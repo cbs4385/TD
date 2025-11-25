@@ -145,7 +145,8 @@ namespace FaeMaze.UI
                 scaler.referenceResolution = new Vector2(1920, 1080);
             }
 
-            Sprite defaultSprite = Resources.GetBuiltinResource<Sprite>("UISprite.psd");
+            // Use built-in UI skin assets to avoid missing resource warnings when creating the slider at runtime.
+            Sprite defaultSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
 
             var sliderObject = new GameObject("SfxVolumeSlider", typeof(RectTransform), typeof(Slider));
             sliderObject.transform.SetParent(canvas.transform, false);
@@ -222,7 +223,7 @@ namespace FaeMaze.UI
 
             var label = labelObject.GetComponent<Text>();
             label.text = "SFX";
-            label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             label.alignment = TextAnchor.UpperRight;
             label.color = Color.white;
 
