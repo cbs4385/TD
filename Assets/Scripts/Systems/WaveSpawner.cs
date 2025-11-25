@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Maze;
+using FaeMaze.Audio;
 using FaeMaze.Visitors;
 using FaeMaze.Audio;
 

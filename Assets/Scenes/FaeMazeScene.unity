@@ -38,6 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
+  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -201,7 +202,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 2400000002}
+  - {fileID: 1800000001}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &330585545
@@ -564,7 +565,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1800000001}
   m_Father: {fileID: 1534669903}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1408523522
@@ -632,7 +634,7 @@ MonoBehaviour:
   mazeGridBehaviour: {fileID: 330585547}
   faeLanternPrefab: {fileID: 6000000000, guid: 8f6d3e9a2c1b5d7e4a9f8c2b6e3a7d5c, type: 3}
   faeLanternCost: 20
---- !u!1 &2400000001
+--- !u!1 &1800000000
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -640,9 +642,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 2400000002}
-  - component: {fileID: 2400000003}
-  - component: {fileID: 2400000004}
+  - component: {fileID: 1800000001}
+  - component: {fileID: 1800000002}
+  - component: {fileID: 1800000003}
   m_Layer: 0
   m_Name: SoundManager
   m_TagString: Untagged
@@ -650,13 +652,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &2400000002
+--- !u!4 &1800000001
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2400000001}
+  m_GameObject: {fileID: 1800000000}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -665,15 +667,17 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1408523521}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!82 &2400000003
+--- !u!82 &1800000002
 AudioSource:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2400000001}
+  m_GameObject: {fileID: 1800000000}
   m_Enabled: 1
-  serializedVersion: 10
+  serializedVersion: 4
+  m_Type: 0
+  m_PreserveOutput: 0
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 0}
   m_PlayOnAwake: 0
@@ -685,11 +689,13 @@ AudioSource:
   SpatializePostEffects: 0
   Priority: 128
   DopplerLevel: 1
-  Spread: 0
-  VolumeRolloff: 0
   MinDistance: 1
   MaxDistance: 500
   Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
   rolloffCustomCurve:
     serializedVersion: 2
     m_Curve:
@@ -716,7 +722,7 @@ AudioSource:
     serializedVersion: 2
     m_Curve:
     - time: 0
-      value: 0
+      value: 1
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -754,22 +760,22 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
---- !u!114 &2400000004
+--- !u!114 &1800000003
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2400000001}
+  m_GameObject: {fileID: 1800000000}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1176779ad9134cffacb67f8991b220d9, type: 3}
+  m_Script: {fileID: 11500000, guid: a4afafa0382c4248a73b90f5594bb811, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  sfxSource: {fileID: 2400000003}
-  visitorSpawnClip: {fileID: 8300000, guid: 7a407e6f45aa4bbd8ce8ee1bc4042698, type: 3}
-  visitorConsumedClip: {fileID: 8300000, guid: 9e39450cdcb341148afedd271680b6a2, type: 3}
-  lanternPlacedClip: {fileID: 8300000, guid: 945a4cbaf9004571b642ccbdf6c4a00d, type: 3}
+  sfxSource: {fileID: 1800000002}
+  visitorSpawnClip: {fileID: 8300000, guid: 7519a4a42c1d0ab44b2ed27e9b52ccff, type: 3}
+  visitorConsumedClip: {fileID: 8300000, guid: 82fe4401c4cf446419581f8b7ec463bc, type: 3}
+  lanternPlacedClip: {fileID: 8300000, guid: 3c87055a9802d5f45984b9610da2e278, type: 3}
 --- !u!1 &1534669902
 GameObject:
   m_ObjectHideFlags: 0
