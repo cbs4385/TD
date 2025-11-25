@@ -154,7 +154,7 @@ namespace FaeMaze.Systems
             VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
             visitor.gameObject.name = $"Visitor_Wave{currentWaveNumber}_{visitorsSpawnedThisWave}";
 
-            SoundManager.Instance?.PlayVisitorSpawn();
+            SoundManager.PlayVisitorSpawn();
 
             GameController.Instance.SetLastSpawnedVisitor(visitor);
 

@@ -768,9 +768,9 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   sfxSource: {fileID: 2400000003}
-  visitorSpawnClip: {fileID: 8300000, guid: 7a407e6f45aa4bbd8ce8ee1bc4042698, type: 3}
-  visitorConsumedClip: {fileID: 8300000, guid: 9e39450cdcb341148afedd271680b6a2, type: 3}
-  lanternPlacedClip: {fileID: 8300000, guid: 945a4cbaf9004571b642ccbdf6c4a00d, type: 3}
+  visitorSpawnClip: {fileID: 0}
+  visitorConsumedClip: {fileID: 0}
+  lanternPlacedClip: {fileID: 0}
 --- !u!1 &1534669902
 GameObject:
   m_ObjectHideFlags: 0

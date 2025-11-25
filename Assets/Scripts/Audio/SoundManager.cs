@@ -9,6 +9,9 @@ namespace FaeMaze.Audio
     {
         public static SoundManager Instance { get; private set; }
 
+        private const int DefaultSampleRate = 44100;
+        private const float DefaultClipDuration = 0.25f;
+
         [SerializeField]
         private AudioSource sfxSource;
 
@@ -22,8 +25,7 @@ namespace FaeMaze.Audio
         [SerializeField]
         private AudioClip lanternPlacedClip;
 
-        private const int DefaultSampleRate = 44100;
-        private const float DefaultClipDuration = 0.25f;
+        private bool initialized;
 
         private void Awake()
         {
@@ -35,27 +37,60 @@ namespace FaeMaze.Audio
 
             Instance = this;
 
+            InitializeIfNeeded();
+        }
+
+        private void InitializeIfNeeded()
+        {
+            if (initialized)
+            {
+                return;
+            }
+
+            if (sfxSource == null)
+            {
+                sfxSource = GetComponent<AudioSource>();
+            }
+
             if (sfxSource == null)
             {
                 sfxSource = gameObject.AddComponent<AudioSource>();
             }
 
+            sfxSource.playOnAwake = false;
+            sfxSource.loop = false;
+
             EnsureDefaultClips();
+
+            initialized = true;
         }
 
-        public void PlayVisitorSpawn()
+        public static void PlayVisitorSpawn()
         {
-            PlayClip(visitorSpawnClip);
+            EnsureInstanceExists();
+            Instance?.PlayClipWithFallback(ref Instance.visitorSpawnClip, 523.25f);
         }
 
-        public void PlayVisitorConsumed()
+        public static void PlayVisitorConsumed()
         {
-            PlayClip(visitorConsumedClip);
+            EnsureInstanceExists();
+            Instance?.PlayClipWithFallback(ref Instance.visitorConsumedClip, 392f);
         }
 
-        public void PlayLanternPlaced()
+        public static void PlayLanternPlaced()
         {
-            PlayClip(lanternPlacedClip);
+            EnsureInstanceExists();
+            Instance?.PlayClipWithFallback(ref Instance.lanternPlacedClip, 659.25f);
+        }
+
+        private void PlayClipWithFallback(ref AudioClip clip, float fallbackFrequency)
+        {
+            if (clip == null)
+            {
+                clip = GenerateToneClip(fallbackFrequency);
+            }
+
+            PlayClip(clip);
         }
 
         private void PlayClip(AudioClip clip)
@@ -66,6 +101,27 @@ namespace FaeMaze.Audio
             }
 
             sfxSource.PlayOneShot(clip);
+        }
+
+        private static void EnsureInstanceExists()
+        {
+            if (Instance != null)
+            {
+                return;
+            }
+
+            SoundManager existing = FindFirstObjectByType<SoundManager>();
+            if (existing != null)
+            {
+                Instance = existing;
+                Instance.InitializeIfNeeded();
+                return;
+            }
+
+            GameObject soundManagerObject = new GameObject("SoundManager");
+            Instance = soundManagerObject.AddComponent<SoundManager>();
+            Instance.InitializeIfNeeded();
+            DontDestroyOnLoad(soundManagerObject);
         }
 
         private void EnsureDefaultClips()
