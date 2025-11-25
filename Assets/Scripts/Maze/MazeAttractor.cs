@@ -25,6 +25,19 @@ namespace FaeMaze.Maze
         [Tooltip("Draw attraction radius in Scene view")]
         private bool showDebugRadius = true;
 
+        [Header("Visual Settings")]
+        [SerializeField]
+        [Tooltip("Color of the attractor sprite")]
+        private Color spriteColor = new Color(1f, 0.8f, 0.2f, 1f); // Golden yellow
+
+        [SerializeField]
+        [Tooltip("Size of the attractor sprite")]
+        private float spriteSize = 0.7f;
+
+        [SerializeField]
+        [Tooltip("Sprite rendering layer order")]
+        private int sortingOrder = 12;
+
         #endregion
 
         #region Private Fields
@@ -32,6 +45,7 @@ namespace FaeMaze.Maze
         private MazeGridBehaviour gridBehaviour;
         private Vector2Int gridPosition;
         private bool isApplied = false;
+        private SpriteRenderer spriteRenderer;
 
         #endregion
 
@@ -52,6 +66,9 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
+            // Create visual sprite first
+            CreateVisualSprite();
+
             // Find the MazeGridBehaviour in the scene
             gridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
@@ -73,6 +90,54 @@ namespace FaeMaze.Maze
 
             // Apply attraction
             ApplyAttraction(gridBehaviour);
+        }
+
+        private void CreateVisualSprite()
+        {
+            // Add SpriteRenderer if not already present
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+            }
+
+            // Create a simple circle sprite for the lantern
+            spriteRenderer.sprite = CreateLanternSprite(32);
+            spriteRenderer.color = spriteColor;
+            spriteRenderer.sortingOrder = sortingOrder;
+
+            // Set scale
+            transform.localScale = new Vector3(spriteSize, spriteSize, 1f);
+        }
+
+        private Sprite CreateLanternSprite(int resolution)
+        {
+            int size = resolution;
+            Texture2D texture = new Texture2D(size, size);
+            Color[] pixels = new Color[size * size];
+
+            Vector2 center = new Vector2(size / 2f, size / 2f);
+            float radius = size / 2f;
+
+            // Create a circle (simplified lantern shape)
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dist = Vector2.Distance(new Vector2(x, y), center);
+                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply();
+
+            return Sprite.Create(
+                texture,
+                new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f),
+                size
+            );
         }
 
         private void OnEnable()
