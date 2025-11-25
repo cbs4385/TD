@@ -35,6 +35,19 @@ namespace FaeMaze.Visitors
         [Tooltip("Distance threshold to consider a waypoint reached")]
         private float waypointReachedDistance = 0.05f;
 
+        [Header("Visual Settings")]
+        [SerializeField]
+        [Tooltip("Color of the visitor sprite")]
+        private Color visitorColor = new Color(0.3f, 0.6f, 1f, 1f); // Light blue
+
+        [SerializeField]
+        [Tooltip("Size of the visitor sprite")]
+        private float visitorSize = 0.6f;
+
+        [SerializeField]
+        [Tooltip("Sprite rendering layer order")]
+        private int sortingOrder = 15;
+
         #endregion
 
         #region Private Fields
@@ -46,6 +59,7 @@ namespace FaeMaze.Visitors
         private MazeGridBehaviour mazeGridBehaviour;
         private bool isEntranced;
         private float speedMultiplier = 1f;
+        private SpriteRenderer spriteRenderer;
 
         #endregion
 
@@ -74,6 +88,55 @@ namespace FaeMaze.Visitors
         private void Awake()
         {
             state = VisitorState.Idle;
+            CreateVisualSprite();
+        }
+
+        private void CreateVisualSprite()
+        {
+            // Add SpriteRenderer if not already present
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+            }
+
+            // Create a simple circle sprite for the visitor
+            spriteRenderer.sprite = CreateCircleSprite(32);
+            spriteRenderer.color = visitorColor;
+            spriteRenderer.sortingOrder = sortingOrder;
+
+            // Set scale
+            transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+        }
+
+        private Sprite CreateCircleSprite(int resolution)
+        {
+            int size = resolution;
+            Texture2D texture = new Texture2D(size, size);
+            Color[] pixels = new Color[size * size];
+
+            Vector2 center = new Vector2(size / 2f, size / 2f);
+            float radius = size / 2f;
+
+            // Create a circle
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dist = Vector2.Distance(new Vector2(x, y), center);
+                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply();
+
+            return Sprite.Create(
+                texture,
+                new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f),
+                size
+            );
         }
 
         private void Update()
