@@ -37,6 +37,7 @@ namespace FaeMaze.Cameras
         private bool isFocusing;
         private Vector3 focusTargetPosition;
         private float focusLerpSpeed = 10f;
+        private VisitorController focusVisitor;
 
         #endregion
 
@@ -200,11 +201,19 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            if (focusVisitor != null)
+            {
+                focusTargetPosition = new Vector3(
+                    focusVisitor.transform.position.x,
+                    focusVisitor.transform.position.y,
+                    transform.position.z);
+            }
+
             Vector3 currentPosition = transform.position;
             Vector3 newPosition = Vector3.MoveTowards(currentPosition, focusTargetPosition, focusLerpSpeed * Time.deltaTime);
             transform.position = newPosition;
 
-            if (Vector3.SqrMagnitude(newPosition - focusTargetPosition) < 0.0001f)
+            if (focusVisitor == null && Vector3.SqrMagnitude(newPosition - focusTargetPosition) < 0.0001f)
             {
                 isFocusing = false;
             }
@@ -283,7 +292,9 @@ namespace FaeMaze.Cameras
         /// </summary>
         public void FocusOnPosition(Vector3 worldPos, bool instant = false, float lerpSpeed = 10f)
         {
+            focusVisitor = null;
             Vector3 targetPosition = new Vector3(worldPos.x, worldPos.y, transform.position.z);
+            focusTargetPosition = targetPosition;
 
             if (instant)
             {
@@ -336,6 +347,9 @@ namespace FaeMaze.Cameras
             }
 
             FocusOnPosition(visitor.transform.position, instant);
+            focusVisitor = visitor;
+            focusLerpSpeed = Mathf.Max(focusLerpSpeed, 0f);
+            isFocusing = true;
         }
 
         #endregion
