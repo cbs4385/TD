@@ -105,7 +105,7 @@ namespace FaeMaze.Maze
                 Debug.LogError("GameController instance is null! Cannot add essence.");
             }
 
-            SoundManager.Instance?.PlayVisitorConsumed();
+            SoundManager.PlayVisitorConsumed();
 
             // Destroy the visitor
             Destroy(visitor.gameObject);
