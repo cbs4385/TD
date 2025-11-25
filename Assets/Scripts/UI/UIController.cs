@@ -145,8 +145,15 @@ namespace FaeMaze.UI
                 scaler.referenceResolution = new Vector2(1920, 1080);
             }
 
-            // Use built-in UI skin assets to avoid missing resource warnings when creating the slider at runtime.
-            Sprite defaultSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            // Create a simple 1x1 sprite from the white texture to avoid missing built-in resource lookups.
+            var whiteTexture = Texture2D.whiteTexture;
+            Sprite defaultSprite = Sprite.Create(
+                whiteTexture,
+                new Rect(0, 0, whiteTexture.width, whiteTexture.height),
+                new Vector2(0.5f, 0.5f),
+                100f,
+                0,
+                SpriteMeshType.FullRect);
 
             var sliderObject = new GameObject("SfxVolumeSlider", typeof(RectTransform), typeof(Slider));
             sliderObject.transform.SetParent(canvas.transform, false);
