@@ -73,8 +73,11 @@ namespace FaeMaze.Systems
 
             // Initialize from file
             InitializeFromFile();
+        }
 
-            // Register with GameController
+        private void Start()
+        {
+            // Register with GameController (all Awake() calls are done by now)
             if (GameController.Instance != null)
             {
                 GameController.Instance.RegisterMazeGrid(grid);
@@ -84,10 +87,7 @@ namespace FaeMaze.Systems
             {
                 Debug.LogError("GameController instance not found! Cannot register MazeGrid.");
             }
-        }
 
-        private void Start()
-        {
             // Position the entrance and heart objects after everything is initialized
             PositionEntranceAndHeart();
         }
