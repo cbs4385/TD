@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
+using FaeMaze.Audio;
 
 namespace FaeMaze.Props
 {
@@ -171,6 +172,7 @@ namespace FaeMaze.Props
             // Mark tile as occupied
             occupiedTiles[gridPos] = lantern;
 
+            SoundManager.Instance?.PlayLanternPlaced();
 
             // The MazeAttractor component on the lantern will automatically apply attraction in its Start() method
         }
