@@ -31,7 +31,6 @@ namespace FaeMaze.Audio
         {
             if (Instance != null && Instance != this)
             {
-                Debug.LogWarning("Duplicate SoundManager detected and destroyed.");
                 Destroy(gameObject);
                 return;
             }
@@ -45,20 +44,17 @@ namespace FaeMaze.Audio
         {
             if (initialized)
             {
-                Debug.Log("SoundManager already initialized.");
                 return;
             }
 
             if (sfxSource == null)
             {
                 sfxSource = GetComponent<AudioSource>();
-                Debug.Log($"SoundManager: Retrieved AudioSource from GameObject: {sfxSource != null}");
             }
 
             if (sfxSource == null)
             {
                 sfxSource = gameObject.AddComponent<AudioSource>();
-                Debug.Log("SoundManager: Added new AudioSource component.");
             }
 
             sfxSource.playOnAwake = false;
@@ -91,7 +87,6 @@ namespace FaeMaze.Audio
         {
             if (clip == null)
             {
-                Debug.LogWarning($"SoundManager: Missing clip for frequency {fallbackFrequency}, generating fallback.");
                 clip = GenerateToneClip(fallbackFrequency);
             }
 
@@ -102,11 +97,9 @@ namespace FaeMaze.Audio
         {
             if (clip == null || sfxSource == null)
             {
-                Debug.LogError($"SoundManager: Cannot play clip. Clip null: {clip == null}, AudioSource null: {sfxSource == null}");
                 return;
             }
 
-            Debug.Log($"SoundManager: Playing clip '{clip.name}' with length {clip.length:0.00}s.");
             sfxSource.PlayOneShot(clip);
         }
 
@@ -121,14 +114,12 @@ namespace FaeMaze.Audio
             if (existing != null)
             {
                 Instance = existing;
-                Debug.Log("SoundManager: Found existing instance in scene.");
                 Instance.InitializeIfNeeded();
                 return;
             }
 
             GameObject soundManagerObject = new GameObject("SoundManager");
             Instance = soundManagerObject.AddComponent<SoundManager>();
-            Debug.Log("SoundManager: Created new runtime instance.");
             Instance.InitializeIfNeeded();
             DontDestroyOnLoad(soundManagerObject);
         }
@@ -155,7 +146,6 @@ namespace FaeMaze.Audio
 
             AudioClip clip = AudioClip.Create($"Tone_{frequency:F0}", sampleCount, 1, DefaultSampleRate, false);
             clip.SetData(samples, 0);
-            Debug.Log($"SoundManager: Generated tone clip '{clip.name}' at {frequency}Hz with {sampleCount} samples.");
             return clip;
         }
     }
