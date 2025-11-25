@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using FaeMaze.Systems;
 
 namespace FaeMaze.Cameras
@@ -65,18 +66,50 @@ namespace FaeMaze.Cameras
 
         private void HandleKeyboardPan()
         {
-            float horizontal = Input.GetAxis("Horizontal");
-            float vertical = Input.GetAxis("Vertical");
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return;
+            }
 
-            Vector3 delta = new Vector3(horizontal, vertical, 0f) * panSpeed * Time.deltaTime;
+            Vector2 movement = Vector2.zero;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+            {
+                movement.y += 1f;
+            }
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+            {
+                movement.y -= 1f;
+            }
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+            {
+                movement.x += 1f;
+            }
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+            {
+                movement.x -= 1f;
+            }
+
+            if (movement.sqrMagnitude <= 0f)
+            {
+                return;
+            }
+
+            Vector3 delta = new Vector3(movement.x, movement.y, 0f) * panSpeed * Time.deltaTime;
             transform.position += delta;
         }
 
         private void HandleMouseDrag()
         {
-            bool dragButtonDown = Input.GetMouseButtonDown(1) || Input.GetMouseButtonDown(2);
-            bool dragButtonHeld = Input.GetMouseButton(1) || Input.GetMouseButton(2);
-            bool dragButtonUp = Input.GetMouseButtonUp(1) || Input.GetMouseButtonUp(2);
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+            {
+                return;
+            }
+
+            bool dragButtonDown = mouse.rightButton.wasPressedThisFrame || mouse.middleButton.wasPressedThisFrame;
+            bool dragButtonHeld = mouse.rightButton.isPressed || mouse.middleButton.isPressed;
+            bool dragButtonUp = mouse.rightButton.wasReleasedThisFrame || mouse.middleButton.wasReleasedThisFrame;
 
             if (dragButtonDown)
             {
@@ -100,7 +133,13 @@ namespace FaeMaze.Cameras
 
         private void HandleZoom()
         {
-            float scroll = Input.mouseScrollDelta.y;
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+            {
+                return;
+            }
+
+            float scroll = mouse.scroll.ReadValue().y;
             if (Mathf.Approximately(scroll, 0f))
             {
                 return;
@@ -112,7 +151,9 @@ namespace FaeMaze.Cameras
 
         private Vector3 GetMouseWorldPosition()
         {
-            return cam.ScreenToWorldPoint(Input.mousePosition);
+            Mouse mouse = Mouse.current;
+            Vector2 mousePosition = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
+            return cam.ScreenToWorldPoint(new Vector3(mousePosition.x, mousePosition.y, 0f));
         }
 
         #endregion
