@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nUpdate DebugVisitorSpawner to use new Input System\n\nReplaced old UnityEngine.Input API with UnityEngine.InputSystem.Keyboard\nto fix InvalidOperationException when reading input. Now uses\nKeyboard.current.spaceKey.wasPressedThisFrame for spawn input.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
