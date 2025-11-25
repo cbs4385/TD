@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using TMPro;
 using FaeMaze.Systems;
 
@@ -79,8 +80,8 @@ namespace FaeMaze.UI
 
         private void Update()
         {
-            // Toggle debug panel with F1 key
-            if (Input.GetKeyDown(KeyCode.F1))
+            // Toggle debug panel with F1 key using new Input System
+            if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame)
             {
                 ToggleDebugPanel();
             }
