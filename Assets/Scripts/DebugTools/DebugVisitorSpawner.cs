@@ -111,6 +111,8 @@ namespace FaeMaze.DebugTools
             VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
             visitor.gameObject.name = $"Visitor_{visitorSpawnCount++}";
 
+            GameController.Instance.SetLastSpawnedVisitor(visitor);
+
             // Initialize visitor
             visitor.Initialize(GameController.Instance);
 
