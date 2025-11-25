@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
 
@@ -73,8 +74,8 @@ namespace FaeMaze.Props
 
         private void Update()
         {
-            // Check for left mouse button click
-            if (Input.GetMouseButtonDown(0))
+            // Check for left mouse button click using new Input System
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
                 TryPlaceLantern();
             }
@@ -94,8 +95,14 @@ namespace FaeMaze.Props
                 return;
             }
 
+            // Get mouse position using new Input System
+            if (Mouse.current == null)
+            {
+                return;
+            }
+
             // Get mouse position in world space
-            Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+            Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Mouse.current.position.ReadValue());
             mouseWorldPos.z = 0; // Ensure z is 0 for 2D
 
             // Convert world position to grid coordinates
