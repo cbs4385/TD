@@ -202,6 +202,24 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Debug Methods
+
+        /// <summary>
+        /// Spawns a single visitor immediately for debug purposes.
+        /// </summary>
+        public void SpawnSingleVisitorForDebug()
+        {
+            if (!ValidateReferences())
+            {
+                Debug.LogWarning("Cannot spawn debug visitor - references not valid");
+                return;
+            }
+
+            SpawnVisitor();
+        }
+
+        #endregion
+
         #region Gizmos
 
         private void OnDrawGizmosSelected()
