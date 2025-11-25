@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using TMPro;
 using FaeMaze.Systems;
+using FaeMaze.Audio;
 
 namespace FaeMaze.UI
 {
@@ -35,6 +36,10 @@ namespace FaeMaze.UI
         [SerializeField]
         [Tooltip("Button to spawn a test visitor")]
         private Button spawnTestVisitorButton;
+
+        [SerializeField]
+        [Tooltip("Slider for adjusting SFX volume (0.0 to 1.0)")]
+        private Slider sfxVolumeSlider;
 
         [Header("System References")]
         [SerializeField]
@@ -109,6 +114,11 @@ namespace FaeMaze.UI
             {
                 spawnTestVisitorButton.onClick.RemoveListener(OnSpawnTestVisitorClicked);
             }
+
+            if (sfxVolumeSlider != null)
+            {
+                sfxVolumeSlider.onValueChanged.RemoveListener(OnSfxVolumeChanged);
+            }
         }
 
         #endregion
@@ -147,6 +157,18 @@ namespace FaeMaze.UI
             if (spawnTestVisitorButton != null)
             {
                 spawnTestVisitorButton.onClick.AddListener(OnSpawnTestVisitorClicked);
+            }
+
+            // Initialize SFX volume slider
+            if (sfxVolumeSlider != null)
+            {
+                float initialVolume = SoundManager.Instance != null
+                    ? Mathf.Max(SoundManager.Instance.SfxVolume, SoundManager.Instance.MusicVolume)
+                    : 1f;
+                sfxVolumeSlider.minValue = 0f;
+                sfxVolumeSlider.maxValue = 1f;
+                sfxVolumeSlider.value = initialVolume;
+                sfxVolumeSlider.onValueChanged.AddListener(OnSfxVolumeChanged);
             }
 
             // Debug panel starts visible
@@ -196,6 +218,12 @@ namespace FaeMaze.UI
             yPos -= 50f;
 
             spawnTestVisitorButton = CreateButton(debugPanel.transform, "Spawn Visitor", yPos);
+            yPos -= 50f;
+
+            CreateLabel(debugPanel.transform, "SFX Volume:", yPos);
+            yPos -= 30f;
+
+            sfxVolumeSlider = CreateSlider(debugPanel.transform, yPos);
         }
 
         /// <summary>
@@ -231,7 +259,7 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
             rect.anchoredPosition = new Vector2(-10f, -10f);
-            rect.sizeDelta = new Vector2(300f, 300f);
+            rect.sizeDelta = new Vector2(300f, 380f);
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
@@ -543,6 +571,20 @@ namespace FaeMaze.UI
             {
                 Debug.LogWarning("WaveSpawner reference is not assigned in DebugUIController!");
             }
+        }
+
+        /// <summary>
+        /// Called when the SFX volume slider value changes.
+        /// </summary>
+        private void OnSfxVolumeChanged(float value)
+        {
+            if (SoundManager.Instance == null)
+            {
+                return;
+            }
+
+            SoundManager.Instance.SetSfxVolume(value);
+            SoundManager.Instance.SetMusicVolume(value);
         }
 
         #endregion
