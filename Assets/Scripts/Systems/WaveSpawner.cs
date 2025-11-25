@@ -68,12 +68,6 @@ namespace FaeMaze.Systems
         {
             // Find the MazeGridBehaviour in the scene
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-
-            if (mazeGridBehaviour == null)
-            {
-                Debug.LogError("WaveSpawner: Could not find MazeGridBehaviour in scene!");
-            }
-
             ValidateReferences();
         }
 
@@ -88,20 +82,17 @@ namespace FaeMaze.Systems
         {
             if (isSpawning)
             {
-                Debug.LogWarning("WaveSpawner: Wave is already in progress!");
                 return;
             }
 
             if (!ValidateReferences())
             {
-                Debug.LogError("WaveSpawner: Cannot start wave - missing references!");
                 return;
             }
 
             currentWaveNumber++;
             visitorsSpawnedThisWave = 0;
 
-            Debug.Log($"Starting Wave {currentWaveNumber}: {visitorsPerWave} visitors");
 
             StartCoroutine(SpawnWaveCoroutine());
         }
@@ -126,7 +117,6 @@ namespace FaeMaze.Systems
             }
 
             isSpawning = false;
-            Debug.Log($"Wave {currentWaveNumber} spawning complete. Total spawned: {visitorsSpawnedThisWave}");
         }
 
         #endregion
@@ -140,7 +130,6 @@ namespace FaeMaze.Systems
         {
             if (GameController.Instance == null)
             {
-                Debug.LogError("WaveSpawner: GameController instance is null!");
                 return;
             }
 
@@ -154,7 +143,6 @@ namespace FaeMaze.Systems
 
             if (!pathFound || pathNodes.Count == 0)
             {
-                Debug.LogWarning($"WaveSpawner: No path found from {entrancePos} to {heartPos}!");
                 return;
             }
 
@@ -165,6 +153,8 @@ namespace FaeMaze.Systems
             VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
             visitor.gameObject.name = $"Visitor_Wave{currentWaveNumber}_{visitorsSpawnedThisWave}";
 
+            GameController.Instance.SetLastSpawnedVisitor(visitor);
+
             // Initialize visitor
             visitor.Initialize(GameController.Instance);
 
@@ -173,7 +163,6 @@ namespace FaeMaze.Systems
 
             totalVisitorsSpawned++;
 
-            Debug.Log($"Wave {currentWaveNumber}: Spawned visitor {visitorsSpawnedThisWave + 1}/{visitorsPerWave} at {spawnWorldPos}");
         }
 
         #endregion
@@ -186,25 +175,21 @@ namespace FaeMaze.Systems
 
             if (visitorPrefab == null)
             {
-                Debug.LogError("WaveSpawner: Visitor prefab is not assigned!");
                 isValid = false;
             }
 
             if (entrance == null)
             {
-                Debug.LogError("WaveSpawner: Entrance is not assigned!");
                 isValid = false;
             }
 
             if (heart == null)
             {
-                Debug.LogError("WaveSpawner: Heart is not assigned!");
                 isValid = false;
             }
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("WaveSpawner: MazeGridBehaviour not found in scene!");
                 isValid = false;
             }
 

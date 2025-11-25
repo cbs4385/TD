@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
 
@@ -68,13 +69,12 @@ namespace FaeMaze.Props
                 Debug.LogError("PropPlacementController: FaeLantern prefab is not assigned!");
             }
 
-            Debug.Log($"PropPlacementController initialized. FaeLantern cost: {faeLanternCost}");
         }
 
         private void Update()
         {
-            // Check for left mouse button click
-            if (Input.GetMouseButtonDown(0))
+            // Check for left mouse button click using new Input System
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
                 TryPlaceLantern();
             }
@@ -94,14 +94,19 @@ namespace FaeMaze.Props
                 return;
             }
 
+            // Get mouse position using new Input System
+            if (Mouse.current == null)
+            {
+                return;
+            }
+
             // Get mouse position in world space
-            Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+            Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Mouse.current.position.ReadValue());
             mouseWorldPos.z = 0; // Ensure z is 0 for 2D
 
             // Convert world position to grid coordinates
             if (!mazeGridBehaviour.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
             {
-                Debug.Log("PropPlacementController: Click position is outside grid bounds");
                 return;
             }
 
@@ -110,7 +115,6 @@ namespace FaeMaze.Props
             // Check if tile is already occupied
             if (occupiedTiles.ContainsKey(gridPos))
             {
-                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is already occupied");
                 return;
             }
 
@@ -132,7 +136,6 @@ namespace FaeMaze.Props
             // Check if tile is walkable
             if (!node.walkable)
             {
-                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is not walkable (wall)");
                 return;
             }
 
@@ -145,7 +148,6 @@ namespace FaeMaze.Props
 
             if (!GameController.Instance.TrySpendEssence(faeLanternCost))
             {
-                Debug.Log($"PropPlacementController: Not enough essence to place lantern (need {faeLanternCost}, have {GameController.Instance.CurrentEssence})");
                 return;
             }
 
@@ -169,7 +171,6 @@ namespace FaeMaze.Props
             // Mark tile as occupied
             occupiedTiles[gridPos] = lantern;
 
-            Debug.Log($"PropPlacementController: Placed FaeLantern at grid ({gridPos.x}, {gridPos.y}), world {worldPos}");
 
             // The MazeAttractor component on the lantern will automatically apply attraction in its Start() method
         }
@@ -183,7 +184,6 @@ namespace FaeMaze.Props
             if (occupiedTiles.ContainsKey(gridPos))
             {
                 occupiedTiles.Remove(gridPos);
-                Debug.Log($"PropPlacementController: Freed tile ({gridPos.x}, {gridPos.y})");
             }
         }
 

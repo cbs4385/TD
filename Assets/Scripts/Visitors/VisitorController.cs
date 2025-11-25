@@ -35,6 +35,19 @@ namespace FaeMaze.Visitors
         [Tooltip("Distance threshold to consider a waypoint reached")]
         private float waypointReachedDistance = 0.05f;
 
+        [Header("Visual Settings")]
+        [SerializeField]
+        [Tooltip("Color of the visitor sprite")]
+        private Color visitorColor = new Color(0.3f, 0.6f, 1f, 1f); // Light blue
+
+        [SerializeField]
+        [Tooltip("Size of the visitor sprite")]
+        private float visitorSize = 0.6f;
+
+        [SerializeField]
+        [Tooltip("Sprite rendering layer order")]
+        private int sortingOrder = 15;
+
         #endregion
 
         #region Private Fields
@@ -46,6 +59,7 @@ namespace FaeMaze.Visitors
         private MazeGridBehaviour mazeGridBehaviour;
         private bool isEntranced;
         private float speedMultiplier = 1f;
+        private SpriteRenderer spriteRenderer;
 
         #endregion
 
@@ -74,6 +88,73 @@ namespace FaeMaze.Visitors
         private void Awake()
         {
             state = VisitorState.Idle;
+            CreateVisualSprite();
+        }
+
+        private void CreateVisualSprite()
+        {
+            // Add SpriteRenderer if not already present
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+            }
+
+            // Create a simple circle sprite for the visitor
+            spriteRenderer.sprite = CreateCircleSprite(32);
+            spriteRenderer.color = visitorColor;
+            spriteRenderer.sortingOrder = sortingOrder;
+
+            // Set scale
+            transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+
+            // Add Rigidbody2D for trigger collisions with MazeAttractors
+            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            if (rb == null)
+            {
+                rb = gameObject.AddComponent<Rigidbody2D>();
+                rb.bodyType = RigidbodyType2D.Kinematic; // Kinematic so we control movement manually
+                rb.gravityScale = 0f; // No gravity for 2D top-down
+            }
+
+            // Add CircleCollider2D for trigger detection
+            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            if (collider == null)
+            {
+                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider.radius = 0.3f; // Small radius for visitor collision
+                collider.isTrigger = true; // Enable trigger events
+            }
+        }
+
+        private Sprite CreateCircleSprite(int resolution)
+        {
+            int size = resolution;
+            Texture2D texture = new Texture2D(size, size);
+            Color[] pixels = new Color[size * size];
+
+            Vector2 center = new Vector2(size / 2f, size / 2f);
+            float radius = size / 2f;
+
+            // Create a circle
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dist = Vector2.Distance(new Vector2(x, y), center);
+                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply();
+
+            return Sprite.Create(
+                texture,
+                new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f),
+                size
+            );
         }
 
         private void Update()
@@ -140,7 +221,6 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             state = VisitorState.Walking;
 
-            Debug.Log($"Visitor path set with {path.Count} waypoints. Starting at {path[0]}");
         }
 
         /// <summary>
@@ -164,7 +244,6 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             state = VisitorState.Walking;
 
-            Debug.Log($"Visitor path set with {path.Count} waypoints. Starting at {path[0]}");
         }
 
         #endregion
@@ -219,13 +298,11 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                Debug.Log($"Visitor reached waypoint {currentPathIndex - 1}, moving to waypoint {currentPathIndex}");
             }
         }
 
         private void OnPathCompleted()
         {
-            Debug.Log("Visitor reached the end of the path!");
             state = VisitorState.Consumed;
 
             // Notify the Heart that this visitor has arrived
@@ -250,7 +327,6 @@ namespace FaeMaze.Visitors
         public void Stop()
         {
             state = VisitorState.Idle;
-            Debug.Log("Visitor stopped");
         }
 
         /// <summary>
@@ -261,7 +337,6 @@ namespace FaeMaze.Visitors
             if (path != null && path.Count > 0 && currentPathIndex < path.Count)
             {
                 state = VisitorState.Walking;
-                Debug.Log("Visitor resumed walking");
             }
         }
 
@@ -275,7 +350,6 @@ namespace FaeMaze.Visitors
             if (isEntranced != value)
             {
                 isEntranced = value;
-                Debug.Log($"Visitor {gameObject.name} entranced state set to: {isEntranced}");
             }
         }
 

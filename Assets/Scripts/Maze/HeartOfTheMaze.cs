@@ -25,6 +25,38 @@ namespace FaeMaze.Maze
         [Tooltip("Amount of essence gained per visitor consumed")]
         private int essencePerVisitor = 10;
 
+        [Header("Visual Settings")]
+        [SerializeField]
+        [Tooltip("Color of the heart marker")]
+        private Color markerColor = new Color(1f, 0.2f, 0.2f, 1f); // Bright red
+
+        [SerializeField]
+        [Tooltip("Size of the heart marker")]
+        private float markerSize = 1.2f;
+
+        [SerializeField]
+        [Tooltip("Sprite rendering layer order")]
+        private int sortingOrder = 10;
+
+        [SerializeField]
+        [Tooltip("Enable pulsing animation")]
+        private bool enablePulse = true;
+
+        [SerializeField]
+        [Tooltip("Pulse speed")]
+        private float pulseSpeed = 2f;
+
+        [SerializeField]
+        [Tooltip("Pulse amount")]
+        private float pulseAmount = 0.2f;
+
+        #endregion
+
+        #region Private Fields
+
+        private SpriteRenderer spriteRenderer;
+        private Vector3 baseScale;
+
         #endregion
 
         #region Properties
@@ -47,7 +79,6 @@ namespace FaeMaze.Maze
         {
             gridX = pos.x;
             gridY = pos.y;
-            Debug.Log($"HeartOfTheMaze grid position set to: ({gridX}, {gridY})");
         }
 
         /// <summary>
@@ -62,7 +93,6 @@ namespace FaeMaze.Maze
                 return;
             }
 
-            Debug.Log($"Visitor {visitor.gameObject.name} consumed at Heart! Gaining {essencePerVisitor} essence.");
 
             // Add essence to game controller
             if (GameController.Instance != null)
@@ -84,8 +114,74 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
-            Debug.Log($"HeartOfTheMaze initialized at grid position ({gridX}, {gridY}), world position {transform.position}");
-            Debug.Log($"Essence per visitor: {essencePerVisitor}");
+            CreateVisualMarker();
+        }
+
+        private void Update()
+        {
+            if (enablePulse && spriteRenderer != null)
+            {
+                float pulse = Mathf.PingPong(Time.time * pulseSpeed, pulseAmount);
+                transform.localScale = baseScale * (1f + pulse);
+            }
+        }
+
+        private void CreateVisualMarker()
+        {
+            // Add SpriteRenderer if not already present
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+            }
+
+            // Create a heart-shaped sprite (simplified as a circle for now)
+            spriteRenderer.sprite = CreateHeartSprite(32);
+            spriteRenderer.color = markerColor;
+            spriteRenderer.sortingOrder = sortingOrder;
+
+            // Set scale
+            baseScale = new Vector3(markerSize, markerSize, 1f);
+            transform.localScale = baseScale;
+
+            // Add CircleCollider2D for trigger detection
+            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            if (collider == null)
+            {
+                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider.radius = 0.5f;
+                collider.isTrigger = true;
+            }
+        }
+
+        private Sprite CreateHeartSprite(int resolution)
+        {
+            int size = resolution;
+            Texture2D texture = new Texture2D(size, size);
+            Color[] pixels = new Color[size * size];
+
+            Vector2 center = new Vector2(size / 2f, size / 2f);
+            float radius = size / 2f;
+
+            // Create a circle (can be enhanced to actual heart shape later)
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dist = Vector2.Distance(new Vector2(x, y), center);
+                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply();
+
+            return Sprite.Create(
+                texture,
+                new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f),
+                size
+            );
         }
 
         private void OnTriggerEnter2D(Collider2D other)

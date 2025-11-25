@@ -49,7 +49,6 @@ namespace FaeMaze.Props
         private void Start()
         {
             originalScale = transform.localScale;
-            Debug.Log($"FairyRing initialized at {transform.position} with slow factor {slowFactor}");
         }
 
         private void Update()
@@ -91,7 +90,6 @@ namespace FaeMaze.Props
         /// <param name="visitor">The visitor entering the ring</param>
         private void OnVisitorEnter(VisitorController visitor)
         {
-            Debug.Log($"Visitor {visitor.gameObject.name} entered FairyRing at {transform.position}");
 
             // Mark as entranced (permanent effect - once entranced, always entranced)
             visitor.SetEntranced(true);
@@ -99,7 +97,6 @@ namespace FaeMaze.Props
             // Apply slow effect
             visitor.SpeedMultiplier = slowFactor;
 
-            Debug.Log($"Visitor speed multiplier set to {slowFactor}");
         }
 
         /// <summary>
@@ -109,7 +106,6 @@ namespace FaeMaze.Props
         /// <param name="visitor">The visitor exiting the ring</param>
         private void OnVisitorExit(VisitorController visitor)
         {
-            Debug.Log($"Visitor {visitor.gameObject.name} exited FairyRing at {transform.position}");
 
             // Restore normal speed
             visitor.SpeedMultiplier = 1f;
@@ -118,7 +114,6 @@ namespace FaeMaze.Props
             // Once a visitor passes through a Fairy Ring, they remain marked as entranced
             // This could be used for future mechanics (e.g., entranced visitors give more essence)
 
-            Debug.Log($"Visitor speed restored to normal (still entranced: {visitor.IsEntranced})");
         }
 
         #endregion
