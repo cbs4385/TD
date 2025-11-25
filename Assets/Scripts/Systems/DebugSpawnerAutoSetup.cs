@@ -19,14 +19,13 @@ namespace FaeMaze.Systems
         private MazeEntrance entrance;
         private HeartOfTheMaze heart;
         private MazeGridBehaviour mazeGridBehaviour;
-        private bool hasLoggedInstructions = false;
 
         private void Start()
         {
             // Find required components
-            entrance = FindObjectOfType<MazeEntrance>();
-            heart = FindObjectOfType<HeartOfTheMaze>();
-            mazeGridBehaviour = FindObjectOfType<MazeGridBehaviour>();
+            entrance = FindFirstObjectByType<MazeEntrance>();
+            heart = FindFirstObjectByType<HeartOfTheMaze>();
+            mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
             if (entrance == null)
             {
@@ -50,7 +49,6 @@ namespace FaeMaze.Systems
             else
             {
                 Debug.Log("DebugSpawnerAutoSetup: Ready! Press SPACE to spawn a visitor.");
-                hasLoggedInstructions = true;
             }
         }
 

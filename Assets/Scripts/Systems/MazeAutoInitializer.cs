@@ -14,7 +14,7 @@ namespace FaeMaze.Systems
             Debug.Log("MazeAutoInitializer: Checking for maze components...");
 
             // Find MazeGridBehaviour in scene
-            MazeGridBehaviour mazeGrid = Object.FindObjectOfType<MazeGridBehaviour>();
+            MazeGridBehaviour mazeGrid = Object.FindFirstObjectByType<MazeGridBehaviour>();
             if (mazeGrid == null)
             {
                 Debug.LogWarning("MazeAutoInitializer: No MazeGridBehaviour found in scene!");
