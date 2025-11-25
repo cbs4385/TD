@@ -77,8 +77,8 @@ namespace FaeMaze.Maze
 
         private void OnEnable()
         {
-            // If already initialized and grid behaviour exists, reapply attraction
-            if (isApplied && gridBehaviour != null)
+            // If already initialized and grid behaviour exists with valid grid, reapply attraction
+            if (isApplied && gridBehaviour != null && gridBehaviour.Grid != null)
             {
                 ApplyAttraction(gridBehaviour);
             }
