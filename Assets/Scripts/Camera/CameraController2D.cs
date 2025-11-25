@@ -38,6 +38,8 @@ namespace FaeMaze.Cameras
         private Vector3 focusTargetPosition;
         private float focusLerpSpeed = 10f;
         private VisitorController focusVisitor;
+        private float trackingLogInterval = 0.5f;
+        private float trackingLogTimer;
 
         #endregion
 
@@ -46,10 +48,6 @@ namespace FaeMaze.Cameras
         private void Awake()
         {
             cam = GetComponent<Camera>();
-            if (cam == null)
-            {
-                Debug.LogError("CameraController2D requires a Camera component on the same GameObject.");
-            }
         }
 
         private void Update()
@@ -129,7 +127,12 @@ namespace FaeMaze.Cameras
                 VisitorController lastVisitor = GameController.Instance.LastSpawnedVisitor;
                 if (lastVisitor != null)
                 {
+                    Debug.Log($"[CameraController2D] Focus shortcut 3 pressed. Tracking last visitor: {lastVisitor.name} at {lastVisitor.transform.position}.");
                     FocusOnVisitor(lastVisitor, false);
+                }
+                else
+                {
+                    Debug.Log("[CameraController2D] Focus shortcut 3 pressed but no last visitor is available.");
                 }
             }
         }
@@ -207,6 +210,13 @@ namespace FaeMaze.Cameras
                     focusVisitor.transform.position.x,
                     focusVisitor.transform.position.y,
                     transform.position.z);
+
+                trackingLogTimer -= Time.deltaTime;
+                if (trackingLogTimer <= 0f)
+                {
+                    Debug.Log($"[CameraController2D] Tracking visitor '{focusVisitor.name}'. Visitor position: {focusVisitor.transform.position}, Camera position: {transform.position}, Target: {focusTargetPosition}.");
+                    trackingLogTimer = trackingLogInterval;
+                }
             }
 
             Vector3 currentPosition = transform.position;
@@ -216,6 +226,7 @@ namespace FaeMaze.Cameras
             if (focusVisitor == null && Vector3.SqrMagnitude(newPosition - focusTargetPosition) < 0.0001f)
             {
                 isFocusing = false;
+                Debug.Log("[CameraController2D] Focus movement complete. Reached target position.");
             }
         }
 
@@ -296,6 +307,8 @@ namespace FaeMaze.Cameras
             Vector3 targetPosition = new Vector3(worldPos.x, worldPos.y, transform.position.z);
             focusTargetPosition = targetPosition;
 
+            Debug.Log($"[CameraController2D] FocusOnPosition {(instant ? "instant" : "smooth")} to {targetPosition}.");
+
             if (instant)
             {
                 transform.position = targetPosition;
@@ -350,6 +363,8 @@ namespace FaeMaze.Cameras
             focusVisitor = visitor;
             focusLerpSpeed = Mathf.Max(focusLerpSpeed, 0f);
             isFocusing = true;
+            trackingLogTimer = 0f;
+            Debug.Log($"[CameraController2D] FocusOnVisitor {(instant ? "instant" : "smooth")} for '{visitor.name}' at {visitor.transform.position}.");
         }
 
         #endregion
