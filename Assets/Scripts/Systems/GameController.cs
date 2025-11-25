@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Maze;
 using FaeMaze.UI;
+using FaeMaze.Visitors;
 
 namespace FaeMaze.Systems
 {
@@ -56,6 +57,7 @@ namespace FaeMaze.Systems
         private MazeGrid mazeGrid;
         private MazePathfinder pathfinder;
         private int currentEssence;
+        private VisitorController lastSpawnedVisitor;
 
         #endregion
 
@@ -75,6 +77,11 @@ namespace FaeMaze.Systems
         /// Gets the Heart of the Maze.
         /// </summary>
         public HeartOfTheMaze Heart => heart;
+
+        /// <summary>
+        /// Gets the last spawned visitor.
+        /// </summary>
+        public VisitorController LastSpawnedVisitor => lastSpawnedVisitor;
 
         /// <summary>
         /// Gets the current essence count.
@@ -229,6 +236,14 @@ namespace FaeMaze.Systems
 
             Debug.LogWarning($"Insufficient essence to spend {cost}. Current: {currentEssence}");
             return false;
+        }
+
+        /// <summary>
+        /// Sets the last spawned visitor reference.
+        /// </summary>
+        public void SetLastSpawnedVisitor(VisitorController visitor)
+        {
+            lastSpawnedVisitor = visitor;
         }
 
         #endregion

@@ -165,6 +165,8 @@ namespace FaeMaze.Systems
             VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
             visitor.gameObject.name = $"Visitor_Wave{currentWaveNumber}_{visitorsSpawnedThisWave}";
 
+            GameController.Instance.SetLastSpawnedVisitor(visitor);
+
             // Initialize visitor
             visitor.Initialize(GameController.Instance);
 

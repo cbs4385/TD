@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Systems;
+using FaeMaze.Visitors;
 
 namespace FaeMaze.Cameras
 {
@@ -33,6 +34,9 @@ namespace FaeMaze.Cameras
         private Camera cam;
         private bool isDragging;
         private Vector3 lastMouseWorldPosition;
+        private bool isFocusing;
+        private Vector3 focusTargetPosition;
+        private float focusLerpSpeed = 10f;
 
         #endregion
 
@@ -54,9 +58,11 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            HandleFocusShortcuts();
             HandleKeyboardPan();
             HandleMouseDrag();
             HandleZoom();
+            HandleFocusMovement();
             ClampToMazeBounds();
         }
 
@@ -97,6 +103,34 @@ namespace FaeMaze.Cameras
 
             Vector3 delta = new Vector3(movement.x, movement.y, 0f) * panSpeed * Time.deltaTime;
             transform.position += delta;
+        }
+
+        private void HandleFocusShortcuts()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return;
+            }
+
+            if (keyboard.digit1Key.wasPressedThisFrame)
+            {
+                FocusOnHeart(true);
+            }
+
+            if (keyboard.digit2Key.wasPressedThisFrame)
+            {
+                FocusOnEntrance(true);
+            }
+
+            if (keyboard.digit3Key.wasPressedThisFrame && GameController.Instance != null)
+            {
+                VisitorController lastVisitor = GameController.Instance.LastSpawnedVisitor;
+                if (lastVisitor != null)
+                {
+                    FocusOnVisitor(lastVisitor, false);
+                }
+            }
         }
 
         private void HandleMouseDrag()
@@ -157,6 +191,23 @@ namespace FaeMaze.Cameras
             Mouse mouse = Mouse.current;
             Vector2 mousePosition = mouse != null ? mouse.position.ReadValue() : Vector2.zero;
             return cam.ScreenToWorldPoint(new Vector3(mousePosition.x, mousePosition.y, 0f));
+        }
+
+        private void HandleFocusMovement()
+        {
+            if (!isFocusing)
+            {
+                return;
+            }
+
+            Vector3 currentPosition = transform.position;
+            Vector3 newPosition = Vector3.MoveTowards(currentPosition, focusTargetPosition, focusLerpSpeed * Time.deltaTime);
+            transform.position = newPosition;
+
+            if (Vector3.SqrMagnitude(newPosition - focusTargetPosition) < 0.0001f)
+            {
+                isFocusing = false;
+            }
         }
 
         #endregion
@@ -221,6 +272,70 @@ namespace FaeMaze.Cameras
             width = grid.Width;
             height = grid.Height;
             return true;
+        }
+
+        #endregion
+
+        #region Focus Controls
+
+        /// <summary>
+        /// Focuses the camera on the given world position.
+        /// </summary>
+        public void FocusOnPosition(Vector3 worldPos, bool instant = false, float lerpSpeed = 10f)
+        {
+            Vector3 targetPosition = new Vector3(worldPos.x, worldPos.y, transform.position.z);
+
+            if (instant)
+            {
+                transform.position = targetPosition;
+                isFocusing = false;
+                ClampToMazeBounds();
+            }
+            else
+            {
+                focusTargetPosition = targetPosition;
+                focusLerpSpeed = Mathf.Max(lerpSpeed, 0f);
+                isFocusing = true;
+            }
+        }
+
+        /// <summary>
+        /// Focuses on the Heart of the Maze.
+        /// </summary>
+        public void FocusOnHeart(bool instant = false)
+        {
+            if (GameController.Instance == null || GameController.Instance.Heart == null)
+            {
+                return;
+            }
+
+            FocusOnPosition(GameController.Instance.Heart.transform.position, instant);
+        }
+
+        /// <summary>
+        /// Focuses on the Maze Entrance.
+        /// </summary>
+        public void FocusOnEntrance(bool instant = false)
+        {
+            if (GameController.Instance == null || GameController.Instance.Entrance == null)
+            {
+                return;
+            }
+
+            FocusOnPosition(GameController.Instance.Entrance.transform.position, instant);
+        }
+
+        /// <summary>
+        /// Focuses on the given visitor.
+        /// </summary>
+        public void FocusOnVisitor(VisitorController visitor, bool instant = false)
+        {
+            if (visitor == null)
+            {
+                return;
+            }
+
+            FocusOnPosition(visitor.transform.position, instant);
         }
 
         #endregion
