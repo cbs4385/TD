@@ -21,6 +21,15 @@ namespace FaeMaze.Audio
         [Tooltip("Audio source used for playing sound effects.")]
         private AudioSource sfxSource;
 
+        [SerializeField]
+        [Tooltip("Audio source used for playing music or ambient loops.")]
+        private AudioSource musicSource;
+
+        [Header("Music & Ambience")]
+        [SerializeField]
+        [Tooltip("Looping ambient clip played on start.")]
+        private AudioClip ambientLoopClip;
+
         [Header("Sound Effects")]
         [SerializeField]
         [Tooltip("Clip played when a visitor spawns.")]
@@ -64,6 +73,24 @@ namespace FaeMaze.Audio
             }
         }
 
+        private void Start()
+        {
+            if (ambientLoopClip == null)
+            {
+                return;
+            }
+
+            if (musicSource == null)
+            {
+                musicSource = gameObject.AddComponent<AudioSource>();
+            }
+
+            musicSource.loop = true;
+            musicSource.clip = ambientLoopClip;
+            musicSource.playOnAwake = false;
+            musicSource.Play();
+        }
+
         #endregion
 
         #region Public Methods
@@ -85,6 +112,32 @@ namespace FaeMaze.Audio
         {
             PlayClip(lanternPlacedClip);
         }
+
+        /// <summary>Sets the volume for sound effects.</summary>
+        /// <param name="volume">Volume between 0 and 1.</param>
+        public void SetSfxVolume(float volume)
+        {
+            if (sfxSource != null)
+            {
+                sfxSource.volume = Mathf.Clamp01(volume);
+            }
+        }
+
+        /// <summary>Sets the volume for music or ambient audio.</summary>
+        /// <param name="volume">Volume between 0 and 1.</param>
+        public void SetMusicVolume(float volume)
+        {
+            if (musicSource != null)
+            {
+                musicSource.volume = Mathf.Clamp01(volume);
+            }
+        }
+
+        /// <summary>Gets the current SFX volume.</summary>
+        public float SfxVolume => sfxSource != null ? sfxSource.volume : 1f;
+
+        /// <summary>Gets the current music or ambient volume.</summary>
+        public float MusicVolume => musicSource != null ? musicSource.volume : 1f;
 
         #endregion
 
