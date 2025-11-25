@@ -68,12 +68,6 @@ namespace FaeMaze.Systems
         {
             // Find the MazeGridBehaviour in the scene
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-
-            if (mazeGridBehaviour == null)
-            {
-                Debug.LogError("WaveSpawner: Could not find MazeGridBehaviour in scene!");
-            }
-
             ValidateReferences();
         }
 
@@ -88,13 +82,11 @@ namespace FaeMaze.Systems
         {
             if (isSpawning)
             {
-                Debug.LogWarning("WaveSpawner: Wave is already in progress!");
                 return;
             }
 
             if (!ValidateReferences())
             {
-                Debug.LogError("WaveSpawner: Cannot start wave - missing references!");
                 return;
             }
 
@@ -138,7 +130,6 @@ namespace FaeMaze.Systems
         {
             if (GameController.Instance == null)
             {
-                Debug.LogError("WaveSpawner: GameController instance is null!");
                 return;
             }
 
@@ -152,7 +143,6 @@ namespace FaeMaze.Systems
 
             if (!pathFound || pathNodes.Count == 0)
             {
-                Debug.LogWarning($"WaveSpawner: No path found from {entrancePos} to {heartPos}!");
                 return;
             }
 
@@ -185,25 +175,21 @@ namespace FaeMaze.Systems
 
             if (visitorPrefab == null)
             {
-                Debug.LogError("WaveSpawner: Visitor prefab is not assigned!");
                 isValid = false;
             }
 
             if (entrance == null)
             {
-                Debug.LogError("WaveSpawner: Entrance is not assigned!");
                 isValid = false;
             }
 
             if (heart == null)
             {
-                Debug.LogError("WaveSpawner: Heart is not assigned!");
                 isValid = false;
             }
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("WaveSpawner: MazeGridBehaviour not found in scene!");
                 isValid = false;
             }
 

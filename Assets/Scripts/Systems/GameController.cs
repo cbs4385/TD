@@ -20,10 +20,6 @@ namespace FaeMaze.Systems
         {
             get
             {
-                if (_instance == null)
-                {
-                    Debug.LogError("GameController instance is null! Make sure it exists in the scene.");
-                }
                 return _instance;
             }
         }
@@ -97,7 +93,6 @@ namespace FaeMaze.Systems
             // Singleton pattern enforcement
             if (_instance != null && _instance != this)
             {
-                Debug.LogError("Multiple GameController instances detected! Destroying duplicate on: " + gameObject.name);
                 Destroy(gameObject);
                 return;
             }
@@ -123,7 +118,6 @@ namespace FaeMaze.Systems
         {
             if (grid == null)
             {
-                Debug.LogError("Attempted to register null MazeGrid!");
                 return;
             }
 
@@ -144,7 +138,6 @@ namespace FaeMaze.Systems
         {
             if (pathfinder == null)
             {
-                Debug.LogError("GameController: Pathfinder is not initialized! Make sure MazeGrid is registered first.");
                 return false;
             }
 
@@ -157,10 +150,6 @@ namespace FaeMaze.Systems
         /// <returns>The maze origin transform, or null if not assigned</returns>
         public Transform GetMazeOrigin()
         {
-            if (mazeOrigin == null)
-            {
-                Debug.LogWarning("MazeOrigin is not assigned in GameController!");
-            }
             return mazeOrigin;
         }
 
@@ -190,7 +179,6 @@ namespace FaeMaze.Systems
         {
             if (amount < 0)
             {
-                Debug.LogWarning($"Attempted to add negative essence: {amount}. Use TrySpendEssence for spending.");
                 return;
             }
 
@@ -212,7 +200,6 @@ namespace FaeMaze.Systems
         {
             if (cost < 0)
             {
-                Debug.LogWarning($"Attempted to spend negative essence: {cost}.");
                 return false;
             }
 
@@ -229,7 +216,6 @@ namespace FaeMaze.Systems
                 return true;
             }
 
-            Debug.LogWarning($"Insufficient essence to spend {cost}. Current: {currentEssence}");
             return false;
         }
 
@@ -247,26 +233,6 @@ namespace FaeMaze.Systems
 
         private void ValidateReferences()
         {
-            if (mazeOrigin == null)
-            {
-                Debug.LogWarning("MazeOrigin is not assigned in GameController!");
-            }
-
-            if (mazeGrid == null)
-            {
-                Debug.LogWarning("MazeGrid has not been registered yet. Make sure MazeGridBehaviour initializes before GameController.Start()");
-            }
-
-            if (entrance == null)
-            {
-                Debug.LogWarning("Entrance is not assigned in GameController!");
-            }
-
-            if (heart == null)
-            {
-                Debug.LogWarning("Heart is not assigned in GameController!");
-            }
-
             // UIController is optional at startup
             if (uiController == null)
             {
