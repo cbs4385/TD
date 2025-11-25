@@ -1,7 +1,7 @@
 using UnityEngine;
 using FaeMaze.Systems;
 
-namespace FaeMaze.Camera
+namespace FaeMaze.Cameras
 {
     /// <summary>
     /// Controls an orthographic camera with keyboard and mouse input while keeping it within maze bounds.
