@@ -129,7 +129,6 @@ namespace FaeMaze.Systems
             if (pathEndNode != null)
             {
                 BuildResultPath(pathEndNode, resultPath);
-                Debug.Log($"MazePathfinder: Path found with {resultPath.Count} nodes from ({startX},{startY}) to ({endX},{endY})");
                 return true;
             }
 

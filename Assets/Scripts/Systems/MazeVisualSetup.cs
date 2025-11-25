@@ -36,12 +36,7 @@ namespace FaeMaze.Systems
             MazeRenderer renderer = GetComponent<MazeRenderer>();
             if (renderer == null)
             {
-                Debug.Log("MazeVisualSetup: Adding MazeRenderer component...");
                 gameObject.AddComponent<MazeRenderer>();
-            }
-            else
-            {
-                Debug.Log("MazeVisualSetup: MazeRenderer already exists.");
             }
         }
 
@@ -74,7 +69,6 @@ namespace FaeMaze.Systems
             float maxDimension = Mathf.Max(mazeGrid.Grid.Width, mazeGrid.Grid.Height);
             mainCamera.orthographicSize = maxDimension * 0.6f; // 0.6 gives some padding
 
-            Debug.Log($"MazeVisualSetup: Camera centered at ({centerX}, {centerY}) with ortho size {mainCamera.orthographicSize}");
         }
 
         private void Start()

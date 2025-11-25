@@ -89,7 +89,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"MazeGrid created: {width}x{height} ({width * height} nodes)");
         }
 
         #endregion

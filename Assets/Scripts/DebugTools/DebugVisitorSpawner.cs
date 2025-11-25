@@ -92,7 +92,6 @@ namespace FaeMaze.DebugTools
             Vector2Int entrancePos = entrance.GridPosition;
             Vector2Int heartPos = heart.GridPosition;
 
-            Debug.Log($"Spawning visitor: Entrance at {entrancePos}, Heart at {heartPos}");
 
             // Find path using A* through GameController
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
@@ -104,7 +103,6 @@ namespace FaeMaze.DebugTools
                 return;
             }
 
-            Debug.Log($"A* pathfinding found path with {pathNodes.Count} nodes");
 
             // Get world position for spawn
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(entrancePos.x, entrancePos.y) + spawnOffset;
@@ -119,7 +117,6 @@ namespace FaeMaze.DebugTools
             // Set path (using MazeNode list directly)
             visitor.SetPath(pathNodes);
 
-            Debug.Log($"Visitor spawned at {spawnWorldPos} with {pathNodes.Count} waypoints");
         }
 
         /// <summary>
@@ -172,7 +169,6 @@ namespace FaeMaze.DebugTools
                 }
             }
 
-            Debug.Log($"Created straight-line path with {path.Count} points from {start} to {end}");
             return path;
         }
 

@@ -221,7 +221,6 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             state = VisitorState.Walking;
 
-            Debug.Log($"Visitor path set with {path.Count} waypoints. Starting at {path[0]}");
         }
 
         /// <summary>
@@ -245,7 +244,6 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             state = VisitorState.Walking;
 
-            Debug.Log($"Visitor path set with {path.Count} waypoints. Starting at {path[0]}");
         }
 
         #endregion
@@ -300,13 +298,11 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                Debug.Log($"Visitor reached waypoint {currentPathIndex - 1}, moving to waypoint {currentPathIndex}");
             }
         }
 
         private void OnPathCompleted()
         {
-            Debug.Log("Visitor reached the end of the path!");
             state = VisitorState.Consumed;
 
             // Notify the Heart that this visitor has arrived
@@ -331,7 +327,6 @@ namespace FaeMaze.Visitors
         public void Stop()
         {
             state = VisitorState.Idle;
-            Debug.Log("Visitor stopped");
         }
 
         /// <summary>
@@ -342,7 +337,6 @@ namespace FaeMaze.Visitors
             if (path != null && path.Count > 0 && currentPathIndex < path.Count)
             {
                 state = VisitorState.Walking;
-                Debug.Log("Visitor resumed walking");
             }
         }
 
@@ -356,7 +350,6 @@ namespace FaeMaze.Visitors
             if (isEntranced != value)
             {
                 isEntranced = value;
-                Debug.Log($"Visitor {gameObject.name} entranced state set to: {isEntranced}");
             }
         }
 

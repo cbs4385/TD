@@ -104,7 +104,6 @@ namespace FaeMaze.Systems
 
             _instance = this;
 
-            Debug.Log("GameController initialized successfully.");
         }
 
         private void Start()
@@ -129,11 +128,9 @@ namespace FaeMaze.Systems
             }
 
             mazeGrid = grid;
-            Debug.Log("MazeGrid registered with GameController.");
 
             // Create pathfinder once grid is registered
             pathfinder = new MazePathfinder(mazeGrid);
-            Debug.Log("MazePathfinder initialized.");
         }
 
         /// <summary>
@@ -198,7 +195,6 @@ namespace FaeMaze.Systems
             }
 
             currentEssence += amount;
-            Debug.Log($"Added {amount} essence. Current total: {currentEssence}");
 
             // Update UI
             if (uiController != null)
@@ -223,7 +219,6 @@ namespace FaeMaze.Systems
             if (currentEssence >= cost)
             {
                 currentEssence -= cost;
-                Debug.Log($"Spent {cost} essence. Remaining: {currentEssence}");
 
                 // Update UI
                 if (uiController != null)
@@ -275,7 +270,6 @@ namespace FaeMaze.Systems
             // UIController is optional at startup
             if (uiController == null)
             {
-                Debug.Log("UIController reference not yet assigned (will be set later).");
             }
         }
 

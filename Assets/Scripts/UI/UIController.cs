@@ -56,7 +56,6 @@ namespace FaeMaze.UI
             if (startWaveButton != null && waveSpawner != null)
             {
                 startWaveButton.onClick.AddListener(OnStartWaveClicked);
-                Debug.Log("UIController: Start Wave button listener added");
             }
 
             // Initialize essence display
@@ -105,7 +104,6 @@ namespace FaeMaze.UI
         {
             if (waveSpawner != null)
             {
-                Debug.Log("UIController: Start Wave button clicked");
                 waveSpawner.StartWave();
             }
             else

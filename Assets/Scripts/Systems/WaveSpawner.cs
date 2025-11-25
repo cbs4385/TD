@@ -101,7 +101,6 @@ namespace FaeMaze.Systems
             currentWaveNumber++;
             visitorsSpawnedThisWave = 0;
 
-            Debug.Log($"Starting Wave {currentWaveNumber}: {visitorsPerWave} visitors");
 
             StartCoroutine(SpawnWaveCoroutine());
         }
@@ -126,7 +125,6 @@ namespace FaeMaze.Systems
             }
 
             isSpawning = false;
-            Debug.Log($"Wave {currentWaveNumber} spawning complete. Total spawned: {visitorsSpawnedThisWave}");
         }
 
         #endregion
@@ -175,7 +173,6 @@ namespace FaeMaze.Systems
 
             totalVisitorsSpawned++;
 
-            Debug.Log($"Wave {currentWaveNumber}: Spawned visitor {visitorsSpawnedThisWave + 1}/{visitorsPerWave} at {spawnWorldPos}");
         }
 
         #endregion

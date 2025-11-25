@@ -57,7 +57,6 @@ namespace FaeMaze.Maze
         {
             gridX = pos.x;
             gridY = pos.y;
-            Debug.Log($"MazeEntrance grid position set to: ({gridX}, {gridY})");
         }
 
         #endregion
@@ -66,7 +65,6 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
-            Debug.Log($"MazeEntrance initialized at grid position ({gridX}, {gridY}), world position {transform.position}");
             CreateVisualMarker();
         }
 
