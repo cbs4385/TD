@@ -122,7 +122,9 @@ namespace FaeMaze.UI
                 return;
             }
 
-            float initialVolume = SoundManager.Instance != null ? SoundManager.Instance.SfxVolume : 1f;
+            float initialVolume = SoundManager.Instance != null
+                ? Mathf.Max(SoundManager.Instance.SfxVolume, SoundManager.Instance.MusicVolume)
+                : 1f;
             sfxVolumeSlider.minValue = 0f;
             sfxVolumeSlider.maxValue = 1f;
             sfxVolumeSlider.value = initialVolume;
@@ -239,7 +241,13 @@ namespace FaeMaze.UI
 
         private void OnSfxVolumeChanged(float value)
         {
-            SoundManager.Instance?.SetSfxVolume(value);
+            if (SoundManager.Instance == null)
+            {
+                return;
+            }
+
+            SoundManager.Instance.SetSfxVolume(value);
+            SoundManager.Instance.SetMusicVolume(value);
         }
 
         #endregion
