@@ -1,0 +1,312 @@
+using System.Collections.Generic;
+using UnityEngine;
+using FaeMaze.Systems;
+using FaeMaze.Maze;
+
+namespace FaeMaze.Visitors
+{
+    /// <summary>
+    /// Controls a visitor's movement through the maze toward the Heart.
+    /// Visitors follow a path of grid nodes and are consumed when they reach the Heart.
+    /// </summary>
+    public class VisitorController : MonoBehaviour
+    {
+        #region Enums
+
+        public enum VisitorState
+        {
+            Idle,
+            Walking,
+            Consumed,
+            Escaping
+        }
+
+        #endregion
+
+        #region Serialized Fields
+
+        [Header("Movement Settings")]
+        [SerializeField]
+        [Tooltip("Movement speed in units per second")]
+        private float moveSpeed = 3f;
+
+        [Header("Path Following")]
+        [SerializeField]
+        [Tooltip("Distance threshold to consider a waypoint reached")]
+        private float waypointReachedDistance = 0.05f;
+
+        #endregion
+
+        #region Private Fields
+
+        private List<Vector2Int> path;
+        private int currentPathIndex;
+        private VisitorState state;
+        private GameController gameController;
+        private MazeGridBehaviour mazeGridBehaviour;
+        private bool isEntranced;
+        private float speedMultiplier = 1f;
+
+        #endregion
+
+        #region Properties
+
+        /// <summary>Gets the current state of the visitor</summary>
+        public VisitorState State => state;
+
+        /// <summary>Gets the current move speed</summary>
+        public float MoveSpeed => moveSpeed;
+
+        /// <summary>Gets whether this visitor is entranced by a Fairy Ring</summary>
+        public bool IsEntranced => isEntranced;
+
+        /// <summary>Gets or sets the speed multiplier applied to movement</summary>
+        public float SpeedMultiplier
+        {
+            get => speedMultiplier;
+            set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
+        }
+
+        #endregion
+
+        #region Unity Lifecycle
+
+        private void Awake()
+        {
+            state = VisitorState.Idle;
+        }
+
+        private void Update()
+        {
+            if (state == VisitorState.Walking)
+            {
+                UpdateWalking();
+            }
+        }
+
+        #endregion
+
+        #region Initialization
+
+        /// <summary>
+        /// Initializes the visitor with a reference to the game controller.
+        /// </summary>
+        /// <param name="controller">The game controller instance</param>
+        public void Initialize(GameController controller)
+        {
+            gameController = controller;
+
+            if (gameController != null && gameController.MazeGrid != null)
+            {
+                // Find the MazeGridBehaviour in the scene
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+
+                if (mazeGridBehaviour == null)
+                {
+                    Debug.LogError("VisitorController: Could not find MazeGridBehaviour in scene!");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("VisitorController: GameController or MazeGrid is null during initialization!");
+            }
+        }
+
+        /// <summary>
+        /// Initializes the visitor using the static GameController instance.
+        /// </summary>
+        public void Initialize()
+        {
+            Initialize(GameController.Instance);
+        }
+
+        #endregion
+
+        #region Path Management
+
+        /// <summary>
+        /// Sets the path for the visitor to follow and begins walking.
+        /// </summary>
+        /// <param name="gridPath">List of grid coordinates forming the path</param>
+        public void SetPath(List<Vector2Int> gridPath)
+        {
+            if (gridPath == null || gridPath.Count == 0)
+            {
+                Debug.LogError("VisitorController: Cannot set null or empty path!");
+                return;
+            }
+
+            path = new List<Vector2Int>(gridPath);
+            currentPathIndex = 0;
+            state = VisitorState.Walking;
+
+            Debug.Log($"Visitor path set with {path.Count} waypoints. Starting at {path[0]}");
+        }
+
+        /// <summary>
+        /// Sets the path using MazeNode objects.
+        /// </summary>
+        /// <param name="nodePath">List of MazeNode objects forming the path</param>
+        public void SetPath(List<MazeGrid.MazeNode> nodePath)
+        {
+            if (nodePath == null || nodePath.Count == 0)
+            {
+                Debug.LogError("VisitorController: Cannot set null or empty path!");
+                return;
+            }
+
+            path = new List<Vector2Int>();
+            foreach (var node in nodePath)
+            {
+                path.Add(new Vector2Int(node.x, node.y));
+            }
+
+            currentPathIndex = 0;
+            state = VisitorState.Walking;
+
+            Debug.Log($"Visitor path set with {path.Count} waypoints. Starting at {path[0]}");
+        }
+
+        #endregion
+
+        #region Movement
+
+        private void UpdateWalking()
+        {
+            if (path == null || path.Count == 0)
+            {
+                Debug.LogWarning("VisitorController: No path set but state is Walking!");
+                state = VisitorState.Idle;
+                return;
+            }
+
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogError("VisitorController: MazeGridBehaviour is null, cannot convert grid to world!");
+                return;
+            }
+
+            // Get current target waypoint
+            Vector2Int targetGridPos = path[currentPathIndex];
+            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
+
+            // Move toward target (apply speed multiplier)
+            float effectiveSpeed = moveSpeed * speedMultiplier;
+            Vector3 newPosition = Vector3.MoveTowards(
+                transform.position,
+                targetWorldPos,
+                effectiveSpeed * Time.deltaTime
+            );
+
+            transform.position = newPosition;
+
+            // Check if we've reached the waypoint
+            float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
+            if (distanceToTarget < waypointReachedDistance)
+            {
+                OnWaypointReached();
+            }
+        }
+
+        private void OnWaypointReached()
+        {
+            currentPathIndex++;
+
+            // Check if we've reached the end of the path
+            if (currentPathIndex >= path.Count)
+            {
+                OnPathCompleted();
+            }
+            else
+            {
+                Debug.Log($"Visitor reached waypoint {currentPathIndex - 1}, moving to waypoint {currentPathIndex}");
+            }
+        }
+
+        private void OnPathCompleted()
+        {
+            Debug.Log("Visitor reached the end of the path!");
+            state = VisitorState.Consumed;
+
+            // Notify the Heart that this visitor has arrived
+            if (gameController != null && gameController.Heart != null)
+            {
+                gameController.Heart.OnVisitorConsumed(this);
+            }
+            else
+            {
+                Debug.LogWarning("VisitorController: Could not notify Heart - reference is null. Destroying self.");
+                Destroy(gameObject);
+            }
+        }
+
+        #endregion
+
+        #region Public Methods
+
+        /// <summary>
+        /// Stops the visitor's movement.
+        /// </summary>
+        public void Stop()
+        {
+            state = VisitorState.Idle;
+            Debug.Log("Visitor stopped");
+        }
+
+        /// <summary>
+        /// Resumes the visitor's movement if they have a path.
+        /// </summary>
+        public void Resume()
+        {
+            if (path != null && path.Count > 0 && currentPathIndex < path.Count)
+            {
+                state = VisitorState.Walking;
+                Debug.Log("Visitor resumed walking");
+            }
+        }
+
+        /// <summary>
+        /// Sets the entranced state of this visitor.
+        /// Entranced visitors are affected by Fairy Rings.
+        /// </summary>
+        /// <param name="value">True to mark as entranced, false to clear</param>
+        public void SetEntranced(bool value)
+        {
+            if (isEntranced != value)
+            {
+                isEntranced = value;
+                Debug.Log($"Visitor {gameObject.name} entranced state set to: {isEntranced}");
+            }
+        }
+
+        #endregion
+
+        #region Gizmos
+
+        private void OnDrawGizmos()
+        {
+            // Draw current path
+            if (path != null && path.Count > 0 && mazeGridBehaviour != null)
+            {
+                Gizmos.color = Color.cyan;
+
+                for (int i = 0; i < path.Count - 1; i++)
+                {
+                    Vector3 start = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
+                    Vector3 end = mazeGridBehaviour.GridToWorld(path[i + 1].x, path[i + 1].y);
+                    Gizmos.DrawLine(start, end);
+                }
+
+                // Draw current target
+                if (state == VisitorState.Walking && currentPathIndex < path.Count)
+                {
+                    Gizmos.color = Color.yellow;
+                    Vector3 target = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);
+                    Gizmos.DrawWireSphere(target, 0.3f);
+                }
+            }
+        }
+
+        #endregion
+    }
+}
