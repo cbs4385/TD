@@ -147,6 +147,15 @@ namespace FaeMaze.Maze
             // Set scale
             baseScale = new Vector3(markerSize, markerSize, 1f);
             transform.localScale = baseScale;
+
+            // Add CircleCollider2D for trigger detection
+            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            if (collider == null)
+            {
+                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider.radius = 0.5f;
+                collider.isTrigger = true;
+            }
         }
 
         private Sprite CreateHeartSprite(int resolution)

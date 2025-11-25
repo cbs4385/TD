@@ -107,6 +107,24 @@ namespace FaeMaze.Visitors
 
             // Set scale
             transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+
+            // Add Rigidbody2D for trigger collisions with MazeAttractors
+            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            if (rb == null)
+            {
+                rb = gameObject.AddComponent<Rigidbody2D>();
+                rb.bodyType = RigidbodyType2D.Kinematic; // Kinematic so we control movement manually
+                rb.gravityScale = 0f; // No gravity for 2D top-down
+            }
+
+            // Add CircleCollider2D for trigger detection
+            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            if (collider == null)
+            {
+                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider.radius = 0.3f; // Small radius for visitor collision
+                collider.isTrigger = true; // Enable trigger events
+            }
         }
 
         private Sprite CreateCircleSprite(int resolution)

@@ -38,6 +38,15 @@ namespace FaeMaze.Maze
         [Tooltip("Sprite rendering layer order")]
         private int sortingOrder = 12;
 
+        [Header("Visitor Interaction")]
+        [SerializeField]
+        [Tooltip("Slow factor applied to visitors within radius (0.5 = half speed)")]
+        private float visitorSlowFactor = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Enable trigger-based visitor slowing")]
+        private bool enableVisitorSlowing = true;
+
         #endregion
 
         #region Private Fields
@@ -46,6 +55,7 @@ namespace FaeMaze.Maze
         private Vector2Int gridPosition;
         private bool isApplied = false;
         private SpriteRenderer spriteRenderer;
+        private CircleCollider2D triggerCollider;
 
         #endregion
 
@@ -69,6 +79,12 @@ namespace FaeMaze.Maze
             // Create visual sprite first
             CreateVisualSprite();
 
+            // Setup trigger collider for visitor interaction
+            if (enableVisitorSlowing)
+            {
+                SetupTriggerCollider();
+            }
+
             // Find the MazeGridBehaviour in the scene
             gridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
@@ -90,6 +106,21 @@ namespace FaeMaze.Maze
 
             // Apply attraction
             ApplyAttraction(gridBehaviour);
+        }
+
+        private void SetupTriggerCollider()
+        {
+            // Add CircleCollider2D for trigger detection
+            triggerCollider = GetComponent<CircleCollider2D>();
+            if (triggerCollider == null)
+            {
+                triggerCollider = gameObject.AddComponent<CircleCollider2D>();
+            }
+
+            triggerCollider.isTrigger = true;
+            triggerCollider.radius = radius;
+
+            Debug.Log($"MazeAttractor: Setup trigger collider with radius {radius}");
         }
 
         private void CreateVisualSprite()
@@ -154,6 +185,36 @@ namespace FaeMaze.Maze
             // For MVP, we don't remove attraction when disabled
             // Could implement removal by storing affected nodes and calling AddAttraction with negative value
             Debug.Log($"MazeAttractor at {gridPosition} disabled (attraction remains on grid)");
+        }
+
+        private void OnTriggerEnter2D(Collider2D other)
+        {
+            if (!enableVisitorSlowing)
+                return;
+
+            // Check if a visitor entered the attraction radius
+            var visitor = other.GetComponent<Visitors.VisitorController>();
+            if (visitor != null)
+            {
+                // Apply slow effect
+                visitor.SpeedMultiplier = visitorSlowFactor;
+                Debug.Log($"MazeAttractor at {gridPosition}: Visitor entered range, slowing to {visitorSlowFactor}x speed");
+            }
+        }
+
+        private void OnTriggerExit2D(Collider2D other)
+        {
+            if (!enableVisitorSlowing)
+                return;
+
+            // Check if a visitor exited the attraction radius
+            var visitor = other.GetComponent<Visitors.VisitorController>();
+            if (visitor != null)
+            {
+                // Restore normal speed
+                visitor.SpeedMultiplier = 1f;
+                Debug.Log($"MazeAttractor at {gridPosition}: Visitor exited range, restoring normal speed");
+            }
         }
 
         #endregion
