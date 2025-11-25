@@ -35,6 +35,13 @@ namespace FaeMaze.Systems
         [Tooltip("Reference to the HeartOfTheMaze component")]
         private HeartOfTheMaze heart;
 
+        [Header("Debug Visualization")]
+        [SerializeField]
+        private bool drawGridGizmos = true;
+
+        [SerializeField]
+        private bool drawAttractionHeatmap = true;
+
         #endregion
 
         #region Private Fields
@@ -347,6 +354,83 @@ namespace FaeMaze.Systems
 
         #region Gizmos
 
+        private void OnDrawGizmos()
+        {
+            if (!drawGridGizmos || grid == null || mazeOrigin == null)
+            {
+                return;
+            }
+
+            Color originalColor = Gizmos.color;
+
+            float maxAttraction = 0f;
+            if (drawAttractionHeatmap)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        var node = grid.GetNode(x, y);
+                        if (node != null)
+                        {
+                            maxAttraction = Mathf.Max(maxAttraction, node.attraction);
+                        }
+                    }
+                }
+
+                if (Mathf.Approximately(maxAttraction, 0f))
+                {
+                    maxAttraction = 1f;
+                }
+            }
+
+            Color walkableBaseColor = new Color(0.2f, 0.8f, 0.2f, 0.35f);
+            Color blockedColor = new Color(0.6f, 0.1f, 0.1f, 0.4f);
+            Vector3 cellSize = new Vector3(0.95f, 0.95f, 0.1f);
+
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node == null)
+                    {
+                        continue;
+                    }
+
+                    Vector3 cellCenter = GridToWorld(x, y);
+
+                    if (node.walkable)
+                    {
+                        Color tileColor = walkableBaseColor;
+
+                        if (drawAttractionHeatmap)
+                        {
+                            float t = Mathf.InverseLerp(0f, maxAttraction, node.attraction);
+                            tileColor = Color.Lerp(walkableBaseColor, Color.cyan, t);
+                        }
+
+                        Gizmos.color = tileColor;
+                        Gizmos.DrawCube(cellCenter, cellSize);
+                    }
+                    else
+                    {
+                        Gizmos.color = blockedColor;
+                        Gizmos.DrawCube(cellCenter, cellSize);
+                    }
+                }
+            }
+
+            // Highlight entrance and heart positions
+            Gizmos.color = new Color(0.2f, 0.4f, 1f, 0.8f);
+            Gizmos.DrawWireCube(GridToWorld(entranceGridPos.x, entranceGridPos.y), Vector3.one * 1.1f);
+
+            Gizmos.color = new Color(1f, 0.9f, 0.1f, 0.9f);
+            Gizmos.DrawWireCube(GridToWorld(heartGridPos.x, heartGridPos.y), Vector3.one * 1.1f);
+
+            Gizmos.color = originalColor;
+        }
+
         private void OnDrawGizmosSelected()
         {
             if (grid == null || mazeOrigin == null)
@@ -367,6 +451,20 @@ namespace FaeMaze.Systems
             Gizmos.color = Color.red;
             Vector3 heartPos = GridToWorld(heartGridPos.x, heartGridPos.y);
             Gizmos.DrawWireSphere(heartPos, 0.5f);
+        }
+
+        #endregion
+
+        #region Debug Controls
+
+        public void SetDrawGridGizmos(bool value)
+        {
+            drawGridGizmos = value;
+        }
+
+        public void SetDrawAttractionHeatmap(bool value)
+        {
+            drawAttractionHeatmap = value;
         }
 
         #endregion
