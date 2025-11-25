@@ -31,10 +31,6 @@ namespace FaeMaze.DebugTools
 
         [Header("Spawn Settings")]
         [SerializeField]
-        [Tooltip("Key to press to spawn a visitor")]
-        private KeyCode spawnKey = KeyCode.Space;
-
-        [SerializeField]
         [Tooltip("Offset from entrance to spawn visitor (to avoid overlapping)")]
         private Vector3 spawnOffset = Vector3.zero;
 
@@ -64,7 +60,7 @@ namespace FaeMaze.DebugTools
 
         private void Update()
         {
-            // Check for spawn key press using new Input System
+            // Check for Space key press using new Input System
             if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 SpawnVisitor();
