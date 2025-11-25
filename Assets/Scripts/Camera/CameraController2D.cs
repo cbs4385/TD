@@ -145,8 +145,11 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            cam.orthographicSize -= scroll * zoomSpeed * Time.deltaTime;
-            cam.orthographicSize = Mathf.Clamp(cam.orthographicSize, minOrthographicSize, maxOrthographicSize);
+            float zoomFactor = Mathf.Exp(scroll * zoomSpeed * Time.deltaTime);
+            cam.orthographicSize = Mathf.Clamp(
+                cam.orthographicSize / zoomFactor,
+                minOrthographicSize,
+                maxOrthographicSize);
         }
 
         private Vector3 GetMouseWorldPosition()
