@@ -78,7 +78,6 @@ namespace FaeMaze.Systems
             int width = grid.Width;
             int height = grid.Height;
 
-            Debug.Log($"Rendering maze: {width}x{height}");
 
             int renderedTiles = 0;
 
@@ -99,7 +98,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"MazeRenderer: Created {renderedTiles} tile sprites");
         }
 
         private void CreateTileSprite(int gridX, int gridY, Color color)

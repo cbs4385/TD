@@ -79,7 +79,6 @@ namespace FaeMaze.Maze
         {
             gridX = pos.x;
             gridY = pos.y;
-            Debug.Log($"HeartOfTheMaze grid position set to: ({gridX}, {gridY})");
         }
 
         /// <summary>
@@ -94,7 +93,6 @@ namespace FaeMaze.Maze
                 return;
             }
 
-            Debug.Log($"Visitor {visitor.gameObject.name} consumed at Heart! Gaining {essencePerVisitor} essence.");
 
             // Add essence to game controller
             if (GameController.Instance != null)
@@ -116,8 +114,6 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
-            Debug.Log($"HeartOfTheMaze initialized at grid position ({gridX}, {gridY}), world position {transform.position}");
-            Debug.Log($"Essence per visitor: {essencePerVisitor}");
             CreateVisualMarker();
         }
 

@@ -69,7 +69,6 @@ namespace FaeMaze.Props
                 Debug.LogError("PropPlacementController: FaeLantern prefab is not assigned!");
             }
 
-            Debug.Log($"PropPlacementController initialized. FaeLantern cost: {faeLanternCost}");
         }
 
         private void Update()
@@ -108,7 +107,6 @@ namespace FaeMaze.Props
             // Convert world position to grid coordinates
             if (!mazeGridBehaviour.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
             {
-                Debug.Log("PropPlacementController: Click position is outside grid bounds");
                 return;
             }
 
@@ -117,7 +115,6 @@ namespace FaeMaze.Props
             // Check if tile is already occupied
             if (occupiedTiles.ContainsKey(gridPos))
             {
-                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is already occupied");
                 return;
             }
 
@@ -139,7 +136,6 @@ namespace FaeMaze.Props
             // Check if tile is walkable
             if (!node.walkable)
             {
-                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is not walkable (wall)");
                 return;
             }
 
@@ -152,7 +148,6 @@ namespace FaeMaze.Props
 
             if (!GameController.Instance.TrySpendEssence(faeLanternCost))
             {
-                Debug.Log($"PropPlacementController: Not enough essence to place lantern (need {faeLanternCost}, have {GameController.Instance.CurrentEssence})");
                 return;
             }
 
@@ -176,7 +171,6 @@ namespace FaeMaze.Props
             // Mark tile as occupied
             occupiedTiles[gridPos] = lantern;
 
-            Debug.Log($"PropPlacementController: Placed FaeLantern at grid ({gridPos.x}, {gridPos.y}), world {worldPos}");
 
             // The MazeAttractor component on the lantern will automatically apply attraction in its Start() method
         }
@@ -190,7 +184,6 @@ namespace FaeMaze.Props
             if (occupiedTiles.ContainsKey(gridPos))
             {
                 occupiedTiles.Remove(gridPos);
-                Debug.Log($"PropPlacementController: Freed tile ({gridPos.x}, {gridPos.y})");
             }
         }
 

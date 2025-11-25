@@ -102,7 +102,6 @@ namespace FaeMaze.Maze
             }
 
             gridPosition = new Vector2Int(x, y);
-            Debug.Log($"MazeAttractor at world {transform.position} -> grid {gridPosition}");
 
             // Apply attraction
             ApplyAttraction(gridBehaviour);
@@ -120,7 +119,6 @@ namespace FaeMaze.Maze
             triggerCollider.isTrigger = true;
             triggerCollider.radius = radius;
 
-            Debug.Log($"MazeAttractor: Setup trigger collider with radius {radius}");
         }
 
         private void CreateVisualSprite()
@@ -184,7 +182,6 @@ namespace FaeMaze.Maze
         {
             // For MVP, we don't remove attraction when disabled
             // Could implement removal by storing affected nodes and calling AddAttraction with negative value
-            Debug.Log($"MazeAttractor at {gridPosition} disabled (attraction remains on grid)");
         }
 
         private void OnTriggerEnter2D(Collider2D other)
@@ -198,7 +195,6 @@ namespace FaeMaze.Maze
             {
                 // Apply slow effect
                 visitor.SpeedMultiplier = visitorSlowFactor;
-                Debug.Log($"MazeAttractor at {gridPosition}: Visitor entered range, slowing to {visitorSlowFactor}x speed");
             }
         }
 
@@ -213,7 +209,6 @@ namespace FaeMaze.Maze
             {
                 // Restore normal speed
                 visitor.SpeedMultiplier = 1f;
-                Debug.Log($"MazeAttractor at {gridPosition}: Visitor exited range, restoring normal speed");
             }
         }
 
@@ -280,7 +275,6 @@ namespace FaeMaze.Maze
 
             isApplied = true;
 
-            Debug.Log($"MazeAttractor at {gridPosition}: Applied attraction to {affectedCount} tiles (total: {totalAttractionApplied:F2}, avg: {(affectedCount > 0 ? totalAttractionApplied / affectedCount : 0):F3})");
         }
 
         /// <summary>
@@ -306,7 +300,6 @@ namespace FaeMaze.Maze
                 }
             }
 
-            Debug.Log($"MazeAttractor at {gridPosition}: Removed attraction and reapplied {allAttractors.Length - 1} other attractors");
         }
 
         #endregion

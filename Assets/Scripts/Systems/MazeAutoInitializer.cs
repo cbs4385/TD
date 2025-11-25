@@ -11,7 +11,6 @@ namespace FaeMaze.Systems
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Initialize()
         {
-            Debug.Log("MazeAutoInitializer: Checking for maze components...");
 
             // Find MazeGridBehaviour in scene
             MazeGridBehaviour mazeGrid = Object.FindFirstObjectByType<MazeGridBehaviour>();
@@ -25,7 +24,6 @@ namespace FaeMaze.Systems
             MazeRenderer renderer = mazeGrid.GetComponent<MazeRenderer>();
             if (renderer == null)
             {
-                Debug.Log("MazeAutoInitializer: Adding MazeRenderer component automatically...");
                 renderer = mazeGrid.gameObject.AddComponent<MazeRenderer>();
             }
 
@@ -71,7 +69,6 @@ namespace FaeMaze.Systems
             float maxDimension = Mathf.Max(mazeGrid.Grid.Width, mazeGrid.Grid.Height);
             camera.orthographicSize = maxDimension * 0.6f; // 0.6 gives some padding
 
-            Debug.Log($"MazeAutoInitializer: Camera centered at ({centerX}, {centerY}) with ortho size {camera.orthographicSize}");
         }
 
         // Helper class to run coroutines

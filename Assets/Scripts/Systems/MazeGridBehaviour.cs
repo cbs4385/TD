@@ -81,7 +81,6 @@ namespace FaeMaze.Systems
             if (GameController.Instance != null)
             {
                 GameController.Instance.RegisterMazeGrid(grid);
-                Debug.Log("MazeGrid registered with GameController");
             }
             else
             {
@@ -105,7 +104,6 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            Debug.Log($"Loading maze from file: {mazeFile.name}");
 
             // Parse the text file
             var lines = mazeFile.text
@@ -124,7 +122,6 @@ namespace FaeMaze.Systems
             height = lines.Length;
             width = lines.Max(line => line.Length);
 
-            Debug.Log($"Maze dimensions: {width}x{height}");
 
             // Create the grid
             grid = new MazeGrid(width, height);
@@ -159,14 +156,12 @@ namespace FaeMaze.Systems
                             {
                                 entranceGridPos = new Vector2Int(x, y);
                                 foundEntrance = true;
-                                Debug.Log($"Entrance found at grid position ({x}, {y})");
                             }
                             break;
 
                         case 'H':
                             // Heart marker (optional) - walkable
                             grid.SetWalkable(x, y, true);
-                            Debug.Log($"Heart marker 'H' found at ({x}, {y}) - will use as hint");
                             break;
 
                         default:
@@ -195,9 +190,6 @@ namespace FaeMaze.Systems
             FindHeartPosition();
 
             // Log diagnostic info
-            Debug.Log(grid.GetGridInfo());
-            Debug.Log($"Entrance at grid: {entranceGridPos}");
-            Debug.Log($"Heart at grid: {heartGridPos}");
         }
 
         private void FindHeartPosition()
@@ -206,13 +198,11 @@ namespace FaeMaze.Systems
             int centerX = width / 2;
             int centerY = height / 2;
 
-            Debug.Log($"Searching for heart position near center ({centerX}, {centerY})");
 
             // Check if center is walkable
             if (grid.GetNode(centerX, centerY)?.walkable == true)
             {
                 heartGridPos = new Vector2Int(centerX, centerY);
-                Debug.Log($"Heart position set to center: {heartGridPos}");
                 return;
             }
 
@@ -237,7 +227,6 @@ namespace FaeMaze.Systems
                             if (node != null && node.walkable)
                             {
                                 heartGridPos = new Vector2Int(checkX, checkY);
-                                Debug.Log($"Heart position found at: {heartGridPos} (radius {radius} from center)");
                                 return;
                             }
                         }
@@ -258,7 +247,6 @@ namespace FaeMaze.Systems
                 Vector3 entranceWorldPos = GridToWorld(entranceGridPos.x, entranceGridPos.y);
                 entrance.transform.position = entranceWorldPos;
                 entrance.SetGridPosition(entranceGridPos);
-                Debug.Log($"Entrance positioned at world: {entranceWorldPos}");
             }
             else
             {
@@ -271,7 +259,6 @@ namespace FaeMaze.Systems
                 Vector3 heartWorldPos = GridToWorld(heartGridPos.x, heartGridPos.y);
                 heart.transform.position = heartWorldPos;
                 heart.SetGridPosition(heartGridPos);
-                Debug.Log($"Heart positioned at world: {heartWorldPos}");
             }
             else
             {

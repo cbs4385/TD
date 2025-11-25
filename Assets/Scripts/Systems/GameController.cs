@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Maze;
 using FaeMaze.UI;
+using FaeMaze.Visitors;
 
 namespace FaeMaze.Systems
 {
@@ -19,10 +20,6 @@ namespace FaeMaze.Systems
         {
             get
             {
-                if (_instance == null)
-                {
-                    Debug.LogError("GameController instance is null! Make sure it exists in the scene.");
-                }
                 return _instance;
             }
         }
@@ -56,6 +53,7 @@ namespace FaeMaze.Systems
         private MazeGrid mazeGrid;
         private MazePathfinder pathfinder;
         private int currentEssence;
+        private VisitorController lastSpawnedVisitor;
 
         #endregion
 
@@ -77,6 +75,11 @@ namespace FaeMaze.Systems
         public HeartOfTheMaze Heart => heart;
 
         /// <summary>
+        /// Gets the last spawned visitor.
+        /// </summary>
+        public VisitorController LastSpawnedVisitor => lastSpawnedVisitor;
+
+        /// <summary>
         /// Gets the current essence count.
         /// </summary>
         public int CurrentEssence => currentEssence;
@@ -90,14 +93,12 @@ namespace FaeMaze.Systems
             // Singleton pattern enforcement
             if (_instance != null && _instance != this)
             {
-                Debug.LogError("Multiple GameController instances detected! Destroying duplicate on: " + gameObject.name);
                 Destroy(gameObject);
                 return;
             }
 
             _instance = this;
 
-            Debug.Log("GameController initialized successfully.");
         }
 
         private void Start()
@@ -117,16 +118,13 @@ namespace FaeMaze.Systems
         {
             if (grid == null)
             {
-                Debug.LogError("Attempted to register null MazeGrid!");
                 return;
             }
 
             mazeGrid = grid;
-            Debug.Log("MazeGrid registered with GameController.");
 
             // Create pathfinder once grid is registered
             pathfinder = new MazePathfinder(mazeGrid);
-            Debug.Log("MazePathfinder initialized.");
         }
 
         /// <summary>
@@ -140,7 +138,6 @@ namespace FaeMaze.Systems
         {
             if (pathfinder == null)
             {
-                Debug.LogError("GameController: Pathfinder is not initialized! Make sure MazeGrid is registered first.");
                 return false;
             }
 
@@ -153,10 +150,6 @@ namespace FaeMaze.Systems
         /// <returns>The maze origin transform, or null if not assigned</returns>
         public Transform GetMazeOrigin()
         {
-            if (mazeOrigin == null)
-            {
-                Debug.LogWarning("MazeOrigin is not assigned in GameController!");
-            }
             return mazeOrigin;
         }
 
@@ -186,12 +179,10 @@ namespace FaeMaze.Systems
         {
             if (amount < 0)
             {
-                Debug.LogWarning($"Attempted to add negative essence: {amount}. Use TrySpendEssence for spending.");
                 return;
             }
 
             currentEssence += amount;
-            Debug.Log($"Added {amount} essence. Current total: {currentEssence}");
 
             // Update UI
             if (uiController != null)
@@ -209,14 +200,12 @@ namespace FaeMaze.Systems
         {
             if (cost < 0)
             {
-                Debug.LogWarning($"Attempted to spend negative essence: {cost}.");
                 return false;
             }
 
             if (currentEssence >= cost)
             {
                 currentEssence -= cost;
-                Debug.Log($"Spent {cost} essence. Remaining: {currentEssence}");
 
                 // Update UI
                 if (uiController != null)
@@ -227,8 +216,15 @@ namespace FaeMaze.Systems
                 return true;
             }
 
-            Debug.LogWarning($"Insufficient essence to spend {cost}. Current: {currentEssence}");
             return false;
+        }
+
+        /// <summary>
+        /// Sets the last spawned visitor reference.
+        /// </summary>
+        public void SetLastSpawnedVisitor(VisitorController visitor)
+        {
+            lastSpawnedVisitor = visitor;
         }
 
         #endregion
@@ -237,30 +233,9 @@ namespace FaeMaze.Systems
 
         private void ValidateReferences()
         {
-            if (mazeOrigin == null)
-            {
-                Debug.LogWarning("MazeOrigin is not assigned in GameController!");
-            }
-
-            if (mazeGrid == null)
-            {
-                Debug.LogWarning("MazeGrid has not been registered yet. Make sure MazeGridBehaviour initializes before GameController.Start()");
-            }
-
-            if (entrance == null)
-            {
-                Debug.LogWarning("Entrance is not assigned in GameController!");
-            }
-
-            if (heart == null)
-            {
-                Debug.LogWarning("Heart is not assigned in GameController!");
-            }
-
             // UIController is optional at startup
             if (uiController == null)
             {
-                Debug.Log("UIController reference not yet assigned (will be set later).");
             }
         }
 

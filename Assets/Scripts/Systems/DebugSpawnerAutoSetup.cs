@@ -48,7 +48,6 @@ namespace FaeMaze.Systems
             }
             else
             {
-                Debug.Log("DebugSpawnerAutoSetup: Ready! Press SPACE to spawn a visitor.");
             }
         }
 
@@ -79,7 +78,6 @@ namespace FaeMaze.Systems
             Vector2Int entrancePos = entrance.GridPosition;
             Vector2Int heartPos = heart.GridPosition;
 
-            Debug.Log($"Spawning visitor: Entrance at {entrancePos}, Heart at {heartPos}");
 
             // Find path using A* through GameController
             System.Collections.Generic.List<MazeGrid.MazeNode> pathNodes = new System.Collections.Generic.List<MazeGrid.MazeNode>();
@@ -91,7 +89,6 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            Debug.Log($"A* pathfinding found path with {pathNodes.Count} nodes");
 
             // Get world position for spawn
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(entrancePos.x, entrancePos.y);
@@ -106,7 +103,6 @@ namespace FaeMaze.Systems
             // Set path
             visitor.SetPath(pathNodes);
 
-            Debug.Log($"Visitor spawned at {spawnWorldPos} with {pathNodes.Count} waypoints");
         }
     }
 }

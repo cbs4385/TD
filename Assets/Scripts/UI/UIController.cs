@@ -36,27 +36,10 @@ namespace FaeMaze.UI
 
         private void Start()
         {
-            // Validate references
-            if (essenceText == null)
-            {
-                Debug.LogError("UIController: EssenceText is not assigned!");
-            }
-
-            if (startWaveButton == null)
-            {
-                Debug.LogError("UIController: StartWaveButton is not assigned!");
-            }
-
-            if (waveSpawner == null)
-            {
-                Debug.LogError("UIController: WaveSpawner is not assigned!");
-            }
-
             // Hook up button click event
             if (startWaveButton != null && waveSpawner != null)
             {
                 startWaveButton.onClick.AddListener(OnStartWaveClicked);
-                Debug.Log("UIController: Start Wave button listener added");
             }
 
             // Initialize essence display
@@ -105,12 +88,7 @@ namespace FaeMaze.UI
         {
             if (waveSpawner != null)
             {
-                Debug.Log("UIController: Start Wave button clicked");
                 waveSpawner.StartWave();
-            }
-            else
-            {
-                Debug.LogWarning("UIController: Cannot start wave - WaveSpawner reference is null!");
             }
         }
 
