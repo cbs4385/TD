@@ -1,6 +1,7 @@
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Visitors;
+using FaeMaze.Audio;
 
 namespace FaeMaze.Maze
 {
@@ -103,6 +104,8 @@ namespace FaeMaze.Maze
             {
                 Debug.LogError("GameController instance is null! Cannot add essence.");
             }
+
+            SoundManager.PlayVisitorConsumed();
 
             // Destroy the visitor
             Destroy(visitor.gameObject);

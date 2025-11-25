@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
+using FaeMaze.Audio;
 
 namespace FaeMaze.Props
 {
@@ -167,6 +168,8 @@ namespace FaeMaze.Props
             // Instantiate the lantern
             GameObject lantern = Instantiate(faeLanternPrefab, worldPos, Quaternion.identity);
             lantern.name = $"FaeLantern_{gridPos.x}_{gridPos.y}";
+
+            SoundManager.PlayLanternPlaced();
 
             // Mark tile as occupied
             occupiedTiles[gridPos] = lantern;

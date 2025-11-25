@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1176779ad9134cffacb67f8991b220d9
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - sfxSource: {instanceID: 0}
+  - visitorSpawnClip: {fileID: 8300000, guid: 7519a4a42c1d0ab44b2ed27e9b52ccff, type: 3}
+  - visitorConsumedClip: {fileID: 8300000, guid: 82fe4401c4cf446419581f8b7ec463bc, type: 3}
+  - lanternPlacedClip: {fileID: 8300000, guid: 3c87055a9802d5f45984b9610da2e278, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
