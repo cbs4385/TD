@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using FaeMaze.Audio;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
 using FaeMaze.Visitors;
@@ -110,6 +111,8 @@ namespace FaeMaze.DebugTools
             // Instantiate visitor
             VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
             visitor.gameObject.name = $"Visitor_{visitorSpawnCount++}";
+
+            SoundManager.Instance?.PlayVisitorSpawn();
 
             GameController.Instance.SetLastSpawnedVisitor(visitor);
 
