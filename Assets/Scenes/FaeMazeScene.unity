@@ -263,6 +263,7 @@ GameObject:
   - component: {fileID: 534669904}
   - component: {fileID: 534669903}
   - component: {fileID: 534669906}
+  - component: {fileID: 534669907}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -388,6 +389,23 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!114 &534669907
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 534669902}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 598d9facc1e14532ab0f400c72c107cf, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  panSpeed: 10
+  zoomSpeed: 5
+  minOrthographicSize: 3
+  maxOrthographicSize: 20
+  mazeGridBehaviour: {fileID: 330585547}
 --- !u!1 &963194227
 GameObject:
   m_ObjectHideFlags: 0
