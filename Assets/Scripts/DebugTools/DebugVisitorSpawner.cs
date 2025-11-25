@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
 using FaeMaze.Visitors;
@@ -63,7 +64,8 @@ namespace FaeMaze.DebugTools
 
         private void Update()
         {
-            if (Input.GetKeyDown(spawnKey))
+            // Check for spawn key press using new Input System
+            if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 SpawnVisitor();
             }
