@@ -867,7 +867,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   sfxSource: {fileID: 1800000002}
   musicSource: {fileID: 1800000004}
-  ambientLoopClip: {fileID: 8300000, guid: 7519a4a42c1d0ab44b2ed27e9b52ccff, type: 3}
+  ambientLoopClip: {fileID: 8300000, guid: a61554970159c1245a6e35cbcb716501, type: 3}
   visitorSpawnClip: {fileID: 8300000, guid: 7519a4a42c1d0ab44b2ed27e9b52ccff, type: 3}
   visitorConsumedClip: {fileID: 8300000, guid: 82fe4401c4cf446419581f8b7ec463bc, type: 3}
   lanternPlacedClip: {fileID: 8300000, guid: 3c87055a9802d5f45984b9610da2e278, type: 3}
