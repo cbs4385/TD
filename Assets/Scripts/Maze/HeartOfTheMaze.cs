@@ -13,12 +13,16 @@ namespace FaeMaze.Maze
 
         [Header("Grid Position")]
         [SerializeField]
-        [Tooltip("X coordinate in the maze grid")]
+        [Tooltip("X coordinate in the maze grid (auto-set from 'H' marker if autoPosition is true)")]
         private int gridX;
 
         [SerializeField]
-        [Tooltip("Y coordinate in the maze grid")]
+        [Tooltip("Y coordinate in the maze grid (auto-set from 'H' marker if autoPosition is true)")]
         private int gridY;
+
+        [SerializeField]
+        [Tooltip("Automatically position heart from 'H' marker in maze file")]
+        private bool autoPosition = true;
 
         [Header("Essence Settings")]
         [SerializeField]
@@ -82,6 +86,33 @@ namespace FaeMaze.Maze
         }
 
         /// <summary>
+        /// Positions the heart from the 'H' marker in the maze file.
+        /// </summary>
+        private void PositionFromMazeGrid()
+        {
+            // Find MazeGridBehaviour in scene
+            var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogWarning("HeartOfTheMaze: MazeGridBehaviour not found! Cannot auto-position from 'H' marker.");
+                return;
+            }
+
+            // Get heart position from maze grid
+            Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
+
+            // Update grid position
+            gridX = heartPos.x;
+            gridY = heartPos.y;
+
+            // Convert to world position and update transform
+            Vector3 worldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
+            transform.position = worldPos;
+
+            Debug.Log($"HeartOfTheMaze: Auto-positioned to grid ({gridX}, {gridY}) at world position {worldPos}");
+        }
+
+        /// <summary>
         /// Called when a visitor reaches the heart and is consumed.
         /// </summary>
         /// <param name="visitor">The visitor controller to consume</param>
@@ -116,6 +147,12 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
+            // Auto-position from maze grid if enabled
+            if (autoPosition)
+            {
+                PositionFromMazeGrid();
+            }
+
             CreateVisualMarker();
         }
 

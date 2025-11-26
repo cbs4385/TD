@@ -198,11 +198,20 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Validate entrance
+            // Validate entrance (only required for legacy system)
             if (!foundEntrance)
             {
-                Debug.LogError("No entrance ('E') found in maze file!");
-                entranceGridPos = new Vector2Int(0, 0);
+                // If using spawn markers, entrance is not required
+                if (spawnPoints.Count >= 2)
+                {
+                    Debug.Log("MazeGridBehaviour: No 'E' entrance marker found, using spawn marker system.");
+                    entranceGridPos = new Vector2Int(0, 0); // Not used with spawn markers
+                }
+                else
+                {
+                    Debug.LogError("No entrance ('E') found in maze file! Required for legacy entrance/heart system.");
+                    entranceGridPos = new Vector2Int(0, 0);
+                }
             }
 
             // Find heart position (only if 'H' marker not found)
