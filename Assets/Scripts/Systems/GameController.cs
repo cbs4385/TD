@@ -110,6 +110,8 @@ namespace FaeMaze.Systems
         {
             ValidateReferences();
 
+            EnsurePlacementUI();
+
             currentEssence = Mathf.Max(0, startingEssence);
 
             if (uiController != null)
@@ -249,6 +251,24 @@ namespace FaeMaze.Systems
             if (uiController == null)
             {
             }
+        }
+
+        private void EnsurePlacementUI()
+        {
+            var placementUI = FindFirstObjectByType<PlacementUIController>();
+            if (placementUI != null)
+            {
+                return;
+            }
+
+            GameObject placementUiObject = new GameObject("PlacementUI");
+            if (uiController != null)
+            {
+                placementUiObject.transform.SetParent(uiController.transform, false);
+            }
+
+            placementUI = placementUiObject.AddComponent<PlacementUIController>();
+            Debug.Log("GameController: Created PlacementUIController at runtime to provide build selection buttons");
         }
 
         #endregion
