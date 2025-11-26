@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Systems;
@@ -10,9 +11,33 @@ namespace FaeMaze.Props
     /// <summary>
     /// Handles player placement of props on the maze grid by spending essence.
     /// Tracks tile occupancy to prevent duplicate props on the same tile.
+    /// Supports multiple placeable item types (FaeLantern, FairyRing, etc.).
     /// </summary>
     public class PropPlacementController : MonoBehaviour
     {
+        #region Data Structures
+
+        /// <summary>
+        /// Defines a placeable item type with its properties.
+        /// </summary>
+        [System.Serializable]
+        public class PlaceableItem
+        {
+            [Tooltip("Unique identifier for this item (e.g., 'FaeLantern', 'FairyRing')")]
+            public string id;
+
+            [Tooltip("Display name shown in UI")]
+            public string displayName;
+
+            [Tooltip("Prefab to instantiate when placed")]
+            public GameObject prefab;
+
+            [Tooltip("Essence cost to place this item")]
+            public int essenceCost;
+        }
+
+        #endregion
+
         #region Serialized Fields
 
         [Header("References")]
@@ -20,14 +45,10 @@ namespace FaeMaze.Props
         [Tooltip("Reference to the maze grid behaviour")]
         private MazeGridBehaviour mazeGridBehaviour;
 
+        [Header("Placeable Items")]
         [SerializeField]
-        [Tooltip("The FaeLantern prefab to place")]
-        private GameObject faeLanternPrefab;
-
-        [Header("Settings")]
-        [SerializeField]
-        [Tooltip("Essence cost to place a FaeLantern")]
-        private int faeLanternCost = 20;
+        [Tooltip("List of all placeable item types")]
+        private List<PlaceableItem> placeableItems = new List<PlaceableItem>();
 
         #endregion
 
@@ -35,13 +56,17 @@ namespace FaeMaze.Props
 
         private Camera mainCamera;
         private Dictionary<Vector2Int, GameObject> occupiedTiles;
+        private PlaceableItem currentSelection;
 
         #endregion
 
         #region Properties
 
-        /// <summary>Gets the cost to place a FaeLantern</summary>
-        public int FaeLanternCost => faeLanternCost;
+        /// <summary>Gets the currently selected placeable item</summary>
+        public PlaceableItem CurrentSelection => currentSelection;
+
+        /// <summary>Gets the list of all placeable items</summary>
+        public List<PlaceableItem> PlaceableItems => placeableItems;
 
         #endregion
 
@@ -65,11 +90,16 @@ namespace FaeMaze.Props
                 Debug.LogError("PropPlacementController: MazeGridBehaviour is not assigned!");
             }
 
-            if (faeLanternPrefab == null)
+            // Set default selection (first item in list for backward compatibility)
+            if (placeableItems.Count > 0)
             {
-                Debug.LogError("PropPlacementController: FaeLantern prefab is not assigned!");
+                currentSelection = placeableItems[0];
+                Debug.Log($"PropPlacementController: Default selection set to '{currentSelection.displayName}'");
             }
-
+            else
+            {
+                Debug.LogWarning("PropPlacementController: No placeable items configured!");
+            }
         }
 
         private void Update()
@@ -77,8 +107,50 @@ namespace FaeMaze.Props
             // Check for left mouse button click using new Input System
             if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
-                TryPlaceLantern();
+                TryPlaceProp();
             }
+        }
+
+        #endregion
+
+        #region Selection Management
+
+        /// <summary>
+        /// Selects a placeable item by its ID.
+        /// This will be called by UI in future tasks.
+        /// </summary>
+        /// <param name="id">Unique identifier of the item to select</param>
+        public void SelectItemById(string id)
+        {
+            PlaceableItem item = placeableItems.FirstOrDefault(p => p.id == id);
+            if (item != null)
+            {
+                currentSelection = item;
+                Debug.Log($"PropPlacementController: Selected '{currentSelection.displayName}' (cost: {currentSelection.essenceCost})");
+            }
+            else
+            {
+                Debug.LogWarning($"PropPlacementController: No placeable item found with id '{id}'");
+            }
+        }
+
+        /// <summary>
+        /// Gets the currently selected placeable item.
+        /// </summary>
+        /// <returns>The current selection, or null if none selected</returns>
+        public PlaceableItem GetCurrentSelection()
+        {
+            return currentSelection;
+        }
+
+        /// <summary>
+        /// Gets a placeable item by its ID.
+        /// </summary>
+        /// <param name="id">Unique identifier of the item</param>
+        /// <returns>The item if found, null otherwise</returns>
+        public PlaceableItem GetItemById(string id)
+        {
+            return placeableItems.FirstOrDefault(p => p.id == id);
         }
 
         #endregion
@@ -86,12 +158,25 @@ namespace FaeMaze.Props
         #region Placement Logic
 
         /// <summary>
-        /// Attempts to place a FaeLantern at the mouse cursor position.
+        /// Attempts to place the currently selected prop at the mouse cursor position.
         /// </summary>
-        private void TryPlaceLantern()
+        private void TryPlaceProp()
         {
-            if (mainCamera == null || mazeGridBehaviour == null || faeLanternPrefab == null)
+            // Validate preconditions
+            if (currentSelection == null)
             {
+                Debug.LogWarning("PropPlacementController: No item selected for placement!");
+                return;
+            }
+
+            if (mainCamera == null || mazeGridBehaviour == null)
+            {
+                return;
+            }
+
+            if (currentSelection.prefab == null)
+            {
+                Debug.LogError($"PropPlacementController: Prefab not assigned for '{currentSelection.displayName}'!");
                 return;
             }
 
@@ -116,6 +201,7 @@ namespace FaeMaze.Props
             // Check if tile is already occupied
             if (occupiedTiles.ContainsKey(gridPos))
             {
+                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is already occupied");
                 return;
             }
 
@@ -137,6 +223,7 @@ namespace FaeMaze.Props
             // Check if tile is walkable
             if (!node.walkable)
             {
+                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is not walkable");
                 return;
             }
 
@@ -147,36 +234,40 @@ namespace FaeMaze.Props
                 return;
             }
 
-            if (!GameController.Instance.TrySpendEssence(faeLanternCost))
+            if (!GameController.Instance.TrySpendEssence(currentSelection.essenceCost))
             {
+                Debug.Log($"PropPlacementController: Not enough essence (need {currentSelection.essenceCost})");
                 return;
             }
 
-            // Place the lantern
-            PlaceLantern(gridPos);
+            // Place the prop
+            PlaceProp(gridPos, currentSelection);
         }
 
         /// <summary>
-        /// Places a FaeLantern at the specified grid position.
+        /// Places a prop at the specified grid position.
         /// </summary>
-        /// <param name="gridPos">Grid coordinates where the lantern should be placed</param>
-        private void PlaceLantern(Vector2Int gridPos)
+        /// <param name="gridPos">Grid coordinates where the prop should be placed</param>
+        /// <param name="item">The placeable item to instantiate</param>
+        private void PlaceProp(Vector2Int gridPos, PlaceableItem item)
         {
             // Get world position for placement
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
 
-            // Instantiate the lantern
-            GameObject lantern = Instantiate(faeLanternPrefab, worldPos, Quaternion.identity);
-            lantern.name = $"FaeLantern_{gridPos.x}_{gridPos.y}";
+            // Instantiate the prop
+            GameObject prop = Instantiate(item.prefab, worldPos, Quaternion.identity);
+            prop.name = $"{item.id}_{gridPos.x}_{gridPos.y}";
 
-            SoundManager.Instance?.PlayLanternPlaced();
+            Debug.Log($"PropPlacementController: Placed '{item.displayName}' at ({gridPos.x}, {gridPos.y})");
 
             // Mark tile as occupied
-            occupiedTiles[gridPos] = lantern;
+            occupiedTiles[gridPos] = prop;
 
+            // Play placement sound
             SoundManager.Instance?.PlayLanternPlaced();
 
-            // The MazeAttractor component on the lantern will automatically apply attraction in its Start() method
+            // The MazeAttractor or other components on the prop will automatically
+            // apply their effects in their Start() methods
         }
 
         /// <summary>
@@ -187,6 +278,8 @@ namespace FaeMaze.Props
         {
             if (occupiedTiles.ContainsKey(gridPos))
             {
+                GameObject prop = occupiedTiles[gridPos];
+                Debug.Log($"PropPlacementController: Removed prop from ({gridPos.x}, {gridPos.y})");
                 occupiedTiles.Remove(gridPos);
             }
         }
@@ -199,6 +292,16 @@ namespace FaeMaze.Props
         public bool IsTileOccupied(Vector2Int gridPos)
         {
             return occupiedTiles.ContainsKey(gridPos);
+        }
+
+        /// <summary>
+        /// Gets the prop GameObject at the specified grid position.
+        /// </summary>
+        /// <param name="gridPos">Grid position to query</param>
+        /// <returns>The prop GameObject if found, null otherwise</returns>
+        public GameObject GetPropAt(Vector2Int gridPos)
+        {
+            return occupiedTiles.TryGetValue(gridPos, out GameObject prop) ? prop : null;
         }
 
         #endregion
@@ -216,6 +319,13 @@ namespace FaeMaze.Props
             {
                 Vector3 worldPos = mazeGridBehaviour.GridToWorld(kvp.Key.x, kvp.Key.y);
                 Gizmos.DrawWireSphere(worldPos, 0.3f);
+            }
+
+            // Draw current selection info
+            if (currentSelection != null)
+            {
+                Gizmos.color = Color.cyan;
+                // Could draw selection indicator near mouse position in future
             }
         }
 
