@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.EventSystems;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
 using FaeMaze.Audio;
@@ -34,6 +35,13 @@ namespace FaeMaze.Props
 
             [Tooltip("Essence cost to place this item")]
             public int essenceCost;
+
+            [Header("Preview Settings")]
+            [Tooltip("Sprite to use for preview (optional; falls back to prefab's sprite)")]
+            public Sprite previewSprite;
+
+            [Tooltip("Color for the preview ghost (semi-transparent recommended)")]
+            public Color previewColor = new Color(1f, 1f, 1f, 0.5f);
         }
 
         #endregion
@@ -50,6 +58,15 @@ namespace FaeMaze.Props
         [Tooltip("List of all placeable item types")]
         private List<PlaceableItem> placeableItems = new List<PlaceableItem>();
 
+        [Header("Preview")]
+        [SerializeField]
+        [Tooltip("Parent transform for preview objects (optional; will create if null)")]
+        private Transform previewRoot;
+
+        [SerializeField]
+        [Tooltip("Color tint for invalid placement (e.g., non-walkable tiles)")]
+        private Color invalidPlacementColor = new Color(1f, 0.3f, 0.3f, 0.5f);
+
         #endregion
 
         #region Private Fields
@@ -57,6 +74,13 @@ namespace FaeMaze.Props
         private Camera mainCamera;
         private Dictionary<Vector2Int, GameObject> occupiedTiles;
         private PlaceableItem currentSelection;
+
+        // Preview fields
+        private GameObject previewInstance;
+        private SpriteRenderer previewSpriteRenderer;
+        private LineRenderer previewRadiusRenderer;
+        private float previewRadius;
+        private bool isPreviewValid;
 
         #endregion
 
@@ -90,11 +114,17 @@ namespace FaeMaze.Props
                 Debug.LogError("PropPlacementController: MazeGridBehaviour is not assigned!");
             }
 
+            // Create preview root if not assigned
+            if (previewRoot == null)
+            {
+                GameObject rootObj = new GameObject("PlacementPreviewRoot");
+                previewRoot = rootObj.transform;
+            }
+
             // Set default selection (first item in list for backward compatibility)
             if (placeableItems.Count > 0)
             {
-                currentSelection = placeableItems[0];
-                Debug.Log($"PropPlacementController: Default selection set to '{currentSelection.displayName}'");
+                SelectItemById(placeableItems[0].id); // Use SelectItemById to trigger preview creation
             }
             else
             {
@@ -104,6 +134,9 @@ namespace FaeMaze.Props
 
         private void Update()
         {
+            // Update preview position
+            UpdatePreviewPosition();
+
             // Check for left mouse button click using new Input System
             if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
@@ -127,6 +160,9 @@ namespace FaeMaze.Props
             {
                 currentSelection = item;
                 Debug.Log($"PropPlacementController: Selected '{currentSelection.displayName}' (cost: {currentSelection.essenceCost})");
+
+                // Create or update preview for new selection
+                CreateOrUpdatePreview();
             }
             else
             {
@@ -318,6 +354,223 @@ namespace FaeMaze.Props
         public GameObject GetPropAt(Vector2Int gridPos)
         {
             return occupiedTiles.TryGetValue(gridPos, out GameObject prop) ? prop : null;
+        }
+
+        #endregion
+
+        #region Preview Management
+
+        /// <summary>
+        /// Creates or updates the preview instance for the currently selected item.
+        /// </summary>
+        private void CreateOrUpdatePreview()
+        {
+            if (currentSelection == null)
+            {
+                HidePreview();
+                return;
+            }
+
+            // Create preview instance if it doesn't exist
+            if (previewInstance == null)
+            {
+                previewInstance = new GameObject("PlacementPreview");
+                previewInstance.transform.SetParent(previewRoot);
+
+                // Add SpriteRenderer
+                previewSpriteRenderer = previewInstance.AddComponent<SpriteRenderer>();
+                previewSpriteRenderer.sortingOrder = 100; // High order to render on top
+
+                // Create radius indicator as child
+                GameObject radiusObj = new GameObject("RadiusIndicator");
+                radiusObj.transform.SetParent(previewInstance.transform);
+                radiusObj.transform.localPosition = Vector3.zero;
+
+                previewRadiusRenderer = radiusObj.AddComponent<LineRenderer>();
+                ConfigureRadiusRenderer();
+            }
+
+            // Determine sprite to use
+            Sprite sprite = currentSelection.previewSprite;
+            if (sprite == null && currentSelection.prefab != null)
+            {
+                // Try to get sprite from prefab's SpriteRenderer
+                SpriteRenderer prefabSpriteRenderer = currentSelection.prefab.GetComponent<SpriteRenderer>();
+                if (prefabSpriteRenderer != null)
+                {
+                    sprite = prefabSpriteRenderer.sprite;
+                }
+            }
+
+            if (previewSpriteRenderer != null)
+            {
+                previewSpriteRenderer.sprite = sprite;
+                previewSpriteRenderer.color = currentSelection.previewColor;
+            }
+
+            // Determine radius from MazeAttractor if present
+            previewRadius = 0f;
+            if (currentSelection.prefab != null)
+            {
+                MazeAttractor attractor = currentSelection.prefab.GetComponent<MazeAttractor>();
+                if (attractor != null)
+                {
+                    previewRadius = attractor.Radius;
+                }
+            }
+
+            UpdateRadiusVisualization();
+        }
+
+        /// <summary>
+        /// Configures the LineRenderer for the radius indicator.
+        /// </summary>
+        private void ConfigureRadiusRenderer()
+        {
+            if (previewRadiusRenderer == null) return;
+
+            previewRadiusRenderer.loop = true;
+            previewRadiusRenderer.useWorldSpace = false;
+            previewRadiusRenderer.startWidth = 0.05f;
+            previewRadiusRenderer.endWidth = 0.05f;
+            previewRadiusRenderer.material = new Material(Shader.Find("Sprites/Default"));
+            previewRadiusRenderer.startColor = new Color(1f, 1f, 1f, 0.3f);
+            previewRadiusRenderer.endColor = new Color(1f, 1f, 1f, 0.3f);
+            previewRadiusRenderer.sortingOrder = 99;
+        }
+
+        /// <summary>
+        /// Updates the radius visualization circle.
+        /// </summary>
+        private void UpdateRadiusVisualization()
+        {
+            if (previewRadiusRenderer == null || previewRadius <= 0f)
+            {
+                if (previewRadiusRenderer != null)
+                {
+                    previewRadiusRenderer.enabled = false;
+                }
+                return;
+            }
+
+            previewRadiusRenderer.enabled = true;
+
+            // Create circle points
+            int segments = 32;
+            previewRadiusRenderer.positionCount = segments;
+
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = (i / (float)segments) * 2f * Mathf.PI;
+                float x = Mathf.Cos(angle) * previewRadius;
+                float y = Mathf.Sin(angle) * previewRadius;
+                previewRadiusRenderer.SetPosition(i, new Vector3(x, y, 0f));
+            }
+        }
+
+        /// <summary>
+        /// Updates the preview position to follow the mouse cursor.
+        /// </summary>
+        private void UpdatePreviewPosition()
+        {
+            // Hide preview if no selection or mouse is over UI
+            if (currentSelection == null || previewInstance == null)
+            {
+                HidePreview();
+                return;
+            }
+
+            // Check if mouse is over UI
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            {
+                HidePreview();
+                return;
+            }
+
+            // Ensure we have required components
+            if (mainCamera == null || mazeGridBehaviour == null || Mouse.current == null)
+            {
+                HidePreview();
+                return;
+            }
+
+            // Get mouse position in world space
+            Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Mouse.current.position.ReadValue());
+            mouseWorldPos.z = 0f;
+
+            // Convert to grid coordinates
+            if (!mazeGridBehaviour.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
+            {
+                HidePreview();
+                return;
+            }
+
+            Vector2Int gridPos = new Vector2Int(gridX, gridY);
+
+            // Check if tile is valid for placement
+            bool isValid = IsTileValidForPlacement(gridPos);
+            isPreviewValid = isValid;
+
+            // Position preview at grid cell
+            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
+            previewInstance.transform.position = targetWorldPos;
+
+            // Show preview
+            if (!previewInstance.activeSelf)
+            {
+                previewInstance.SetActive(true);
+            }
+
+            // Update color based on validity
+            if (previewSpriteRenderer != null)
+            {
+                previewSpriteRenderer.color = isValid ? currentSelection.previewColor : invalidPlacementColor;
+            }
+
+            // Update radius indicator color
+            if (previewRadiusRenderer != null)
+            {
+                Color radiusColor = isValid ? new Color(1f, 1f, 1f, 0.3f) : new Color(1f, 0.3f, 0.3f, 0.3f);
+                previewRadiusRenderer.startColor = radiusColor;
+                previewRadiusRenderer.endColor = radiusColor;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a tile is valid for placement.
+        /// </summary>
+        private bool IsTileValidForPlacement(Vector2Int gridPos)
+        {
+            // Check if tile is occupied
+            if (occupiedTiles.ContainsKey(gridPos))
+            {
+                return false;
+            }
+
+            // Check if tile is walkable
+            if (mazeGridBehaviour.Grid == null)
+            {
+                return false;
+            }
+
+            MazeGrid.MazeNode node = mazeGridBehaviour.Grid.GetNode(gridPos.x, gridPos.y);
+            if (node == null || !node.walkable)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Hides the preview instance.
+        /// </summary>
+        private void HidePreview()
+        {
+            if (previewInstance != null && previewInstance.activeSelf)
+            {
+                previewInstance.SetActive(false);
+            }
         }
 
         #endregion
