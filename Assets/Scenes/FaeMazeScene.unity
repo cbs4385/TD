@@ -939,6 +939,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2096385508}
   - component: {fileID: 2096385509}
+  - component: {fileID: 2096385510}
   m_Layer: 0
   m_Name: UIRoot
   m_TagString: Untagged
@@ -978,6 +979,26 @@ MonoBehaviour:
   placementInstructionsText: {fileID: 0}
   waveSpawner: {fileID: 1408523524}
   sfxVolumeSlider: {fileID: 0}
+--- !u!114 &2096385510
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2096385507}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 964c9cf9d6de2f64b8abd431c472aef9, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.UI.DebugUIController
+  debugPanel: {fileID: 0}
+  gridToggle: {fileID: 0}
+  heatmapToggle: {fileID: 0}
+  timescaleSlider: {fileID: 0}
+  spawnTestVisitorButton: {fileID: 0}
+  sfxVolumeSlider: {fileID: 0}
+  mazeGridBehaviour: {fileID: 0}
+  waveSpawner: {fileID: 0}
 --- !u!1 &4000000000
 GameObject:
   m_ObjectHideFlags: 0
