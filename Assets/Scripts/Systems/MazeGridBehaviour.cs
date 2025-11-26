@@ -124,8 +124,9 @@ namespace FaeMaze.Systems
             // Create the grid
             grid = new MazeGrid(width, height);
 
-            // Track if we found entrance
+            // Track if we found entrance and heart
             bool foundEntrance = false;
+            bool foundHeart = false;
 
             // Parse each character
             for (int y = 0; y < height; y++)
@@ -158,8 +159,11 @@ namespace FaeMaze.Systems
                             break;
 
                         case 'H':
-                            // Heart marker (optional) - walkable (backwards compatibility)
+                            // Heart marker - walkable and mark position
                             grid.SetWalkable(x, y, true);
+                            heartGridPos = new Vector2Int(x, y);
+                            foundHeart = true;
+                            Debug.Log($"MazeGridBehaviour: Found heart marker 'H' at ({x}, {y})");
                             break;
 
                         case 'A':
@@ -201,8 +205,12 @@ namespace FaeMaze.Systems
                 entranceGridPos = new Vector2Int(0, 0);
             }
 
-            // Find heart position
-            FindHeartPosition();
+            // Find heart position (only if 'H' marker not found)
+            if (!foundHeart)
+            {
+                Debug.LogWarning("No heart marker ('H') found in maze file. Using center fallback.");
+                FindHeartPosition();
+            }
 
             // Log diagnostic info
         }
