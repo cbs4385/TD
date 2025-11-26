@@ -37,6 +37,16 @@ namespace FaeMaze.Visitors
         [Tooltip("Distance threshold to consider a waypoint reached")]
         private float waypointReachedDistance = 0.05f;
 
+        [Header("Confusion Settings")]
+        [SerializeField]
+        [Tooltip("Chance (0-1) for visitor to get confused at intersections")]
+        [Range(0f, 1f)]
+        private float confusionChance = 0.25f;
+
+        [SerializeField]
+        [Tooltip("Whether confusion is enabled")]
+        private bool confusionEnabled = true;
+
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("Color of the visitor sprite")]
@@ -62,6 +72,7 @@ namespace FaeMaze.Visitors
         private bool isEntranced;
         private float speedMultiplier = 1f;
         private SpriteRenderer spriteRenderer;
+        private Vector2Int originalDestination; // Store original destination for confusion recovery
 
         #endregion
 
@@ -228,6 +239,11 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             state = VisitorState.Walking;
 
+            // Store original destination for confusion recovery
+            if (path.Count > 0)
+            {
+                originalDestination = path[path.Count - 1];
+            }
         }
 
         /// <summary>
@@ -251,6 +267,11 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             state = VisitorState.Walking;
 
+            // Store original destination for confusion recovery
+            if (path.Count > 0)
+            {
+                originalDestination = path[path.Count - 1];
+            }
         }
 
         #endregion
@@ -296,15 +317,18 @@ namespace FaeMaze.Visitors
 
         private void OnWaypointReached()
         {
+            // Try confusion at intersections
+            if (confusionEnabled && currentPathIndex < path.Count - 1)
+            {
+                TryConfusionAtIntersection();
+            }
+
             currentPathIndex++;
 
             // Check if we've reached the end of the path
             if (currentPathIndex >= path.Count)
             {
                 OnPathCompleted();
-            }
-            else
-            {
             }
         }
 
@@ -351,6 +375,187 @@ namespace FaeMaze.Visitors
                     Destroy(gameObject);
                 }
             }
+        }
+
+        #endregion
+
+        #region Confusion System
+
+        /// <summary>
+        /// Attempts to trigger confusion at the current waypoint if it's an intersection.
+        /// </summary>
+        private void TryConfusionAtIntersection()
+        {
+            if (mazeGridBehaviour == null || gameController == null)
+            {
+                return;
+            }
+
+            Vector2Int currentPos = path[currentPathIndex];
+            Vector2Int nextPos = path[currentPathIndex + 1];
+
+            // Check if current position is an intersection (3+ walkable neighbors)
+            List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
+
+            if (walkableNeighbors.Count < 3)
+            {
+                return; // Not an intersection
+            }
+
+            // Roll for confusion
+            if (Random.value > confusionChance)
+            {
+                return; // No confusion this time
+            }
+
+            // Get confused - pick a non-forward direction
+            List<Vector2Int> detourDirections = new List<Vector2Int>();
+            foreach (var neighbor in walkableNeighbors)
+            {
+                if (neighbor != nextPos) // Don't pick the intended next waypoint
+                {
+                    detourDirections.Add(neighbor);
+                }
+            }
+
+            if (detourDirections.Count == 0)
+            {
+                return; // No detour options
+            }
+
+            // Pick random detour direction
+            Vector2Int detourStart = detourDirections[Random.Range(0, detourDirections.Count)];
+
+            // Follow detour to dead end
+            List<Vector2Int> detourPath = FollowToDeadEnd(currentPos, detourStart);
+
+            if (detourPath == null || detourPath.Count == 0)
+            {
+                return; // Failed to find dead end
+            }
+
+            // Get dead end position
+            Vector2Int deadEndPos = detourPath[detourPath.Count - 1];
+
+            // Pathfind from dead end back to original destination
+            List<MazeGrid.MazeNode> recoveryPathNodes = new List<MazeGrid.MazeNode>();
+            bool pathFound = gameController.TryFindPath(deadEndPos, originalDestination, recoveryPathNodes);
+
+            if (!pathFound || recoveryPathNodes.Count == 0)
+            {
+                Debug.LogWarning($"{gameObject.name}: Confusion failed - no path from dead end to destination");
+                return;
+            }
+
+            // Convert recovery path to Vector2Int
+            List<Vector2Int> recoveryPath = new List<Vector2Int>();
+            foreach (var node in recoveryPathNodes)
+            {
+                recoveryPath.Add(new Vector2Int(node.x, node.y));
+            }
+
+            // Build new path: current position + detour + recovery path
+            List<Vector2Int> newPath = new List<Vector2Int>();
+            newPath.Add(currentPos); // Current position
+            newPath.AddRange(detourPath); // Detour to dead end
+
+            // Add recovery path (skip first node if it's the dead end to avoid duplicate)
+            for (int i = (recoveryPath[0] == deadEndPos ? 1 : 0); i < recoveryPath.Count; i++)
+            {
+                newPath.Add(recoveryPath[i]);
+            }
+
+            // Replace visitor's path
+            path = newPath;
+            currentPathIndex = 0;
+
+            Debug.Log($"{gameObject.name} got confused at intersection! Taking detour through {detourPath.Count} nodes");
+        }
+
+        /// <summary>
+        /// Gets all walkable neighbor positions for a grid position.
+        /// </summary>
+        private List<Vector2Int> GetWalkableNeighbors(Vector2Int gridPos)
+        {
+            List<Vector2Int> neighbors = new List<Vector2Int>();
+
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return neighbors;
+            }
+
+            // Check 4 cardinal directions
+            Vector2Int[] directions = new Vector2Int[]
+            {
+                new Vector2Int(0, 1),   // Up
+                new Vector2Int(0, -1),  // Down
+                new Vector2Int(1, 0),   // Right
+                new Vector2Int(-1, 0)   // Left
+            };
+
+            foreach (var dir in directions)
+            {
+                Vector2Int neighborPos = gridPos + dir;
+                var node = mazeGridBehaviour.Grid.GetNode(neighborPos.x, neighborPos.y);
+
+                if (node != null && node.walkable)
+                {
+                    neighbors.Add(neighborPos);
+                }
+            }
+
+            return neighbors;
+        }
+
+        /// <summary>
+        /// Follows a path from start position in the given direction until reaching a dead end.
+        /// A dead end is a node with only one walkable exit (besides the entry direction).
+        /// </summary>
+        private List<Vector2Int> FollowToDeadEnd(Vector2Int startPos, Vector2Int firstStep)
+        {
+            List<Vector2Int> detourPath = new List<Vector2Int>();
+            detourPath.Add(firstStep);
+
+            Vector2Int currentPos = firstStep;
+            Vector2Int previousPos = startPos;
+
+            int maxSteps = 100; // Safety limit
+            int steps = 0;
+
+            while (steps < maxSteps)
+            {
+                steps++;
+
+                // Get walkable neighbors
+                List<Vector2Int> neighbors = GetWalkableNeighbors(currentPos);
+
+                // Remove the direction we came from
+                neighbors.Remove(previousPos);
+
+                if (neighbors.Count == 0)
+                {
+                    // Dead end - no exits besides where we came from
+                    return detourPath;
+                }
+
+                if (neighbors.Count == 1)
+                {
+                    // Dead end - only one exit besides where we came from
+                    return detourPath;
+                }
+
+                // Multiple exits - pick one that's not backwards
+                // Prefer continuing in same general direction if possible
+                Vector2Int nextPos = neighbors[Random.Range(0, neighbors.Count)];
+
+                detourPath.Add(nextPos);
+                previousPos = currentPos;
+                currentPos = nextPos;
+            }
+
+            // Safety limit reached
+            Debug.LogWarning($"{gameObject.name}: Dead end search exceeded max steps");
+            return detourPath;
         }
 
         #endregion
