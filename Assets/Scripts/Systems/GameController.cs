@@ -46,6 +46,11 @@ namespace FaeMaze.Systems
         [Tooltip("Reference to the UI controller")]
         private UIController uiController;
 
+        [Header("Essence Settings")]
+        [SerializeField]
+        [Tooltip("Essence amount the player starts with when the game begins")]
+        private int startingEssence = 100;
+
         #endregion
 
         #region Private Fields
@@ -104,6 +109,13 @@ namespace FaeMaze.Systems
         private void Start()
         {
             ValidateReferences();
+
+            currentEssence = Mathf.Max(0, startingEssence);
+
+            if (uiController != null)
+            {
+                uiController.UpdateEssence(currentEssence);
+            }
         }
 
         #endregion
