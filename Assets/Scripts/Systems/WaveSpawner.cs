@@ -4,7 +4,6 @@ using UnityEngine;
 using FaeMaze.Maze;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
-using FaeMaze.Audio;
 
 namespace FaeMaze.Systems
 {
