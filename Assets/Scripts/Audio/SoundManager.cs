@@ -70,24 +70,27 @@ namespace FaeMaze.Audio
             if (sfxSource != null)
             {
                 sfxSource.playOnAwake = false;
+                sfxSource.volume = 1f;
             }
         }
 
         private void Start()
         {
-            if (ambientLoopClip == null)
-            {
-                return;
-            }
-
             if (musicSource == null)
             {
                 musicSource = gameObject.AddComponent<AudioSource>();
             }
 
+            musicSource.volume = 1f;
+            musicSource.playOnAwake = false;
+
+            if (ambientLoopClip == null)
+            {
+                return;
+            }
+
             musicSource.loop = true;
             musicSource.clip = ambientLoopClip;
-            musicSource.playOnAwake = false;
             musicSource.Play();
         }
 
