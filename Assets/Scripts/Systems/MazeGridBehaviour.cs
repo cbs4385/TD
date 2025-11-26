@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using FaeMaze.Maze;
@@ -51,6 +52,7 @@ namespace FaeMaze.Systems
         private int height;
         private Vector2Int entranceGridPos;
         private Vector2Int heartGridPos;
+        private Dictionary<char, Vector2Int> spawnPoints = new Dictionary<char, Vector2Int>();
 
         #endregion
 
@@ -157,7 +159,7 @@ namespace FaeMaze.Systems
                             break;
 
                         case 'E':
-                            // Entrance - walkable and mark position
+                            // Entrance - walkable and mark position (backwards compatibility)
                             grid.SetWalkable(x, y, true);
                             if (!foundEntrance)
                             {
@@ -167,8 +169,25 @@ namespace FaeMaze.Systems
                             break;
 
                         case 'H':
-                            // Heart marker (optional) - walkable
+                            // Heart marker (optional) - walkable (backwards compatibility)
                             grid.SetWalkable(x, y, true);
+                            break;
+
+                        case 'A':
+                        case 'B':
+                        case 'C':
+                        case 'D':
+                            // Spawn markers - walkable and store position
+                            grid.SetWalkable(x, y, true);
+                            if (!spawnPoints.ContainsKey(c))
+                            {
+                                spawnPoints[c] = new Vector2Int(x, y);
+                                Debug.Log($"MazeGridBehaviour: Found spawn point '{c}' at ({x}, {y})");
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"MazeGridBehaviour: Duplicate spawn marker '{c}' at ({x}, {y}), ignoring");
+                            }
                             break;
 
                         default:
@@ -465,6 +484,119 @@ namespace FaeMaze.Systems
         public void SetDrawAttractionHeatmap(bool value)
         {
             drawAttractionHeatmap = value;
+        }
+
+        #endregion
+
+        #region Spawn Point API
+
+        /// <summary>
+        /// Gets the grid position of a specific spawn point.
+        /// </summary>
+        /// <param name="spawnId">The spawn marker character (A, B, C, D)</param>
+        /// <param name="position">Output position if found</param>
+        /// <returns>True if spawn point exists, false otherwise</returns>
+        public bool TryGetSpawnPoint(char spawnId, out Vector2Int position)
+        {
+            return spawnPoints.TryGetValue(spawnId, out position);
+        }
+
+        /// <summary>
+        /// Gets the grid position of a specific spawn point.
+        /// Throws exception if spawn point doesn't exist.
+        /// </summary>
+        /// <param name="spawnId">The spawn marker character (A, B, C, D)</param>
+        /// <returns>Grid position of the spawn point</returns>
+        public Vector2Int GetSpawnPoint(char spawnId)
+        {
+            if (!spawnPoints.ContainsKey(spawnId))
+            {
+                Debug.LogError($"MazeGridBehaviour: Spawn point '{spawnId}' not found!");
+                return Vector2Int.zero;
+            }
+            return spawnPoints[spawnId];
+        }
+
+        /// <summary>
+        /// Gets all spawn points as a read-only dictionary.
+        /// </summary>
+        /// <returns>Dictionary mapping spawn IDs to grid positions</returns>
+        public IReadOnlyDictionary<char, Vector2Int> GetAllSpawnPoints()
+        {
+            return spawnPoints;
+        }
+
+        /// <summary>
+        /// Gets a random spawn point from all available spawn markers.
+        /// </summary>
+        /// <param name="spawnId">Output spawn ID that was selected</param>
+        /// <param name="position">Output grid position</param>
+        /// <returns>True if at least one spawn point exists, false otherwise</returns>
+        public bool TryGetRandomSpawnPoint(out char spawnId, out Vector2Int position)
+        {
+            if (spawnPoints.Count == 0)
+            {
+                Debug.LogWarning("MazeGridBehaviour: No spawn points available!");
+                spawnId = '\0';
+                position = Vector2Int.zero;
+                return false;
+            }
+
+            // Get random spawn point
+            var keys = new List<char>(spawnPoints.Keys);
+            int randomIndex = Random.Range(0, keys.Count);
+            spawnId = keys[randomIndex];
+            position = spawnPoints[spawnId];
+            return true;
+        }
+
+        /// <summary>
+        /// Gets two different random spawn points for start and destination.
+        /// </summary>
+        /// <param name="startId">Output start spawn ID</param>
+        /// <param name="startPos">Output start grid position</param>
+        /// <param name="destId">Output destination spawn ID</param>
+        /// <param name="destPos">Output destination grid position</param>
+        /// <returns>True if at least two different spawn points exist, false otherwise</returns>
+        public bool TryGetRandomSpawnPair(out char startId, out Vector2Int startPos, out char destId, out Vector2Int destPos)
+        {
+            if (spawnPoints.Count < 2)
+            {
+                Debug.LogWarning($"MazeGridBehaviour: Need at least 2 spawn points, found {spawnPoints.Count}");
+                startId = '\0';
+                startPos = Vector2Int.zero;
+                destId = '\0';
+                destPos = Vector2Int.zero;
+                return false;
+            }
+
+            // Get list of spawn IDs
+            var keys = new List<char>(spawnPoints.Keys);
+
+            // Pick random start
+            int startIndex = Random.Range(0, keys.Count);
+            startId = keys[startIndex];
+            startPos = spawnPoints[startId];
+
+            // Pick random destination (different from start)
+            int destIndex;
+            do
+            {
+                destIndex = Random.Range(0, keys.Count);
+            } while (destIndex == startIndex);
+
+            destId = keys[destIndex];
+            destPos = spawnPoints[destId];
+
+            return true;
+        }
+
+        /// <summary>
+        /// Gets the number of spawn points detected in the maze.
+        /// </summary>
+        public int GetSpawnPointCount()
+        {
+            return spawnPoints.Count;
         }
 
         #endregion
