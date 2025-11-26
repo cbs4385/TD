@@ -439,6 +439,13 @@ namespace FaeMaze.Visitors
                 return; // Failed to find dead end
             }
 
+            // Skip confusion if the detour would be too short to matter
+            const int minDetourLength = 5;
+            if (detourPath.Count < minDetourLength)
+            {
+                return;
+            }
+
             // Get dead end position
             Vector2Int deadEndPos = detourPath[detourPath.Count - 1];
 
