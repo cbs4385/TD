@@ -6,8 +6,10 @@ using FaeMaze.Maze;
 namespace FaeMaze.Visitors
 {
     /// <summary>
-    /// Controls a visitor's movement through the maze toward the Heart.
-    /// Visitors follow a path of grid nodes and are consumed when they reach the Heart.
+    /// Controls a visitor's movement through the maze.
+    /// Visitors follow a path of grid nodes.
+    /// When using spawn markers: visitors escape at the destination (no essence).
+    /// When using legacy heart: visitors are consumed at the heart (awards essence).
     /// </summary>
     public class VisitorController : MonoBehaviour
     {
@@ -163,6 +165,11 @@ namespace FaeMaze.Visitors
             {
                 UpdateWalking();
             }
+            else if (state == VisitorState.Escaping)
+            {
+                // Optionally: add escape animation/effects here
+                // Currently handled in OnPathCompleted with fade and delayed destroy
+            }
         }
 
         #endregion
@@ -303,17 +310,46 @@ namespace FaeMaze.Visitors
 
         private void OnPathCompleted()
         {
-            state = VisitorState.Consumed;
+            // With spawn marker system: visitors escape (no essence awarded)
+            // With legacy heart system: visitors are consumed (essence awarded)
 
-            // Notify the Heart that this visitor has arrived
-            if (gameController != null && gameController.Heart != null)
+            // Check if we're using the new spawn marker system
+            bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2;
+
+            if (isUsingSpawnMarkers)
             {
-                gameController.Heart.OnVisitorConsumed(this);
+                // ESCAPE: Visitor reached destination spawn point
+                state = VisitorState.Escaping;
+
+                // Visual feedback: fade to transparent
+                if (spriteRenderer != null)
+                {
+                    Color escapingColor = visitorColor;
+                    escapingColor.a = 0.3f; // Fade out
+                    spriteRenderer.color = escapingColor;
+                }
+
+                // Log escape
+                Debug.Log($"{gameObject.name} escaped to destination spawn point (no essence awarded)");
+
+                // Destroy visitor after short delay for visual effect
+                Destroy(gameObject, 0.2f);
             }
             else
             {
-                Debug.LogWarning("VisitorController: Could not notify Heart - reference is null. Destroying self.");
-                Destroy(gameObject);
+                // LEGACY CONSUMED: Visitor reached the heart
+                state = VisitorState.Consumed;
+
+                // Notify the Heart that this visitor has arrived (awards essence)
+                if (gameController != null && gameController.Heart != null)
+                {
+                    gameController.Heart.OnVisitorConsumed(this);
+                }
+                else
+                {
+                    Debug.LogWarning("VisitorController: Could not notify Heart - reference is null. Destroying self.");
+                    Destroy(gameObject);
+                }
             }
         }
 
@@ -351,6 +387,26 @@ namespace FaeMaze.Visitors
             {
                 isEntranced = value;
             }
+        }
+
+        /// <summary>
+        /// Forces the visitor to escape immediately.
+        /// Used when visitor needs to despawn without awarding essence.
+        /// </summary>
+        public void ForceEscape()
+        {
+            state = VisitorState.Escaping;
+
+            // Visual feedback
+            if (spriteRenderer != null)
+            {
+                Color escapingColor = visitorColor;
+                escapingColor.a = 0.3f;
+                spriteRenderer.color = escapingColor;
+            }
+
+            Debug.Log($"{gameObject.name} forced to escape (no essence awarded)");
+            Destroy(gameObject, 0.2f);
         }
 
         #endregion
