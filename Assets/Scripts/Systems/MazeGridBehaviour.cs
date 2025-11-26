@@ -28,14 +28,6 @@ namespace FaeMaze.Systems
         [Tooltip("Transform acting as the origin point for world-to-grid conversions")]
         private Transform mazeOrigin;
 
-        [SerializeField]
-        [Tooltip("Reference to the MazeEntrance component")]
-        private MazeEntrance entrance;
-
-        [SerializeField]
-        [Tooltip("Reference to the HeartOfTheMaze component")]
-        private HeartOfTheMaze heart;
-
         [Header("Debug Visualization")]
         [SerializeField]
         private bool drawGridGizmos = true;
@@ -95,9 +87,6 @@ namespace FaeMaze.Systems
             {
                 Debug.LogError("GameController instance not found! Cannot register MazeGrid.");
             }
-
-            // Position the entrance and heart objects after everything is initialized
-            PositionEntranceAndHeart();
         }
 
         #endregion
@@ -263,33 +252,6 @@ namespace FaeMaze.Systems
             // Fallback - should never reach here if maze has any walkable tiles
             Debug.LogError("Could not find any walkable tile for heart position!");
             heartGridPos = entranceGridPos;
-        }
-
-        private void PositionEntranceAndHeart()
-        {
-            // Position entrance object
-            if (entrance != null)
-            {
-                Vector3 entranceWorldPos = GridToWorld(entranceGridPos.x, entranceGridPos.y);
-                entrance.transform.position = entranceWorldPos;
-                entrance.SetGridPosition(entranceGridPos);
-            }
-            else
-            {
-                Debug.LogWarning("Entrance component not assigned in MazeGridBehaviour!");
-            }
-
-            // Position heart object
-            if (heart != null)
-            {
-                Vector3 heartWorldPos = GridToWorld(heartGridPos.x, heartGridPos.y);
-                heart.transform.position = heartWorldPos;
-                heart.SetGridPosition(heartGridPos);
-            }
-            else
-            {
-                Debug.LogWarning("Heart component not assigned in MazeGridBehaviour!");
-            }
         }
 
         #endregion
