@@ -8,12 +8,17 @@ namespace FaeMaze.UI
     /// <summary>
     /// Controls the Build Panel UI for selecting placeable items.
     /// Shows buttons for each item type and updates selection when clicked.
+    /// Automatically creates the UI if not manually set up.
     /// </summary>
     public class PlacementUIController : MonoBehaviour
     {
         #region Serialized Fields
 
-        [Header("Item Buttons")]
+        [Header("UI References (Optional - will auto-create if null)")]
+        [SerializeField]
+        [Tooltip("Build panel GameObject")]
+        private GameObject buildPanel;
+
         [SerializeField]
         [Tooltip("Button for selecting FaeLantern")]
         private Button lanternButton;
@@ -22,7 +27,6 @@ namespace FaeMaze.UI
         [Tooltip("Button for selecting FairyRing")]
         private Button fairyRingButton;
 
-        [Header("Cost Labels")]
         [SerializeField]
         [Tooltip("Text showing lantern essence cost")]
         private TextMeshProUGUI lanternCostText;
@@ -57,7 +61,7 @@ namespace FaeMaze.UI
 
         private void Start()
         {
-            // Validate references
+            // Auto-find PropPlacementController if not assigned
             if (propPlacementController == null)
             {
                 propPlacementController = FindFirstObjectByType<PropPlacementController>();
@@ -72,6 +76,21 @@ namespace FaeMaze.UI
                 }
             }
 
+            // Auto-create build panel if not assigned
+            if (buildPanel == null)
+            {
+                CreateBuildPanelUI();
+            }
+
+            // Initialize UI controls
+            InitializeControls();
+        }
+
+        /// <summary>
+        /// Initializes all UI controls with listeners and default values.
+        /// </summary>
+        private void InitializeControls()
+        {
             // Add button listeners
             if (lanternButton != null)
             {
@@ -149,6 +168,176 @@ namespace FaeMaze.UI
                 UpdateSelectionVisual("FairyRing");
                 Debug.Log("PlacementUIController: Selected FairyRing");
             }
+        }
+
+        #endregion
+
+        #region UI Auto-Creation
+
+        /// <summary>
+        /// Automatically creates the build panel UI hierarchy.
+        /// </summary>
+        private void CreateBuildPanelUI()
+        {
+            // Find or create canvas
+            Canvas canvas = FindFirstObjectByType<Canvas>();
+            if (canvas == null)
+            {
+                canvas = CreateCanvas();
+            }
+
+            // Create the build panel
+            buildPanel = CreatePanel(canvas.transform);
+
+            // Create title
+            CreateTitle(buildPanel.transform);
+
+            // Create buttons and labels
+            float yPos = -50f;
+
+            // Lantern button
+            lanternButton = CreateButton(buildPanel.transform, "FaeLantern", yPos);
+            yPos -= 35f;
+
+            lanternCostText = CreateLabel(buildPanel.transform, "20 Essence", yPos);
+            yPos -= 60f;
+
+            // Fairy Ring button
+            fairyRingButton = CreateButton(buildPanel.transform, "FairyRing", yPos);
+            yPos -= 35f;
+
+            fairyRingCostText = CreateLabel(buildPanel.transform, "15 Essence", yPos);
+
+            Debug.Log("PlacementUIController: Auto-created Build Panel UI");
+        }
+
+        /// <summary>
+        /// Creates a Canvas for the UI.
+        /// </summary>
+        private Canvas CreateCanvas()
+        {
+            GameObject canvasObj = new GameObject("BuildCanvas");
+            canvasObj.transform.SetParent(transform, false);
+
+            Canvas canvas = canvasObj.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+
+            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+
+            canvasObj.AddComponent<GraphicRaycaster>();
+
+            Debug.Log("PlacementUIController: Created Canvas");
+            return canvas;
+        }
+
+        /// <summary>
+        /// Creates the main panel background.
+        /// </summary>
+        private GameObject CreatePanel(Transform parent)
+        {
+            GameObject panel = new GameObject("BuildPanel");
+            panel.transform.SetParent(parent, false);
+
+            RectTransform rect = panel.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = new Vector2(10f, 10f);
+            rect.sizeDelta = new Vector2(200f, 280f);
+
+            Image image = panel.AddComponent<Image>();
+            image.color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
+
+            return panel;
+        }
+
+        /// <summary>
+        /// Creates a title text at the top of the panel.
+        /// </summary>
+        private void CreateTitle(Transform parent)
+        {
+            GameObject titleObj = new GameObject("Title");
+            titleObj.transform.SetParent(parent, false);
+
+            RectTransform rect = titleObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 1f);
+            rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, -10f);
+            rect.sizeDelta = new Vector2(180f, 30f);
+
+            TextMeshProUGUI text = titleObj.AddComponent<TextMeshProUGUI>();
+            text.text = "BUILD";
+            text.fontSize = 18;
+            text.fontStyle = FontStyles.Bold;
+            text.alignment = TextAlignmentOptions.Center;
+            text.color = Color.white;
+        }
+
+        /// <summary>
+        /// Creates a button control.
+        /// </summary>
+        private Button CreateButton(Transform parent, string buttonText, float yPos)
+        {
+            GameObject buttonObj = new GameObject("Button_" + buttonText);
+            buttonObj.transform.SetParent(parent, false);
+
+            RectTransform rect = buttonObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 1f);
+            rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, yPos);
+            rect.sizeDelta = new Vector2(180f, 30f);
+
+            Image image = buttonObj.AddComponent<Image>();
+            image.color = new Color(0.3f, 0.5f, 0.8f, 1f);
+
+            Button button = buttonObj.AddComponent<Button>();
+            button.targetGraphic = image;
+
+            // Create button text
+            GameObject textObj = new GameObject("Text");
+            textObj.transform.SetParent(buttonObj.transform, false);
+
+            RectTransform textRect = textObj.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+
+            TextMeshProUGUI text = textObj.AddComponent<TextMeshProUGUI>();
+            text.text = buttonText;
+            text.fontSize = 16;
+            text.alignment = TextAlignmentOptions.Center;
+            text.color = Color.white;
+
+            return button;
+        }
+
+        /// <summary>
+        /// Creates a text label.
+        /// </summary>
+        private TextMeshProUGUI CreateLabel(Transform parent, string labelText, float yPos)
+        {
+            GameObject labelObj = new GameObject("Label");
+            labelObj.transform.SetParent(parent, false);
+
+            RectTransform rect = labelObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 1f);
+            rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, yPos);
+            rect.sizeDelta = new Vector2(180f, 25f);
+
+            TextMeshProUGUI text = labelObj.AddComponent<TextMeshProUGUI>();
+            text.text = labelText;
+            text.fontSize = 12;
+            text.alignment = TextAlignmentOptions.Center;
+            text.color = new Color(0.8f, 0.8f, 0.8f, 1f);
+
+            return text;
         }
 
         #endregion
