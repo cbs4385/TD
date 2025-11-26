@@ -66,11 +66,27 @@ namespace FaeMaze.UI
             if (mazeGridBehaviour == null)
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+                if (mazeGridBehaviour != null)
+                {
+                    Debug.Log("DebugUIController: Found MazeGridBehaviour");
+                }
+                else
+                {
+                    Debug.LogWarning("DebugUIController: Could not find MazeGridBehaviour in scene!");
+                }
             }
 
             if (waveSpawner == null)
             {
                 waveSpawner = FindFirstObjectByType<WaveSpawner>();
+                if (waveSpawner != null)
+                {
+                    Debug.Log("DebugUIController: Found WaveSpawner");
+                }
+                else
+                {
+                    Debug.LogWarning("DebugUIController: Could not find WaveSpawner in scene!");
+                }
             }
 
             // Auto-create debug panel if not assigned
@@ -206,7 +222,11 @@ namespace FaeMaze.UI
             yPos -= 40f;
 
             heatmapToggle = CreateToggle(debugPanel.transform, "Attraction Heatmap", yPos);
-            yPos -= 50f;
+            yPos -= 30f;
+
+            // Add helper text about gizmos
+            CreateSmallLabel(debugPanel.transform, "(Gizmos visible in Scene view only)", yPos);
+            yPos -= 35f;
 
             CreateLabel(debugPanel.transform, "Timescale:", yPos);
             yPos -= 30f;
@@ -259,7 +279,7 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
             rect.anchoredPosition = new Vector2(-10f, -10f);
-            rect.sizeDelta = new Vector2(300f, 380f);
+            rect.sizeDelta = new Vector2(300f, 400f);
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
@@ -310,6 +330,29 @@ namespace FaeMaze.UI
             text.fontSize = 16;
             text.alignment = TextAlignmentOptions.Left;
             text.color = Color.white;
+        }
+
+        /// <summary>
+        /// Creates a small text label (for hints/notes).
+        /// </summary>
+        private void CreateSmallLabel(Transform parent, string labelText, float yPos)
+        {
+            GameObject labelObj = new GameObject("SmallLabel_" + labelText);
+            labelObj.transform.SetParent(parent, false);
+
+            RectTransform rect = labelObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 1f);
+            rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, yPos);
+            rect.sizeDelta = new Vector2(280f, 20f);
+
+            TextMeshProUGUI text = labelObj.AddComponent<TextMeshProUGUI>();
+            text.text = labelText;
+            text.fontSize = 12;
+            text.alignment = TextAlignmentOptions.Center;
+            text.color = new Color(0.7f, 0.7f, 0.7f, 1f);
+            text.fontStyle = FontStyles.Italic;
         }
 
         /// <summary>
@@ -527,9 +570,15 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnGridToggleChanged(bool value)
         {
+            Debug.Log($"DebugUIController: Grid Gizmos toggled to {value}");
             if (mazeGridBehaviour != null)
             {
                 mazeGridBehaviour.SetDrawGridGizmos(value);
+                Debug.Log($"DebugUIController: Set drawGridGizmos to {value} (view in Scene window)");
+            }
+            else
+            {
+                Debug.LogWarning("DebugUIController: Cannot toggle Grid Gizmos - MazeGridBehaviour is null!");
             }
         }
 
@@ -538,9 +587,15 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnHeatmapToggleChanged(bool value)
         {
+            Debug.Log($"DebugUIController: Attraction Heatmap toggled to {value}");
             if (mazeGridBehaviour != null)
             {
                 mazeGridBehaviour.SetDrawAttractionHeatmap(value);
+                Debug.Log($"DebugUIController: Set drawAttractionHeatmap to {value} (view in Scene window)");
+            }
+            else
+            {
+                Debug.LogWarning("DebugUIController: Cannot toggle Heatmap - MazeGridBehaviour is null!");
             }
         }
 
