@@ -564,6 +564,18 @@ namespace FaeMaze.Visitors
                         // Dead end - only one exit besides where we came from
                         return detourPath;
                     }
+
+                    // Stop if the visitor can see the next tile is a dead end
+                    foreach (var neighbor in neighbors)
+                    {
+                        List<Vector2Int> neighborExits = GetWalkableNeighbors(neighbor);
+                        neighborExits.Remove(currentPos);
+
+                        if (neighborExits.Count == 0)
+                        {
+                            return detourPath;
+                        }
+                    }
                 }
                 else
                 {
