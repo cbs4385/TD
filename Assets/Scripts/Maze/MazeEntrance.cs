@@ -21,6 +21,10 @@ namespace FaeMaze.Maze
 
         [Header("Visual Settings")]
         [SerializeField]
+        [Tooltip("Show visual marker (disable when using spawn marker system)")]
+        private bool showVisualMarker = false;
+
+        [SerializeField]
         [Tooltip("Color of the entrance marker")]
         private Color markerColor = new Color(0.2f, 1f, 0.2f, 1f); // Bright green
 
@@ -65,7 +69,20 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
-            CreateVisualMarker();
+            // Only create visual marker if enabled (legacy mode)
+            if (showVisualMarker)
+            {
+                CreateVisualMarker();
+            }
+            else
+            {
+                // Hide the sprite renderer if it exists
+                spriteRenderer = GetComponent<SpriteRenderer>();
+                if (spriteRenderer != null)
+                {
+                    spriteRenderer.enabled = false;
+                }
+            }
         }
 
         private void CreateVisualMarker()
