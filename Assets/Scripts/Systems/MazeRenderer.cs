@@ -117,7 +117,7 @@ namespace FaeMaze.Systems
             spriteRenderer.sortingOrder = sortingOrder;
 
             // Scale to fit grid cell (assuming 1 unit per cell)
-            tileObj.transform.localScale = new Vector3(0.95f, 0.95f, 1f); // Slight gap between tiles
+            tileObj.transform.localScale = new Vector3(1f, 1f, 1f); // Slight gap between tiles
         }
 
         /// <summary>
