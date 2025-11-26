@@ -162,6 +162,12 @@ namespace FaeMaze.Props
         /// </summary>
         private void TryPlaceProp()
         {
+            // Early exit if no items configured - avoid spam warnings
+            if (placeableItems.Count == 0)
+            {
+                return; // Already warned in Start()
+            }
+
             // Validate preconditions
             if (currentSelection == null)
             {
