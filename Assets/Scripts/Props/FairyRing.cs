@@ -6,7 +6,9 @@ namespace FaeMaze.Props
     /// <summary>
     /// A mystical Fairy Ring that entrances and slows visitors passing through.
     /// Once entranced, a visitor remains in that state permanently (design choice).
+    /// Requires a Collider2D component set to isTrigger = true for detection.
     /// </summary>
+    [RequireComponent(typeof(Collider2D))]
     public class FairyRing : MonoBehaviour
     {
         #region Serialized Fields
