@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using FaeMaze.Props;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -86,6 +87,12 @@ namespace FaeMaze.UI
             InitializeControls();
         }
 
+        private void Update()
+        {
+            // Poll essence and update button states every frame
+            UpdateButtonStates();
+        }
+
         /// <summary>
         /// Initializes all UI controls with listeners and default values.
         /// </summary>
@@ -123,6 +130,35 @@ namespace FaeMaze.UI
             {
                 // Default to FaeLantern if nothing selected
                 UpdateSelectionVisual("FaeLantern");
+            }
+        }
+
+        /// <summary>
+        /// Updates button interactability based on current Essence.
+        /// Buttons are enabled only if the player can afford the item.
+        /// </summary>
+        private void UpdateButtonStates()
+        {
+            // Check if GameController is available
+            if (GameController.Instance == null)
+            {
+                return;
+            }
+
+            int essence = GameController.Instance.CurrentEssence;
+
+            // Update lantern button
+            var lanternItem = propPlacementController?.GetItemById("FaeLantern");
+            if (lanternItem != null && lanternButton != null)
+            {
+                lanternButton.interactable = essence >= lanternItem.essenceCost;
+            }
+
+            // Update fairy ring button
+            var ringItem = propPlacementController?.GetItemById("FairyRing");
+            if (ringItem != null && fairyRingButton != null)
+            {
+                fairyRingButton.interactable = essence >= ringItem.essenceCost;
             }
         }
 

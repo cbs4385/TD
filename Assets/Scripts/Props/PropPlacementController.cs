@@ -153,6 +153,16 @@ namespace FaeMaze.Props
             return placeableItems.FirstOrDefault(p => p.id == id);
         }
 
+        /// <summary>
+        /// Gets all placeable items as a read-only list.
+        /// Useful for UI to iterate through all available items.
+        /// </summary>
+        /// <returns>Read-only list of all placeable items</returns>
+        public IReadOnlyList<PlaceableItem> GetAllPlaceableItems()
+        {
+            return placeableItems.AsReadOnly();
+        }
+
         #endregion
 
         #region Placement Logic
