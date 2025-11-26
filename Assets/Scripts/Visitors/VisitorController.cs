@@ -47,6 +47,11 @@ namespace FaeMaze.Visitors
         [Tooltip("Whether confusion is enabled")]
         private bool confusionEnabled = true;
 
+        [SerializeField]
+        [Tooltip("Minimum number of tiles to travel on confused detour path")]
+        [Range(5, 50)]
+        private int minConfusionDistance = 15;
+
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("Color of the visitor sprite")]
@@ -426,8 +431,8 @@ namespace FaeMaze.Visitors
             // Pick random detour direction
             Vector2Int detourStart = detourDirections[Random.Range(0, detourDirections.Count)];
 
-            // Follow detour to dead end
-            List<Vector2Int> detourPath = FollowToDeadEnd(currentPos, detourStart);
+            // Follow detour to dead end (minimum distance requirement)
+            List<Vector2Int> detourPath = FollowToDeadEnd(currentPos, detourStart, minConfusionDistance);
 
             if (detourPath == null || detourPath.Count == 0)
             {
@@ -469,7 +474,9 @@ namespace FaeMaze.Visitors
             path = newPath;
             currentPathIndex = 0;
 
-            Debug.Log($"{gameObject.name} got confused at intersection! Taking detour through {detourPath.Count} nodes");
+            // Calculate estimated detour time based on distance and speed
+            float estimatedTime = detourPath.Count / (moveSpeed * speedMultiplier);
+            Debug.Log($"{gameObject.name} got confused at intersection! Taking detour through {detourPath.Count} tiles (~{estimatedTime:F1}s at current speed)");
         }
 
         /// <summary>
@@ -510,8 +517,12 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Follows a path from start position in the given direction until reaching a dead end.
         /// A dead end is a node with only one walkable exit (besides the entry direction).
+        /// Enforces a minimum distance before checking for dead ends to ensure substantial detours.
         /// </summary>
-        private List<Vector2Int> FollowToDeadEnd(Vector2Int startPos, Vector2Int firstStep)
+        /// <param name="startPos">Starting position for the detour</param>
+        /// <param name="firstStep">First step in the detour direction</param>
+        /// <param name="minDistance">Minimum number of tiles to travel before stopping at dead end</param>
+        private List<Vector2Int> FollowToDeadEnd(Vector2Int startPos, Vector2Int firstStep, int minDistance)
         {
             List<Vector2Int> detourPath = new List<Vector2Int>();
             detourPath.Add(firstStep);
@@ -519,7 +530,7 @@ namespace FaeMaze.Visitors
             Vector2Int currentPos = firstStep;
             Vector2Int previousPos = startPos;
 
-            int maxSteps = 100; // Safety limit
+            int maxSteps = 150; // Safety limit (increased to accommodate minimum distance)
             int steps = 0;
 
             while (steps < maxSteps)
@@ -532,20 +543,33 @@ namespace FaeMaze.Visitors
                 // Remove the direction we came from
                 neighbors.Remove(previousPos);
 
-                if (neighbors.Count == 0)
+                // Only check for dead ends after traveling minimum distance
+                if (detourPath.Count >= minDistance)
                 {
-                    // Dead end - no exits besides where we came from
-                    return detourPath;
+                    if (neighbors.Count == 0)
+                    {
+                        // Dead end - no exits besides where we came from
+                        return detourPath;
+                    }
+
+                    if (neighbors.Count == 1)
+                    {
+                        // Dead end - only one exit besides where we came from
+                        return detourPath;
+                    }
+                }
+                else
+                {
+                    // Before minimum distance, avoid dead ends if possible
+                    if (neighbors.Count == 0)
+                    {
+                        // Hit a dead end before minimum distance - return what we have
+                        Debug.LogWarning($"{gameObject.name}: Hit dead end at {detourPath.Count} tiles (minimum {minDistance})");
+                        return detourPath;
+                    }
                 }
 
-                if (neighbors.Count == 1)
-                {
-                    // Dead end - only one exit besides where we came from
-                    return detourPath;
-                }
-
-                // Multiple exits - pick one that's not backwards
-                // Prefer continuing in same general direction if possible
+                // Multiple exits - pick one randomly
                 Vector2Int nextPos = neighbors[Random.Range(0, neighbors.Count)];
 
                 detourPath.Add(nextPos);
@@ -554,7 +578,7 @@ namespace FaeMaze.Visitors
             }
 
             // Safety limit reached
-            Debug.LogWarning($"{gameObject.name}: Dead end search exceeded max steps");
+            Debug.LogWarning($"{gameObject.name}: Dead end search exceeded max steps (traveled {detourPath.Count} tiles)");
             return detourPath;
         }
 
