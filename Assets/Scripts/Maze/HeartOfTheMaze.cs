@@ -2,8 +2,6 @@ using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
-using FaeMaze.Audio;
-
 namespace FaeMaze.Maze
 {
     /// <summary>
