@@ -40,6 +40,23 @@ namespace FaeMaze.UI
 
         #region Unity Lifecycle
 
+        private void OnEnable()
+        {
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged += UpdateEssence;
+                UpdateEssence(GameController.Instance.CurrentEssence);
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged -= UpdateEssence;
+            }
+        }
+
         private void Start()
         {
             // Hook up button click event
@@ -47,9 +64,6 @@ namespace FaeMaze.UI
             {
                 startWaveButton.onClick.AddListener(OnStartWaveClicked);
             }
-
-            // Initialize essence display
-            UpdateEssence(0);
 
             // Initialize placement instructions
             if (placementInstructionsText != null)
