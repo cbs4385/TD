@@ -62,6 +62,16 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Events
+
+        /// <summary>
+        /// Event invoked whenever the essence value changes.
+        /// Passes the new essence value as a parameter.
+        /// </summary>
+        public event System.Action<int> OnEssenceChanged;
+
+        #endregion
+
         #region Properties
 
         /// <summary>
@@ -114,6 +124,10 @@ namespace FaeMaze.Systems
 
             currentEssence = Mathf.Max(0, startingEssence);
 
+            // Invoke event for initial essence value
+            OnEssenceChanged?.Invoke(currentEssence);
+
+            // Legacy UI update (can be removed once PlayerResourcesUIController is in use)
             if (uiController != null)
             {
                 uiController.UpdateEssence(currentEssence);
@@ -198,7 +212,10 @@ namespace FaeMaze.Systems
 
             currentEssence += amount;
 
-            // Update UI
+            // Invoke event for essence change
+            OnEssenceChanged?.Invoke(currentEssence);
+
+            // Legacy UI update (can be removed once PlayerResourcesUIController is in use)
             if (uiController != null)
             {
                 uiController.UpdateEssence(currentEssence);
@@ -221,7 +238,10 @@ namespace FaeMaze.Systems
             {
                 currentEssence -= cost;
 
-                // Update UI
+                // Invoke event for essence change
+                OnEssenceChanged?.Invoke(currentEssence);
+
+                // Legacy UI update (can be removed once PlayerResourcesUIController is in use)
                 if (uiController != null)
                 {
                     uiController.UpdateEssence(currentEssence);
