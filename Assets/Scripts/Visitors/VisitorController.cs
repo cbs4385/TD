@@ -330,24 +330,16 @@ namespace FaeMaze.Visitors
 
         private void UpdateWalking()
         {
-            if (mazeGridBehaviour == null)
-            {
-                Debug.LogError("VisitorController: MazeGridBehaviour is null, cannot convert grid to world!");
-                return;
-            }
-
-            // Handle fascinated visitors with direct steering toward lantern
-            if (isFascinated && !hasReachedLantern)
-            {
-                UpdateFascinatedSteering();
-                return;
-            }
-
-            // Normal pathfinding mode
             if (path == null || path.Count == 0)
             {
                 Debug.LogWarning("VisitorController: No path set but state is Walking!");
                 state = VisitorState.Idle;
+                return;
+            }
+
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogError("VisitorController: MazeGridBehaviour is null, cannot convert grid to world!");
                 return;
             }
 
@@ -384,54 +376,24 @@ namespace FaeMaze.Visitors
             }
         }
 
-        /// <summary>
-        /// Handles direct steering movement toward the lantern when fascinated.
-        /// Uses simplified pathfinding that ignores the prior A* plan.
-        /// </summary>
-        private void UpdateFascinatedSteering()
-        {
-            // Get lantern world position
-            Vector3 lanternWorldPos = mazeGridBehaviour.GridToWorld(fascinationLanternPosition.x, fascinationLanternPosition.y);
-
-            // Move directly toward lantern (simplified steering, not A* based)
-            float effectiveSpeed = moveSpeed * speedMultiplier;
-            Vector3 newPosition = Vector3.MoveTowards(
-                transform.position,
-                lanternWorldPos,
-                effectiveSpeed * Time.deltaTime
-            );
-
-            // Use Rigidbody2D.MovePosition for proper trigger detection
-            if (rb != null)
-            {
-                rb.MovePosition(newPosition);
-                Physics2D.SyncTransforms();
-            }
-            else
-            {
-                transform.position = newPosition;
-            }
-
-            // Check if we've reached the lantern
-            float distanceToLantern = Vector3.Distance(transform.position, lanternWorldPos);
-            if (distanceToLantern < waypointReachedDistance)
-            {
-                // Reached the lantern!
-                hasReachedLantern = true;
-                Debug.Log($"[Fascination] '{gameObject.name}' REACHED lantern at {fascinationLanternPosition}! Switching to intersection-based random walk...");
-
-                // Initialize random walk with current position
-                if (mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-                {
-                    Vector2Int currentPos = new Vector2Int(currentX, currentY);
-                    path = new List<Vector2Int> { currentPos };
-                    currentPathIndex = 0;
-                }
-            }
-        }
-
         private void OnWaypointReached()
         {
+            // Check if fascinated visitor reached the lantern
+            if (isFascinated && !hasReachedLantern && currentPathIndex < path.Count)
+            {
+                Vector2Int currentWaypoint = path[currentPathIndex];
+                if (currentWaypoint == fascinationLanternPosition)
+                {
+                    hasReachedLantern = true;
+                    Debug.Log($"[Fascination] '{gameObject.name}' REACHED lantern at {fascinationLanternPosition}! Switching to intersection-based random walk...");
+
+                    // Initialize random walk - keep only current position
+                    path = new List<Vector2Int> { currentWaypoint };
+                    currentPathIndex = 0;
+                    return; // Don't increment or handle confusion
+                }
+            }
+
             // Handle confusion or fascinated random walk at waypoint
             HandleConfusionAtWaypoint();
 
@@ -1049,7 +1011,8 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Makes this visitor fascinated by a FaeLantern.
-        /// Fascinated visitors immediately discard their A* path and use direct steering to the lantern.
+        /// Fascinated visitors immediately discard their A* path to the original destination
+        /// and calculate a new path directly to the lantern.
         /// After reaching the lantern, they will travel straight and turn at intersections randomly.
         /// </summary>
         /// <param name="lanternGridPosition">Grid position of the lantern</param>
@@ -1065,14 +1028,62 @@ namespace FaeMaze.Visitors
             fascinationLanternPosition = lanternGridPosition;
             hasReachedLantern = false;
 
-            // Immediately discard any existing A* path - DO NOT recalculate or reuse TryFindPath
-            // Clear current waypoint list
+            // Immediately discard any existing A* path to the original destination
+            // Calculate a NEW path directly to the lantern (not back to original destination)
             path = null;
             currentPathIndex = 0;
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
 
-            Debug.Log($"[Fascination] '{gameObject.name}' became FASCINATED by lantern at {lanternGridPosition}! Cleared A* path, switching to direct steering mode.");
+            // Get current position and pathfind to lantern
+            if (gameController != null && mazeGridBehaviour != null &&
+                mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            {
+                Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+                // Find NEW path to lantern (ignores prior A* plan to original destination)
+                List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
+                if (gameController.TryFindPath(currentPos, lanternGridPosition, pathToLantern) && pathToLantern.Count > 0)
+                {
+                    // Convert to Vector2Int path
+                    path = new List<Vector2Int>();
+                    foreach (var node in pathToLantern)
+                    {
+                        path.Add(new Vector2Int(node.x, node.y));
+                    }
+
+                    // Find closest waypoint to start from
+                    currentPathIndex = 0;
+                    if (path.Count > 1)
+                    {
+                        Vector3 currentWorldPos = transform.position;
+                        float closestDist = float.MaxValue;
+
+                        for (int i = 0; i < path.Count; i++)
+                        {
+                            Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
+                            float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
+
+                            if (dist < closestDist)
+                            {
+                                closestDist = dist;
+                                currentPathIndex = i;
+                            }
+                        }
+
+                        if (currentPathIndex < path.Count - 1 && closestDist < waypointReachedDistance)
+                        {
+                            currentPathIndex++;
+                        }
+                    }
+
+                    Debug.Log($"[Fascination] '{gameObject.name}' became FASCINATED! Discarded old path and calculated new path to lantern at {lanternGridPosition} ({path.Count - currentPathIndex} waypoints)");
+                }
+                else
+                {
+                    Debug.LogWarning($"[Fascination] '{gameObject.name}' FAILED to find path to lantern at {lanternGridPosition}!");
+                }
+            }
         }
 
         #endregion
