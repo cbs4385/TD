@@ -126,12 +126,6 @@ namespace FaeMaze.Systems
 
             // Invoke event for initial essence value
             OnEssenceChanged?.Invoke(currentEssence);
-
-            // Legacy UI update (can be removed once PlayerResourcesUIController is in use)
-            if (uiController != null)
-            {
-                uiController.UpdateEssence(currentEssence);
-            }
         }
 
         #endregion
@@ -214,12 +208,6 @@ namespace FaeMaze.Systems
 
             // Invoke event for essence change
             OnEssenceChanged?.Invoke(currentEssence);
-
-            // Legacy UI update (can be removed once PlayerResourcesUIController is in use)
-            if (uiController != null)
-            {
-                uiController.UpdateEssence(currentEssence);
-            }
         }
 
         /// <summary>
@@ -240,12 +228,6 @@ namespace FaeMaze.Systems
 
                 // Invoke event for essence change
                 OnEssenceChanged?.Invoke(currentEssence);
-
-                // Legacy UI update (can be removed once PlayerResourcesUIController is in use)
-                if (uiController != null)
-                {
-                    uiController.UpdateEssence(currentEssence);
-                }
 
                 return true;
             }
