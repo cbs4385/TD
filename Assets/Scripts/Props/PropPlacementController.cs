@@ -19,6 +19,15 @@ namespace FaeMaze.Props
         #region Data Structures
 
         /// <summary>
+        /// Build mode state for prop placement.
+        /// </summary>
+        public enum BuildModeState
+        {
+            Inactive,
+            Active
+        }
+
+        /// <summary>
         /// Defines a placeable item type with its properties.
         /// </summary>
         [System.Serializable]
@@ -67,6 +76,28 @@ namespace FaeMaze.Props
         [Tooltip("Color tint for invalid placement (e.g., non-walkable tiles)")]
         private Color invalidPlacementColor = new Color(1f, 0.3f, 0.3f, 0.5f);
 
+        [Header("Build Mode")]
+        [SerializeField]
+        [Tooltip("Current build mode state")]
+        private BuildModeState buildModeState = BuildModeState.Active;
+
+        [Header("Cursor")]
+        [SerializeField]
+        [Tooltip("Cursor texture to use in build mode")]
+        private Texture2D buildCursorTexture;
+
+        [SerializeField]
+        [Tooltip("Hotspot for build cursor (usually center or top-left)")]
+        private Vector2 buildCursorHotspot = Vector2.zero;
+
+        [SerializeField]
+        [Tooltip("Default cursor texture (null = system default)")]
+        private Texture2D defaultCursorTexture;
+
+        [SerializeField]
+        [Tooltip("Hotspot for default cursor")]
+        private Vector2 defaultCursorHotspot = Vector2.zero;
+
         #endregion
 
         #region Private Fields
@@ -91,6 +122,9 @@ namespace FaeMaze.Props
 
         /// <summary>Gets the list of all placeable items</summary>
         public List<PlaceableItem> PlaceableItems => placeableItems;
+
+        /// <summary>Gets whether the controller is currently in build mode</summary>
+        public bool IsInBuildMode => buildModeState == BuildModeState.Active;
 
         #endregion
 
@@ -130,10 +164,32 @@ namespace FaeMaze.Props
             {
                 Debug.LogWarning("PropPlacementController: No placeable items configured!");
             }
+
+            // Set initial cursor
+            UpdateCursor();
         }
 
         private void Update()
         {
+            // Handle cancel keys (Escape or Right-click)
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            {
+                ExitBuildMode();
+                return;
+            }
+
+            if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
+            {
+                ExitBuildMode();
+                return;
+            }
+
+            // Early exit if not in build mode
+            if (buildModeState != BuildModeState.Active)
+            {
+                return;
+            }
+
             // Update preview position
             UpdatePreviewPosition();
 
@@ -570,6 +626,57 @@ namespace FaeMaze.Props
             if (previewInstance != null && previewInstance.activeSelf)
             {
                 previewInstance.SetActive(false);
+            }
+        }
+
+        #endregion
+
+        #region Build Mode Management
+
+        /// <summary>
+        /// Enters build mode, enabling placement and showing custom cursor.
+        /// </summary>
+        public void EnterBuildMode()
+        {
+            buildModeState = BuildModeState.Active;
+            UpdateCursor();
+            Debug.Log("PropPlacementController: Entered build mode");
+        }
+
+        /// <summary>
+        /// Exits build mode, clearing selection and restoring default cursor.
+        /// </summary>
+        public void ExitBuildMode()
+        {
+            buildModeState = BuildModeState.Inactive;
+            ClearSelection();
+            UpdateCursor();
+            Debug.Log("PropPlacementController: Exited build mode");
+        }
+
+        /// <summary>
+        /// Clears the current selection and hides the preview.
+        /// </summary>
+        public void ClearSelection()
+        {
+            currentSelection = null;
+            HidePreview();
+        }
+
+        /// <summary>
+        /// Updates the cursor based on build mode state.
+        /// Handles null textures gracefully by using system default.
+        /// </summary>
+        private void UpdateCursor()
+        {
+            if (buildModeState == BuildModeState.Active && buildCursorTexture != null)
+            {
+                Cursor.SetCursor(buildCursorTexture, buildCursorHotspot, CursorMode.Auto);
+            }
+            else
+            {
+                // Set to default cursor (null = system default)
+                Cursor.SetCursor(defaultCursorTexture, defaultCursorHotspot, CursorMode.Auto);
             }
         }
 
