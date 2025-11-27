@@ -390,6 +390,17 @@ namespace FaeMaze.Visitors
             // Increment waypoint counter
             waypointsTraversedSinceSpawn++;
 
+            // VALIDATION: Check for backtracking by detecting if this waypoint position
+            // appears earlier in the path (which would indicate we're stepping backward)
+            for (int i = 0; i < currentPathIndex; i++)
+            {
+                if (path[i] == currentWaypoint)
+                {
+                    Debug.LogWarning($"[{gameObject.name}] BACKTRACKING DETECTED! | waypoint={currentWaypoint} at index {currentPathIndex} was already visited at index {i} | This should never happen!");
+                    break;
+                }
+            }
+
             Debug.Log($"[{gameObject.name}] WAYPOINT REACHED | pos={currentWaypoint} | wpIndex={currentPathIndex}/{path.Count} | wpCount={waypointsTraversedSinceSpawn} | fascinated={isFascinated} | confusionActive={confusionSegmentActive}");
 
             // Check if fascinated visitor reached the lantern
@@ -472,6 +483,28 @@ namespace FaeMaze.Visitors
         #endregion
 
         #region Confusion System
+
+        /// <summary>
+        /// Gets all tiles that have been traversed so far (from spawn to current position).
+        /// Used to prevent backtracking when building confusion paths or random walks.
+        /// </summary>
+        private HashSet<Vector2Int> GetTraversedTiles()
+        {
+            HashSet<Vector2Int> traversed = new HashSet<Vector2Int>();
+
+            if (path == null || path.Count == 0)
+            {
+                return traversed;
+            }
+
+            // Add all tiles from start up to and including current index
+            for (int i = 0; i <= currentPathIndex && i < path.Count; i++)
+            {
+                traversed.Add(path[i]);
+            }
+
+            return traversed;
+        }
 
         /// <summary>
         /// Attempts to trigger confusion at the current waypoint if it's an intersection.
@@ -617,7 +650,10 @@ namespace FaeMaze.Visitors
         {
             int stepsTarget = Mathf.Clamp(Random.Range(minConfusionDistance, maxConfusionDistance + 1), minConfusionDistance, maxConfusionDistance);
 
-            List<Vector2Int> confusionPath = BuildConfusionPath(currentPos, detourStart, stepsTarget);
+            // Get all tiles traversed so far to prevent backtracking
+            HashSet<Vector2Int> traversedTiles = GetTraversedTiles();
+
+            List<Vector2Int> confusionPath = BuildConfusionPath(currentPos, detourStart, stepsTarget, traversedTiles);
 
             if (confusionPath.Count == 0)
             {
@@ -639,14 +675,40 @@ namespace FaeMaze.Visitors
                 recoveryPath.Add(new Vector2Int(node.x, node.y));
             }
 
+            // Build the combined path: current position + confusion detour + recovery path
             List<Vector2Int> newPath = new List<Vector2Int>();
             newPath.Add(currentPos);
+
+            // Add all confusion path tiles (already validated to not backtrack)
             newPath.AddRange(confusionPath);
 
+            // Create a set of all tiles in the new path so far to avoid duplicates
+            HashSet<Vector2Int> tilesInNewPath = new HashSet<Vector2Int>(newPath);
+
+            // Add recovery path tiles, but skip any that would cause backtracking
+            // Start from index 0 or 1 depending on whether the first tile duplicates confusionEnd
             int recoveryStartIndex = (recoveryPath.Count > 0 && recoveryPath[0] == confusionEnd) ? 1 : 0;
+
+            int skippedTiles = 0;
             for (int i = recoveryStartIndex; i < recoveryPath.Count; i++)
             {
-                newPath.Add(recoveryPath[i]);
+                Vector2Int recoveryTile = recoveryPath[i];
+
+                // Skip tiles that were already traversed before confusion OR are duplicates in the new path
+                if (traversedTiles.Contains(recoveryTile) || tilesInNewPath.Contains(recoveryTile))
+                {
+                    skippedTiles++;
+                    Debug.Log($"[{gameObject.name}] RECOVERY PATH SKIP | tile={recoveryTile} would cause backtracking or duplicate");
+                    continue; // Skip this tile to prevent backtracking
+                }
+
+                newPath.Add(recoveryTile);
+                tilesInNewPath.Add(recoveryTile);
+            }
+
+            if (skippedTiles > 0)
+            {
+                Debug.Log($"[{gameObject.name}] RECOVERY PATH FILTERED | skipped {skippedTiles} backtracking tiles");
             }
 
             path = newPath;
@@ -661,7 +723,7 @@ namespace FaeMaze.Visitors
             Debug.Log($"[{gameObject.name}] CONFUSION STARTED | from={currentPos} to={detourStart} | targetSteps={stepsTarget} | actualSteps={confusionPath.Count} | newPathLength={newPath.Count} | confusionEndIndex={confusionSegmentEndIndex}");
         }
 
-        private List<Vector2Int> BuildConfusionPath(Vector2Int currentPos, Vector2Int detourStart, int stepsTarget)
+        private List<Vector2Int> BuildConfusionPath(Vector2Int currentPos, Vector2Int detourStart, int stepsTarget, HashSet<Vector2Int> traversedTiles)
         {
             List<Vector2Int> confusionPath = new List<Vector2Int>();
 
@@ -672,6 +734,9 @@ namespace FaeMaze.Visitors
             int safetyLimit = 250;
             int iterations = 0;
 
+            // Track tiles in the confusion path to avoid loops within the detour
+            HashSet<Vector2Int> confusionPathSet = new HashSet<Vector2Int>();
+
             while (iterations < safetyLimit && confusionPath.Count < stepsTarget)
             {
                 if (!IsWalkable(nextPos))
@@ -679,7 +744,22 @@ namespace FaeMaze.Visitors
                     break;
                 }
 
+                // Check if this tile was already traversed before confusion started
+                if (traversedTiles.Contains(nextPos))
+                {
+                    Debug.Log($"[{gameObject.name}] CONFUSION PATH BACKTRACK BLOCKED | tile={nextPos} was already traversed");
+                    break; // Would backtrack to an earlier position
+                }
+
+                // Check if we're creating a loop within this confusion path
+                if (confusionPathSet.Contains(nextPos))
+                {
+                    Debug.Log($"[{gameObject.name}] CONFUSION PATH LOOP BLOCKED | tile={nextPos} already in confusion detour");
+                    break;
+                }
+
                 confusionPath.Add(nextPos);
+                confusionPathSet.Add(nextPos);
                 confusionStepsTaken = confusionPath.Count;
 
                 if (IsDeadEndVisible(nextPos, forwardDir))
@@ -688,11 +768,18 @@ namespace FaeMaze.Visitors
                 }
 
                 List<Vector2Int> neighbors = GetWalkableNeighbors(nextPos);
-                neighbors.Remove(previousPos);
+                neighbors.Remove(previousPos); // Don't go immediately backward
+
+                // Remove any neighbors that would cause backtracking to already-traversed tiles
+                neighbors.RemoveAll(n => traversedTiles.Contains(n));
+
+                // Also avoid creating loops within the confusion path itself
+                neighbors.RemoveAll(n => confusionPathSet.Contains(n));
 
                 if (neighbors.Count == 0)
                 {
-                    break; // Cannot continue this direction
+                    Debug.Log($"[{gameObject.name}] CONFUSION PATH ENDED | no forward neighbors available (all would backtrack)");
+                    break; // Cannot continue without backtracking
                 }
 
                 Vector2Int preferredForward = nextPos + forwardDir;
@@ -766,7 +853,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Handles intersection-based random walk behavior for fascinated visitors.
         /// Travels straight until reaching an intersection, then picks a random forward direction.
-        /// Avoids immediate backtracking to the previous tile.
+        /// Avoids backtracking to any previously traversed tiles.
         /// </summary>
         private void HandleFascinatedRandomWalk()
         {
@@ -778,6 +865,9 @@ namespace FaeMaze.Visitors
             }
 
             Vector2Int currentPos = path[currentPathIndex];
+
+            // Get all tiles traversed so far to prevent backtracking
+            HashSet<Vector2Int> traversedTiles = GetTraversedTiles();
 
             // Get walkable neighbors
             List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
@@ -792,10 +882,18 @@ namespace FaeMaze.Visitors
                 hasPrevious = true;
             }
 
+            // Exclude all previously traversed tiles to prevent any backtracking
+            int beforeFilter = walkableNeighbors.Count;
+            walkableNeighbors.RemoveAll(n => traversedTiles.Contains(n));
+            if (walkableNeighbors.Count < beforeFilter)
+            {
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK FILTERED | removed {beforeFilter - walkableNeighbors.Count} backtracking options");
+            }
+
             if (walkableNeighbors.Count == 0)
             {
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END | pos={currentPos}");
-                return; // Dead end - let visitor reach end of path
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END | pos={currentPos} | all neighbors would backtrack");
+                return; // Dead end or all options would backtrack - let visitor reach end of path
             }
 
             // Determine current direction (if we have a previous tile)
@@ -827,7 +925,7 @@ namespace FaeMaze.Visitors
             }
 
             // Build a straight path until the next intersection
-            List<Vector2Int> straightPath = BuildStraightPathToIntersection(currentPos, nextTile);
+            List<Vector2Int> straightPath = BuildStraightPathToIntersection(currentPos, nextTile, traversedTiles);
 
             if (straightPath.Count == 0)
             {
@@ -847,8 +945,9 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Builds a straight path segment from current position until reaching an intersection or dead end.
         /// Follows the chosen direction without turning until forced to by maze geometry.
+        /// Prevents backtracking to any previously traversed tiles.
         /// </summary>
-        private List<Vector2Int> BuildStraightPathToIntersection(Vector2Int currentPos, Vector2Int nextPos)
+        private List<Vector2Int> BuildStraightPathToIntersection(Vector2Int currentPos, Vector2Int nextPos, HashSet<Vector2Int> traversedTiles)
         {
             List<Vector2Int> straightPath = new List<Vector2Int>();
 
@@ -858,6 +957,9 @@ namespace FaeMaze.Visitors
             int safetyLimit = 100;
             int iterations = 0;
 
+            // Track tiles added in this straight path to avoid loops
+            HashSet<Vector2Int> straightPathSet = new HashSet<Vector2Int>();
+
             while (iterations < safetyLimit)
             {
                 if (!IsWalkable(current))
@@ -865,15 +967,37 @@ namespace FaeMaze.Visitors
                     break;
                 }
 
+                // Check if this tile was already traversed (would be backtracking)
+                if (traversedTiles.Contains(current))
+                {
+                    Debug.Log($"[{gameObject.name}] FASCINATED STRAIGHT PATH BACKTRACK BLOCKED | tile={current} was already traversed");
+                    break;
+                }
+
+                // Check if we're creating a loop within this straight path
+                if (straightPathSet.Contains(current))
+                {
+                    Debug.Log($"[{gameObject.name}] FASCINATED STRAIGHT PATH LOOP BLOCKED | tile={current} already in straight path");
+                    break;
+                }
+
                 straightPath.Add(current);
+                straightPathSet.Add(current);
 
                 // Get neighbors for next step
                 List<Vector2Int> neighbors = GetWalkableNeighbors(current);
-                neighbors.Remove(previousPos); // Don't go backward
+                neighbors.Remove(previousPos); // Don't go immediately backward
+
+                // Remove any neighbors that would cause backtracking
+                neighbors.RemoveAll(n => traversedTiles.Contains(n));
+
+                // Also avoid loops within this straight path
+                neighbors.RemoveAll(n => straightPathSet.Contains(n));
 
                 if (neighbors.Count == 0)
                 {
-                    // Dead end - stop here
+                    // Dead end or all neighbors would backtrack - stop here
+                    Debug.Log($"[{gameObject.name}] FASCINATED STRAIGHT PATH ENDED | no forward neighbors (all would backtrack)");
                     break;
                 }
                 else if (neighbors.Count == 1)
