@@ -100,6 +100,11 @@ namespace FaeMaze.Visitors
 
         private float timeSinceLastRecalculation;
 
+        // Fascination state (for FaeLantern)
+        private bool isFascinated;
+        private Vector2Int fascinationLanternPosition;
+        private bool hasReachedLantern;
+
         #endregion
 
         #region Properties
@@ -119,6 +124,9 @@ namespace FaeMaze.Visitors
             get => speedMultiplier;
             set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
         }
+
+        /// <summary>Gets whether this visitor is fascinated by a FaeLantern</summary>
+        public bool IsFascinated => isFascinated;
 
         #endregion
 
@@ -358,6 +366,17 @@ namespace FaeMaze.Visitors
 
         private void OnWaypointReached()
         {
+            // Check if fascinated visitor reached the lantern
+            if (isFascinated && !hasReachedLantern && currentPathIndex < path.Count)
+            {
+                Vector2Int currentWaypoint = path[currentPathIndex];
+                if (currentWaypoint == fascinationLanternPosition)
+                {
+                    hasReachedLantern = true;
+                    Debug.Log($"{gameObject.name} reached the lantern at {fascinationLanternPosition}! Now wandering randomly...");
+                }
+            }
+
             HandleConfusionAtWaypoint();
 
             currentPathIndex++;
@@ -373,6 +392,10 @@ namespace FaeMaze.Visitors
         {
             // With spawn marker system: visitors escape (no essence awarded)
             // With legacy heart system: visitors are consumed (essence awarded)
+
+            // Clear fascination state
+            isFascinated = false;
+            hasReachedLantern = false;
 
             // Check if we're using the new spawn marker system
             bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2;
@@ -420,11 +443,19 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Attempts to trigger confusion at the current waypoint if it's an intersection.
+        /// For fascinated visitors who have reached the lantern, implements random walk behavior.
         /// </summary>
         private void HandleConfusionAtWaypoint()
         {
             if (mazeGridBehaviour == null || gameController == null)
             {
+                return;
+            }
+
+            // Handle fascinated visitors who have reached the lantern
+            if (isFascinated && hasReachedLantern)
+            {
+                HandleFascinatedRandomWalk();
                 return;
             }
 
@@ -683,6 +714,111 @@ namespace FaeMaze.Visitors
             isConfused = !recover;
         }
 
+        /// <summary>
+        /// Handles random walk behavior for fascinated visitors who have passed the lantern.
+        /// At intersections, picks a random direction. When no intersection, continues forward.
+        /// </summary>
+        private void HandleFascinatedRandomWalk()
+        {
+            // Only handle if we're near the end of the current path (need to extend it)
+            if (currentPathIndex < path.Count - 5)
+            {
+                return; // Still have waypoints ahead
+            }
+
+            Vector2Int currentPos = path[currentPathIndex];
+
+            // Get walkable neighbors
+            List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
+
+            // Exclude the tile we just came from
+            if (currentPathIndex > 0)
+            {
+                walkableNeighbors.Remove(path[currentPathIndex - 1]);
+            }
+
+            if (walkableNeighbors.Count == 0)
+            {
+                return; // Dead end - let visitor reach end of path
+            }
+
+            // Pick a random direction (no bias toward any destination)
+            Vector2Int randomNext = walkableNeighbors[Random.Range(0, walkableNeighbors.Count)];
+
+            // Build a short path segment in that direction (10-15 tiles)
+            int segmentLength = Random.Range(10, 16);
+            List<Vector2Int> wanderSegment = BuildWanderPath(currentPos, randomNext, segmentLength);
+
+            if (wanderSegment.Count == 0)
+            {
+                return; // Couldn't build path
+            }
+
+            // Extend the current path with the wander segment
+            foreach (var waypoint in wanderSegment)
+            {
+                path.Add(waypoint);
+            }
+
+            Debug.Log($"{gameObject.name} (fascinated) picked random direction at {currentPos}, extended path by {wanderSegment.Count} waypoints");
+        }
+
+        /// <summary>
+        /// Builds a wandering path segment for fascinated visitors.
+        /// Similar to confusion path but with no recovery - just keeps going forward.
+        /// </summary>
+        private List<Vector2Int> BuildWanderPath(Vector2Int currentPos, Vector2Int nextPos, int targetLength)
+        {
+            List<Vector2Int> wanderPath = new List<Vector2Int>();
+
+            Vector2Int previousPos = currentPos;
+            Vector2Int forwardDir = nextPos - currentPos;
+
+            int safetyLimit = 100;
+            int iterations = 0;
+
+            while (iterations < safetyLimit && wanderPath.Count < targetLength)
+            {
+                if (!IsWalkable(nextPos))
+                {
+                    break;
+                }
+
+                wanderPath.Add(nextPos);
+
+                // Get neighbors for next step
+                List<Vector2Int> neighbors = GetWalkableNeighbors(nextPos);
+                neighbors.Remove(previousPos); // Don't go backward
+
+                if (neighbors.Count == 0)
+                {
+                    break; // Dead end
+                }
+
+                // Prefer continuing forward, but randomly turn at intersections
+                Vector2Int preferredForward = nextPos + forwardDir;
+                Vector2Int chosenNext;
+
+                if (neighbors.Count == 1)
+                {
+                    // Only one way forward
+                    chosenNext = neighbors[0];
+                }
+                else
+                {
+                    // Intersection - pick randomly (may continue forward or turn)
+                    chosenNext = neighbors[Random.Range(0, neighbors.Count)];
+                }
+
+                forwardDir = chosenNext - nextPos;
+                previousPos = nextPos;
+                nextPos = chosenNext;
+                iterations++;
+            }
+
+            return wanderPath;
+        }
+
         #endregion
 
         #region Public Methods
@@ -720,6 +856,13 @@ namespace FaeMaze.Visitors
             if (path == null || path.Count == 0)
             {
                 return; // No original path to recalculate
+            }
+
+            // Skip recalculation if fascinated and haven't reached lantern yet
+            // (let them focus on reaching the lantern first)
+            if (isFascinated && !hasReachedLantern)
+            {
+                return;
             }
 
             // Get current position in grid coordinates
@@ -809,6 +952,10 @@ namespace FaeMaze.Visitors
         {
             state = VisitorState.Escaping;
 
+            // Clear fascination state
+            isFascinated = false;
+            hasReachedLantern = false;
+
             // Visual feedback
             if (spriteRenderer != null)
             {
@@ -819,6 +966,79 @@ namespace FaeMaze.Visitors
 
             Debug.Log($"{gameObject.name} forced to escape (no essence awarded)");
             Destroy(gameObject, 0.2f);
+        }
+
+        /// <summary>
+        /// Makes this visitor fascinated by a FaeLantern.
+        /// Fascinated visitors immediately retarget toward the lantern.
+        /// After reaching the lantern, they will wander randomly at intersections.
+        /// </summary>
+        /// <param name="lanternGridPosition">Grid position of the lantern</param>
+        public void BecomeFascinated(Vector2Int lanternGridPosition)
+        {
+            if (state != VisitorState.Walking)
+            {
+                return; // Only walking visitors can be fascinated
+            }
+
+            isFascinated = true;
+            fascinationLanternPosition = lanternGridPosition;
+            hasReachedLantern = false;
+
+            // Immediately retarget toward the lantern
+            if (gameController != null)
+            {
+                // Get current position
+                if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+                {
+                    Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+                    // Find path to lantern
+                    List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
+                    if (gameController.TryFindPath(currentPos, lanternGridPosition, pathToLantern) && pathToLantern.Count > 0)
+                    {
+                        // Convert to Vector2Int path
+                        List<Vector2Int> newPath = new List<Vector2Int>();
+                        foreach (var node in pathToLantern)
+                        {
+                            newPath.Add(new Vector2Int(node.x, node.y));
+                        }
+
+                        // Find closest waypoint to current position
+                        int startIndex = 0;
+                        if (newPath.Count > 1)
+                        {
+                            Vector3 currentWorldPos = transform.position;
+                            float closestDist = float.MaxValue;
+
+                            for (int i = 0; i < newPath.Count; i++)
+                            {
+                                Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(newPath[i].x, newPath[i].y);
+                                float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
+
+                                if (dist < closestDist)
+                                {
+                                    closestDist = dist;
+                                    startIndex = i;
+                                }
+                            }
+
+                            if (startIndex < newPath.Count - 1 && closestDist < waypointReachedDistance)
+                            {
+                                startIndex++;
+                            }
+                        }
+
+                        // Update path
+                        path = newPath;
+                        currentPathIndex = startIndex;
+                        confusionSegmentActive = false;
+                        confusionSegmentEndIndex = 0;
+
+                        Debug.Log($"{gameObject.name} became fascinated by lantern at {lanternGridPosition}! Retargeting...");
+                    }
+                }
+            }
         }
 
         #endregion

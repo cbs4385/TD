@@ -47,6 +47,16 @@ namespace FaeMaze.Maze
         [Tooltip("Enable trigger-based visitor slowing")]
         private bool enableVisitorSlowing = true;
 
+        [Header("Fascination (FaeLantern)")]
+        [SerializeField]
+        [Tooltip("Enable fascination mechanic (visitors retarget to lantern then wander)")]
+        private bool enableFascination = false;
+
+        [SerializeField]
+        [Tooltip("Chance (0-1) for a visitor to become fascinated when entering trigger")]
+        [Range(0f, 1f)]
+        private float fascinationChance = 0.8f;
+
         #endregion
 
         #region Private Fields
@@ -190,15 +200,25 @@ namespace FaeMaze.Maze
 
         private void OnTriggerEnter2D(Collider2D other)
         {
-            if (!enableVisitorSlowing)
-                return;
-
             // Check if a visitor entered the attraction radius
             var visitor = other.GetComponent<Visitors.VisitorController>();
             if (visitor != null)
             {
-                // Apply slow effect
-                visitor.SpeedMultiplier = visitorSlowFactor;
+                // Apply fascination if enabled (FaeLantern-specific behavior)
+                if (enableFascination && !visitor.IsFascinated)
+                {
+                    // Roll for fascination
+                    if (Random.value <= fascinationChance)
+                    {
+                        visitor.BecomeFascinated(gridPosition);
+                    }
+                }
+
+                // Apply slow effect if enabled
+                if (enableVisitorSlowing)
+                {
+                    visitor.SpeedMultiplier = visitorSlowFactor;
+                }
             }
         }
 
