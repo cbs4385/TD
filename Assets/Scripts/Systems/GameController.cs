@@ -122,6 +122,8 @@ namespace FaeMaze.Systems
 
             EnsurePlacementUI();
 
+            EnsureResourcesUI();
+
             currentEssence = Mathf.Max(0, startingEssence);
 
             // Invoke event for initial essence value
@@ -271,6 +273,24 @@ namespace FaeMaze.Systems
 
             placementUI = placementUiObject.AddComponent<PlacementUIController>();
             Debug.Log("GameController: Created PlacementUIController at runtime to provide build selection buttons");
+        }
+
+        private void EnsureResourcesUI()
+        {
+            var resourcesUI = FindFirstObjectByType<FaeMaze.UI.PlayerResourcesUIController>();
+            if (resourcesUI != null)
+            {
+                return;
+            }
+
+            GameObject resourcesUiObject = new GameObject("PlayerResourcesUI");
+            if (uiController != null)
+            {
+                resourcesUiObject.transform.SetParent(uiController.transform, false);
+            }
+
+            resourcesUI = resourcesUiObject.AddComponent<FaeMaze.UI.PlayerResourcesUIController>();
+            Debug.Log("GameController: Created PlayerResourcesUIController at runtime to display player resources");
         }
 
         #endregion
