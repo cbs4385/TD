@@ -693,6 +693,53 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Recalculates the path to the original destination.
+        /// Used when new attractors (lanterns) are placed to update the visitor's route.
+        /// </summary>
+        public void RecalculatePath()
+        {
+            if (state != VisitorState.Walking || gameController == null)
+            {
+                return; // Only recalculate if actively walking
+            }
+
+            if (path == null || path.Count == 0)
+            {
+                return; // No original path to recalculate
+            }
+
+            // Get current position in grid coordinates
+            if (mazeGridBehaviour == null || !mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            {
+                return; // Can't determine current position
+            }
+
+            Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+            // Find new path to original destination
+            List<MazeGrid.MazeNode> newPathNodes = new List<MazeGrid.MazeNode>();
+            if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
+            {
+                return; // Couldn't find new path, keep following old one
+            }
+
+            // Convert to Vector2Int path
+            List<Vector2Int> newPath = new List<Vector2Int>();
+            foreach (var node in newPathNodes)
+            {
+                newPath.Add(new Vector2Int(node.x, node.y));
+            }
+
+            // Update path (preserve confusion state but reset segment tracking)
+            path = newPath;
+            currentPathIndex = 0;
+            confusionSegmentActive = false;
+            confusionSegmentEndIndex = 0;
+
+            Debug.Log($"{gameObject.name}: Recalculated path to {originalDestination} from {currentPos}");
+        }
+
+        /// <summary>
         /// Sets the entranced state of this visitor.
         /// Entranced visitors are affected by Fairy Rings.
         /// </summary>

@@ -105,6 +105,9 @@ namespace FaeMaze.Maze
 
             // Apply attraction
             ApplyAttraction(gridBehaviour);
+
+            // Trigger path recalculation for all active visitors
+            RecalculateAllVisitorPaths();
         }
 
         private void SetupTriggerCollider()
@@ -300,6 +303,35 @@ namespace FaeMaze.Maze
                 }
             }
 
+        }
+
+        #endregion
+
+        #region Visitor Path Recalculation
+
+        /// <summary>
+        /// Triggers all active visitors to recalculate their paths.
+        /// Called when a new attractor is placed so visitors can take advantage of the new attraction.
+        /// </summary>
+        private void RecalculateAllVisitorPaths()
+        {
+            // Find all active visitors in the scene
+            var visitors = FindObjectsByType<Visitors.VisitorController>(FindObjectsSortMode.None);
+
+            int recalculatedCount = 0;
+            foreach (var visitor in visitors)
+            {
+                if (visitor != null && visitor.State == Visitors.VisitorController.VisitorState.Walking)
+                {
+                    visitor.RecalculatePath();
+                    recalculatedCount++;
+                }
+            }
+
+            if (recalculatedCount > 0)
+            {
+                Debug.Log($"MazeAttractor at {gridPosition}: Triggered path recalculation for {recalculatedCount} active visitors");
+            }
         }
 
         #endregion
