@@ -107,6 +107,10 @@ namespace FaeMaze.Visitors
         private Vector2Int fascinationLanternPosition;
         private bool hasReachedLantern;
 
+        // Permanent tracking of all grid tiles visited to prevent backtracking
+        private HashSet<Vector2Int> visitedGridTiles;
+        private Vector2Int lastRecordedGridPosition;
+
         #endregion
 
         #region Properties
@@ -322,6 +326,15 @@ namespace FaeMaze.Visitors
             isConfused = confusionEnabled;
             waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
 
+            // Initialize permanent visited tiles tracking
+            visitedGridTiles = new HashSet<Vector2Int>();
+            if (path.Count > 0)
+            {
+                // Add starting position to visited set
+                visitedGridTiles.Add(path[0]);
+                lastRecordedGridPosition = path[0];
+            }
+
             // Store original destination for confusion recovery
             if (path.Count > 0)
             {
@@ -373,6 +386,17 @@ namespace FaeMaze.Visitors
             else
             {
                 transform.position = newPosition;
+            }
+
+            // Track grid position changes to maintain permanent visited tiles history
+            if (visitedGridTiles != null && mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            {
+                Vector2Int currentGridPos = new Vector2Int(currentX, currentY);
+                if (currentGridPos != lastRecordedGridPosition)
+                {
+                    visitedGridTiles.Add(currentGridPos);
+                    lastRecordedGridPosition = currentGridPos;
+                }
             }
 
             // Check if we've reached the waypoint
@@ -650,8 +674,8 @@ namespace FaeMaze.Visitors
         {
             int stepsTarget = Mathf.Clamp(Random.Range(minConfusionDistance, maxConfusionDistance + 1), minConfusionDistance, maxConfusionDistance);
 
-            // Get all tiles traversed so far to prevent backtracking
-            HashSet<Vector2Int> traversedTiles = GetTraversedTiles();
+            // Use permanent visited tiles tracking to prevent backtracking
+            HashSet<Vector2Int> traversedTiles = visitedGridTiles ?? GetTraversedTiles();
 
             List<Vector2Int> confusionPath = BuildConfusionPath(currentPos, detourStart, stepsTarget, traversedTiles);
 
@@ -866,8 +890,8 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = path[currentPathIndex];
 
-            // Get all tiles traversed so far to prevent backtracking
-            HashSet<Vector2Int> traversedTiles = GetTraversedTiles();
+            // Use permanent visited tiles tracking to prevent backtracking
+            HashSet<Vector2Int> traversedTiles = visitedGridTiles ?? GetTraversedTiles();
 
             // Get walkable neighbors
             List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
@@ -1074,8 +1098,9 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
 
-            // Get all tiles traversed so far to prevent backtracking
-            HashSet<Vector2Int> traversedTiles = GetTraversedTiles();
+            // Use permanent visited tiles tracking to prevent backtracking
+            // If visitedGridTiles is null (shouldn't happen), fall back to GetTraversedTiles()
+            HashSet<Vector2Int> traversedTiles = visitedGridTiles ?? GetTraversedTiles();
 
             // Store old path length for comparison
             int oldPathLength = path.Count - currentPathIndex;
