@@ -365,7 +365,7 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            MazeAttractor[] attractors = FindObjectsByType<MazeAttractor>(FindObjectsInactive.Exclude);
+            MazeAttractor[] attractors = FindObjectsByType<MazeAttractor>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             foreach (var attractor in attractors)
             {
                 if (!attractor.EnableFascination)
