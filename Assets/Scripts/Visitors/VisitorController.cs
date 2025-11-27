@@ -330,16 +330,24 @@ namespace FaeMaze.Visitors
 
         private void UpdateWalking()
         {
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogError("VisitorController: MazeGridBehaviour is null, cannot convert grid to world!");
+                return;
+            }
+
+            // Handle fascinated visitors with direct steering toward lantern
+            if (isFascinated && !hasReachedLantern)
+            {
+                UpdateFascinatedSteering();
+                return;
+            }
+
+            // Normal pathfinding mode
             if (path == null || path.Count == 0)
             {
                 Debug.LogWarning("VisitorController: No path set but state is Walking!");
                 state = VisitorState.Idle;
-                return;
-            }
-
-            if (mazeGridBehaviour == null)
-            {
-                Debug.LogError("VisitorController: MazeGridBehaviour is null, cannot convert grid to world!");
                 return;
             }
 
@@ -376,24 +384,55 @@ namespace FaeMaze.Visitors
             }
         }
 
-        private void OnWaypointReached()
+        /// <summary>
+        /// Handles direct steering movement toward the lantern when fascinated.
+        /// Uses simplified pathfinding that ignores the prior A* plan.
+        /// </summary>
+        private void UpdateFascinatedSteering()
         {
-            // Check if fascinated visitor reached the lantern
-            if (isFascinated && !hasReachedLantern && currentPathIndex < path.Count)
-            {
-                Vector2Int currentWaypoint = path[currentPathIndex];
-                if (currentWaypoint == fascinationLanternPosition)
-                {
-                    hasReachedLantern = true;
-                    Debug.Log($"[Fascination] '{gameObject.name}' REACHED lantern at {fascinationLanternPosition}! Switching to random wander mode...");
+            // Get lantern world position
+            Vector3 lanternWorldPos = mazeGridBehaviour.GridToWorld(fascinationLanternPosition.x, fascinationLanternPosition.y);
 
-                    // Truncate path to force immediate random walk behavior
-                    // Keep only current position and a few waypoints ahead
-                    int keepWaypoints = Mathf.Min(3, path.Count - currentPathIndex);
-                    path.RemoveRange(currentPathIndex + keepWaypoints, path.Count - (currentPathIndex + keepWaypoints));
-                }
+            // Move directly toward lantern (simplified steering, not A* based)
+            float effectiveSpeed = moveSpeed * speedMultiplier;
+            Vector3 newPosition = Vector3.MoveTowards(
+                transform.position,
+                lanternWorldPos,
+                effectiveSpeed * Time.deltaTime
+            );
+
+            // Use Rigidbody2D.MovePosition for proper trigger detection
+            if (rb != null)
+            {
+                rb.MovePosition(newPosition);
+                Physics2D.SyncTransforms();
+            }
+            else
+            {
+                transform.position = newPosition;
             }
 
+            // Check if we've reached the lantern
+            float distanceToLantern = Vector3.Distance(transform.position, lanternWorldPos);
+            if (distanceToLantern < waypointReachedDistance)
+            {
+                // Reached the lantern!
+                hasReachedLantern = true;
+                Debug.Log($"[Fascination] '{gameObject.name}' REACHED lantern at {fascinationLanternPosition}! Switching to intersection-based random walk...");
+
+                // Initialize random walk with current position
+                if (mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+                {
+                    Vector2Int currentPos = new Vector2Int(currentX, currentY);
+                    path = new List<Vector2Int> { currentPos };
+                    currentPathIndex = 0;
+                }
+            }
+        }
+
+        private void OnWaypointReached()
+        {
+            // Handle confusion or fascinated random walk at waypoint
             HandleConfusionAtWaypoint();
 
             currentPathIndex++;
@@ -733,14 +772,15 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Handles random walk behavior for fascinated visitors who have passed the lantern.
-        /// At intersections, picks a random direction. When no intersection, continues forward.
+        /// Handles intersection-based random walk behavior for fascinated visitors.
+        /// Travels straight until reaching an intersection, then picks a random forward direction.
+        /// Avoids immediate backtracking to the previous tile.
         /// </summary>
         private void HandleFascinatedRandomWalk()
         {
-            // Only extend path if we're near the end (within 5 waypoints)
+            // Only extend path if we're near the end (within 3 waypoints)
             int waypointsRemaining = path.Count - currentPathIndex;
-            if (waypointsRemaining > 5)
+            if (waypointsRemaining > 3)
             {
                 return; // Still have enough waypoints ahead
             }
@@ -750,94 +790,117 @@ namespace FaeMaze.Visitors
             // Get walkable neighbors
             List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
 
-            // Exclude the tile we just came from
+            // Exclude the tile we just came from (avoid immediate backtracking)
+            Vector2Int previousTile = Vector2Int.zero;
+            bool hasPrevious = false;
             if (currentPathIndex > 0)
             {
-                walkableNeighbors.Remove(path[currentPathIndex - 1]);
+                previousTile = path[currentPathIndex - 1];
+                walkableNeighbors.Remove(previousTile);
+                hasPrevious = true;
             }
 
             if (walkableNeighbors.Count == 0)
             {
-                Debug.Log($"[Fascination] '{gameObject.name}' random walk - dead end at {currentPos}, cannot extend path");
+                Debug.Log($"[Fascination] '{gameObject.name}' intersection walk - dead end at {currentPos}, cannot extend path");
                 return; // Dead end - let visitor reach end of path
             }
 
-            // Pick a random direction (no bias toward any destination)
-            Vector2Int randomNext = walkableNeighbors[Random.Range(0, walkableNeighbors.Count)];
-
-            // Build a short path segment in that direction (8-12 tiles)
-            int segmentLength = Random.Range(8, 13);
-            List<Vector2Int> wanderSegment = BuildWanderPath(currentPos, randomNext, segmentLength);
-
-            if (wanderSegment.Count == 0)
+            // Determine current direction (if we have a previous tile)
+            Vector2Int currentDirection = Vector2Int.zero;
+            if (hasPrevious)
             {
-                Debug.Log($"[Fascination] '{gameObject.name}' random walk - failed to build wander segment from {currentPos} toward {randomNext}");
-                return; // Couldn't build path
+                currentDirection = currentPos - previousTile;
             }
 
-            // Extend the current path with the wander segment
-            foreach (var waypoint in wanderSegment)
+            // Check if we're at an intersection (2+ forward options)
+            bool isIntersection = walkableNeighbors.Count >= 2;
+
+            // Pick next tile
+            Vector2Int nextTile;
+            if (isIntersection)
+            {
+                // At intersection: pick a random forward option
+                nextTile = walkableNeighbors[Random.Range(0, walkableNeighbors.Count)];
+                Debug.Log($"[Fascination] '{gameObject.name}' at INTERSECTION {currentPos} with {walkableNeighbors.Count} options - picked {nextTile}");
+            }
+            else if (walkableNeighbors.Count == 1)
+            {
+                // Only one way forward: continue straight
+                nextTile = walkableNeighbors[0];
+            }
+            else
+            {
+                return; // Should not happen
+            }
+
+            // Build a straight path until the next intersection
+            List<Vector2Int> straightPath = BuildStraightPathToIntersection(currentPos, nextTile);
+
+            if (straightPath.Count == 0)
+            {
+                Debug.Log($"[Fascination] '{gameObject.name}' intersection walk - failed to build path from {currentPos} toward {nextTile}");
+                return;
+            }
+
+            // Extend the current path
+            foreach (var waypoint in straightPath)
             {
                 path.Add(waypoint);
             }
 
-            Debug.Log($"[Fascination] '{gameObject.name}' random walk - extended path by {wanderSegment.Count} waypoints (target={segmentLength}) from {currentPos} toward {randomNext}");
+            Debug.Log($"[Fascination] '{gameObject.name}' intersection walk - extended path by {straightPath.Count} tiles toward {nextTile}");
         }
 
         /// <summary>
-        /// Builds a wandering path segment for fascinated visitors.
-        /// Similar to confusion path but with no recovery - just keeps going forward.
+        /// Builds a straight path segment from current position until reaching an intersection or dead end.
+        /// Follows the chosen direction without turning until forced to by maze geometry.
         /// </summary>
-        private List<Vector2Int> BuildWanderPath(Vector2Int currentPos, Vector2Int nextPos, int targetLength)
+        private List<Vector2Int> BuildStraightPathToIntersection(Vector2Int currentPos, Vector2Int nextPos)
         {
-            List<Vector2Int> wanderPath = new List<Vector2Int>();
+            List<Vector2Int> straightPath = new List<Vector2Int>();
 
             Vector2Int previousPos = currentPos;
-            Vector2Int forwardDir = nextPos - currentPos;
+            Vector2Int current = nextPos;
 
             int safetyLimit = 100;
             int iterations = 0;
 
-            while (iterations < safetyLimit && wanderPath.Count < targetLength)
+            while (iterations < safetyLimit)
             {
-                if (!IsWalkable(nextPos))
+                if (!IsWalkable(current))
                 {
                     break;
                 }
 
-                wanderPath.Add(nextPos);
+                straightPath.Add(current);
 
                 // Get neighbors for next step
-                List<Vector2Int> neighbors = GetWalkableNeighbors(nextPos);
+                List<Vector2Int> neighbors = GetWalkableNeighbors(current);
                 neighbors.Remove(previousPos); // Don't go backward
 
                 if (neighbors.Count == 0)
                 {
-                    break; // Dead end
+                    // Dead end - stop here
+                    break;
                 }
-
-                // Prefer continuing forward, but randomly turn at intersections
-                Vector2Int preferredForward = nextPos + forwardDir;
-                Vector2Int chosenNext;
-
-                if (neighbors.Count == 1)
+                else if (neighbors.Count == 1)
                 {
-                    // Only one way forward
-                    chosenNext = neighbors[0];
+                    // Only one way forward - continue straight
+                    previousPos = current;
+                    current = neighbors[0];
                 }
                 else
                 {
-                    // Intersection - pick randomly (may continue forward or turn)
-                    chosenNext = neighbors[Random.Range(0, neighbors.Count)];
+                    // Intersection reached - stop here so we can make a new decision
+                    // The intersection tile is already added to the path
+                    break;
                 }
 
-                forwardDir = chosenNext - nextPos;
-                previousPos = nextPos;
-                nextPos = chosenNext;
                 iterations++;
             }
 
-            return wanderPath;
+            return straightPath;
         }
 
         #endregion
@@ -986,8 +1049,8 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Makes this visitor fascinated by a FaeLantern.
-        /// Fascinated visitors immediately retarget toward the lantern.
-        /// After reaching the lantern, they will wander randomly at intersections.
+        /// Fascinated visitors immediately discard their A* path and use direct steering to the lantern.
+        /// After reaching the lantern, they will travel straight and turn at intersections randomly.
         /// </summary>
         /// <param name="lanternGridPosition">Grid position of the lantern</param>
         public void BecomeFascinated(Vector2Int lanternGridPosition)
@@ -1002,78 +1065,14 @@ namespace FaeMaze.Visitors
             fascinationLanternPosition = lanternGridPosition;
             hasReachedLantern = false;
 
-            // Immediately retarget toward the lantern
-            if (gameController != null)
-            {
-                // Get current position
-                if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-                {
-                    Vector2Int currentPos = new Vector2Int(currentX, currentY);
-                    Vector2Int oldDestination = originalDestination;
+            // Immediately discard any existing A* path - DO NOT recalculate or reuse TryFindPath
+            // Clear current waypoint list
+            path = null;
+            currentPathIndex = 0;
+            confusionSegmentActive = false;
+            confusionSegmentEndIndex = 0;
 
-                    Debug.Log($"[Fascination] '{gameObject.name}' attempting to retarget from {currentPos} to lantern at {lanternGridPosition} (old destination: {oldDestination})");
-
-                    // Find path to lantern
-                    List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
-                    if (gameController.TryFindPath(currentPos, lanternGridPosition, pathToLantern) && pathToLantern.Count > 0)
-                    {
-                        // Convert to Vector2Int path
-                        List<Vector2Int> newPath = new List<Vector2Int>();
-                        foreach (var node in pathToLantern)
-                        {
-                            newPath.Add(new Vector2Int(node.x, node.y));
-                        }
-
-                        // Find closest waypoint to current position
-                        int startIndex = 0;
-                        if (newPath.Count > 1)
-                        {
-                            Vector3 currentWorldPos = transform.position;
-                            float closestDist = float.MaxValue;
-
-                            for (int i = 0; i < newPath.Count; i++)
-                            {
-                                Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(newPath[i].x, newPath[i].y);
-                                float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
-
-                                if (dist < closestDist)
-                                {
-                                    closestDist = dist;
-                                    startIndex = i;
-                                }
-                            }
-
-                            if (startIndex < newPath.Count - 1 && closestDist < waypointReachedDistance)
-                            {
-                                startIndex++;
-                            }
-                        }
-
-                        int oldPathRemaining = path != null ? (path.Count - currentPathIndex) : 0;
-                        int newPathLength = newPath.Count - startIndex;
-
-                        // Update path
-                        path = newPath;
-                        currentPathIndex = startIndex;
-                        confusionSegmentActive = false;
-                        confusionSegmentEndIndex = 0;
-
-                        Debug.Log($"[Fascination] '{gameObject.name}' RETARGETED to lantern | oldPathRemaining={oldPathRemaining} waypoints | newPath={newPathLength} waypoints | startIndex={startIndex}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[Fascination] '{gameObject.name}' FAILED to find path to lantern at {lanternGridPosition} from {currentPos}!");
-                    }
-                }
-                else
-                {
-                    Debug.LogError($"[Fascination] '{gameObject.name}' cannot determine grid position - WorldToGrid failed!");
-                }
-            }
-            else
-            {
-                Debug.LogError($"[Fascination] '{gameObject.name}' cannot retarget - gameController is null!");
-            }
+            Debug.Log($"[Fascination] '{gameObject.name}' became FASCINATED by lantern at {lanternGridPosition}! Cleared A* path, switching to direct steering mode.");
         }
 
         #endregion
