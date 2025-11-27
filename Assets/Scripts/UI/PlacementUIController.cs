@@ -36,6 +36,19 @@ namespace FaeMaze.UI
         [Tooltip("Text showing fairy ring essence cost")]
         private TextMeshProUGUI fairyRingCostText;
 
+        [Header("Tooltip")]
+        [SerializeField]
+        [Tooltip("Tooltip panel GameObject")]
+        private GameObject tooltipPanel;
+
+        [SerializeField]
+        [Tooltip("Text showing tooltip title")]
+        private TextMeshProUGUI tooltipTitleText;
+
+        [SerializeField]
+        [Tooltip("Text showing tooltip body (description and cost)")]
+        private TextMeshProUGUI tooltipBodyText;
+
         [Header("References")]
         [SerializeField]
         [Tooltip("Reference to the prop placement controller")]
@@ -98,6 +111,12 @@ namespace FaeMaze.UI
         /// </summary>
         private void InitializeControls()
         {
+            // Hide tooltip on startup
+            if (tooltipPanel != null)
+            {
+                tooltipPanel.SetActive(false);
+            }
+
             // Add button listeners
             if (lanternButton != null)
             {
@@ -460,6 +479,67 @@ namespace FaeMaze.UI
         public string GetCurrentSelectionId()
         {
             return currentSelectionId;
+        }
+
+        #endregion
+
+        #region Tooltip Management
+
+        /// <summary>
+        /// Shows the tooltip for a specific item at the given screen position.
+        /// </summary>
+        /// <param name="id">Item ID to show tooltip for</param>
+        /// <param name="screenPosition">Screen position for tooltip (usually near cursor)</param>
+        public void ShowTooltipForItem(string id, Vector2 screenPosition)
+        {
+            var item = propPlacementController.GetPlaceableItemById(id);
+            if (item == null)
+            {
+                Debug.LogWarning($"PlacementUIController: No item found with id '{id}' for tooltip");
+                return;
+            }
+
+            if (tooltipPanel != null)
+            {
+                tooltipPanel.SetActive(true);
+
+                // Update title text
+                if (tooltipTitleText != null)
+                {
+                    tooltipTitleText.text = item.displayName;
+                }
+
+                // Update body text with description and cost
+                if (tooltipBodyText != null)
+                {
+                    string descriptionText = !string.IsNullOrEmpty(item.description)
+                        ? item.description
+                        : "No description available.";
+                    tooltipBodyText.text = $"{descriptionText}\n\nCost: {item.essenceCost} Essence";
+                }
+
+                // Position tooltip near cursor
+                var panelRect = (RectTransform)tooltipPanel.transform;
+                Vector2 localPos;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    (RectTransform)tooltipPanel.transform.parent,
+                    screenPosition,
+                    null,
+                    out localPos
+                );
+                panelRect.anchoredPosition = localPos + new Vector2(10f, 10f);
+            }
+        }
+
+        /// <summary>
+        /// Hides the tooltip panel.
+        /// </summary>
+        public void HideTooltip()
+        {
+            if (tooltipPanel != null)
+            {
+                tooltipPanel.SetActive(false);
+            }
         }
 
         #endregion

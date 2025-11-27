@@ -45,6 +45,10 @@ namespace FaeMaze.Props
             [Tooltip("Essence cost to place this item")]
             public int essenceCost;
 
+            [TextArea]
+            [Tooltip("Description of the item's effect (shown in tooltip)")]
+            public string description;
+
             [Header("Preview Settings")]
             [Tooltip("Sprite to use for preview (optional; falls back to prefab's sprite)")]
             public Sprite previewSprite;
@@ -253,6 +257,16 @@ namespace FaeMaze.Props
         public IReadOnlyList<PlaceableItem> GetAllPlaceableItems()
         {
             return placeableItems.AsReadOnly();
+        }
+
+        /// <summary>
+        /// Gets a placeable item by its ID (alias for GetItemById for clarity).
+        /// </summary>
+        /// <param name="id">Unique identifier of the item</param>
+        /// <returns>The item if found, null otherwise</returns>
+        public PlaceableItem GetPlaceableItemById(string id)
+        {
+            return GetItemById(id);
         }
 
         #endregion
