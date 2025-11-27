@@ -1214,6 +1214,29 @@ namespace FaeMaze.Visitors
 
             Debug.Log($"[{gameObject.name}] PATH RECALC FILTER | visitedTiles.Count={traversedTiles.Count} | newPath.Count={newPath.Count} | startIndex={startIndex}");
 
+            // Debug: Show first few visited tiles and new path tiles
+            if (traversedTiles.Count > 0)
+            {
+                string visitedSample = "";
+                int count = 0;
+                foreach (var tile in traversedTiles)
+                {
+                    visitedSample += tile.ToString() + " ";
+                    if (++count >= 10) break;
+                }
+                Debug.Log($"[{gameObject.name}] VISITED (first 10): {visitedSample}");
+            }
+
+            if (newPath.Count > 0)
+            {
+                string newPathSample = "";
+                for (int i = 0; i < System.Math.Min(10, newPath.Count); i++)
+                {
+                    newPathSample += newPath[i].ToString() + " ";
+                }
+                Debug.Log($"[{gameObject.name}] NEWPATH (first 10): {newPathSample}");
+            }
+
             for (int i = startIndex; i < newPath.Count; i++)
             {
                 Vector2Int tile = newPath[i];
@@ -1226,10 +1249,11 @@ namespace FaeMaze.Visitors
                 }
 
                 // Skip tiles that would cause backtracking
-                if (traversedTiles.Contains(tile))
+                bool isVisited = traversedTiles.Contains(tile);
+                if (isVisited)
                 {
                     skippedTiles++;
-                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | tile={tile} would cause backtracking");
+                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} would cause backtracking");
                     continue;
                 }
 
