@@ -135,6 +135,15 @@ namespace FaeMaze.Maze
 
         private void SetupTriggerCollider()
         {
+            // Add Rigidbody2D for trigger detection (required for OnTriggerEnter2D to work)
+            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            if (rb == null)
+            {
+                rb = gameObject.AddComponent<Rigidbody2D>();
+                rb.bodyType = RigidbodyType2D.Kinematic; // Kinematic - attractor doesn't move
+                rb.gravityScale = 0f; // No gravity for 2D top-down
+            }
+
             // Add CircleCollider2D for trigger detection
             triggerCollider = GetComponent<CircleCollider2D>();
             if (triggerCollider == null)
@@ -204,13 +213,23 @@ namespace FaeMaze.Maze
             var visitor = other.GetComponent<Visitors.VisitorController>();
             if (visitor != null)
             {
+                Debug.Log($"MazeAttractor at {gridPosition}: Visitor {visitor.name} entered trigger radius");
+
                 // Apply fascination if enabled (FaeLantern-specific behavior)
                 if (enableFascination && !visitor.IsFascinated)
                 {
                     // Roll for fascination
-                    if (Random.value <= fascinationChance)
+                    float roll = Random.value;
+                    Debug.Log($"MazeAttractor at {gridPosition}: Rolling for fascination - roll={roll:F2}, chance={fascinationChance:F2}");
+
+                    if (roll <= fascinationChance)
                     {
+                        Debug.Log($"MazeAttractor at {gridPosition}: {visitor.name} will become fascinated!");
                         visitor.BecomeFascinated(gridPosition);
+                    }
+                    else
+                    {
+                        Debug.Log($"MazeAttractor at {gridPosition}: {visitor.name} resisted fascination");
                     }
                 }
 
