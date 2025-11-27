@@ -33,23 +33,39 @@ namespace FaeMaze.UI
 
         [Header("Audio")]
         [SerializeField]
-        [Tooltip("Slider controlling SFX volume")] 
+        [Tooltip("Slider controlling SFX volume")]
         private Slider sfxVolumeSlider;
+
+        private bool isSubscribedToEssence;
 
         #endregion
 
         #region Unity Lifecycle
 
+        private void OnEnable()
+        {
+            TrySubscribeToGameController();
+        }
+
+        private void OnDisable()
+        {
+            if (isSubscribedToEssence && GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged -= UpdateEssence;
+                isSubscribedToEssence = false;
+            }
+        }
+
         private void Start()
         {
+            // Ensure subscription in case GameController wasn't initialized during OnEnable
+            TrySubscribeToGameController();
+
             // Hook up button click event
             if (startWaveButton != null && waveSpawner != null)
             {
                 startWaveButton.onClick.AddListener(OnStartWaveClicked);
             }
-
-            // Initialize essence display
-            UpdateEssence(0);
 
             // Initialize placement instructions
             if (placementInstructionsText != null)
@@ -103,6 +119,22 @@ namespace FaeMaze.UI
             {
                 waveSpawner.StartWave();
             }
+        }
+
+        private void TrySubscribeToGameController()
+        {
+            if (GameController.Instance == null)
+            {
+                return;
+            }
+
+            if (!isSubscribedToEssence)
+            {
+                GameController.Instance.OnEssenceChanged += UpdateEssence;
+                isSubscribedToEssence = true;
+            }
+
+            UpdateEssence(GameController.Instance.CurrentEssence);
         }
 
         private void SetupSfxVolumeSlider()
