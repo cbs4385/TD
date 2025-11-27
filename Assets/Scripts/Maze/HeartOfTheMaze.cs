@@ -158,7 +158,7 @@ namespace FaeMaze.Maze
 
         #region Unity Lifecycle
 
-        private void Start()
+        private void Awake()
         {
             // Auto-position from maze grid if enabled
             if (autoPosition)
@@ -166,13 +166,17 @@ namespace FaeMaze.Maze
                 PositionFromMazeGrid();
             }
 
-            CreateVisualMarker();
-
             // Apply attraction to draw visitors toward the heart
+            // (Done in Awake() to ensure attraction is applied before any Start() methods)
             if (enableAttraction)
             {
                 ApplyAttraction();
             }
+        }
+
+        private void Start()
+        {
+            CreateVisualMarker();
         }
 
         private void Update()
@@ -264,9 +268,15 @@ namespace FaeMaze.Maze
         {
             // Find the MazeGridBehaviour in the scene
             var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            if (mazeGridBehaviour == null)
             {
-                Debug.LogError("HeartOfTheMaze: Cannot apply attraction - MazeGridBehaviour or Grid is null!");
+                Debug.LogError("HeartOfTheMaze: Cannot find MazeGridBehaviour in scene!");
+                return;
+            }
+
+            if (mazeGridBehaviour.Grid == null)
+            {
+                Debug.LogError("HeartOfTheMaze: MazeGrid is null! Grid may not be initialized yet.");
                 return;
             }
 

@@ -93,9 +93,6 @@ namespace FaeMaze.Maze
             }
 
             gridPosition = new Vector2Int(x, y);
-
-            // Apply attraction IMMEDIATELY so pathfinding uses it
-            ApplyAttraction(gridBehaviour);
         }
 
         private void Start()
@@ -109,8 +106,20 @@ namespace FaeMaze.Maze
                 SetupTriggerCollider();
             }
 
+            // Apply attraction BEFORE path recalculation
+            // (Done in Start() to ensure MazeGridBehaviour.Awake() has completed and Grid exists)
+            if (gridBehaviour != null && gridBehaviour.Grid != null)
+            {
+                ApplyAttraction(gridBehaviour);
+            }
+            else
+            {
+                Debug.LogError("MazeAttractor: Grid not ready in Start(), cannot apply attraction!");
+                return;
+            }
+
             // Trigger path recalculation for all active visitors
-            // (This happens after Awake, so attraction is already applied)
+            // (This happens after attraction is applied)
             RecalculateAllVisitorPaths();
         }
 

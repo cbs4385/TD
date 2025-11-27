@@ -14,6 +14,7 @@ namespace FaeMaze.Systems
     /// - Y increases downward (lines[0] is Y=0, top of maze)
     /// - Grid origin (0,0) is at top-left of the maze
     /// </summary>
+    [DefaultExecutionOrder(-100)] // Execute before other scripts to ensure grid is initialized first
     public class MazeGridBehaviour : MonoBehaviour
     {
         #region Serialized Fields
