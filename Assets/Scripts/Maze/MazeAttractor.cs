@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 
@@ -259,7 +260,8 @@ namespace FaeMaze.Maze
 
         /// <summary>
         /// Applies attraction to nearby tiles on the maze grid.
-        /// Uses distance-based falloff for natural influence.
+        /// Uses BFS/flood-fill to propagate influence only along walkable paths.
+        /// Distance-based falloff ensures natural influence that respects maze structure.
         /// </summary>
         /// <param name="gridBehaviour">The maze grid behaviour to apply attraction to</param>
         public void ApplyAttraction(MazeGridBehaviour gridBehaviour)
@@ -278,39 +280,70 @@ namespace FaeMaze.Maze
             int affectedCount = 0;
             float totalAttractionApplied = 0f;
 
-            // Apply attraction to tiles within radius
-            for (int dx = -gridRadius; dx <= gridRadius; dx++)
+            // Use BFS to propagate attraction through walkable tiles only
+            Queue<Vector2Int> queue = new Queue<Vector2Int>();
+            Dictionary<Vector2Int, float> distances = new Dictionary<Vector2Int, float>();
+
+            // Start from lantern position
+            queue.Enqueue(gridPosition);
+            distances[gridPosition] = 0f;
+
+            // Cardinal directions for BFS
+            Vector2Int[] directions = new Vector2Int[]
             {
-                for (int dy = -gridRadius; dy <= gridRadius; dy++)
+                new Vector2Int(0, 1),   // Up
+                new Vector2Int(0, -1),  // Down
+                new Vector2Int(1, 0),   // Right
+                new Vector2Int(-1, 0)   // Left
+            };
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                float currentDistance = distances[current];
+
+                // Apply attraction at current position
+                var currentNode = grid.GetNode(current.x, current.y);
+                if (currentNode != null && currentNode.walkable)
                 {
-                    int targetX = gridPosition.x + dx;
-                    int targetY = gridPosition.y + dy;
-
-                    // Check bounds
-                    if (!grid.InBounds(targetX, targetY))
-                        continue;
-
-                    // Check if node is walkable
-                    var node = grid.GetNode(targetX, targetY);
-                    if (node == null || !node.walkable)
-                        continue;
-
-                    // Calculate distance
-                    float distance = Mathf.Sqrt(dx * dx + dy * dy);
-
-                    // Skip if outside radius
-                    if (distance > radius)
-                        continue;
-
-                    // Calculate attraction with falloff
-                    float falloff = Mathf.Clamp01(1f - (distance / radius));
+                    // Calculate attraction with falloff based on path distance
+                    float falloff = Mathf.Clamp01(1f - (currentDistance / radius));
                     float effectiveAttraction = attractionStrength * falloff;
 
-                    // Apply attraction to grid
-                    grid.AddAttraction(targetX, targetY, effectiveAttraction);
+                    grid.AddAttraction(current.x, current.y, effectiveAttraction);
 
                     affectedCount++;
                     totalAttractionApplied += effectiveAttraction;
+                }
+
+                // Explore neighbors
+                foreach (var dir in directions)
+                {
+                    Vector2Int neighbor = current + dir;
+
+                    // Check bounds
+                    if (!grid.InBounds(neighbor.x, neighbor.y))
+                        continue;
+
+                    // Check if node is walkable
+                    var neighborNode = grid.GetNode(neighbor.x, neighbor.y);
+                    if (neighborNode == null || !neighborNode.walkable)
+                        continue;
+
+                    // Calculate new distance (1 unit per step)
+                    float newDistance = currentDistance + 1f;
+
+                    // Skip if outside radius
+                    if (newDistance > radius)
+                        continue;
+
+                    // Skip if already visited with a shorter or equal distance
+                    if (distances.ContainsKey(neighbor) && distances[neighbor] <= newDistance)
+                        continue;
+
+                    // Mark as visited and enqueue
+                    distances[neighbor] = newDistance;
+                    queue.Enqueue(neighbor);
                 }
             }
 

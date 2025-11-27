@@ -386,6 +386,11 @@ namespace FaeMaze.Visitors
                 {
                     hasReachedLantern = true;
                     Debug.Log($"[Fascination] '{gameObject.name}' REACHED lantern at {fascinationLanternPosition}! Switching to random wander mode...");
+
+                    // Truncate path to force immediate random walk behavior
+                    // Keep only current position and a few waypoints ahead
+                    int keepWaypoints = Mathf.Min(3, path.Count - currentPathIndex);
+                    path.RemoveRange(currentPathIndex + keepWaypoints, path.Count - (currentPathIndex + keepWaypoints));
                 }
             }
 
@@ -733,10 +738,11 @@ namespace FaeMaze.Visitors
         /// </summary>
         private void HandleFascinatedRandomWalk()
         {
-            // Only handle if we're near the end of the current path (need to extend it)
-            if (currentPathIndex < path.Count - 5)
+            // Only extend path if we're near the end (within 5 waypoints)
+            int waypointsRemaining = path.Count - currentPathIndex;
+            if (waypointsRemaining > 5)
             {
-                return; // Still have waypoints ahead
+                return; // Still have enough waypoints ahead
             }
 
             Vector2Int currentPos = path[currentPathIndex];
@@ -759,8 +765,8 @@ namespace FaeMaze.Visitors
             // Pick a random direction (no bias toward any destination)
             Vector2Int randomNext = walkableNeighbors[Random.Range(0, walkableNeighbors.Count)];
 
-            // Build a short path segment in that direction (10-15 tiles)
-            int segmentLength = Random.Range(10, 16);
+            // Build a short path segment in that direction (8-12 tiles)
+            int segmentLength = Random.Range(8, 13);
             List<Vector2Int> wanderSegment = BuildWanderPath(currentPos, randomNext, segmentLength);
 
             if (wanderSegment.Count == 0)
