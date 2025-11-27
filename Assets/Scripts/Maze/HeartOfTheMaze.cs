@@ -54,6 +54,19 @@ namespace FaeMaze.Maze
         [Tooltip("Pulse amount")]
         private float pulseAmount = 0.2f;
 
+        [Header("Attraction Settings")]
+        [SerializeField]
+        [Tooltip("Radius of attraction influence in grid units")]
+        private float attractionRadius = 5f;
+
+        [SerializeField]
+        [Tooltip("Strength of attraction (higher = stronger pull)")]
+        private float attractionStrength = 2.0f;
+
+        [SerializeField]
+        [Tooltip("Enable attraction to draw visitors toward the heart")]
+        private bool enableAttraction = true;
+
         #endregion
 
         #region Private Fields
@@ -154,6 +167,12 @@ namespace FaeMaze.Maze
             }
 
             CreateVisualMarker();
+
+            // Apply attraction to draw visitors toward the heart
+            if (enableAttraction)
+            {
+                ApplyAttraction();
+            }
         }
 
         private void Update()
@@ -235,6 +254,71 @@ namespace FaeMaze.Maze
 
         #endregion
 
+        #region Attraction
+
+        /// <summary>
+        /// Applies attraction to nearby tiles on the maze grid.
+        /// Draws visitors toward the Heart of the Maze.
+        /// </summary>
+        private void ApplyAttraction()
+        {
+            // Find the MazeGridBehaviour in the scene
+            var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                Debug.LogError("HeartOfTheMaze: Cannot apply attraction - MazeGridBehaviour or Grid is null!");
+                return;
+            }
+
+            var grid = mazeGridBehaviour.Grid;
+
+            // Calculate grid radius
+            int gridRadius = Mathf.CeilToInt(attractionRadius);
+
+            int affectedCount = 0;
+            float totalAttractionApplied = 0f;
+
+            // Apply attraction to tiles within radius
+            for (int dx = -gridRadius; dx <= gridRadius; dx++)
+            {
+                for (int dy = -gridRadius; dy <= gridRadius; dy++)
+                {
+                    int targetX = gridX + dx;
+                    int targetY = gridY + dy;
+
+                    // Check bounds
+                    if (!grid.InBounds(targetX, targetY))
+                        continue;
+
+                    // Check if node is walkable
+                    var node = grid.GetNode(targetX, targetY);
+                    if (node == null || !node.walkable)
+                        continue;
+
+                    // Calculate distance
+                    float distance = Mathf.Sqrt(dx * dx + dy * dy);
+
+                    // Skip if outside radius
+                    if (distance > attractionRadius)
+                        continue;
+
+                    // Calculate attraction with falloff
+                    float falloff = Mathf.Clamp01(1f - (distance / attractionRadius));
+                    float effectiveAttraction = attractionStrength * falloff;
+
+                    // Apply attraction to grid
+                    grid.AddAttraction(targetX, targetY, effectiveAttraction);
+
+                    affectedCount++;
+                    totalAttractionApplied += effectiveAttraction;
+                }
+            }
+
+            Debug.Log($"HeartOfTheMaze: Applied attraction at grid ({gridX}, {gridY}) - affected {affectedCount} tiles with total attraction {totalAttractionApplied:F2}");
+        }
+
+        #endregion
+
         #region Gizmos
 
         private void OnDrawGizmos()
@@ -247,6 +331,27 @@ namespace FaeMaze.Maze
             Gizmos.color = new Color(1f, 0f, 0f, 0.3f);
             float pulse = Mathf.PingPong(Time.time * 2f, 0.3f);
             Gizmos.DrawSphere(transform.position, 0.5f + pulse);
+
+            // Draw attraction radius if enabled
+            if (enableAttraction)
+            {
+                Gizmos.color = new Color(1f, 0.5f, 0.5f, 0.2f);
+                DrawCircleGizmo(transform.position, attractionRadius, 32);
+            }
+        }
+
+        private void DrawCircleGizmo(Vector3 center, float radius, int segments)
+        {
+            float angleStep = 360f / segments;
+            Vector3 prevPoint = center + new Vector3(radius, 0, 0);
+
+            for (int i = 1; i <= segments; i++)
+            {
+                float angle = i * angleStep * Mathf.Deg2Rad;
+                Vector3 newPoint = center + new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0);
+                Gizmos.DrawLine(prevPoint, newPoint);
+                prevPoint = newPoint;
+            }
         }
 
         #endregion

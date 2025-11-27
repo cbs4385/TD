@@ -37,6 +37,10 @@ namespace FaeMaze.Visitors
         [Tooltip("Distance threshold to consider a waypoint reached")]
         private float waypointReachedDistance = 0.05f;
 
+        [SerializeField]
+        [Tooltip("How often to recalculate path (in seconds) to react to new attractors")]
+        private float pathRecalculationInterval = 2.0f;
+
         [Header("Confusion Settings")]
         [SerializeField]
         [Tooltip("Chance (0-1) for visitor to get confused at intersections")]
@@ -93,6 +97,8 @@ namespace FaeMaze.Visitors
         private int confusionSegmentEndIndex;
         private int confusionStepsTarget;
         private int confusionStepsTaken;
+
+        private float timeSinceLastRecalculation;
 
         #endregion
 
@@ -196,6 +202,14 @@ namespace FaeMaze.Visitors
             if (state == VisitorState.Walking)
             {
                 UpdateWalking();
+
+                // Periodically recalculate path to react to new attractors
+                timeSinceLastRecalculation += Time.deltaTime;
+                if (timeSinceLastRecalculation >= pathRecalculationInterval)
+                {
+                    RecalculatePath();
+                    timeSinceLastRecalculation = 0f;
+                }
             }
             else if (state == VisitorState.Escaping)
             {
@@ -730,13 +744,37 @@ namespace FaeMaze.Visitors
                 newPath.Add(new Vector2Int(node.x, node.y));
             }
 
-            // Update path (preserve confusion state but reset segment tracking)
+            // Find the closest waypoint in the new path to our current position
+            int startIndex = 0;
+            if (newPath.Count > 1)
+            {
+                Vector3 currentWorldPos = transform.position;
+                float closestDist = float.MaxValue;
+
+                for (int i = 0; i < newPath.Count; i++)
+                {
+                    Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(newPath[i].x, newPath[i].y);
+                    float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
+
+                    if (dist < closestDist)
+                    {
+                        closestDist = dist;
+                        startIndex = i;
+                    }
+                }
+
+                // If we're very close to the closest waypoint (already reached it), start from the next one
+                if (startIndex < newPath.Count - 1 && closestDist < waypointReachedDistance)
+                {
+                    startIndex++;
+                }
+            }
+
+            // Update path
             path = newPath;
-            currentPathIndex = 0;
+            currentPathIndex = startIndex;
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
-
-            Debug.Log($"{gameObject.name}: Recalculated path to {originalDestination} from {currentPos}");
         }
 
         /// <summary>
