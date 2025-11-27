@@ -282,7 +282,12 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            path = new List<Vector2Int>(gridPath);
+            if (!TryValidateOrRepairPath(gridPath, out path))
+            {
+                Debug.LogError("VisitorController: Provided path is invalid and could not be repaired.");
+                return;
+            }
+
             currentPathIndex = 0;
             state = VisitorState.Walking;
             confusionSegmentActive = false;
@@ -314,10 +319,16 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            path = new List<Vector2Int>();
+            List<Vector2Int> convertedPath = new List<Vector2Int>();
             foreach (var node in nodePath)
             {
-                path.Add(new Vector2Int(node.x, node.y));
+                convertedPath.Add(new Vector2Int(node.x, node.y));
+            }
+
+            if (!TryValidateOrRepairPath(convertedPath, out path))
+            {
+                Debug.LogError("VisitorController: Provided node path is invalid and could not be repaired.");
+                return;
             }
 
             currentPathIndex = 0;
@@ -682,6 +693,93 @@ namespace FaeMaze.Visitors
             }
 
             return neighbors;
+        }
+
+        private bool ValidatePath(List<Vector2Int> candidatePath, out string error)
+        {
+            error = string.Empty;
+
+            if (candidatePath == null || candidatePath.Count == 0)
+            {
+                error = "Path is null or empty.";
+                return false;
+            }
+
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                error = "Maze grid is unavailable for validation.";
+                return false;
+            }
+
+            for (int i = 0; i < candidatePath.Count; i++)
+            {
+                Vector2Int step = candidatePath[i];
+                var node = mazeGridBehaviour.Grid.GetNode(step.x, step.y);
+
+                if (node == null || !node.walkable)
+                {
+                    error = $"Path crosses unwalkable or out-of-bounds tile at {step}.";
+                    return false;
+                }
+
+                if (i == 0)
+                {
+                    continue;
+                }
+
+                Vector2Int prev = candidatePath[i - 1];
+                int manhattanDistance = Mathf.Abs(step.x - prev.x) + Mathf.Abs(step.y - prev.y);
+
+                if (manhattanDistance != 1)
+                {
+                    error = $"Non-adjacent movement detected between {prev} and {step}.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool TryValidateOrRepairPath(List<Vector2Int> candidatePath, out List<Vector2Int> validatedPath)
+        {
+            validatedPath = null;
+
+            if (ValidatePath(candidatePath, out string validationError))
+            {
+                validatedPath = new List<Vector2Int>(candidatePath);
+                return true;
+            }
+
+            if (gameController == null || mazeGridBehaviour == null || candidatePath == null || candidatePath.Count < 2)
+            {
+                Debug.LogError($"VisitorController: Path validation failed and cannot be repaired. Reason: {validationError}");
+                return false;
+            }
+
+            Vector2Int start = candidatePath[0];
+            Vector2Int destination = candidatePath[candidatePath.Count - 1];
+
+            List<MazeGrid.MazeNode> repairedNodes = new List<MazeGrid.MazeNode>();
+            if (!gameController.TryFindPath(start, destination, repairedNodes) || repairedNodes.Count == 0)
+            {
+                Debug.LogError($"VisitorController: Unable to repair invalid path from {start} to {destination}. Reason: {validationError}");
+                return false;
+            }
+
+            List<Vector2Int> repairedPath = new List<Vector2Int>();
+            foreach (var node in repairedNodes)
+            {
+                repairedPath.Add(new Vector2Int(node.x, node.y));
+            }
+
+            if (!ValidatePath(repairedPath, out string repairedError))
+            {
+                Debug.LogError($"VisitorController: Repaired path is still invalid. Reason: {repairedError}");
+                return false;
+            }
+
+            validatedPath = repairedPath;
+            return true;
         }
 
         private void BeginConfusionSegment(Vector2Int currentPos, Vector2Int detourStart)
@@ -1116,6 +1214,12 @@ namespace FaeMaze.Visitors
                 newPath.Add(new Vector2Int(node.x, node.y));
             }
 
+            if (!ValidatePath(newPath, out string validationError))
+            {
+                Debug.LogError($"VisitorController: Recalculated path invalid - {validationError}");
+                return false;
+            }
+
             path = newPath;
             currentPathIndex = 0;
 
@@ -1236,6 +1340,12 @@ namespace FaeMaze.Visitors
                     foreach (var node in pathToLantern)
                     {
                         path.Add(new Vector2Int(node.x, node.y));
+                    }
+
+                    if (!ValidatePath(path, out string fascinationValidationError))
+                    {
+                        Debug.LogError($"[{gameObject.name}] FASCINATION PATH INVALID | {fascinationValidationError}");
+                        return;
                     }
 
                     // Find closest waypoint to start from
