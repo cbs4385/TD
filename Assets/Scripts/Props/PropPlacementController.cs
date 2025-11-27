@@ -223,6 +223,9 @@ namespace FaeMaze.Props
 
                 // Create or update preview for new selection
                 CreateOrUpdatePreview();
+
+                // Enter build mode when selecting an item
+                EnterBuildMode();
             }
             else
             {
