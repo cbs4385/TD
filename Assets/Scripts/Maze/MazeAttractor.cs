@@ -176,20 +176,8 @@ namespace FaeMaze.Maze
             );
         }
 
-        private void OnEnable()
-        {
-            // If already initialized and grid behaviour exists with valid grid, reapply attraction
-            if (isApplied && gridBehaviour != null && gridBehaviour.Grid != null)
-            {
-                ApplyAttraction(gridBehaviour);
-            }
-        }
-
-        private void OnDisable()
-        {
-            // For MVP, we don't remove attraction when disabled
-            // Could implement removal by storing affected nodes and calling AddAttraction with negative value
-        }
+        // OnEnable/OnDisable removed - Awake() handles initial attraction application
+        // No need to reapply on enable since attraction persists on the grid
 
         private void OnTriggerEnter2D(Collider2D other)
         {
