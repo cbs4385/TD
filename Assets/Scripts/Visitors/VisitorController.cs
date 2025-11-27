@@ -1091,29 +1091,85 @@ namespace FaeMaze.Visitors
                 newPath.Add(new Vector2Int(node.x, node.y));
             }
 
-            // Find the closest waypoint in the new path to our current position
+            // Find the starting waypoint in the new path that preserves forward progress
+            // Strategy: Use the visitor's current grid tile to anchor the new path, preventing backtracking
             int startIndex = 0;
             if (newPath.Count > 1)
             {
-                Vector3 currentWorldPos = transform.position;
-                float closestDist = float.MaxValue;
-
+                // First, try to find the visitor's current grid tile in the new path
+                int currentGridIndex = -1;
                 for (int i = 0; i < newPath.Count; i++)
                 {
-                    Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(newPath[i].x, newPath[i].y);
-                    float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
-
-                    if (dist < closestDist)
+                    if (newPath[i] == currentPos)
                     {
-                        closestDist = dist;
-                        startIndex = i;
+                        currentGridIndex = i;
+                        break;
                     }
                 }
 
-                // If we're very close to the closest waypoint (already reached it), start from the next one
-                if (startIndex < newPath.Count - 1 && closestDist < waypointReachedDistance)
+                if (currentGridIndex >= 0)
                 {
-                    startIndex++;
+                    // Found current tile in new path - start from there
+                    startIndex = currentGridIndex;
+
+                    // If we're very close to this tile's center, advance to next waypoint
+                    Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
+                    float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
+                    if (startIndex < newPath.Count - 1 && distToCurrentTile < waypointReachedDistance)
+                    {
+                        startIndex++;
+                    }
+
+                    Debug.Log($"[{gameObject.name}] PATH RECALC | current grid tile found in new path at index {currentGridIndex} | startIndex={startIndex}");
+                }
+                else
+                {
+                    // Current tile not in new path (path changed significantly)
+                    // Find closest waypoint, but only consider waypoints that would move us forward
+                    Vector3 currentWorldPos = transform.position;
+                    float closestDist = float.MaxValue;
+
+                    // Get the direction we're currently moving (if we have a target waypoint)
+                    Vector3 movementDirection = Vector3.zero;
+                    if (path != null && currentPathIndex < path.Count)
+                    {
+                        Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);
+                        movementDirection = (targetWorldPos - currentWorldPos).normalized;
+                    }
+
+                    for (int i = 0; i < newPath.Count; i++)
+                    {
+                        Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(newPath[i].x, newPath[i].y);
+                        float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
+
+                        // Only consider waypoints that are ahead of us (not behind)
+                        // If we have a movement direction, ensure waypoint is in forward arc
+                        if (movementDirection != Vector3.zero)
+                        {
+                            Vector3 toWaypoint = (waypointWorldPos - currentWorldPos).normalized;
+                            float dotProduct = Vector3.Dot(movementDirection, toWaypoint);
+
+                            // Skip waypoints behind us (dot product < -0.5 means > 120 degrees backward)
+                            if (dotProduct < -0.5f)
+                            {
+                                continue;
+                            }
+                        }
+
+                        if (dist < closestDist)
+                        {
+                            closestDist = dist;
+                            startIndex = i;
+                        }
+                    }
+
+                    // If we're very close to the chosen waypoint, advance to next one
+                    if (startIndex < newPath.Count - 1 && closestDist < waypointReachedDistance)
+                    {
+                        startIndex++;
+                    }
+
+                    Debug.Log($"[{gameObject.name}] PATH RECALC | current tile NOT in new path | using direction-based selection | startIndex={startIndex}");
                 }
             }
 
@@ -1209,28 +1265,60 @@ namespace FaeMaze.Visitors
                         path.Add(new Vector2Int(node.x, node.y));
                     }
 
-                    // Find closest waypoint to start from
+                    // Find starting waypoint without backtracking
                     currentPathIndex = 0;
                     if (path.Count > 1)
                     {
-                        Vector3 currentWorldPos = transform.position;
-                        float closestDist = float.MaxValue;
-
+                        // First, try to find current grid position in the path
+                        int currentGridIndex = -1;
                         for (int i = 0; i < path.Count; i++)
                         {
-                            Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
-                            float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
-
-                            if (dist < closestDist)
+                            if (path[i] == currentPos)
                             {
-                                closestDist = dist;
-                                currentPathIndex = i;
+                                currentGridIndex = i;
+                                break;
                             }
                         }
 
-                        if (currentPathIndex < path.Count - 1 && closestDist < waypointReachedDistance)
+                        if (currentGridIndex >= 0)
                         {
-                            currentPathIndex++;
+                            // Found current tile in path - start from there
+                            currentPathIndex = currentGridIndex;
+
+                            // If very close to center, advance to next waypoint
+                            Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
+                            float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
+                            if (currentPathIndex < path.Count - 1 && distToCurrentTile < waypointReachedDistance)
+                            {
+                                currentPathIndex++;
+                            }
+                        }
+                        else
+                        {
+                            // Current tile not in path - use closest waypoint with forward bias
+                            Vector3 currentWorldPos = transform.position;
+                            float closestDist = float.MaxValue;
+
+                            for (int i = 0; i < path.Count; i++)
+                            {
+                                Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
+                                float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
+
+                                // Prefer waypoints ahead by biasing distance for waypoints at later indices
+                                // This ensures we favor forward progress when distances are similar
+                                float biasedDist = dist - (i * 0.01f);
+
+                                if (biasedDist < closestDist)
+                                {
+                                    closestDist = biasedDist;
+                                    currentPathIndex = i;
+                                }
+                            }
+
+                            if (currentPathIndex < path.Count - 1 && closestDist < waypointReachedDistance)
+                            {
+                                currentPathIndex++;
+                            }
                         }
                     }
 
