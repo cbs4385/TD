@@ -114,6 +114,8 @@ namespace FaeMaze.Systems
 
             _instance = this;
 
+            currentEssence = Mathf.Max(0, startingEssence);
+
         }
 
         private void Start()
@@ -123,8 +125,6 @@ namespace FaeMaze.Systems
             EnsurePlacementUI();
 
             EnsureResourcesUI();
-
-            currentEssence = Mathf.Max(0, startingEssence);
 
             // Invoke event for initial essence value
             OnEssenceChanged?.Invoke(currentEssence);
