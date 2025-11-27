@@ -1074,6 +1074,9 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
 
+            // Get all tiles traversed so far to prevent backtracking
+            HashSet<Vector2Int> traversedTiles = GetTraversedTiles();
+
             // Store old path length for comparison
             int oldPathLength = path.Count - currentPathIndex;
 
@@ -1173,13 +1176,47 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            int newPathLength = newPath.Count - startIndex;
+            // Filter the new path to remove backtracking tiles
+            List<Vector2Int> filteredPath = new List<Vector2Int>();
+            int skippedTiles = 0;
 
-            // Update path
-            path = newPath;
-            currentPathIndex = startIndex;
-            confusionSegmentActive = false;
-            confusionSegmentEndIndex = 0;
+            for (int i = startIndex; i < newPath.Count; i++)
+            {
+                Vector2Int tile = newPath[i];
+
+                // Always include the starting tile (current position)
+                if (i == startIndex)
+                {
+                    filteredPath.Add(tile);
+                    continue;
+                }
+
+                // Skip tiles that would cause backtracking
+                if (traversedTiles.Contains(tile))
+                {
+                    skippedTiles++;
+                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | tile={tile} would cause backtracking");
+                    continue;
+                }
+
+                filteredPath.Add(tile);
+            }
+
+            // Only update path if we have valid forward waypoints (more than just the current position)
+            if (filteredPath.Count > 1)
+            {
+                path = filteredPath;
+                currentPathIndex = 0; // Start from beginning of filtered path
+                confusionSegmentActive = false;
+                confusionSegmentEndIndex = 0;
+
+                Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | newLength={filteredPath.Count} | skipped={skippedTiles} tiles");
+            }
+            else
+            {
+                Debug.Log($"[{gameObject.name}] PATH RECALC ABORT | no forward tiles available (all would cause backtracking)");
+                // Keep the old path - don't update anything
+            }
         }
 
         /// <summary>
