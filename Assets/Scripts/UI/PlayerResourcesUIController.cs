@@ -38,9 +38,9 @@ namespace FaeMaze.UI
 
         #region Unity Lifecycle
 
-        private void Start()
+        private void Awake()
         {
-            // Auto-create UI if needed
+            // Auto-create UI if needed (must happen before OnEnable)
             if (autoCreateUI && essenceValueText == null)
             {
                 CreateResourcesPanelUI();
