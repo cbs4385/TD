@@ -74,17 +74,8 @@ namespace FaeMaze.Maze
 
         #region Unity Lifecycle
 
-        private void Start()
+        private void Awake()
         {
-            // Create visual sprite first
-            CreateVisualSprite();
-
-            // Setup trigger collider for visitor interaction
-            if (enableVisitorSlowing)
-            {
-                SetupTriggerCollider();
-            }
-
             // Find the MazeGridBehaviour in the scene
             gridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
@@ -103,10 +94,23 @@ namespace FaeMaze.Maze
 
             gridPosition = new Vector2Int(x, y);
 
-            // Apply attraction
+            // Apply attraction IMMEDIATELY so pathfinding uses it
             ApplyAttraction(gridBehaviour);
+        }
+
+        private void Start()
+        {
+            // Create visual sprite
+            CreateVisualSprite();
+
+            // Setup trigger collider for visitor interaction
+            if (enableVisitorSlowing)
+            {
+                SetupTriggerCollider();
+            }
 
             // Trigger path recalculation for all active visitors
+            // (This happens after Awake, so attraction is already applied)
             RecalculateAllVisitorPaths();
         }
 
@@ -278,6 +282,7 @@ namespace FaeMaze.Maze
 
             isApplied = true;
 
+            Debug.Log($"MazeAttractor at grid ({gridPosition.x}, {gridPosition.y}): Applied attraction (radius: {radius}, strength: {attractionStrength}) to {affectedCount} tiles, total attraction: {totalAttractionApplied:F2}");
         }
 
         /// <summary>

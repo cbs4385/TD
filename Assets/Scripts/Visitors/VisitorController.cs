@@ -730,6 +730,9 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
 
+            // Store old path length for comparison
+            int oldPathLength = path.Count - currentPathIndex;
+
             // Find new path to original destination
             List<MazeGrid.MazeNode> newPathNodes = new List<MazeGrid.MazeNode>();
             if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
@@ -770,11 +773,19 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            int newPathLength = newPath.Count - startIndex;
+            bool pathChanged = newPathLength != oldPathLength;
+
             // Update path
             path = newPath;
             currentPathIndex = startIndex;
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
+
+            if (pathChanged)
+            {
+                Debug.Log($"{gameObject.name}: Path recalculated - old length: {oldPathLength}, new length: {newPathLength}, from {currentPos} to {originalDestination}");
+            }
         }
 
         /// <summary>
