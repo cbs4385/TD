@@ -90,6 +90,7 @@ namespace FaeMaze.Visitors
         private bool isEntranced;
         private float speedMultiplier = 1f;
         private SpriteRenderer spriteRenderer;
+        private Rigidbody2D rb;
         private Vector2Int originalDestination; // Store original destination for confusion recovery
 
         private bool isConfused;
@@ -157,7 +158,7 @@ namespace FaeMaze.Visitors
             transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
 
             // Add Rigidbody2D for trigger collisions with MazeAttractors
-            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            rb = GetComponent<Rigidbody2D>();
             if (rb == null)
             {
                 rb = gameObject.AddComponent<Rigidbody2D>();
@@ -354,7 +355,15 @@ namespace FaeMaze.Visitors
                 effectiveSpeed * Time.deltaTime
             );
 
-            transform.position = newPosition;
+            // Use Rigidbody2D.MovePosition for proper trigger detection
+            if (rb != null)
+            {
+                rb.MovePosition(newPosition);
+            }
+            else
+            {
+                transform.position = newPosition;
+            }
 
             // Check if we've reached the waypoint
             float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
