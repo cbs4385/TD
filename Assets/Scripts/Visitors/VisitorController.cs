@@ -293,6 +293,8 @@ namespace FaeMaze.Visitors
             {
                 originalDestination = path[path.Count - 1];
             }
+
+            Debug.Log($"[{gameObject.name}] PATH SET | pathLength={path.Count} | start={path[0]} | dest={originalDestination} | fascinated={isFascinated}");
         }
 
         /// <summary>
@@ -325,6 +327,8 @@ namespace FaeMaze.Visitors
             {
                 originalDestination = path[path.Count - 1];
             }
+
+            Debug.Log($"[{gameObject.name}] PATH SET (from nodes) | pathLength={path.Count} | start={path[0]} | dest={originalDestination} | fascinated={isFascinated}");
         }
 
         #endregion
@@ -381,17 +385,20 @@ namespace FaeMaze.Visitors
 
         private void OnWaypointReached()
         {
+            Vector2Int currentWaypoint = path[currentPathIndex];
+
             // Increment waypoint counter
             waypointsTraversedSinceSpawn++;
+
+            Debug.Log($"[{gameObject.name}] WAYPOINT REACHED | pos={currentWaypoint} | wpIndex={currentPathIndex}/{path.Count} | wpCount={waypointsTraversedSinceSpawn} | fascinated={isFascinated} | confusionActive={confusionSegmentActive}");
 
             // Check if fascinated visitor reached the lantern
             if (isFascinated && !hasReachedLantern && currentPathIndex < path.Count)
             {
-                Vector2Int currentWaypoint = path[currentPathIndex];
                 if (currentWaypoint == fascinationLanternPosition)
                 {
                     hasReachedLantern = true;
-                    Debug.Log($"[Fascination] '{gameObject.name}' REACHED lantern at {fascinationLanternPosition}! Switching to intersection-based random walk...");
+                    Debug.Log($"[{gameObject.name}] REACHED LANTERN | pos={fascinationLanternPosition} | switching to random walk");
 
                     // Initialize random walk - keep only current position
                     path = new List<Vector2Int> { currentWaypoint };
@@ -408,6 +415,7 @@ namespace FaeMaze.Visitors
             // Check if we've reached the end of the path
             if (currentPathIndex >= path.Count)
             {
+                Debug.Log($"[{gameObject.name}] PATH END REACHED | completing path");
                 OnPathCompleted();
             }
         }
@@ -438,7 +446,7 @@ namespace FaeMaze.Visitors
                 }
 
                 // Log escape
-                Debug.Log($"{gameObject.name} escaped to destination spawn point (no essence awarded)");
+                Debug.Log($"[{gameObject.name}] ESCAPED | reached destination spawn point");
 
                 // Destroy visitor after short delay for visual effect
                 Destroy(gameObject, 0.2f);
@@ -479,13 +487,14 @@ namespace FaeMaze.Visitors
             // Handle fascinated visitors who have reached the lantern
             if (isFascinated && hasReachedLantern)
             {
-                Debug.Log($"[Fascination] '{gameObject.name}' at waypoint {currentPathIndex}/{path.Count} - handling random walk (confusion disabled)");
+                Debug.Log($"[{gameObject.name}] FASCINATED RANDOM WALK | wpIndex={currentPathIndex}/{path.Count}");
                 HandleFascinatedRandomWalk();
                 return;
             }
 
             if (!confusionEnabled || currentPathIndex >= path.Count - 1)
             {
+                Debug.Log($"[{gameObject.name}] CONFUSION SKIP | confusionEnabled={confusionEnabled} | nearPathEnd={currentPathIndex >= path.Count - 1}");
                 return;
             }
 
@@ -493,6 +502,7 @@ namespace FaeMaze.Visitors
             // This ensures visitors make meaningful progress on their A* path before getting confused
             if (waypointsTraversedSinceSpawn < 10)
             {
+                Debug.Log($"[{gameObject.name}] CONFUSION SKIP | wpCount={waypointsTraversedSinceSpawn} < 10 (safety buffer)");
                 return;
             }
 
@@ -503,17 +513,20 @@ namespace FaeMaze.Visitors
                 // End of segment reached? Allow recovery logic and new decisions afterward.
                 if (currentPathIndex > confusionSegmentEndIndex)
                 {
+                    Debug.Log($"[{gameObject.name}] CONFUSION SEGMENT ENDED | endIndex={confusionSegmentEndIndex} | deciding recovery");
                     confusionSegmentActive = false;
                     DecideRecoveryFromConfusion();
                 }
                 else
                 {
+                    Debug.Log($"[{gameObject.name}] IN CONFUSION SEGMENT | {currentPathIndex}/{confusionSegmentEndIndex}");
                     return; // Still traversing a confusion segment; no new detours.
                 }
             }
 
             if (!isConfused)
             {
+                Debug.Log($"[{gameObject.name}] NOT CONFUSED | navigating normally");
                 return; // Currently navigating normally.
             }
 
@@ -530,14 +543,19 @@ namespace FaeMaze.Visitors
 
             if (walkableNeighbors.Count < 2)
             {
+                Debug.Log($"[{gameObject.name}] NOT INTERSECTION | neighbors={walkableNeighbors.Count}");
                 return; // Not an intersection
             }
 
             // Roll for confusion
-            if (Random.value > confusionChance)
+            float roll = Random.value;
+            if (roll > confusionChance)
             {
+                Debug.Log($"[{gameObject.name}] CONFUSION ROLL FAILED | roll={roll:F3} > chance={confusionChance}");
                 return; // No confusion this time
             }
+
+            Debug.Log($"[{gameObject.name}] CONFUSION TRIGGERED | roll={roll:F3} <= chance={confusionChance} | intersection with {walkableNeighbors.Count} neighbors");
 
             // Get confused - pick a non-forward direction
             List<Vector2Int> detourDirections = new List<Vector2Int>();
@@ -611,7 +629,7 @@ namespace FaeMaze.Visitors
 
             if (!gameController.TryFindPath(confusionEnd, originalDestination, recoveryPathNodes) || recoveryPathNodes.Count == 0)
             {
-                Debug.LogWarning($"{gameObject.name}: Confusion failed - no recovery path from {confusionEnd}");
+                Debug.Log($"[{gameObject.name}] CONFUSION FAILED | no recovery path from {confusionEnd} to {originalDestination}");
                 return;
             }
 
@@ -640,10 +658,7 @@ namespace FaeMaze.Visitors
             confusionStepsTaken = 0;
             isConfused = true;
 
-            if (debugConfusionGizmos)
-            {
-                Debug.Log($"{gameObject.name} took a wrong turn from {currentPos} (target {stepsTarget} steps, heading to {detourStart})");
-            }
+            Debug.Log($"[{gameObject.name}] CONFUSION STARTED | from={currentPos} to={detourStart} | targetSteps={stepsTarget} | actualSteps={confusionPath.Count} | newPathLength={newPath.Count} | confusionEndIndex={confusionSegmentEndIndex}");
         }
 
         private List<Vector2Int> BuildConfusionPath(Vector2Int currentPos, Vector2Int detourStart, int stepsTarget)
@@ -742,8 +757,10 @@ namespace FaeMaze.Visitors
 
         private void DecideRecoveryFromConfusion()
         {
-            bool recover = Random.value <= 0.5f;
+            float roll = Random.value;
+            bool recover = roll <= 0.5f;
             isConfused = !recover;
+            Debug.Log($"[{gameObject.name}] CONFUSION RECOVERY ROLL | roll={roll:F3} | recover={recover} | isConfused={isConfused}");
         }
 
         /// <summary>
@@ -777,7 +794,7 @@ namespace FaeMaze.Visitors
 
             if (walkableNeighbors.Count == 0)
             {
-                Debug.Log($"[Fascination] '{gameObject.name}' intersection walk - dead end at {currentPos}, cannot extend path");
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END | pos={currentPos}");
                 return; // Dead end - let visitor reach end of path
             }
 
@@ -797,7 +814,7 @@ namespace FaeMaze.Visitors
             {
                 // At intersection: pick a random forward option
                 nextTile = walkableNeighbors[Random.Range(0, walkableNeighbors.Count)];
-                Debug.Log($"[Fascination] '{gameObject.name}' at INTERSECTION {currentPos} with {walkableNeighbors.Count} options - picked {nextTile}");
+                Debug.Log($"[{gameObject.name}] FASCINATED INTERSECTION | pos={currentPos} | options={walkableNeighbors.Count} | picked={nextTile}");
             }
             else if (walkableNeighbors.Count == 1)
             {
@@ -814,7 +831,7 @@ namespace FaeMaze.Visitors
 
             if (straightPath.Count == 0)
             {
-                Debug.Log($"[Fascination] '{gameObject.name}' intersection walk - failed to build path from {currentPos} toward {nextTile}");
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK FAILED | from={currentPos} toward={nextTile}");
                 return;
             }
 
@@ -824,7 +841,7 @@ namespace FaeMaze.Visitors
                 path.Add(waypoint);
             }
 
-            Debug.Log($"[Fascination] '{gameObject.name}' intersection walk - extended path by {straightPath.Count} tiles toward {nextTile}");
+            Debug.Log($"[{gameObject.name}] FASCINATED WALK EXTENDED | added={straightPath.Count} tiles | toward={nextTile} | newPathLength={path.Count}");
         }
 
         /// <summary>
@@ -921,7 +938,7 @@ namespace FaeMaze.Visitors
             // Fascinated visitors either head to lantern or wander randomly - no recalc to original destination
             if (isFascinated)
             {
-                Debug.Log($"[Fascination] '{gameObject.name}' path recalc SKIPPED - visitor is fascinated (hasReachedLantern={hasReachedLantern})");
+                Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | fascinated=true | hasReachedLantern={hasReachedLantern}");
                 return;
             }
 
@@ -1018,7 +1035,7 @@ namespace FaeMaze.Visitors
                 spriteRenderer.color = escapingColor;
             }
 
-            Debug.Log($"{gameObject.name} forced to escape (no essence awarded)");
+            Debug.Log($"[{gameObject.name}] FORCED ESCAPE | no essence awarded");
             Destroy(gameObject, 0.2f);
         }
 
@@ -1033,7 +1050,7 @@ namespace FaeMaze.Visitors
         {
             if (state != VisitorState.Walking)
             {
-                Debug.Log($"[Fascination] '{gameObject.name}' cannot be fascinated - state is {state}, not Walking");
+                Debug.Log($"[{gameObject.name}] FASCINATION FAILED | state={state} (not Walking)");
                 return; // Only walking visitors can be fascinated
             }
 
@@ -1054,6 +1071,8 @@ namespace FaeMaze.Visitors
                 mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
                 Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+                Debug.Log($"[{gameObject.name}] FASCINATION TRIGGERED | currentPos={currentPos} | lanternPos={lanternGridPosition} | calculating new path");
 
                 // Find NEW path to lantern (ignores prior A* plan to original destination)
                 List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
@@ -1091,11 +1110,11 @@ namespace FaeMaze.Visitors
                         }
                     }
 
-                    Debug.Log($"[Fascination] '{gameObject.name}' became FASCINATED! Discarded old path and calculated new path to lantern at {lanternGridPosition} ({path.Count - currentPathIndex} waypoints)");
+                    Debug.Log($"[{gameObject.name}] FASCINATION PATH SET | pathLength={path.Count - currentPathIndex} waypoints | startIndex={currentPathIndex}");
                 }
                 else
                 {
-                    Debug.LogWarning($"[Fascination] '{gameObject.name}' FAILED to find path to lantern at {lanternGridPosition}!");
+                    Debug.Log($"[{gameObject.name}] FASCINATION PATHFIND FAILED | no path from {currentPos} to {lanternGridPosition}");
                 }
             }
         }
