@@ -98,6 +98,7 @@ namespace FaeMaze.Visitors
         private int confusionSegmentEndIndex;
         private int confusionStepsTarget;
         private int confusionStepsTaken;
+        private int waypointsTraversedSinceSpawn; // Track progress before allowing confusion
 
         private float timeSinceLastRecalculation;
 
@@ -285,6 +286,7 @@ namespace FaeMaze.Visitors
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
             isConfused = confusionEnabled;
+            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
 
             // Store original destination for confusion recovery
             if (path.Count > 0)
@@ -316,6 +318,7 @@ namespace FaeMaze.Visitors
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
             isConfused = confusionEnabled;
+            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
 
             // Store original destination for confusion recovery
             if (path.Count > 0)
@@ -378,6 +381,9 @@ namespace FaeMaze.Visitors
 
         private void OnWaypointReached()
         {
+            // Increment waypoint counter
+            waypointsTraversedSinceSpawn++;
+
             // Check if fascinated visitor reached the lantern
             if (isFascinated && !hasReachedLantern && currentPathIndex < path.Count)
             {
@@ -479,6 +485,13 @@ namespace FaeMaze.Visitors
             }
 
             if (!confusionEnabled || currentPathIndex >= path.Count - 1)
+            {
+                return;
+            }
+
+            // Prevent confusion for the first 10 waypoints after spawning
+            // This ensures visitors make meaningful progress on their A* path before getting confused
+            if (waypointsTraversedSinceSpawn < 10)
             {
                 return;
             }
@@ -1034,6 +1047,7 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
+            waypointsTraversedSinceSpawn = 0; // Reset to allow fresh path to lantern
 
             // Get current position and pathfind to lantern
             if (gameController != null && mazeGridBehaviour != null &&
