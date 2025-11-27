@@ -858,9 +858,9 @@ namespace FaeMaze.Visitors
                 return; // No original path to recalculate
             }
 
-            // Skip recalculation if fascinated and haven't reached lantern yet
-            // (let them focus on reaching the lantern first)
-            if (isFascinated && !hasReachedLantern)
+            // Skip recalculation if fascinated
+            // Fascinated visitors either head to lantern or wander randomly - no recalc to original destination
+            if (isFascinated)
             {
                 return;
             }
