@@ -411,6 +411,13 @@ namespace FaeMaze.Visitors
         {
             Vector2Int currentWaypoint = path[currentPathIndex];
 
+            // Immediately mark this waypoint as visited to prevent backtracking
+            if (visitedGridTiles != null)
+            {
+                visitedGridTiles.Add(currentWaypoint);
+                lastRecordedGridPosition = currentWaypoint;
+            }
+
             // Increment waypoint counter
             waypointsTraversedSinceSpawn++;
 
@@ -1204,6 +1211,8 @@ namespace FaeMaze.Visitors
             // Filter the new path to remove backtracking tiles
             List<Vector2Int> filteredPath = new List<Vector2Int>();
             int skippedTiles = 0;
+
+            Debug.Log($"[{gameObject.name}] PATH RECALC FILTER | visitedTiles.Count={traversedTiles.Count} | newPath.Count={newPath.Count} | startIndex={startIndex}");
 
             for (int i = startIndex; i < newPath.Count; i++)
             {
