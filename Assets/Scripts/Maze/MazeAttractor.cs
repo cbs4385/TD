@@ -78,6 +78,9 @@ namespace FaeMaze.Maze
         /// <summary>Gets the attraction strength</summary>
         public float AttractionStrength => attractionStrength;
 
+        /// <summary>Gets whether fascination behavior is enabled for this attractor.</summary>
+        public bool EnableFascination => enableFascination;
+
         /// <summary>Gets the grid position of this attractor</summary>
         public Vector2Int GridPosition => gridPosition;
 
