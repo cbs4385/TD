@@ -213,23 +213,20 @@ namespace FaeMaze.Maze
             var visitor = other.GetComponent<Visitors.VisitorController>();
             if (visitor != null)
             {
-                Debug.Log($"MazeAttractor at {gridPosition}: Visitor {visitor.name} entered trigger radius");
+                Debug.Log($"[FaeLantern] Visitor '{visitor.name}' entered trigger at {gridPosition} | fascinationEnabled={enableFascination} | alreadyFascinated={visitor.IsFascinated}");
 
                 // Apply fascination if enabled (FaeLantern-specific behavior)
                 if (enableFascination && !visitor.IsFascinated)
                 {
                     // Roll for fascination
                     float roll = Random.value;
-                    Debug.Log($"MazeAttractor at {gridPosition}: Rolling for fascination - roll={roll:F2}, chance={fascinationChance:F2}");
+                    bool willFascinate = roll <= fascinationChance;
 
-                    if (roll <= fascinationChance)
+                    Debug.Log($"[FaeLantern] Fascination roll for '{visitor.name}': roll={roll:F3}, chance={fascinationChance:F3}, result={(willFascinate ? "FASCINATED" : "RESISTED")}");
+
+                    if (willFascinate)
                     {
-                        Debug.Log($"MazeAttractor at {gridPosition}: {visitor.name} will become fascinated!");
                         visitor.BecomeFascinated(gridPosition);
-                    }
-                    else
-                    {
-                        Debug.Log($"MazeAttractor at {gridPosition}: {visitor.name} resisted fascination");
                     }
                 }
 
@@ -237,6 +234,7 @@ namespace FaeMaze.Maze
                 if (enableVisitorSlowing)
                 {
                     visitor.SpeedMultiplier = visitorSlowFactor;
+                    Debug.Log($"[FaeLantern] Applied slow effect to '{visitor.name}': speedMultiplier={visitorSlowFactor}");
                 }
             }
         }
@@ -317,8 +315,6 @@ namespace FaeMaze.Maze
             }
 
             isApplied = true;
-
-            Debug.Log($"MazeAttractor at grid ({gridPosition.x}, {gridPosition.y}): Applied attraction (radius: {radius}, strength: {attractionStrength}) to {affectedCount} tiles, total attraction: {totalAttractionApplied:F2}");
         }
 
         /// <summary>
@@ -367,11 +363,6 @@ namespace FaeMaze.Maze
                     visitor.RecalculatePath();
                     recalculatedCount++;
                 }
-            }
-
-            if (recalculatedCount > 0)
-            {
-                Debug.Log($"MazeAttractor at {gridPosition}: Triggered path recalculation for {recalculatedCount} active visitors");
             }
         }
 

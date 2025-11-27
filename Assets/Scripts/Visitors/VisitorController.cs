@@ -373,7 +373,7 @@ namespace FaeMaze.Visitors
                 if (currentWaypoint == fascinationLanternPosition)
                 {
                     hasReachedLantern = true;
-                    Debug.Log($"{gameObject.name} reached the lantern at {fascinationLanternPosition}! Now wandering randomly...");
+                    Debug.Log($"[Fascination] '{gameObject.name}' REACHED lantern at {fascinationLanternPosition}! Switching to random wander mode...");
                 }
             }
 
@@ -455,6 +455,7 @@ namespace FaeMaze.Visitors
             // Handle fascinated visitors who have reached the lantern
             if (isFascinated && hasReachedLantern)
             {
+                Debug.Log($"[Fascination] '{gameObject.name}' at waypoint {currentPathIndex}/{path.Count} - handling random walk (confusion disabled)");
                 HandleFascinatedRandomWalk();
                 return;
             }
@@ -739,6 +740,7 @@ namespace FaeMaze.Visitors
 
             if (walkableNeighbors.Count == 0)
             {
+                Debug.Log($"[Fascination] '{gameObject.name}' random walk - dead end at {currentPos}, cannot extend path");
                 return; // Dead end - let visitor reach end of path
             }
 
@@ -751,6 +753,7 @@ namespace FaeMaze.Visitors
 
             if (wanderSegment.Count == 0)
             {
+                Debug.Log($"[Fascination] '{gameObject.name}' random walk - failed to build wander segment from {currentPos} toward {randomNext}");
                 return; // Couldn't build path
             }
 
@@ -760,7 +763,7 @@ namespace FaeMaze.Visitors
                 path.Add(waypoint);
             }
 
-            Debug.Log($"{gameObject.name} (fascinated) picked random direction at {currentPos}, extended path by {wanderSegment.Count} waypoints");
+            Debug.Log($"[Fascination] '{gameObject.name}' random walk - extended path by {wanderSegment.Count} waypoints (target={segmentLength}) from {currentPos} toward {randomNext}");
         }
 
         /// <summary>
@@ -862,6 +865,7 @@ namespace FaeMaze.Visitors
             // Fascinated visitors either head to lantern or wander randomly - no recalc to original destination
             if (isFascinated)
             {
+                Debug.Log($"[Fascination] '{gameObject.name}' path recalc SKIPPED - visitor is fascinated (hasReachedLantern={hasReachedLantern})");
                 return;
             }
 
@@ -917,18 +921,12 @@ namespace FaeMaze.Visitors
             }
 
             int newPathLength = newPath.Count - startIndex;
-            bool pathChanged = newPathLength != oldPathLength;
 
             // Update path
             path = newPath;
             currentPathIndex = startIndex;
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
-
-            if (pathChanged)
-            {
-                Debug.Log($"{gameObject.name}: Path recalculated - old length: {oldPathLength}, new length: {newPathLength}, from {currentPos} to {originalDestination}");
-            }
         }
 
         /// <summary>
@@ -978,6 +976,7 @@ namespace FaeMaze.Visitors
         {
             if (state != VisitorState.Walking)
             {
+                Debug.Log($"[Fascination] '{gameObject.name}' cannot be fascinated - state is {state}, not Walking");
                 return; // Only walking visitors can be fascinated
             }
 
@@ -992,6 +991,9 @@ namespace FaeMaze.Visitors
                 if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
                 {
                     Vector2Int currentPos = new Vector2Int(currentX, currentY);
+                    Vector2Int oldDestination = originalDestination;
+
+                    Debug.Log($"[Fascination] '{gameObject.name}' attempting to retarget from {currentPos} to lantern at {lanternGridPosition} (old destination: {oldDestination})");
 
                     // Find path to lantern
                     List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
@@ -1029,15 +1031,30 @@ namespace FaeMaze.Visitors
                             }
                         }
 
+                        int oldPathRemaining = path != null ? (path.Count - currentPathIndex) : 0;
+                        int newPathLength = newPath.Count - startIndex;
+
                         // Update path
                         path = newPath;
                         currentPathIndex = startIndex;
                         confusionSegmentActive = false;
                         confusionSegmentEndIndex = 0;
 
-                        Debug.Log($"{gameObject.name} became fascinated by lantern at {lanternGridPosition}! Retargeting...");
+                        Debug.Log($"[Fascination] '{gameObject.name}' RETARGETED to lantern | oldPathRemaining={oldPathRemaining} waypoints | newPath={newPathLength} waypoints | startIndex={startIndex}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[Fascination] '{gameObject.name}' FAILED to find path to lantern at {lanternGridPosition} from {currentPos}!");
                     }
                 }
+                else
+                {
+                    Debug.LogError($"[Fascination] '{gameObject.name}' cannot determine grid position - WorldToGrid failed!");
+                }
+            }
+            else
+            {
+                Debug.LogError($"[Fascination] '{gameObject.name}' cannot retarget - gameController is null!");
             }
         }
 
