@@ -359,6 +359,9 @@ namespace FaeMaze.Visitors
             if (rb != null)
             {
                 rb.MovePosition(newPosition);
+                // Manually sync transforms with physics system to ensure trigger detection works
+                // This is necessary when AutoSyncTransforms is disabled in Physics2D settings
+                Physics2D.SyncTransforms();
             }
             else
             {
