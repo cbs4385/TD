@@ -97,6 +97,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d3f8e2a9c1b5d4e6a7f2c8b9e3a5d1f, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  radius: 4
-  attractionStrength: 0.3
+  radius: 5
+  attractionStrength: 3
   showDebugRadius: 1
+  spriteColor: {r: 1, g: 0.9, b: 0.5, a: 1}
+  spriteSize: 0.7
+  sortingOrder: 12
+  visitorSlowFactor: 0.5
+  enableVisitorSlowing: 0
+  enableFascination: 1
+  fascinationChance: 0.8

@@ -110,8 +110,8 @@ namespace FaeMaze.Maze
             // Create visual sprite
             CreateVisualSprite();
 
-            // Setup trigger collider for visitor interaction
-            if (enableVisitorSlowing)
+            // Setup trigger collider for visitor interaction (either slowing or fascination)
+            if (enableVisitorSlowing || enableFascination)
             {
                 SetupTriggerCollider();
             }
