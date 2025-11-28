@@ -1237,6 +1237,10 @@ namespace FaeMaze.Visitors
                 Debug.Log($"[{gameObject.name}] NEWPATH (first 10): {newPathSample}");
             }
 
+            // Calculate current distance to destination for directional backtracking detection
+            int currentDistToDestination = Mathf.Abs(currentPos.x - originalDestination.x) + Mathf.Abs(currentPos.y - originalDestination.y);
+            int lastAcceptedDistToDestination = currentDistToDestination;
+
             for (int i = startIndex; i < newPath.Count; i++)
             {
                 Vector2Int tile = newPath[i];
@@ -1248,16 +1252,32 @@ namespace FaeMaze.Visitors
                     continue;
                 }
 
-                // Skip tiles that would cause backtracking
+                // Skip tiles that would cause backtracking (exact tile revisit)
                 bool isVisited = traversedTiles.Contains(tile);
                 if (isVisited)
                 {
                     skippedTiles++;
-                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} would cause backtracking");
+                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} would cause tile revisit backtracking");
+                    continue;
+                }
+
+                // Skip tiles that cause directional backtracking (moving farther from destination)
+                // Calculate Manhattan distance from this tile to destination
+                int tileDistToDestination = Mathf.Abs(tile.x - originalDestination.x) + Mathf.Abs(tile.y - originalDestination.y);
+
+                // Allow small increases in distance (tolerance of 2 tiles) to handle maze detours
+                // But reject tiles that move significantly backward
+                if (tileDistToDestination > lastAcceptedDistToDestination + 2)
+                {
+                    skippedTiles++;
+                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} at dist={tileDistToDestination} would cause directional backtracking (current={lastAcceptedDistToDestination})");
                     continue;
                 }
 
                 filteredPath.Add(tile);
+
+                // Update the last accepted distance for next iteration
+                lastAcceptedDistToDestination = tileDistToDestination;
             }
 
             // Only update path if we have valid forward waypoints (more than just the current position)
