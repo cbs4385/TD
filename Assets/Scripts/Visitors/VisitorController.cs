@@ -1030,12 +1030,19 @@ namespace FaeMaze.Visitors
             // currentPathIndex has already been incremented to point at next target
             // so current position is at currentPathIndex - 1
             Vector2Int currentPos;
-            if (currentPathIndex > 0 && currentPathIndex < path.Count)
+            if (currentPathIndex == 0 && path.Count > 0)
             {
+                // At the start: current position IS path[0]
+                currentPos = path[0];
+            }
+            else if (currentPathIndex > 0 && currentPathIndex < path.Count)
+            {
+                // In the middle: current position is one behind currentPathIndex
                 currentPos = path[currentPathIndex - 1];
             }
             else if (currentPathIndex >= path.Count && path.Count > 0)
             {
+                // Past the end: current position is the last element
                 currentPos = path[path.Count - 1];
             }
             else
