@@ -1148,21 +1148,22 @@ namespace FaeMaze.Visitors
                     // Found current tile in new path - start from there
                     startIndex = currentGridIndex;
 
-                    // Decide whether to advance to the next tile to preserve forward movement
+                    // Move the anchor forward as soon as we've started traveling toward the next tile
                     Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
-                    float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
 
                     if (startIndex < newPath.Count - 1)
                     {
                         Vector3 nextTileWorldPos = mazeGridBehaviour.GridToWorld(newPath[startIndex + 1].x, newPath[startIndex + 1].y);
-                        float distToNextTile = Vector3.Distance(transform.position, nextTileWorldPos);
+                        Vector3 toNextFromCurrent = (nextTileWorldPos - currentTileWorldPos).normalized;
+                        Vector3 displacementFromCurrent = transform.position - currentTileWorldPos;
 
-                        // If we're closer to (or equally close to) the next tile than the current one, move the anchor forward
-                        if (distToNextTile <= distToCurrentTile)
+                        // If we've moved any distance in the direction of the next tile, advance the anchor immediately.
+                        // This prevents "closest tile" snapping that can drag the anchor backward when rounding grid positions.
+                        if (displacementFromCurrent.sqrMagnitude > 0f && Vector3.Dot(displacementFromCurrent.normalized, toNextFromCurrent) > 0f)
                         {
                             startIndex++;
                         }
-                        else if (distToCurrentTile < waypointReachedDistance)
+                        else if (displacementFromCurrent.magnitude < waypointReachedDistance)
                         {
                             // Alternatively, if we're effectively on the center of this tile, also advance
                             startIndex++;
