@@ -1210,7 +1210,6 @@ namespace FaeMaze.Visitors
 
             // Filter the new path to remove backtracking tiles
             List<Vector2Int> filteredPath = new List<Vector2Int>();
-            int skippedTiles = 0;
 
             Debug.Log($"[{gameObject.name}] PATH RECALC FILTER | visitedTiles.Count={traversedTiles.Count} | newPath.Count={newPath.Count} | startIndex={startIndex}");
 
@@ -1251,27 +1250,26 @@ namespace FaeMaze.Visitors
                     continue;
                 }
 
-                // Skip tiles that would cause backtracking (exact tile revisit)
+                // Stop processing if tile would cause backtracking (exact tile revisit)
+                // IMPORTANT: Use break not continue to prevent path discontinuity
                 bool isVisited = traversedTiles.Contains(tile);
                 if (isVisited)
                 {
-                    skippedTiles++;
-                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} would cause tile revisit backtracking");
-                    continue;
+                    Debug.Log($"[{gameObject.name}] PATH RECALC STOP | index={i} | tile={tile} would cause tile revisit backtracking - stopping path here");
+                    break;
                 }
 
-                // Skip tiles that cause directional backtracking (moving farther from destination)
+                // Stop processing if tile causes directional backtracking (moving farther from destination)
                 // Calculate Manhattan distance from this tile to destination
                 int tileDistToDestination = Mathf.Abs(tile.x - originalDestination.x) + Mathf.Abs(tile.y - originalDestination.y);
 
                 // Reject tiles that move backward from our current position
                 // Compare against the INITIAL distance from current position to prevent any backward movement
-                // This prevents cumulative backtracking while allowing the pathfinder to find detours
+                // IMPORTANT: Use break not continue to prevent creating invalid jumps across unwalkable tiles
                 if (tileDistToDestination > currentDistToDestination)
                 {
-                    skippedTiles++;
-                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} at dist={tileDistToDestination} would cause directional backtracking (currentPos dist={currentDistToDestination})");
-                    continue;
+                    Debug.Log($"[{gameObject.name}] PATH RECALC STOP | index={i} | tile={tile} at dist={tileDistToDestination} would cause directional backtracking (currentPos dist={currentDistToDestination}) - stopping path here");
+                    break;
                 }
 
                 filteredPath.Add(tile);
@@ -1285,11 +1283,11 @@ namespace FaeMaze.Visitors
                 confusionSegmentActive = false;
                 confusionSegmentEndIndex = 0;
 
-                Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | newLength={filteredPath.Count} | skipped={skippedTiles} tiles");
+                Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | newLength={filteredPath.Count} | stopped at first backtracking tile");
             }
             else
             {
-                Debug.Log($"[{gameObject.name}] PATH RECALC ABORT | no forward tiles available (all would cause backtracking)");
+                Debug.Log($"[{gameObject.name}] PATH RECALC ABORT | no forward tiles available (immediate backtracking detected)");
                 // Keep the old path - don't update anything
             }
         }
