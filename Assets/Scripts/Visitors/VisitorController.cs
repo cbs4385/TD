@@ -1275,15 +1275,23 @@ namespace FaeMaze.Visitors
                 filteredPath.Add(tile);
             }
 
-            // Only update path if we have valid forward waypoints (more than just the current position)
-            if (filteredPath.Count > 1)
+            // Only update path if we have a useful forward path
+            // Require minimum length to avoid accepting truncated paths that don't reach destination
+            const int MIN_PATH_LENGTH = 10;
+
+            if (filteredPath.Count > 1 && filteredPath.Count >= MIN_PATH_LENGTH)
             {
                 path = filteredPath;
                 currentPathIndex = 0; // Start from beginning of filtered path
                 confusionSegmentActive = false;
                 confusionSegmentEndIndex = 0;
 
-                Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | newLength={filteredPath.Count} | stopped at first backtracking tile");
+                Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | newLength={filteredPath.Count}");
+            }
+            else if (filteredPath.Count > 1 && filteredPath.Count < MIN_PATH_LENGTH)
+            {
+                Debug.Log($"[{gameObject.name}] PATH RECALC REJECT | path too short ({filteredPath.Count} < {MIN_PATH_LENGTH}) - would create dead-end, keeping old path");
+                // Keep the old path - truncated path would strand visitor
             }
             else
             {
