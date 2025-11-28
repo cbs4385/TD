@@ -1016,8 +1016,12 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = path[currentPathIndex];
 
-            // Use recently reached tiles (last 10) to prevent short-term backtracking
-            HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>(recentlyReachedTiles ?? new Queue<Vector2Int>());
+            // Use ALL tiles in current path to prevent backtracking to any of them
+            HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>();
+            for (int i = 0; i < path.Count; i++)
+            {
+                traversedTiles.Add(path[i]);
+            }
 
             // Get walkable neighbors
             List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
