@@ -110,9 +110,10 @@ namespace FaeMaze.Visitors
         private Queue<Vector2Int> recentlyReachedTiles;
         private const int MAX_RECENT_TILES = 10;
 
-        // Track dead-end backtracking for fascinated visitors
-        private Vector2Int deadEndPosition;
-        private bool isBacktrackingFromDeadEnd;
+        // Track dead-end positions for fascinated visitors
+        // Once a fascinated visitor hits their first dead end, only dead-ends are tracked
+        private HashSet<Vector2Int> avoidedDeadEnds;
+        private bool hasEncounteredDeadEnd;
 
         #endregion
 
@@ -146,6 +147,8 @@ namespace FaeMaze.Visitors
             state = VisitorState.Idle;
             isConfused = confusionEnabled;
             recentlyReachedTiles = new Queue<Vector2Int>();
+            avoidedDeadEnds = new HashSet<Vector2Int>();
+            hasEncounteredDeadEnd = false;
             CreateVisualSprite();
         }
 
@@ -448,7 +451,8 @@ namespace FaeMaze.Visitors
                     // Keep only current position - will build random walk after timer expires
                     path = new List<Vector2Int> { currentWaypoint };
                     currentPathIndex = 0;
-                    isBacktrackingFromDeadEnd = false; // Reset dead-end tracking for fresh random walk
+                    avoidedDeadEnds.Clear(); // Reset dead-end tracking for fresh random walk
+                    hasEncounteredDeadEnd = false;
                     return; // Don't increment or handle confusion
                 }
                 else
@@ -578,7 +582,8 @@ namespace FaeMaze.Visitors
             fascinationLanternPosition = lantern.GridPosition;
             hasReachedLantern = false;
             fascinationTimer = 0f; // Will be set when reaching lantern
-            isBacktrackingFromDeadEnd = false; // Reset dead-end tracking
+            avoidedDeadEnds.Clear(); // Reset dead-end tracking
+            hasEncounteredDeadEnd = false;
 
             Debug.Log($"[{gameObject.name}] FAE INFLUENCE CAPTURED | lanternPos={fascinationLanternPosition}");
 
@@ -1024,13 +1029,14 @@ namespace FaeMaze.Visitors
             Vector2Int currentPos = path[currentPathIndex];
 
             // Build traversed tiles set
-            // When backtracking from a dead end, use a minimal set to allow escape
+            // After first dead end: only track dead-ends to avoid, not entire path
+            // Before first dead end: track entire path to prevent backtracking
             HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>();
-            if (isBacktrackingFromDeadEnd)
+            if (hasEncounteredDeadEnd)
             {
-                // Only mark the dead end position to prevent immediately returning to it
-                traversedTiles.Add(deadEndPosition);
-                Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACKING | avoiding dead end at {deadEndPosition}");
+                // Only avoid positions that led to dead ends
+                traversedTiles = new HashSet<Vector2Int>(avoidedDeadEnds);
+                Debug.Log($"[{gameObject.name}] FASCINATED POST-DEADEND MODE | avoiding {avoidedDeadEnds.Count} dead end(s)");
             }
             else
             {
@@ -1087,30 +1093,24 @@ namespace FaeMaze.Visitors
             List<Vector2Int> walkableNeighbors;
             if (forwardOptions.Count > 0)
             {
-                // Best case: we have forward options
+                // Best case: we have forward options (new unexplored tiles)
                 walkableNeighbors = forwardOptions;
-
-                // If we were backtracking from a dead end and now have forward options, we've escaped
-                if (isBacktrackingFromDeadEnd)
-                {
-                    Debug.Log($"[{gameObject.name}] FASCINATED ESCAPED DEAD END | now at intersection with {forwardOptions.Count} options");
-                    isBacktrackingFromDeadEnd = false;
-                }
             }
             else if (backtrackOptions.Count > 0)
             {
                 // Second choice: backtrack to an earlier position (but not immediate previous)
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END BACKTRACK | pos={currentPos} | using {backtrackOptions.Count} backtrack options");
+                // This can happen when all neighbors are traversed
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK BACKTRACK | pos={currentPos} | using {backtrackOptions.Count} backtrack options");
                 walkableNeighbors = backtrackOptions;
             }
             else if (immediateBacktrack.HasValue)
             {
                 // Last resort: go back to the tile we just came from (dead end detected)
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END | pos={currentPos} | clearing traversed tiles to allow backtrack");
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END | pos={currentPos} | marking as dead end to avoid in future");
 
-                // Mark this position as a dead end
-                deadEndPosition = currentPos;
-                isBacktrackingFromDeadEnd = true;
+                // Mark this position as a dead end and enter post-dead-end mode
+                avoidedDeadEnds.Add(currentPos);
+                hasEncounteredDeadEnd = true;
 
                 walkableNeighbors = new List<Vector2Int> { immediateBacktrack.Value };
             }
@@ -1403,7 +1403,8 @@ namespace FaeMaze.Visitors
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
             waypointsTraversedSinceSpawn = 0; // Reset to allow fresh path to lantern
-            isBacktrackingFromDeadEnd = false; // Reset dead-end tracking
+            avoidedDeadEnds.Clear(); // Reset dead-end tracking
+            hasEncounteredDeadEnd = false;
 
             // Get current position and pathfind to lantern
             if (gameController != null && mazeGridBehaviour != null &&
