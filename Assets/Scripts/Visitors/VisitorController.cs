@@ -110,6 +110,10 @@ namespace FaeMaze.Visitors
         private Queue<Vector2Int> recentlyReachedTiles;
         private const int MAX_RECENT_TILES = 10;
 
+        // Track dead ends encountered during fascinated random walk
+        private HashSet<Vector2Int> avoidedDeadEnds;
+        private bool hasEncounteredDeadEnd;
+
         #endregion
 
         #region Properties
@@ -142,6 +146,8 @@ namespace FaeMaze.Visitors
             state = VisitorState.Idle;
             isConfused = confusionEnabled;
             recentlyReachedTiles = new Queue<Vector2Int>();
+            avoidedDeadEnds = new HashSet<Vector2Int>();
+            hasEncounteredDeadEnd = false;
             CreateVisualSprite();
         }
 
@@ -465,15 +471,17 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // For fascinated visitors doing random walk, advance to next waypoint
-            if (isFascinated && hasReachedLantern)
+            // For fascinated visitors doing random walk, handle confusion/path extension
+            if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
             {
                 currentPathIndex++;
                 if (currentPathIndex >= path.Count)
                 {
-                    // Near end of path, RecalculatePath will extend it
+                    // Near end of path, HandleConfusionAtWaypoint will extend it
                     currentPathIndex = path.Count - 1;
                 }
+                HandleConfusionAtWaypoint();
+                return; // Don't call RecalculatePath for fascinated random walk
             }
 
             RecalculatePath();
@@ -675,8 +683,13 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Fascinated visitors are handled by timer expiration in RecalculatePath()
-            // No random walk behavior needed
+            // Handle fascinated visitors who have reached the lantern and timer expired
+            if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
+            {
+                Debug.Log($"[{gameObject.name}] FASCINATED RANDOM WALK | wpIndex={currentPathIndex}/{path.Count}");
+                HandleFascinatedRandomWalk();
+                return;
+            }
 
             if (!confusionEnabled || currentPathIndex >= path.Count - 1)
             {
@@ -1004,10 +1017,9 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// DEPRECATED: Random walk behavior is no longer used.
-        /// Fascinated visitors now resume their path to original destination after pause.
+        /// Handles random walk behavior for fascinated visitors after they've reached the lantern.
+        /// Extends the path with random exploration, avoiding backtracking except at dead ends.
         /// </summary>
-        /*
         private void HandleFascinatedRandomWalk()
         {
             // Only extend path if we're near the end (within 3 waypoints)
@@ -1181,15 +1193,12 @@ namespace FaeMaze.Visitors
 
             Debug.Log($"[{gameObject.name}] FASCINATED WALK EXTENDED | added={straightPath.Count} tiles | toward={nextTile} | newPathLength={path.Count}");
         }
-        */
 
         /// <summary>
-        /// DEPRECATED: Only called by HandleFascinatedRandomWalk which is no longer used.
         /// Builds a straight path segment from current position until reaching an intersection or dead end.
         /// Follows the chosen direction without turning until forced to by maze geometry.
         /// Prevents backtracking to any previously traversed tiles.
         /// </summary>
-        /*
         private List<Vector2Int> BuildStraightPathToIntersection(Vector2Int currentPos, Vector2Int nextPos, HashSet<Vector2Int> traversedTiles)
         {
             List<Vector2Int> straightPath = new List<Vector2Int>();
@@ -1261,7 +1270,6 @@ namespace FaeMaze.Visitors
 
             return straightPath;
         }
-        */
 
         #endregion
 
@@ -1297,20 +1305,10 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Handle fascinated visitors who have reached the lantern and timer expired
-            if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
+            // Fascinated visitors use random walk, not A* recalculation
+            if (isFascinated)
             {
-                Debug.Log($"[{gameObject.name}] PATH RECALC | fascination timer expired, resuming to original destination");
-                // Clear fascination state and resume to original destination
-                isFascinated = false;
-                hasReachedLantern = false;
-                currentFaeLantern = null;
-                // Fall through to normal pathfinding to original destination
-            }
-            else if (isFascinated)
-            {
-                // Still fascinated but haven't reached lantern or timer still running
-                Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | fascinated=true | hasReachedLantern={hasReachedLantern}");
+                Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | fascinated=true | using random walk behavior");
                 return;
             }
 
