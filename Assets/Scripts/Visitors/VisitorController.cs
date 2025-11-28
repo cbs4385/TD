@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
@@ -1038,6 +1039,7 @@ namespace FaeMaze.Visitors
 
             // Exclude all previously traversed tiles to prevent any backtracking
             int beforeFilter = walkableNeighbors.Count;
+            List<Vector2Int> backtrackOptions = new List<Vector2Int>(walkableNeighbors.Where(n => traversedTiles.Contains(n)));
             walkableNeighbors.RemoveAll(n => traversedTiles.Contains(n));
             if (walkableNeighbors.Count < beforeFilter)
             {
@@ -1046,8 +1048,18 @@ namespace FaeMaze.Visitors
 
             if (walkableNeighbors.Count == 0)
             {
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END | pos={currentPos} | all neighbors would backtrack");
-                return; // Dead end or all options would backtrack - let visitor reach end of path
+                // Dead end - all neighbors would backtrack
+                // Allow backtracking as a last resort to escape the dead end
+                if (backtrackOptions.Count > 0)
+                {
+                    Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END BACKTRACK | pos={currentPos} | allowing backtrack as only option");
+                    walkableNeighbors = backtrackOptions;
+                }
+                else
+                {
+                    Debug.Log($"[{gameObject.name}] FASCINATED WALK TRULY STUCK | pos={currentPos} | no walkable neighbors at all");
+                    return; // Truly stuck with no walkable neighbors
+                }
             }
 
             // Determine current direction (if we have a previous tile)
