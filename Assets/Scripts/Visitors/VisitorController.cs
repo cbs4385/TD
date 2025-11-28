@@ -112,6 +112,7 @@ namespace FaeMaze.Visitors
 
         // Track visited tiles during fascinated random walk (in order)
         private List<Vector2Int> fascinatedVisitedTiles;
+        private HashSet<Vector2Int> fascinatedDeadEnds; // Tiles confirmed as dead ends (never revisit)
         private bool isBacktracking; // Whether currently backtracking from dead end
 
         #endregion
@@ -147,6 +148,7 @@ namespace FaeMaze.Visitors
             isConfused = confusionEnabled;
             recentlyReachedTiles = new Queue<Vector2Int>();
             fascinatedVisitedTiles = new List<Vector2Int>();
+            fascinatedDeadEnds = new HashSet<Vector2Int>();
             isBacktracking = false;
             CreateVisualSprite();
         }
@@ -384,6 +386,7 @@ namespace FaeMaze.Visitors
                     hasReachedLantern = false;
                     currentFaeLantern = null;
                     fascinatedVisitedTiles.Clear();
+                    fascinatedDeadEnds.Clear();
                     isBacktracking = false;
                 }
             }
@@ -442,12 +445,16 @@ namespace FaeMaze.Visitors
 
             // VALIDATION: Check for backtracking by detecting if this waypoint position
             // appears earlier in the path (which would indicate we're stepping backward)
-            for (int i = 0; i < currentPathIndex; i++)
+            // Skip this check for fascinated visitors doing random walk - they intentionally backtrack from dead ends
+            if (!(isFascinated && hasReachedLantern))
             {
-                if (path[i] == currentWaypoint)
+                for (int i = 0; i < currentPathIndex; i++)
                 {
-                    Debug.LogWarning($"[{gameObject.name}] BACKTRACKING DETECTED! | waypoint={currentWaypoint} at index {currentPathIndex} was already visited at index {i} | This should never happen!");
-                    break;
+                    if (path[i] == currentWaypoint)
+                    {
+                        Debug.LogWarning($"[{gameObject.name}] BACKTRACKING DETECTED! | waypoint={currentWaypoint} at index {currentPathIndex} was already visited at index {i} | This should never happen!");
+                        break;
+                    }
                 }
             }
 
@@ -1083,21 +1090,22 @@ namespace FaeMaze.Visitors
             // Handle backtracking mode
             if (isBacktracking)
             {
-                Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACKING | currentPos={currentPos} | visitedCount={fascinatedVisitedTiles.Count}");
+                Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACKING | currentPos={currentPos} | visitedCount={fascinatedVisitedTiles.Count} | deadEnds={fascinatedDeadEnds.Count}");
 
                 // Traverse visited list backwards to find a tile with unvisited neighbors
                 for (int i = fascinatedVisitedTiles.Count - 1; i >= 0; i--)
                 {
                     Vector2Int checkPos = fascinatedVisitedTiles[i];
                     List<Vector2Int> neighbors = GetWalkableNeighbors(checkPos);
-                    List<Vector2Int> unvisitedNeighbors = neighbors.FindAll(n => !visitedSet.Contains(n));
+                    // Exclude tiles in visited list AND tiles confirmed as dead ends
+                    List<Vector2Int> unvisitedNeighbors = neighbors.FindAll(n => !visitedSet.Contains(n) && !fascinatedDeadEnds.Contains(n));
 
                     if (unvisitedNeighbors.Count > 0)
                     {
                         // Found a tile with unvisited neighbors!
                         Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK FOUND | pos={checkPos} | unvisitedOptions={unvisitedNeighbors.Count}");
 
-                        // Build path back to this position BEFORE truncating (currentPos might be in the part we remove)
+                        // Build path back to this position (if not already there)
                         if (checkPos != currentPos)
                         {
                             // Find currentPos in the visited list
@@ -1119,12 +1127,12 @@ namespace FaeMaze.Visitors
                             }
                         }
 
-                        // Truncate visited list to this position (remove dead-end tiles)
+                        // Truncate visited list to maintain continuous path from lantern to current position
                         int tilesToRemove = fascinatedVisitedTiles.Count - 1 - i;
                         if (tilesToRemove > 0)
                         {
                             fascinatedVisitedTiles.RemoveRange(i + 1, tilesToRemove);
-                            Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK TRUNCATE | removed {tilesToRemove} dead-end tiles | newVisitedCount={fascinatedVisitedTiles.Count}");
+                            Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK TRUNCATE | removed {tilesToRemove} dead-end branch tiles | newVisitedCount={fascinatedVisitedTiles.Count}");
                         }
 
                         // Pick a random unvisited neighbor
@@ -1145,7 +1153,8 @@ namespace FaeMaze.Visitors
 
             // Normal random walk mode: get unvisited neighbors
             List<Vector2Int> allNeighbors = GetWalkableNeighbors(currentPos);
-            List<Vector2Int> unvisited = allNeighbors.FindAll(n => !visitedSet.Contains(n));
+            // Exclude tiles in visited list AND tiles confirmed as dead ends
+            List<Vector2Int> unvisited = allNeighbors.FindAll(n => !visitedSet.Contains(n) && !fascinatedDeadEnds.Contains(n));
 
             if (unvisited.Count > 0)
             {
@@ -1157,8 +1166,9 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                // Dead end reached - enter backtracking mode
-                Debug.Log($"[{gameObject.name}] FASCINATED DEAD END | pos={currentPos} | entering backtrack mode");
+                // Dead end reached - mark it and enter backtracking mode
+                fascinatedDeadEnds.Add(currentPos);
+                Debug.Log($"[{gameObject.name}] FASCINATED DEAD END | pos={currentPos} | marking as dead end | totalDeadEnds={fascinatedDeadEnds.Count}");
                 isBacktracking = true;
                 HandleFascinatedRandomWalk(); // Recursively call to start backtracking immediately
             }
