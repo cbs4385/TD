@@ -369,6 +369,25 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            // Bounds check for currentPathIndex
+            if (currentPathIndex >= path.Count)
+            {
+                // Path index out of bounds - this can happen if fascinated random walk failed to extend path
+                Debug.LogWarning($"[{gameObject.name}] PATH INDEX OUT OF BOUNDS | index={currentPathIndex} | pathCount={path.Count} | clamping to last waypoint");
+                currentPathIndex = path.Count - 1;
+
+                // If fascinated, clear fascination state since we can't continue
+                if (isFascinated && hasReachedLantern)
+                {
+                    Debug.Log($"[{gameObject.name}] CLEARING FASCINATION | random walk failed");
+                    isFascinated = false;
+                    hasReachedLantern = false;
+                    currentFaeLantern = null;
+                    avoidedDeadEnds.Clear();
+                    hasEncounteredDeadEnd = false;
+                }
+            }
+
             // Get current target waypoint
             Vector2Int targetGridPos = path[currentPathIndex];
             Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
@@ -1194,7 +1213,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Builds a straight path segment from current position until reaching an intersection or dead end.
         /// Follows the chosen direction without turning until forced to by maze geometry.
-        /// Prevents backtracking to any previously traversed tiles.
+        /// Prevents backtracking to any previously traversed tiles (except the first tile which was explicitly chosen).
         /// </summary>
         private List<Vector2Int> BuildStraightPathToIntersection(Vector2Int currentPos, Vector2Int nextPos, HashSet<Vector2Int> traversedTiles)
         {
@@ -1205,6 +1224,7 @@ namespace FaeMaze.Visitors
 
             int safetyLimit = 100;
             int iterations = 0;
+            bool isFirstTile = true; // Allow first tile even if traversed (it was explicitly chosen)
 
             // Track tiles added in this straight path to avoid loops
             HashSet<Vector2Int> straightPathSet = new HashSet<Vector2Int>();
@@ -1217,7 +1237,8 @@ namespace FaeMaze.Visitors
                 }
 
                 // Check if this tile was already traversed (would be backtracking)
-                if (traversedTiles.Contains(current))
+                // Allow the first tile even if traversed, since it was explicitly chosen (e.g., backtracking from dead end)
+                if (!isFirstTile && traversedTiles.Contains(current))
                 {
                     Debug.Log($"[{gameObject.name}] FASCINATED STRAIGHT PATH BACKTRACK BLOCKED | tile={current} was already traversed");
                     break;
@@ -1232,6 +1253,7 @@ namespace FaeMaze.Visitors
 
                 straightPath.Add(current);
                 straightPathSet.Add(current);
+                isFirstTile = false; // After first tile, enforce backtrack prevention
 
                 // Get neighbors for next step
                 List<Vector2Int> neighbors = GetWalkableNeighbors(current);
