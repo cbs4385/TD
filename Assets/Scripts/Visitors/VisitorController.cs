@@ -445,6 +445,18 @@ namespace FaeMaze.Visitors
                     currentPathIndex = 0;
                     return; // Don't increment or handle confusion
                 }
+                else
+                {
+                    // Fascinated visitor reached intermediate waypoint on path to lantern
+                    // Advance to next waypoint
+                    currentPathIndex++;
+                    if (currentPathIndex >= path.Count)
+                    {
+                        Debug.LogWarning($"[{gameObject.name}] FASCINATED PATH ENDED | reached end without finding lantern at {fascinationLanternPosition}");
+                        OnPathCompleted();
+                    }
+                    return; // Don't call RecalculatePath for fascinated visitors
+                }
             }
 
             RecalculatePath();
