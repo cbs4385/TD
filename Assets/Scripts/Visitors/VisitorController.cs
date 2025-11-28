@@ -475,11 +475,8 @@ namespace FaeMaze.Visitors
             if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
             {
                 currentPathIndex++;
-                if (currentPathIndex >= path.Count)
-                {
-                    // Near end of path, HandleConfusionAtWaypoint will extend it
-                    currentPathIndex = path.Count - 1;
-                }
+                // Don't reset currentPathIndex - HandleFascinatedRandomWalk handles the case
+                // where currentPathIndex >= path.Count by using path[path.Count - 1] as current position
                 HandleConfusionAtWaypoint();
                 return; // Don't call RecalculatePath for fascinated random walk
             }
