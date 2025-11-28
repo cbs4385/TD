@@ -37,10 +37,6 @@ namespace FaeMaze.Visitors
         [Tooltip("Distance threshold to consider a waypoint reached")]
         private float waypointReachedDistance = 0.05f;
 
-        [SerializeField]
-        [Tooltip("How often to recalculate path (in seconds) to react to new attractors")]
-        private float pathRecalculationInterval = 2.0f;
-
         [Header("Confusion Settings")]
         [SerializeField]
         [Tooltip("Chance (0-1) for visitor to get confused at intersections")]
@@ -100,7 +96,7 @@ namespace FaeMaze.Visitors
         private int confusionStepsTaken;
         private int waypointsTraversedSinceSpawn; // Track progress before allowing confusion
 
-        private float timeSinceLastRecalculation;
+        private bool isCalculatingPath;
 
         // Fascination state (for FaeLantern)
         private bool isFascinated;
@@ -216,14 +212,9 @@ namespace FaeMaze.Visitors
         {
             if (state == VisitorState.Walking)
             {
-                UpdateWalking();
-
-                // Periodically recalculate path to react to new attractors
-                timeSinceLastRecalculation += Time.deltaTime;
-                if (timeSinceLastRecalculation >= pathRecalculationInterval)
+                if (!isCalculatingPath)
                 {
-                    RecalculatePath();
-                    timeSinceLastRecalculation = 0f;
+                    UpdateWalking();
                 }
             }
             else if (state == VisitorState.Escaping)
@@ -285,29 +276,13 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            path = new List<Vector2Int>(gridPath);
-            currentPathIndex = 0;
-            state = VisitorState.Walking;
+            originalDestination = gridPath[gridPath.Count - 1];
+            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
             isConfused = confusionEnabled;
-            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
 
-            // Clear recently reached tiles for new path
-            recentlyReachedTiles.Clear();
-            if (path.Count > 0)
-            {
-                // Add starting position to recent tiles
-                recentlyReachedTiles.Enqueue(path[0]);
-            }
-
-            // Store original destination for confusion recovery
-            if (path.Count > 0)
-            {
-                originalDestination = path[path.Count - 1];
-            }
-
-            Debug.Log($"[{gameObject.name}] PATH SET | pathLength={path.Count} | start={path[0]} | dest={originalDestination} | fascinated={isFascinated}");
+            RecalculatePath();
         }
 
         /// <summary>
@@ -322,34 +297,23 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            path = new List<Vector2Int>();
+            List<Vector2Int> gridPath = new List<Vector2Int>();
             foreach (var node in nodePath)
             {
-                path.Add(new Vector2Int(node.x, node.y));
+                gridPath.Add(new Vector2Int(node.x, node.y));
             }
 
-            currentPathIndex = 0;
-            state = VisitorState.Walking;
+            if (gridPath.Count > 0)
+            {
+                originalDestination = gridPath[gridPath.Count - 1];
+            }
+
+            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
             isConfused = confusionEnabled;
-            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
 
-            // Clear recently reached tiles for new path
-            recentlyReachedTiles.Clear();
-            if (path.Count > 0)
-            {
-                // Add starting position to recent tiles
-                recentlyReachedTiles.Enqueue(path[0]);
-            }
-
-            // Store original destination for confusion recovery
-            if (path.Count > 0)
-            {
-                originalDestination = path[path.Count - 1];
-            }
-
-            Debug.Log($"[{gameObject.name}] PATH SET (from nodes) | pathLength={path.Count} | start={path[0]} | dest={originalDestination} | fascinated={isFascinated}");
+            RecalculatePath();
         }
 
         #endregion
@@ -451,17 +415,7 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // Handle confusion or fascinated random walk at waypoint
-            HandleConfusionAtWaypoint();
-
-            currentPathIndex++;
-
-            // Check if we've reached the end of the path
-            if (currentPathIndex >= path.Count)
-            {
-                Debug.Log($"[{gameObject.name}] PATH END REACHED | completing path");
-                OnPathCompleted();
-            }
+            RecalculatePath();
         }
 
         private void OnPathCompleted()
@@ -1081,234 +1035,63 @@ namespace FaeMaze.Visitors
         /// </summary>
         public void RecalculatePath()
         {
-            if (state != VisitorState.Walking || gameController == null)
+            if (gameController == null || mazeGridBehaviour == null)
             {
-                return; // Only recalculate if actively walking
+                return;
             }
 
-            if (path == null || path.Count == 0)
-            {
-                return; // No original path to recalculate
-            }
-
-            // Skip recalculation if fascinated
-            // Fascinated visitors either head to lantern or wander randomly - no recalc to original destination
             if (isFascinated)
             {
                 Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | fascinated=true | hasReachedLantern={hasReachedLantern}");
                 return;
             }
 
-            // Get current position in grid coordinates
-            if (mazeGridBehaviour == null || !mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            isCalculatingPath = true;
+            state = VisitorState.Idle;
+
+            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
-                return; // Can't determine current position
+                isCalculatingPath = false;
+                return;
             }
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-            // Use recently reached tiles (last 10) to prevent short-term backtracking
-            HashSet<Vector2Int> recentTiles = new HashSet<Vector2Int>(recentlyReachedTiles ?? new Queue<Vector2Int>());
-
-            // Store old path length for comparison
-            int oldPathLength = path.Count - currentPathIndex;
-
-            // Find new path to original destination
             List<MazeGrid.MazeNode> newPathNodes = new List<MazeGrid.MazeNode>();
+
             if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
             {
-                return; // Couldn't find new path, keep following old one
+                isCalculatingPath = false;
+                return;
             }
 
-            // Convert to Vector2Int path
             List<Vector2Int> newPath = new List<Vector2Int>();
             foreach (var node in newPathNodes)
             {
                 newPath.Add(new Vector2Int(node.x, node.y));
             }
 
-            // Find the starting waypoint in the new path that preserves forward progress
-            // Strategy: anchor on the active target waypoint (what we're actually walking toward),
-            // falling back to the current grid position only if the target tile is no longer valid.
-            int startIndex = 0;
-            if (newPath.Count > 1)
+            path = newPath;
+            recentlyReachedTiles.Clear();
+            if (path.Count > 0)
             {
-                // Prefer anchoring to the waypoint we're currently moving toward; rounding can place us
-                // in the previous tile, so anchoring to the target avoids snapping backward.
-                Vector2Int anchorTile = path[Mathf.Clamp(currentPathIndex, 0, path.Count - 1)];
-
-                // Build a prioritized list of anchor candidates
-                List<(Vector2Int tile, string source)> anchorCandidates = new List<(Vector2Int, string)>
-                {
-                    (anchorTile, "activeTarget")
-                };
-
-                if (currentPos != anchorTile)
-                {
-                    anchorCandidates.Add((currentPos, "worldGrid"));
-                }
-
-                if (currentPathIndex > 0)
-                {
-                    anchorCandidates.Add((path[currentPathIndex - 1], "previousTile"));
-                }
-
-                int anchorIndex = -1;
-                string anchorSource = "";
-                foreach (var candidate in anchorCandidates)
-                {
-                    for (int i = 0; i < newPath.Count; i++)
-                    {
-                        if (newPath[i] == candidate.tile)
-                        {
-                            anchorIndex = i;
-                            anchorSource = candidate.source;
-                            break;
-                        }
-                    }
-
-                    if (anchorIndex >= 0)
-                    {
-                        break;
-                    }
-                }
-
-                if (anchorIndex >= 0)
-                {
-                    // Keep the anchored tile unless it has already been traversed (or comes from the previous-tile fallback).
-                    bool anchorVisited = recentTiles.Contains(newPath[anchorIndex])
-                                         || currentPos == newPath[anchorIndex]
-                                         || anchorSource == "previousTile";
-
-                    startIndex = anchorVisited ? Mathf.Min(anchorIndex + 1, newPath.Count - 1) : anchorIndex;
-
-                    Debug.Log($"[{gameObject.name}] PATH RECALC | anchor found via {anchorSource} at index {anchorIndex} | startIndex={startIndex} | anchorVisited={anchorVisited}");
-                }
-                else
-                {
-                    // Current tile not in new path (path changed significantly)
-                    // Find closest waypoint, but only consider waypoints that would move us forward
-                    Vector3 currentWorldPos = transform.position;
-                    float closestDist = float.MaxValue;
-
-                    // Get the direction we're currently moving (if we have a target waypoint)
-                    Vector3 movementDirection = Vector3.zero;
-                    if (path != null && currentPathIndex < path.Count)
-                    {
-                        Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);
-                        movementDirection = (targetWorldPos - currentWorldPos).normalized;
-                    }
-
-                    for (int i = 0; i < newPath.Count; i++)
-                    {
-                        Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(newPath[i].x, newPath[i].y);
-                        float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
-
-                        // Only consider waypoints that are ahead of us (not behind)
-                        // If we have a movement direction, ensure waypoint is in forward arc
-                        if (movementDirection != Vector3.zero)
-                        {
-                            Vector3 toWaypoint = (waypointWorldPos - currentWorldPos).normalized;
-                            float dotProduct = Vector3.Dot(movementDirection, toWaypoint);
-
-                            // Skip waypoints behind us (dot product < -0.5 means > 120 degrees backward)
-                            if (dotProduct < -0.5f)
-                            {
-                                continue;
-                            }
-                        }
-
-                        if (dist < closestDist)
-                        {
-                            closestDist = dist;
-                            startIndex = i;
-                        }
-                    }
-
-                    // If we're very close to the chosen waypoint, advance to next one
-                    if (startIndex < newPath.Count - 1 && closestDist < waypointReachedDistance)
-                    {
-                        startIndex++;
-                    }
-
-                    Debug.Log($"[{gameObject.name}] PATH RECALC | current tile NOT in new path | using direction-based selection | startIndex={startIndex}");
-                }
+                recentlyReachedTiles.Enqueue(path[0]);
             }
 
-            // Filter the new path to remove backtracking tiles
-            List<Vector2Int> filteredPath = new List<Vector2Int>();
+            currentPathIndex = path.Count > 1 ? 1 : 0;
+            confusionSegmentActive = false;
+            confusionSegmentEndIndex = 0;
 
-            Debug.Log($"[{gameObject.name}] PATH RECALC FILTER | recentTiles.Count={recentTiles.Count} | newPath.Count={newPath.Count} | startIndex={startIndex}");
+            Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | start={currentPos} | dest={originalDestination} | length={path.Count}");
 
-            // Debug: Show recently reached tiles
-            if (recentTiles.Count > 0)
+            if (path.Count <= 1)
             {
-                string recentSample = "";
-                int count = 0;
-                foreach (var tile in recentTiles)
-                {
-                    recentSample += tile.ToString() + " ";
-                    if (++count >= 10) break;
-                }
-                Debug.Log($"[{gameObject.name}] RECENT TILES (last {recentTiles.Count}): {recentSample}");
+                isCalculatingPath = false;
+                OnPathCompleted();
+                return;
             }
 
-            if (newPath.Count > 0)
-            {
-                string newPathSample = "";
-                for (int i = 0; i < System.Math.Min(10, newPath.Count); i++)
-                {
-                    newPathSample += newPath[i].ToString() + " ";
-                }
-                Debug.Log($"[{gameObject.name}] NEWPATH (first 10): {newPathSample}");
-            }
-
-            for (int i = startIndex; i < newPath.Count; i++)
-            {
-                Vector2Int tile = newPath[i];
-
-                // Always include the starting tile (current position)
-                if (i == startIndex)
-                {
-                    filteredPath.Add(tile);
-                    continue;
-                }
-
-                // Stop processing if tile is in recently reached list (would cause short-term backtracking)
-                // IMPORTANT: Use break not continue to prevent path discontinuity
-                bool isRecentlyReached = recentTiles.Contains(tile);
-                if (isRecentlyReached)
-                {
-                    Debug.Log($"[{gameObject.name}] PATH RECALC STOP | index={i} | tile={tile} is in recent {MAX_RECENT_TILES} tiles - stopping path here");
-                    break;
-                }
-
-                filteredPath.Add(tile);
-            }
-
-            // Only update path if we have a useful forward path
-            // Require minimum length to avoid accepting truncated paths that don't reach destination
-            const int MIN_PATH_LENGTH = 10;
-
-            if (filteredPath.Count > 1 && filteredPath.Count >= MIN_PATH_LENGTH)
-            {
-                path = filteredPath;
-                currentPathIndex = 0; // Start from beginning of filtered path
-                confusionSegmentActive = false;
-                confusionSegmentEndIndex = 0;
-
-                Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | newLength={filteredPath.Count}");
-            }
-            else if (filteredPath.Count > 1 && filteredPath.Count < MIN_PATH_LENGTH)
-            {
-                Debug.Log($"[{gameObject.name}] PATH RECALC REJECT | path too short ({filteredPath.Count} < {MIN_PATH_LENGTH}) - would create dead-end, keeping old path");
-                // Keep the old path - truncated path would strand visitor
-            }
-            else
-            {
-                Debug.Log($"[{gameObject.name}] PATH RECALC ABORT | no forward tiles available (immediate backtracking detected)");
-                // Keep the old path - don't update anything
-            }
+            state = VisitorState.Walking;
+            isCalculatingPath = false;
         }
 
         /// <summary>
