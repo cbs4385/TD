@@ -107,9 +107,9 @@ namespace FaeMaze.Visitors
         private Vector2Int fascinationLanternPosition;
         private bool hasReachedLantern;
 
-        // Permanent tracking of all grid tiles visited to prevent backtracking
-        private HashSet<Vector2Int> visitedGridTiles;
-        private Vector2Int lastRecordedGridPosition;
+        // Track last 10 tiles reached to prevent short-term backtracking
+        private Queue<Vector2Int> recentlyReachedTiles;
+        private const int MAX_RECENT_TILES = 10;
 
         #endregion
 
@@ -142,6 +142,7 @@ namespace FaeMaze.Visitors
         {
             state = VisitorState.Idle;
             isConfused = confusionEnabled;
+            recentlyReachedTiles = new Queue<Vector2Int>();
             CreateVisualSprite();
         }
 
@@ -292,6 +293,14 @@ namespace FaeMaze.Visitors
             isConfused = confusionEnabled;
             waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
 
+            // Clear recently reached tiles for new path
+            recentlyReachedTiles.Clear();
+            if (path.Count > 0)
+            {
+                // Add starting position to recent tiles
+                recentlyReachedTiles.Enqueue(path[0]);
+            }
+
             // Store original destination for confusion recovery
             if (path.Count > 0)
             {
@@ -326,13 +335,12 @@ namespace FaeMaze.Visitors
             isConfused = confusionEnabled;
             waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
 
-            // Initialize permanent visited tiles tracking
-            visitedGridTiles = new HashSet<Vector2Int>();
+            // Clear recently reached tiles for new path
+            recentlyReachedTiles.Clear();
             if (path.Count > 0)
             {
-                // Add starting position to visited set
-                visitedGridTiles.Add(path[0]);
-                lastRecordedGridPosition = path[0];
+                // Add starting position to recent tiles
+                recentlyReachedTiles.Enqueue(path[0]);
             }
 
             // Store original destination for confusion recovery
@@ -411,11 +419,16 @@ namespace FaeMaze.Visitors
         {
             Vector2Int currentWaypoint = path[currentPathIndex];
 
-            // Immediately mark this waypoint as visited to prevent backtracking
-            if (visitedGridTiles != null)
+            // Add to recently reached tiles queue (maintain last 10)
+            if (recentlyReachedTiles != null)
             {
-                visitedGridTiles.Add(currentWaypoint);
-                lastRecordedGridPosition = currentWaypoint;
+                recentlyReachedTiles.Enqueue(currentWaypoint);
+
+                // Remove oldest tiles if we exceed the maximum
+                while (recentlyReachedTiles.Count > MAX_RECENT_TILES)
+                {
+                    recentlyReachedTiles.Dequeue();
+                }
             }
 
             // Increment waypoint counter
@@ -1105,9 +1118,8 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
 
-            // Use permanent visited tiles tracking to prevent backtracking
-            // If visitedGridTiles is null (shouldn't happen), fall back to GetTraversedTiles()
-            HashSet<Vector2Int> traversedTiles = visitedGridTiles ?? GetTraversedTiles();
+            // Use recently reached tiles (last 10) to prevent short-term backtracking
+            HashSet<Vector2Int> recentTiles = new HashSet<Vector2Int>(recentlyReachedTiles ?? new Queue<Vector2Int>());
 
             // Store old path length for comparison
             int oldPathLength = path.Count - currentPathIndex;
@@ -1211,19 +1223,19 @@ namespace FaeMaze.Visitors
             // Filter the new path to remove backtracking tiles
             List<Vector2Int> filteredPath = new List<Vector2Int>();
 
-            Debug.Log($"[{gameObject.name}] PATH RECALC FILTER | visitedTiles.Count={traversedTiles.Count} | newPath.Count={newPath.Count} | startIndex={startIndex}");
+            Debug.Log($"[{gameObject.name}] PATH RECALC FILTER | recentTiles.Count={recentTiles.Count} | newPath.Count={newPath.Count} | startIndex={startIndex}");
 
-            // Debug: Show first few visited tiles and new path tiles
-            if (traversedTiles.Count > 0)
+            // Debug: Show recently reached tiles
+            if (recentTiles.Count > 0)
             {
-                string visitedSample = "";
+                string recentSample = "";
                 int count = 0;
-                foreach (var tile in traversedTiles)
+                foreach (var tile in recentTiles)
                 {
-                    visitedSample += tile.ToString() + " ";
+                    recentSample += tile.ToString() + " ";
                     if (++count >= 10) break;
                 }
-                Debug.Log($"[{gameObject.name}] VISITED (first 10): {visitedSample}");
+                Debug.Log($"[{gameObject.name}] RECENT TILES (last {recentTiles.Count}): {recentSample}");
             }
 
             if (newPath.Count > 0)
@@ -1236,9 +1248,6 @@ namespace FaeMaze.Visitors
                 Debug.Log($"[{gameObject.name}] NEWPATH (first 10): {newPathSample}");
             }
 
-            // Calculate current distance to destination for directional backtracking detection
-            int currentDistToDestination = Mathf.Abs(currentPos.x - originalDestination.x) + Mathf.Abs(currentPos.y - originalDestination.y);
-
             for (int i = startIndex; i < newPath.Count; i++)
             {
                 Vector2Int tile = newPath[i];
@@ -1250,25 +1259,12 @@ namespace FaeMaze.Visitors
                     continue;
                 }
 
-                // Stop processing if tile would cause backtracking (exact tile revisit)
+                // Stop processing if tile is in recently reached list (would cause short-term backtracking)
                 // IMPORTANT: Use break not continue to prevent path discontinuity
-                bool isVisited = traversedTiles.Contains(tile);
-                if (isVisited)
+                bool isRecentlyReached = recentTiles.Contains(tile);
+                if (isRecentlyReached)
                 {
-                    Debug.Log($"[{gameObject.name}] PATH RECALC STOP | index={i} | tile={tile} would cause tile revisit backtracking - stopping path here");
-                    break;
-                }
-
-                // Stop processing if tile causes directional backtracking (moving farther from destination)
-                // Calculate Manhattan distance from this tile to destination
-                int tileDistToDestination = Mathf.Abs(tile.x - originalDestination.x) + Mathf.Abs(tile.y - originalDestination.y);
-
-                // Reject tiles that move backward from our current position
-                // Compare against the INITIAL distance from current position to prevent any backward movement
-                // IMPORTANT: Use break not continue to prevent creating invalid jumps across unwalkable tiles
-                if (tileDistToDestination > currentDistToDestination)
-                {
-                    Debug.Log($"[{gameObject.name}] PATH RECALC STOP | index={i} | tile={tile} at dist={tileDistToDestination} would cause directional backtracking (currentPos dist={currentDistToDestination}) - stopping path here");
+                    Debug.Log($"[{gameObject.name}] PATH RECALC STOP | index={i} | tile={tile} is in recent {MAX_RECENT_TILES} tiles - stopping path here");
                     break;
                 }
 
