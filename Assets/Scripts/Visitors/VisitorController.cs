@@ -24,6 +24,33 @@ namespace FaeMaze.Visitors
             Escaping
         }
 
+        /// <summary>
+        /// Represents a visited tile in the fascinated random walk with its unexplored neighbors.
+        /// </summary>
+        private class FascinatedPathNode
+        {
+            public Vector2Int Position { get; set; }
+            public List<Vector2Int> UnexploredNeighbors { get; set; }
+
+            public FascinatedPathNode(Vector2Int position, List<Vector2Int> unexploredNeighbors)
+            {
+                Position = position;
+                UnexploredNeighbors = new List<Vector2Int>(unexploredNeighbors);
+            }
+
+            public bool HasUnexploredNeighbors => UnexploredNeighbors.Count > 0;
+
+            public Vector2Int PopNextNeighbor()
+            {
+                if (UnexploredNeighbors.Count == 0)
+                    throw new System.InvalidOperationException("No unexplored neighbors to pop");
+
+                Vector2Int next = UnexploredNeighbors[0];
+                UnexploredNeighbors.RemoveAt(0);
+                return next;
+            }
+        }
+
         #endregion
 
         #region Serialized Fields
@@ -110,10 +137,9 @@ namespace FaeMaze.Visitors
         private Queue<Vector2Int> recentlyReachedTiles;
         private const int MAX_RECENT_TILES = 10;
 
-        // Track visited tiles during fascinated random walk (in order)
-        private List<Vector2Int> fascinatedVisitedTiles;
-        private HashSet<Vector2Int> fascinatedDeadEnds; // Tiles confirmed as dead ends (never revisit)
-        private bool isBacktracking; // Whether currently backtracking from dead end
+        // Track visited tiles during fascinated random walk as a tree structure
+        // Each node contains its position and list of unexplored neighbors
+        private List<FascinatedPathNode> fascinatedPathNodes;
 
         #endregion
 
@@ -147,9 +173,7 @@ namespace FaeMaze.Visitors
             state = VisitorState.Idle;
             isConfused = confusionEnabled;
             recentlyReachedTiles = new Queue<Vector2Int>();
-            fascinatedVisitedTiles = new List<Vector2Int>();
-            fascinatedDeadEnds = new HashSet<Vector2Int>();
-            isBacktracking = false;
+            fascinatedPathNodes = new List<FascinatedPathNode>();
             CreateVisualSprite();
         }
 
@@ -385,9 +409,7 @@ namespace FaeMaze.Visitors
                     isFascinated = false;
                     hasReachedLantern = false;
                     currentFaeLantern = null;
-                    fascinatedVisitedTiles.Clear();
-                    fascinatedDeadEnds.Clear();
-                    isBacktracking = false;
+                    fascinatedPathNodes.Clear();
                 }
             }
 
@@ -1041,7 +1063,8 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Handles random walk behavior for fascinated visitors after they've reached the lantern.
-        /// Uses a visited tiles list to track exploration and backtrack when reaching dead ends.
+        /// Uses a tree structure where each node tracks its unexplored neighbors.
+        /// Backtracks through the node list when dead ends are encountered.
         /// </summary>
         private void HandleFascinatedRandomWalk()
         {
@@ -1072,105 +1095,91 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Initialize visited list on first call after reaching lantern
-            if (fascinatedVisitedTiles.Count == 0)
+            // Initialize path nodes on first call after reaching lantern
+            if (fascinatedPathNodes.Count == 0)
             {
-                // Add the previously visited tile (if there is one) and the current tile (lantern position)
-                if (currentPathIndex > 1)
-                {
-                    fascinatedVisitedTiles.Add(path[currentPathIndex - 2]); // Previous tile
-                }
-                fascinatedVisitedTiles.Add(currentPos); // Current tile (lantern)
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK INIT | visitedCount={fascinatedVisitedTiles.Count} | starting from {currentPos}");
+                // Get all walkable neighbors and shuffle them randomly
+                List<Vector2Int> neighbors = GetWalkableNeighbors(currentPos);
+                ShuffleList(neighbors);
+
+                // Create initial node at lantern position
+                FascinatedPathNode initialNode = new FascinatedPathNode(currentPos, neighbors);
+                fascinatedPathNodes.Add(initialNode);
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK INIT | pos={currentPos} | unexploredNeighbors={neighbors.Count}");
             }
 
-            // Convert visited list to HashSet for faster lookups
-            HashSet<Vector2Int> visitedSet = new HashSet<Vector2Int>(fascinatedVisitedTiles);
+            // Get current node (last in list = current position)
+            FascinatedPathNode currentNode = fascinatedPathNodes[fascinatedPathNodes.Count - 1];
 
-            // Handle backtracking mode
-            if (isBacktracking)
+            // Check if current node has unexplored neighbors
+            while (!currentNode.HasUnexploredNeighbors && fascinatedPathNodes.Count > 0)
             {
-                Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACKING | currentPos={currentPos} | visitedCount={fascinatedVisitedTiles.Count} | deadEnds={fascinatedDeadEnds.Count}");
+                // Dead end - backtrack by removing current node
+                fascinatedPathNodes.RemoveAt(fascinatedPathNodes.Count - 1);
+                Debug.Log($"[{gameObject.name}] FASCINATED DEAD END | pos={currentNode.Position} | backtracking | pathDepth={fascinatedPathNodes.Count}");
 
-                // Traverse visited list backwards to find a tile with unvisited neighbors
-                for (int i = fascinatedVisitedTiles.Count - 1; i >= 0; i--)
+                if (fascinatedPathNodes.Count == 0)
                 {
-                    Vector2Int checkPos = fascinatedVisitedTiles[i];
-                    List<Vector2Int> neighbors = GetWalkableNeighbors(checkPos);
-                    // Exclude tiles in visited list AND tiles confirmed as dead ends
-                    List<Vector2Int> unvisitedNeighbors = neighbors.FindAll(n => !visitedSet.Contains(n) && !fascinatedDeadEnds.Contains(n));
-
-                    if (unvisitedNeighbors.Count > 0)
-                    {
-                        // Found a tile with unvisited neighbors!
-                        Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK FOUND | pos={checkPos} | unvisitedOptions={unvisitedNeighbors.Count}");
-
-                        // Build path back to this position (if not already there)
-                        if (checkPos != currentPos)
-                        {
-                            // Find currentPos in the visited list
-                            int currentIndex = fascinatedVisitedTiles.IndexOf(currentPos);
-                            int targetIndex = i;
-
-                            if (currentIndex >= 0 && currentIndex > targetIndex)
-                            {
-                                // Add backtrack path (traverse backwards through visited tiles)
-                                for (int j = currentIndex - 1; j >= targetIndex; j--)
-                                {
-                                    path.Add(fascinatedVisitedTiles[j]);
-                                }
-                                Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK PATH | added {currentIndex - targetIndex} tiles from {currentPos} to reach {checkPos}");
-                            }
-                            else if (currentIndex < 0)
-                            {
-                                Debug.LogWarning($"[{gameObject.name}] FASCINATED BACKTRACK ERROR | currentPos={currentPos} not found in visited list");
-                            }
-                        }
-
-                        // Truncate visited list to maintain continuous path from lantern to current position
-                        int tilesToRemove = fascinatedVisitedTiles.Count - 1 - i;
-                        if (tilesToRemove > 0)
-                        {
-                            fascinatedVisitedTiles.RemoveRange(i + 1, tilesToRemove);
-                            Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK TRUNCATE | removed {tilesToRemove} dead-end branch tiles | newVisitedCount={fascinatedVisitedTiles.Count}");
-                        }
-
-                        // Pick a random unvisited neighbor
-                        Vector2Int chosenTile = unvisitedNeighbors[Random.Range(0, unvisitedNeighbors.Count)];
-                        path.Add(chosenTile);
-                        fascinatedVisitedTiles.Add(chosenTile);
-
-                        isBacktracking = false; // Exit backtracking mode
-                        Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK COMPLETE | resuming from {checkPos} to {chosenTile}");
-                        return;
-                    }
+                    // Exhausted all paths
+                    Debug.Log($"[{gameObject.name}] FASCINATED WALK EXHAUSTED | explored all reachable tiles");
+                    return;
                 }
 
-                // If we get here, we've exhausted all options - clear fascination
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK EXHAUSTED | no more paths to explore");
-                return;
+                // Move to parent node
+                currentNode = fascinatedPathNodes[fascinatedPathNodes.Count - 1];
+                Vector2Int backtrackPos = currentNode.Position;
+
+                // Add backtrack waypoint if we're not already there
+                if (backtrackPos != currentPos)
+                {
+                    path.Add(backtrackPos);
+                    currentPos = backtrackPos;
+                    Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK | to={backtrackPos} | pathDepth={fascinatedPathNodes.Count}");
+                }
             }
 
-            // Normal random walk mode: get unvisited neighbors
-            List<Vector2Int> allNeighbors = GetWalkableNeighbors(currentPos);
-            // Exclude tiles in visited list AND tiles confirmed as dead ends
-            List<Vector2Int> unvisited = allNeighbors.FindAll(n => !visitedSet.Contains(n) && !fascinatedDeadEnds.Contains(n));
-
-            if (unvisited.Count > 0)
+            if (fascinatedPathNodes.Count == 0)
             {
-                // Randomly choose among unvisited neighbors
-                Vector2Int chosen = unvisited[Random.Range(0, unvisited.Count)];
-                path.Add(chosen);
-                fascinatedVisitedTiles.Add(chosen);
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK | from={currentPos} to={chosen} | unvisitedOptions={unvisited.Count} | visitedCount={fascinatedVisitedTiles.Count}");
+                return; // Fully explored
             }
-            else
+
+            // Current node has unexplored neighbors - pick the next one
+            Vector2Int nextPos = currentNode.PopNextNeighbor();
+
+            // Get neighbors of next position and shuffle them
+            List<Vector2Int> nextNeighbors = GetWalkableNeighbors(nextPos);
+
+            // Build set of visited positions for filtering
+            HashSet<Vector2Int> visitedPositions = new HashSet<Vector2Int>();
+            foreach (var node in fascinatedPathNodes)
             {
-                // Dead end reached - mark it and enter backtracking mode
-                fascinatedDeadEnds.Add(currentPos);
-                Debug.Log($"[{gameObject.name}] FASCINATED DEAD END | pos={currentPos} | marking as dead end | totalDeadEnds={fascinatedDeadEnds.Count}");
-                isBacktracking = true;
-                HandleFascinatedRandomWalk(); // Recursively call to start backtracking immediately
+                visitedPositions.Add(node.Position);
+            }
+
+            // Remove neighbors that we've already visited
+            nextNeighbors.RemoveAll(n => visitedPositions.Contains(n));
+            ShuffleList(nextNeighbors);
+
+            // Create new node for next position
+            FascinatedPathNode nextNode = new FascinatedPathNode(nextPos, nextNeighbors);
+            fascinatedPathNodes.Add(nextNode);
+
+            // Add to movement path
+            path.Add(nextPos);
+            Debug.Log($"[{gameObject.name}] FASCINATED WALK | from={currentNode.Position} to={nextPos} | unexploredNeighbors={nextNeighbors.Count} | pathDepth={fascinatedPathNodes.Count}");
+        }
+
+        /// <summary>
+        /// Shuffles a list in place using Fisher-Yates algorithm.
+        /// </summary>
+        private void ShuffleList<T>(List<T> list)
+        {
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                T temp = list[i];
+                list[i] = list[j];
+                list[j] = temp;
             }
         }
 
