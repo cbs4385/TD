@@ -1026,7 +1026,23 @@ namespace FaeMaze.Visitors
                 return; // Still have enough waypoints ahead
             }
 
-            Vector2Int currentPos = path[currentPathIndex];
+            // Get the actual current position (where visitor is now)
+            // currentPathIndex has already been incremented to point at next target
+            // so current position is at currentPathIndex - 1
+            Vector2Int currentPos;
+            if (currentPathIndex > 0 && currentPathIndex < path.Count)
+            {
+                currentPos = path[currentPathIndex - 1];
+            }
+            else if (currentPathIndex >= path.Count && path.Count > 0)
+            {
+                currentPos = path[path.Count - 1];
+            }
+            else
+            {
+                Debug.LogWarning($"[{gameObject.name}] FASCINATED WALK INVALID INDEX | currentPathIndex={currentPathIndex} | pathCount={path.Count}");
+                return;
+            }
 
             // Build traversed tiles set
             // After first dead end: only track dead-ends to avoid, not entire path
@@ -1057,11 +1073,12 @@ namespace FaeMaze.Visitors
             }
 
             // Identify the previous tile (to prefer not going back immediately)
+            // currentPos is at currentPathIndex - 1, so previous is at currentPathIndex - 2
             Vector2Int previousTile = Vector2Int.zero;
             bool hasPrevious = false;
-            if (currentPathIndex > 0)
+            if (currentPathIndex > 1)
             {
-                previousTile = path[currentPathIndex - 1];
+                previousTile = path[currentPathIndex - 2];
                 hasPrevious = true;
             }
 
