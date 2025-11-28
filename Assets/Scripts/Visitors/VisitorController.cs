@@ -1148,12 +1148,25 @@ namespace FaeMaze.Visitors
                     // Found current tile in new path - start from there
                     startIndex = currentGridIndex;
 
-                    // If we're very close to this tile's center, advance to next waypoint
+                    // Decide whether to advance to the next tile to preserve forward movement
                     Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
                     float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
-                    if (startIndex < newPath.Count - 1 && distToCurrentTile < waypointReachedDistance)
+
+                    if (startIndex < newPath.Count - 1)
                     {
-                        startIndex++;
+                        Vector3 nextTileWorldPos = mazeGridBehaviour.GridToWorld(newPath[startIndex + 1].x, newPath[startIndex + 1].y);
+                        float distToNextTile = Vector3.Distance(transform.position, nextTileWorldPos);
+
+                        // If we're closer to (or equally close to) the next tile than the current one, move the anchor forward
+                        if (distToNextTile <= distToCurrentTile)
+                        {
+                            startIndex++;
+                        }
+                        else if (distToCurrentTile < waypointReachedDistance)
+                        {
+                            // Alternatively, if we're effectively on the center of this tile, also advance
+                            startIndex++;
+                        }
                     }
 
                     Debug.Log($"[{gameObject.name}] PATH RECALC | current grid tile found in new path at index {currentGridIndex} | startIndex={startIndex}");
