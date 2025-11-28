@@ -102,6 +102,8 @@ namespace FaeMaze.Visitors
         private bool isFascinated;
         private Vector2Int fascinationLanternPosition;
         private bool hasReachedLantern;
+        private float fascinationTimer;
+        private FaeMaze.Props.FaeLantern currentFaeLantern;
 
         // Track last 10 tiles reached to prevent short-term backtracking
         private Queue<Vector2Int> recentlyReachedTiles;
@@ -210,6 +212,25 @@ namespace FaeMaze.Visitors
 
         private void Update()
         {
+            // Check for FaeLantern influence (grid-based detection)
+            if (state == VisitorState.Walking && !isFascinated)
+            {
+                CheckFaeLanternInfluence();
+            }
+
+            // Handle fascination timer (2-second pause at lantern)
+            if (isFascinated && hasReachedLantern && fascinationTimer > 0)
+            {
+                fascinationTimer -= Time.deltaTime;
+                if (fascinationTimer <= 0)
+                {
+                    // Timer expired - start random wandering
+                    Debug.Log($"[{gameObject.name}] FASCINATION TIMER EXPIRED | starting random wander");
+                    // The random walk will be handled in HandleConfusionAtWaypoint
+                }
+                return; // Don't move while fascinated timer is active
+            }
+
             if (state == VisitorState.Walking)
             {
                 if (!isCalculatingPath)
@@ -406,9 +427,20 @@ namespace FaeMaze.Visitors
                 if (currentWaypoint == fascinationLanternPosition)
                 {
                     hasReachedLantern = true;
-                    Debug.Log($"[{gameObject.name}] REACHED LANTERN | pos={fascinationLanternPosition} | switching to random walk");
 
-                    // Initialize random walk - keep only current position
+                    // Start fascination timer (2 seconds by default)
+                    if (currentFaeLantern != null)
+                    {
+                        fascinationTimer = currentFaeLantern.FascinationDuration;
+                    }
+                    else
+                    {
+                        fascinationTimer = 2f; // Fallback
+                    }
+
+                    Debug.Log($"[{gameObject.name}] REACHED LANTERN | pos={fascinationLanternPosition} | starting {fascinationTimer}s fascination pause");
+
+                    // Keep only current position - will build random walk after timer expires
                     path = new List<Vector2Int> { currentWaypoint };
                     currentPathIndex = 0;
                     return; // Don't increment or handle confusion
@@ -463,6 +495,114 @@ namespace FaeMaze.Visitors
                 {
                     Debug.LogWarning("VisitorController: Could not notify Heart - reference is null. Destroying self.");
                     Destroy(gameObject);
+                }
+            }
+        }
+
+        #endregion
+
+        #region FaeLantern Detection
+
+        /// <summary>
+        /// Checks if the visitor has entered any FaeLantern's influence area.
+        /// Uses grid-based detection to check if current grid position is within
+        /// the flood-filled influence area of any active lantern.
+        /// </summary>
+        private void CheckFaeLanternInfluence()
+        {
+            if (mazeGridBehaviour == null)
+                return;
+
+            // Get current grid position
+            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
+                return;
+
+            Vector2Int currentGridPos = new Vector2Int(x, y);
+
+            // Check all active FaeLanterns
+            foreach (var lantern in FaeMaze.Props.FaeLantern.All)
+            {
+                if (lantern == null)
+                    continue;
+
+                // Check if this cell is in the lantern's influence
+                if (lantern.IsCellInInfluence(currentGridPos))
+                {
+                    Debug.Log($"[{gameObject.name}] ENTERED FAE INFLUENCE | lanternPos={lantern.GridPosition} | visitorPos={currentGridPos}");
+                    EnterFaeInfluence(lantern);
+                    break; // Only one lantern can capture a visitor
+                }
+            }
+        }
+
+        /// <summary>
+        /// Called when a visitor enters a FaeLantern's influence area.
+        /// Abandons current path and paths to the lantern.
+        /// </summary>
+        private void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern)
+        {
+            if (isFascinated)
+                return; // Already fascinated
+
+            isFascinated = true;
+            currentFaeLantern = lantern;
+            fascinationLanternPosition = lantern.GridPosition;
+            hasReachedLantern = false;
+            fascinationTimer = 0f; // Will be set when reaching lantern
+
+            Debug.Log($"[{gameObject.name}] FAE INFLUENCE CAPTURED | lanternPos={fascinationLanternPosition}");
+
+            // Abandon current path
+            path = null;
+            currentPathIndex = 0;
+            confusionSegmentActive = false;
+            confusionSegmentEndIndex = 0;
+
+            // Calculate path to lantern
+            if (gameController != null && mazeGridBehaviour != null &&
+                mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            {
+                Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+                List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
+                if (gameController.TryFindPath(currentPos, fascinationLanternPosition, pathToLantern) && pathToLantern.Count > 0)
+                {
+                    // Convert to Vector2Int path
+                    path = new List<Vector2Int>();
+                    foreach (var node in pathToLantern)
+                    {
+                        path.Add(new Vector2Int(node.x, node.y));
+                    }
+
+                    // Find starting waypoint
+                    currentPathIndex = 0;
+                    if (path.Count > 1)
+                    {
+                        // Try to find current grid position in the path
+                        for (int i = 0; i < path.Count; i++)
+                        {
+                            if (path[i] == currentPos)
+                            {
+                                currentPathIndex = i;
+                                break;
+                            }
+                        }
+
+                        // If very close to current tile center, advance to next
+                        Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
+                        float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
+                        if (currentPathIndex < path.Count - 1 && distToCurrentTile < waypointReachedDistance)
+                        {
+                            currentPathIndex++;
+                        }
+                    }
+
+                    Debug.Log($"[{gameObject.name}] FAE PATH SET | pathLength={path.Count - currentPathIndex} waypoints | startIndex={currentPathIndex}");
+                    state = VisitorState.Walking;
+                }
+                else
+                {
+                    Debug.LogWarning($"[{gameObject.name}] FAE PATHFIND FAILED | no path from {currentPos} to {fascinationLanternPosition}");
                 }
             }
         }
@@ -1037,6 +1177,14 @@ namespace FaeMaze.Visitors
         {
             if (gameController == null || mazeGridBehaviour == null)
             {
+                return;
+            }
+
+            // Handle fascinated visitors who have reached the lantern and timer expired
+            if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
+            {
+                Debug.Log($"[{gameObject.name}] PATH RECALC | fascinated random walk");
+                HandleFascinatedRandomWalk();
                 return;
             }
 

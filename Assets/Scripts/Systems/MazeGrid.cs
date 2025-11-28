@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FaeMaze.Systems
@@ -210,6 +211,87 @@ namespace FaeMaze.Systems
             }
 
             return $"MazeGrid [{width}x{height}]: {walkableCount} walkable, {blockedCount} blocked";
+        }
+
+        /// <summary>
+        /// Performs a flood-fill BFS to find all walkable tiles reachable from an origin
+        /// within a maximum number of steps, respecting walls and non-walkable tiles.
+        /// </summary>
+        /// <param name="originX">Starting X coordinate</param>
+        /// <param name="originY">Starting Y coordinate</param>
+        /// <param name="maxSteps">Maximum distance in grid steps</param>
+        /// <returns>HashSet of reachable grid positions</returns>
+        public HashSet<Vector2Int> FloodFillReachable(int originX, int originY, int maxSteps)
+        {
+            HashSet<Vector2Int> reachable = new HashSet<Vector2Int>();
+
+            // Validate origin
+            if (!InBounds(originX, originY))
+            {
+                Debug.LogWarning($"FloodFillReachable: Origin ({originX}, {originY}) is out of bounds!");
+                return reachable;
+            }
+
+            var originNode = GetNode(originX, originY);
+            if (originNode == null || !originNode.walkable)
+            {
+                Debug.LogWarning($"FloodFillReachable: Origin ({originX}, {originY}) is not walkable!");
+                return reachable;
+            }
+
+            // BFS queue: (position, distance)
+            Queue<(Vector2Int pos, int dist)> queue = new Queue<(Vector2Int, int)>();
+            HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+
+            Vector2Int origin = new Vector2Int(originX, originY);
+            queue.Enqueue((origin, 0));
+            visited.Add(origin);
+
+            // 4-directional neighbors
+            Vector2Int[] directions = new Vector2Int[]
+            {
+                new Vector2Int(0, 1),   // Up
+                new Vector2Int(0, -1),  // Down
+                new Vector2Int(1, 0),   // Right
+                new Vector2Int(-1, 0)   // Left
+            };
+
+            while (queue.Count > 0)
+            {
+                var (currentPos, currentDist) = queue.Dequeue();
+                reachable.Add(currentPos);
+
+                // Don't explore beyond max steps
+                if (currentDist >= maxSteps)
+                {
+                    continue;
+                }
+
+                // Explore neighbors
+                foreach (var dir in directions)
+                {
+                    Vector2Int neighborPos = currentPos + dir;
+
+                    // Skip if already visited
+                    if (visited.Contains(neighborPos))
+                        continue;
+
+                    // Check bounds
+                    if (!InBounds(neighborPos.x, neighborPos.y))
+                        continue;
+
+                    // Check walkability
+                    var neighborNode = GetNode(neighborPos.x, neighborPos.y);
+                    if (neighborNode == null || !neighborNode.walkable)
+                        continue;
+
+                    // Add to queue
+                    visited.Add(neighborPos);
+                    queue.Enqueue((neighborPos, currentDist + 1));
+                }
+            }
+
+            return reachable;
         }
 
         #endregion
