@@ -522,6 +522,14 @@ namespace FaeMaze.Visitors
             // For fascinated visitors doing random walk, handle confusion/path extension
             if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
             {
+                // Check if current waypoint is the original destination (exit or heart)
+                if (currentWaypoint == originalDestination)
+                {
+                    Debug.Log($"[{gameObject.name}] FASCINATED VISITOR REACHED DESTINATION | pos={currentWaypoint} | despawning");
+                    OnPathCompleted();
+                    return;
+                }
+
                 currentPathIndex++;
                 // Don't reset currentPathIndex - HandleFascinatedRandomWalk handles the case
                 // where currentPathIndex >= path.Count by using path[path.Count - 1] as current position
@@ -633,6 +641,9 @@ namespace FaeMaze.Visitors
             fascinationLanternPosition = lantern.GridPosition;
             hasReachedLantern = false;
             fascinationTimer = 0f; // Will be set when reaching lantern
+
+            // Clear path nodes from previous fascination
+            fascinatedPathNodes.Clear();
 
             Debug.Log($"[{gameObject.name}] FAE INFLUENCE CAPTURED | lanternPos={fascinationLanternPosition}");
 
@@ -1131,8 +1142,9 @@ namespace FaeMaze.Visitors
 
                 if (fascinatedPathNodes.Count == 0)
                 {
-                    // Exhausted all paths
-                    Debug.Log($"[{gameObject.name}] FASCINATED WALK EXHAUSTED | explored all reachable tiles");
+                    // Exhausted all paths - visitor has fully explored, trigger completion
+                    Debug.Log($"[{gameObject.name}] FASCINATED WALK EXHAUSTED | explored all reachable tiles | triggering completion");
+                    OnPathCompleted();
                     return;
                 }
 
@@ -1178,6 +1190,14 @@ namespace FaeMaze.Visitors
             // Add to movement path
             path.Add(nextPos);
             Debug.Log($"[{gameObject.name}] FASCINATED WALK | from={currentNode.Position} to={nextPos} | unexploredNeighbors={nextNeighbors.Count} | pathDepth={fascinatedPathNodes.Count}");
+
+            // Check if visitor has reached their original destination (exit or heart)
+            if (nextPos == originalDestination)
+            {
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK REACHED DESTINATION | pos={nextPos} | triggering completion");
+                // Note: OnPathCompleted will be called when visitor actually reaches this waypoint
+                // For now, just log it - the normal waypoint completion logic will handle despawn
+            }
         }
 
         /// <summary>
