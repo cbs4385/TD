@@ -1098,8 +1098,19 @@ namespace FaeMaze.Visitors
             // Initialize path nodes on first call after reaching lantern
             if (fascinatedPathNodes.Count == 0)
             {
-                // Get all walkable neighbors and shuffle them randomly
+                // Get all walkable neighbors
                 List<Vector2Int> neighbors = GetWalkableNeighbors(currentPos);
+
+                // Exclude the tile we came from (the previous tile before reaching lantern)
+                // This ensures visitor continues forward into maze rather than immediately backtracking
+                if (currentPathIndex > 1)
+                {
+                    Vector2Int previousTile = path[currentPathIndex - 2];
+                    neighbors.Remove(previousTile);
+                    Debug.Log($"[{gameObject.name}] FASCINATED WALK INIT | excluding previousTile={previousTile} to continue forward");
+                }
+
+                // Shuffle remaining neighbors randomly
                 ShuffleList(neighbors);
 
                 // Create initial node at lantern position
