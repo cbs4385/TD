@@ -1097,21 +1097,34 @@ namespace FaeMaze.Visitors
                         // Found a tile with unvisited neighbors!
                         Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK FOUND | pos={checkPos} | unvisitedOptions={unvisitedNeighbors.Count}");
 
-                        // Build path back to this position
+                        // Build path back to this position BEFORE truncating (currentPos might be in the part we remove)
                         if (checkPos != currentPos)
                         {
-                            // Need to backtrack to this position first
+                            // Find currentPos in the visited list
                             int currentIndex = fascinatedVisitedTiles.IndexOf(currentPos);
                             int targetIndex = i;
 
-                            if (currentIndex > targetIndex)
+                            if (currentIndex >= 0 && currentIndex > targetIndex)
                             {
-                                // Add backtrack path
+                                // Add backtrack path (traverse backwards through visited tiles)
                                 for (int j = currentIndex - 1; j >= targetIndex; j--)
                                 {
                                     path.Add(fascinatedVisitedTiles[j]);
                                 }
+                                Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK PATH | added {currentIndex - targetIndex} tiles from {currentPos} to reach {checkPos}");
                             }
+                            else if (currentIndex < 0)
+                            {
+                                Debug.LogWarning($"[{gameObject.name}] FASCINATED BACKTRACK ERROR | currentPos={currentPos} not found in visited list");
+                            }
+                        }
+
+                        // Truncate visited list to this position (remove dead-end tiles)
+                        int tilesToRemove = fascinatedVisitedTiles.Count - 1 - i;
+                        if (tilesToRemove > 0)
+                        {
+                            fascinatedVisitedTiles.RemoveRange(i + 1, tilesToRemove);
+                            Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK TRUNCATE | removed {tilesToRemove} dead-end tiles | newVisitedCount={fascinatedVisitedTiles.Count}");
                         }
 
                         // Pick a random unvisited neighbor
