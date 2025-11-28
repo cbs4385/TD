@@ -1239,7 +1239,6 @@ namespace FaeMaze.Visitors
 
             // Calculate current distance to destination for directional backtracking detection
             int currentDistToDestination = Mathf.Abs(currentPos.x - originalDestination.x) + Mathf.Abs(currentPos.y - originalDestination.y);
-            int lastAcceptedDistToDestination = currentDistToDestination;
 
             for (int i = startIndex; i < newPath.Count; i++)
             {
@@ -1265,19 +1264,17 @@ namespace FaeMaze.Visitors
                 // Calculate Manhattan distance from this tile to destination
                 int tileDistToDestination = Mathf.Abs(tile.x - originalDestination.x) + Mathf.Abs(tile.y - originalDestination.y);
 
-                // Allow small increases in distance (tolerance of 2 tiles) to handle maze detours
-                // But reject tiles that move significantly backward
-                if (tileDistToDestination > lastAcceptedDistToDestination + 2)
+                // Reject tiles that move backward from our current position
+                // Compare against the INITIAL distance from current position to prevent any backward movement
+                // This prevents cumulative backtracking while allowing the pathfinder to find detours
+                if (tileDistToDestination > currentDistToDestination)
                 {
                     skippedTiles++;
-                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} at dist={tileDistToDestination} would cause directional backtracking (current={lastAcceptedDistToDestination})");
+                    Debug.Log($"[{gameObject.name}] PATH RECALC SKIP | index={i} | tile={tile} at dist={tileDistToDestination} would cause directional backtracking (currentPos dist={currentDistToDestination})");
                     continue;
                 }
 
                 filteredPath.Add(tile);
-
-                // Update the last accepted distance for next iteration
-                lastAcceptedDistToDestination = tileDistToDestination;
             }
 
             // Only update path if we have valid forward waypoints (more than just the current position)
