@@ -459,6 +459,17 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            // For fascinated visitors doing random walk, advance to next waypoint
+            if (isFascinated && hasReachedLantern)
+            {
+                currentPathIndex++;
+                if (currentPathIndex >= path.Count)
+                {
+                    // Near end of path, RecalculatePath will extend it
+                    currentPathIndex = path.Count - 1;
+                }
+            }
+
             RecalculatePath();
         }
 
