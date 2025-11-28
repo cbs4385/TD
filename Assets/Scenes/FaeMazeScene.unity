@@ -555,6 +555,7 @@ GameObject:
   - component: {fileID: 1408523523}
   - component: {fileID: 1408523524}
   - component: {fileID: 1408523525}
+  - component: {fileID: 1408523526}
   m_Layer: 0
   m_Name: Systems
   m_TagString: Untagged
@@ -662,6 +663,27 @@ MonoBehaviour:
     description: A mystical light that wanders the maze and leads visitors to the heart
     previewSprite: {fileID: 0}
     previewColor: {r: 0.9, g: 1, b: 0.4, a: 0.5}
+--- !u!114 &1408523526
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1408523520}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
+  totalVisitors: 10
+  spawnInterval: 1.5
+  uiCanvas: {fileID: 0}
+  visitorsText: {fileID: 0}
+  countdownText: {fileID: 0}
+  visitorsFontSize: 20
+  countdownFontSize: 16
+  uiTextColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &1534669902
 GameObject:
   m_ObjectHideFlags: 0
