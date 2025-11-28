@@ -110,9 +110,9 @@ namespace FaeMaze.Visitors
         private Queue<Vector2Int> recentlyReachedTiles;
         private const int MAX_RECENT_TILES = 10;
 
-        // Track dead ends encountered during fascinated random walk
-        private HashSet<Vector2Int> avoidedDeadEnds;
-        private bool hasEncounteredDeadEnd;
+        // Track visited tiles during fascinated random walk (in order)
+        private List<Vector2Int> fascinatedVisitedTiles;
+        private bool isBacktracking; // Whether currently backtracking from dead end
 
         #endregion
 
@@ -146,8 +146,8 @@ namespace FaeMaze.Visitors
             state = VisitorState.Idle;
             isConfused = confusionEnabled;
             recentlyReachedTiles = new Queue<Vector2Int>();
-            avoidedDeadEnds = new HashSet<Vector2Int>();
-            hasEncounteredDeadEnd = false;
+            fascinatedVisitedTiles = new List<Vector2Int>();
+            isBacktracking = false;
             CreateVisualSprite();
         }
 
@@ -383,8 +383,8 @@ namespace FaeMaze.Visitors
                     isFascinated = false;
                     hasReachedLantern = false;
                     currentFaeLantern = null;
-                    avoidedDeadEnds.Clear();
-                    hasEncounteredDeadEnd = false;
+                    fascinatedVisitedTiles.Clear();
+                    isBacktracking = false;
                 }
             }
 
@@ -1034,7 +1034,7 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Handles random walk behavior for fascinated visitors after they've reached the lantern.
-        /// Extends the path with random exploration, avoiding backtracking except at dead ends.
+        /// Uses a visited tiles list to track exploration and backtrack when reaching dead ends.
         /// </summary>
         private void HandleFascinatedRandomWalk()
         {
@@ -1046,22 +1046,17 @@ namespace FaeMaze.Visitors
             }
 
             // Get the actual current position (where visitor is now)
-            // currentPathIndex has already been incremented to point at next target
-            // so current position is at currentPathIndex - 1
             Vector2Int currentPos;
             if (currentPathIndex == 0 && path.Count > 0)
             {
-                // At the start: current position IS path[0]
                 currentPos = path[0];
             }
             else if (currentPathIndex > 0 && currentPathIndex < path.Count)
             {
-                // In the middle: current position is one behind currentPathIndex
                 currentPos = path[currentPathIndex - 1];
             }
             else if (currentPathIndex >= path.Count && path.Count > 0)
             {
-                // Past the end: current position is the last element
                 currentPos = path[path.Count - 1];
             }
             else
@@ -1070,224 +1065,90 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Build traversed tiles set
-            // After first dead end: only track dead-ends to avoid, not entire path
-            // Before first dead end: track entire path to prevent backtracking
-            HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>();
-            if (hasEncounteredDeadEnd)
+            // Initialize visited list on first call after reaching lantern
+            if (fascinatedVisitedTiles.Count == 0)
             {
-                // Only avoid positions that led to dead ends
-                traversedTiles = new HashSet<Vector2Int>(avoidedDeadEnds);
-                Debug.Log($"[{gameObject.name}] FASCINATED POST-DEADEND MODE | avoiding {avoidedDeadEnds.Count} dead end(s)");
-            }
-            else
-            {
-                // Normal mode: prevent backtracking to any tiles in current path
-                for (int i = 0; i < path.Count; i++)
+                // Add the previously visited tile (if there is one) and the current tile (lantern position)
+                if (currentPathIndex > 1)
                 {
-                    traversedTiles.Add(path[i]);
+                    fascinatedVisitedTiles.Add(path[currentPathIndex - 2]); // Previous tile
                 }
+                fascinatedVisitedTiles.Add(currentPos); // Current tile (lantern)
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK INIT | visitedCount={fascinatedVisitedTiles.Count} | starting from {currentPos}");
             }
 
-            // Get walkable neighbors
-            List<Vector2Int> allWalkableNeighbors = GetWalkableNeighbors(currentPos);
+            // Convert visited list to HashSet for faster lookups
+            HashSet<Vector2Int> visitedSet = new HashSet<Vector2Int>(fascinatedVisitedTiles);
 
-            if (allWalkableNeighbors.Count == 0)
+            // Handle backtracking mode
+            if (isBacktracking)
             {
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK TRULY STUCK | pos={currentPos} | no walkable neighbors at all");
-                return; // Truly stuck with no walkable neighbors
-            }
+                Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACKING | currentPos={currentPos} | visitedCount={fascinatedVisitedTiles.Count}");
 
-            // Identify the previous tile (to prefer not going back immediately)
-            // currentPos is at currentPathIndex - 1, so previous is at currentPathIndex - 2
-            Vector2Int previousTile = Vector2Int.zero;
-            bool hasPrevious = false;
-            if (currentPathIndex > 1)
-            {
-                previousTile = path[currentPathIndex - 2];
-                hasPrevious = true;
-            }
-
-            // Split neighbors into categories:
-            // 1. Forward options: not traversed, not previous tile
-            // 2. Backtrack options: traversed, not previous tile
-            // 3. Immediate backtrack: the previous tile itself
-            List<Vector2Int> forwardOptions = new List<Vector2Int>();
-            List<Vector2Int> backtrackOptions = new List<Vector2Int>();
-            Vector2Int? immediateBacktrack = null;
-
-            foreach (var neighbor in allWalkableNeighbors)
-            {
-                if (hasPrevious && neighbor == previousTile)
+                // Traverse visited list backwards to find a tile with unvisited neighbors
+                for (int i = fascinatedVisitedTiles.Count - 1; i >= 0; i--)
                 {
-                    immediateBacktrack = neighbor;
-                }
-                else if (traversedTiles.Contains(neighbor))
-                {
-                    backtrackOptions.Add(neighbor);
-                }
-                else
-                {
-                    forwardOptions.Add(neighbor);
-                }
-            }
+                    Vector2Int checkPos = fascinatedVisitedTiles[i];
+                    List<Vector2Int> neighbors = GetWalkableNeighbors(checkPos);
+                    List<Vector2Int> unvisitedNeighbors = neighbors.FindAll(n => !visitedSet.Contains(n));
 
-            // Choose which set of options to use, in order of preference
-            List<Vector2Int> walkableNeighbors;
-            if (forwardOptions.Count > 0)
-            {
-                // Best case: we have forward options (new unexplored tiles)
-                walkableNeighbors = forwardOptions;
-            }
-            else if (backtrackOptions.Count > 0)
-            {
-                // Second choice: backtrack to an earlier position (but not immediate previous)
-                // This can happen when all neighbors are traversed
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK BACKTRACK | pos={currentPos} | using {backtrackOptions.Count} backtrack options");
-                walkableNeighbors = backtrackOptions;
-            }
-            else if (immediateBacktrack.HasValue)
-            {
-                // Last resort: go back to the tile we just came from (dead end detected)
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END | pos={currentPos} | marking as dead end to avoid in future");
+                    if (unvisitedNeighbors.Count > 0)
+                    {
+                        // Found a tile with unvisited neighbors!
+                        Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK FOUND | pos={checkPos} | unvisitedOptions={unvisitedNeighbors.Count}");
 
-                // Mark this position as a dead end and enter post-dead-end mode
-                avoidedDeadEnds.Add(currentPos);
-                hasEncounteredDeadEnd = true;
+                        // Build path back to this position
+                        if (checkPos != currentPos)
+                        {
+                            // Need to backtrack to this position first
+                            int currentIndex = fascinatedVisitedTiles.IndexOf(currentPos);
+                            int targetIndex = i;
 
-                walkableNeighbors = new List<Vector2Int> { immediateBacktrack.Value };
-            }
-            else
-            {
-                // Should never reach here if allWalkableNeighbors.Count > 0
-                Debug.LogError($"[{gameObject.name}] FASCINATED WALK ERROR | unexpected state at pos={currentPos}");
+                            if (currentIndex > targetIndex)
+                            {
+                                // Add backtrack path
+                                for (int j = currentIndex - 1; j >= targetIndex; j--)
+                                {
+                                    path.Add(fascinatedVisitedTiles[j]);
+                                }
+                            }
+                        }
+
+                        // Pick a random unvisited neighbor
+                        Vector2Int chosenTile = unvisitedNeighbors[Random.Range(0, unvisitedNeighbors.Count)];
+                        path.Add(chosenTile);
+                        fascinatedVisitedTiles.Add(chosenTile);
+
+                        isBacktracking = false; // Exit backtracking mode
+                        Debug.Log($"[{gameObject.name}] FASCINATED BACKTRACK COMPLETE | resuming from {checkPos} to {chosenTile}");
+                        return;
+                    }
+                }
+
+                // If we get here, we've exhausted all options - clear fascination
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK EXHAUSTED | no more paths to explore");
                 return;
             }
 
-            // Determine current direction (if we have a previous tile)
-            Vector2Int currentDirection = Vector2Int.zero;
-            if (hasPrevious)
-            {
-                currentDirection = currentPos - previousTile;
-            }
+            // Normal random walk mode: get unvisited neighbors
+            List<Vector2Int> allNeighbors = GetWalkableNeighbors(currentPos);
+            List<Vector2Int> unvisited = allNeighbors.FindAll(n => !visitedSet.Contains(n));
 
-            // Check if we're at an intersection (2+ forward options)
-            bool isIntersection = walkableNeighbors.Count >= 2;
-
-            // Pick next tile
-            Vector2Int nextTile;
-            if (isIntersection)
+            if (unvisited.Count > 0)
             {
-                // At intersection: pick a random forward option
-                nextTile = walkableNeighbors[Random.Range(0, walkableNeighbors.Count)];
-                Debug.Log($"[{gameObject.name}] FASCINATED INTERSECTION | pos={currentPos} | options={walkableNeighbors.Count} | picked={nextTile}");
-            }
-            else if (walkableNeighbors.Count == 1)
-            {
-                // Only one way forward: continue straight
-                nextTile = walkableNeighbors[0];
+                // Randomly choose among unvisited neighbors
+                Vector2Int chosen = unvisited[Random.Range(0, unvisited.Count)];
+                path.Add(chosen);
+                fascinatedVisitedTiles.Add(chosen);
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK | from={currentPos} to={chosen} | unvisitedOptions={unvisited.Count} | visitedCount={fascinatedVisitedTiles.Count}");
             }
             else
             {
-                return; // Should not happen
+                // Dead end reached - enter backtracking mode
+                Debug.Log($"[{gameObject.name}] FASCINATED DEAD END | pos={currentPos} | entering backtrack mode");
+                isBacktracking = true;
+                HandleFascinatedRandomWalk(); // Recursively call to start backtracking immediately
             }
-
-            // Build a straight path until the next intersection
-            List<Vector2Int> straightPath = BuildStraightPathToIntersection(currentPos, nextTile, traversedTiles);
-
-            if (straightPath.Count == 0)
-            {
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK FAILED | from={currentPos} toward={nextTile}");
-                return;
-            }
-
-            // Extend the current path
-            foreach (var waypoint in straightPath)
-            {
-                path.Add(waypoint);
-            }
-
-            Debug.Log($"[{gameObject.name}] FASCINATED WALK EXTENDED | added={straightPath.Count} tiles | toward={nextTile} | newPathLength={path.Count}");
-        }
-
-        /// <summary>
-        /// Builds a straight path segment from current position until reaching an intersection or dead end.
-        /// Follows the chosen direction without turning until forced to by maze geometry.
-        /// Prevents backtracking to any previously traversed tiles (except the first tile which was explicitly chosen).
-        /// </summary>
-        private List<Vector2Int> BuildStraightPathToIntersection(Vector2Int currentPos, Vector2Int nextPos, HashSet<Vector2Int> traversedTiles)
-        {
-            List<Vector2Int> straightPath = new List<Vector2Int>();
-
-            Vector2Int previousPos = currentPos;
-            Vector2Int current = nextPos;
-
-            int safetyLimit = 100;
-            int iterations = 0;
-            bool isFirstTile = true; // Allow first tile even if traversed (it was explicitly chosen)
-
-            // Track tiles added in this straight path to avoid loops
-            HashSet<Vector2Int> straightPathSet = new HashSet<Vector2Int>();
-
-            while (iterations < safetyLimit)
-            {
-                if (!IsWalkable(current))
-                {
-                    break;
-                }
-
-                // Check if this tile was already traversed (would be backtracking)
-                // Allow the first tile even if traversed, since it was explicitly chosen (e.g., backtracking from dead end)
-                if (!isFirstTile && traversedTiles.Contains(current))
-                {
-                    Debug.Log($"[{gameObject.name}] FASCINATED STRAIGHT PATH BACKTRACK BLOCKED | tile={current} was already traversed");
-                    break;
-                }
-
-                // Check if we're creating a loop within this straight path
-                if (straightPathSet.Contains(current))
-                {
-                    Debug.Log($"[{gameObject.name}] FASCINATED STRAIGHT PATH LOOP BLOCKED | tile={current} already in straight path");
-                    break;
-                }
-
-                straightPath.Add(current);
-                straightPathSet.Add(current);
-                isFirstTile = false; // After first tile, enforce backtrack prevention
-
-                // Get neighbors for next step
-                List<Vector2Int> neighbors = GetWalkableNeighbors(current);
-                neighbors.Remove(previousPos); // Don't go immediately backward
-
-                // Remove any neighbors that would cause backtracking
-                neighbors.RemoveAll(n => traversedTiles.Contains(n));
-
-                // Also avoid loops within this straight path
-                neighbors.RemoveAll(n => straightPathSet.Contains(n));
-
-                if (neighbors.Count == 0)
-                {
-                    // Dead end or all neighbors would backtrack - stop here
-                    Debug.Log($"[{gameObject.name}] FASCINATED STRAIGHT PATH ENDED | no forward neighbors (all would backtrack)");
-                    break;
-                }
-                else if (neighbors.Count == 1)
-                {
-                    // Only one way forward - continue straight
-                    previousPos = current;
-                    current = neighbors[0];
-                }
-                else
-                {
-                    // Intersection reached - stop here so we can make a new decision
-                    // The intersection tile is already added to the path
-                    break;
-                }
-
-                iterations++;
-            }
-
-            return straightPath;
         }
 
         #endregion
