@@ -1025,41 +1025,71 @@ namespace FaeMaze.Visitors
             }
 
             // Get walkable neighbors
-            List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
+            List<Vector2Int> allWalkableNeighbors = GetWalkableNeighbors(currentPos);
 
-            // Exclude the tile we just came from (avoid immediate backtracking)
+            if (allWalkableNeighbors.Count == 0)
+            {
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK TRULY STUCK | pos={currentPos} | no walkable neighbors at all");
+                return; // Truly stuck with no walkable neighbors
+            }
+
+            // Identify the previous tile (to prefer not going back immediately)
             Vector2Int previousTile = Vector2Int.zero;
             bool hasPrevious = false;
             if (currentPathIndex > 0)
             {
                 previousTile = path[currentPathIndex - 1];
-                walkableNeighbors.Remove(previousTile);
                 hasPrevious = true;
             }
 
-            // Exclude all previously traversed tiles to prevent any backtracking
-            int beforeFilter = walkableNeighbors.Count;
-            List<Vector2Int> backtrackOptions = new List<Vector2Int>(walkableNeighbors.Where(n => traversedTiles.Contains(n)));
-            walkableNeighbors.RemoveAll(n => traversedTiles.Contains(n));
-            if (walkableNeighbors.Count < beforeFilter)
-            {
-                Debug.Log($"[{gameObject.name}] FASCINATED WALK FILTERED | removed {beforeFilter - walkableNeighbors.Count} backtracking options");
-            }
+            // Split neighbors into categories:
+            // 1. Forward options: not traversed, not previous tile
+            // 2. Backtrack options: traversed, not previous tile
+            // 3. Immediate backtrack: the previous tile itself
+            List<Vector2Int> forwardOptions = new List<Vector2Int>();
+            List<Vector2Int> backtrackOptions = new List<Vector2Int>();
+            Vector2Int? immediateBacktrack = null;
 
-            if (walkableNeighbors.Count == 0)
+            foreach (var neighbor in allWalkableNeighbors)
             {
-                // Dead end - all neighbors would backtrack
-                // Allow backtracking as a last resort to escape the dead end
-                if (backtrackOptions.Count > 0)
+                if (hasPrevious && neighbor == previousTile)
                 {
-                    Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END BACKTRACK | pos={currentPos} | allowing backtrack as only option");
-                    walkableNeighbors = backtrackOptions;
+                    immediateBacktrack = neighbor;
+                }
+                else if (traversedTiles.Contains(neighbor))
+                {
+                    backtrackOptions.Add(neighbor);
                 }
                 else
                 {
-                    Debug.Log($"[{gameObject.name}] FASCINATED WALK TRULY STUCK | pos={currentPos} | no walkable neighbors at all");
-                    return; // Truly stuck with no walkable neighbors
+                    forwardOptions.Add(neighbor);
                 }
+            }
+
+            // Choose which set of options to use, in order of preference
+            List<Vector2Int> walkableNeighbors;
+            if (forwardOptions.Count > 0)
+            {
+                // Best case: we have forward options
+                walkableNeighbors = forwardOptions;
+            }
+            else if (backtrackOptions.Count > 0)
+            {
+                // Second choice: backtrack to an earlier position (but not immediate previous)
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK DEAD END BACKTRACK | pos={currentPos} | using {backtrackOptions.Count} backtrack options");
+                walkableNeighbors = backtrackOptions;
+            }
+            else if (immediateBacktrack.HasValue)
+            {
+                // Last resort: go back to the tile we just came from
+                Debug.Log($"[{gameObject.name}] FASCINATED WALK IMMEDIATE BACKTRACK | pos={currentPos} | only option is previous tile");
+                walkableNeighbors = new List<Vector2Int> { immediateBacktrack.Value };
+            }
+            else
+            {
+                // Should never reach here if allWalkableNeighbors.Count > 0
+                Debug.LogError($"[{gameObject.name}] FASCINATED WALK ERROR | unexpected state at pos={currentPos}");
+                return;
             }
 
             // Determine current direction (if we have a previous tile)
