@@ -396,17 +396,6 @@ namespace FaeMaze.Visitors
                 transform.position = newPosition;
             }
 
-            // Track grid position changes to maintain permanent visited tiles history
-            if (visitedGridTiles != null && mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                Vector2Int currentGridPos = new Vector2Int(currentX, currentY);
-                if (currentGridPos != lastRecordedGridPosition)
-                {
-                    visitedGridTiles.Add(currentGridPos);
-                    lastRecordedGridPosition = currentGridPos;
-                }
-            }
-
             // Check if we've reached the waypoint
             float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
             if (distanceToTarget < waypointReachedDistance)
@@ -694,8 +683,8 @@ namespace FaeMaze.Visitors
         {
             int stepsTarget = Mathf.Clamp(Random.Range(minConfusionDistance, maxConfusionDistance + 1), minConfusionDistance, maxConfusionDistance);
 
-            // Use permanent visited tiles tracking to prevent backtracking
-            HashSet<Vector2Int> traversedTiles = visitedGridTiles ?? GetTraversedTiles();
+            // Use recently reached tiles (last 10) to prevent short-term backtracking
+            HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>(recentlyReachedTiles ?? new Queue<Vector2Int>());
 
             List<Vector2Int> confusionPath = BuildConfusionPath(currentPos, detourStart, stepsTarget, traversedTiles);
 
@@ -910,8 +899,8 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = path[currentPathIndex];
 
-            // Use permanent visited tiles tracking to prevent backtracking
-            HashSet<Vector2Int> traversedTiles = visitedGridTiles ?? GetTraversedTiles();
+            // Use recently reached tiles (last 10) to prevent short-term backtracking
+            HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>(recentlyReachedTiles ?? new Queue<Vector2Int>());
 
             // Get walkable neighbors
             List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
