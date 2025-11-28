@@ -1128,49 +1128,81 @@ namespace FaeMaze.Visitors
             }
 
             // Find the starting waypoint in the new path that preserves forward progress
-            // Strategy: Use the visitor's current grid tile to anchor the new path, preventing backtracking
+            // Strategy: anchor on the active target waypoint (what we're actually walking toward),
+            // falling back to the current grid position only if the target tile is no longer valid.
             int startIndex = 0;
             if (newPath.Count > 1)
             {
-                // First, try to find the visitor's current grid tile in the new path
-                int currentGridIndex = -1;
-                for (int i = 0; i < newPath.Count; i++)
+                // Prefer anchoring to the waypoint we're currently moving toward; rounding can place us
+                // in the previous tile, so anchoring to the target avoids snapping backward.
+                Vector2Int anchorTile = path[Mathf.Clamp(currentPathIndex, 0, path.Count - 1)];
+
+                // Build a prioritized list of anchor candidates
+                List<(Vector2Int tile, string source)> anchorCandidates = new List<(Vector2Int, string)>
                 {
-                    if (newPath[i] == currentPos)
+                    (anchorTile, "activeTarget")
+                };
+
+                if (currentPos != anchorTile)
+                {
+                    anchorCandidates.Add((currentPos, "worldGrid"));
+                }
+
+                if (currentPathIndex > 0)
+                {
+                    anchorCandidates.Add((path[currentPathIndex - 1], "previousTile"));
+                }
+
+                int anchorIndex = -1;
+                string anchorSource = "";
+                foreach (var candidate in anchorCandidates)
+                {
+                    for (int i = 0; i < newPath.Count; i++)
                     {
-                        currentGridIndex = i;
+                        if (newPath[i] == candidate.tile)
+                        {
+                            anchorIndex = i;
+                            anchorSource = candidate.source;
+                            break;
+                        }
+                    }
+
+                    if (anchorIndex >= 0)
+                    {
                         break;
                     }
                 }
 
-                if (currentGridIndex >= 0)
+                if (anchorIndex >= 0)
                 {
-                    // Found current tile in new path - start from there
-                    startIndex = currentGridIndex;
+                    startIndex = anchorIndex;
 
-                    // Move the anchor forward as soon as we've started traveling toward the next tile
-                    Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
-
+                    // Move the anchor forward as soon as we've started traveling toward the next tile (based on movement direction
+                    // rather than nearest grid center to avoid oscillation when straddling tile boundaries).
                     if (startIndex < newPath.Count - 1)
                     {
+                        Vector3 anchorWorldPos = mazeGridBehaviour.GridToWorld(newPath[startIndex].x, newPath[startIndex].y);
                         Vector3 nextTileWorldPos = mazeGridBehaviour.GridToWorld(newPath[startIndex + 1].x, newPath[startIndex + 1].y);
-                        Vector3 toNextFromCurrent = (nextTileWorldPos - currentTileWorldPos).normalized;
-                        Vector3 displacementFromCurrent = transform.position - currentTileWorldPos;
+                        Vector3 toNext = (nextTileWorldPos - anchorWorldPos).normalized;
 
-                        // If we've moved any distance in the direction of the next tile, advance the anchor immediately.
-                        // This prevents "closest tile" snapping that can drag the anchor backward when rounding grid positions.
-                        if (displacementFromCurrent.sqrMagnitude > 0f && Vector3.Dot(displacementFromCurrent.normalized, toNextFromCurrent) > 0f)
+                        Vector3 movementDirection = Vector3.zero;
+                        if (path != null && currentPathIndex < path.Count)
+                        {
+                            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);
+                            movementDirection = (targetWorldPos - transform.position).normalized;
+                        }
+
+                        if (movementDirection != Vector3.zero && Vector3.Dot(movementDirection, toNext) > 0f)
                         {
                             startIndex++;
                         }
-                        else if (displacementFromCurrent.magnitude < waypointReachedDistance)
+                        else if (Vector3.Distance(transform.position, anchorWorldPos) < waypointReachedDistance)
                         {
-                            // Alternatively, if we're effectively on the center of this tile, also advance
                             startIndex++;
                         }
                     }
 
-                    Debug.Log($"[{gameObject.name}] PATH RECALC | current grid tile found in new path at index {currentGridIndex} | startIndex={startIndex}");
+                    Debug.Log($"[{gameObject.name}] PATH RECALC | anchor found via {anchorSource} at index {anchorIndex} | startIndex={startIndex}");
                 }
                 else
                 {
