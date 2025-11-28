@@ -1175,34 +1175,14 @@ namespace FaeMaze.Visitors
 
                 if (anchorIndex >= 0)
                 {
-                    startIndex = anchorIndex;
+                    // Keep the anchored tile unless it has already been traversed (or comes from the previous-tile fallback).
+                    bool anchorVisited = recentTiles.Contains(newPath[anchorIndex])
+                                         || currentPos == newPath[anchorIndex]
+                                         || anchorSource == "previousTile";
 
-                    // Move the anchor forward as soon as we've started traveling toward the next tile (based on movement direction
-                    // rather than nearest grid center to avoid oscillation when straddling tile boundaries).
-                    if (startIndex < newPath.Count - 1)
-                    {
-                        Vector3 anchorWorldPos = mazeGridBehaviour.GridToWorld(newPath[startIndex].x, newPath[startIndex].y);
-                        Vector3 nextTileWorldPos = mazeGridBehaviour.GridToWorld(newPath[startIndex + 1].x, newPath[startIndex + 1].y);
-                        Vector3 toNext = (nextTileWorldPos - anchorWorldPos).normalized;
+                    startIndex = anchorVisited ? Mathf.Min(anchorIndex + 1, newPath.Count - 1) : anchorIndex;
 
-                        Vector3 movementDirection = Vector3.zero;
-                        if (path != null && currentPathIndex < path.Count)
-                        {
-                            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);
-                            movementDirection = (targetWorldPos - transform.position).normalized;
-                        }
-
-                        if (movementDirection != Vector3.zero && Vector3.Dot(movementDirection, toNext) > 0f)
-                        {
-                            startIndex++;
-                        }
-                        else if (Vector3.Distance(transform.position, anchorWorldPos) < waypointReachedDistance)
-                        {
-                            startIndex++;
-                        }
-                    }
-
-                    Debug.Log($"[{gameObject.name}] PATH RECALC | anchor found via {anchorSource} at index {anchorIndex} | startIndex={startIndex}");
+                    Debug.Log($"[{gameObject.name}] PATH RECALC | anchor found via {anchorSource} at index {anchorIndex} | startIndex={startIndex} | anchorVisited={anchorVisited}");
                 }
                 else
                 {
