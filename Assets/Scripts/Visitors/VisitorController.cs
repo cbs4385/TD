@@ -675,13 +675,8 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Handle fascinated visitors who have reached the lantern
-            if (isFascinated && hasReachedLantern)
-            {
-                Debug.Log($"[{gameObject.name}] FASCINATED RANDOM WALK | wpIndex={currentPathIndex}/{path.Count}");
-                HandleFascinatedRandomWalk();
-                return;
-            }
+            // Fascinated visitors are handled by timer expiration in RecalculatePath()
+            // No random walk behavior needed
 
             if (!confusionEnabled || currentPathIndex >= path.Count - 1)
             {
