@@ -29,12 +29,20 @@ namespace FaeMaze.UI
         private Button fairyRingButton;
 
         [SerializeField]
+        [Tooltip("Button for selecting WillowTheWisp")]
+        private Button willowWispButton;
+
+        [SerializeField]
         [Tooltip("Text showing lantern essence cost")]
         private TextMeshProUGUI lanternCostText;
 
         [SerializeField]
         [Tooltip("Text showing fairy ring essence cost")]
         private TextMeshProUGUI fairyRingCostText;
+
+        [SerializeField]
+        [Tooltip("Text showing willow wisp essence cost")]
+        private TextMeshProUGUI willowWispCostText;
 
         [Header("Tooltip")]
         [SerializeField]
@@ -136,6 +144,15 @@ namespace FaeMaze.UI
                 Debug.LogWarning("PlacementUIController: FairyRing button not assigned!");
             }
 
+            if (willowWispButton != null)
+            {
+                willowWispButton.onClick.AddListener(OnWillowWispButtonClicked);
+            }
+            else
+            {
+                Debug.LogWarning("PlacementUIController: WillowWisp button not assigned!");
+            }
+
             // Refresh cost labels from placeable items data
             RefreshCostsFromPlaceableItems();
 
@@ -179,6 +196,13 @@ namespace FaeMaze.UI
             {
                 fairyRingButton.interactable = essence >= ringItem.essenceCost;
             }
+
+            // Update willow wisp button
+            var wispItem = propPlacementController?.GetItemById("WillowTheWisp");
+            if (wispItem != null && willowWispButton != null)
+            {
+                willowWispButton.interactable = essence >= wispItem.essenceCost;
+            }
         }
 
         private void OnDestroy()
@@ -192,6 +216,11 @@ namespace FaeMaze.UI
             if (fairyRingButton != null)
             {
                 fairyRingButton.onClick.RemoveListener(OnFairyRingButtonClicked);
+            }
+
+            if (willowWispButton != null)
+            {
+                willowWispButton.onClick.RemoveListener(OnWillowWispButtonClicked);
             }
         }
 
@@ -222,6 +251,19 @@ namespace FaeMaze.UI
                 propPlacementController.SelectItemById("FairyRing");
                 UpdateSelectionVisual("FairyRing");
                 Debug.Log("PlacementUIController: Selected FairyRing");
+            }
+        }
+
+        /// <summary>
+        /// Called when the WillowWisp button is clicked.
+        /// </summary>
+        private void OnWillowWispButtonClicked()
+        {
+            if (propPlacementController != null)
+            {
+                propPlacementController.SelectItemById("WillowTheWisp");
+                UpdateSelectionVisual("WillowTheWisp");
+                Debug.Log("PlacementUIController: Selected WillowTheWisp");
             }
         }
 
@@ -262,6 +304,13 @@ namespace FaeMaze.UI
             yPos -= 35f;
 
             fairyRingCostText = CreateLabel(buildPanel.transform, "15 Essence", yPos);
+            yPos -= 60f;
+
+            // Willow Wisp button
+            willowWispButton = CreateButton(buildPanel.transform, "Willow-the-Wisp", yPos);
+            yPos -= 35f;
+
+            willowWispCostText = CreateLabel(buildPanel.transform, "50 Essence", yPos);
 
             Debug.Log("PlacementUIController: Auto-created Build Panel UI");
         }
@@ -300,7 +349,7 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(0f, 0f);
             rect.pivot = new Vector2(0f, 0f);
             rect.anchoredPosition = new Vector2(10f, 10f);
-            rect.sizeDelta = new Vector2(200f, 280f);
+            rect.sizeDelta = new Vector2(200f, 370f); // Increased height for third button
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
@@ -424,6 +473,15 @@ namespace FaeMaze.UI
                 ringColors.highlightedColor = (id == "FairyRing") ? selectedColor : deselectedColor;
                 fairyRingButton.colors = ringColors;
             }
+
+            // Update willow wisp button
+            if (willowWispButton != null)
+            {
+                var wispColors = willowWispButton.colors;
+                wispColors.normalColor = (id == "WillowTheWisp") ? selectedColor : deselectedColor;
+                wispColors.highlightedColor = (id == "WillowTheWisp") ? selectedColor : deselectedColor;
+                willowWispButton.colors = wispColors;
+            }
         }
 
         /// <summary>
@@ -457,6 +515,17 @@ namespace FaeMaze.UI
             else if (fairyRingCostText != null)
             {
                 fairyRingCostText.text = "? Essence";
+            }
+
+            // Get willow wisp item and update cost
+            var wispItem = propPlacementController.GetItemById("WillowTheWisp");
+            if (wispItem != null && willowWispCostText != null)
+            {
+                willowWispCostText.text = $"{wispItem.essenceCost} Essence";
+            }
+            else if (willowWispCostText != null)
+            {
+                willowWispCostText.text = "? Essence";
             }
         }
 

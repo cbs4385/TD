@@ -579,6 +579,16 @@ namespace FaeMaze.Systems
             return spawnPoints.Count;
         }
 
+        /// <summary>
+        /// Checks if a given grid position is a spawn point (exit).
+        /// </summary>
+        /// <param name="position">Grid position to check</param>
+        /// <returns>True if the position is a spawn point, false otherwise</returns>
+        public bool IsSpawnPoint(Vector2Int position)
+        {
+            return spawnPoints.ContainsValue(position);
+        }
+
         #endregion
     }
 }

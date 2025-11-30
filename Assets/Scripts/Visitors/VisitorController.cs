@@ -530,6 +530,19 @@ namespace FaeMaze.Visitors
                     return;
                 }
 
+                // Check if fascinated visitor wandered onto ANY spawn point (exit)
+                // This handles the case where there are multiple exits and the visitor
+                // wanders onto a different exit than their original destination
+                if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2)
+                {
+                    if (mazeGridBehaviour.IsSpawnPoint(currentWaypoint))
+                    {
+                        Debug.Log($"[{gameObject.name}] FASCINATED VISITOR REACHED EXIT | pos={currentWaypoint} | despawning");
+                        ForceEscape();
+                        return;
+                    }
+                }
+
                 currentPathIndex++;
                 // Don't reset currentPathIndex - HandleFascinatedRandomWalk handles the case
                 // where currentPathIndex >= path.Count by using path[path.Count - 1] as current position
