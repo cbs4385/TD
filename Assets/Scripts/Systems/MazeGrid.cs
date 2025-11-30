@@ -223,6 +223,21 @@ namespace FaeMaze.Systems
         /// <returns>HashSet of reachable grid positions</returns>
         public HashSet<Vector2Int> FloodFillReachable(int originX, int originY, int maxSteps)
         {
+            // Use the overload with radius = maxSteps for backward compatibility
+            return FloodFillReachable(originX, originY, maxSteps, maxSteps);
+        }
+
+        /// <summary>
+        /// Performs a flood-fill BFS to find all walkable tiles reachable from an origin.
+        /// Stops when either the radius or step limit is reached.
+        /// </summary>
+        /// <param name="originX">Starting X coordinate</param>
+        /// <param name="originY">Starting Y coordinate</param>
+        /// <param name="radius">Maximum Manhattan distance from origin</param>
+        /// <param name="maxFloodFillSteps">Maximum number of BFS steps</param>
+        /// <returns>HashSet of reachable grid positions</returns>
+        public HashSet<Vector2Int> FloodFillReachable(int originX, int originY, int radius, int maxFloodFillSteps)
+        {
             HashSet<Vector2Int> reachable = new HashSet<Vector2Int>();
 
             // Validate origin
@@ -239,8 +254,8 @@ namespace FaeMaze.Systems
                 return reachable;
             }
 
-            // BFS queue: (position, distance)
-            Queue<(Vector2Int pos, int dist)> queue = new Queue<(Vector2Int, int)>();
+            // BFS queue: (position, step_count)
+            Queue<(Vector2Int pos, int steps)> queue = new Queue<(Vector2Int, int)>();
             HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
 
             Vector2Int origin = new Vector2Int(originX, originY);
@@ -258,11 +273,11 @@ namespace FaeMaze.Systems
 
             while (queue.Count > 0)
             {
-                var (currentPos, currentDist) = queue.Dequeue();
+                var (currentPos, currentSteps) = queue.Dequeue();
                 reachable.Add(currentPos);
 
-                // Don't explore beyond max steps
-                if (currentDist >= maxSteps)
+                // Don't explore beyond max flood-fill steps
+                if (currentSteps >= maxFloodFillSteps)
                 {
                     continue;
                 }
@@ -285,9 +300,14 @@ namespace FaeMaze.Systems
                     if (neighborNode == null || !neighborNode.walkable)
                         continue;
 
+                    // Check Manhattan distance from origin (stop when radius is exceeded)
+                    int manhattanDist = Mathf.Abs(neighborPos.x - originX) + Mathf.Abs(neighborPos.y - originY);
+                    if (manhattanDist > radius)
+                        continue;
+
                     // Add to queue
                     visited.Add(neighborPos);
-                    queue.Enqueue((neighborPos, currentDist + 1));
+                    queue.Enqueue((neighborPos, currentSteps + 1));
                 }
             }
 

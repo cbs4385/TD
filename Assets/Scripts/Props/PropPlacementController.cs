@@ -33,7 +33,7 @@ namespace FaeMaze.Props
         [System.Serializable]
         public class PlaceableItem
         {
-            [Tooltip("Unique identifier for this item (e.g., 'FaeLantern', 'FairyRing')")]
+            [Tooltip("Unique identifier for this item (e.g., 'fae_lantern', 'fairy_ring')")]
             public string id;
 
             [Tooltip("Display name shown in UI")]
@@ -48,6 +48,16 @@ namespace FaeMaze.Props
             [TextArea]
             [Tooltip("Description of the item's effect (shown in tooltip)")]
             public string description;
+
+            [Header("Placement Constraints")]
+            [Tooltip("Maximum number of this item that can be placed per maze (0 = unlimited)")]
+            public int maxPerMaze = 0;
+
+            [Tooltip("Minimum distance in tiles between instances of this item (0 = no restriction)")]
+            public int minDistanceBetweenProps = 0;
+
+            [Tooltip("If true, only allow placement on Path/Junction/DeadEnd tiles")]
+            public bool requiresPathTile = false;
 
             [Header("Preview Settings")]
             [Tooltip("Sprite to use for preview (optional; falls back to prefab's sprite)")]
@@ -614,6 +624,11 @@ namespace FaeMaze.Props
         /// </summary>
         private bool IsTileValidForPlacement(Vector2Int gridPos)
         {
+            if (currentSelection == null || mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return false;
+            }
+
             // Check if tile is occupied
             if (occupiedTiles.ContainsKey(gridPos))
             {
@@ -621,18 +636,114 @@ namespace FaeMaze.Props
             }
 
             // Check if tile is walkable
-            if (mazeGridBehaviour.Grid == null)
-            {
-                return false;
-            }
-
             MazeGrid.MazeNode node = mazeGridBehaviour.Grid.GetNode(gridPos.x, gridPos.y);
             if (node == null || !node.walkable)
             {
                 return false;
             }
 
+            // Check max per maze constraint
+            if (currentSelection.maxPerMaze > 0)
+            {
+                int currentCount = CountPlacedItemsOfType(currentSelection.id);
+                if (currentCount >= currentSelection.maxPerMaze)
+                {
+                    Debug.Log($"PropPlacementController: Max per maze limit reached for '{currentSelection.id}' ({currentCount}/{currentSelection.maxPerMaze})");
+                    return false;
+                }
+            }
+
+            // Check minimum distance constraint
+            if (currentSelection.minDistanceBetweenProps > 0)
+            {
+                if (!IsMinDistanceSatisfied(gridPos, currentSelection.id, currentSelection.minDistanceBetweenProps))
+                {
+                    return false;
+                }
+            }
+
+            // Check tile type constraint (Path/Junction/DeadEnd)
+            if (currentSelection.requiresPathTile)
+            {
+                if (!IsPathJunctionOrDeadEnd(gridPos))
+                {
+                    return false;
+                }
+            }
+
             return true;
+        }
+
+        /// <summary>
+        /// Counts how many items of a specific type have been placed.
+        /// </summary>
+        private int CountPlacedItemsOfType(string itemId)
+        {
+            int count = 0;
+            foreach (var kvp in occupiedTiles)
+            {
+                if (kvp.Value != null && kvp.Value.name.StartsWith(itemId))
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Checks if the minimum distance constraint is satisfied.
+        /// </summary>
+        private bool IsMinDistanceSatisfied(Vector2Int gridPos, string itemId, int minDistance)
+        {
+            foreach (var kvp in occupiedTiles)
+            {
+                // Only check distance to same item type
+                if (kvp.Value != null && kvp.Value.name.StartsWith(itemId))
+                {
+                    int manhattanDist = Mathf.Abs(gridPos.x - kvp.Key.x) + Mathf.Abs(gridPos.y - kvp.Key.y);
+                    if (manhattanDist < minDistance)
+                    {
+                        Debug.Log($"PropPlacementController: Too close to another {itemId} (distance={manhattanDist}, min={minDistance})");
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if a tile is a Path, Junction, or DeadEnd.
+        /// </summary>
+        private bool IsPathJunctionOrDeadEnd(Vector2Int gridPos)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return false;
+            }
+
+            // Count walkable neighbors to determine tile type
+            int walkableNeighbors = 0;
+            Vector2Int[] directions = new Vector2Int[]
+            {
+                new Vector2Int(0, 1),   // Up
+                new Vector2Int(0, -1),  // Down
+                new Vector2Int(1, 0),   // Right
+                new Vector2Int(-1, 0)   // Left
+            };
+
+            foreach (var dir in directions)
+            {
+                Vector2Int neighborPos = gridPos + dir;
+                var neighborNode = mazeGridBehaviour.Grid.GetNode(neighborPos.x, neighborPos.y);
+                if (neighborNode != null && neighborNode.walkable)
+                {
+                    walkableNeighbors++;
+                }
+            }
+
+            // DeadEnd: 1 neighbor, Path: 2 neighbors, Junction: 3+ neighbors
+            // Reject isolated tiles (0 neighbors) and open areas (not valid path tiles)
+            return walkableNeighbors >= 1 && walkableNeighbors <= 4;
         }
 
         /// <summary>

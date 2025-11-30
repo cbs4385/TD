@@ -133,6 +133,9 @@ namespace FaeMaze.Visitors
         private float fascinationTimer;
         private FaeMaze.Props.FaeLantern currentFaeLantern;
 
+        // Cooldown tracking per lantern (prevents immediate re-triggering)
+        private Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
+
         // Track last 10 tiles reached to prevent short-term backtracking
         private Queue<Vector2Int> recentlyReachedTiles;
         private const int MAX_RECENT_TILES = 10;
@@ -174,6 +177,7 @@ namespace FaeMaze.Visitors
             isConfused = confusionEnabled;
             recentlyReachedTiles = new Queue<Vector2Int>();
             fascinatedPathNodes = new List<FascinatedPathNode>();
+            lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
             CreateVisualSprite();
         }
 
@@ -245,6 +249,24 @@ namespace FaeMaze.Visitors
 
         private void Update()
         {
+            // Update lantern cooldowns
+            if (lanternCooldowns != null && lanternCooldowns.Count > 0)
+            {
+                // Create a list of lanterns to update (avoid modifying during iteration)
+                List<FaeMaze.Props.FaeLantern> lanternsToUpdate = new List<FaeMaze.Props.FaeLantern>(lanternCooldowns.Keys);
+                foreach (var lantern in lanternsToUpdate)
+                {
+                    if (lantern != null)
+                    {
+                        lanternCooldowns[lantern] -= Time.deltaTime;
+                        if (lanternCooldowns[lantern] <= 0f)
+                        {
+                            lanternCooldowns.Remove(lantern);
+                        }
+                    }
+                }
+            }
+
             // Check for FaeLantern influence (grid-based detection)
             // Allow checking even when fascinated to handle multiple lanterns
             if (state == VisitorState.Walking)
@@ -641,12 +663,32 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Called when a visitor enters a FaeLantern's influence area.
         /// Abandons current path and paths to the lantern.
+        /// Applies cooldown and proc chance checks per spec.
         /// </summary>
         private void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern)
         {
             // If already fascinated by this same lantern, ignore
             if (isFascinated && currentFaeLantern == lantern && fascinationLanternPosition == lantern.GridPosition)
                 return;
+
+            // Check cooldown (prevents immediate re-triggering)
+            if (lanternCooldowns.ContainsKey(lantern) && lanternCooldowns[lantern] > 0f)
+            {
+                Debug.Log($"[{gameObject.name}] LANTERN COOLDOWN ACTIVE | remaining={lanternCooldowns[lantern]:F2}s");
+                return;
+            }
+
+            // Check proc chance (probability of fascination)
+            float roll = Random.value;
+            if (roll > lantern.ProcChance)
+            {
+                Debug.Log($"[{gameObject.name}] FASCINATION PROC FAILED | roll={roll:F3} > procChance={lantern.ProcChance}");
+                // Set cooldown even on failed proc to prevent spam checks
+                lanternCooldowns[lantern] = lantern.CooldownSec;
+                return;
+            }
+
+            Debug.Log($"[{gameObject.name}] FASCINATION PROC SUCCESS | roll={roll:F3} <= procChance={lantern.ProcChance}");
 
             // Allow re-fascination by a different lantern
             isFascinated = true;
@@ -655,10 +697,13 @@ namespace FaeMaze.Visitors
             hasReachedLantern = false;
             fascinationTimer = 0f; // Will be set when reaching lantern
 
+            // Set cooldown for this lantern
+            lanternCooldowns[lantern] = lantern.CooldownSec;
+
             // Clear path nodes from previous fascination
             fascinatedPathNodes.Clear();
 
-            Debug.Log($"[{gameObject.name}] FAE INFLUENCE CAPTURED | lanternPos={fascinationLanternPosition}");
+            Debug.Log($"[{gameObject.name}] FAE INFLUENCE CAPTURED | lanternPos={fascinationLanternPosition} | cooldown={lantern.CooldownSec}s");
 
             // Abandon current path
             path = null;

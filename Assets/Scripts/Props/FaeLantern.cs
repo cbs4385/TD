@@ -24,12 +24,29 @@ namespace FaeMaze.Props
 
         [Header("Influence Settings")]
         [SerializeField]
-        [Tooltip("Radius of influence in grid steps (tiles)")]
-        private int influenceRadius = 8;
+        [Tooltip("Radius of influence in grid tiles (Manhattan distance)")]
+        private int influenceRadius = 6;
+
+        [SerializeField]
+        [Tooltip("Maximum flood-fill steps for influence area calculation")]
+        private int maxFloodFillSteps = 24;
 
         [SerializeField]
         [Tooltip("Duration in seconds that visitor stands fascinated at the lantern")]
         private float fascinationDuration = 2f;
+
+        [SerializeField]
+        [Tooltip("Probability (0-1) that a visitor becomes fascinated when entering influence")]
+        [Range(0f, 1f)]
+        private float procChance = 1.0f;
+
+        [SerializeField]
+        [Tooltip("Cooldown in seconds before a visitor can be fascinated again")]
+        private float cooldownSec = 5.0f;
+
+        [SerializeField]
+        [Tooltip("Attraction delta applied to grid nodes within influence area")]
+        private float attractionDelta = 2.0f;
 
         [Header("Debug")]
         [SerializeField]
@@ -67,6 +84,12 @@ namespace FaeMaze.Props
 
         /// <summary>Gets the fascination duration in seconds</summary>
         public float FascinationDuration => fascinationDuration;
+
+        /// <summary>Gets the proc chance for fascination (0-1)</summary>
+        public float ProcChance => procChance;
+
+        /// <summary>Gets the cooldown in seconds before re-fascination</summary>
+        public float CooldownSec => cooldownSec;
 
         #endregion
 
@@ -117,6 +140,7 @@ namespace FaeMaze.Props
         /// <summary>
         /// Calculates the flood-fill influence area for this lantern.
         /// Only tiles reachable via walkable paths are included.
+        /// Applies attraction delta to all influenced nodes.
         /// </summary>
         private void CalculateInfluenceArea()
         {
@@ -129,10 +153,16 @@ namespace FaeMaze.Props
 
             _gridPosition = new Vector2Int(x, y);
 
-            // Use flood-fill to get reachable tiles
-            _influenceCells = _gridBehaviour.Grid.FloodFillReachable(x, y, influenceRadius);
+            // Use flood-fill to get reachable tiles (stops when either radius or step limit is reached)
+            _influenceCells = _gridBehaviour.Grid.FloodFillReachable(x, y, influenceRadius, maxFloodFillSteps);
 
-            Debug.Log($"FaeLantern at {_gridPosition}: Influence area calculated with {_influenceCells.Count} tiles (radius={influenceRadius})");
+            // Apply attraction delta to all influenced cells
+            foreach (var cell in _influenceCells)
+            {
+                _gridBehaviour.Grid.AddAttraction(cell.x, cell.y, attractionDelta);
+            }
+
+            Debug.Log($"FaeLantern at {_gridPosition}: Influence area calculated with {_influenceCells.Count} tiles (radius={influenceRadius}, maxSteps={maxFloodFillSteps}, attraction=+{attractionDelta})");
         }
 
         /// <summary>
@@ -143,6 +173,15 @@ namespace FaeMaze.Props
         public bool IsCellInInfluence(Vector2Int cell)
         {
             return _influenceCells != null && _influenceCells.Contains(cell);
+        }
+
+        /// <summary>
+        /// Gets the cached flood-filled influence area for visitor checks.
+        /// </summary>
+        /// <returns>Read-only collection of influenced grid cells</returns>
+        public IReadOnlyCollection<Vector2Int> GetInfluenceArea()
+        {
+            return _influenceCells ?? new HashSet<Vector2Int>();
         }
 
         #endregion
