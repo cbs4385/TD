@@ -95,8 +95,8 @@ namespace FaeMaze.Visitors
         private Color visitorColor = new Color(0.3f, 0.6f, 1f, 1f); // Light blue
 
         [SerializeField]
-        [Tooltip("Size of the visitor sprite")]
-        private float visitorSize = 2.4f;
+        [Tooltip("Desired world-space diameter (in Unity units) for procedural visitors")]
+        private float visitorSize = 1.1f;
 
         [SerializeField]
         [Tooltip("Pixels per unit for procedural visitor sprites (match imported visitor assets)")]
@@ -232,7 +232,17 @@ namespace FaeMaze.Visitors
             // Only override scale when generating a procedural sprite
             if (useProceduralSprite)
             {
-                transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+                float baseSpriteSize = spriteRenderer.sprite != null
+                    ? spriteRenderer.sprite.bounds.size.x
+                    : 1f;
+
+                if (baseSpriteSize <= 0f)
+                {
+                    baseSpriteSize = 1f;
+                }
+
+                float scale = visitorSize / baseSpriteSize;
+                transform.localScale = new Vector3(scale, scale, 1f);
             }
             else
             {
