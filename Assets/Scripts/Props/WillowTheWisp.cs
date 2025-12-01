@@ -103,6 +103,7 @@ namespace FaeMaze.Props
         private GameController gameController;
         private SpriteRenderer spriteRenderer;
         private Rigidbody2D rb;
+        private Animator animator;
         private Vector3 baseScale;
 
         // Influence area
@@ -124,6 +125,8 @@ namespace FaeMaze.Props
         // Target destination (Heart of the Maze)
         private Vector2Int heartGridPosition;
 
+        private const string DirectionParameter = "Direction";
+
         #endregion
 
         #region Properties
@@ -143,6 +146,7 @@ namespace FaeMaze.Props
             state = WispState.Wandering;
             SetupSpriteRenderer();
             SetupColliders();
+            animator = GetComponent<Animator>();
         }
 
         private void Start()
@@ -150,6 +154,11 @@ namespace FaeMaze.Props
             // Find references
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             gameController = GameController.Instance;
+
+            if (animator == null)
+            {
+                animator = GetComponent<Animator>();
+            }
 
             if (mazeGridBehaviour == null)
             {
@@ -543,6 +552,8 @@ namespace FaeMaze.Props
             Vector2Int targetGridPos = wanderPath[currentPathIndex];
             Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
 
+            UpdateAnimatorDirection(targetWorldPos - transform.position);
+
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
                 targetWorldPos,
@@ -611,6 +622,8 @@ namespace FaeMaze.Props
 
             // Calculate distance to target
             float distance = Vector3.Distance(transform.position, targetVisitor.transform.position);
+
+            UpdateAnimatorDirection(targetVisitor.transform.position - transform.position);
 
             // Check if close enough to capture
             if (distance <= captureDistance)
@@ -732,6 +745,8 @@ namespace FaeMaze.Props
             Vector2Int targetGridPos = wanderPath[currentPathIndex];
             Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
 
+            UpdateAnimatorDirection(targetWorldPos - transform.position);
+
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
                 targetWorldPos,
@@ -766,6 +781,28 @@ namespace FaeMaze.Props
 
             // Generate new random wander path
             GenerateRandomWanderPath();
+        }
+
+        private void UpdateAnimatorDirection(Vector3 direction)
+        {
+            if (animator == null)
+                return;
+
+            // Avoid updating when there's no meaningful movement direction
+            if (direction.sqrMagnitude < 0.0001f)
+                return;
+
+            int directionValue;
+            if (Mathf.Abs(direction.y) > Mathf.Abs(direction.x))
+            {
+                directionValue = direction.y >= 0f ? 0 : 1; // Up : Down
+            }
+            else
+            {
+                directionValue = direction.x < 0f ? 2 : 3; // Left : Right
+            }
+
+            animator.SetInteger(DirectionParameter, directionValue);
         }
 
         #endregion
