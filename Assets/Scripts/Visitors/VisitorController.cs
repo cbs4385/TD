@@ -520,7 +520,7 @@ namespace FaeMaze.Visitors
 
             if (absY >= absX)
             {
-                return movement.y >= 0f ? 0 : 1;
+                return movement.y <= 0f ? 0 : 1;
             }
 
             return movement.x < 0f ? 2 : 3;
