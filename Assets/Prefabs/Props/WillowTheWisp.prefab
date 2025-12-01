@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 8000000003}
   - component: {fileID: 8000000004}
   - component: {fileID: 8000000005}
+  - component: {fileID: -4105535882290159223}
   m_Layer: 0
   m_Name: WillowTheWisp
   m_TagString: Untagged
@@ -131,7 +132,7 @@ CircleCollider2D:
   m_Radius: 0.4
 --- !u!50 &8000000004
 Rigidbody2D:
-  serializedVersion: 4
+  serializedVersion: 5
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -142,8 +143,8 @@ Rigidbody2D:
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
   m_Mass: 1
-  m_LinearDrag: 0
-  m_AngularDrag: 0.05
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
   m_GravityScale: 0
   m_Material: {fileID: 0}
   m_IncludeLayers:
@@ -166,14 +167,42 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d7, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   wanderSpeed: 6
+  chaseSpeed: 5
   leadSpeed: 3
   waypointReachedDistance: 0.05
+  captureDistance: 0.4
+  detectionRadius: 8
+  maxFloodFillSteps: 30
+  influenceRecalculateInterval: 2
+  visitorScanInterval: 0.5
   wispColor: {r: 0.9, g: 1, b: 0.4, a: 1}
   wispSize: 0.5
   sortingOrder: 16
   enablePulse: 1
   pulseSpeed: 3
   pulseMagnitude: 0.15
+--- !u!95 &-4105535882290159223
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8000000000}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 85468a3d9dd2b2c41a578d258b624f4e, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0

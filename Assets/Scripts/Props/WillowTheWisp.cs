@@ -137,7 +137,7 @@ namespace FaeMaze.Props
         private void Awake()
         {
             state = WispState.Wandering;
-            CreateVisualSprite();
+            //CreateVisualSprite();
             SetupColliders();
         }
 
