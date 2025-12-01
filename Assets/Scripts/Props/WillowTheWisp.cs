@@ -18,8 +18,9 @@ namespace FaeMaze.Props
 
         public enum WispState
         {
-            Wandering,  // Randomly wandering the maze
-            Leading     // Leading a visitor to the heart
+            Wandering,  // Randomly wandering the maze (no visitors in range)
+            Chasing,    // Actively pursuing a target visitor
+            Leading     // Leading a captured visitor to the heart
         }
 
         #endregion
@@ -32,12 +33,37 @@ namespace FaeMaze.Props
         private float wanderSpeed = 6f; // 2x the default visitor speed of 3
 
         [SerializeField]
+        [Tooltip("Speed when chasing a visitor")]
+        private float chaseSpeed = 5f; // Slightly faster than visitors
+
+        [SerializeField]
         [Tooltip("Speed when leading a visitor (matches visitor speed)")]
         private float leadSpeed = 3f; // Matches visitor speed
 
         [SerializeField]
         [Tooltip("Distance threshold to consider a waypoint reached")]
         private float waypointReachedDistance = 0.05f;
+
+        [SerializeField]
+        [Tooltip("Distance to capture a visitor when chasing")]
+        private float captureDistance = 0.4f;
+
+        [Header("Influence Settings")]
+        [SerializeField]
+        [Tooltip("Detection radius in grid tiles (Manhattan distance)")]
+        private int detectionRadius = 8;
+
+        [SerializeField]
+        [Tooltip("Maximum flood-fill steps for influence area calculation")]
+        private int maxFloodFillSteps = 30;
+
+        [SerializeField]
+        [Tooltip("How often to recalculate influence area (seconds)")]
+        private float influenceRecalculateInterval = 2f;
+
+        [SerializeField]
+        [Tooltip("How often to scan for visitors (seconds)")]
+        private float visitorScanInterval = 0.5f;
 
         [Header("Visual Settings")]
         [SerializeField]
@@ -74,6 +100,15 @@ namespace FaeMaze.Props
         private SpriteRenderer spriteRenderer;
         private Rigidbody2D rb;
         private Vector3 baseScale;
+
+        // Influence area
+        private Vector2Int gridPosition;
+        private HashSet<Vector2Int> influenceCells;
+        private float influenceRecalculateTimer;
+
+        // Visitor detection and targeting
+        private VisitorController targetVisitor;
+        private float visitorScanTimer;
 
         // Wandering path
         private List<Vector2Int> wanderPath;
@@ -134,6 +169,9 @@ namespace FaeMaze.Props
                 Debug.LogWarning("WillowTheWisp: Heart not found! Will try to locate it later.");
             }
 
+            // Calculate initial influence area
+            CalculateInfluenceArea();
+
             // Start wandering
             GenerateRandomWanderPath();
         }
@@ -145,9 +183,33 @@ namespace FaeMaze.Props
                 UpdatePulse();
             }
 
+            // Periodically recalculate influence area
+            influenceRecalculateTimer += Time.deltaTime;
+            if (influenceRecalculateTimer >= influenceRecalculateInterval)
+            {
+                influenceRecalculateTimer = 0f;
+                CalculateInfluenceArea();
+            }
+
+            // Periodically scan for visitors (except when already leading)
+            if (state != WispState.Leading)
+            {
+                visitorScanTimer += Time.deltaTime;
+                if (visitorScanTimer >= visitorScanInterval)
+                {
+                    visitorScanTimer = 0f;
+                    ScanForVisitors();
+                }
+            }
+
+            // Update state-specific behavior
             if (state == WispState.Wandering)
             {
                 UpdateWandering();
+            }
+            else if (state == WispState.Chasing)
+            {
+                UpdateChasing();
             }
             else if (state == WispState.Leading)
             {
@@ -155,17 +217,126 @@ namespace FaeMaze.Props
             }
         }
 
-        private void OnTriggerEnter2D(Collider2D other)
+        #endregion
+
+        #region Influence and Detection
+
+        /// <summary>
+        /// Calculates the flood-fill influence area for visitor detection.
+        /// </summary>
+        private void CalculateInfluenceArea()
         {
-            // Only capture visitors when wandering
-            if (state != WispState.Wandering)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
                 return;
 
-            var visitor = other.GetComponent<VisitorController>();
-            if (visitor != null && visitor.State == VisitorController.VisitorState.Walking)
+            // Convert world position to grid coordinates
+            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
             {
-                CaptureVisitor(visitor);
+                return;
             }
+
+            gridPosition = new Vector2Int(x, y);
+
+            // Use flood-fill to get reachable tiles
+            influenceCells = mazeGridBehaviour.Grid.FloodFillReachable(x, y, detectionRadius, maxFloodFillSteps);
+        }
+
+        /// <summary>
+        /// Scans for visitors within the influence area and picks the best target.
+        /// Prioritizes the closest visitor with the least status effects.
+        /// </summary>
+        private void ScanForVisitors()
+        {
+            if (influenceCells == null || influenceCells.Count == 0)
+                return;
+
+            // Find all visitors in the scene
+            VisitorController[] allVisitors = FindObjectsByType<VisitorController>(FindObjectsSortMode.None);
+            if (allVisitors.Length == 0)
+                return;
+
+            // Filter visitors that are within influence area and walkable
+            List<VisitorController> candidateVisitors = new List<VisitorController>();
+            foreach (var visitor in allVisitors)
+            {
+                // Skip if not walking
+                if (visitor.State != VisitorController.VisitorState.Walking)
+                    continue;
+
+                // Skip if already following a wisp
+                var followWisp = visitor.GetComponent<FollowWispBehavior>();
+                if (followWisp != null && followWisp.IsFollowing)
+                    continue;
+
+                // Check if visitor is in influence area
+                if (mazeGridBehaviour.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                {
+                    Vector2Int visitorGridPos = new Vector2Int(vx, vy);
+                    if (influenceCells.Contains(visitorGridPos))
+                    {
+                        candidateVisitors.Add(visitor);
+                    }
+                }
+            }
+
+            if (candidateVisitors.Count == 0)
+            {
+                // No visitors in range, return to wandering if we were chasing
+                if (state == WispState.Chasing)
+                {
+                    Debug.Log("WillowTheWisp: Lost target visitor, returning to wandering");
+                    ReturnToWandering();
+                }
+                return;
+            }
+
+            // Pick the best target: closest visitor with least status effects
+            VisitorController bestTarget = FindBestTarget(candidateVisitors);
+
+            if (bestTarget != null)
+            {
+                // Start chasing if we were wandering, or update target if already chasing
+                if (state == WispState.Wandering || targetVisitor != bestTarget)
+                {
+                    StartChasing(bestTarget);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Finds the best visitor to target based on distance and status effects.
+        /// Prioritizes: least affected visitor, then closest.
+        /// </summary>
+        private VisitorController FindBestTarget(List<VisitorController> candidates)
+        {
+            if (candidates.Count == 0)
+                return null;
+
+            VisitorController bestTarget = null;
+            float bestScore = float.MaxValue;
+
+            foreach (var visitor in candidates)
+            {
+                // Calculate status effect count (lower is better)
+                int statusCount = 0;
+                if (visitor.IsFascinated) statusCount++;
+                if (visitor.IsEntranced) statusCount++;
+
+                // Calculate distance to wisp
+                float distance = Vector3.Distance(transform.position, visitor.transform.position);
+
+                // Score: prioritize fewer status effects, then closer distance
+                // Weight status effects heavily (multiply by 100 to make it dominant)
+                float score = (statusCount * 100f) + distance;
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestTarget = visitor;
+                }
+            }
+
+            return bestTarget;
         }
 
         #endregion
@@ -372,6 +543,73 @@ namespace FaeMaze.Props
 
         #endregion
 
+        #region Chasing Behavior
+
+        /// <summary>
+        /// Starts actively chasing a target visitor.
+        /// </summary>
+        private void StartChasing(VisitorController visitor)
+        {
+            if (visitor == null)
+                return;
+
+            Debug.Log($"WillowTheWisp: Started chasing visitor {visitor.name}");
+
+            targetVisitor = visitor;
+            state = WispState.Chasing;
+            wanderPath = null; // Clear wander path
+            currentPathIndex = 0;
+        }
+
+        /// <summary>
+        /// Updates the chasing behavior: pursue the target visitor directly.
+        /// </summary>
+        private void UpdateChasing()
+        {
+            // Check if target is still valid
+            if (targetVisitor == null || targetVisitor.State != VisitorController.VisitorState.Walking)
+            {
+                Debug.Log("WillowTheWisp: Target visitor lost or invalid, returning to wandering");
+                ReturnToWandering();
+                return;
+            }
+
+            // Check if visitor is already following a wisp
+            var followWisp = targetVisitor.GetComponent<FollowWispBehavior>();
+            if (followWisp != null && followWisp.IsFollowing)
+            {
+                Debug.Log("WillowTheWisp: Target visitor captured by another wisp, returning to wandering");
+                ReturnToWandering();
+                return;
+            }
+
+            // Calculate distance to target
+            float distance = Vector3.Distance(transform.position, targetVisitor.transform.position);
+
+            // Check if close enough to capture
+            if (distance <= captureDistance)
+            {
+                CaptureVisitor(targetVisitor);
+                return;
+            }
+
+            // Move directly toward visitor
+            Vector3 direction = (targetVisitor.transform.position - transform.position).normalized;
+            Vector3 newPosition = transform.position + direction * chaseSpeed * Time.deltaTime;
+
+            if (rb != null)
+            {
+                rb.MovePosition(newPosition);
+                Physics2D.SyncTransforms();
+            }
+            else
+            {
+                transform.position = newPosition;
+            }
+        }
+
+        #endregion
+
         #region Leading Behavior
 
         private void CaptureVisitor(VisitorController visitor)
@@ -495,6 +733,7 @@ namespace FaeMaze.Props
         private void ReturnToWandering()
         {
             state = WispState.Wandering;
+            targetVisitor = null;
             followingVisitor = null;
             wanderPath = null;
             currentPathIndex = 0;
@@ -509,10 +748,27 @@ namespace FaeMaze.Props
 
         private void OnDrawGizmos()
         {
+            // Draw influence area
+            if (influenceCells != null && influenceCells.Count > 0 && mazeGridBehaviour != null)
+            {
+                Gizmos.color = new Color(0.9f, 1f, 0.4f, 0.1f); // Semi-transparent yellow-green
+                foreach (var cell in influenceCells)
+                {
+                    Vector3 worldPos = mazeGridBehaviour.GridToWorld(cell.x, cell.y);
+                    Gizmos.DrawCube(worldPos, new Vector3(0.8f, 0.8f, 0.1f));
+                }
+            }
+
             // Draw current path
             if (wanderPath != null && wanderPath.Count > 0 && mazeGridBehaviour != null)
             {
-                Gizmos.color = state == WispState.Leading ? Color.yellow : Color.green;
+                // Color based on state
+                if (state == WispState.Leading)
+                    Gizmos.color = Color.yellow;
+                else if (state == WispState.Chasing)
+                    Gizmos.color = Color.red;
+                else
+                    Gizmos.color = Color.green;
 
                 for (int i = 0; i < wanderPath.Count - 1; i++)
                 {
@@ -528,6 +784,20 @@ namespace FaeMaze.Props
                     Vector3 target = mazeGridBehaviour.GridToWorld(wanderPath[currentPathIndex].x, wanderPath[currentPathIndex].y);
                     Gizmos.DrawWireSphere(target, 0.2f);
                 }
+            }
+
+            // Draw line to target visitor when chasing
+            if (state == WispState.Chasing && targetVisitor != null)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(transform.position, targetVisitor.transform.position);
+            }
+
+            // Draw line to following visitor when leading
+            if (state == WispState.Leading && followingVisitor != null)
+            {
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawLine(transform.position, followingVisitor.transform.position);
             }
         }
 
