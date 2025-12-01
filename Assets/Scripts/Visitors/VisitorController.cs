@@ -117,6 +117,7 @@ namespace FaeMaze.Visitors
         private List<Vector2Int> path;
         private int currentPathIndex;
         private VisitorState state;
+        private Animator animator;
         private GameController gameController;
         private MazeGridBehaviour mazeGridBehaviour;
         private bool isEntranced;
@@ -155,6 +156,10 @@ namespace FaeMaze.Visitors
         // Each node contains its position and list of unexplored neighbors
         private List<FascinatedPathNode> fascinatedPathNodes;
 
+        private const string DirectionParameter = "Direction";
+        private const int IdleDirection = 5;
+        private const float MovementEpsilonSqr = 0.0001f;
+
         #endregion
 
         #region Properties
@@ -190,10 +195,12 @@ namespace FaeMaze.Visitors
             fascinatedPathNodes = new List<FascinatedPathNode>();
             lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
             initialScale = transform.localScale;
+            animator = GetComponent<Animator>();
             spriteRenderer = GetComponent<SpriteRenderer>();
             CacheAuthoredSpriteSize();
             SetupSpriteRenderer();
             SetupPhysics();
+            SetAnimatorDirection(IdleDirection);
         }
 
         private void CreateVisualSprite()
@@ -374,6 +381,7 @@ namespace FaeMaze.Visitors
                     Debug.Log($"[{gameObject.name}] FASCINATION TIMER EXPIRED | starting random wander");
                     // The random walk will be handled in HandleConfusionAtWaypoint
                 }
+                SetAnimatorDirection(IdleDirection);
                 return; // Don't move while fascinated timer is active
             }
 
@@ -487,12 +495,44 @@ namespace FaeMaze.Visitors
 
         #region Movement
 
+        private void UpdateAnimatorDirection(Vector2 movement)
+        {
+            SetAnimatorDirection(GetDirectionFromMovement(movement));
+        }
+
+        private void SetAnimatorDirection(int direction)
+        {
+            if (animator != null)
+            {
+                animator.SetInteger(DirectionParameter, direction);
+            }
+        }
+
+        private int GetDirectionFromMovement(Vector2 movement)
+        {
+            if (movement.sqrMagnitude <= MovementEpsilonSqr)
+            {
+                return IdleDirection;
+            }
+
+            float absX = Mathf.Abs(movement.x);
+            float absY = Mathf.Abs(movement.y);
+
+            if (absY >= absX)
+            {
+                return movement.y >= 0f ? 0 : 1;
+            }
+
+            return movement.x < 0f ? 2 : 3;
+        }
+
         private void UpdateWalking()
         {
             if (path == null || path.Count == 0)
             {
                 Debug.LogWarning("VisitorController: No path set but state is Walking!");
                 state = VisitorState.Idle;
+                SetAnimatorDirection(IdleDirection);
                 return;
             }
 
@@ -531,6 +571,8 @@ namespace FaeMaze.Visitors
                 targetWorldPos,
                 effectiveSpeed * Time.deltaTime
             );
+
+            UpdateAnimatorDirection(newPosition - transform.position);
 
             // Use Rigidbody2D.MovePosition for proper trigger detection
             if (rb != null)
@@ -608,6 +650,8 @@ namespace FaeMaze.Visitors
 
                     Debug.Log($"[{gameObject.name}] REACHED LANTERN | pos={fascinationLanternPosition} | starting {fascinationTimer}s fascination pause");
 
+                    SetAnimatorDirection(IdleDirection);
+
                     // Pause at lantern - don't modify path, let timer run
                     // After timer expires, will resume to original destination
                     return; // Don't increment or handle confusion
@@ -677,6 +721,7 @@ namespace FaeMaze.Visitors
             {
                 // ESCAPE: Visitor reached destination spawn point
                 state = VisitorState.Escaping;
+                SetAnimatorDirection(IdleDirection);
 
                 // Visual feedback: fade to transparent
                 if (spriteRenderer != null)
@@ -696,6 +741,7 @@ namespace FaeMaze.Visitors
             {
                 // LEGACY CONSUMED: Visitor reached the heart
                 state = VisitorState.Consumed;
+                SetAnimatorDirection(IdleDirection);
 
                 // Notify the Heart that this visitor has arrived (awards essence)
                 if (gameController != null && gameController.Heart != null)
@@ -1384,6 +1430,7 @@ namespace FaeMaze.Visitors
         public void Stop()
         {
             state = VisitorState.Idle;
+            SetAnimatorDirection(IdleDirection);
         }
 
         /// <summary>
@@ -1417,6 +1464,7 @@ namespace FaeMaze.Visitors
 
             isCalculatingPath = true;
             state = VisitorState.Idle;
+            SetAnimatorDirection(IdleDirection);
 
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
@@ -1483,6 +1531,7 @@ namespace FaeMaze.Visitors
         public void ForceEscape()
         {
             state = VisitorState.Escaping;
+            SetAnimatorDirection(IdleDirection);
 
             // Clear fascination state
             isFascinated = false;
