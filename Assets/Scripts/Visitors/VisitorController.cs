@@ -232,22 +232,21 @@ namespace FaeMaze.Visitors
             spriteRenderer.color = visitorColor;
             spriteRenderer.sortingOrder = sortingOrder;
 
-            // Only override scale when generating a procedural sprite
-            if (useProceduralSprite)
+            float baseSpriteSize = spriteRenderer.sprite != null
+                ? Mathf.Max(spriteRenderer.sprite.bounds.size.x, spriteRenderer.sprite.bounds.size.y)
+                : 1f;
+
+            if (baseSpriteSize <= 0f)
             {
-                float baseSpriteSize = spriteRenderer.sprite != null
-                    ? Mathf.Max(spriteRenderer.sprite.bounds.size.x, spriteRenderer.sprite.bounds.size.y)
-                    : 1f;
+                baseSpriteSize = 1f;
+            }
 
-                if (baseSpriteSize <= 0f)
-                {
-                    baseSpriteSize = 1f;
-                }
+            float targetWorldSize = visitorSize > 0f
+                ? visitorSize
+                : Mathf.Max(authoredSpriteWorldSize.x, authoredSpriteWorldSize.y);
 
-                float targetWorldSize = authoredSpriteWorldSize != Vector2.zero
-                    ? Mathf.Max(authoredSpriteWorldSize.x, authoredSpriteWorldSize.y)
-                    : visitorSize;
-
+            if (targetWorldSize > 0f)
+            {
                 float scale = targetWorldSize / baseSpriteSize;
                 transform.localScale = new Vector3(scale, scale, 1f);
             }
