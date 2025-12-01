@@ -31,6 +31,11 @@ namespace FaeMaze.UI
         [Tooltip("Reference to the wave spawner")]
         private WaveSpawner waveSpawner;
 
+        [Header("Canvas Settings")]
+        [SerializeField]
+        [Tooltip("Reference pixels per unit to ensure sprites render at intended UI scale")]
+        private float referencePixelsPerUnit = 32f;
+
         [Header("Audio")]
         [SerializeField]
         [Tooltip("Slider controlling SFX volume")]
@@ -66,6 +71,8 @@ namespace FaeMaze.UI
             {
                 startWaveButton.onClick.AddListener(OnStartWaveClicked);
             }
+
+            ApplyCanvasSettings();
 
             // Initialize placement instructions
             if (placementInstructionsText != null)
@@ -177,6 +184,8 @@ namespace FaeMaze.UI
                 var scaler = canvasObject.GetComponent<CanvasScaler>();
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 scaler.referenceResolution = new Vector2(1920, 1080);
+
+                ApplyCanvasSettings(canvas);
             }
 
             // Create a simple 1x1 sprite from the white texture to avoid missing built-in resource lookups.
@@ -269,6 +278,27 @@ namespace FaeMaze.UI
             label.color = Color.white;
 
             return slider;
+        }
+
+        private void ApplyCanvasSettings()
+        {
+            ApplyCanvasSettings(GetComponentInParent<Canvas>());
+        }
+
+        private void ApplyCanvasSettings(Canvas canvas)
+        {
+            if (canvas == null)
+            {
+                return;
+            }
+
+            canvas.referencePixelsPerUnit = referencePixelsPerUnit;
+
+            var scaler = canvas.GetComponent<CanvasScaler>();
+            if (scaler != null && scaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+            {
+                scaler.referencePixelsPerUnit = referencePixelsPerUnit;
+            }
         }
 
         private void OnSfxVolumeChanged(float value)
