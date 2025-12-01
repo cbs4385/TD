@@ -78,7 +78,10 @@ namespace FaeMaze.Props
         private Vector2Int _gridPosition;
         private HashSet<Vector2Int> _influenceCells;
         private SpriteRenderer _spriteRenderer;
+        private Animator _animator;
         private Vector3 _initialScale;
+
+        private const string DirectionParameter = "Direction";
 
         #endregion
 
@@ -104,6 +107,8 @@ namespace FaeMaze.Props
         {
             _initialScale = transform.localScale;
 
+            _animator = GetComponent<Animator>();
+
             // Find the MazeGridBehaviour in the scene
             _gridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
@@ -114,6 +119,8 @@ namespace FaeMaze.Props
             }
 
             SetupSpriteRenderer();
+
+            SetIdleDirection();
         }
 
         private void Start()
@@ -188,6 +195,56 @@ namespace FaeMaze.Props
         public IReadOnlyCollection<Vector2Int> GetInfluenceArea()
         {
             return _influenceCells ?? new HashSet<Vector2Int>();
+        }
+
+        #endregion
+
+        #region Animation Control
+
+        /// <summary>
+        /// Sets the animator Direction parameter based on where the visitor is relative to the lantern.
+        /// </summary>
+        /// <param name="visitorGridPosition">Grid position of the interacting visitor.</param>
+        public void SetInteractionDirection(Vector2Int visitorGridPosition)
+        {
+            if (_animator == null)
+            {
+                return;
+            }
+
+            int directionValue = 5; // Idle by default
+
+            if (visitorGridPosition.y > _gridPosition.y)
+            {
+                directionValue = 0; // Up
+            }
+            else if (visitorGridPosition.y < _gridPosition.y)
+            {
+                directionValue = 1; // Down
+            }
+            else if (visitorGridPosition.x < _gridPosition.x)
+            {
+                directionValue = 2; // Left
+            }
+            else if (visitorGridPosition.x > _gridPosition.x)
+            {
+                directionValue = 3; // Right
+            }
+
+            _animator.SetInteger(DirectionParameter, directionValue);
+        }
+
+        /// <summary>
+        /// Resets the animator Direction parameter to idle (5).
+        /// </summary>
+        public void SetIdleDirection()
+        {
+            if (_animator == null)
+            {
+                return;
+            }
+
+            _animator.SetInteger(DirectionParameter, 5);
         }
 
         #endregion
