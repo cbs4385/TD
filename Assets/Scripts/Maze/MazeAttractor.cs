@@ -71,6 +71,7 @@ namespace FaeMaze.Maze
         private bool isApplied = false;
         private SpriteRenderer spriteRenderer;
         private CircleCollider2D triggerCollider;
+        private Vector3 initialScale;
 
         #endregion
 
@@ -93,6 +94,8 @@ namespace FaeMaze.Maze
         {
             // Find the MazeGridBehaviour in the scene
             gridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+
+            initialScale = transform.localScale;
 
             if (gridBehaviour == null)
             {
@@ -193,8 +196,15 @@ namespace FaeMaze.Maze
             spriteRenderer.color = spriteColor;
             spriteRenderer.sortingOrder = sortingOrder;
 
-            // Set scale
-            transform.localScale = new Vector3(spriteSize, spriteSize, 1f);
+            // Only override scale when generating a procedural sprite
+            if (useProceduralSprite)
+            {
+                transform.localScale = new Vector3(spriteSize, spriteSize, 1f);
+            }
+            else
+            {
+                transform.localScale = initialScale;
+            }
         }
 
         private Sprite CreateLanternSprite(int resolution)

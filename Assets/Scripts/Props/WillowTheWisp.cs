@@ -105,6 +105,7 @@ namespace FaeMaze.Props
         private Rigidbody2D rb;
         private Animator animator;
         private Vector3 baseScale;
+        private Vector3 initialScale;
 
         // Influence area
         private Vector2Int gridPosition;
@@ -144,6 +145,7 @@ namespace FaeMaze.Props
         private void Awake()
         {
             state = WispState.Wandering;
+            initialScale = transform.localScale;
             SetupSpriteRenderer();
             SetupColliders();
             animator = GetComponent<Animator>();
@@ -391,7 +393,9 @@ namespace FaeMaze.Props
             spriteRenderer.color = wispColor;
             spriteRenderer.sortingOrder = sortingOrder;
 
-            baseScale = new Vector3(wispSize, wispSize, 1f);
+            baseScale = useProceduralSprite
+                ? new Vector3(wispSize, wispSize, 1f)
+                : initialScale;
             transform.localScale = baseScale;
         }
 

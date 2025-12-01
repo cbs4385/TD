@@ -140,6 +140,8 @@ namespace FaeMaze.Visitors
         // Cooldown tracking per lantern (prevents immediate re-triggering)
         private Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
 
+        private Vector3 initialScale;
+
         // Track last 10 tiles reached to prevent short-term backtracking
         private Queue<Vector2Int> recentlyReachedTiles;
         private const int MAX_RECENT_TILES = 10;
@@ -182,6 +184,7 @@ namespace FaeMaze.Visitors
             recentlyReachedTiles = new Queue<Vector2Int>();
             fascinatedPathNodes = new List<FascinatedPathNode>();
             lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
+            initialScale = transform.localScale;
             SetupSpriteRenderer();
             SetupPhysics();
         }
@@ -222,8 +225,15 @@ namespace FaeMaze.Visitors
             spriteRenderer.color = visitorColor;
             spriteRenderer.sortingOrder = sortingOrder;
 
-            // Set scale
-            transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+            // Only override scale when generating a procedural sprite
+            if (useProceduralSprite)
+            {
+                transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+            }
+            else
+            {
+                transform.localScale = initialScale;
+            }
         }
 
         private void SetupPhysics()

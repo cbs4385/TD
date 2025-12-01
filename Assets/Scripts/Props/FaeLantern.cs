@@ -78,6 +78,7 @@ namespace FaeMaze.Props
         private Vector2Int _gridPosition;
         private HashSet<Vector2Int> _influenceCells;
         private SpriteRenderer _spriteRenderer;
+        private Vector3 _initialScale;
 
         #endregion
 
@@ -101,6 +102,8 @@ namespace FaeMaze.Props
 
         private void Awake()
         {
+            _initialScale = transform.localScale;
+
             // Find the MazeGridBehaviour in the scene
             _gridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
@@ -224,8 +227,15 @@ namespace FaeMaze.Props
             _spriteRenderer.color = lanternColor;
             _spriteRenderer.sortingOrder = sortingOrder;
 
-            // Set scale
-            transform.localScale = new Vector3(lanternSize, lanternSize, 1f);
+            // Only override scale when generating a procedural sprite
+            if (useProceduralSprite)
+            {
+                transform.localScale = new Vector3(lanternSize, lanternSize, 1f);
+            }
+            else
+            {
+                transform.localScale = _initialScale;
+            }
         }
 
         private Sprite CreateLanternSprite(int resolution)
