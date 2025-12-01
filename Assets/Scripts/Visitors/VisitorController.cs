@@ -232,26 +232,34 @@ namespace FaeMaze.Visitors
             spriteRenderer.color = visitorColor;
             spriteRenderer.sortingOrder = sortingOrder;
 
-            float baseSpriteSize = spriteRenderer.sprite != null
-                ? Mathf.Max(spriteRenderer.sprite.bounds.size.x, spriteRenderer.sprite.bounds.size.y)
-                : 1f;
-
-            if (baseSpriteSize <= 0f)
+            if (useProceduralSprite)
             {
-                baseSpriteSize = 1f;
-            }
+                float baseSpriteSize = spriteRenderer.sprite != null
+                    ? Mathf.Max(spriteRenderer.sprite.bounds.size.x, spriteRenderer.sprite.bounds.size.y)
+                    : 1f;
 
-            float targetWorldSize = visitorSize > 0f
-                ? visitorSize
-                : Mathf.Max(authoredSpriteWorldSize.x, authoredSpriteWorldSize.y);
+                if (baseSpriteSize <= 0f)
+                {
+                    baseSpriteSize = 1f;
+                }
 
-            if (targetWorldSize > 0f)
-            {
-                float scale = targetWorldSize / baseSpriteSize;
-                transform.localScale = new Vector3(scale, scale, 1f);
+                float targetWorldSize = visitorSize > 0f
+                    ? visitorSize
+                    : Mathf.Max(authoredSpriteWorldSize.x, authoredSpriteWorldSize.y);
+
+                if (targetWorldSize > 0f)
+                {
+                    float scale = targetWorldSize / baseSpriteSize;
+                    transform.localScale = new Vector3(scale, scale, 1f);
+                }
+                else
+                {
+                    transform.localScale = initialScale;
+                }
             }
             else
             {
+                // Preserve the authored prefab scale when using imported visitor visuals.
                 transform.localScale = initialScale;
             }
         }
@@ -507,7 +515,7 @@ namespace FaeMaze.Visitors
                     Debug.Log($"[{gameObject.name}] CLEARING FASCINATION | random walk failed");
                     isFascinated = false;
                     hasReachedLantern = false;
-                    currentFaeLantern = null;
+                    ClearLanternInteraction();
                     fascinatedPathNodes.Clear();
                 }
             }
@@ -660,6 +668,7 @@ namespace FaeMaze.Visitors
             // Clear fascination state
             isFascinated = false;
             hasReachedLantern = false;
+            ClearLanternInteraction();
 
             // Check if we're using the new spawn marker system
             bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2;
@@ -705,6 +714,17 @@ namespace FaeMaze.Visitors
 
         #region FaeLantern Detection
 
+        private void ClearLanternInteraction()
+        {
+            if (currentFaeLantern != null)
+            {
+                currentFaeLantern.SetIdleDirection();
+            }
+
+            currentFaeLantern = null;
+            fascinationLanternPosition = Vector2Int.zero;
+        }
+
         /// <summary>
         /// Checks if the visitor has entered any FaeLantern's influence area.
         /// Uses grid-based detection to check if current grid position is within
@@ -731,7 +751,7 @@ namespace FaeMaze.Visitors
                 if (lantern.IsCellInInfluence(currentGridPos))
                 {
                     Debug.Log($"[{gameObject.name}] ENTERED FAE INFLUENCE | lanternPos={lantern.GridPosition} | visitorPos={currentGridPos}");
-                    EnterFaeInfluence(lantern);
+                    EnterFaeInfluence(lantern, currentGridPos);
                     break; // Only one lantern can capture a visitor
                 }
             }
@@ -742,7 +762,7 @@ namespace FaeMaze.Visitors
         /// Abandons current path and paths to the lantern.
         /// Applies cooldown and proc chance checks per spec.
         /// </summary>
-        private void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern)
+        private void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern, Vector2Int visitorGridPosition)
         {
             // If already fascinated by this same lantern, ignore
             if (isFascinated && currentFaeLantern == lantern && fascinationLanternPosition == lantern.GridPosition)
@@ -773,6 +793,8 @@ namespace FaeMaze.Visitors
             fascinationLanternPosition = lantern.GridPosition;
             hasReachedLantern = false;
             fascinationTimer = 0f; // Will be set when reaching lantern
+
+            currentFaeLantern.SetInteractionDirection(visitorGridPosition);
 
             // Set cooldown for this lantern
             lanternCooldowns[lantern] = lantern.CooldownSec;
@@ -833,6 +855,9 @@ namespace FaeMaze.Visitors
                 else
                 {
                     Debug.LogWarning($"[{gameObject.name}] FAE PATHFIND FAILED | no path from {currentPos} to {fascinationLanternPosition}");
+                    isFascinated = false;
+                    hasReachedLantern = false;
+                    ClearLanternInteraction();
                 }
             }
         }
@@ -1462,6 +1487,7 @@ namespace FaeMaze.Visitors
             // Clear fascination state
             isFascinated = false;
             hasReachedLantern = false;
+            ClearLanternInteraction();
 
             // Visual feedback
             if (spriteRenderer != null)
