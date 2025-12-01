@@ -1035,6 +1035,7 @@ MonoBehaviour:
   startWaveButton: {fileID: 0}
   placementInstructionsText: {fileID: 0}
   waveSpawner: {fileID: 1408523524}
+  referencePixelsPerUnit: 32
   sfxVolumeSlider: {fileID: 0}
 --- !u!114 &2096385510
 MonoBehaviour:
