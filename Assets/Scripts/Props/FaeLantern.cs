@@ -66,6 +66,10 @@ namespace FaeMaze.Props
         [Tooltip("Sprite rendering layer order")]
         private int sortingOrder = 12;
 
+        [SerializeField]
+        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
+        private bool useProceduralSprite = false;
+
         #endregion
 
         #region Private Fields
@@ -105,13 +109,12 @@ namespace FaeMaze.Props
                 Debug.LogError("FaeLantern: Could not find MazeGridBehaviour in scene!");
                 return;
             }
+
+            SetupSpriteRenderer();
         }
 
         private void Start()
         {
-            // Create visual sprite
-            CreateVisualSprite();
-
             // Wait for grid to be ready and calculate influence area
             if (_gridBehaviour != null && _gridBehaviour.Grid != null)
             {
@@ -188,7 +191,7 @@ namespace FaeMaze.Props
 
         #region Visual
 
-        private void CreateVisualSprite()
+        private void SetupSpriteRenderer()
         {
             // Add SpriteRenderer if not already present
             _spriteRenderer = GetComponent<SpriteRenderer>();
@@ -197,8 +200,27 @@ namespace FaeMaze.Props
                 _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
             }
 
+            if (useProceduralSprite)
+            {
+                CreateVisualSprite();
+            }
+
+            ApplySpriteSettings();
+        }
+
+        private void CreateVisualSprite()
+        {
             // Create a simple circle sprite for the lantern
             _spriteRenderer.sprite = CreateLanternSprite(32);
+        }
+
+        private void ApplySpriteSettings()
+        {
+            if (_spriteRenderer == null)
+            {
+                return;
+            }
+
             _spriteRenderer.color = lanternColor;
             _spriteRenderer.sortingOrder = sortingOrder;
 

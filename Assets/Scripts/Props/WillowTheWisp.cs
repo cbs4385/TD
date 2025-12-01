@@ -90,6 +90,10 @@ namespace FaeMaze.Props
         [Tooltip("Pulse magnitude")]
         private float pulseMagnitude = 0.15f;
 
+        [SerializeField]
+        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
+        private bool useProceduralSprite = false;
+
         #endregion
 
         #region Private Fields
@@ -137,7 +141,7 @@ namespace FaeMaze.Props
         private void Awake()
         {
             state = WispState.Wandering;
-            //CreateVisualSprite();
+            SetupSpriteRenderer();
             SetupColliders();
         }
 
@@ -345,14 +349,36 @@ namespace FaeMaze.Props
 
         private void CreateVisualSprite()
         {
+            // Create a glowing circle sprite
+            spriteRenderer.sprite = CreateCircleSprite(32);
+            ApplySpriteSettings();
+        }
+
+        private void SetupSpriteRenderer()
+        {
             spriteRenderer = GetComponent<SpriteRenderer>();
             if (spriteRenderer == null)
             {
                 spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
             }
 
-            // Create a glowing circle sprite
-            spriteRenderer.sprite = CreateCircleSprite(32);
+            if (useProceduralSprite)
+            {
+                CreateVisualSprite();
+            }
+            else
+            {
+                ApplySpriteSettings();
+            }
+        }
+
+        private void ApplySpriteSettings()
+        {
+            if (spriteRenderer == null)
+            {
+                return;
+            }
+
             spriteRenderer.color = wispColor;
             spriteRenderer.sortingOrder = sortingOrder;
 

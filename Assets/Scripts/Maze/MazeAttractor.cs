@@ -39,6 +39,10 @@ namespace FaeMaze.Maze
         [Tooltip("Sprite rendering layer order")]
         private int sortingOrder = 12;
 
+        [SerializeField]
+        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
+        private bool useProceduralSprite = false;
+
         [Header("Visitor Interaction")]
         [SerializeField]
         [Tooltip("Slow factor applied to visitors within radius (0.5 = half speed)")]
@@ -104,13 +108,12 @@ namespace FaeMaze.Maze
             }
 
             gridPosition = new Vector2Int(x, y);
+
+            SetupSpriteRenderer();
         }
 
         private void Start()
         {
-            // Create visual sprite
-            CreateVisualSprite();
-
             // Setup trigger collider for visitor interaction (either slowing or fascination)
             if (enableVisitorSlowing || enableFascination)
             {
@@ -159,6 +162,12 @@ namespace FaeMaze.Maze
 
         private void CreateVisualSprite()
         {
+            // Create a simple circle sprite for the lantern
+            spriteRenderer.sprite = CreateLanternSprite(32);
+        }
+
+        private void SetupSpriteRenderer()
+        {
             // Add SpriteRenderer if not already present
             spriteRenderer = GetComponent<SpriteRenderer>();
             if (spriteRenderer == null)
@@ -166,8 +175,21 @@ namespace FaeMaze.Maze
                 spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
             }
 
-            // Create a simple circle sprite for the lantern
-            spriteRenderer.sprite = CreateLanternSprite(32);
+            if (useProceduralSprite)
+            {
+                CreateVisualSprite();
+            }
+
+            ApplySpriteSettings();
+        }
+
+        private void ApplySpriteSettings()
+        {
+            if (spriteRenderer == null)
+            {
+                return;
+            }
+
             spriteRenderer.color = spriteColor;
             spriteRenderer.sortingOrder = sortingOrder;
 

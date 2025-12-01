@@ -102,6 +102,10 @@ namespace FaeMaze.Visitors
         [Tooltip("Sprite rendering layer order")]
         private int sortingOrder = 15;
 
+        [SerializeField]
+        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
+        private bool useProceduralSprite = false;
+
         #endregion
 
         #region Private Fields
@@ -178,10 +182,18 @@ namespace FaeMaze.Visitors
             recentlyReachedTiles = new Queue<Vector2Int>();
             fascinatedPathNodes = new List<FascinatedPathNode>();
             lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
-            CreateVisualSprite();
+            SetupSpriteRenderer();
+            SetupPhysics();
         }
 
         private void CreateVisualSprite()
+        {
+            // Create a simple circle sprite for the visitor
+            spriteRenderer.sprite = CreateCircleSprite(32);
+            ApplySpriteSettings();
+        }
+
+        private void SetupSpriteRenderer()
         {
             // Add SpriteRenderer if not already present
             spriteRenderer = GetComponent<SpriteRenderer>();
@@ -190,31 +202,51 @@ namespace FaeMaze.Visitors
                 spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
             }
 
-            // Create a simple circle sprite for the visitor
-            spriteRenderer.sprite = CreateCircleSprite(32);
+            if (useProceduralSprite)
+            {
+                CreateVisualSprite();
+            }
+            else
+            {
+                ApplySpriteSettings();
+            }
+        }
+
+        private void ApplySpriteSettings()
+        {
+            if (spriteRenderer == null)
+            {
+                return;
+            }
+
             spriteRenderer.color = visitorColor;
             spriteRenderer.sortingOrder = sortingOrder;
 
             // Set scale
             transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+        }
 
+        private void SetupPhysics()
+        {
             // Add Rigidbody2D for trigger collisions with MazeAttractors
             rb = GetComponent<Rigidbody2D>();
             if (rb == null)
             {
                 rb = gameObject.AddComponent<Rigidbody2D>();
-                rb.bodyType = RigidbodyType2D.Kinematic; // Kinematic so we control movement manually
-                rb.gravityScale = 0f; // No gravity for 2D top-down
             }
+
+            rb.bodyType = RigidbodyType2D.Kinematic; // Kinematic so we control movement manually
+            rb.gravityScale = 0f; // No gravity for 2D top-down
 
             // Add CircleCollider2D for trigger detection
             CircleCollider2D collider = GetComponent<CircleCollider2D>();
             if (collider == null)
             {
                 collider = gameObject.AddComponent<CircleCollider2D>();
-                collider.radius = 0.3f; // Small radius for visitor collision
-                collider.isTrigger = true; // Enable trigger events
             }
+
+            collider.radius = 0.3f; // Small radius for visitor collision
+            collider.isTrigger = true; // Enable trigger events
         }
 
         private Sprite CreateCircleSprite(int resolution)
