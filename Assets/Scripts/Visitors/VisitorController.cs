@@ -96,11 +96,11 @@ namespace FaeMaze.Visitors
 
         [SerializeField]
         [Tooltip("Desired world-space diameter (in Unity units) for procedural visitors")]
-        private float visitorSize = 1.1f;
+        private float visitorSize = 30.0f;
 
         [SerializeField]
         [Tooltip("Pixels per unit for procedural visitor sprites (match imported visitor assets)")]
-        private int proceduralPixelsPerUnit = 100;
+        private int proceduralPixelsPerUnit = 32;
 
         [SerializeField]
         [Tooltip("Sprite rendering layer order")]
