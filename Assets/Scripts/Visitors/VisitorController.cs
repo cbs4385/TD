@@ -95,8 +95,12 @@ namespace FaeMaze.Visitors
         private Color visitorColor = new Color(0.3f, 0.6f, 1f, 1f); // Light blue
 
         [SerializeField]
-        [Tooltip("Size of the visitor sprite")]
-        private float visitorSize = 0.6f;
+        [Tooltip("Desired world-space diameter (in Unity units) for procedural visitors")]
+        private float visitorSize = 1.1f;
+
+        [SerializeField]
+        [Tooltip("Pixels per unit for procedural visitor sprites (match imported visitor assets)")]
+        private int proceduralPixelsPerUnit = 100;
 
         [SerializeField]
         [Tooltip("Sprite rendering layer order")]
@@ -119,6 +123,7 @@ namespace FaeMaze.Visitors
         private float speedMultiplier = 1f;
         private SpriteRenderer spriteRenderer;
         private Rigidbody2D rb;
+        private Vector2 authoredSpriteWorldSize;
         private Vector2Int originalDestination; // Store original destination for confusion recovery
 
         private bool isConfused;
@@ -185,6 +190,8 @@ namespace FaeMaze.Visitors
             fascinatedPathNodes = new List<FascinatedPathNode>();
             lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
             initialScale = transform.localScale;
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            CacheAuthoredSpriteSize();
             SetupSpriteRenderer();
             SetupPhysics();
         }
@@ -228,12 +235,41 @@ namespace FaeMaze.Visitors
             // Only override scale when generating a procedural sprite
             if (useProceduralSprite)
             {
-                transform.localScale = new Vector3(visitorSize, visitorSize, 1f);
+                float baseSpriteSize = spriteRenderer.sprite != null
+                    ? Mathf.Max(spriteRenderer.sprite.bounds.size.x, spriteRenderer.sprite.bounds.size.y)
+                    : 1f;
+
+                if (baseSpriteSize <= 0f)
+                {
+                    baseSpriteSize = 1f;
+                }
+
+                float targetWorldSize = authoredSpriteWorldSize != Vector2.zero
+                    ? Mathf.Max(authoredSpriteWorldSize.x, authoredSpriteWorldSize.y)
+                    : visitorSize;
+
+                float scale = targetWorldSize / baseSpriteSize;
+                transform.localScale = new Vector3(scale, scale, 1f);
             }
             else
             {
                 transform.localScale = initialScale;
             }
+        }
+
+        private void CacheAuthoredSpriteSize()
+        {
+            if (spriteRenderer == null || spriteRenderer.sprite == null)
+            {
+                authoredSpriteWorldSize = Vector2.zero;
+                return;
+            }
+
+            Vector2 spriteSize = spriteRenderer.sprite.bounds.size;
+            authoredSpriteWorldSize = new Vector2(
+                spriteSize.x * transform.localScale.x,
+                spriteSize.y * transform.localScale.y
+            );
         }
 
         private void SetupPhysics()
@@ -285,7 +321,7 @@ namespace FaeMaze.Visitors
                 texture,
                 new Rect(0, 0, size, size),
                 new Vector2(0.5f, 0.5f),
-                size
+                proceduralPixelsPerUnit
             );
         }
 
