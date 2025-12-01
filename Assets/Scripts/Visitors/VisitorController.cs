@@ -96,7 +96,11 @@ namespace FaeMaze.Visitors
 
         [SerializeField]
         [Tooltip("Size of the visitor sprite")]
-        private float visitorSize = 0.6f;
+        private float visitorSize = 2.4f;
+
+        [SerializeField]
+        [Tooltip("Pixels per unit for procedural visitor sprites (match imported visitor assets)")]
+        private int proceduralPixelsPerUnit = 100;
 
         [SerializeField]
         [Tooltip("Sprite rendering layer order")]
@@ -285,7 +289,7 @@ namespace FaeMaze.Visitors
                 texture,
                 new Rect(0, 0, size, size),
                 new Vector2(0.5f, 0.5f),
-                size
+                proceduralPixelsPerUnit
             );
         }
 
