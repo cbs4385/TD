@@ -94,7 +94,7 @@ namespace FaeMaze.Visitors
         private float moveSpeed;
 
         // Direction tracking for animation
-        private const int IdleDirection = 5;
+        private const int IdleDirection = 0;
         private int lastDirection = IdleDirection;
         private int currentAnimatorDirection = IdleDirection;
 
@@ -339,12 +339,12 @@ namespace FaeMaze.Visitors
             if (absY >= absX)
             {
                 // Vertical movement dominant
-                newDirection = movement.y < 0f ? 0 : 1; // 0 = Down, 1 = Up
+                newDirection = movement.y > 0f ? 1 : 2; // 1 = Up, 2 = Down
             }
             else
             {
                 // Horizontal movement dominant
-                newDirection = movement.x < 0f ? 2 : 3; // 2 = Left, 3 = Right
+                newDirection = movement.x < 0f ? 3 : 4; // 3 = Left, 4 = Right
             }
 
             if (newDirection != IdleDirection)
