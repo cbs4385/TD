@@ -208,10 +208,22 @@ namespace FaeMaze.Visitors
             }
 
             // Get current grid position
-            Vector2Int currentGridPos = mazeGridBehaviour.WorldToGrid(transform.position);
+            int currentX, currentY;
+            if (!mazeGridBehaviour.WorldToGrid(transform.position, out currentX, out currentY))
+            {
+                currentPath.Clear();
+                return;
+            }
+            Vector2Int currentGridPos = new Vector2Int(currentX, currentY);
 
             // Get target grid position
-            Vector2Int targetGridPos = mazeGridBehaviour.WorldToGrid(targetVisitor.transform.position);
+            int targetX, targetY;
+            if (!mazeGridBehaviour.WorldToGrid(targetVisitor.transform.position, out targetX, out targetY))
+            {
+                currentPath.Clear();
+                return;
+            }
+            Vector2Int targetGridPos = new Vector2Int(targetX, targetY);
 
             // Find path using GameController's pathfinding
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
