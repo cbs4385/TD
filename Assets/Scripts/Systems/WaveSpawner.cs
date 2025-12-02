@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 using FaeMaze.Maze;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
@@ -10,9 +12,23 @@ namespace FaeMaze.Systems
     /// <summary>
     /// Manages wave-based spawning of visitors from the entrance to the heart.
     /// Spawns visitors in waves with configurable count and interval.
+    /// Includes per-wave timer with pass/fail conditions.
     /// </summary>
     public class WaveSpawner : MonoBehaviour
     {
+        #region Events
+
+        /// <summary>Invoked when a wave is successfully completed (all visitors cleared in time)</summary>
+        public event System.Action OnWaveSuccess;
+
+        /// <summary>Invoked when a wave fails (timer expires before all visitors cleared)</summary>
+        public event System.Action OnWaveFailed;
+
+        /// <summary>Invoked when the wave timer updates (passes remaining time)</summary>
+        public event System.Action<float> OnWaveTimerUpdate;
+
+        #endregion
+
         #region Serialized Fields
 
         [Header("Prefab References")]
@@ -38,15 +54,50 @@ namespace FaeMaze.Systems
         [Tooltip("Time interval between spawns (in seconds)")]
         private float spawnInterval = 1.0f;
 
+        [SerializeField]
+        [Tooltip("Time budget for each wave (in seconds). Wave fails if not cleared in time.")]
+        private float waveDuration = 60f;
+
+        [Header("UI Configuration")]
+        [SerializeField]
+        [Tooltip("Canvas for UI display (will auto-create if null)")]
+        private Canvas uiCanvas;
+
+        [SerializeField]
+        [Tooltip("Font size for wave info text")]
+        private int fontSize = 20;
+
+        [SerializeField]
+        [Tooltip("Color for UI text")]
+        private Color uiTextColor = Color.white;
+
+        [SerializeField]
+        [Tooltip("Color for timer text when running low")]
+        private Color warningColor = Color.red;
+
+        [SerializeField]
+        [Tooltip("Time threshold (seconds) to show warning color")]
+        private float warningThreshold = 10f;
+
         #endregion
 
         #region Private Fields
 
         private MazeGridBehaviour mazeGridBehaviour;
         private bool isSpawning;
+        private bool isWaveActive;
+        private bool isWaveFailed;
         private int currentWaveNumber;
         private int visitorsSpawnedThisWave;
         private int totalVisitorsSpawned;
+        private float waveTimeRemaining;
+        private List<VisitorController> activeVisitors = new List<VisitorController>();
+
+        // UI References
+        private TextMeshProUGUI timerText;
+        private TextMeshProUGUI visitorCountText;
+        private TextMeshProUGUI waveStatusText;
+        private GameObject uiPanel;
 
         #endregion
 
@@ -55,11 +106,26 @@ namespace FaeMaze.Systems
         /// <summary>Gets whether a wave is currently spawning</summary>
         public bool IsSpawning => isSpawning;
 
+        /// <summary>Gets whether a wave is currently active (including after spawning completes)</summary>
+        public bool IsWaveActive => isWaveActive;
+
+        /// <summary>Gets whether the current wave has failed</summary>
+        public bool IsWaveFailed => isWaveFailed;
+
         /// <summary>Gets the current wave number</summary>
         public int CurrentWaveNumber => currentWaveNumber;
 
         /// <summary>Gets the total number of visitors spawned</summary>
         public int TotalVisitorsSpawned => totalVisitorsSpawned;
+
+        /// <summary>Gets the number of active visitors currently in the maze</summary>
+        public int ActiveVisitorCount => activeVisitors.Count;
+
+        /// <summary>Gets the time remaining in the current wave (in seconds)</summary>
+        public float WaveTimeRemaining => waveTimeRemaining;
+
+        /// <summary>Gets the configured wave duration (in seconds)</summary>
+        public float WaveDuration => waveDuration;
 
         #endregion
 
@@ -70,6 +136,43 @@ namespace FaeMaze.Systems
             // Find the MazeGridBehaviour in the scene
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             ValidateReferences();
+
+            // Create UI if needed
+            if (timerText == null || visitorCountText == null || waveStatusText == null)
+            {
+                CreateUI();
+            }
+        }
+
+        private void Update()
+        {
+            if (!isWaveActive || isWaveFailed)
+                return;
+
+            // Update timer
+            waveTimeRemaining -= Time.deltaTime;
+
+            // Check for timeout
+            if (waveTimeRemaining <= 0f)
+            {
+                waveTimeRemaining = 0f;
+                HandleWaveFailure();
+            }
+
+            // Clean up destroyed visitors from active list
+            activeVisitors.RemoveAll(v => v == null);
+
+            // Check for wave success (all visitors cleared)
+            if (!isSpawning && activeVisitors.Count == 0 && visitorsSpawnedThisWave > 0)
+            {
+                HandleWaveSuccess();
+            }
+
+            // Update UI
+            UpdateUI();
+
+            // Invoke timer update event
+            OnWaveTimerUpdate?.Invoke(waveTimeRemaining);
         }
 
         #endregion
@@ -78,24 +181,58 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Starts spawning a new wave of visitors.
+        /// Returns false if wave cannot start (already active or failed state).
         /// </summary>
-        public void StartWave()
+        public bool StartWave()
         {
+            // Prevent starting if already spawning
             if (isSpawning)
             {
-                return;
+                Debug.LogWarning("WaveSpawner: Cannot start wave - already spawning!");
+                return false;
+            }
+
+            // Prevent starting if wave is already active
+            if (isWaveActive)
+            {
+                Debug.LogWarning("WaveSpawner: Cannot start wave - wave already active!");
+                return false;
+            }
+
+            // Prevent starting if in failed state
+            if (isWaveFailed)
+            {
+                Debug.LogWarning("WaveSpawner: Cannot start wave - level in failed state!");
+                return false;
             }
 
             if (!ValidateReferences())
             {
-                return;
+                return false;
             }
 
+            // Initialize wave state
             currentWaveNumber++;
             visitorsSpawnedThisWave = 0;
+            activeVisitors.Clear();
+            isWaveActive = true;
+            waveTimeRemaining = waveDuration;
 
+            Debug.Log($"WaveSpawner: Starting Wave {currentWaveNumber} with {visitorsPerWave} visitors and {waveDuration}s time limit");
 
             StartCoroutine(SpawnWaveCoroutine());
+            return true;
+        }
+
+        /// <summary>
+        /// Resets the failed state to allow starting a new wave.
+        /// Call this to retry after failure.
+        /// </summary>
+        public void ResetFailedState()
+        {
+            isWaveFailed = false;
+            isWaveActive = false;
+            Debug.Log("WaveSpawner: Failed state reset - can start new wave");
         }
 
         /// <summary>
@@ -199,7 +336,205 @@ namespace FaeMaze.Systems
             // Set path
             visitor.SetPath(pathNodes);
 
+            // Track active visitor
+            activeVisitors.Add(visitor);
+
             totalVisitorsSpawned++;
+        }
+
+        /// <summary>
+        /// Handles wave success when all visitors are cleared in time.
+        /// </summary>
+        private void HandleWaveSuccess()
+        {
+            if (!isWaveActive || isWaveFailed)
+                return;
+
+            isWaveActive = false;
+            Debug.Log($"WaveSpawner: Wave {currentWaveNumber} SUCCESS! Cleared with {waveTimeRemaining:F1}s remaining");
+
+            OnWaveSuccess?.Invoke();
+        }
+
+        /// <summary>
+        /// Handles wave failure when timer expires.
+        /// </summary>
+        private void HandleWaveFailure()
+        {
+            if (isWaveFailed)
+                return;
+
+            isWaveFailed = true;
+            isWaveActive = false;
+
+            // Stop spawning if still active
+            if (isSpawning)
+            {
+                StopAllCoroutines();
+                isSpawning = false;
+            }
+
+            Debug.LogWarning($"WaveSpawner: Wave {currentWaveNumber} FAILED! Timer expired with {activeVisitors.Count} visitors remaining");
+
+            OnWaveFailed?.Invoke();
+        }
+
+        #endregion
+
+        #region UI Management
+
+        /// <summary>
+        /// Creates the UI elements for wave display (top-middle of screen).
+        /// </summary>
+        private void CreateUI()
+        {
+            // Create or find canvas
+            if (uiCanvas == null)
+            {
+                uiCanvas = FindFirstObjectByType<Canvas>();
+                if (uiCanvas == null)
+                {
+                    GameObject canvasObj = new GameObject("WaveSpawnerCanvas");
+                    uiCanvas = canvasObj.AddComponent<Canvas>();
+                    uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+
+                    CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
+                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                    scaler.referenceResolution = new Vector2(1920, 1080);
+
+                    canvasObj.AddComponent<GraphicRaycaster>();
+                }
+            }
+
+            // Create panel container - positioned at TOP MIDDLE
+            uiPanel = new GameObject("WaveInfoPanel");
+            uiPanel.transform.SetParent(uiCanvas.transform, false);
+
+            RectTransform panelRect = uiPanel.AddComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 1f);  // Top-middle anchor
+            panelRect.anchorMax = new Vector2(0.5f, 1f);
+            panelRect.pivot = new Vector2(0.5f, 1f);
+            panelRect.anchoredPosition = new Vector2(0f, -10f);  // 10px from top
+            panelRect.sizeDelta = new Vector2(350f, 120f);
+
+            Image panelImage = uiPanel.AddComponent<Image>();
+            panelImage.color = new Color(0.1f, 0.1f, 0.1f, 0.85f);
+
+            // Add outline for better visibility
+            Outline outline = uiPanel.AddComponent<Outline>();
+            outline.effectColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+            outline.effectDistance = new Vector2(2f, -2f);
+
+            // Create wave status text (top)
+            GameObject statusTextObj = new GameObject("WaveStatusText");
+            statusTextObj.transform.SetParent(uiPanel.transform, false);
+
+            RectTransform statusRect = statusTextObj.AddComponent<RectTransform>();
+            statusRect.anchorMin = new Vector2(0f, 1f);
+            statusRect.anchorMax = new Vector2(1f, 1f);
+            statusRect.pivot = new Vector2(0.5f, 1f);
+            statusRect.anchoredPosition = new Vector2(0f, -10f);
+            statusRect.sizeDelta = new Vector2(-20f, 30f);
+
+            waveStatusText = statusTextObj.AddComponent<TextMeshProUGUI>();
+            waveStatusText.fontSize = fontSize + 4;
+            waveStatusText.color = new Color(1f, 0.85f, 0.3f, 1f);  // Gold color
+            waveStatusText.alignment = TextAlignmentOptions.Center;
+            waveStatusText.fontStyle = FontStyles.Bold;
+            waveStatusText.text = "Wave 0";
+
+            // Create timer text (middle)
+            GameObject timerTextObj = new GameObject("TimerText");
+            timerTextObj.transform.SetParent(uiPanel.transform, false);
+
+            RectTransform timerRect = timerTextObj.AddComponent<RectTransform>();
+            timerRect.anchorMin = new Vector2(0f, 0.5f);
+            timerRect.anchorMax = new Vector2(1f, 0.5f);
+            timerRect.pivot = new Vector2(0.5f, 0.5f);
+            timerRect.anchoredPosition = new Vector2(0f, 0f);
+            timerRect.sizeDelta = new Vector2(-20f, 35f);
+
+            timerText = timerTextObj.AddComponent<TextMeshProUGUI>();
+            timerText.fontSize = fontSize + 6;
+            timerText.color = uiTextColor;
+            timerText.alignment = TextAlignmentOptions.Center;
+            timerText.fontStyle = FontStyles.Bold;
+            timerText.text = "--:--";
+
+            // Create visitor count text (bottom)
+            GameObject countTextObj = new GameObject("VisitorCountText");
+            countTextObj.transform.SetParent(uiPanel.transform, false);
+
+            RectTransform countRect = countTextObj.AddComponent<RectTransform>();
+            countRect.anchorMin = new Vector2(0f, 0f);
+            countRect.anchorMax = new Vector2(1f, 0f);
+            countRect.pivot = new Vector2(0.5f, 0f);
+            countRect.anchoredPosition = new Vector2(0f, 10f);
+            countRect.sizeDelta = new Vector2(-20f, 25f);
+
+            visitorCountText = countTextObj.AddComponent<TextMeshProUGUI>();
+            visitorCountText.fontSize = fontSize;
+            visitorCountText.color = new Color(uiTextColor.r, uiTextColor.g, uiTextColor.b, 0.9f);
+            visitorCountText.alignment = TextAlignmentOptions.Center;
+            visitorCountText.text = "Visitors: 0/0 (Active: 0)";
+
+            Debug.Log("WaveSpawner: Auto-created UI elements at top-middle of screen");
+        }
+
+        /// <summary>
+        /// Updates the UI display with current wave status.
+        /// </summary>
+        private void UpdateUI()
+        {
+            if (waveStatusText != null)
+            {
+                if (isWaveFailed)
+                {
+                    waveStatusText.text = $"Wave {currentWaveNumber} - FAILED";
+                    waveStatusText.color = warningColor;
+                }
+                else if (!isWaveActive)
+                {
+                    waveStatusText.text = "No Active Wave";
+                    waveStatusText.color = new Color(0.6f, 0.6f, 0.6f, 1f);
+                }
+                else
+                {
+                    waveStatusText.text = $"Wave {currentWaveNumber}";
+                    waveStatusText.color = new Color(1f, 0.85f, 0.3f, 1f);
+                }
+            }
+
+            if (timerText != null)
+            {
+                if (!isWaveActive)
+                {
+                    timerText.text = "--:--";
+                    timerText.color = uiTextColor;
+                }
+                else
+                {
+                    int minutes = Mathf.FloorToInt(waveTimeRemaining / 60f);
+                    int seconds = Mathf.FloorToInt(waveTimeRemaining % 60f);
+                    timerText.text = $"{minutes:00}:{seconds:00}";
+
+                    // Change color to warning if time is low
+                    if (waveTimeRemaining <= warningThreshold)
+                    {
+                        timerText.color = warningColor;
+                    }
+                    else
+                    {
+                        timerText.color = uiTextColor;
+                    }
+                }
+            }
+
+            if (visitorCountText != null)
+            {
+                int totalForWave = visitorsPerWave;
+                visitorCountText.text = $"Visitors: {visitorsSpawnedThisWave}/{totalForWave} (Active: {activeVisitors.Count})";
+            }
         }
 
         #endregion
