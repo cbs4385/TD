@@ -36,6 +36,10 @@ namespace FaeMaze.Systems
         [Tooltip("The visitor prefab to spawn")]
         private VisitorController visitorPrefab;
 
+        [SerializeField]
+        [Tooltip("The Red Cap prefab (hostile actor that hunts visitors)")]
+        private RedCapController redCapPrefab;
+
         [Header("Scene References (Legacy - Optional)")]
         [SerializeField]
         [Tooltip("(LEGACY) The maze entrance where visitors spawn. Leave empty to use spawn markers.")]
@@ -57,6 +61,27 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Time budget for each wave (in seconds). Wave fails if not cleared in time.")]
         private float waveDuration = 60f;
+
+        [Header("Red Cap Settings")]
+        [SerializeField]
+        [Tooltip("Enable Red Cap spawning during waves")]
+        private bool enableRedCap = true;
+
+        [SerializeField]
+        [Tooltip("Delay (in seconds) before spawning the first Red Cap in a wave")]
+        private float redCapSpawnDelay = 60f;
+
+        [SerializeField]
+        [Tooltip("Speed multiplier for Red Cap relative to visitor speed")]
+        private float redCapSpeedMultiplier = 1.25f;
+
+        [SerializeField]
+        [Tooltip("Essence penalty multiplier when Red Cap catches a visitor")]
+        private float redCapEssencePenaltyMultiplier = 2.0f;
+
+        [SerializeField]
+        [Tooltip("Base essence value per visitor (should match HeartOfTheMaze setting)")]
+        private int baseEssencePerVisitor = 10;
 
         [Header("UI Configuration")]
         [SerializeField]
@@ -99,6 +124,11 @@ namespace FaeMaze.Systems
         private float waveTimeRemaining;
         private List<VisitorController> activeVisitors = new List<VisitorController>();
 
+        // Red Cap tracking
+        private float redCapSpawnTimer;
+        private bool hasSpawnedRedCap;
+        private RedCapController currentRedCap;
+
         // UI References
         private TextMeshProUGUI timerText;
         private TextMeshProUGUI visitorCountText;
@@ -132,6 +162,15 @@ namespace FaeMaze.Systems
 
         /// <summary>Gets the configured wave duration (in seconds)</summary>
         public float WaveDuration => waveDuration;
+
+        /// <summary>Gets the time remaining until Red Cap spawns (in seconds). Returns 0 if already spawned.</summary>
+        public float RedCapSpawnTimeRemaining => hasSpawnedRedCap ? 0f : Mathf.Max(0f, redCapSpawnTimer);
+
+        /// <summary>Gets whether a Red Cap has been spawned in this wave</summary>
+        public bool HasSpawnedRedCap => hasSpawnedRedCap;
+
+        /// <summary>Gets the current Red Cap instance (null if not spawned or destroyed)</summary>
+        public RedCapController CurrentRedCap => currentRedCap;
 
         #endregion
 
@@ -170,6 +209,17 @@ namespace FaeMaze.Systems
             {
                 waveTimeRemaining = 0f;
                 HandleWaveFailure();
+            }
+
+            // Update Red Cap spawn timer
+            if (enableRedCap && !hasSpawnedRedCap)
+            {
+                redCapSpawnTimer -= Time.deltaTime;
+
+                if (redCapSpawnTimer <= 0f)
+                {
+                    SpawnRedCap();
+                }
             }
 
             // Clean up destroyed visitors from active list
@@ -232,6 +282,15 @@ namespace FaeMaze.Systems
             isWaveSuccessful = false;
             waveTimeRemaining = waveDuration;
 
+            // Initialize Red Cap state
+            redCapSpawnTimer = redCapSpawnDelay;
+            hasSpawnedRedCap = false;
+            if (currentRedCap != null)
+            {
+                Destroy(currentRedCap.gameObject);
+                currentRedCap = null;
+            }
+
             Debug.Log($"WaveSpawner: Starting Wave {currentWaveNumber} with {visitorsPerWave} visitors and {waveDuration}s time limit");
 
             StartCoroutine(SpawnWaveCoroutine());
@@ -247,6 +306,15 @@ namespace FaeMaze.Systems
             isWaveFailed = false;
             isWaveSuccessful = false;
             isWaveActive = false;
+
+            // Clean up Red Cap
+            if (currentRedCap != null)
+            {
+                Destroy(currentRedCap.gameObject);
+                currentRedCap = null;
+            }
+            hasSpawnedRedCap = false;
+
             Debug.Log("WaveSpawner: Failed state reset - can start new wave");
         }
 
@@ -358,6 +426,60 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Spawns a Red Cap at the entrance location.
+        /// </summary>
+        private void SpawnRedCap()
+        {
+            if (redCapPrefab == null)
+            {
+                Debug.LogWarning("WaveSpawner: Red Cap prefab not assigned!");
+                hasSpawnedRedCap = true; // Mark as spawned to prevent repeated warnings
+                return;
+            }
+
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogError("WaveSpawner: MazeGridBehaviour not found! Cannot spawn Red Cap.");
+                hasSpawnedRedCap = true;
+                return;
+            }
+
+            // Determine spawn position (use first spawn marker or legacy entrance)
+            Vector3 spawnWorldPos;
+            List<MazeSpawnMarker> spawnMarkers = mazeGridBehaviour.GetSpawnMarkers();
+
+            if (spawnMarkers != null && spawnMarkers.Count > 0)
+            {
+                // Use first spawn marker
+                Vector2Int spawnGridPos = spawnMarkers[0].GridPosition;
+                spawnWorldPos = mazeGridBehaviour.GridToWorld(spawnGridPos.x, spawnGridPos.y);
+            }
+            else if (entrance != null)
+            {
+                // Use legacy entrance
+                spawnWorldPos = mazeGridBehaviour.GridToWorld(entrance.GridPosition.x, entrance.GridPosition.y);
+            }
+            else
+            {
+                Debug.LogError("WaveSpawner: No spawn markers or entrance found! Cannot spawn Red Cap.");
+                hasSpawnedRedCap = true;
+                return;
+            }
+
+            // Instantiate Red Cap
+            currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.identity);
+            currentRedCap.name = $"RedCap_Wave{currentWaveNumber}";
+
+            // Configure Red Cap if properties exist
+            // (The RedCapController will read its own serialized fields, but we can pass inspector values if needed)
+            // For now, the RedCapController uses its own serialized defaults
+
+            hasSpawnedRedCap = true;
+
+            Debug.Log($"WaveSpawner: Spawned Red Cap at {spawnWorldPos} for Wave {currentWaveNumber}");
+        }
+
+        /// <summary>
         /// Handles wave success when all visitors are cleared in time.
         /// </summary>
         private void HandleWaveSuccess()
@@ -367,6 +489,14 @@ namespace FaeMaze.Systems
 
             isWaveActive = false;
             isWaveSuccessful = true;
+
+            // Clean up Red Cap
+            if (currentRedCap != null)
+            {
+                Destroy(currentRedCap.gameObject);
+                currentRedCap = null;
+            }
+
             Debug.Log($"WaveSpawner: Wave {currentWaveNumber} SUCCESS! Cleared with {waveTimeRemaining:F1}s remaining");
 
             OnWaveSuccess?.Invoke();
@@ -388,6 +518,13 @@ namespace FaeMaze.Systems
             {
                 StopAllCoroutines();
                 isSpawning = false;
+            }
+
+            // Clean up Red Cap
+            if (currentRedCap != null)
+            {
+                Destroy(currentRedCap.gameObject);
+                currentRedCap = null;
             }
 
             Debug.LogWarning($"WaveSpawner: Wave {currentWaveNumber} FAILED! Timer expired with {activeVisitors.Count} visitors remaining");

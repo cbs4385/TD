@@ -1,0 +1,424 @@
+using System.Collections.Generic;
+using UnityEngine;
+using FaeMaze.Systems;
+using FaeMaze.Maze;
+
+namespace FaeMaze.Visitors
+{
+    /// <summary>
+    /// Red Cap - A hostile actor that hunts visitors and drains essence.
+    /// Moves faster than visitors, actively stalks them, and penalizes the player
+    /// when catching one.
+    /// </summary>
+    public class RedCapController : MonoBehaviour
+    {
+        #region Enums
+
+        public enum RedCapState
+        {
+            Idle,
+            Hunting,
+            Returning
+        }
+
+        #endregion
+
+        #region Serialized Fields
+
+        [Header("Movement Settings")]
+        [SerializeField]
+        [Tooltip("Movement speed multiplier relative to visitor speed (1.25 = 25% faster)")]
+        private float speedMultiplier = 1.25f;
+
+        [SerializeField]
+        [Tooltip("Base movement speed in units per second")]
+        private float baseMoveSpeed = 3f;
+
+        [Header("Hunting Settings")]
+        [SerializeField]
+        [Tooltip("How often to update target selection (in seconds)")]
+        private float targetUpdateInterval = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Distance threshold to consider a waypoint reached")]
+        private float waypointReachedDistance = 0.05f;
+
+        [SerializeField]
+        [Tooltip("Detection radius for visitor contact (collision)")]
+        private float contactRadius = 0.3f;
+
+        [Header("Essence Settings")]
+        [SerializeField]
+        [Tooltip("Essence penalty multiplier when catching a visitor (2.0 = double the normal reward)")]
+        private float essencePenaltyMultiplier = 2.0f;
+
+        [SerializeField]
+        [Tooltip("Base essence value per visitor (should match HeartOfTheMaze setting)")]
+        private int baseEssencePerVisitor = 10;
+
+        [Header("Visual Settings")]
+        [SerializeField]
+        [Tooltip("Color of the Red Cap")]
+        private Color redCapColor = new Color(0.8f, 0.1f, 0.1f, 1f); // Dark red
+
+        [SerializeField]
+        [Tooltip("Size of the Red Cap sprite")]
+        private float redCapSize = 1.2f;
+
+        [SerializeField]
+        [Tooltip("Sprite rendering layer order")]
+        private int sortingOrder = 15;
+
+        #endregion
+
+        #region Private Fields
+
+        private RedCapState state = RedCapState.Idle;
+        private MazeGridBehaviour mazeGridBehaviour;
+        private GameController gameController;
+        private List<Vector2Int> currentPath = new List<Vector2Int>();
+        private int currentWaypointIndex;
+        private VisitorController targetVisitor;
+        private float targetUpdateTimer;
+        private SpriteRenderer spriteRenderer;
+        private float moveSpeed;
+
+        // Direction tracking for animation (if we add animations later)
+        private const int IdleDirection = 5;
+        private int lastDirection = IdleDirection;
+
+        #endregion
+
+        #region Properties
+
+        /// <summary>Gets the current state of the Red Cap</summary>
+        public RedCapState State => state;
+
+        /// <summary>Gets the current target visitor</summary>
+        public VisitorController TargetVisitor => targetVisitor;
+
+        /// <summary>Gets the calculated move speed</summary>
+        public float MoveSpeed => moveSpeed;
+
+        #endregion
+
+        #region Unity Lifecycle
+
+        private void Awake()
+        {
+            // Calculate actual move speed
+            moveSpeed = baseMoveSpeed * speedMultiplier;
+        }
+
+        private void Start()
+        {
+            // Find required components
+            gameController = GameController.Instance;
+            mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+
+            if (gameController == null)
+            {
+                Debug.LogError("RedCapController: GameController not found!");
+            }
+
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogError("RedCapController: MazeGridBehaviour not found!");
+            }
+
+            // Create visual representation
+            CreateVisualMarker();
+
+            // Start hunting
+            state = RedCapState.Hunting;
+        }
+
+        private void Update()
+        {
+            if (state == RedCapState.Hunting)
+            {
+                UpdateTargetSelection();
+                FollowPath();
+                CheckForVisitorContact();
+            }
+        }
+
+        #endregion
+
+        #region Hunting Behavior
+
+        /// <summary>
+        /// Updates target selection at regular intervals.
+        /// Finds the closest visitor or switches to a closer one.
+        /// </summary>
+        private void UpdateTargetSelection()
+        {
+            targetUpdateTimer -= Time.deltaTime;
+
+            if (targetUpdateTimer <= 0f)
+            {
+                targetUpdateTimer = targetUpdateInterval;
+
+                // Find all visitors in the scene
+                VisitorController[] allVisitors = FindObjectsByType<VisitorController>(FindObjectsSortMode.None);
+
+                if (allVisitors.Length == 0)
+                {
+                    targetVisitor = null;
+                    currentPath.Clear();
+                    state = RedCapState.Idle;
+                    return;
+                }
+
+                // Find closest visitor
+                VisitorController closestVisitor = null;
+                float closestDistance = float.MaxValue;
+
+                foreach (var visitor in allVisitors)
+                {
+                    if (visitor == null || visitor.gameObject == null)
+                        continue;
+
+                    float distance = Vector3.Distance(transform.position, visitor.transform.position);
+                    if (distance < closestDistance)
+                    {
+                        closestDistance = distance;
+                        closestVisitor = visitor;
+                    }
+                }
+
+                // Update target if we found a new one
+                if (closestVisitor != targetVisitor)
+                {
+                    targetVisitor = closestVisitor;
+                    RecalculatePathToTarget();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Recalculates the path to the current target visitor.
+        /// </summary>
+        private void RecalculatePathToTarget()
+        {
+            if (targetVisitor == null || gameController == null || mazeGridBehaviour == null)
+            {
+                currentPath.Clear();
+                return;
+            }
+
+            // Get current grid position
+            Vector2Int currentGridPos = mazeGridBehaviour.WorldToGrid(transform.position);
+
+            // Get target grid position
+            Vector2Int targetGridPos = mazeGridBehaviour.WorldToGrid(targetVisitor.transform.position);
+
+            // Find path using GameController's pathfinding
+            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
+            if (gameController.TryFindPath(currentGridPos, targetGridPos, pathNodes))
+            {
+                currentPath.Clear();
+                foreach (var node in pathNodes)
+                {
+                    currentPath.Add(new Vector2Int(node.x, node.y));
+                }
+
+                currentWaypointIndex = 0;
+            }
+            else
+            {
+                currentPath.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Follows the current path toward the target.
+        /// </summary>
+        private void FollowPath()
+        {
+            if (currentPath.Count == 0 || currentWaypointIndex >= currentPath.Count)
+            {
+                // No path or reached end - recalculate
+                RecalculatePathToTarget();
+                return;
+            }
+
+            // Get current waypoint
+            Vector2Int waypointGridPos = currentPath[currentWaypointIndex];
+            Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(waypointGridPos.x, waypointGridPos.y);
+
+            // Move toward waypoint
+            Vector3 direction = (waypointWorldPos - transform.position).normalized;
+            transform.position += direction * moveSpeed * Time.deltaTime;
+
+            // Check if reached waypoint
+            float distanceToWaypoint = Vector3.Distance(transform.position, waypointWorldPos);
+            if (distanceToWaypoint < waypointReachedDistance)
+            {
+                currentWaypointIndex++;
+
+                // Recalculate path periodically to adjust for moving target
+                if (currentWaypointIndex >= currentPath.Count)
+                {
+                    RecalculatePathToTarget();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks if the Red Cap is in contact with a visitor.
+        /// </summary>
+        private void CheckForVisitorContact()
+        {
+            if (targetVisitor == null)
+                return;
+
+            float distance = Vector3.Distance(transform.position, targetVisitor.transform.position);
+
+            if (distance <= contactRadius)
+            {
+                CaptureVisitor(targetVisitor);
+            }
+        }
+
+        /// <summary>
+        /// Captures a visitor, despawns them, and charges the essence penalty.
+        /// </summary>
+        /// <param name="visitor">The visitor to capture</param>
+        private void CaptureVisitor(VisitorController visitor)
+        {
+            if (visitor == null)
+                return;
+
+            // Calculate essence penalty
+            int essencePenalty = Mathf.RoundToInt(baseEssencePerVisitor * essencePenaltyMultiplier);
+
+            // Deduct essence from player
+            if (gameController != null)
+            {
+                // Use TrySpendEssence to deduct, but we want to force the deduction even if not enough
+                // So we'll use AddEssence with negative value to bypass the spending check
+                gameController.AddEssence(-essencePenalty);
+
+                Debug.Log($"RedCap: Captured visitor! Charged {essencePenalty} essence (current: {gameController.CurrentEssence})");
+            }
+
+            // Despawn the visitor
+            Destroy(visitor.gameObject);
+
+            // Clear target and find a new one
+            targetVisitor = null;
+            currentPath.Clear();
+        }
+
+        #endregion
+
+        #region Visual
+
+        /// <summary>
+        /// Creates the visual representation of the Red Cap.
+        /// </summary>
+        private void CreateVisualMarker()
+        {
+            // Add SpriteRenderer if not already present
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+            }
+
+            // Create a sprite (simple circle for now)
+            spriteRenderer.sprite = CreateCircleSprite(32);
+            spriteRenderer.color = redCapColor;
+            spriteRenderer.sortingOrder = sortingOrder;
+
+            // Set scale
+            transform.localScale = new Vector3(redCapSize, redCapSize, 1f);
+
+            // Add CircleCollider2D for trigger detection
+            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            if (collider == null)
+            {
+                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider.radius = contactRadius;
+                collider.isTrigger = true;
+            }
+        }
+
+        private Sprite CreateCircleSprite(int resolution)
+        {
+            int size = resolution;
+            Texture2D texture = new Texture2D(size, size);
+            Color[] pixels = new Color[size * size];
+
+            Vector2 center = new Vector2(size / 2f, size / 2f);
+            float radius = size / 2f;
+
+            // Create a circle
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dist = Vector2.Distance(new Vector2(x, y), center);
+                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply();
+
+            return Sprite.Create(
+                texture,
+                new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f),
+                size
+            );
+        }
+
+        #endregion
+
+        #region Gizmos
+
+        private void OnDrawGizmos()
+        {
+            // Draw Red Cap position
+            Gizmos.color = new Color(0.8f, 0.1f, 0.1f, 0.8f);
+            Gizmos.DrawWireSphere(transform.position, 0.4f);
+
+            // Draw contact radius
+            Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.3f);
+            Gizmos.DrawWireSphere(transform.position, contactRadius);
+
+            // Draw path if available
+            if (currentPath != null && currentPath.Count > 0 && mazeGridBehaviour != null)
+            {
+                Gizmos.color = new Color(1f, 0f, 0f, 0.5f);
+
+                for (int i = currentWaypointIndex; i < currentPath.Count; i++)
+                {
+                    Vector3 worldPos = mazeGridBehaviour.GridToWorld(currentPath[i].x, currentPath[i].y);
+                    Gizmos.DrawSphere(worldPos, 0.1f);
+
+                    if (i > currentWaypointIndex)
+                    {
+                        Vector3 prevWorldPos = mazeGridBehaviour.GridToWorld(currentPath[i - 1].x, currentPath[i - 1].y);
+                        Gizmos.DrawLine(prevWorldPos, worldPos);
+                    }
+                    else if (i == currentWaypointIndex)
+                    {
+                        Gizmos.DrawLine(transform.position, worldPos);
+                    }
+                }
+            }
+
+            // Draw line to target visitor
+            if (targetVisitor != null)
+            {
+                Gizmos.color = new Color(1f, 0f, 0f, 0.7f);
+                Gizmos.DrawLine(transform.position, targetVisitor.transform.position);
+            }
+        }
+
+        #endregion
+    }
+}
