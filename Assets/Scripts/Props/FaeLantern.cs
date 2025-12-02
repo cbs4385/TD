@@ -212,30 +212,30 @@ namespace FaeMaze.Props
                 return;
             }
 
-            int directionValue = 5; // Idle by default
+            int directionValue = 0; // Idle by default
 
             if (visitorGridPosition.y > _gridPosition.y)
             {
-                directionValue = 0; // Up
+                directionValue = 1; // Up (-y direction)
             }
             else if (visitorGridPosition.y < _gridPosition.y)
             {
-                directionValue = 1; // Down
+                directionValue = 2; // Down (+y direction)
             }
             else if (visitorGridPosition.x < _gridPosition.x)
             {
-                directionValue = 2; // Left
+                directionValue = 3; // Left (-x direction)
             }
             else if (visitorGridPosition.x > _gridPosition.x)
             {
-                directionValue = 3; // Right
+                directionValue = 4; // Right (+x direction)
             }
 
             _animator.SetInteger(DirectionParameter, directionValue);
         }
 
         /// <summary>
-        /// Resets the animator Direction parameter to idle (5).
+        /// Resets the animator Direction parameter to idle (0).
         /// </summary>
         public void SetIdleDirection()
         {
@@ -244,7 +244,7 @@ namespace FaeMaze.Props
                 return;
             }
 
-            _animator.SetInteger(DirectionParameter, 5);
+            _animator.SetInteger(DirectionParameter, 0);
         }
 
         #endregion
