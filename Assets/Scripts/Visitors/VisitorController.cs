@@ -164,6 +164,12 @@ namespace FaeMaze.Visitors
         private int lastDirection = IdleDirection;
         private int currentAnimatorDirection = IdleDirection;
 
+        // Debug tracking for first visitor only
+        private static int visitorSpawnCount = 0;
+        private static int firstVisitorId = -1;
+        private int visitorId;
+        private bool isFirstVisitor = false;
+
         #endregion
 
         #region Properties
@@ -193,6 +199,15 @@ namespace FaeMaze.Visitors
 
         private void Awake()
         {
+            // Track visitor spawn order for debugging
+            visitorId = visitorSpawnCount++;
+            if (firstVisitorId == -1)
+            {
+                firstVisitorId = visitorId;
+                isFirstVisitor = true;
+                Debug.Log($"[FIRST_VISITOR] Visitor ID {visitorId} marked as first visitor for debug tracking");
+            }
+
             state = VisitorState.Idle;
             isConfused = confusionEnabled;
             recentlyReachedTiles = new Queue<Vector2Int>();
@@ -509,7 +524,12 @@ namespace FaeMaze.Visitors
             // Guard against redundant animator parameter writes
             if (animator != null && currentAnimatorDirection != direction)
             {
-                Debug.Log($"[{gameObject.name}] DIRECTION CHANGE | from={currentAnimatorDirection} to={direction} | state={state} | lastDir={lastDirection}");
+                if (isFirstVisitor)
+                {
+                    string dirName = direction == 0 ? "Down" : direction == 1 ? "Up" : direction == 2 ? "Left" : direction == 3 ? "Right" : "Idle";
+                    string prevDirName = currentAnimatorDirection == 0 ? "Down" : currentAnimatorDirection == 1 ? "Up" : currentAnimatorDirection == 2 ? "Left" : currentAnimatorDirection == 3 ? "Right" : "Idle";
+                    Debug.Log($"[FIRST_VISITOR] ANIMATOR_DIRECTION_SET | from={prevDirName}({currentAnimatorDirection}) to={dirName}({direction}) | state={state} | lastDir={lastDirection} | frame={Time.frameCount}");
+                }
                 animator.SetInteger(DirectionParameter, direction);
                 currentAnimatorDirection = direction;
             }
@@ -528,10 +548,18 @@ namespace FaeMaze.Visitors
                 // Only return idle if we're actually stopped (not in Walking state)
                 if (state != VisitorState.Walking)
                 {
+                    if (isFirstVisitor)
+                    {
+                        Debug.Log($"[FIRST_VISITOR] DIR_FROM_MOVEMENT | movement=({movement.x:F4},{movement.y:F4}) mag={movement.magnitude:F4} | threshold={movementThreshold:F4} | belowThreshold=true | state={state} | returning=Idle(5)");
+                    }
                     return IdleDirection;
                 }
 
                 // While walking with small movement delta, retain last direction
+                if (isFirstVisitor)
+                {
+                    Debug.Log($"[FIRST_VISITOR] DIR_FROM_MOVEMENT | movement=({movement.x:F4},{movement.y:F4}) mag={movement.magnitude:F4} | threshold={movementThreshold:F4} | belowThreshold=true | state={state} | retaining=lastDir({lastDirection})");
+                }
                 return lastDirection;
             }
 
@@ -553,6 +581,12 @@ namespace FaeMaze.Visitors
             if (newDirection != IdleDirection)
             {
                 lastDirection = newDirection;
+            }
+
+            if (isFirstVisitor)
+            {
+                string dirName = newDirection == 0 ? "Down" : newDirection == 1 ? "Up" : newDirection == 2 ? "Left" : newDirection == 3 ? "Right" : "Idle";
+                Debug.Log($"[FIRST_VISITOR] DIR_FROM_MOVEMENT | movement=({movement.x:F4},{movement.y:F4}) mag={movement.magnitude:F4} | threshold={movementThreshold:F4} | absX={absX:F4} absY={absY:F4} | newDir={dirName}({newDirection}) | cached");
             }
 
             return newDirection;
@@ -1495,7 +1529,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            Debug.Log($"[{gameObject.name}] RECALC_PATH START | state={state} | isCalculating=true");
             isCalculatingPath = true;
             // Don't change state to Idle during recalculation - this causes animation flickering
             // The isCalculatingPath flag prevents movement, so we can keep the walking animation
@@ -1532,8 +1565,6 @@ namespace FaeMaze.Visitors
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
 
-            Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | start={currentPos} | dest={originalDestination} | length={path.Count} | state={state}");
-
             if (path.Count <= 1)
             {
                 isCalculatingPath = false;
@@ -1544,7 +1575,6 @@ namespace FaeMaze.Visitors
             // Ensure state is Walking (in case RecalculatePath was called when not walking)
             if (state != VisitorState.Walking)
             {
-                Debug.Log($"[{gameObject.name}] RECALC_PATH | setting state to Walking");
                 state = VisitorState.Walking;
             }
             isCalculatingPath = false;
