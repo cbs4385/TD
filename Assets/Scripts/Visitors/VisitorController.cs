@@ -509,6 +509,7 @@ namespace FaeMaze.Visitors
             // Guard against redundant animator parameter writes
             if (animator != null && currentAnimatorDirection != direction)
             {
+                Debug.Log($"[{gameObject.name}] DIRECTION CHANGE | from={currentAnimatorDirection} to={direction} | state={state} | lastDir={lastDirection}");
                 animator.SetInteger(DirectionParameter, direction);
                 currentAnimatorDirection = direction;
             }
@@ -603,7 +604,8 @@ namespace FaeMaze.Visitors
                 effectiveSpeed * Time.deltaTime
             );
 
-            UpdateAnimatorDirection(newPosition - transform.position);
+            Vector3 movementDelta = newPosition - transform.position;
+            UpdateAnimatorDirection(movementDelta);
 
             // Use Rigidbody2D.MovePosition for proper trigger detection
             if (rb != null)
@@ -1493,9 +1495,10 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            Debug.Log($"[{gameObject.name}] RECALC_PATH START | state={state} | isCalculating=true");
             isCalculatingPath = true;
-            state = VisitorState.Idle;
-            SetAnimatorDirection(IdleDirection);
+            // Don't change state to Idle during recalculation - this causes animation flickering
+            // The isCalculatingPath flag prevents movement, so we can keep the walking animation
 
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
@@ -1529,7 +1532,7 @@ namespace FaeMaze.Visitors
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
 
-            Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | start={currentPos} | dest={originalDestination} | length={path.Count}");
+            Debug.Log($"[{gameObject.name}] PATH RECALC SUCCESS | start={currentPos} | dest={originalDestination} | length={path.Count} | state={state}");
 
             if (path.Count <= 1)
             {
@@ -1538,7 +1541,12 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            state = VisitorState.Walking;
+            // Ensure state is Walking (in case RecalculatePath was called when not walking)
+            if (state != VisitorState.Walking)
+            {
+                Debug.Log($"[{gameObject.name}] RECALC_PATH | setting state to Walking");
+                state = VisitorState.Walking;
+            }
             isCalculatingPath = false;
         }
 
