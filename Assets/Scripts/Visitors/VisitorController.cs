@@ -528,6 +528,7 @@ namespace FaeMaze.Visitors
                 {
                     string dirName = direction == 0 ? "Down" : direction == 1 ? "Up" : direction == 2 ? "Left" : direction == 3 ? "Right" : "Idle";
                     string prevDirName = currentAnimatorDirection == 0 ? "Down" : currentAnimatorDirection == 1 ? "Up" : currentAnimatorDirection == 2 ? "Left" : currentAnimatorDirection == 3 ? "Right" : "Idle";
+
                     Debug.Log($"[FIRST_VISITOR] ANIMATOR_DIRECTION_SET | from={prevDirName}({currentAnimatorDirection}) to={dirName}({direction}) | state={state} | lastDir={lastDirection} | frame={Time.frameCount}");
                 }
                 animator.SetInteger(DirectionParameter, direction);
@@ -566,6 +567,22 @@ namespace FaeMaze.Visitors
             // Movement is significant - calculate new direction
             float absX = Mathf.Abs(movement.x);
             float absY = Mathf.Abs(movement.y);
+
+            // Require a clear dominant axis to prevent flickering when values are close
+            // Use 20% hysteresis: one axis must be at least 1.2x the other to change direction
+            float axisDifference = Mathf.Abs(absX - absY);
+            float axisMin = Mathf.Min(absX, absY);
+
+            if (axisDifference < axisMin * 0.2f && lastDirection != IdleDirection)
+            {
+                // Axes are too close - retain last direction to prevent flickering
+                if (isFirstVisitor)
+                {
+                    string lastDirName = lastDirection == 0 ? "Down" : lastDirection == 1 ? "Up" : lastDirection == 2 ? "Left" : lastDirection == 3 ? "Right" : "Idle";
+                    Debug.Log($"[FIRST_VISITOR] DIR_FROM_MOVEMENT | movement=({movement.x:F4},{movement.y:F4}) mag={movement.magnitude:F4} | absX={absX:F4} absY={absY:F4} | axisDiff={axisDifference:F4} | tooClose=true | retaining={lastDirName}({lastDirection})");
+                }
+                return lastDirection;
+            }
 
             int newDirection;
             if (absY >= absX)
