@@ -157,7 +157,7 @@ namespace FaeMaze.Visitors
         private List<FascinatedPathNode> fascinatedPathNodes;
 
         private const string DirectionParameter = "Direction";
-        private const int IdleDirection = 5;
+        private const int IdleDirection = 0;
         private const float MovementEpsilonSqr = 0.0001f;
 
         // Cached direction to prevent animation flickering when movement delta is small
@@ -551,11 +551,13 @@ namespace FaeMaze.Visitors
             int newDirection;
             if (absY >= absX)
             {
-                newDirection = movement.y <= 0f ? 0 : 1;
+                // Vertical movement dominant
+                newDirection = movement.y > 0f ? 1 : 2; // 1 = Up, 2 = Down
             }
             else
             {
-                newDirection = movement.x < 0f ? 2 : 3;
+                // Horizontal movement dominant
+                newDirection = movement.x < 0f ? 3 : 4; // 3 = Left, 4 = Right
             }
 
             // Update cached direction (only cache non-idle directions)
