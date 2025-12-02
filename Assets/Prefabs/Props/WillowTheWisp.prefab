@@ -184,6 +184,7 @@ MonoBehaviour:
   enablePulse: 1
   pulseSpeed: 3
   pulseMagnitude: 0.15
+  useProceduralSprite: 0
 --- !u!95 &-4105535882290159223
 Animator:
   serializedVersion: 7
