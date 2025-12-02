@@ -58,7 +58,11 @@ namespace FaeMaze.Visitors
 
         [Header("Visual Settings")]
         [SerializeField]
-        [Tooltip("Color of the Red Cap")]
+        [Tooltip("Use procedural sprite if true, otherwise relies on child SpriteRenderer/Animator")]
+        private bool useProceduralSprite = false;
+
+        [SerializeField]
+        [Tooltip("Color of the Red Cap (used for procedural sprite)")]
         private Color redCapColor = new Color(0.8f, 0.1f, 0.1f, 1f); // Dark red
 
         [SerializeField]
@@ -68,6 +72,11 @@ namespace FaeMaze.Visitors
         [SerializeField]
         [Tooltip("Sprite rendering layer order")]
         private int sortingOrder = 15;
+
+        [Header("Animation Settings")]
+        [SerializeField]
+        [Tooltip("Animator parameter name for direction")]
+        private string directionParameterName = "Direction";
 
         #endregion
 
@@ -81,11 +90,13 @@ namespace FaeMaze.Visitors
         private VisitorController targetVisitor;
         private float targetUpdateTimer;
         private SpriteRenderer spriteRenderer;
+        private Animator animator;
         private float moveSpeed;
 
-        // Direction tracking for animation (if we add animations later)
+        // Direction tracking for animation
         private const int IdleDirection = 5;
         private int lastDirection = IdleDirection;
+        private int currentAnimatorDirection = IdleDirection;
 
         #endregion
 
@@ -115,6 +126,7 @@ namespace FaeMaze.Visitors
             // Find required components
             gameController = GameController.Instance;
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            animator = GetComponent<Animator>();
 
             if (gameController == null)
             {
@@ -126,8 +138,22 @@ namespace FaeMaze.Visitors
                 Debug.LogError("RedCapController: MazeGridBehaviour not found!");
             }
 
-            // Create visual representation
-            CreateVisualMarker();
+            // Create visual representation only if using procedural sprite
+            if (useProceduralSprite)
+            {
+                CreateProceduralVisual();
+            }
+            else
+            {
+                // Get existing SpriteRenderer if not using procedural
+                spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            }
+
+            // Initialize animator direction
+            if (animator != null)
+            {
+                SetAnimatorDirection(IdleDirection);
+            }
 
             // Start hunting
             state = RedCapState.Hunting;
@@ -263,6 +289,9 @@ namespace FaeMaze.Visitors
             Vector3 direction = (waypointWorldPos - transform.position).normalized;
             transform.position += direction * moveSpeed * Time.deltaTime;
 
+            // Update animation direction based on movement
+            UpdateAnimationDirection(direction);
+
             // Check if reached waypoint
             float distanceToWaypoint = Vector3.Distance(transform.position, waypointWorldPos);
             if (distanceToWaypoint < waypointReachedDistance)
@@ -274,6 +303,67 @@ namespace FaeMaze.Visitors
                 {
                     RecalculatePathToTarget();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Updates the animation direction based on movement vector.
+        /// </summary>
+        private void UpdateAnimationDirection(Vector3 movement)
+        {
+            if (animator == null)
+                return;
+
+            // Calculate direction from movement (similar to VisitorController)
+            int direction = GetDirectionFromMovement(new Vector2(movement.x, movement.y));
+            SetAnimatorDirection(direction);
+        }
+
+        /// <summary>
+        /// Gets the direction enum from a movement vector.
+        /// </summary>
+        private int GetDirectionFromMovement(Vector2 movement)
+        {
+            float movementThreshold = 0.01f;
+
+            if (movement.sqrMagnitude <= movementThreshold * movementThreshold)
+            {
+                return lastDirection; // Retain last direction when not moving much
+            }
+
+            float absX = Mathf.Abs(movement.x);
+            float absY = Mathf.Abs(movement.y);
+
+            // Determine dominant axis
+            int newDirection;
+            if (absY >= absX)
+            {
+                // Vertical movement dominant
+                newDirection = movement.y < 0f ? 0 : 1; // 0 = Down, 1 = Up
+            }
+            else
+            {
+                // Horizontal movement dominant
+                newDirection = movement.x < 0f ? 2 : 3; // 2 = Left, 3 = Right
+            }
+
+            if (newDirection != IdleDirection)
+            {
+                lastDirection = newDirection;
+            }
+
+            return newDirection;
+        }
+
+        /// <summary>
+        /// Sets the animator direction parameter.
+        /// </summary>
+        private void SetAnimatorDirection(int direction)
+        {
+            if (animator != null && currentAnimatorDirection != direction)
+            {
+                animator.SetInteger(directionParameterName, direction);
+                currentAnimatorDirection = direction;
             }
         }
 
@@ -328,9 +418,9 @@ namespace FaeMaze.Visitors
         #region Visual
 
         /// <summary>
-        /// Creates the visual representation of the Red Cap.
+        /// Creates the procedural visual representation of the Red Cap.
         /// </summary>
-        private void CreateVisualMarker()
+        private void CreateProceduralVisual()
         {
             // Add SpriteRenderer if not already present
             spriteRenderer = GetComponent<SpriteRenderer>();
