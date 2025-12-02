@@ -146,6 +146,11 @@ namespace FaeMaze.Props
             _activeLanterns.Remove(this);
         }
 
+        private void Update()
+        {
+            UpdateDirectionToClosestVisitor();
+        }
+
         #endregion
 
         #region Influence Calculation
@@ -200,6 +205,70 @@ namespace FaeMaze.Props
         #endregion
 
         #region Animation Control
+
+        /// <summary>
+        /// Updates the animator direction to point toward the closest unfascinated visitor in range.
+        /// Sets direction to idle (0) if no unfascinated visitors are in the influence area.
+        /// </summary>
+        private void UpdateDirectionToClosestVisitor()
+        {
+            if (_animator == null || _influenceCells == null || _gridBehaviour == null)
+            {
+                return;
+            }
+
+            // Find all visitors in the scene
+            FaeMaze.Visitors.VisitorController[] allVisitors = FindObjectsByType<FaeMaze.Visitors.VisitorController>(FindObjectsSortMode.None);
+
+            FaeMaze.Visitors.VisitorController closestVisitor = null;
+            float closestDistance = float.MaxValue;
+
+            // Find the closest unfascinated visitor in the influence area
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor == null)
+                    continue;
+
+                // Skip fascinated visitors
+                if (visitor.IsFascinated)
+                    continue;
+
+                // Get visitor's grid position
+                if (_gridBehaviour.WorldToGrid(visitor.transform.position, out int visitorX, out int visitorY))
+                {
+                    Vector2Int visitorGridPos = new Vector2Int(visitorX, visitorY);
+
+                    // Check if visitor is in influence area
+                    if (IsCellInInfluence(visitorGridPos))
+                    {
+                        // Calculate distance to lantern
+                        float distance = Vector2Int.Distance(visitorGridPos, _gridPosition);
+
+                        if (distance < closestDistance)
+                        {
+                            closestDistance = distance;
+                            closestVisitor = visitor;
+                        }
+                    }
+                }
+            }
+
+            // Update direction based on closest visitor
+            if (closestVisitor != null)
+            {
+                // Get visitor's grid position
+                if (_gridBehaviour.WorldToGrid(closestVisitor.transform.position, out int visitorX, out int visitorY))
+                {
+                    Vector2Int visitorGridPos = new Vector2Int(visitorX, visitorY);
+                    SetInteractionDirection(visitorGridPos);
+                }
+            }
+            else
+            {
+                // No unfascinated visitors in range - set to idle
+                SetIdleDirection();
+            }
+        }
 
         /// <summary>
         /// Sets the animator Direction parameter based on where the visitor is relative to the lantern.

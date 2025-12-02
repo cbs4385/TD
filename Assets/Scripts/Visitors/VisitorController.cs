@@ -850,8 +850,6 @@ namespace FaeMaze.Visitors
             hasReachedLantern = false;
             fascinationTimer = 0f; // Will be set when reaching lantern
 
-            currentFaeLantern.SetInteractionDirection(visitorGridPosition);
-
             // Set cooldown for this lantern
             lanternCooldowns[lantern] = lantern.CooldownSec;
 
