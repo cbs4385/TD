@@ -79,6 +79,11 @@ namespace FaeMaze.Systems
         [Tooltip("Time threshold (seconds) to show warning color")]
         private float warningThreshold = 10f;
 
+        [Header("Auto-Start")]
+        [SerializeField]
+        [Tooltip("Automatically start first wave on scene start")]
+        private bool autoStartFirstWave = false;
+
         #endregion
 
         #region Private Fields
@@ -141,6 +146,13 @@ namespace FaeMaze.Systems
             if (timerText == null || visitorCountText == null || waveStatusText == null)
             {
                 CreateUI();
+            }
+
+            // Auto-start first wave if enabled
+            if (autoStartFirstWave)
+            {
+                Debug.Log("WaveSpawner: Auto-starting first wave");
+                StartWave();
             }
         }
 
