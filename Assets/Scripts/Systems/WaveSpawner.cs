@@ -444,20 +444,23 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Determine spawn position (use first spawn marker or legacy entrance)
+            // Determine spawn position (use random spawn marker or legacy entrance)
             Vector3 spawnWorldPos;
-            List<MazeSpawnMarker> spawnMarkers = mazeGridBehaviour.GetSpawnMarkers();
+            Vector2Int spawnGridPos;
 
-            if (spawnMarkers != null && spawnMarkers.Count > 0)
+            // Try to get a random spawn point first
+            if (mazeGridBehaviour.TryGetRandomSpawnPoint(out char spawnId, out spawnGridPos))
             {
-                // Use first spawn marker
-                Vector2Int spawnGridPos = spawnMarkers[0].GridPosition;
+                // Use spawn marker
                 spawnWorldPos = mazeGridBehaviour.GridToWorld(spawnGridPos.x, spawnGridPos.y);
+                Debug.Log($"WaveSpawner: Spawning Red Cap at spawn marker '{spawnId}' ({spawnGridPos.x}, {spawnGridPos.y})");
             }
             else if (entrance != null)
             {
                 // Use legacy entrance
-                spawnWorldPos = mazeGridBehaviour.GridToWorld(entrance.GridPosition.x, entrance.GridPosition.y);
+                spawnGridPos = entrance.GridPosition;
+                spawnWorldPos = mazeGridBehaviour.GridToWorld(spawnGridPos.x, spawnGridPos.y);
+                Debug.Log($"WaveSpawner: Spawning Red Cap at entrance ({spawnGridPos.x}, {spawnGridPos.y})");
             }
             else
             {
