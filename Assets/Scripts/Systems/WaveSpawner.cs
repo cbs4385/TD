@@ -216,8 +216,15 @@ namespace FaeMaze.Systems
             {
                 redCapSpawnTimer -= Time.deltaTime;
 
+                // Log timer countdown every 5 seconds
+                if (Mathf.FloorToInt(redCapSpawnTimer) % 5 == 0 && redCapSpawnTimer > 0f && redCapSpawnTimer < redCapSpawnDelay - 1f)
+                {
+                    Debug.Log($"[RED_CAP] Spawn timer: {redCapSpawnTimer:F1}s remaining");
+                }
+
                 if (redCapSpawnTimer <= 0f)
                 {
+                    Debug.Log($"[RED_CAP] Timer expired! Attempting to spawn Red Cap...");
                     SpawnRedCap();
                 }
             }
@@ -292,6 +299,7 @@ namespace FaeMaze.Systems
             }
 
             Debug.Log($"WaveSpawner: Starting Wave {currentWaveNumber} with {visitorsPerWave} visitors and {waveDuration}s time limit");
+            Debug.Log($"[RED_CAP] Initialized: enabled={enableRedCap}, spawnDelay={redCapSpawnDelay}s, timer={redCapSpawnTimer}s");
 
             StartCoroutine(SpawnWaveCoroutine());
             return true;
@@ -430,19 +438,25 @@ namespace FaeMaze.Systems
         /// </summary>
         private void SpawnRedCap()
         {
+            Debug.Log($"[RED_CAP] SpawnRedCap() called - Wave {currentWaveNumber}");
+
             if (redCapPrefab == null)
             {
-                Debug.LogWarning("WaveSpawner: Red Cap prefab not assigned!");
+                Debug.LogError("[RED_CAP] FAILED: Red Cap prefab not assigned!");
                 hasSpawnedRedCap = true; // Mark as spawned to prevent repeated warnings
                 return;
             }
 
+            Debug.Log($"[RED_CAP] Prefab OK: {redCapPrefab.name}");
+
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("WaveSpawner: MazeGridBehaviour not found! Cannot spawn Red Cap.");
+                Debug.LogError("[RED_CAP] FAILED: MazeGridBehaviour not found!");
                 hasSpawnedRedCap = true;
                 return;
             }
+
+            Debug.Log($"[RED_CAP] MazeGridBehaviour OK");
 
             // Determine spawn position (use random spawn marker or legacy entrance)
             Vector3 spawnWorldPos;
@@ -453,33 +467,30 @@ namespace FaeMaze.Systems
             {
                 // Use spawn marker
                 spawnWorldPos = mazeGridBehaviour.GridToWorld(spawnGridPos.x, spawnGridPos.y);
-                Debug.Log($"WaveSpawner: Spawning Red Cap at spawn marker '{spawnId}' ({spawnGridPos.x}, {spawnGridPos.y})");
+                Debug.Log($"[RED_CAP] Using spawn marker '{spawnId}' at grid ({spawnGridPos.x}, {spawnGridPos.y}), world {spawnWorldPos}");
             }
             else if (entrance != null)
             {
                 // Use legacy entrance
                 spawnGridPos = entrance.GridPosition;
                 spawnWorldPos = mazeGridBehaviour.GridToWorld(spawnGridPos.x, spawnGridPos.y);
-                Debug.Log($"WaveSpawner: Spawning Red Cap at entrance ({spawnGridPos.x}, {spawnGridPos.y})");
+                Debug.Log($"[RED_CAP] Using entrance at grid ({spawnGridPos.x}, {spawnGridPos.y}), world {spawnWorldPos}");
             }
             else
             {
-                Debug.LogError("WaveSpawner: No spawn markers or entrance found! Cannot spawn Red Cap.");
+                Debug.LogError("[RED_CAP] FAILED: No spawn markers or entrance found!");
                 hasSpawnedRedCap = true;
                 return;
             }
 
             // Instantiate Red Cap
+            Debug.Log($"[RED_CAP] Instantiating prefab at {spawnWorldPos}...");
             currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.identity);
             currentRedCap.name = $"RedCap_Wave{currentWaveNumber}";
 
-            // Configure Red Cap if properties exist
-            // (The RedCapController will read its own serialized fields, but we can pass inspector values if needed)
-            // For now, the RedCapController uses its own serialized defaults
-
             hasSpawnedRedCap = true;
 
-            Debug.Log($"WaveSpawner: Spawned Red Cap at {spawnWorldPos} for Wave {currentWaveNumber}");
+            Debug.Log($"[RED_CAP] SUCCESS! Spawned {currentRedCap.name} at {spawnWorldPos} for Wave {currentWaveNumber}");
         }
 
         /// <summary>
