@@ -71,18 +71,6 @@ namespace FaeMaze.Systems
         [Tooltip("Delay (in seconds) before spawning the first Red Cap in a wave")]
         private float redCapSpawnDelay = 60f;
 
-        [SerializeField]
-        [Tooltip("Speed multiplier for Red Cap relative to visitor speed")]
-        private float redCapSpeedMultiplier = 1.25f;
-
-        [SerializeField]
-        [Tooltip("Essence penalty multiplier when Red Cap catches a visitor")]
-        private float redCapEssencePenaltyMultiplier = 2.0f;
-
-        [SerializeField]
-        [Tooltip("Base essence value per visitor (should match HeartOfTheMaze setting)")]
-        private int baseEssencePerVisitor = 10;
-
         [Header("UI Configuration")]
         [SerializeField]
         [Tooltip("Canvas for UI display (will auto-create if null)")]
