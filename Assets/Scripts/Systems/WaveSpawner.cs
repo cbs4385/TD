@@ -318,6 +318,30 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Retries the current wave without incrementing the wave number.
+        /// Resets failed state and starts the wave again.
+        /// </summary>
+        public bool RetryCurrentWave()
+        {
+            if (!isWaveFailed)
+            {
+                Debug.LogWarning("WaveSpawner: Cannot retry - wave has not failed!");
+                return false;
+            }
+
+            Debug.Log($"WaveSpawner: Retrying wave {currentWaveNumber}");
+
+            // Reset failed state
+            ResetFailedState();
+
+            // Decrement wave number since StartWave() will increment it
+            currentWaveNumber--;
+
+            // Start the wave (which will re-increment to current wave number)
+            return StartWave();
+        }
+
+        /// <summary>
         /// Coroutine that spawns visitors for the current wave.
         /// </summary>
         private IEnumerator SpawnWaveCoroutine()
