@@ -794,16 +794,19 @@ namespace FaeMaze.Props
 
             // Avoid updating when there's no meaningful movement direction
             if (direction.sqrMagnitude < 0.0001f)
+            {
+                animator.SetInteger(DirectionParameter, 0); // Idle
                 return;
+            }
 
             int directionValue;
             if (Mathf.Abs(direction.y) > Mathf.Abs(direction.x))
             {
-                directionValue = direction.y >= 0f ? 0 : 1; // Up : Down
+                directionValue = direction.y > 0f ? 1 : 2; // Up : Down
             }
             else
             {
-                directionValue = direction.x < 0f ? 2 : 3; // Left : Right
+                directionValue = direction.x < 0f ? 3 : 4; // Left : Right
             }
 
             animator.SetInteger(DirectionParameter, directionValue);
