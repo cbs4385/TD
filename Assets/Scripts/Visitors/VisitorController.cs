@@ -160,6 +160,10 @@ namespace FaeMaze.Visitors
         private const int IdleDirection = 5;
         private const float MovementEpsilonSqr = 0.0001f;
 
+        // Cached direction to prevent animation flickering when movement delta is small
+        private int lastDirection = IdleDirection;
+        private int currentAnimatorDirection = IdleDirection;
+
         #endregion
 
         #region Properties
@@ -502,28 +506,55 @@ namespace FaeMaze.Visitors
 
         private void SetAnimatorDirection(int direction)
         {
-            if (animator != null)
+            // Guard against redundant animator parameter writes
+            if (animator != null && currentAnimatorDirection != direction)
             {
                 animator.SetInteger(DirectionParameter, direction);
+                currentAnimatorDirection = direction;
             }
         }
 
         private int GetDirectionFromMovement(Vector2 movement)
         {
-            if (movement.sqrMagnitude <= MovementEpsilonSqr)
+            // Use a higher threshold based on movement speed to avoid flickering
+            // When visitor is walking, small deltas between frames shouldn't trigger idle
+            float movementThreshold = moveSpeed * Time.deltaTime * 0.1f;
+            float movementThresholdSqr = movementThreshold * movementThreshold;
+
+            // If movement is below threshold but we're walking, retain the last direction
+            if (movement.sqrMagnitude <= movementThresholdSqr)
             {
-                return IdleDirection;
+                // Only return idle if we're actually stopped (not in Walking state)
+                if (state != VisitorState.Walking)
+                {
+                    return IdleDirection;
+                }
+
+                // While walking with small movement delta, retain last direction
+                return lastDirection;
             }
 
+            // Movement is significant - calculate new direction
             float absX = Mathf.Abs(movement.x);
             float absY = Mathf.Abs(movement.y);
 
+            int newDirection;
             if (absY >= absX)
             {
-                return movement.y <= 0f ? 0 : 1;
+                newDirection = movement.y <= 0f ? 0 : 1;
+            }
+            else
+            {
+                newDirection = movement.x < 0f ? 2 : 3;
             }
 
-            return movement.x < 0f ? 2 : 3;
+            // Update cached direction (only cache non-idle directions)
+            if (newDirection != IdleDirection)
+            {
+                lastDirection = newDirection;
+            }
+
+            return newDirection;
         }
 
         private void UpdateWalking()
