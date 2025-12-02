@@ -214,10 +214,13 @@ namespace FaeMaze.Systems
             // Update Red Cap spawn timer
             if (enableRedCap && !hasSpawnedRedCap)
             {
+                float previousTimer = redCapSpawnTimer;
                 redCapSpawnTimer -= Time.deltaTime;
 
-                // Log timer countdown every 5 seconds
-                if (Mathf.FloorToInt(redCapSpawnTimer) % 5 == 0 && redCapSpawnTimer > 0f && redCapSpawnTimer < redCapSpawnDelay - 1f)
+                // Log timer countdown at 5-second intervals (55, 50, 45, 40, etc.)
+                int previousInterval = Mathf.FloorToInt(previousTimer / 5f);
+                int currentInterval = Mathf.FloorToInt(redCapSpawnTimer / 5f);
+                if (currentInterval < previousInterval && redCapSpawnTimer > 0f)
                 {
                     Debug.Log($"[RED_CAP] Spawn timer: {redCapSpawnTimer:F1}s remaining");
                 }
