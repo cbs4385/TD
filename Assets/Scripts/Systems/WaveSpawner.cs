@@ -92,6 +92,7 @@ namespace FaeMaze.Systems
         private bool isSpawning;
         private bool isWaveActive;
         private bool isWaveFailed;
+        private bool isWaveSuccessful;
         private int currentWaveNumber;
         private int visitorsSpawnedThisWave;
         private int totalVisitorsSpawned;
@@ -228,6 +229,7 @@ namespace FaeMaze.Systems
             visitorsSpawnedThisWave = 0;
             activeVisitors.Clear();
             isWaveActive = true;
+            isWaveSuccessful = false;
             waveTimeRemaining = waveDuration;
 
             Debug.Log($"WaveSpawner: Starting Wave {currentWaveNumber} with {visitorsPerWave} visitors and {waveDuration}s time limit");
@@ -243,6 +245,7 @@ namespace FaeMaze.Systems
         public void ResetFailedState()
         {
             isWaveFailed = false;
+            isWaveSuccessful = false;
             isWaveActive = false;
             Debug.Log("WaveSpawner: Failed state reset - can start new wave");
         }
@@ -363,6 +366,7 @@ namespace FaeMaze.Systems
                 return;
 
             isWaveActive = false;
+            isWaveSuccessful = true;
             Debug.Log($"WaveSpawner: Wave {currentWaveNumber} SUCCESS! Cleared with {waveTimeRemaining:F1}s remaining");
 
             OnWaveSuccess?.Invoke();
@@ -504,6 +508,11 @@ namespace FaeMaze.Systems
                 {
                     waveStatusText.text = $"Wave {currentWaveNumber} - FAILED";
                     waveStatusText.color = warningColor;
+                }
+                else if (isWaveSuccessful)
+                {
+                    waveStatusText.text = $"Wave {currentWaveNumber} - SUCCESS!";
+                    waveStatusText.color = new Color(0.3f, 1f, 0.3f, 1f);  // Green color
                 }
                 else if (!isWaveActive)
                 {
