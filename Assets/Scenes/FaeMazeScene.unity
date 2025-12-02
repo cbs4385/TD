@@ -967,7 +967,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
-  redCapPrefab: {fileID: 0}
+  redCapPrefab: {fileID: 5000000003, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
   entrance: {fileID: 1100000002}
   heart: {fileID: 1100000005}
   visitorsPerWave: 10
