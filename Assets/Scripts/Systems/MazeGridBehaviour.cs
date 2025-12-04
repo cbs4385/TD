@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 using FaeMaze.Maze;
 
@@ -326,6 +327,33 @@ namespace FaeMaze.Systems
                 cachedConfig.randomSeed == configToCheck.randomSeed;
         }
 
+        private void LogGeneratedTiles(TileType[,] tilesToLog, string label)
+        {
+            if (tilesToLog == null)
+            {
+                return;
+            }
+
+            int logWidth = tilesToLog.GetLength(0);
+            int logHeight = tilesToLog.GetLength(1);
+
+            var builder = new StringBuilder(logHeight * (logWidth + 1));
+            for (int y = 0; y < logHeight; y++)
+            {
+                for (int x = 0; x < logWidth; x++)
+                {
+                    builder.Append(SymbolFromTile(tilesToLog[x, y]));
+                }
+
+                if (y < logHeight - 1)
+                {
+                    builder.Append('\n');
+                }
+            }
+
+            Debug.Log($"{label} ({logWidth}x{logHeight}):\n{builder}");
+        }
+
         private void ApplyTileFromChar(int x, int y, char c, bool isHeart = false)
         {
             TileType tile = TileFromChar(c);
@@ -404,6 +432,12 @@ namespace FaeMaze.Systems
                 cachedEntranceEdges = generator.GetEntranceEdgePositions().ToList();
                 cachedConfig = generatorConfig;
                 hasCachedGeneration = true;
+
+                LogGeneratedTiles(cachedGeneratedTiles, "ForestMazeGenerator output");
+            }
+            else
+            {
+                LogGeneratedTiles(cachedGeneratedTiles, "ForestMazeGenerator cached output");
             }
 
             TileType[,] tiles = cachedGeneratedTiles;

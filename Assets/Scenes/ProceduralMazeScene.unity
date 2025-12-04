@@ -203,63 +203,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &330585545
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 330585546}
-  - component: {fileID: 330585547}
-  m_Layer: 0
-  m_Name: MazeOrigin
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &330585546
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585545}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 963194228}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &330585547
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585545}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  useRuntimeGeneration: 0
-  mazeFile: {fileID: 4900000, guid: 9f5e8c3a7d2b6e4f1a9c8d5b3e7a2f6c, type: 3}
-  generatorConfig:
-    width: 30
-    height: 30
-    numEntrances: 4
-    minPathWidth: 2
-    maxPathWidth: 4
-    waterCoverage: 0.15
-    randomSeed: 0
-  mazeOrigin: {fileID: 330585546}
-  drawGridGizmos: 1
-  drawAttractionHeatmap: 1
 --- !u!1 &534669902
 GameObject:
   m_ObjectHideFlags: 0
@@ -446,8 +389,7 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 330585546}
+  m_Children: []
   m_Father: {fileID: 1534669903}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &963194229
@@ -502,7 +444,7 @@ MonoBehaviour:
     maxPathWidth: 4
     waterCoverage: 0.15
     randomSeed: 0
-  mazeOrigin: {fileID: 330585546}
+  mazeOrigin: {fileID: 963194228}
   drawGridGizmos: 1
   drawAttractionHeatmap: 1
 --- !u!1 &1100000000
@@ -661,7 +603,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a9d3f1e2b4c8d5e9a1f6c3b7e2d5a8b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mazeOrigin: {fileID: 330585546}
+  mazeOrigin: {fileID: 963194228}
   entrance: {fileID: 1100000002}
   heart: {fileID: 1100000005}
   uiController: {fileID: 2096385509}
