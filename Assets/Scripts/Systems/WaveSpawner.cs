@@ -729,8 +729,6 @@ namespace FaeMaze.Systems
 
                 if (!hasSpawnMarkers && !hasLegacySystem)
                 {
-                        "  - 2+ spawn markers (A, B, C, D) in maze file, OR\n" +
-                        "  - Entrance and Heart references assigned");
                     isValid = false;
                 }
             }
