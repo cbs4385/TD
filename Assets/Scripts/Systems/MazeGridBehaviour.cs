@@ -7,7 +7,7 @@ namespace FaeMaze.Systems
 {
     /// <summary>
     /// MonoBehaviour wrapper for the MazeGrid data structure.
-    /// Handles grid initialization from text file, world-space conversions, and registration with GameController.
+    /// Handles grid initialization from text file or runtime generation, world-space conversions, and registration with GameController.
     ///
     /// Coordinate system:
     /// - X increases to the right
@@ -19,10 +19,20 @@ namespace FaeMaze.Systems
     {
         #region Serialized Fields
 
+        [Header("Initialization Mode")]
+        [SerializeField]
+        [Tooltip("Use runtime generation instead of loading from file")]
+        private bool useRuntimeGeneration = false;
+
         [Header("Maze File")]
         [SerializeField]
-        [Tooltip("Text file containing the maze layout")]
+        [Tooltip("Text file containing the maze layout (used when useRuntimeGeneration is false)")]
         private TextAsset mazeFile;
+
+        [Header("Runtime Generation")]
+        [SerializeField]
+        [Tooltip("Configuration for runtime maze generation (used when useRuntimeGeneration is true)")]
+        private ForestMazeConfig generatorConfig = ForestMazeConfig.Default();
 
         [Header("References")]
         [SerializeField]
@@ -73,8 +83,15 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform; // Fallback to self
             }
 
-            // Initialize from file
-            InitializeFromFile();
+            // Initialize based on mode
+            if (useRuntimeGeneration)
+            {
+                InitializeFromGenerator();
+            }
+            else
+            {
+                InitializeFromFile();
+            }
         }
 
         private void Start()
@@ -270,6 +287,111 @@ namespace FaeMaze.Systems
             // Fallback - should never reach here if maze has any walkable tiles
             Debug.LogError("Could not find any walkable tile for heart position!");
             heartGridPos = entranceGridPos;
+        }
+
+        /// <summary>
+        /// Initializes the maze grid using ForestMazeGenerator for runtime procedural generation.
+        /// </summary>
+        private void InitializeFromGenerator()
+        {
+            Debug.Log("MazeGridBehaviour: Initializing maze from runtime generator...");
+
+            // Generate the maze
+            var generator = new ForestMazeGenerator();
+            TileType[,] tiles = generator.GenerateForestMaze(generatorConfig);
+
+            // Get dimensions from generated maze
+            width = tiles.GetLength(0);
+            height = tiles.GetLength(1);
+
+            Debug.Log($"MazeGridBehaviour: Generated {width}x{height} maze");
+
+            // Create the grid
+            grid = new MazeGrid(width, height);
+
+            // Convert tile types to walkability and populate grid
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    TileType tile = tiles[x, y];
+
+                    // Path and Undergrowth are walkable
+                    bool walkable = (tile == TileType.Path || tile == TileType.Undergrowth);
+                    grid.SetWalkable(x, y, walkable);
+
+                    // Set different base costs for different tile types
+                    var node = grid.GetNode(x, y);
+                    if (node != null)
+                    {
+                        if (tile == TileType.Path)
+                        {
+                            node.baseCost = 1.0f;
+                        }
+                        else if (tile == TileType.Undergrowth)
+                        {
+                            node.baseCost = 1.5f; // Slightly more expensive to traverse
+                        }
+                    }
+                }
+            }
+
+            // Find entrance positions (border walkable tiles created by ForestMazeGenerator)
+            List<Vector2Int> borderWalkableTiles = new List<Vector2Int>();
+
+            // Check all border tiles
+            for (int x = 0; x < width; x++)
+            {
+                // Top and bottom borders
+                if (grid.GetNode(x, 0)?.walkable == true)
+                    borderWalkableTiles.Add(new Vector2Int(x, 0));
+                if (grid.GetNode(x, height - 1)?.walkable == true)
+                    borderWalkableTiles.Add(new Vector2Int(x, height - 1));
+            }
+
+            for (int y = 0; y < height; y++)
+            {
+                // Left and right borders
+                if (grid.GetNode(0, y)?.walkable == true)
+                    borderWalkableTiles.Add(new Vector2Int(0, y));
+                if (grid.GetNode(width - 1, y)?.walkable == true)
+                    borderWalkableTiles.Add(new Vector2Int(width - 1, y));
+            }
+
+            Debug.Log($"MazeGridBehaviour: Found {borderWalkableTiles.Count} border entrance tiles");
+
+            // Set up spawn points from border entrances
+            // Use up to 4 evenly distributed entrances as spawn points
+            char[] spawnIds = new char[] { 'A', 'B', 'C', 'D' };
+            int numSpawns = Mathf.Min(borderWalkableTiles.Count, spawnIds.Length);
+
+            for (int i = 0; i < numSpawns; i++)
+            {
+                int index = (i * borderWalkableTiles.Count) / numSpawns;
+                Vector2Int pos = borderWalkableTiles[index];
+                spawnPoints[spawnIds[i]] = pos;
+                Debug.Log($"MazeGridBehaviour: Assigned spawn point '{spawnIds[i]}' at ({pos.x}, {pos.y})");
+            }
+
+            // Set entrance to first spawn point (or first border tile if no spawns)
+            if (spawnPoints.Count > 0)
+            {
+                entranceGridPos = spawnPoints['A'];
+            }
+            else if (borderWalkableTiles.Count > 0)
+            {
+                entranceGridPos = borderWalkableTiles[0];
+            }
+            else
+            {
+                Debug.LogWarning("MazeGridBehaviour: No border entrances found, defaulting to (0,0)");
+                entranceGridPos = new Vector2Int(0, 0);
+            }
+
+            // Find heart position in the center of the maze
+            FindHeartPosition();
+
+            Debug.Log($"MazeGridBehaviour: Runtime generation complete. Entrance at ({entranceGridPos.x}, {entranceGridPos.y}), Heart at ({heartGridPos.x}, {heartGridPos.y})");
         }
 
         #endregion
