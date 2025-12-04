@@ -12,12 +12,16 @@ namespace FaeMaze.Maze
 
         [Header("Grid Position")]
         [SerializeField]
-        [Tooltip("X coordinate in the maze grid")]
+        [Tooltip("X coordinate in the maze grid (auto-set if autoPosition is true)")]
         private int gridX;
 
         [SerializeField]
-        [Tooltip("Y coordinate in the maze grid")]
+        [Tooltip("Y coordinate in the maze grid (auto-set if autoPosition is true)")]
         private int gridY;
+
+        [SerializeField]
+        [Tooltip("Automatically position entrance from maze grid")]
+        private bool autoPosition = true;
 
         [Header("Visual Settings")]
         [SerializeField]
@@ -67,6 +71,15 @@ namespace FaeMaze.Maze
 
         #region Unity Lifecycle
 
+        private void Awake()
+        {
+            // Auto-position from maze grid if enabled
+            if (autoPosition)
+            {
+                PositionFromMazeGrid();
+            }
+        }
+
         private void Start()
         {
             // Only create visual marker if enabled (legacy mode)
@@ -83,6 +96,30 @@ namespace FaeMaze.Maze
                     spriteRenderer.enabled = false;
                 }
             }
+        }
+
+        /// <summary>
+        /// Positions the entrance from the maze grid entrance position.
+        /// </summary>
+        private void PositionFromMazeGrid()
+        {
+            // Find MazeGridBehaviour in scene
+            var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
+            if (mazeGridBehaviour == null)
+            {
+                return;
+            }
+
+            // Get entrance position from maze grid
+            Vector2Int entrancePos = mazeGridBehaviour.EntranceGridPos;
+
+            // Update grid position
+            gridX = entrancePos.x;
+            gridY = entrancePos.y;
+
+            // Convert to world position and update transform
+            Vector3 worldPos = mazeGridBehaviour.GridToWorld(entrancePos.x, entrancePos.y);
+            transform.position = worldPos;
         }
 
         private void CreateVisualMarker()

@@ -19,7 +19,7 @@ namespace FaeMaze.Systems
         {
             string sceneName = scene.name;
 
-            if (sceneName == "FaeMazeScene" || sceneName == "Options")
+            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "Options")
             {
                 GameObject escapeHandlerObj = GameObject.Find("EscapeHandler");
                 if (escapeHandlerObj == null)
@@ -27,6 +27,12 @@ namespace FaeMaze.Systems
                     escapeHandlerObj = new GameObject("EscapeHandler");
                     escapeHandlerObj.AddComponent<EscapeHandler>();
                 }
+            }
+
+            // Handle ProceduralMazeScene setup
+            if (sceneName == "ProceduralMazeScene")
+            {
+                SetupProceduralMazeScene();
             }
 
             // Auto-create WaveManager in FaeMazeScene if it doesn't exist
@@ -50,6 +56,39 @@ namespace FaeMaze.Systems
                     GameObject waveManagerObj = new GameObject("WaveManager");
                     waveManagerObj.transform.SetParent(gameRoot.transform);
                     waveManagerObj.AddComponent<WaveManager>();
+                }
+            }
+        }
+
+        private static void SetupProceduralMazeScene()
+        {
+            // Find all MazeGridBehaviour components in the scene
+            MazeGridBehaviour[] allMazeGrids = Object.FindObjectsByType<MazeGridBehaviour>(FindObjectsSortMode.None);
+
+            MazeGridBehaviour runtimeGenMaze = null;
+
+            // Find the one using runtime generation and disable others
+            foreach (var mazeGrid in allMazeGrids)
+            {
+                // Check if this one uses runtime generation (via reflection to access private field)
+                var field = typeof(MazeGridBehaviour).GetField("useRuntimeGeneration",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                if (field != null)
+                {
+                    bool usesRuntimeGen = (bool)field.GetValue(mazeGrid);
+
+                    if (usesRuntimeGen)
+                    {
+                        // This is the runtime generation maze - keep it enabled
+                        runtimeGenMaze = mazeGrid;
+                        mazeGrid.enabled = true;
+                    }
+                    else
+                    {
+                        // Disable file-based maze grids in ProceduralMazeScene
+                        mazeGrid.enabled = false;
+                    }
                 }
             }
         }
