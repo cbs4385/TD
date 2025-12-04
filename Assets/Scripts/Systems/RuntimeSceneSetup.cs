@@ -134,7 +134,7 @@ namespace FaeMaze.Systems
                 var gcType = typeof(GameController);
                 var mazeGridField = gcType.GetField("mazeGridBehaviour",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (mazeGridField != null && mazeGridField.GetValue(GameController.Instance) == oldMaze)
+                if (mazeGridField != null && ReferenceEquals(mazeGridField.GetValue(GameController.Instance), oldMaze))
                 {
                     // Re-register with the correct maze
                     GameController.Instance.RegisterMazeGrid(newMaze.Grid);
