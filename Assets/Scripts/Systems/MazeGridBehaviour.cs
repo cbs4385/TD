@@ -39,6 +39,11 @@ namespace FaeMaze.Systems
         [Tooltip("Transform acting as the origin point for world-to-grid conversions")]
         private Transform mazeOrigin;
 
+        [Header("Grid Sizing")]
+        [SerializeField]
+        [Tooltip("World-space size of a single maze tile")] 
+        private float tileSize = 1f;
+
         [Header("Debug Visualization")]
         [SerializeField]
         private bool drawGridGizmos = true;
@@ -69,6 +74,9 @@ namespace FaeMaze.Systems
 
         /// <summary>Gets the heart grid position</summary>
         public Vector2Int HeartGridPos => heartGridPos;
+
+        /// <summary>Gets the world-space size of a single grid tile.</summary>
+        public float TileSize => tileSize;
 
         #endregion
 
@@ -409,10 +417,10 @@ namespace FaeMaze.Systems
             if (mazeOrigin == null)
             {
                 Debug.LogWarning("MazeOrigin is null! Using Vector3.zero as origin.");
-                return new Vector3(x, y, 0);
+                return new Vector3(x * tileSize, y * tileSize, 0);
             }
 
-            return mazeOrigin.position + new Vector3(x, y, 0);
+            return mazeOrigin.position + new Vector3(x * tileSize, y * tileSize, 0);
         }
 
         /// <summary>
@@ -434,6 +442,12 @@ namespace FaeMaze.Systems
 
             // Calculate relative position from origin
             Vector3 localPos = worldPos - mazeOrigin.position;
+
+            // Account for tile size so each grid cell maps to one tile
+            if (!Mathf.Approximately(tileSize, 0f))
+            {
+                localPos /= tileSize;
+            }
 
             // Round to nearest integer coordinates
             x = Mathf.RoundToInt(localPos.x);
@@ -462,6 +476,12 @@ namespace FaeMaze.Systems
 
             // Calculate relative position from origin
             Vector3 localPos = worldPos - mazeOrigin.position;
+
+            // Account for tile size so each grid cell maps to one tile
+            if (!Mathf.Approximately(tileSize, 0f))
+            {
+                localPos /= tileSize;
+            }
 
             // Floor to integer coordinates
             x = Mathf.FloorToInt(localPos.x);
@@ -507,7 +527,7 @@ namespace FaeMaze.Systems
 
             Color walkableBaseColor = new Color(0.2f, 0.8f, 0.2f, 0.35f);
             Color blockedColor = new Color(0.6f, 0.1f, 0.1f, 0.4f);
-            Vector3 cellSize = new Vector3(0.95f, 0.95f, 0.1f);
+            Vector3 cellSize = new Vector3(0.95f * tileSize, 0.95f * tileSize, 0.1f);
 
             for (int x = 0; x < width; x++)
             {
