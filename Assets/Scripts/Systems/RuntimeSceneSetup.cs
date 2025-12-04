@@ -59,6 +59,19 @@ namespace FaeMaze.Systems
 
                     Debug.Log($"Created WaveManager for {sceneName}");
                 }
+
+                // Auto-start first wave in ProceduralMazeScene
+                if (sceneName == "ProceduralMazeScene")
+                {
+                    WaveSpawner waveSpawner = Object.FindFirstObjectByType<WaveSpawner>();
+                    if (waveSpawner != null)
+                    {
+                        // Use delayed invoke to ensure all initialization is complete
+                        var delayedStarter = new GameObject("WaveStarterDelay");
+                        var starter = delayedStarter.AddComponent<DelayedWaveStarter>();
+                        starter.StartFirstWave(waveSpawner, 0.5f);
+                    }
+                }
             }
         }
 
@@ -171,6 +184,39 @@ namespace FaeMaze.Systems
                     Debug.Log("Updated PropPlacementController maze reference");
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Helper component to start the first wave after a delay.
+    /// Ensures all scene initialization is complete before starting wave spawning.
+    /// </summary>
+    internal class DelayedWaveStarter : MonoBehaviour
+    {
+        public void StartFirstWave(WaveSpawner waveSpawner, float delay)
+        {
+            StartCoroutine(StartAfterDelay(waveSpawner, delay));
+        }
+
+        private System.Collections.IEnumerator StartAfterDelay(WaveSpawner waveSpawner, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+
+            if (waveSpawner != null)
+            {
+                bool started = waveSpawner.StartWave();
+                if (started)
+                {
+                    Debug.Log("Auto-started first wave in ProceduralMazeScene");
+                }
+                else
+                {
+                    Debug.LogWarning("Failed to auto-start first wave in ProceduralMazeScene");
+                }
+            }
+
+            // Clean up this helper object
+            Destroy(gameObject);
         }
     }
 }
