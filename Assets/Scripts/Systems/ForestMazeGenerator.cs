@@ -137,6 +137,7 @@ namespace FaeMaze.Systems
         private MazeCell[,] mazeCells;
         private HashSet<MazeEdge> edges;
         private List<MazeCell> chosenEntrances;
+        private List<Vector2Int> entranceEdgePositions;
 
         /// <summary>
         /// Generates a forest maze based on the provided configuration.
@@ -149,6 +150,7 @@ namespace FaeMaze.Systems
             this.rng = new System.Random(config.randomSeed);
             this.edges = new HashSet<MazeEdge>();
             this.chosenEntrances = new List<MazeCell>();
+            this.entranceEdgePositions = new List<Vector2Int>();
 
             // Step 1: Initialize the grid with solid forest
             InitializeGrid();
@@ -201,7 +203,8 @@ namespace FaeMaze.Systems
         private void CreateCoarseMazeLayout()
         {
             // Decide spacing between maze cell centers
-            cellSpacing = config.minPathWidth + 2;
+            // Use the widest possible corridor width to avoid over-crowding the grid and keep walls intact
+            cellSpacing = Mathf.Max(config.maxPathWidth + 1, config.minPathWidth + 2);
             mazeCols = Mathf.Max(1, (config.width - 2) / cellSpacing);
             mazeRows = Mathf.Max(1, (config.height - 2) / cellSpacing);
 
@@ -467,6 +470,8 @@ namespace FaeMaze.Systems
                 ey = config.height - 1;
             }
 
+            entranceEdgePositions.Add(new Vector2Int(ex, ey));
+
             // Carve corridor between edge and center
             CarveCorridorBetween(new Vector2Int(ex, ey), new Vector2Int(cx, cy));
         }
@@ -587,6 +592,14 @@ namespace FaeMaze.Systems
                 list[i] = list[j];
                 list[j] = temp;
             }
+        }
+
+        /// <summary>
+        /// Returns the list of carved entrance edge positions (world grid coordinates).
+        /// </summary>
+        public IReadOnlyList<Vector2Int> GetEntranceEdgePositions()
+        {
+            return entranceEdgePositions ?? new List<Vector2Int>();
         }
     }
 }

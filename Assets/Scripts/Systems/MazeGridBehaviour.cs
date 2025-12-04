@@ -344,26 +344,37 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Find entrance positions (border walkable tiles created by ForestMazeGenerator)
-            List<Vector2Int> borderWalkableTiles = new List<Vector2Int>();
+            // Collect entrance positions (prefer carved entrances from the generator)
+            HashSet<Vector2Int> borderWalkableTiles = new HashSet<Vector2Int>();
 
-            // Check all border tiles
-            for (int x = 0; x < width; x++)
+            foreach (var entrance in generator.GetEntranceEdgePositions())
             {
-                // Top and bottom borders
-                if (grid.GetNode(x, 0)?.walkable == true)
-                    borderWalkableTiles.Add(new Vector2Int(x, 0));
-                if (grid.GetNode(x, height - 1)?.walkable == true)
-                    borderWalkableTiles.Add(new Vector2Int(x, height - 1));
+                if (grid.InBounds(entrance.x, entrance.y) && grid.GetNode(entrance.x, entrance.y)?.walkable == true)
+                {
+                    borderWalkableTiles.Add(entrance);
+                }
             }
 
-            for (int y = 0; y < height; y++)
+            // If generator didn't yield any (or for redundancy), check all border tiles
+            if (borderWalkableTiles.Count == 0)
             {
-                // Left and right borders
-                if (grid.GetNode(0, y)?.walkable == true)
-                    borderWalkableTiles.Add(new Vector2Int(0, y));
-                if (grid.GetNode(width - 1, y)?.walkable == true)
-                    borderWalkableTiles.Add(new Vector2Int(width - 1, y));
+                for (int x = 0; x < width; x++)
+                {
+                    // Top and bottom borders
+                    if (grid.GetNode(x, 0)?.walkable == true)
+                        borderWalkableTiles.Add(new Vector2Int(x, 0));
+                    if (grid.GetNode(x, height - 1)?.walkable == true)
+                        borderWalkableTiles.Add(new Vector2Int(x, height - 1));
+                }
+
+                for (int y = 0; y < height; y++)
+                {
+                    // Left and right borders
+                    if (grid.GetNode(0, y)?.walkable == true)
+                        borderWalkableTiles.Add(new Vector2Int(0, y));
+                    if (grid.GetNode(width - 1, y)?.walkable == true)
+                        borderWalkableTiles.Add(new Vector2Int(width - 1, y));
+                }
             }
 
             Debug.Log($"MazeGridBehaviour: Found {borderWalkableTiles.Count} border entrance tiles");
