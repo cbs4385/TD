@@ -309,9 +309,6 @@ namespace ForestMaze
                         entrancePositions.Add(candidate);
                     }
                 }
-
-                // Ensure single-tile entrances by checking and removing adjacent entrance tiles
-                EnsureSingleTileEntrances(grid, width, height, entrancePositions);
             }
             else
             {
@@ -355,50 +352,6 @@ namespace ForestMaze
 
             candidates.Add((x, y));
         }
-
-        private static void EnsureSingleTileEntrances(char[,] grid, int width, int height, List<(int x, int y)> entrances)
-        {
-            // For each entrance, ensure it's a single tile by checking adjacent border tiles
-            foreach (var entrance in entrances)
-            {
-                int x = entrance.x;
-                int y = entrance.y;
-
-                // Check if this is an edge tile
-                bool isTop = y == 0;
-                bool isBottom = y == height - 1;
-                bool isLeft = x == 0;
-                bool isRight = x == width - 1;
-
-                // Check adjacent tiles on the same edge and block them if they're also entrances
-                if (isTop || isBottom)
-                {
-                    // Horizontal edge - check left and right neighbors
-                    if (x > 0 && grid[y, x - 1] == '.')
-                    {
-                        // Check if left neighbor is also on the edge (would make entrance wider)
-                        grid[y, x - 1] = '#';
-                    }
-                    if (x < width - 1 && grid[y, x + 1] == '.')
-                    {
-                        grid[y, x + 1] = '#';
-                    }
-                }
-                else if (isLeft || isRight)
-                {
-                    // Vertical edge - check top and bottom neighbors
-                    if (y > 0 && grid[y - 1, x] == '.')
-                    {
-                        grid[y - 1, x] = '#';
-                    }
-                    if (y < height - 1 && grid[y + 1, x] == '.')
-                    {
-                        grid[y + 1, x] = '#';
-                    }
-                }
-            }
-        }
-
 
         private static void DecorateTerrain(char[,] grid, int width, int height, Random random)
         {
