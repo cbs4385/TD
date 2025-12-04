@@ -208,6 +208,9 @@ namespace FaeMaze.Systems
 
             if (waveSpawner != null)
             {
+                // Log WaveSpawner state before attempting start
+                LogWaveSpawnerState(waveSpawner, "First attempt");
+
                 // Verify WaveSpawner is ready
                 bool started = waveSpawner.StartWave();
 
@@ -216,6 +219,8 @@ namespace FaeMaze.Systems
                     // Retry after another frame if first attempt failed
                     Debug.Log("First wave start attempt failed, retrying after delay...");
                     yield return new WaitForSeconds(0.5f);
+
+                    LogWaveSpawnerState(waveSpawner, "Retry attempt");
                     started = waveSpawner.StartWave();
                 }
 
@@ -231,6 +236,56 @@ namespace FaeMaze.Systems
 
             // Clean up this helper object
             Destroy(gameObject);
+        }
+
+        private void LogWaveSpawnerState(WaveSpawner waveSpawner, string attemptName)
+        {
+            var spawnerType = typeof(WaveSpawner);
+
+            // Check visitorPrefab
+            var visitorPrefabField = spawnerType.GetField("visitorPrefab",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var visitorPrefab = visitorPrefabField?.GetValue(waveSpawner);
+            Debug.Log($"[{attemptName}] visitorPrefab: {(visitorPrefab != null ? "SET" : "NULL")}");
+
+            // Check mazeGridBehaviour
+            var mazeGridField = spawnerType.GetField("mazeGridBehaviour",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var mazeGrid = mazeGridField?.GetValue(waveSpawner) as MazeGridBehaviour;
+            Debug.Log($"[{attemptName}] mazeGridBehaviour: {(mazeGrid != null ? "SET" : "NULL")}");
+
+            if (mazeGrid != null)
+            {
+                int spawnCount = mazeGrid.GetSpawnPointCount();
+                Debug.Log($"[{attemptName}] Spawn point count: {spawnCount}");
+            }
+
+            // Check entrance/heart (legacy)
+            var entranceField = spawnerType.GetField("entrance",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var entrance = entranceField?.GetValue(waveSpawner);
+            Debug.Log($"[{attemptName}] entrance: {(entrance != null ? "SET" : "NULL")}");
+
+            var heartField = spawnerType.GetField("heart",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var heart = heartField?.GetValue(waveSpawner);
+            Debug.Log($"[{attemptName}] heart: {(heart != null ? "SET" : "NULL")}");
+
+            // Check wave state flags
+            var isSpawningField = spawnerType.GetField("isSpawning",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var isSpawning = isSpawningField?.GetValue(waveSpawner);
+            Debug.Log($"[{attemptName}] isSpawning: {isSpawning}");
+
+            var isWaveActiveField = spawnerType.GetField("isWaveActive",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var isWaveActive = isWaveActiveField?.GetValue(waveSpawner);
+            Debug.Log($"[{attemptName}] isWaveActive: {isWaveActive}");
+
+            var isWaveFailedField = spawnerType.GetField("isWaveFailed",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var isWaveFailed = isWaveFailedField?.GetValue(waveSpawner);
+            Debug.Log($"[{attemptName}] isWaveFailed: {isWaveFailed}");
         }
     }
 }
