@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-using ForestMaze;
+using MazeStringGenerator = ForestMaze.ForestMazeGenerator;
 using FaeMaze.Maze;
 
 namespace FaeMaze.Systems
@@ -476,7 +476,7 @@ namespace FaeMaze.Systems
 
             if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
             {
-                string mazeString = ForestMazeGenerator.GenerateMaze(
+                string mazeString = MazeStringGenerator.GenerateMaze(
                     generatorConfig.width,
                     generatorConfig.height,
                     generatorConfig.numEntrances,
