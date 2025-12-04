@@ -66,6 +66,34 @@ namespace FaeMaze.Systems
                     WaveSpawner waveSpawner = Object.FindFirstObjectByType<WaveSpawner>();
                     if (waveSpawner != null)
                     {
+                        // Auto-assign visitor prefab if missing
+                        var spawnerType = typeof(WaveSpawner);
+                        var visitorPrefabField = spawnerType.GetField("visitorPrefab",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                        if (visitorPrefabField != null)
+                        {
+                            var currentPrefab = visitorPrefabField.GetValue(waveSpawner);
+                            if (currentPrefab == null)
+                            {
+                                // Try to load visitor prefab from Resources folder
+                                // Prefab must be in Assets/Resources/Prefabs/Visitors/ for this to work
+                                var prefab = UnityEngine.Resources.Load<GameObject>("Prefabs/Visitors/Visitor_FestivalTourist");
+
+                                if (prefab != null)
+                                {
+                                    visitorPrefabField.SetValue(waveSpawner, prefab);
+                                    Debug.Log("Auto-assigned visitor prefab to WaveSpawner from Resources");
+                                }
+                                else
+                                {
+                                    Debug.LogError("WaveSpawner is missing visitor prefab! " +
+                                        "Please assign Visitor_FestivalTourist prefab to WaveSpawner in ProceduralMazeScene, " +
+                                        "or move the prefab to Assets/Resources/Prefabs/Visitors/");
+                                }
+                            }
+                        }
+
                         // Use delayed invoke to ensure all initialization is complete
                         var delayedStarter = new GameObject("WaveStarterDelay");
                         var starter = delayedStarter.AddComponent<DelayedWaveStarter>();
