@@ -122,9 +122,6 @@ namespace ForestMaze
                 }
             }
 
-            // Thicken corridors so that local widths are between 1 and 3 tiles.
-            ThickenCorridors(grid, width, height, random);
-
             // Mark the maze center as 'H' (heart) on top of a path tile.
             MarkCenter(grid, width, height, cellWidth, cellHeight);
 
@@ -140,8 +137,6 @@ namespace ForestMaze
             // Convert to a single string.
             return GridToString(grid, width, height);
         }
-
-        #region Corridor Thickening (width 1-3)
 
         /// <summary>
         /// Ensure that all border tiles are either '#' (forest) or '.' (entrance/exit).
@@ -170,103 +165,10 @@ namespace ForestMaze
             }
         }
 
-
-        private static void ThickenCorridors(char[,] grid, int width, int height, Random random)
-        {
-            // How aggressively to widen corridors; tweak to taste.
-            const double expansionChance = 0.35;
-            const int passes = 2; // multiple passes allow up to width 3
-
-            int[,] dirs = new int[,]
-            {
-                { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }
-            };
-
-            for (int pass = 0; pass < passes; pass++)
-            {
-                for (int y = 1; y < height - 1; y++)
-                {
-                    for (int x = 1; x < width - 1; x++)
-                    {
-                        if (grid[y, x] != '.') continue;
-
-                        for (int d = 0; d < 4; d++)
-                        {
-                            int nx = x + dirs[d, 0];
-                            int ny = y + dirs[d, 1];
-
-                            // Don't widen into the very outer border.
-                            if (nx <= 0 || nx >= width - 1 || ny <= 0 || ny >= height - 1)
-                                continue;
-
-                            if (grid[ny, nx] != '#') continue;
-                            if (random.NextDouble() > expansionChance) continue;
-
-                            if (CanThickenAt(nx, ny, grid, width, height))
-                            {
-                                grid[ny, nx] = '.';
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Check whether turning (x,y) into '.' would keep the corridor width <= 3
-        /// horizontally and vertically.
-        /// </summary>
-        private static bool CanThickenAt(int x, int y, char[,] grid, int width, int height)
-        {
-            const int maxWidth = 3;
-
-            // Horizontal span (treat 'H' as path as well).
-            int horiz = 1; // include the candidate tile
-
-            int ix = x - 1;
-            while (ix >= 0 && IsPathLike(grid[y, ix]))
-            {
-                horiz++;
-                ix--;
-            }
-
-            ix = x + 1;
-            while (ix < width && IsPathLike(grid[y, ix]))
-            {
-                horiz++;
-                ix++;
-            }
-
-            if (horiz > maxWidth) return false;
-
-            // Vertical span
-            int vert = 1;
-
-            int iy = y - 1;
-            while (iy >= 0 && IsPathLike(grid[iy, x]))
-            {
-                vert++;
-                iy--;
-            }
-
-            iy = y + 1;
-            while (iy < height && IsPathLike(grid[iy, x]))
-            {
-                vert++;
-                iy++;
-            }
-
-            if (vert > maxWidth) return false;
-
-            return true;
-        }
-
         private static bool IsPathLike(char c)
         {
             return c == '.' || c == 'H';
         }
-
-        #endregion
 
         #region Center / Entrances / Decoration
 
