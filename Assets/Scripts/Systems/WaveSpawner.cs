@@ -377,7 +377,6 @@ namespace FaeMaze.Systems
             Vector2Int startPos;
             Vector2Int destPos;
             char startId = '\0';
-            char destId = '\0';
 
             // Try to use spawn marker system first
             if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 1)
@@ -389,7 +388,6 @@ namespace FaeMaze.Systems
                 }
                 // Destination is always the heart
                 destPos = mazeGridBehaviour.HeartGridPos;
-                destId = 'H';
             }
             // Fall back to legacy entrance/heart system
             else if (entrance != null && heart != null)

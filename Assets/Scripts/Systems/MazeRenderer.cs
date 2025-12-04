@@ -15,19 +15,19 @@ namespace FaeMaze.Systems
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("Color for walkable path tiles")]
-        private Color pathColor = new Color(0.8f, 0.9f, 0.8f, 1f); // Light green
+        private Color pathColor = Color.white; // White
 
         [SerializeField]
-        [Tooltip("Color for wall tiles")]
-        private Color wallColor = new Color(0.2f, 0.3f, 0.2f, 1f); // Dark green
+        [Tooltip("Color for wall tiles (trees/brambles)")]
+        private Color wallColor = Color.black; // Black
 
         [SerializeField]
         [Tooltip("Color for undergrowth tiles")]
-        private Color undergrowthColor = new Color(0.65f, 0.75f, 0.65f, 1f); // Mid green
+        private Color undergrowthColor = new Color(0.5f, 0f, 0.5f, 1f); // Purple
 
         [SerializeField]
         [Tooltip("Color for water tiles")]
-        private Color waterColor = new Color(0.35f, 0.55f, 0.75f, 1f); // Blue tint
+        private Color waterColor = Color.magenta; // Magenta
 
         [SerializeField]
         [Tooltip("Color for the heart tile")]
