@@ -33,8 +33,17 @@ namespace FaeMaze.Systems
 
         [Header("Prefab References")]
         [SerializeField]
-        [Tooltip("The visitor prefab to spawn")]
+        [Tooltip("The visitor prefab to spawn (base visitor type, used as fallback)")]
         private VisitorController visitorPrefab;
+
+        [SerializeField]
+        [Tooltip("The mistaking visitor prefab (takes wrong turns at branches)")]
+        private MistakingVisitorController mistakingVisitorPrefab;
+
+        [SerializeField]
+        [Range(0f, 1f)]
+        [Tooltip("Chance (0-1) to spawn mistaking visitor when available (default 0.8 = 80%)")]
+        private float mistakingVisitorChance = 0.8f;
 
         [SerializeField]
         [Tooltip("The Red Cap prefab (hostile actor that hunts visitors)")]
@@ -110,7 +119,7 @@ namespace FaeMaze.Systems
         private int visitorsSpawnedThisWave;
         private int totalVisitorsSpawned;
         private float waveTimeRemaining;
-        private List<VisitorController> activeVisitors = new List<VisitorController>();
+        private List<GameObject> activeVisitors = new List<GameObject>();
 
         // Red Cap tracking
         private float redCapSpawnTimer;
@@ -372,6 +381,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Spawns a single visitor at a random start spawn point with a path to a different destination spawn point.
         /// Falls back to entrance/heart if spawn markers are not available.
+        /// Chooses between mistaking visitor (80% chance) and regular visitor (20% chance) if both prefabs are assigned.
         /// </summary>
         private void SpawnVisitor()
         {
@@ -418,31 +428,61 @@ namespace FaeMaze.Systems
             // Get world position for spawn
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(startPos.x, startPos.y);
 
-            // Instantiate visitor
-            VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
+            // Choose which visitor type to spawn
+            GameObject visitorObject = null;
+            bool isMistakingVisitor = false;
+
+            // If mistaking visitor prefab is assigned, roll for it
+            if (mistakingVisitorPrefab != null)
+            {
+                float roll = Random.value;
+                if (roll < mistakingVisitorChance)
+                {
+                    // Spawn mistaking visitor
+                    MistakingVisitorController mistakingVisitor = Instantiate(mistakingVisitorPrefab, spawnWorldPos, Quaternion.identity);
+                    visitorObject = mistakingVisitor.gameObject;
+                    isMistakingVisitor = true;
+
+                    // Initialize mistaking visitor
+                    mistakingVisitor.Initialize(GameController.Instance);
+                    mistakingVisitor.SetPath(pathNodes);
+                }
+            }
+
+            // Fall back to regular visitor if mistaking visitor wasn't spawned
+            if (visitorObject == null && visitorPrefab != null)
+            {
+                VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
+                visitorObject = visitor.gameObject;
+
+                // Initialize regular visitor
+                visitor.Initialize(GameController.Instance);
+                visitor.SetPath(pathNodes);
+
+                // Only regular visitors are tracked by GameController
+                GameController.Instance.SetLastSpawnedVisitor(visitor);
+            }
+
+            if (visitorObject == null)
+            {
+                return;
+            }
 
             // Name includes spawn ID if using spawn marker system
+            string visitorType = isMistakingVisitor ? "MistakingVisitor" : "Visitor";
             if (startId != '\0')
             {
-                visitor.gameObject.name = $"Visitor_W{currentWaveNumber}_{visitorsSpawnedThisWave}_{startId}toH";
+                visitorObject.name = $"{visitorType}_W{currentWaveNumber}_{visitorsSpawnedThisWave}_{startId}toH";
             }
             else
             {
-                visitor.gameObject.name = $"Visitor_Wave{currentWaveNumber}_{visitorsSpawnedThisWave}";
+                visitorObject.name = $"{visitorType}_Wave{currentWaveNumber}_{visitorsSpawnedThisWave}";
             }
 
             SoundManager.Instance?.PlayVisitorSpawn();
 
-            GameController.Instance.SetLastSpawnedVisitor(visitor);
-
-            // Initialize visitor
-            visitor.Initialize(GameController.Instance);
-
-            // Set path
-            visitor.SetPath(pathNodes);
-
             // Track active visitor
-            activeVisitors.Add(visitor);
+            activeVisitors.Add(visitorObject);
 
             totalVisitorsSpawned++;
         }
@@ -718,7 +758,8 @@ namespace FaeMaze.Systems
         {
             bool isValid = true;
 
-            if (visitorPrefab == null)
+            // Need at least one visitor prefab (regular or mistaking)
+            if (visitorPrefab == null && mistakingVisitorPrefab == null)
             {
                 isValid = false;
             }

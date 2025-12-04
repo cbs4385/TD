@@ -66,8 +66,9 @@ namespace FaeMaze.Systems
                     WaveSpawner waveSpawner = Object.FindFirstObjectByType<WaveSpawner>();
                     if (waveSpawner != null)
                     {
-                        // Auto-assign visitor prefab if missing
                         var spawnerType = typeof(WaveSpawner);
+
+                        // Auto-assign visitor prefab if missing
                         var visitorPrefabField = spawnerType.GetField("visitorPrefab",
                             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
@@ -77,7 +78,6 @@ namespace FaeMaze.Systems
                             if (currentPrefab == null)
                             {
                                 // Try to load visitor prefab from Resources folder
-                                // Prefab must be in Assets/Resources/Prefabs/Visitors/ for this to work
                                 var prefab = UnityEngine.Resources.Load<GameObject>("Prefabs/Visitors/Visitor_FestivalTourist");
 
                                 if (prefab != null)
@@ -90,6 +90,30 @@ namespace FaeMaze.Systems
                                     Debug.LogError("WaveSpawner is missing visitor prefab! " +
                                         "Please assign Visitor_FestivalTourist prefab to WaveSpawner in ProceduralMazeScene, " +
                                         "or move the prefab to Assets/Resources/Prefabs/Visitors/");
+                                }
+                            }
+                        }
+
+                        // Auto-assign mistaking visitor prefab if missing
+                        var mistakingVisitorPrefabField = spawnerType.GetField("mistakingVisitorPrefab",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                        if (mistakingVisitorPrefabField != null)
+                        {
+                            var currentMistakingPrefab = mistakingVisitorPrefabField.GetValue(waveSpawner);
+                            if (currentMistakingPrefab == null)
+                            {
+                                // Try to load mistaking visitor prefab from Resources folder
+                                var mistakingPrefab = UnityEngine.Resources.Load<GameObject>("Prefabs/Visitors/MistakingVisitor_FestivalTourist");
+
+                                if (mistakingPrefab != null)
+                                {
+                                    mistakingVisitorPrefabField.SetValue(waveSpawner, mistakingPrefab);
+                                    Debug.Log("Auto-assigned mistaking visitor prefab to WaveSpawner from Resources");
+                                }
+                                else
+                                {
+                                    Debug.Log("No mistaking visitor prefab found in Resources. WaveSpawner will spawn only regular visitors.");
                                 }
                             }
                         }
@@ -275,6 +299,12 @@ namespace FaeMaze.Systems
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             var visitorPrefab = visitorPrefabField?.GetValue(waveSpawner);
             Debug.Log($"[{attemptName}] visitorPrefab: {(visitorPrefab != null ? "SET" : "NULL")}");
+
+            // Check mistakingVisitorPrefab
+            var mistakingVisitorPrefabField = spawnerType.GetField("mistakingVisitorPrefab",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var mistakingVisitorPrefab = mistakingVisitorPrefabField?.GetValue(waveSpawner);
+            Debug.Log($"[{attemptName}] mistakingVisitorPrefab: {(mistakingVisitorPrefab != null ? "SET" : "NULL")}");
 
             // Check mazeGridBehaviour
             var mazeGridField = spawnerType.GetField("mazeGridBehaviour",
