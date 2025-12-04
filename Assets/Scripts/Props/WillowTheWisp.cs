@@ -184,6 +184,9 @@ namespace FaeMaze.Props
                 Debug.LogWarning("WillowTheWisp: Heart not found! Will try to locate it later.");
             }
 
+            // Ensure wisp starts on a walkable tile
+            EnsureWalkablePosition();
+
             // Calculate initial influence area
             CalculateInfluenceArea();
 
@@ -535,6 +538,94 @@ namespace FaeMaze.Props
             }
 
             return Vector2Int.zero;
+        }
+
+        /// <summary>
+        /// Ensures the wisp is positioned on a walkable tile. If not, finds the nearest walkable tile.
+        /// </summary>
+        private void EnsureWalkablePosition()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+                return;
+
+            var grid = mazeGridBehaviour.Grid;
+
+            // Get current grid position
+            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            {
+                Debug.LogWarning("WillowTheWisp: Could not convert world position to grid, moving to random walkable tile");
+                Vector2Int randomPos = GetRandomWalkableTile();
+                transform.position = mazeGridBehaviour.GridToWorld(randomPos.x, randomPos.y);
+                return;
+            }
+
+            // Check if current position is walkable
+            var currentNode = grid.GetNode(currentX, currentY);
+            if (currentNode != null && currentNode.walkable)
+            {
+                Debug.Log($"WillowTheWisp: Starting at walkable position ({currentX}, {currentY})");
+                return;
+            }
+
+            // Current position is not walkable, find nearest walkable tile
+            Debug.LogWarning($"WillowTheWisp: Start position ({currentX}, {currentY}) is not walkable! Finding nearest walkable tile...");
+
+            Vector2Int nearestWalkable = FindNearestWalkableTile(currentX, currentY);
+            if (nearestWalkable != new Vector2Int(currentX, currentY))
+            {
+                Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearestWalkable.x, nearestWalkable.y);
+                transform.position = newWorldPos;
+                Debug.Log($"WillowTheWisp: Moved to nearest walkable tile ({nearestWalkable.x}, {nearestWalkable.y})");
+            }
+            else
+            {
+                // Couldn't find nearby walkable tile, use random one
+                Debug.LogWarning("WillowTheWisp: Could not find nearby walkable tile, moving to random location");
+                Vector2Int randomPos = GetRandomWalkableTile();
+                transform.position = mazeGridBehaviour.GridToWorld(randomPos.x, randomPos.y);
+            }
+        }
+
+        /// <summary>
+        /// Finds the nearest walkable tile using a spiral search pattern.
+        /// </summary>
+        private Vector2Int FindNearestWalkableTile(int startX, int startY)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+                return new Vector2Int(startX, startY);
+
+            var grid = mazeGridBehaviour.Grid;
+            int maxRadius = 10;
+
+            // Spiral search outward from start position
+            for (int radius = 1; radius <= maxRadius; radius++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        // Only check tiles on the current radius perimeter
+                        if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius)
+                            continue;
+
+                        int checkX = startX + dx;
+                        int checkY = startY + dy;
+
+                        // Check bounds
+                        if (checkX < 0 || checkX >= grid.Width || checkY < 0 || checkY >= grid.Height)
+                            continue;
+
+                        var node = grid.GetNode(checkX, checkY);
+                        if (node != null && node.walkable)
+                        {
+                            return new Vector2Int(checkX, checkY);
+                        }
+                    }
+                }
+            }
+
+            // Fallback
+            return new Vector2Int(startX, startY);
         }
 
         private void UpdateWandering()

@@ -49,7 +49,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   speedMultiplier: 1.25
-  baseMoveSpeed: 3
+  baseMoveSpeed: 1
   targetUpdateInterval: 0.5
   waypointReachedDistance: 0.05
   contactRadius: 0.3

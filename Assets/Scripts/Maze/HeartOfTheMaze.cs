@@ -137,6 +137,11 @@ namespace FaeMaze.Maze
                 return;
             }
 
+            // Track stats
+            if (Systems.GameStatsTracker.Instance != null)
+            {
+                Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
+            }
 
             // Add essence to game controller
             if (GameController.Instance != null)

@@ -415,6 +415,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 963194228}
+  - component: {fileID: 963194231}
+  - component: {fileID: 963194230}
+  - component: {fileID: 963194229}
   m_Layer: 0
   m_Name: MazeRoot
   m_TagString: Untagged
@@ -438,6 +441,52 @@ Transform:
   - {fileID: 330585546}
   m_Father: {fileID: 1534669903}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &963194229
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194227}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2becc5cf1db877042bb38c841fd16660, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeVisualSetup
+  autoAddRenderer: 1
+  autoCenterCamera: 1
+--- !u!114 &963194230
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194227}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21a41d6b956888d49bd606d9620f27e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
+  pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
+  wallColor: {r: 0.2, g: 0.3, b: 0.2, a: 1}
+  sortingOrder: 0
+  tilesParent: {fileID: 0}
+--- !u!114 &963194231
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194227}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeGridBehaviour
+  mazeFile: {fileID: 4900000, guid: 9f5e8c3a7d2b6e4f1a9c8d5b3e7a2f6c, type: 3}
+  mazeOrigin: {fileID: 330585546}
+  drawGridGizmos: 1
+  drawAttractionHeatmap: 1
 --- !u!1 &1100000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -632,13 +681,10 @@ MonoBehaviour:
   entrance: {fileID: 1100000002}
   heart: {fileID: 1100000005}
   visitorsPerWave: 10
-  spawnInterval: 5
+  spawnInterval: 3
   waveDuration: 300
   enableRedCap: 1
   redCapSpawnDelay: 60
-  redCapSpeedMultiplier: 1.25
-  redCapEssencePenaltyMultiplier: 2
-  baseEssencePerVisitor: 10
   uiCanvas: {fileID: 0}
   fontSize: 20
   uiTextColor: {r: 1, g: 1, b: 1, a: 1}

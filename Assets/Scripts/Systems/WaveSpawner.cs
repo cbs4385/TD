@@ -170,6 +170,9 @@ namespace FaeMaze.Systems
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             ValidateReferences();
 
+            // Load settings from GameSettings
+            LoadSettings();
+
             // Create UI if needed
             if (timerText == null || visitorCountText == null || waveStatusText == null)
             {
@@ -182,6 +185,18 @@ namespace FaeMaze.Systems
                 Debug.Log("WaveSpawner: Auto-starting first wave");
                 StartWave();
             }
+        }
+
+        /// <summary>
+        /// Loads settings from GameSettings.
+        /// </summary>
+        private void LoadSettings()
+        {
+            visitorsPerWave = GameSettings.VisitorsPerWave;
+            spawnInterval = GameSettings.SpawnInterval;
+            waveDuration = GameSettings.WaveDuration;
+            enableRedCap = GameSettings.EnableRedCap;
+            redCapSpawnDelay = GameSettings.RedCapSpawnDelay;
         }
 
         private void Update()

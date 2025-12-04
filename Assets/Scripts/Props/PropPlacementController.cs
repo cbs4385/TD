@@ -395,6 +395,12 @@ namespace FaeMaze.Props
 
             Debug.Log($"PropPlacementController: Placed '{item.displayName}' at ({gridPos.x}, {gridPos.y})");
 
+            // Track prop placement for statistics
+            if (Systems.GameStatsTracker.Instance != null)
+            {
+                Systems.GameStatsTracker.Instance.RecordPropPlaced(item.displayName);
+            }
+
             // Mark tile as occupied
             occupiedTiles[gridPos] = prop;
 
