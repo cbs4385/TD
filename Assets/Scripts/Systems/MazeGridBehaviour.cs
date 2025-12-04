@@ -90,6 +90,10 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform; // Fallback to self
             }
 
+            // Enforce requested runtime maze dimensions
+            generatorConfig.width = 30;
+            generatorConfig.height = 30;
+
             // Initialize based on mode
             if (useRuntimeGeneration)
             {
@@ -113,6 +117,13 @@ namespace FaeMaze.Systems
         #endregion
 
         #region Initialization
+
+        private void OnValidate()
+        {
+            // Keep runtime generation dimensions aligned with the requested 30x30 size
+            generatorConfig.width = 30;
+            generatorConfig.height = 30;
+        }
 
         private void InitializeFromFile()
         {

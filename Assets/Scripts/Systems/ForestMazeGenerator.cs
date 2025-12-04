@@ -50,8 +50,8 @@ namespace FaeMaze.Systems
         {
             return new ForestMazeConfig
             {
-                width = 100,
-                height = 100,
+                width = 30,
+                height = 30,
                 numEntrances = 2,
                 minPathWidth = 2,
                 maxPathWidth = 5,
