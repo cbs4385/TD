@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using ForestMaze;
 using FaeMaze.Maze;
 
 namespace FaeMaze.Systems
@@ -75,6 +76,8 @@ namespace FaeMaze.Systems
         };
 
         private static TileType[,] cachedGeneratedTiles;
+        private static char[,] cachedGeneratedSymbols;
+        private static string cachedMazeString;
         private static List<Vector2Int> cachedEntranceEdges = new List<Vector2Int>();
         private static ForestMazeConfig cachedConfig;
         private static bool hasCachedGeneration;
@@ -327,6 +330,50 @@ namespace FaeMaze.Systems
                 cachedConfig.randomSeed == configToCheck.randomSeed;
         }
 
+        private TileType[,] ConvertMazeStringToTiles(string mazeString, out char[,] symbolGrid, out List<Vector2Int> entranceEdges)
+        {
+            entranceEdges = new List<Vector2Int>();
+
+            if (string.IsNullOrWhiteSpace(mazeString))
+            {
+                symbolGrid = null;
+                return null;
+            }
+
+            var lines = mazeString
+                .Replace("\r", string.Empty)
+                .Split('\n')
+                .Where(l => !string.IsNullOrEmpty(l))
+                .ToArray();
+
+            int parsedHeight = lines.Length;
+            int parsedWidth = lines.Max(l => l.Length);
+
+            symbolGrid = new char[parsedWidth, parsedHeight];
+            var tiles = new TileType[parsedWidth, parsedHeight];
+
+            for (int y = 0; y < parsedHeight; y++)
+            {
+                string line = lines[y];
+
+                for (int x = 0; x < parsedWidth; x++)
+                {
+                    char c = x < line.Length ? line[x] : '#';
+
+                    symbolGrid[x, y] = c;
+                    tiles[x, y] = TileFromChar(c);
+
+                    bool isEdge = x == 0 || y == 0 || x == parsedWidth - 1 || y == parsedHeight - 1;
+                    if (isEdge && (c == '.' || c == 'H'))
+                    {
+                        entranceEdges.Add(new Vector2Int(x, y));
+                    }
+                }
+            }
+
+            return tiles;
+        }
+
         private void LogGeneratedTiles(TileType[,] tilesToLog, string label)
         {
             if (tilesToLog == null)
@@ -425,22 +472,30 @@ namespace FaeMaze.Systems
         private void InitializeFromGenerator()
         {
 
-            if (!HasCachedTilesForConfig(generatorConfig))
+            spawnPoints.Clear();
+
+            if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
             {
-                var generator = new ForestMazeGenerator();
-                cachedGeneratedTiles = generator.GenerateForestMaze(generatorConfig);
-                cachedEntranceEdges = generator.GetEntranceEdgePositions().ToList();
+                string mazeString = ForestMazeGenerator.GenerateMaze(
+                    generatorConfig.width,
+                    generatorConfig.height,
+                    generatorConfig.numEntrances,
+                    generatorConfig.randomSeed);
+
+                cachedGeneratedTiles = ConvertMazeStringToTiles(mazeString, out cachedGeneratedSymbols, out cachedEntranceEdges);
                 cachedConfig = generatorConfig;
+                cachedMazeString = mazeString;
                 hasCachedGeneration = true;
 
-                LogGeneratedTiles(cachedGeneratedTiles, "ForestMazeGenerator output");
+                Debug.Log($"ForestMazeGenerator output ({cachedGeneratedTiles.GetLength(0)}x{cachedGeneratedTiles.GetLength(1)}):\n{mazeString}");
             }
             else
             {
-                LogGeneratedTiles(cachedGeneratedTiles, "ForestMazeGenerator cached output");
+                Debug.Log($"ForestMazeGenerator cached output ({cachedGeneratedTiles.GetLength(0)}x{cachedGeneratedTiles.GetLength(1)}):\n{cachedMazeString}");
             }
 
             TileType[,] tiles = cachedGeneratedTiles;
+            char[,] symbols = cachedGeneratedSymbols;
 
             // Get dimensions from generated maze
             width = tiles.GetLength(0);
@@ -451,14 +506,29 @@ namespace FaeMaze.Systems
             grid = new MazeGrid(width, height);
 
             // Convert tile types to walkability and populate grid
+            bool foundHeart = false;
+
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < height; y++)
                 {
                     TileType tile = tiles[x, y];
+                    char symbol = symbols[x, y];
+                    bool isHeart = symbol == 'H';
 
-                    ApplyTileFromTileType(x, y, tile, SymbolFromTile(tile));
+                    ApplyTileFromTileType(x, y, tile, symbol, isHeart);
+
+                    if (isHeart)
+                    {
+                        heartGridPos = new Vector2Int(x, y);
+                        foundHeart = true;
+                    }
                 }
+            }
+
+            if (!foundHeart)
+            {
+                FindHeartPosition();
             }
 
             // Collect entrance positions (prefer carved entrances from the generator)
