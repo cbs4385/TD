@@ -3,9 +3,11 @@ guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - mazeFile: {fileID: 11500000, guid: afcd11a2f27e6fa4081a48d03eed34bd, type: 3}
+  - mazeOrigin: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
-  userData:
-  assetBundleName:
-  assetBundleVariant:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
