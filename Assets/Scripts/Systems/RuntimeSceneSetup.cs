@@ -35,8 +35,8 @@ namespace FaeMaze.Systems
                 SetupProceduralMazeScene();
             }
 
-            // Auto-create WaveManager in FaeMazeScene if it doesn't exist
-            if (sceneName == "FaeMazeScene")
+            // Auto-create WaveManager in both FaeMazeScene and ProceduralMazeScene if it doesn't exist
+            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene")
             {
                 WaveManager waveManager = Object.FindFirstObjectByType<WaveManager>();
                 if (waveManager == null)
@@ -56,6 +56,8 @@ namespace FaeMaze.Systems
                     GameObject waveManagerObj = new GameObject("WaveManager");
                     waveManagerObj.transform.SetParent(gameRoot.transform);
                     waveManagerObj.AddComponent<WaveManager>();
+
+                    Debug.Log($"Created WaveManager for {sceneName}");
                 }
             }
         }
