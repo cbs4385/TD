@@ -479,14 +479,23 @@ namespace FaeMaze.Visitors
                 state = VisitorState.Consumed;
                 SetAnimatorDirection(IdleDirection);
 
+                // Track consumption stats
+                if (FaeMaze.Systems.GameStatsTracker.Instance != null)
+                {
+                    FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
+                }
+
+                // Add essence to game controller
                 if (gameController != null && gameController.Heart != null)
                 {
-                    gameController.Heart.OnVisitorConsumed(this);
+                    gameController.AddEssence(gameController.Heart.EssencePerVisitor);
                 }
-                else
-                {
-                    Destroy(gameObject);
-                }
+
+                // Play consumption sound
+                FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
+
+                // Destroy the visitor
+                Destroy(gameObject);
             }
         }
 
