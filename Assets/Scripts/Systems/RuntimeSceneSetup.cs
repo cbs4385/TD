@@ -66,6 +66,7 @@ namespace FaeMaze.Systems
             MazeGridBehaviour[] allMazeGrids = Object.FindObjectsByType<MazeGridBehaviour>(FindObjectsSortMode.None);
 
             MazeGridBehaviour runtimeGenMaze = null;
+            MazeGridBehaviour fileBasedMaze = null;
 
             // Find the one using runtime generation and disable others
             foreach (var mazeGrid in allMazeGrids)
@@ -86,9 +87,86 @@ namespace FaeMaze.Systems
                     }
                     else
                     {
-                        // Disable file-based maze grids in ProceduralMazeScene
+                        // This is the file-based maze - disable it but keep reference
+                        fileBasedMaze = mazeGrid;
                         mazeGrid.enabled = false;
                     }
+                }
+            }
+
+            if (runtimeGenMaze == null)
+            {
+                Debug.LogError("ProceduralMazeScene: No runtime generation MazeGridBehaviour found!");
+                return;
+            }
+
+            // Update all component references to use the runtime maze
+            UpdateMazeReferences(fileBasedMaze, runtimeGenMaze);
+
+            // Re-position entrance and heart after maze is properly set up
+            var entrance = Object.FindFirstObjectByType<FaeMaze.Maze.MazeEntrance>();
+            var heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+
+            if (entrance != null)
+            {
+                entrance.SetGridPosition(runtimeGenMaze.EntranceGridPos);
+                Vector3 entranceWorld = runtimeGenMaze.GridToWorld(runtimeGenMaze.EntranceGridPos.x, runtimeGenMaze.EntranceGridPos.y);
+                entrance.transform.position = entranceWorld;
+                Debug.Log($"Repositioned entrance to {runtimeGenMaze.EntranceGridPos} (world: {entranceWorld})");
+            }
+
+            if (heart != null)
+            {
+                heart.SetGridPosition(runtimeGenMaze.HeartGridPos);
+                Vector3 heartWorld = runtimeGenMaze.GridToWorld(runtimeGenMaze.HeartGridPos.x, runtimeGenMaze.HeartGridPos.y);
+                heart.transform.position = heartWorld;
+                Debug.Log($"Repositioned heart to {runtimeGenMaze.HeartGridPos} (world: {heartWorld})");
+            }
+
+            Debug.Log($"ProceduralMazeScene setup complete. Spawn points available: {runtimeGenMaze.GetSpawnPointCount()}");
+        }
+
+        private static void UpdateMazeReferences(MazeGridBehaviour oldMaze, MazeGridBehaviour newMaze)
+        {
+            // Update GameController reference
+            if (GameController.Instance != null)
+            {
+                var gcType = typeof(GameController);
+                var mazeGridField = gcType.GetField("mazeGridBehaviour",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (mazeGridField != null && mazeGridField.GetValue(GameController.Instance) == oldMaze)
+                {
+                    // Re-register with the correct maze
+                    GameController.Instance.RegisterMazeGrid(newMaze.Grid);
+                    Debug.Log("Updated GameController maze reference");
+                }
+            }
+
+            // Update CameraController reference
+            var cameraController = Object.FindFirstObjectByType<FaeMaze.Camera.CameraController2D>();
+            if (cameraController != null)
+            {
+                var ccType = typeof(FaeMaze.Camera.CameraController2D);
+                var mazeGridField = ccType.GetField("mazeGridBehaviour",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (mazeGridField != null)
+                {
+                    mazeGridField.SetValue(cameraController, newMaze);
+                    Debug.Log("Updated CameraController maze reference");
+                }
+            }
+
+            // Update PropPlacementController reference
+            var propController = Object.FindFirstObjectByType<FaeMaze.Props.PropPlacementController>();
+            if (propController != null)
+            {
+                var pcType = typeof(FaeMaze.Props.PropPlacementController);
+                var mazeGridField = pcType.GetField("mazeGridBehaviour",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (mazeGridField != null)
+                {
+                    mazeGridField.SetValue(propController, newMaze);
+                    Debug.Log("Updated PropPlacementController maze reference");
                 }
             }
         }
