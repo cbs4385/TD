@@ -100,8 +100,9 @@ namespace FaeMaze.Maze
 
         /// <summary>
         /// Positions the entrance from the maze grid entrance position.
+        /// Can be called to reposition after maze regeneration.
         /// </summary>
-        private void PositionFromMazeGrid()
+        public void PositionFromMazeGrid()
         {
             // Find MazeGridBehaviour in scene
             var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();

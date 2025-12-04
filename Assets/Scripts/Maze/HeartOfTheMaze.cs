@@ -100,8 +100,9 @@ namespace FaeMaze.Maze
 
         /// <summary>
         /// Positions the heart from the 'H' marker in the maze file.
+        /// Can be called to reposition after maze regeneration.
         /// </summary>
-        private void PositionFromMazeGrid()
+        public void PositionFromMazeGrid()
         {
             // Find MazeGridBehaviour in scene
             var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
@@ -261,8 +262,9 @@ namespace FaeMaze.Maze
         /// <summary>
         /// Applies attraction to nearby tiles on the maze grid.
         /// Draws visitors toward the Heart of the Maze.
+        /// Can be called to reapply after maze regeneration.
         /// </summary>
-        private void ApplyAttraction()
+        public void ApplyAttraction()
         {
             // Find the MazeGridBehaviour in the scene
             var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();

@@ -273,6 +273,12 @@ namespace FaeMaze.Systems
                 return false;
             }
 
+            // Regenerate maze for procedurally generated mazes (not on first wave)
+            if (currentWaveNumber > 0 && mazeGridBehaviour != null)
+            {
+                mazeGridBehaviour.RegenerateMaze();
+            }
+
             // Initialize wave state
             currentWaveNumber++;
             visitorsSpawnedThisWave = 0;

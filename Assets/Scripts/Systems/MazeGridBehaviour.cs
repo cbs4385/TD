@@ -810,6 +810,66 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Maze Regeneration
+
+        /// <summary>
+        /// Regenerates the procedurally generated maze with a new random seed.
+        /// Only works when useRuntimeGeneration is true.
+        /// Clears cache and generates a new layout, then notifies all systems.
+        /// </summary>
+        public void RegenerateMaze()
+        {
+            if (!useRuntimeGeneration)
+            {
+                Debug.LogWarning("RegenerateMaze: Cannot regenerate - not using runtime generation mode");
+                return;
+            }
+
+            // Clear cache to force new generation
+            hasCachedGeneration = false;
+            cachedGeneratedTiles = null;
+            cachedGeneratedSymbols = null;
+            cachedMazeString = null;
+            cachedEntranceEdges.Clear();
+
+            // Use current time as random seed for variety
+            generatorConfig.randomSeed = System.DateTime.Now.Millisecond + (System.DateTime.Now.Second * 1000);
+
+            // Regenerate maze
+            InitializeFromGenerator();
+
+            // Re-register with GameController
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.RegisterMazeGrid(grid);
+            }
+
+            // Reposition entrance and heart markers
+            var entrance = Object.FindFirstObjectByType<FaeMaze.Maze.MazeEntrance>();
+            if (entrance != null)
+            {
+                entrance.PositionFromMazeGrid();
+            }
+
+            var heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+            if (heart != null)
+            {
+                heart.PositionFromMazeGrid();
+                heart.ApplyAttraction();
+            }
+
+            // Notify renderer to refresh
+            var renderer = GetComponent<MazeRenderer>();
+            if (renderer != null)
+            {
+                renderer.RefreshMaze();
+            }
+
+            Debug.Log($"Regenerated maze with seed {generatorConfig.randomSeed}. Spawn points: {GetSpawnPointCount()}");
+        }
+
+        #endregion
+
         #region Spawn Point API
 
         /// <summary>
