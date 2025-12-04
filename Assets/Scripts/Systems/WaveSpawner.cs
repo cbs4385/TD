@@ -182,7 +182,6 @@ namespace FaeMaze.Systems
             // Auto-start first wave if enabled
             if (autoStartFirstWave)
             {
-                Debug.Log("WaveSpawner: Auto-starting first wave");
                 StartWave();
             }
         }
@@ -217,20 +216,10 @@ namespace FaeMaze.Systems
             // Update Red Cap spawn timer
             if (enableRedCap && !hasSpawnedRedCap)
             {
-                float previousTimer = redCapSpawnTimer;
                 redCapSpawnTimer -= Time.deltaTime;
-
-                // Log timer countdown at 5-second intervals (55, 50, 45, 40, etc.)
-                int previousInterval = Mathf.FloorToInt(previousTimer / 5f);
-                int currentInterval = Mathf.FloorToInt(redCapSpawnTimer / 5f);
-                if (currentInterval < previousInterval && redCapSpawnTimer > 0f)
-                {
-                    Debug.Log($"[RED_CAP] Spawn timer: {redCapSpawnTimer:F1}s remaining");
-                }
 
                 if (redCapSpawnTimer <= 0f)
                 {
-                    Debug.Log($"[RED_CAP] Timer expired! Attempting to spawn Red Cap...");
                     SpawnRedCap();
                 }
             }
@@ -264,21 +253,18 @@ namespace FaeMaze.Systems
             // Prevent starting if already spawning
             if (isSpawning)
             {
-                Debug.LogWarning("WaveSpawner: Cannot start wave - already spawning!");
                 return false;
             }
 
             // Prevent starting if wave is already active
             if (isWaveActive)
             {
-                Debug.LogWarning("WaveSpawner: Cannot start wave - wave already active!");
                 return false;
             }
 
             // Prevent starting if in failed state
             if (isWaveFailed)
             {
-                Debug.LogWarning("WaveSpawner: Cannot start wave - level in failed state!");
                 return false;
             }
 
@@ -304,8 +290,6 @@ namespace FaeMaze.Systems
                 currentRedCap = null;
             }
 
-            Debug.Log($"WaveSpawner: Starting Wave {currentWaveNumber} with {visitorsPerWave} visitors and {waveDuration}s time limit");
-            Debug.Log($"[RED_CAP] Initialized: enabled={enableRedCap}, spawnDelay={redCapSpawnDelay}s, timer={redCapSpawnTimer}s");
 
             StartCoroutine(SpawnWaveCoroutine());
             return true;
@@ -329,7 +313,6 @@ namespace FaeMaze.Systems
             }
             hasSpawnedRedCap = false;
 
-            Debug.Log("WaveSpawner: Failed state reset - can start new wave");
         }
 
         /// <summary>
@@ -340,11 +323,9 @@ namespace FaeMaze.Systems
         {
             if (!isWaveFailed)
             {
-                Debug.LogWarning("WaveSpawner: Cannot retry - wave has not failed!");
                 return false;
             }
 
-            Debug.Log($"WaveSpawner: Retrying wave {currentWaveNumber}");
 
             // Reset failed state
             ResetFailedState();
@@ -404,7 +385,6 @@ namespace FaeMaze.Systems
                 // Use random spawn points
                 if (!mazeGridBehaviour.TryGetRandomSpawnPair(out startId, out startPos, out destId, out destPos))
                 {
-                    Debug.LogError("WaveSpawner: Failed to get random spawn pair!");
                     return;
                 }
             }
@@ -413,11 +393,9 @@ namespace FaeMaze.Systems
             {
                 startPos = entrance.GridPosition;
                 destPos = heart.GridPosition;
-                Debug.LogWarning("WaveSpawner: Using legacy entrance/heart system. Consider adding spawn markers (A, B, C, D) to your maze file.");
             }
             else
             {
-                Debug.LogError("WaveSpawner: No spawn system available! Need either 2+ spawn markers or entrance/heart references.");
                 return;
             }
 
@@ -427,7 +405,6 @@ namespace FaeMaze.Systems
 
             if (!pathFound || pathNodes.Count == 0)
             {
-                Debug.LogWarning($"WaveSpawner: No path found from {startPos} to {destPos}");
                 return;
             }
 
@@ -468,25 +445,20 @@ namespace FaeMaze.Systems
         /// </summary>
         private void SpawnRedCap()
         {
-            Debug.Log($"[RED_CAP] SpawnRedCap() called - Wave {currentWaveNumber}");
 
             if (redCapPrefab == null)
             {
-                Debug.LogError("[RED_CAP] FAILED: Red Cap prefab not assigned!");
                 hasSpawnedRedCap = true; // Mark as spawned to prevent repeated warnings
                 return;
             }
 
-            Debug.Log($"[RED_CAP] Prefab OK: {redCapPrefab.name}");
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("[RED_CAP] FAILED: MazeGridBehaviour not found!");
                 hasSpawnedRedCap = true;
                 return;
             }
 
-            Debug.Log($"[RED_CAP] MazeGridBehaviour OK");
 
             // Determine spawn position (use random spawn marker or legacy entrance)
             Vector3 spawnWorldPos;
@@ -497,30 +469,25 @@ namespace FaeMaze.Systems
             {
                 // Use spawn marker
                 spawnWorldPos = mazeGridBehaviour.GridToWorld(spawnGridPos.x, spawnGridPos.y);
-                Debug.Log($"[RED_CAP] Using spawn marker '{spawnId}' at grid ({spawnGridPos.x}, {spawnGridPos.y}), world {spawnWorldPos}");
             }
             else if (entrance != null)
             {
                 // Use legacy entrance
                 spawnGridPos = entrance.GridPosition;
                 spawnWorldPos = mazeGridBehaviour.GridToWorld(spawnGridPos.x, spawnGridPos.y);
-                Debug.Log($"[RED_CAP] Using entrance at grid ({spawnGridPos.x}, {spawnGridPos.y}), world {spawnWorldPos}");
             }
             else
             {
-                Debug.LogError("[RED_CAP] FAILED: No spawn markers or entrance found!");
                 hasSpawnedRedCap = true;
                 return;
             }
 
             // Instantiate Red Cap
-            Debug.Log($"[RED_CAP] Instantiating prefab at {spawnWorldPos}...");
             currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.identity);
             currentRedCap.name = $"RedCap_Wave{currentWaveNumber}";
 
             hasSpawnedRedCap = true;
 
-            Debug.Log($"[RED_CAP] SUCCESS! Spawned {currentRedCap.name} at {spawnWorldPos} for Wave {currentWaveNumber}");
         }
 
         /// <summary>
@@ -541,7 +508,6 @@ namespace FaeMaze.Systems
                 currentRedCap = null;
             }
 
-            Debug.Log($"WaveSpawner: Wave {currentWaveNumber} SUCCESS! Cleared with {waveTimeRemaining:F1}s remaining");
 
             OnWaveSuccess?.Invoke();
         }
@@ -571,7 +537,6 @@ namespace FaeMaze.Systems
                 currentRedCap = null;
             }
 
-            Debug.LogWarning($"WaveSpawner: Wave {currentWaveNumber} FAILED! Timer expired with {activeVisitors.Count} visitors remaining");
 
             OnWaveFailed?.Invoke();
         }
@@ -675,7 +640,6 @@ namespace FaeMaze.Systems
             visitorCountText.alignment = TextAlignmentOptions.Center;
             visitorCountText.text = "Visitors: 0/0 (Active: 0)";
 
-            Debug.Log("WaveSpawner: Auto-created UI elements at top-middle of screen");
         }
 
         /// <summary>
@@ -749,13 +713,11 @@ namespace FaeMaze.Systems
 
             if (visitorPrefab == null)
             {
-                Debug.LogError("WaveSpawner: Visitor prefab not assigned!");
                 isValid = false;
             }
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("WaveSpawner: MazeGridBehaviour not found in scene!");
                 isValid = false;
             }
 
@@ -767,7 +729,6 @@ namespace FaeMaze.Systems
 
                 if (!hasSpawnMarkers && !hasLegacySystem)
                 {
-                    Debug.LogError("WaveSpawner: No spawn system available! Need either:\n" +
                         "  - 2+ spawn markers (A, B, C, D) in maze file, OR\n" +
                         "  - Entrance and Heart references assigned");
                     isValid = false;
@@ -788,7 +749,6 @@ namespace FaeMaze.Systems
         {
             if (!ValidateReferences())
             {
-                Debug.LogWarning("Cannot spawn debug visitor - references not valid");
                 return;
             }
 

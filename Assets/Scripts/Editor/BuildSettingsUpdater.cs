@@ -16,7 +16,6 @@ namespace FaeMaze.Editor
 
             if (!File.Exists(gameOverMetaPath))
             {
-                Debug.LogError("[BuildSettingsUpdater] GameOver.unity.meta not found! Generate the scene first using 'FaeMaze/Setup GameOver Scene'");
                 return;
             }
 
@@ -35,11 +34,9 @@ namespace FaeMaze.Editor
 
             if (string.IsNullOrEmpty(gameOverGuid))
             {
-                Debug.LogError("[BuildSettingsUpdater] Could not find GUID in GameOver.unity.meta");
                 return;
             }
 
-            Debug.Log($"[BuildSettingsUpdater] Found GameOver scene GUID: {gameOverGuid}");
 
             // Read EditorBuildSettings.asset
             string buildSettingsPath = "ProjectSettings/EditorBuildSettings.asset";
@@ -57,7 +54,6 @@ namespace FaeMaze.Editor
                         string oldGuid = buildSettingsLines[i + 1].Split(':')[1].Trim();
                         buildSettingsLines[i + 1] = buildSettingsLines[i + 1].Replace(oldGuid, gameOverGuid);
                         updated = true;
-                        Debug.Log($"[BuildSettingsUpdater] Updated GUID from {oldGuid} to {gameOverGuid}");
                         break;
                     }
                 }
@@ -67,11 +63,6 @@ namespace FaeMaze.Editor
             {
                 File.WriteAllLines(buildSettingsPath, buildSettingsLines);
                 AssetDatabase.Refresh();
-                Debug.Log("[BuildSettingsUpdater] Build Settings updated successfully!");
-            }
-            else
-            {
-                Debug.LogWarning("[BuildSettingsUpdater] GameOver scene not found in Build Settings");
             }
         }
     }

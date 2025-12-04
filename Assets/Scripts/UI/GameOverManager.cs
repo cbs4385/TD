@@ -67,7 +67,6 @@ namespace FaeMaze.UI
         {
             if (GameStatsTracker.Instance == null)
             {
-                Debug.LogWarning("[GameOverManager] GameStatsTracker instance not found!");
                 DisplayDefaultStats();
                 return;
             }
@@ -117,7 +116,6 @@ namespace FaeMaze.UI
 
         private void ReturnToMainMenu()
         {
-            Debug.Log("[GameOverManager] Returning to main menu");
 
             // Reset stats for next game
             if (GameStatsTracker.Instance != null)

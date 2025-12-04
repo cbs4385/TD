@@ -87,7 +87,6 @@ namespace FaeMaze.Systems
             // Validate references
             if (mazeOrigin == null)
             {
-                Debug.LogError("MazeOrigin is not assigned in MazeGridBehaviour!");
                 mazeOrigin = transform; // Fallback to self
             }
 
@@ -109,10 +108,6 @@ namespace FaeMaze.Systems
             {
                 GameController.Instance.RegisterMazeGrid(grid);
             }
-            else
-            {
-                Debug.LogError("GameController instance not found! Cannot register MazeGrid.");
-            }
         }
 
         #endregion
@@ -124,7 +119,6 @@ namespace FaeMaze.Systems
             // Validate maze file
             if (mazeFile == null)
             {
-                Debug.LogError("MazeFile is not assigned in MazeGridBehaviour! Cannot initialize maze.");
                 return;
             }
 
@@ -138,7 +132,6 @@ namespace FaeMaze.Systems
 
             if (lines.Length == 0)
             {
-                Debug.LogError("Maze file is empty!");
                 return;
             }
 
@@ -189,7 +182,6 @@ namespace FaeMaze.Systems
                             grid.SetWalkable(x, y, true);
                             heartGridPos = new Vector2Int(x, y);
                             foundHeart = true;
-                            Debug.Log($"MazeGridBehaviour: Found heart marker 'H' at ({x}, {y})");
                             break;
 
                         case 'A':
@@ -201,17 +193,11 @@ namespace FaeMaze.Systems
                             if (!spawnPoints.ContainsKey(c))
                             {
                                 spawnPoints[c] = new Vector2Int(x, y);
-                                Debug.Log($"MazeGridBehaviour: Found spawn point '{c}' at ({x}, {y})");
-                            }
-                            else
-                            {
-                                Debug.LogWarning($"MazeGridBehaviour: Duplicate spawn marker '{c}' at ({x}, {y}), ignoring");
                             }
                             break;
 
                         default:
                             // Unknown character - treat as wall and log warning
-                            Debug.LogWarning($"Unknown character '{c}' at ({x}, {y}), treating as wall");
                             grid.SetWalkable(x, y, false);
                             break;
                     }
@@ -230,12 +216,10 @@ namespace FaeMaze.Systems
                 // If using spawn markers, entrance is not required
                 if (spawnPoints.Count >= 2)
                 {
-                    Debug.Log("MazeGridBehaviour: No 'E' entrance marker found, using spawn marker system.");
                     entranceGridPos = new Vector2Int(0, 0); // Not used with spawn markers
                 }
                 else
                 {
-                    Debug.LogError("No entrance ('E') found in maze file! Required for legacy entrance/heart system.");
                     entranceGridPos = new Vector2Int(0, 0);
                 }
             }
@@ -243,7 +227,6 @@ namespace FaeMaze.Systems
             // Find heart position (only if 'H' marker not found)
             if (!foundHeart)
             {
-                Debug.LogWarning("No heart marker ('H') found in maze file. Using center fallback.");
                 FindHeartPosition();
             }
 
@@ -293,7 +276,6 @@ namespace FaeMaze.Systems
             }
 
             // Fallback - should never reach here if maze has any walkable tiles
-            Debug.LogError("Could not find any walkable tile for heart position!");
             heartGridPos = entranceGridPos;
         }
 
@@ -302,7 +284,6 @@ namespace FaeMaze.Systems
         /// </summary>
         private void InitializeFromGenerator()
         {
-            Debug.Log("MazeGridBehaviour: Initializing maze from runtime generator...");
 
             // Generate the maze
             var generator = new ForestMazeGenerator();
@@ -312,7 +293,6 @@ namespace FaeMaze.Systems
             width = tiles.GetLength(0);
             height = tiles.GetLength(1);
 
-            Debug.Log($"MazeGridBehaviour: Generated {width}x{height} maze");
 
             // Create the grid
             grid = new MazeGrid(width, height);
@@ -377,7 +357,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"MazeGridBehaviour: Found {borderWalkableTiles.Count} border entrance tiles");
 
             // Set up spawn points from border entrances
             // Use up to 4 evenly distributed entrances as spawn points
@@ -398,7 +377,6 @@ namespace FaeMaze.Systems
                 int index = (i * borderCount) / numSpawns;
                 Vector2Int pos = borderWalkableList[index];
                 spawnPoints[spawnIds[i]] = pos;
-                Debug.Log($"MazeGridBehaviour: Assigned spawn point '{spawnIds[i]}' at ({pos.x}, {pos.y})");
             }
 
             // Set entrance to first spawn point (or first border tile if no spawns)
@@ -412,14 +390,12 @@ namespace FaeMaze.Systems
             }
             else
             {
-                Debug.LogWarning("MazeGridBehaviour: No border entrances found, defaulting to (0,0)");
                 entranceGridPos = new Vector2Int(0, 0);
             }
 
             // Find heart position in the center of the maze
             FindHeartPosition();
 
-            Debug.Log($"MazeGridBehaviour: Runtime generation complete. Entrance at ({entranceGridPos.x}, {entranceGridPos.y}), Heart at ({heartGridPos.x}, {heartGridPos.y})");
         }
 
         #endregion
@@ -436,7 +412,6 @@ namespace FaeMaze.Systems
         {
             if (mazeOrigin == null)
             {
-                Debug.LogWarning("MazeOrigin is null! Using Vector3.zero as origin.");
                 return new Vector3(x * tileSize, y * tileSize, 0);
             }
 
@@ -454,7 +429,6 @@ namespace FaeMaze.Systems
         {
             if (mazeOrigin == null)
             {
-                Debug.LogWarning("MazeOrigin is null! Cannot convert world to grid.");
                 x = 0;
                 y = 0;
                 return false;
@@ -488,7 +462,6 @@ namespace FaeMaze.Systems
         {
             if (mazeOrigin == null)
             {
-                Debug.LogWarning("MazeOrigin is null! Cannot convert world to grid.");
                 x = 0;
                 y = 0;
                 return false;
@@ -653,7 +626,6 @@ namespace FaeMaze.Systems
         {
             if (!spawnPoints.ContainsKey(spawnId))
             {
-                Debug.LogError($"MazeGridBehaviour: Spawn point '{spawnId}' not found!");
                 return Vector2Int.zero;
             }
             return spawnPoints[spawnId];
@@ -678,7 +650,6 @@ namespace FaeMaze.Systems
         {
             if (spawnPoints.Count == 0)
             {
-                Debug.LogWarning("MazeGridBehaviour: No spawn points available!");
                 spawnId = '\0';
                 position = Vector2Int.zero;
                 return false;
@@ -704,7 +675,6 @@ namespace FaeMaze.Systems
         {
             if (spawnPoints.Count < 2)
             {
-                Debug.LogWarning($"MazeGridBehaviour: Need at least 2 spawn points, found {spawnPoints.Count}");
                 startId = '\0';
                 startPos = Vector2Int.zero;
                 destId = '\0';

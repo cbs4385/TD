@@ -46,7 +46,6 @@ namespace FaeMaze.Systems
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("MazeRenderer requires MazeGridBehaviour component!");
                 return;
             }
 
@@ -61,7 +60,6 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour.Grid == null)
             {
-                Debug.LogError("MazeGrid is null! Cannot render maze.");
                 return;
             }
 
@@ -97,6 +95,8 @@ namespace FaeMaze.Systems
                     renderedTiles++;
                 }
             }
+
+            Debug.Log($"MazeRenderer: Rendered {renderedTiles} tiles from generated {width}x{height} grid to UI.");
 
         }
 

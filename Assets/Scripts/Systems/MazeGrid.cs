@@ -106,7 +106,6 @@ namespace FaeMaze.Systems
         {
             if (!InBounds(x, y))
             {
-                Debug.LogWarning($"Attempted to access node out of bounds: ({x}, {y})");
                 return null;
             }
 
@@ -243,14 +242,12 @@ namespace FaeMaze.Systems
             // Validate origin
             if (!InBounds(originX, originY))
             {
-                Debug.LogWarning($"FloodFillReachable: Origin ({originX}, {originY}) is out of bounds!");
                 return reachable;
             }
 
             var originNode = GetNode(originX, originY);
             if (originNode == null || !originNode.walkable)
             {
-                Debug.LogWarning($"FloodFillReachable: Origin ({originX}, {originY}) is not walkable!");
                 return reachable;
             }
 

@@ -16,7 +16,6 @@ namespace FaeMaze.Systems
             MazeGridBehaviour mazeGrid = Object.FindFirstObjectByType<MazeGridBehaviour>();
             if (mazeGrid == null)
             {
-                Debug.LogWarning("MazeAutoInitializer: No MazeGridBehaviour found in scene!");
                 return;
             }
 
@@ -36,7 +35,6 @@ namespace FaeMaze.Systems
             Camera mainCamera = Camera.main;
             if (mainCamera == null)
             {
-                Debug.LogWarning("MazeAutoInitializer: No main camera found!");
                 return;
             }
 
@@ -52,7 +50,6 @@ namespace FaeMaze.Systems
 
             if (mazeGrid.Grid == null)
             {
-                Debug.LogWarning("MazeAutoInitializer: Grid not initialized, cannot center camera.");
                 yield break;
             }
 

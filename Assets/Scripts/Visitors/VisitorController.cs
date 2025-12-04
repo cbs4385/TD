@@ -421,12 +421,12 @@ namespace FaeMaze.Visitors
 
                 if (mazeGridBehaviour == null)
                 {
-                    Debug.LogError("VisitorController: Could not find MazeGridBehaviour in scene!");
+                    return;
                 }
             }
             else
             {
-                Debug.LogWarning("VisitorController: GameController or MazeGrid is null during initialization!");
+                return;
             }
         }
 
@@ -450,7 +450,6 @@ namespace FaeMaze.Visitors
         {
             if (gridPath == null || gridPath.Count == 0)
             {
-                Debug.LogError("VisitorController: Cannot set null or empty path!");
                 return;
             }
 
@@ -471,7 +470,6 @@ namespace FaeMaze.Visitors
         {
             if (nodePath == null || nodePath.Count == 0)
             {
-                Debug.LogError("VisitorController: Cannot set null or empty path!");
                 return;
             }
 
@@ -573,7 +571,6 @@ namespace FaeMaze.Visitors
         {
             if (path == null || path.Count == 0)
             {
-                Debug.LogWarning("VisitorController: No path set but state is Walking!");
                 state = VisitorState.Idle;
                 SetAnimatorDirection(IdleDirection);
                 return;
@@ -581,7 +578,6 @@ namespace FaeMaze.Visitors
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("VisitorController: MazeGridBehaviour is null, cannot convert grid to world!");
                 return;
             }
 
@@ -767,7 +763,6 @@ namespace FaeMaze.Visitors
                 }
                 else
                 {
-                    Debug.LogWarning("VisitorController: Could not notify Heart - reference is null. Destroying self.");
                     Destroy(gameObject);
                 }
             }

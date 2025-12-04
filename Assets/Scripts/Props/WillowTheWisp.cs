@@ -164,13 +164,11 @@ namespace FaeMaze.Props
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("WillowTheWisp: Could not find MazeGridBehaviour!");
                 return;
             }
 
             if (gameController == null)
             {
-                Debug.LogError("WillowTheWisp: Could not find GameController!");
                 return;
             }
 
@@ -178,10 +176,6 @@ namespace FaeMaze.Props
             if (gameController.Heart != null)
             {
                 heartGridPosition = gameController.Heart.GridPosition;
-            }
-            else
-            {
-                Debug.LogWarning("WillowTheWisp: Heart not found! Will try to locate it later.");
             }
 
             // Ensure wisp starts on a walkable tile
@@ -302,7 +296,6 @@ namespace FaeMaze.Props
                 // No visitors in range, return to wandering if we were chasing
                 if (state == WispState.Chasing)
                 {
-                    Debug.Log("WillowTheWisp: Lost target visitor, returning to wandering");
                     ReturnToWandering();
                 }
                 return;
@@ -472,7 +465,6 @@ namespace FaeMaze.Props
             // Get current grid position
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
-                Debug.LogWarning("WillowTheWisp: Could not convert world position to grid!");
                 return;
             }
 
@@ -498,11 +490,9 @@ namespace FaeMaze.Props
                 }
 
                 currentPathIndex = 0;
-                Debug.Log($"WillowTheWisp: Generated wander path with {wanderPath.Count} waypoints");
             }
             else
             {
-                Debug.LogWarning($"WillowTheWisp: Failed to find wander path from {currentPos} to {randomDest}");
                 // Try again
                 Invoke(nameof(GenerateRandomWanderPath), 1f);
             }
@@ -553,7 +543,6 @@ namespace FaeMaze.Props
             // Get current grid position
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
-                Debug.LogWarning("WillowTheWisp: Could not convert world position to grid, moving to random walkable tile");
                 Vector2Int randomPos = GetRandomWalkableTile();
                 transform.position = mazeGridBehaviour.GridToWorld(randomPos.x, randomPos.y);
                 return;
@@ -563,24 +552,20 @@ namespace FaeMaze.Props
             var currentNode = grid.GetNode(currentX, currentY);
             if (currentNode != null && currentNode.walkable)
             {
-                Debug.Log($"WillowTheWisp: Starting at walkable position ({currentX}, {currentY})");
                 return;
             }
 
             // Current position is not walkable, find nearest walkable tile
-            Debug.LogWarning($"WillowTheWisp: Start position ({currentX}, {currentY}) is not walkable! Finding nearest walkable tile...");
 
             Vector2Int nearestWalkable = FindNearestWalkableTile(currentX, currentY);
             if (nearestWalkable != new Vector2Int(currentX, currentY))
             {
                 Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearestWalkable.x, nearestWalkable.y);
                 transform.position = newWorldPos;
-                Debug.Log($"WillowTheWisp: Moved to nearest walkable tile ({nearestWalkable.x}, {nearestWalkable.y})");
             }
             else
             {
                 // Couldn't find nearby walkable tile, use random one
-                Debug.LogWarning("WillowTheWisp: Could not find nearby walkable tile, moving to random location");
                 Vector2Int randomPos = GetRandomWalkableTile();
                 transform.position = mazeGridBehaviour.GridToWorld(randomPos.x, randomPos.y);
             }
@@ -685,7 +670,6 @@ namespace FaeMaze.Props
             if (visitor == null)
                 return;
 
-            Debug.Log($"WillowTheWisp: Started chasing visitor {visitor.name}");
 
             targetVisitor = visitor;
             state = WispState.Chasing;
@@ -701,7 +685,6 @@ namespace FaeMaze.Props
             // Check if target is still valid
             if (targetVisitor == null || targetVisitor.State != VisitorController.VisitorState.Walking)
             {
-                Debug.Log("WillowTheWisp: Target visitor lost or invalid, returning to wandering");
                 ReturnToWandering();
                 return;
             }
@@ -710,7 +693,6 @@ namespace FaeMaze.Props
             var followWisp = targetVisitor.GetComponent<FollowWispBehavior>();
             if (followWisp != null && followWisp.IsFollowing)
             {
-                Debug.Log("WillowTheWisp: Target visitor captured by another wisp, returning to wandering");
                 ReturnToWandering();
                 return;
             }
@@ -748,7 +730,6 @@ namespace FaeMaze.Props
 
         private void CaptureVisitor(VisitorController visitor)
         {
-            Debug.Log($"WillowTheWisp: Captured visitor {visitor.name}!");
 
             followingVisitor = visitor;
             state = WispState.Leading;
@@ -777,7 +758,6 @@ namespace FaeMaze.Props
             }
             else
             {
-                Debug.LogError("WillowTheWisp: Cannot lead to heart - heart not found!");
                 ReturnToWandering();
                 return;
             }
@@ -785,7 +765,6 @@ namespace FaeMaze.Props
             // Get current position
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
-                Debug.LogWarning("WillowTheWisp: Could not convert position to grid!");
                 ReturnToWandering();
                 return;
             }
@@ -803,11 +782,9 @@ namespace FaeMaze.Props
                 }
 
                 currentPathIndex = 0;
-                Debug.Log($"WillowTheWisp: Leading visitor to heart with path of {wanderPath.Count} waypoints");
             }
             else
             {
-                Debug.LogWarning($"WillowTheWisp: Failed to find path to heart from {currentPos}");
                 ReturnToWandering();
             }
         }
@@ -817,7 +794,6 @@ namespace FaeMaze.Props
             // Check if visitor is still following
             if (followingVisitor == null || followingVisitor.State == VisitorController.VisitorState.Consumed)
             {
-                Debug.Log("WillowTheWisp: Visitor consumed or lost, returning to wandering");
                 ReturnToWandering();
                 return;
             }
@@ -831,7 +807,6 @@ namespace FaeMaze.Props
             if (currentPathIndex >= wanderPath.Count)
             {
                 // Reached heart - visitor should be consumed soon
-                Debug.Log("WillowTheWisp: Reached heart, returning to wandering");
                 ReturnToWandering();
                 return;
             }

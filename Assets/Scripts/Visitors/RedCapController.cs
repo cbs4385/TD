@@ -128,14 +128,10 @@ namespace FaeMaze.Visitors
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             animator = GetComponent<Animator>();
 
-            if (gameController == null)
+            if (gameController == null || mazeGridBehaviour == null)
             {
-                Debug.LogError("RedCapController: GameController not found!");
-            }
-
-            if (mazeGridBehaviour == null)
-            {
-                Debug.LogError("RedCapController: MazeGridBehaviour not found!");
+                enabled = false;
+                return;
             }
 
             // Create visual representation only if using procedural sprite
@@ -402,7 +398,6 @@ namespace FaeMaze.Visitors
                 // So we'll use AddEssence with negative value to bypass the spending check
                 gameController.AddEssence(-essencePenalty);
 
-                Debug.Log($"RedCap: Captured visitor! Charged {essencePenalty} essence (current: {gameController.CurrentEssence})");
             }
 
             // Despawn the visitor

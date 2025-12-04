@@ -252,9 +252,6 @@ namespace FaeMaze.Systems
         private void ValidateReferences()
         {
             // UIController is optional at startup
-            if (uiController == null)
-            {
-            }
         }
 
         private void EnsurePlacementUI()
@@ -272,7 +269,6 @@ namespace FaeMaze.Systems
             }
 
             placementUI = placementUiObject.AddComponent<PlacementUIController>();
-            Debug.Log("GameController: Created PlacementUIController at runtime to provide build selection buttons");
         }
 
         private void EnsureResourcesUI()
@@ -290,7 +286,6 @@ namespace FaeMaze.Systems
             }
 
             resourcesUI = resourcesUiObject.AddComponent<FaeMaze.UI.PlayerResourcesUIController>();
-            Debug.Log("GameController: Created PlayerResourcesUIController at runtime to display player resources");
         }
 
         #endregion

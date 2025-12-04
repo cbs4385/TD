@@ -26,7 +26,6 @@ namespace FaeMaze.Systems
                 {
                     escapeHandlerObj = new GameObject("EscapeHandler");
                     escapeHandlerObj.AddComponent<EscapeHandler>();
-                    UnityEngine.Debug.Log($"[RuntimeSceneSetup] Added EscapeHandler to {sceneName}");
                 }
             }
 
@@ -51,7 +50,6 @@ namespace FaeMaze.Systems
                     GameObject waveManagerObj = new GameObject("WaveManager");
                     waveManagerObj.transform.SetParent(gameRoot.transform);
                     waveManagerObj.AddComponent<WaveManager>();
-                    UnityEngine.Debug.Log("[RuntimeSceneSetup] Auto-created WaveManager in FaeMazeScene");
                 }
             }
         }

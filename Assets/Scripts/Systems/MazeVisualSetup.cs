@@ -45,14 +45,12 @@ namespace FaeMaze.Systems
             MazeGridBehaviour mazeGrid = GetComponent<MazeGridBehaviour>();
             if (mazeGrid == null || mazeGrid.Grid == null)
             {
-                Debug.LogWarning("MazeVisualSetup: Cannot center camera - MazeGrid not initialized yet. Will try in Start().");
                 return;
             }
 
             Camera mainCamera = Camera.main;
             if (mainCamera == null)
             {
-                Debug.LogWarning("MazeVisualSetup: No main camera found!");
                 return;
             }
 

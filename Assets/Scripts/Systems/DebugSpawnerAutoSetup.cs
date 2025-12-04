@@ -28,27 +28,10 @@ namespace FaeMaze.Systems
             heart = FindFirstObjectByType<HeartOfTheMaze>();
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
-            if (entrance == null)
+            if (entrance == null || heart == null || mazeGridBehaviour == null || visitorPrefab == null)
             {
-                Debug.LogError("DebugSpawnerAutoSetup: No MazeEntrance found in scene!");
-            }
-
-            if (heart == null)
-            {
-                Debug.LogError("DebugSpawnerAutoSetup: No HeartOfTheMaze found in scene!");
-            }
-
-            if (mazeGridBehaviour == null)
-            {
-                Debug.LogError("DebugSpawnerAutoSetup: No MazeGridBehaviour found in scene!");
-            }
-
-            if (visitorPrefab == null)
-            {
-                Debug.LogWarning("DebugSpawnerAutoSetup: Visitor prefab is not assigned! Please assign it in the Inspector.");
-            }
-            else
-            {
+                enabled = false;
+                return;
             }
         }
 
@@ -65,13 +48,11 @@ namespace FaeMaze.Systems
         {
             if (visitorPrefab == null)
             {
-                Debug.LogError("DebugSpawnerAutoSetup: Cannot spawn visitor - prefab is not assigned!");
                 return;
             }
 
             if (entrance == null || heart == null || mazeGridBehaviour == null)
             {
-                Debug.LogError("DebugSpawnerAutoSetup: Cannot spawn visitor - missing scene references!");
                 return;
             }
 
@@ -86,7 +67,6 @@ namespace FaeMaze.Systems
 
             if (!pathFound || pathNodes.Count == 0)
             {
-                Debug.LogWarning($"DebugSpawnerAutoSetup: No path found from {entrancePos} to {heartPos}!");
                 return;
             }
 

@@ -15,7 +15,6 @@ namespace FaeMaze.Systems
             {
                 GameObject trackerObj = new GameObject("GameStatsTracker");
                 trackerObj.AddComponent<GameStatsTracker>();
-                Debug.Log("[GameStatsTrackerInitializer] Created GameStatsTracker singleton");
             }
         }
     }

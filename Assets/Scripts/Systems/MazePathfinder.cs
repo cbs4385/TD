@@ -59,7 +59,7 @@ namespace FaeMaze.Systems
         {
             if (grid == null)
             {
-                Debug.LogError("MazePathfinder: Cannot create pathfinder with null grid!");
+                return;
             }
 
             this.grid = grid;
@@ -86,20 +86,17 @@ namespace FaeMaze.Systems
         {
             if (grid == null)
             {
-                Debug.LogError("MazePathfinder: Grid is null!");
                 return false;
             }
 
             // Validate coordinates
             if (!grid.InBounds(startX, startY))
             {
-                Debug.LogError($"MazePathfinder: Start position ({startX}, {startY}) is out of bounds!");
                 return false;
             }
 
             if (!grid.InBounds(endX, endY))
             {
-                Debug.LogError($"MazePathfinder: End position ({endX}, {endY}) is out of bounds!");
                 return false;
             }
 
@@ -109,13 +106,11 @@ namespace FaeMaze.Systems
 
             if (startNode == null || !startNode.walkable)
             {
-                Debug.LogError($"MazePathfinder: Start position ({startX}, {startY}) is not walkable!");
                 return false;
             }
 
             if (endNode == null || !endNode.walkable)
             {
-                Debug.LogError($"MazePathfinder: End position ({endX}, {endY}) is not walkable!");
                 return false;
             }
 
@@ -132,7 +127,6 @@ namespace FaeMaze.Systems
                 return true;
             }
 
-            Debug.LogWarning($"MazePathfinder: No path found from ({startX},{startY}) to ({endX},{endY})");
             return false;
         }
 

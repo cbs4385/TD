@@ -66,27 +66,11 @@ namespace FaeMaze.UI
             if (mazeGridBehaviour == null)
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-                if (mazeGridBehaviour != null)
-                {
-                    Debug.Log("DebugUIController: Found MazeGridBehaviour");
-                }
-                else
-                {
-                    Debug.LogWarning("DebugUIController: Could not find MazeGridBehaviour in scene!");
-                }
             }
 
             if (waveSpawner == null)
             {
                 waveSpawner = FindFirstObjectByType<WaveSpawner>();
-                if (waveSpawner != null)
-                {
-                    Debug.Log("DebugUIController: Found WaveSpawner");
-                }
-                else
-                {
-                    Debug.LogWarning("DebugUIController: Could not find WaveSpawner in scene!");
-                }
             }
 
             // Auto-create debug panel if not assigned
@@ -570,15 +554,9 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnGridToggleChanged(bool value)
         {
-            Debug.Log($"DebugUIController: Grid Gizmos toggled to {value}");
             if (mazeGridBehaviour != null)
             {
                 mazeGridBehaviour.SetDrawGridGizmos(value);
-                Debug.Log($"DebugUIController: Set drawGridGizmos to {value} (view in Scene window)");
-            }
-            else
-            {
-                Debug.LogWarning("DebugUIController: Cannot toggle Grid Gizmos - MazeGridBehaviour is null!");
             }
         }
 
@@ -587,15 +565,9 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnHeatmapToggleChanged(bool value)
         {
-            Debug.Log($"DebugUIController: Attraction Heatmap toggled to {value}");
             if (mazeGridBehaviour != null)
             {
                 mazeGridBehaviour.SetDrawAttractionHeatmap(value);
-                Debug.Log($"DebugUIController: Set drawAttractionHeatmap to {value} (view in Scene window)");
-            }
-            else
-            {
-                Debug.LogWarning("DebugUIController: Cannot toggle Heatmap - MazeGridBehaviour is null!");
             }
         }
 
@@ -621,10 +593,6 @@ namespace FaeMaze.UI
             if (waveSpawner != null)
             {
                 waveSpawner.SpawnSingleVisitorForDebug();
-            }
-            else
-            {
-                Debug.LogWarning("WaveSpawner reference is not assigned in DebugUIController!");
             }
         }
 

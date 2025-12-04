@@ -150,7 +150,7 @@ namespace FaeMaze.Props
             mainCamera = Camera.main;
             if (mainCamera == null)
             {
-                Debug.LogError("PropPlacementController: Main camera not found!");
+                return;
             }
 
             // Initialize occupancy tracking
@@ -159,7 +159,7 @@ namespace FaeMaze.Props
             // Validate references
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("PropPlacementController: MazeGridBehaviour is not assigned!");
+                return;
             }
 
             // Create preview root if not assigned
@@ -176,7 +176,7 @@ namespace FaeMaze.Props
             }
             else
             {
-                Debug.LogWarning("PropPlacementController: No placeable items configured!");
+                return;
             }
 
             // Set initial cursor
@@ -229,7 +229,6 @@ namespace FaeMaze.Props
             if (item != null)
             {
                 currentSelection = item;
-                Debug.Log($"PropPlacementController: Selected '{currentSelection.displayName}' (cost: {currentSelection.essenceCost})");
 
                 // Create or update preview for new selection
                 CreateOrUpdatePreview();
@@ -239,7 +238,7 @@ namespace FaeMaze.Props
             }
             else
             {
-                Debug.LogWarning($"PropPlacementController: No placeable item found with id '{id}'");
+                return;
             }
         }
 
@@ -300,7 +299,6 @@ namespace FaeMaze.Props
             // Validate preconditions
             if (currentSelection == null)
             {
-                Debug.LogWarning("PropPlacementController: No item selected for placement!");
                 return;
             }
 
@@ -311,7 +309,6 @@ namespace FaeMaze.Props
 
             if (currentSelection.prefab == null)
             {
-                Debug.LogError($"PropPlacementController: Prefab not assigned for '{currentSelection.displayName}'!");
                 return;
             }
 
@@ -336,7 +333,6 @@ namespace FaeMaze.Props
             // Check if tile is already occupied
             if (occupiedTiles.ContainsKey(gridPos))
             {
-                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is already occupied");
                 return;
             }
 
@@ -344,34 +340,29 @@ namespace FaeMaze.Props
             MazeGrid grid = mazeGridBehaviour.Grid;
             if (grid == null)
             {
-                Debug.LogError("PropPlacementController: MazeGrid is null!");
                 return;
             }
 
             MazeGrid.MazeNode node = grid.GetNode(gridX, gridY);
             if (node == null)
             {
-                Debug.LogWarning($"PropPlacementController: No node at ({gridX}, {gridY})");
                 return;
             }
 
             // Check if tile is walkable
             if (!node.walkable)
             {
-                Debug.Log($"PropPlacementController: Tile ({gridX}, {gridY}) is not walkable");
                 return;
             }
 
             // Try to spend essence
             if (GameController.Instance == null)
             {
-                Debug.LogError("PropPlacementController: GameController instance is null!");
                 return;
             }
 
             if (!GameController.Instance.TrySpendEssence(currentSelection.essenceCost))
             {
-                Debug.Log($"PropPlacementController: Not enough essence (need {currentSelection.essenceCost})");
                 return;
             }
 
@@ -393,7 +384,6 @@ namespace FaeMaze.Props
             GameObject prop = Instantiate(item.prefab, worldPos, Quaternion.identity);
             prop.name = $"{item.id}_{gridPos.x}_{gridPos.y}";
 
-            Debug.Log($"PropPlacementController: Placed '{item.displayName}' at ({gridPos.x}, {gridPos.y})");
 
             // Track prop placement for statistics
             if (Systems.GameStatsTracker.Instance != null)
@@ -420,7 +410,6 @@ namespace FaeMaze.Props
             if (occupiedTiles.ContainsKey(gridPos))
             {
                 GameObject prop = occupiedTiles[gridPos];
-                Debug.Log($"PropPlacementController: Removed prop from ({gridPos.x}, {gridPos.y})");
                 occupiedTiles.Remove(gridPos);
             }
         }
@@ -654,7 +643,6 @@ namespace FaeMaze.Props
                 int currentCount = CountPlacedItemsOfType(currentSelection.id);
                 if (currentCount >= currentSelection.maxPerMaze)
                 {
-                    Debug.Log($"PropPlacementController: Max per maze limit reached for '{currentSelection.id}' ({currentCount}/{currentSelection.maxPerMaze})");
                     return false;
                 }
             }
@@ -709,7 +697,6 @@ namespace FaeMaze.Props
                     int manhattanDist = Mathf.Abs(gridPos.x - kvp.Key.x) + Mathf.Abs(gridPos.y - kvp.Key.y);
                     if (manhattanDist < minDistance)
                     {
-                        Debug.Log($"PropPlacementController: Too close to another {itemId} (distance={manhattanDist}, min={minDistance})");
                         return false;
                     }
                 }
@@ -774,7 +761,6 @@ namespace FaeMaze.Props
         {
             buildModeState = BuildModeState.Active;
             UpdateCursor();
-            Debug.Log("PropPlacementController: Entered build mode");
         }
 
         /// <summary>
@@ -785,7 +771,6 @@ namespace FaeMaze.Props
             buildModeState = BuildModeState.Inactive;
             ClearSelection();
             UpdateCursor();
-            Debug.Log("PropPlacementController: Exited build mode");
         }
 
         /// <summary>

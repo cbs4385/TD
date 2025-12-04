@@ -99,14 +99,12 @@ namespace FaeMaze.Maze
 
             if (gridBehaviour == null)
             {
-                Debug.LogError("MazeAttractor: Could not find MazeGridBehaviour in scene!");
                 return;
             }
 
             // Determine grid position
             if (!gridBehaviour.WorldToGrid(transform.position, out int x, out int y))
             {
-                Debug.LogWarning($"MazeAttractor: Position {transform.position} is outside grid bounds!");
                 return;
             }
 
@@ -131,7 +129,6 @@ namespace FaeMaze.Maze
             }
             else
             {
-                Debug.LogError("MazeAttractor: Grid not ready in Start(), cannot apply attraction!");
                 return;
             }
 
@@ -246,7 +243,6 @@ namespace FaeMaze.Maze
             var visitor = other.GetComponent<Visitors.VisitorController>();
             if (visitor != null)
             {
-                Debug.Log($"[FaeLantern] Visitor '{visitor.name}' entered trigger at {gridPosition} | fascinationEnabled={enableFascination} | alreadyFascinated={visitor.IsFascinated}");
 
                 // Apply fascination if enabled (FaeLantern-specific behavior)
                 if (enableFascination && !visitor.IsFascinated)
@@ -255,7 +251,6 @@ namespace FaeMaze.Maze
                     float roll = Random.value;
                     bool willFascinate = roll <= fascinationChance;
 
-                    Debug.Log($"[FaeLantern] Fascination roll for '{visitor.name}': roll={roll:F3}, chance={fascinationChance:F3}, result={(willFascinate ? "FASCINATED" : "RESISTED")}");
 
                     if (willFascinate)
                     {
@@ -267,7 +262,6 @@ namespace FaeMaze.Maze
                 if (enableVisitorSlowing)
                 {
                     visitor.SpeedMultiplier = visitorSlowFactor;
-                    Debug.Log($"[FaeLantern] Applied slow effect to '{visitor.name}': speedMultiplier={visitorSlowFactor}");
                 }
             }
         }
@@ -300,7 +294,6 @@ namespace FaeMaze.Maze
         {
             if (gridBehaviour == null || gridBehaviour.Grid == null)
             {
-                Debug.LogError("MazeAttractor: Cannot apply attraction - grid is null!");
                 return;
             }
 

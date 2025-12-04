@@ -114,7 +114,6 @@ namespace FaeMaze.Props
 
             if (_gridBehaviour == null)
             {
-                Debug.LogError("FaeLantern: Could not find MazeGridBehaviour in scene!");
                 return;
             }
 
@@ -129,10 +128,6 @@ namespace FaeMaze.Props
             if (_gridBehaviour != null && _gridBehaviour.Grid != null)
             {
                 CalculateInfluenceArea();
-            }
-            else
-            {
-                Debug.LogError("FaeLantern: Grid not ready in Start(), cannot calculate influence!");
             }
         }
 
@@ -165,7 +160,6 @@ namespace FaeMaze.Props
             // Convert world position to grid coordinates
             if (!_gridBehaviour.WorldToGrid(transform.position, out int x, out int y))
             {
-                Debug.LogWarning($"FaeLantern: Position {transform.position} is outside grid bounds!");
                 return;
             }
 
@@ -180,7 +174,6 @@ namespace FaeMaze.Props
                 _gridBehaviour.Grid.AddAttraction(cell.x, cell.y, attractionDelta);
             }
 
-            Debug.Log($"FaeLantern at {_gridPosition}: Influence area calculated with {_influenceCells.Count} tiles (radius={influenceRadius}, maxSteps={maxFloodFillSteps}, attraction=+{attractionDelta})");
         }
 
         /// <summary>

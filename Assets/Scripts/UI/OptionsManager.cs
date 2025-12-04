@@ -288,14 +288,12 @@ namespace FaeMaze.UI
         {
             SaveSettings();
             GameSettings.ApplySettings();
-            Debug.Log("[OptionsManager] Settings applied!");
         }
 
         private void OnResetClicked()
         {
             GameSettings.ResetToDefaults();
             LoadSettings();
-            Debug.Log("[OptionsManager] Settings reset to defaults!");
         }
 
         private void OnBackClicked()

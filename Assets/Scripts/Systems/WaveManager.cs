@@ -254,22 +254,18 @@ namespace FaeMaze.Systems
 
         private void HandleWaveFailed()
         {
-            Debug.Log($"[GAME_OVER_TRACE] Wave {waveSpawner.CurrentWaveNumber} failed!");
 
             // Check if game over conditions are met
             bool shouldGameOver = ShouldGameOver();
-            Debug.Log($"[GAME_OVER_TRACE] ShouldGameOver returned: {shouldGameOver}");
 
             if (shouldGameOver)
             {
-                Debug.Log("[GAME_OVER_TRACE] Initiating Game Over sequence...");
                 LoadGameOverScene();
                 isGameOver = true;
                 OnGameOver?.Invoke();
                 return;
             }
 
-            Debug.Log("[GAME_OVER_TRACE] Showing retry panel instead");
             ShowWaveFailedPanel();
         }
 
@@ -282,18 +278,15 @@ namespace FaeMaze.Systems
             // Game over if player doesn't have minimum essence
             if (gameController != null && gameController.CurrentEssence < minimumEssenceToContinue)
             {
-                Debug.Log($"[GAME_OVER_TRACE] Game Over condition: Not enough essence ({gameController.CurrentEssence} < {minimumEssenceToContinue})");
                 return true;
             }
 
             // Game over if max retries exceeded
             if (maxRetriesPerWave >= 0 && currentRetryCount >= maxRetriesPerWave)
             {
-                Debug.Log($"[GAME_OVER_TRACE] Game Over condition: Max retries exceeded ({currentRetryCount} >= {maxRetriesPerWave})");
                 return true;
             }
 
-            Debug.Log($"[GAME_OVER_TRACE] No game over conditions met (Essence: {gameController?.CurrentEssence}, Retries: {currentRetryCount}/{maxRetriesPerWave})");
             return false;
         }
 
@@ -376,25 +369,21 @@ namespace FaeMaze.Systems
 
         private void OnNextWaveClicked()
         {
-            Debug.Log("[WaveManager] Next Wave button clicked");
             StartNextWave();
         }
 
         private void OnRetryWaveClicked()
         {
-            Debug.Log("[WaveManager] Retry Wave button clicked");
             RetryCurrentWave();
         }
 
         private void OnRestartGameClicked()
         {
-            Debug.Log("[WaveManager] Restart Game button clicked");
             RestartGame();
         }
 
         private void OnMainMenuClicked()
         {
-            Debug.Log("[WaveManager] Main Menu button clicked");
             LoadMainMenu();
         }
 
@@ -407,7 +396,6 @@ namespace FaeMaze.Systems
         /// </summary>
         public void StartGame()
         {
-            Debug.Log("[WaveManager] Starting game from wave 1");
 
             // Reset game state
             isGameOver = false;
@@ -431,7 +419,6 @@ namespace FaeMaze.Systems
         {
             if (isGameOver)
             {
-                Debug.LogWarning("[WaveManager] Cannot start next wave: Game is over");
                 return;
             }
 
@@ -450,13 +437,11 @@ namespace FaeMaze.Systems
         {
             if (isGameOver)
             {
-                Debug.LogWarning("[WaveManager] Cannot retry: Game is over");
                 return;
             }
 
             currentRetryCount++;
 
-            Debug.Log($"[WaveManager] Retrying wave {waveSpawner.CurrentWaveNumber} (Attempt {currentRetryCount + 1})");
 
             HideAllPanels();
 
@@ -471,7 +456,6 @@ namespace FaeMaze.Systems
         /// </summary>
         public void RestartGame()
         {
-            Debug.Log("[WaveManager] Restarting game");
 
             // Invoke restart event
             OnGameRestart?.Invoke();
@@ -487,7 +471,6 @@ namespace FaeMaze.Systems
         /// </summary>
         public void LoadMainMenu()
         {
-            Debug.Log("[WaveManager] Loading main menu");
 
             // Try to load "MainMenu" scene, fall back to current scene reload if not found
             try
@@ -496,7 +479,6 @@ namespace FaeMaze.Systems
             }
             catch
             {
-                Debug.LogWarning("[WaveManager] MainMenu scene not found, reloading current scene");
                 UnityEngine.SceneManagement.SceneManager.LoadScene(
                     UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
                 );
@@ -508,29 +490,21 @@ namespace FaeMaze.Systems
         /// </summary>
         private void LoadGameOverScene()
         {
-            Debug.Log("[GAME_OVER_TRACE] === LoadGameOverScene called ===");
 
             // Record final wave reached
             if (GameStatsTracker.Instance != null && waveSpawner != null)
             {
                 GameStatsTracker.Instance.RecordWaveReached(waveSpawner.CurrentWaveNumber);
-                Debug.Log($"[GAME_OVER_TRACE] Recorded wave {waveSpawner.CurrentWaveNumber} to stats tracker");
-            }
-            else
-            {
-                Debug.LogWarning($"[GAME_OVER_TRACE] Missing references: StatsTracker={GameStatsTracker.Instance != null}, WaveSpawner={waveSpawner != null}");
             }
 
             // Load the GameOver scene
-            Debug.Log("[GAME_OVER_TRACE] Attempting to load 'GameOver' scene...");
             try
             {
                 UnityEngine.SceneManagement.SceneManager.LoadScene("GameOver");
-                Debug.Log("[GAME_OVER_TRACE] LoadScene call completed");
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[GAME_OVER_TRACE] Failed to load GameOver scene: {e.Message}");
+                _ = e;
             }
         }
 
@@ -539,7 +513,6 @@ namespace FaeMaze.Systems
         /// </summary>
         public void ResetState()
         {
-            Debug.Log("[WaveManager] Resetting state");
 
             isGameOver = false;
             lastCompletedWave = 0;

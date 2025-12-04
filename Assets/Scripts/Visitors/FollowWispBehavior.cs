@@ -67,14 +67,12 @@ namespace FaeMaze.Visitors
         {
             if (wisp == null)
             {
-                Debug.LogWarning("FollowWispBehavior: Cannot follow null wisp!");
                 return;
             }
 
             targetWisp = wisp;
             isFollowing = true;
 
-            Debug.Log($"FollowWispBehavior: {gameObject.name} started following wisp");
         }
 
         /// <summary>
@@ -88,7 +86,6 @@ namespace FaeMaze.Visitors
             isFollowing = false;
             targetWisp = null;
 
-            Debug.Log($"FollowWispBehavior: {gameObject.name} stopped following wisp");
 
             // Remove this component
             Destroy(this);

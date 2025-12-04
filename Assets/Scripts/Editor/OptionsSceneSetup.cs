@@ -217,7 +217,6 @@ namespace FaeMaze.Editor
             // Save scene
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/Options.unity");
 
-            Debug.Log("[OptionsSceneSetup] Options scene created successfully at Assets/Scenes/Options.unity");
         }
 
         private static GameObject CreateUIObject(string name, Transform parent)

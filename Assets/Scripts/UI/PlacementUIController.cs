@@ -87,13 +87,8 @@ namespace FaeMaze.UI
             if (propPlacementController == null)
             {
                 propPlacementController = FindFirstObjectByType<PropPlacementController>();
-                if (propPlacementController != null)
+                if (propPlacementController == null)
                 {
-                    Debug.Log("PlacementUIController: Found PropPlacementController");
-                }
-                else
-                {
-                    Debug.LogError("PlacementUIController: PropPlacementController not found!");
                     return;
                 }
             }
@@ -130,27 +125,15 @@ namespace FaeMaze.UI
             {
                 lanternButton.onClick.AddListener(OnLanternButtonClicked);
             }
-            else
-            {
-                Debug.LogWarning("PlacementUIController: Lantern button not assigned!");
-            }
 
             if (fairyRingButton != null)
             {
                 fairyRingButton.onClick.AddListener(OnFairyRingButtonClicked);
             }
-            else
-            {
-                Debug.LogWarning("PlacementUIController: FairyRing button not assigned!");
-            }
 
             if (willowWispButton != null)
             {
                 willowWispButton.onClick.AddListener(OnWillowWispButtonClicked);
-            }
-            else
-            {
-                Debug.LogWarning("PlacementUIController: WillowWisp button not assigned!");
             }
 
             // Refresh cost labels from placeable items data
@@ -237,7 +220,6 @@ namespace FaeMaze.UI
             {
                 propPlacementController.SelectItemById("FaeLantern");
                 UpdateSelectionVisual("FaeLantern");
-                Debug.Log("PlacementUIController: Selected FaeLantern");
             }
         }
 
@@ -250,7 +232,6 @@ namespace FaeMaze.UI
             {
                 propPlacementController.SelectItemById("FairyRing");
                 UpdateSelectionVisual("FairyRing");
-                Debug.Log("PlacementUIController: Selected FairyRing");
             }
         }
 
@@ -263,7 +244,6 @@ namespace FaeMaze.UI
             {
                 propPlacementController.SelectItemById("WillowTheWisp");
                 UpdateSelectionVisual("WillowTheWisp");
-                Debug.Log("PlacementUIController: Selected WillowTheWisp");
             }
         }
 
@@ -312,7 +292,6 @@ namespace FaeMaze.UI
 
             willowWispCostText = CreateLabel(buildPanel.transform, "50 Essence", yPos);
 
-            Debug.Log("PlacementUIController: Auto-created Build Panel UI");
         }
 
         /// <summary>
@@ -332,7 +311,6 @@ namespace FaeMaze.UI
 
             canvasObj.AddComponent<GraphicRaycaster>();
 
-            Debug.Log("PlacementUIController: Created Canvas");
             return canvas;
         }
 
@@ -491,7 +469,6 @@ namespace FaeMaze.UI
         {
             if (propPlacementController == null)
             {
-                Debug.LogWarning("PlacementUIController: Cannot refresh costs - PropPlacementController is null!");
                 return;
             }
 
@@ -564,7 +541,6 @@ namespace FaeMaze.UI
             var item = propPlacementController.GetPlaceableItemById(id);
             if (item == null)
             {
-                Debug.LogWarning($"PlacementUIController: No item found with id '{id}' for tooltip");
                 return;
             }
 

@@ -53,7 +53,8 @@ namespace FaeMaze.DebugTools
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("DebugVisitorSpawner: Could not find MazeGridBehaviour in scene!");
+                enabled = false;
+                return;
             }
 
             ValidateReferences();
@@ -79,13 +80,11 @@ namespace FaeMaze.DebugTools
         {
             if (!ValidateReferences())
             {
-                Debug.LogError("DebugVisitorSpawner: Cannot spawn visitor - missing references!");
                 return;
             }
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("DebugVisitorSpawner: MazeGridBehaviour is null!");
                 return;
             }
 
@@ -100,7 +99,6 @@ namespace FaeMaze.DebugTools
 
             if (!pathFound || pathNodes.Count == 0)
             {
-                Debug.LogWarning($"DebugVisitorSpawner: No path found from {entrancePos} to {heartPos}!");
                 return;
             }
 
@@ -187,19 +185,16 @@ namespace FaeMaze.DebugTools
 
             if (visitorPrefab == null)
             {
-                Debug.LogError("DebugVisitorSpawner: Visitor prefab is not assigned!");
                 isValid = false;
             }
 
             if (entrance == null)
             {
-                Debug.LogError("DebugVisitorSpawner: Entrance is not assigned!");
                 isValid = false;
             }
 
             if (heart == null)
             {
-                Debug.LogError("DebugVisitorSpawner: Heart is not assigned!");
                 isValid = false;
             }
 

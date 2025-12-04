@@ -20,7 +20,6 @@ namespace FaeMaze.Editor
             {
                 mazeOriginObj = new GameObject("MazeOrigin");
                 mazeOriginObj.transform.position = Vector3.zero;
-                UnityEngine.Debug.Log("[FaeMazeSceneSetup] Created MazeOrigin");
             }
 
             // Find or create MazeRoot (parent for maze grid)
@@ -29,7 +28,6 @@ namespace FaeMaze.Editor
             {
                 mazeRootObj = new GameObject("MazeRoot");
                 mazeRootObj.transform.position = Vector3.zero;
-                UnityEngine.Debug.Log("[FaeMazeSceneSetup] Created MazeRoot");
             }
 
             // Load the existing HedgeMaze1 map
@@ -38,18 +36,15 @@ namespace FaeMaze.Editor
 
             if (mazeFile == null)
             {
-                UnityEngine.Debug.LogError($"[FaeMazeSceneSetup] Could not find maze file at {mazePath}!");
                 return;
             }
 
-            UnityEngine.Debug.Log($"[FaeMazeSceneSetup] Loaded maze file from {mazePath}");
 
             // Add MazeGridBehaviour to MazeRoot if not present
             MazeGridBehaviour mazeGrid = mazeRootObj.GetComponent<MazeGridBehaviour>();
             if (mazeGrid == null)
             {
                 mazeGrid = mazeRootObj.AddComponent<MazeGridBehaviour>();
-                UnityEngine.Debug.Log("[FaeMazeSceneSetup] Added MazeGridBehaviour");
             }
 
             // Configure MazeGridBehaviour using SerializedObject
@@ -62,21 +57,18 @@ namespace FaeMaze.Editor
             if (mazeRootObj.GetComponent<MazeRenderer>() == null)
             {
                 mazeRootObj.AddComponent<MazeRenderer>();
-                UnityEngine.Debug.Log("[FaeMazeSceneSetup] Added MazeRenderer");
             }
 
             // Add MazeVisualSetup if not present
             if (mazeRootObj.GetComponent<MazeVisualSetup>() == null)
             {
                 mazeRootObj.AddComponent<MazeVisualSetup>();
-                UnityEngine.Debug.Log("[FaeMazeSceneSetup] Added MazeVisualSetup");
             }
 
             // Mark scene as dirty and save
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
 
-            UnityEngine.Debug.Log("[FaeMazeSceneSetup] FaeMazeScene setup complete! The maze should now be visible when you play the scene.");
         }
     }
 }

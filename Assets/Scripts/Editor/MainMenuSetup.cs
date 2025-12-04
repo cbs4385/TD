@@ -62,7 +62,6 @@ namespace FaeMaze.Editor
             // Save the scene
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/MainMenu.unity");
 
-            UnityEngine.Debug.Log("[MainMenuSetup] MainMenu scene created successfully!");
         }
 
         private static Button CreateButton(string name, Vector2 position, Vector2 size, string text, Color buttonColor, Transform parent)

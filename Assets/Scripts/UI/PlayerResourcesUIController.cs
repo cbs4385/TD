@@ -200,7 +200,6 @@ namespace FaeMaze.UI
             var valueLayoutElement = valueObject.AddComponent<LayoutElement>();
             valueLayoutElement.preferredWidth = 60;
 
-            Debug.Log("PlayerResourcesUIController: Created Resources Panel UI at runtime");
         }
 
         #endregion

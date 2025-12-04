@@ -194,7 +194,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"ForestMazeGenerator: Initialized {config.width}x{config.height} grid");
         }
 
         /// <summary>
@@ -218,7 +217,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"ForestMazeGenerator: Created {mazeCols}x{mazeRows} coarse maze grid (spacing={cellSpacing})");
         }
 
         /// <summary>
@@ -248,7 +246,6 @@ namespace FaeMaze.Systems
 
             DFS(startCell, visited);
 
-            Debug.Log($"ForestMazeGenerator: Carved perfect maze with {edges.Count} corridors");
         }
 
         /// <summary>
@@ -291,7 +288,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"ForestMazeGenerator: Added extra edges (total={edges.Count})");
         }
 
         /// <summary>
@@ -320,7 +316,6 @@ namespace FaeMaze.Systems
                 chosenEntrances.Add(borderCells[k]);
             }
 
-            Debug.Log($"ForestMazeGenerator: Chose {chosenEntrances.Count} entrances");
         }
 
         /// <summary>
@@ -356,7 +351,6 @@ namespace FaeMaze.Systems
                 CarveCorridorBetween(p1, p2);
             }
 
-            Debug.Log($"ForestMazeGenerator: Carved all corridors");
         }
 
         /// <summary>
@@ -428,7 +422,6 @@ namespace FaeMaze.Systems
                 CarveEntrance(cell);
             }
 
-            Debug.Log($"ForestMazeGenerator: Carved {chosenEntrances.Count} entrance tunnels");
         }
 
         /// <summary>
@@ -577,7 +570,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"ForestMazeGenerator: Placed {waterPlaced} water tiles (target={targetWaterCount})");
         }
 
         /// <summary>

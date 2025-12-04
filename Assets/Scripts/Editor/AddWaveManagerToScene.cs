@@ -20,7 +20,6 @@ namespace FaeMaze.Editor
             Systems.WaveManager existingManager = Object.FindFirstObjectByType<Systems.WaveManager>();
             if (existingManager != null)
             {
-                Debug.LogWarning("[AddWaveManagerToScene] WaveManager already exists in the scene!");
                 EditorUtility.DisplayDialog("Wave Manager", "WaveManager already exists in the scene!", "OK");
                 return;
             }
@@ -63,7 +62,6 @@ namespace FaeMaze.Editor
                 {
                     waveSpawnerProp.objectReferenceValue = waveSpawner;
                     so.ApplyModifiedProperties();
-                    Debug.Log("[AddWaveManagerToScene] WaveSpawner reference assigned");
                 }
             }
 
@@ -77,7 +75,6 @@ namespace FaeMaze.Editor
                 {
                     gameControllerProp.objectReferenceValue = gameController;
                     so.ApplyModifiedProperties();
-                    Debug.Log("[AddWaveManagerToScene] GameController reference assigned");
                 }
             }
 
@@ -85,7 +82,6 @@ namespace FaeMaze.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
 
-            Debug.Log("[AddWaveManagerToScene] Successfully added WaveManager to FaeMazeScene!");
             EditorUtility.DisplayDialog("Success", "WaveManager has been added to FaeMazeScene!\n\nPlease configure the following in the Inspector:\n- Wave progression settings\n- UI panel references\n- Button references", "OK");
 
             // Select the new WaveManager in the hierarchy

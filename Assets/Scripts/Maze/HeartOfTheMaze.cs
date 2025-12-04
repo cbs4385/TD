@@ -107,7 +107,6 @@ namespace FaeMaze.Maze
             var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
             if (mazeGridBehaviour == null)
             {
-                Debug.LogWarning("HeartOfTheMaze: MazeGridBehaviour not found! Cannot auto-position from 'H' marker.");
                 return;
             }
 
@@ -122,7 +121,6 @@ namespace FaeMaze.Maze
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
             transform.position = worldPos;
 
-            Debug.Log($"HeartOfTheMaze: Auto-positioned to grid ({gridX}, {gridY}) at world position {worldPos}");
         }
 
         /// <summary>
@@ -133,7 +131,6 @@ namespace FaeMaze.Maze
         {
             if (visitor == null)
             {
-                Debug.LogWarning("Attempted to consume null visitor!");
                 return;
             }
 
@@ -147,10 +144,6 @@ namespace FaeMaze.Maze
             if (GameController.Instance != null)
             {
                 GameController.Instance.AddEssence(essencePerVisitor);
-            }
-            else
-            {
-                Debug.LogError("GameController instance is null! Cannot add essence.");
             }
 
             SoundManager.Instance?.PlayVisitorConsumed();
@@ -275,13 +268,11 @@ namespace FaeMaze.Maze
             var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("HeartOfTheMaze: Cannot find MazeGridBehaviour in scene!");
                 return;
             }
 
             if (mazeGridBehaviour.Grid == null)
             {
-                Debug.LogError("HeartOfTheMaze: MazeGrid is null! Grid may not be initialized yet.");
                 return;
             }
 
@@ -329,7 +320,6 @@ namespace FaeMaze.Maze
                 }
             }
 
-            Debug.Log($"HeartOfTheMaze: Applied attraction at grid ({gridX}, {gridY}) - affected {affectedCount} tiles with total attraction {totalAttractionApplied:F2}");
         }
 
         #endregion

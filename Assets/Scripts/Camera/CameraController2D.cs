@@ -129,11 +129,6 @@ namespace FaeMaze.Cameras
                 if (lastVisitor != null)
                 {
                     FocusOnVisitor(lastVisitor, false);
-                    Debug.Log($"[CameraController2D] Shortcut 3: focusing last visitor '{lastVisitor.name}' at {lastVisitor.transform.position} (active={lastVisitor.isActiveAndEnabled}).");
-                }
-                else
-                {
-                    Debug.Log("[CameraController2D] Shortcut 3 pressed but no last visitor is stored.");
                 }
             }
         }
@@ -215,7 +210,6 @@ namespace FaeMaze.Cameras
                 trackingLogTimer -= Time.deltaTime;
                 if (trackingLogTimer <= 0f)
                 {
-                    Debug.Log($"[CameraController2D] Tracking visitor '{focusVisitor.name}': visitorPos={focusVisitor.transform.position}, cameraPos={transform.position}, target={focusTargetPosition}.");
                     trackingLogTimer = trackingLogInterval;
                 }
 
@@ -223,7 +217,6 @@ namespace FaeMaze.Cameras
             }
             else if (!trackingVisitorLostLogged)
             {
-                Debug.Log($"[CameraController2D] Visitor focus target lost; continuing toward last target {focusTargetPosition}.");
                 trackingVisitorLostLogged = true;
             }
 
@@ -371,7 +364,6 @@ namespace FaeMaze.Cameras
             trackingLogTimer = 0f;
             trackingVisitorLostLogged = false;
 
-            Debug.Log($"[CameraController2D] FocusOnVisitor {(instant ? "instant" : "smooth")} for '{visitor.name}' at {visitor.transform.position}.");
         }
 
         #endregion

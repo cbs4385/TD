@@ -130,7 +130,6 @@ namespace FaeMaze.Editor
             // Save scene
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/GameOver.unity");
 
-            Debug.Log("[GameOverSceneSetup] GameOver scene created successfully at Assets/Scenes/GameOver.unity");
         }
 
         private static GameObject CreateUIObject(string name, Transform parent)
