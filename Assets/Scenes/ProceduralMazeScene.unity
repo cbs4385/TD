@@ -357,7 +357,7 @@ MonoBehaviour:
   zoomSpeed: 5
   minOrthographicSize: 3
   maxOrthographicSize: 20
-  mazeGridBehaviour: {fileID: 330585547}
+  mazeGridBehaviour: {fileID: 0}
 --- !u!1 &963194227
 GameObject:
   m_ObjectHideFlags: 0
@@ -420,6 +420,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
   wallColor: {r: 0.2, g: 0.3, b: 0.2, a: 1}
+  undergrowthColor: {r: 0.65, g: 0.75, b: 0.65, a: 1}
+  waterColor: {r: 0.35, g: 0.55, b: 0.75, a: 1}
+  heartColor: {r: 0.9, g: 0.35, b: 0.35, a: 1}
   sortingOrder: 0
   tilesParent: {fileID: 0}
 --- !u!114 &963194231
@@ -432,7 +435,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeGridBehaviour
   useRuntimeGeneration: 1
   mazeFile: {fileID: 0}
@@ -440,11 +443,12 @@ MonoBehaviour:
     width: 30
     height: 30
     numEntrances: 4
-    minPathWidth: 2
-    maxPathWidth: 4
+    minPathWidth: 1
+    maxPathWidth: 1
     waterCoverage: 0.15
     randomSeed: 0
   mazeOrigin: {fileID: 963194228}
+  tileSize: 1
   drawGridGizmos: 1
   drawAttractionHeatmap: 1
 --- !u!1 &1100000000
@@ -493,6 +497,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gridX: 0
   gridY: 0
+  autoPosition: 1
   showVisualMarker: 0
   markerColor: {r: 0.2, g: 1, b: 0.2, a: 1}
   markerSize: 0.8
@@ -620,7 +625,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3f8c2e9a7d1b5e4a6c8f2d9b5e7a3c6d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
+  visitorPrefab: {fileID: 0}
   entrance: {fileID: 1100000002}
   heart: {fileID: 1100000005}
   spawnOffset: {x: 0, y: 0, z: 0}
@@ -637,6 +642,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
+  mistakingVisitorPrefab: {fileID: -7839346307179120839, guid: 30816071056ff0c48823d6a876fe3c82, type: 3}
+  mistakingVisitorChance: 0.8
   redCapPrefab: {fileID: 5000000003, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
   entrance: {fileID: 1100000002}
   heart: {fileID: 1100000005}
@@ -663,7 +670,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mazeGridBehaviour: {fileID: 330585547}
+  mazeGridBehaviour: {fileID: 0}
   placeableItems:
   - id: FaeLantern
     displayName: Fae Lantern
@@ -716,19 +723,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
-  totalVisitors: 10
-  spawnInterval: 1.5
-  uiCanvas: {fileID: 0}
-  visitorsText: {fileID: 0}
-  countdownText: {fileID: 0}
-  visitorsFontSize: 20
-  countdownFontSize: 16
-  uiTextColor:
-    r: 1
-    g: 1
-    b: 1
-    a: 1
 --- !u!1 &1534669902
 GameObject:
   m_ObjectHideFlags: 0
