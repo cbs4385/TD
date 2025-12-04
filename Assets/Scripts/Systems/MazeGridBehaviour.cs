@@ -62,6 +62,17 @@ namespace FaeMaze.Systems
         private Vector2Int heartGridPos;
         private Dictionary<char, Vector2Int> spawnPoints = new Dictionary<char, Vector2Int>();
 
+        private static readonly ForestMazeConfig canonicalConfig = new ForestMazeConfig
+        {
+            width = 30,
+            height = 30,
+            numEntrances = 4,
+            minPathWidth = 1,
+            maxPathWidth = 1,
+            waterCoverage = 0.15f,
+            randomSeed = 0
+        };
+
         private static TileType[,] cachedGeneratedTiles;
         private static List<Vector2Int> cachedEntranceEdges = new List<Vector2Int>();
         private static ForestMazeConfig cachedConfig;
@@ -95,9 +106,8 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform; // Fallback to self
             }
 
-            // Enforce requested runtime maze dimensions
-            generatorConfig.width = 30;
-            generatorConfig.height = 30;
+            // Enforce canonical runtime configuration so generation runs once with a single, shared setup
+            generatorConfig = canonicalConfig;
 
             // Initialize based on mode
             if (useRuntimeGeneration)
@@ -125,9 +135,8 @@ namespace FaeMaze.Systems
 
         private void OnValidate()
         {
-            // Keep runtime generation dimensions aligned with the requested 30x30 size
-            generatorConfig.width = 30;
-            generatorConfig.height = 30;
+            // Keep runtime generation aligned with the single canonical setup
+            generatorConfig = canonicalConfig;
         }
 
         private void InitializeFromFile()
