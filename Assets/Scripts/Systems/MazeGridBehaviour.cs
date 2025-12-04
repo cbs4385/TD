@@ -383,11 +383,12 @@ namespace FaeMaze.Systems
             // Use up to 4 evenly distributed entrances as spawn points
             char[] spawnIds = new char[] { 'A', 'B', 'C', 'D' };
             int numSpawns = Mathf.Min(borderWalkableTiles.Count, spawnIds.Length);
+            List<Vector2Int> borderWalkableList = borderWalkableTiles.ToList();
 
             for (int i = 0; i < numSpawns; i++)
             {
                 int index = (i * borderWalkableTiles.Count) / numSpawns;
-                Vector2Int pos = borderWalkableTiles[index];
+                Vector2Int pos = borderWalkableList[index];
                 spawnPoints[spawnIds[i]] = pos;
                 Debug.Log($"MazeGridBehaviour: Assigned spawn point '{spawnIds[i]}' at ({pos.x}, {pos.y})");
             }
@@ -397,9 +398,9 @@ namespace FaeMaze.Systems
             {
                 entranceGridPos = spawnPoints['A'];
             }
-            else if (borderWalkableTiles.Count > 0)
+            else if (borderWalkableList.Count > 0)
             {
-                entranceGridPos = borderWalkableTiles[0];
+                entranceGridPos = borderWalkableList[0];
             }
             else
             {
