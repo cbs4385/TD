@@ -62,6 +62,11 @@ namespace FaeMaze.Systems
         private Vector2Int heartGridPos;
         private Dictionary<char, Vector2Int> spawnPoints = new Dictionary<char, Vector2Int>();
 
+        private static TileType[,] cachedGeneratedTiles;
+        private static List<Vector2Int> cachedEntranceEdges = new List<Vector2Int>();
+        private static ForestMazeConfig cachedConfig;
+        private static bool hasCachedGeneration;
+
         #endregion
 
         #region Properties
@@ -169,18 +174,16 @@ namespace FaeMaze.Systems
                     switch (c)
                     {
                         case '.':
-                            // Pathway - walkable
-                            grid.SetWalkable(x, y, true);
+                            ApplyTileFromChar(x, y, c);
                             break;
 
                         case '#':
-                            // Wall - not walkable
-                            grid.SetWalkable(x, y, false);
+                            ApplyTileFromChar(x, y, c);
                             break;
 
                         case 'E':
                             // Entrance - walkable and mark position (backwards compatibility)
-                            grid.SetWalkable(x, y, true);
+                            ApplyTileFromChar(x, y, '.');
                             if (!foundEntrance)
                             {
                                 entranceGridPos = new Vector2Int(x, y);
@@ -190,7 +193,7 @@ namespace FaeMaze.Systems
 
                         case 'H':
                             // Heart marker - walkable and mark position
-                            grid.SetWalkable(x, y, true);
+                            ApplyTileFromChar(x, y, c, isHeart: true);
                             heartGridPos = new Vector2Int(x, y);
                             foundHeart = true;
                             break;
@@ -200,7 +203,7 @@ namespace FaeMaze.Systems
                         case 'C':
                         case 'D':
                             // Spawn markers - walkable and store position
-                            grid.SetWalkable(x, y, true);
+                            ApplyTileFromChar(x, y, '.');
                             if (!spawnPoints.ContainsKey(c))
                             {
                                 spawnPoints[c] = new Vector2Int(x, y);
@@ -209,7 +212,7 @@ namespace FaeMaze.Systems
 
                         default:
                             // Unknown character - treat as wall and log warning
-                            grid.SetWalkable(x, y, false);
+                            ApplyTileFromChar(x, y, '#');
                             break;
                     }
                 }
@@ -217,7 +220,7 @@ namespace FaeMaze.Systems
                 // Fill remaining cells in short lines with walls
                 for (int x = line.Length; x < width; x++)
                 {
-                    grid.SetWalkable(x, y, false);
+                    ApplyTileFromChar(x, y, '#');
                 }
             }
 
@@ -250,11 +253,11 @@ namespace FaeMaze.Systems
             int centerX = width / 2;
             int centerY = height / 2;
 
-
             // Check if center is walkable
             if (grid.GetNode(centerX, centerY)?.walkable == true)
             {
                 heartGridPos = new Vector2Int(centerX, centerY);
+                MarkHeartTile(heartGridPos);
                 return;
             }
 
@@ -279,6 +282,7 @@ namespace FaeMaze.Systems
                             if (node != null && node.walkable)
                             {
                                 heartGridPos = new Vector2Int(checkX, checkY);
+                                MarkHeartTile(heartGridPos);
                                 return;
                             }
                         }
@@ -288,6 +292,94 @@ namespace FaeMaze.Systems
 
             // Fallback - should never reach here if maze has any walkable tiles
             heartGridPos = entranceGridPos;
+            MarkHeartTile(heartGridPos);
+        }
+
+        private void MarkHeartTile(Vector2Int position)
+        {
+            ApplyTileFromTileType(position.x, position.y, TileType.Path, 'H', true);
+        }
+
+        private bool HasCachedTilesForConfig(ForestMazeConfig configToCheck)
+        {
+            if (!hasCachedGeneration)
+            {
+                return false;
+            }
+
+            return
+                cachedConfig.width == configToCheck.width &&
+                cachedConfig.height == configToCheck.height &&
+                cachedConfig.numEntrances == configToCheck.numEntrances &&
+                cachedConfig.minPathWidth == configToCheck.minPathWidth &&
+                cachedConfig.maxPathWidth == configToCheck.maxPathWidth &&
+                Mathf.Approximately(cachedConfig.waterCoverage, configToCheck.waterCoverage) &&
+                cachedConfig.randomSeed == configToCheck.randomSeed;
+        }
+
+        private void ApplyTileFromChar(int x, int y, char c, bool isHeart = false)
+        {
+            TileType tile = TileFromChar(c);
+            ApplyTileFromTileType(x, y, tile, c, isHeart);
+        }
+
+        private void ApplyTileFromTileType(int x, int y, TileType tile, char symbol, bool isHeart = false)
+        {
+            bool walkable = tile == TileType.Path || tile == TileType.Undergrowth;
+            float baseCost = tile == TileType.Undergrowth ? 1.5f : 1.0f;
+
+            var node = grid.GetNode(x, y);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.walkable = walkable;
+            node.baseCost = walkable ? baseCost : node.baseCost;
+            node.symbol = symbol;
+            node.terrain = tile;
+            node.isHeart = isHeart;
+
+            if (isHeart)
+            {
+                node.walkable = true;
+                node.baseCost = 1.0f;
+                node.symbol = 'H';
+                node.terrain = TileType.Path;
+            }
+        }
+
+        private TileType TileFromChar(char c)
+        {
+            switch (c)
+            {
+                case '#':
+                    return TileType.TreeBramble;
+                case ';':
+                    return TileType.Undergrowth;
+                case '~':
+                    return TileType.Water;
+                case '.':
+                case 'H':
+                    return TileType.Path;
+                default:
+                    return TileType.TreeBramble;
+            }
+        }
+
+        private char SymbolFromTile(TileType tile)
+        {
+            switch (tile)
+            {
+                case TileType.TreeBramble:
+                    return '#';
+                case TileType.Undergrowth:
+                    return ';';
+                case TileType.Water:
+                    return '~';
+                default:
+                    return '.';
+            }
         }
 
         /// <summary>
@@ -296,9 +388,16 @@ namespace FaeMaze.Systems
         private void InitializeFromGenerator()
         {
 
-            // Generate the maze
-            var generator = new ForestMazeGenerator();
-            TileType[,] tiles = generator.GenerateForestMaze(generatorConfig);
+            if (!HasCachedTilesForConfig(generatorConfig))
+            {
+                var generator = new ForestMazeGenerator();
+                cachedGeneratedTiles = generator.GenerateForestMaze(generatorConfig);
+                cachedEntranceEdges = generator.GetEntranceEdgePositions().ToList();
+                cachedConfig = generatorConfig;
+                hasCachedGeneration = true;
+            }
+
+            TileType[,] tiles = cachedGeneratedTiles;
 
             // Get dimensions from generated maze
             width = tiles.GetLength(0);
@@ -315,30 +414,14 @@ namespace FaeMaze.Systems
                 {
                     TileType tile = tiles[x, y];
 
-                    // Path and Undergrowth are walkable
-                    bool walkable = (tile == TileType.Path || tile == TileType.Undergrowth);
-                    grid.SetWalkable(x, y, walkable);
-
-                    // Set different base costs for different tile types
-                    var node = grid.GetNode(x, y);
-                    if (node != null)
-                    {
-                        if (tile == TileType.Path)
-                        {
-                            node.baseCost = 1.0f;
-                        }
-                        else if (tile == TileType.Undergrowth)
-                        {
-                            node.baseCost = 1.5f; // Slightly more expensive to traverse
-                        }
-                    }
+                    ApplyTileFromTileType(x, y, tile, SymbolFromTile(tile));
                 }
             }
 
             // Collect entrance positions (prefer carved entrances from the generator)
             HashSet<Vector2Int> borderWalkableTiles = new HashSet<Vector2Int>();
 
-            foreach (var entrance in generator.GetEntranceEdgePositions())
+            foreach (var entrance in cachedEntranceEdges)
             {
                 if (grid.InBounds(entrance.x, entrance.y) && grid.GetNode(entrance.x, entrance.y)?.walkable == true)
                 {

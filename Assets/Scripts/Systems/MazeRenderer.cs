@@ -22,6 +22,18 @@ namespace FaeMaze.Systems
         private Color wallColor = new Color(0.2f, 0.3f, 0.2f, 1f); // Dark green
 
         [SerializeField]
+        [Tooltip("Color for undergrowth tiles")]
+        private Color undergrowthColor = new Color(0.65f, 0.75f, 0.65f, 1f); // Mid green
+
+        [SerializeField]
+        [Tooltip("Color for water tiles")]
+        private Color waterColor = new Color(0.35f, 0.55f, 0.75f, 1f); // Blue tint
+
+        [SerializeField]
+        [Tooltip("Color for the heart tile")]
+        private Color heartColor = new Color(0.9f, 0.35f, 0.35f, 1f); // Highlighted
+
+        [SerializeField]
         [Tooltip("Sprite rendering layer order")]
         private int sortingOrder = 0;
 
@@ -87,8 +99,8 @@ namespace FaeMaze.Systems
                     var node = grid.GetNode(x, y);
                     if (node == null) continue;
 
-                    // Determine color based on walkability
-                    Color tileColor = node.walkable ? pathColor : wallColor;
+                    // Determine color based on tile symbol definitions
+                    Color tileColor = GetColorForSymbol(node.symbol, node.walkable);
 
                     // Create tile sprite
                     CreateTileSprite(x, y, tileColor);
@@ -140,6 +152,25 @@ namespace FaeMaze.Systems
             );
 
             return sprite;
+        }
+
+        private Color GetColorForSymbol(char symbol, bool walkable)
+        {
+            switch (symbol)
+            {
+                case '#':
+                    return wallColor;
+                case ';':
+                    return undergrowthColor;
+                case '~':
+                    return waterColor;
+                case 'H':
+                    return heartColor;
+                case '.':
+                    return pathColor;
+                default:
+                    return walkable ? pathColor : wallColor;
+            }
         }
 
         #endregion

@@ -31,6 +31,15 @@ namespace FaeMaze.Systems
             /// <summary>Attraction value applied by Fae props (default 0.0)</summary>
             public float attraction;
 
+            /// <summary>Tile content symbol for rendering/debugging (e.g. '#', '.', ';', '~', 'H').</summary>
+            public char symbol;
+
+            /// <summary>Underlying terrain classification for this tile.</summary>
+            public TileType terrain;
+
+            /// <summary>Indicates this tile is the maze heart.</summary>
+            public bool isHeart;
+
             public MazeNode(int x, int y)
             {
                 this.x = x;
@@ -38,6 +47,9 @@ namespace FaeMaze.Systems
                 this.walkable = true;
                 this.baseCost = 1.0f;
                 this.attraction = 0.0f;
+                this.symbol = '#';
+                this.terrain = TileType.TreeBramble;
+                this.isHeart = false;
             }
         }
 
