@@ -601,8 +601,22 @@ namespace FaeMaze.Visitors
             Vector2Int targetGridPos = path[currentPathIndex];
             Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
 
-            // Move toward target (apply speed multiplier)
-            float effectiveSpeed = moveSpeed * speedMultiplier;
+            // Move toward target (apply speed multiplier adjusted by tile cost)
+            float moveCost = 1f;
+            MazeGrid mazeGrid = mazeGridBehaviour.Grid;
+            if (mazeGrid != null)
+            {
+                MazeGrid.MazeNode targetNode = mazeGrid.GetNode(targetGridPos.x, targetGridPos.y);
+                if (targetNode == null || !targetNode.walkable)
+                {
+                    return; // Non-walkable nodes remain blocked
+                }
+
+                moveCost = mazeGrid.GetMoveCost(targetGridPos.x, targetGridPos.y);
+            }
+
+            moveCost = Mathf.Max(moveCost, Mathf.Epsilon); // Prevent division by zero
+            float effectiveSpeed = (moveSpeed * speedMultiplier) / moveCost;
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
                 targetWorldPos,
