@@ -143,10 +143,10 @@ namespace FaeMaze.Systems
             }
 
             // Update CameraController reference
-            var cameraController = Object.FindFirstObjectByType<FaeMaze.Camera.CameraController2D>();
+            var cameraController = Object.FindFirstObjectByType<FaeMaze.Cameras.CameraController2D>();
             if (cameraController != null)
             {
-                var ccType = typeof(FaeMaze.Camera.CameraController2D);
+                var ccType = typeof(FaeMaze.Cameras.CameraController2D);
                 var mazeGridField = ccType.GetField("mazeGridBehaviour",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 if (mazeGridField != null)
