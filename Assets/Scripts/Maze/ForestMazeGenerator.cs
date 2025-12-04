@@ -250,6 +250,16 @@ namespace ForestMaze
                     rightCandidates.Add((width - 1, y));
             }
 
+            // If no natural candidates exist, force create entrances by carving paths to the edges
+            if (topCandidates.Count == 0)
+                ForceCreateEntrance(grid, width, height, minX, maxX, true, random, topCandidates);
+            if (bottomCandidates.Count == 0)
+                ForceCreateEntrance(grid, width, height, minX, maxX, false, random, bottomCandidates);
+            if (leftCandidates.Count == 0)
+                ForceCreateEntranceVertical(grid, width, height, minY, maxY, true, random, leftCandidates);
+            if (rightCandidates.Count == 0)
+                ForceCreateEntranceVertical(grid, width, height, minY, maxY, false, random, rightCandidates);
+
             // Group edges; each group will contribute at most one entrance.
             var edgeGroups = new List<List<(int x, int y)>>();
             if (topCandidates.Count > 0) edgeGroups.Add(topCandidates);
@@ -260,16 +270,132 @@ namespace ForestMaze
             if (edgeGroups.Count == 0)
                 return;
 
-            // Randomize which edges get picked first.
-            Shuffle(edgeGroups, random);
+            // Ensure at least 2 entrances on opposite sides for proper pathfinding
+            int minRequired = Math.Min(2, numberOfEntrances);
+            int openings = Math.Max(minRequired, Math.Min(numberOfEntrances, edgeGroups.Count));
 
-            int openings = Math.Min(numberOfEntrances, edgeGroups.Count);
-
-            for (int i = 0; i < openings; i++)
+            // If we need opposite entrances, ensure we pick them
+            if (numberOfEntrances >= 2 && edgeGroups.Count >= 2)
             {
-                var group = edgeGroups[i];
-                var candidate = group[random.Next(group.Count)];
-                grid[candidate.y, candidate.x] = '.'; // open a single entrance on this edge
+                // Try to ensure opposite edges are selected
+                var selectedGroups = new HashSet<int>();
+                var entrancePositions = new List<(int x, int y)>();
+
+                // Pick first entrance
+                int firstIdx = random.Next(edgeGroups.Count);
+                selectedGroups.Add(firstIdx);
+                var firstCandidate = edgeGroups[firstIdx][random.Next(edgeGroups[firstIdx].Count)];
+                grid[firstCandidate.y, firstCandidate.x] = '.';
+                entrancePositions.Add(firstCandidate);
+
+                // Pick opposite entrance if possible
+                int oppositeIdx = (firstIdx + 2) % 4; // Opposite side
+                if (oppositeIdx < edgeGroups.Count && !selectedGroups.Contains(oppositeIdx))
+                {
+                    selectedGroups.Add(oppositeIdx);
+                    var oppositeCandidate = edgeGroups[oppositeIdx][random.Next(edgeGroups[oppositeIdx].Count)];
+                    grid[oppositeCandidate.y, oppositeCandidate.x] = '.';
+                    entrancePositions.Add(oppositeCandidate);
+                }
+
+                // Fill remaining entrances
+                for (int i = 0; i < edgeGroups.Count && selectedGroups.Count < openings; i++)
+                {
+                    if (!selectedGroups.Contains(i))
+                    {
+                        selectedGroups.Add(i);
+                        var candidate = edgeGroups[i][random.Next(edgeGroups[i].Count)];
+                        grid[candidate.y, candidate.x] = '.';
+                        entrancePositions.Add(candidate);
+                    }
+                }
+
+                // Ensure single-tile entrances by checking and removing adjacent entrance tiles
+                EnsureSingleTileEntrances(grid, width, height, entrancePositions);
+            }
+            else
+            {
+                // Original behavior for single entrance
+                Shuffle(edgeGroups, random);
+                for (int i = 0; i < Math.Min(openings, edgeGroups.Count); i++)
+                {
+                    var group = edgeGroups[i];
+                    var candidate = group[random.Next(group.Count)];
+                    grid[candidate.y, candidate.x] = '.';
+                }
+            }
+        }
+
+        private static void ForceCreateEntrance(char[,] grid, int width, int height, int minX, int maxX, bool isTop, Random random, List<(int x, int y)> candidates)
+        {
+            int y = isTop ? 0 : height - 1;
+            int yInside = isTop ? 1 : height - 2;
+
+            // Pick a random x position in the central band
+            int x = random.Next(minX, maxX + 1);
+
+            // Carve a path from the edge inward
+            grid[y, x] = '.';
+            grid[yInside, x] = '.';
+
+            candidates.Add((x, y));
+        }
+
+        private static void ForceCreateEntranceVertical(char[,] grid, int width, int height, int minY, int maxY, bool isLeft, Random random, List<(int x, int y)> candidates)
+        {
+            int x = isLeft ? 0 : width - 1;
+            int xInside = isLeft ? 1 : width - 2;
+
+            // Pick a random y position in the central band
+            int y = random.Next(minY, maxY + 1);
+
+            // Carve a path from the edge inward
+            grid[y, x] = '.';
+            grid[y, xInside] = '.';
+
+            candidates.Add((x, y));
+        }
+
+        private static void EnsureSingleTileEntrances(char[,] grid, int width, int height, List<(int x, int y)> entrances)
+        {
+            // For each entrance, ensure it's a single tile by checking adjacent border tiles
+            foreach (var entrance in entrances)
+            {
+                int x = entrance.x;
+                int y = entrance.y;
+
+                // Check if this is an edge tile
+                bool isTop = y == 0;
+                bool isBottom = y == height - 1;
+                bool isLeft = x == 0;
+                bool isRight = x == width - 1;
+
+                // Check adjacent tiles on the same edge and block them if they're also entrances
+                if (isTop || isBottom)
+                {
+                    // Horizontal edge - check left and right neighbors
+                    if (x > 0 && grid[y, x - 1] == '.')
+                    {
+                        // Check if left neighbor is also on the edge (would make entrance wider)
+                        grid[y, x - 1] = '#';
+                    }
+                    if (x < width - 1 && grid[y, x + 1] == '.')
+                    {
+                        grid[y, x + 1] = '#';
+                    }
+                }
+                else if (isLeft || isRight)
+                {
+                    // Vertical edge - check top and bottom neighbors
+                    if (y > 0 && grid[y - 1, x] == '.')
+                    {
+                        grid[y - 1, x] = '#';
+                    }
+                    if (y < height - 1 && grid[y + 1, x] == '.')
+                    {
+                        grid[y + 1, x] = '#';
+                    }
+                }
             }
         }
 
