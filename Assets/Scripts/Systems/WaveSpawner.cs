@@ -380,13 +380,16 @@ namespace FaeMaze.Systems
             char destId = '\0';
 
             // Try to use spawn marker system first
-            if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2)
+            if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 1)
             {
-                // Use random spawn points
-                if (!mazeGridBehaviour.TryGetRandomSpawnPair(out startId, out startPos, out destId, out destPos))
+                // Use random spawn point as start, heart as destination
+                if (!mazeGridBehaviour.TryGetRandomSpawnPoint(out startId, out startPos))
                 {
                     return;
                 }
+                // Destination is always the heart
+                destPos = mazeGridBehaviour.HeartGridPos;
+                destId = 'H';
             }
             // Fall back to legacy entrance/heart system
             else if (entrance != null && heart != null)
@@ -414,10 +417,10 @@ namespace FaeMaze.Systems
             // Instantiate visitor
             VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
 
-            // Name includes spawn IDs if using spawn marker system
+            // Name includes spawn ID if using spawn marker system
             if (startId != '\0')
             {
-                visitor.gameObject.name = $"Visitor_W{currentWaveNumber}_{visitorsSpawnedThisWave}_{startId}to{destId}";
+                visitor.gameObject.name = $"Visitor_W{currentWaveNumber}_{visitorsSpawnedThisWave}_{startId}toH";
             }
             else
             {
