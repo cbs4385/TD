@@ -16,17 +16,9 @@ namespace FaeMaze.Visitors
     /// Functionally identical to VisitorController except for the misstep behavior.
     /// All other behaviors (animations, speed, fascination states, etc.) are preserved.
     /// </summary>
-    public class MistakingVisitorController : MonoBehaviour
+    public class MistakingVisitorController : VisitorControllerBase
     {
         #region Enums
-
-        public enum VisitorState
-        {
-            Idle,
-            Walking,
-            Consumed,
-            Escaping
-        }
 
         /// <summary>
         /// Represents a visited tile in the fascinated random walk with its unexplored neighbors.
@@ -153,15 +145,15 @@ namespace FaeMaze.Visitors
 
         #region Properties
 
-        public VisitorState State => state;
-        public float MoveSpeed => moveSpeed;
-        public bool IsEntranced => isEntranced;
-        public float SpeedMultiplier
+        public override VisitorState State => state;
+        public override float MoveSpeed => moveSpeed;
+        public override bool IsEntranced => isEntranced;
+        public override float SpeedMultiplier
         {
             get => speedMultiplier;
             set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
         }
-        public bool IsFascinated => isFascinated;
+        public override bool IsFascinated => isFascinated;
 
         #endregion
 

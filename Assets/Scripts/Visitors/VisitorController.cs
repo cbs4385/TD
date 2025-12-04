@@ -12,17 +12,9 @@ namespace FaeMaze.Visitors
     /// When using spawn markers: visitors escape at the destination (no essence).
     /// When using legacy heart: visitors are consumed at the heart (awards essence).
     /// </summary>
-    public class VisitorController : MonoBehaviour
+    public class VisitorController : VisitorControllerBase
     {
         #region Enums
-
-        public enum VisitorState
-        {
-            Idle,
-            Walking,
-            Consumed,
-            Escaping
-        }
 
         /// <summary>
         /// Represents a visited tile in the fascinated random walk with its unexplored neighbors.
@@ -169,23 +161,23 @@ namespace FaeMaze.Visitors
         #region Properties
 
         /// <summary>Gets the current state of the visitor</summary>
-        public VisitorState State => state;
+        public override VisitorState State => state;
 
         /// <summary>Gets the current move speed</summary>
-        public float MoveSpeed => moveSpeed;
+        public override float MoveSpeed => moveSpeed;
 
         /// <summary>Gets whether this visitor is entranced by a Fairy Ring</summary>
-        public bool IsEntranced => isEntranced;
+        public override bool IsEntranced => isEntranced;
 
         /// <summary>Gets or sets the speed multiplier applied to movement</summary>
-        public float SpeedMultiplier
+        public override float SpeedMultiplier
         {
             get => speedMultiplier;
             set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
         }
 
         /// <summary>Gets whether this visitor is fascinated by a FaeLantern</summary>
-        public bool IsFascinated => isFascinated;
+        public override bool IsFascinated => isFascinated;
 
         #endregion
 
