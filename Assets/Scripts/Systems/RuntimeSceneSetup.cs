@@ -200,18 +200,32 @@ namespace FaeMaze.Systems
 
         private System.Collections.IEnumerator StartAfterDelay(WaveSpawner waveSpawner, float delay)
         {
+            // Wait for end of frame to ensure all Start() methods have run
+            yield return new WaitForEndOfFrame();
+
+            // Additional delay to ensure all initialization is complete
             yield return new WaitForSeconds(delay);
 
             if (waveSpawner != null)
             {
+                // Verify WaveSpawner is ready
                 bool started = waveSpawner.StartWave();
+
+                if (!started)
+                {
+                    // Retry after another frame if first attempt failed
+                    Debug.Log("First wave start attempt failed, retrying after delay...");
+                    yield return new WaitForSeconds(0.5f);
+                    started = waveSpawner.StartWave();
+                }
+
                 if (started)
                 {
                     Debug.Log("Auto-started first wave in ProceduralMazeScene");
                 }
                 else
                 {
-                    Debug.LogWarning("Failed to auto-start first wave in ProceduralMazeScene");
+                    Debug.LogError("Failed to auto-start first wave in ProceduralMazeScene after retry");
                 }
             }
 
