@@ -250,8 +250,8 @@ MonoBehaviour:
   useRuntimeGeneration: 0
   mazeFile: {fileID: 4900000, guid: 9f5e8c3a7d2b6e4f1a9c8d5b3e7a2f6c, type: 3}
   generatorConfig:
-    width: 64
-    height: 64
+    width: 30
+    height: 30
     numEntrances: 4
     minPathWidth: 2
     maxPathWidth: 4
@@ -495,8 +495,8 @@ MonoBehaviour:
   useRuntimeGeneration: 1
   mazeFile: {fileID: 0}
   generatorConfig:
-    width: 64
-    height: 64
+    width: 30
+    height: 30
     numEntrances: 4
     minPathWidth: 2
     maxPathWidth: 4
