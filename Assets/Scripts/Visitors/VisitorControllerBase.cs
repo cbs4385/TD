@@ -433,6 +433,24 @@ namespace FaeMaze.Visitors
             Vector2Int targetGridPos = path[currentPathIndex];
             Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
 
+            // Validate that the next tile is reachable from the current grid position
+            if (mazeGridBehaviour.WorldToGrid(transform.position, out int currentGridX, out int currentGridY))
+            {
+                Vector2Int currentGridPos = new Vector2Int(currentGridX, currentGridY);
+                int manhattan = Mathf.Abs(currentGridPos.x - targetGridPos.x) + Mathf.Abs(currentGridPos.y - targetGridPos.y);
+
+                if (manhattan > 1 && !hasLoggedPathIssue)
+                {
+                    Debug.LogWarning($"[VisitorPath] {name} is trying to step from {currentGridPos} to non-adjacent waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}.", this);
+                    hasLoggedPathIssue = true;
+                }
+            }
+            else if (!hasLoggedPathIssue)
+            {
+                Debug.LogWarning($"[VisitorPath] {name} could not resolve its current grid position while targeting waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}.", this);
+                hasLoggedPathIssue = true;
+            }
+
             // Move toward target (apply speed multiplier adjusted by tile cost)
             float moveCost = 1f;
             MazeGrid mazeGrid = mazeGridBehaviour.Grid;
