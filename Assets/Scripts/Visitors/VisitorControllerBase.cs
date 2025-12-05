@@ -306,6 +306,12 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            // If grid resolution fails, still consider any measurable displacement as movement so stalls after visible motion log correctly
+            if (!hasMovedSignificantly && deltaSqr > MovementEpsilonSqr)
+            {
+                hasMovedSignificantly = true;
+            }
+
             bool isStationary = remainedInSameCell || deltaSqr <= MovementEpsilonSqr;
 
             if (isStationary)
