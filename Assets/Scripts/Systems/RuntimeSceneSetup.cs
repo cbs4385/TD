@@ -175,7 +175,6 @@ namespace FaeMaze.Systems
                 entrance.SetGridPosition(runtimeGenMaze.EntranceGridPos);
                 Vector3 entranceWorld = runtimeGenMaze.GridToWorld(runtimeGenMaze.EntranceGridPos.x, runtimeGenMaze.EntranceGridPos.y);
                 entrance.transform.position = entranceWorld;
-                Debug.Log($"Repositioned entrance to {runtimeGenMaze.EntranceGridPos} (world: {entranceWorld})");
             }
 
             if (heart != null)
@@ -183,10 +182,7 @@ namespace FaeMaze.Systems
                 heart.SetGridPosition(runtimeGenMaze.HeartGridPos);
                 Vector3 heartWorld = runtimeGenMaze.GridToWorld(runtimeGenMaze.HeartGridPos.x, runtimeGenMaze.HeartGridPos.y);
                 heart.transform.position = heartWorld;
-                Debug.Log($"Repositioned heart to {runtimeGenMaze.HeartGridPos} (world: {heartWorld})");
             }
-
-            Debug.Log($"ProceduralMazeScene setup complete. Spawn points available: {runtimeGenMaze.GetSpawnPointCount()}");
         }
 
         private static void UpdateMazeReferences(MazeGridBehaviour oldMaze, MazeGridBehaviour newMaze)
@@ -201,7 +197,6 @@ namespace FaeMaze.Systems
                 {
                     // Re-register with the correct maze
                     GameController.Instance.RegisterMazeGrid(newMaze.Grid);
-                    Debug.Log("Updated GameController maze reference");
                 }
             }
 
@@ -215,7 +210,6 @@ namespace FaeMaze.Systems
                 if (mazeGridField != null)
                 {
                     mazeGridField.SetValue(cameraController, newMaze);
-                    Debug.Log("Updated CameraController maze reference");
                 }
             }
 
@@ -229,7 +223,6 @@ namespace FaeMaze.Systems
                 if (mazeGridField != null)
                 {
                     mazeGridField.SetValue(propController, newMaze);
-                    Debug.Log("Updated PropPlacementController maze reference");
                 }
             }
         }
@@ -256,27 +249,17 @@ namespace FaeMaze.Systems
 
             if (waveSpawner != null)
             {
-                // Log WaveSpawner state before attempting start
-                LogWaveSpawnerState(waveSpawner, "First attempt");
-
                 // Verify WaveSpawner is ready
                 bool started = waveSpawner.StartWave();
 
                 if (!started)
                 {
-                    // Retry after another frame if first attempt failed
-                    Debug.Log("First wave start attempt failed, retrying after delay...");
                     yield return new WaitForSeconds(0.5f);
 
-                    LogWaveSpawnerState(waveSpawner, "Retry attempt");
                     started = waveSpawner.StartWave();
                 }
 
-                if (started)
-                {
-                    Debug.Log("Auto-started first wave in ProceduralMazeScene");
-                }
-                else
+                if (!started)
                 {
                     Debug.LogError("Failed to auto-start first wave in ProceduralMazeScene after retry");
                 }
@@ -284,62 +267,6 @@ namespace FaeMaze.Systems
 
             // Clean up this helper object
             Destroy(gameObject);
-        }
-
-        private void LogWaveSpawnerState(WaveSpawner waveSpawner, string attemptName)
-        {
-            var spawnerType = typeof(WaveSpawner);
-
-            // Check visitorPrefab
-            var visitorPrefabField = spawnerType.GetField("visitorPrefab",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var visitorPrefab = visitorPrefabField?.GetValue(waveSpawner);
-            Debug.Log($"[{attemptName}] visitorPrefab: {(visitorPrefab != null ? "SET" : "NULL")}");
-
-            // Check mistakingVisitorPrefab
-            var mistakingVisitorPrefabField = spawnerType.GetField("mistakingVisitorPrefab",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var mistakingVisitorPrefab = mistakingVisitorPrefabField?.GetValue(waveSpawner);
-            Debug.Log($"[{attemptName}] mistakingVisitorPrefab: {(mistakingVisitorPrefab != null ? "SET" : "NULL")}");
-
-            // Check mazeGridBehaviour
-            var mazeGridField = spawnerType.GetField("mazeGridBehaviour",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var mazeGrid = mazeGridField?.GetValue(waveSpawner) as MazeGridBehaviour;
-            Debug.Log($"[{attemptName}] mazeGridBehaviour: {(mazeGrid != null ? "SET" : "NULL")}");
-
-            if (mazeGrid != null)
-            {
-                int spawnCount = mazeGrid.GetSpawnPointCount();
-                Debug.Log($"[{attemptName}] Spawn point count: {spawnCount}");
-            }
-
-            // Check entrance/heart (legacy)
-            var entranceField = spawnerType.GetField("entrance",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var entrance = entranceField?.GetValue(waveSpawner);
-            Debug.Log($"[{attemptName}] entrance: {(entrance != null ? "SET" : "NULL")}");
-
-            var heartField = spawnerType.GetField("heart",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var heart = heartField?.GetValue(waveSpawner);
-            Debug.Log($"[{attemptName}] heart: {(heart != null ? "SET" : "NULL")}");
-
-            // Check wave state flags
-            var isSpawningField = spawnerType.GetField("isSpawning",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var isSpawning = isSpawningField?.GetValue(waveSpawner);
-            Debug.Log($"[{attemptName}] isSpawning: {isSpawning}");
-
-            var isWaveActiveField = spawnerType.GetField("isWaveActive",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var isWaveActive = isWaveActiveField?.GetValue(waveSpawner);
-            Debug.Log($"[{attemptName}] isWaveActive: {isWaveActive}");
-
-            var isWaveFailedField = spawnerType.GetField("isWaveFailed",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var isWaveFailed = isWaveFailedField?.GetValue(waveSpawner);
-            Debug.Log($"[{attemptName}] isWaveFailed: {isWaveFailed}");
         }
     }
 }

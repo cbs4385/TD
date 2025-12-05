@@ -139,7 +139,6 @@ namespace FaeMaze.Props
             // Find and link water tiles
             FindAndLinkWaterTiles();
 
-            Debug.Log($"PukaHazard at {gridPosition} linked to {linkedWaterTiles.Count} water tiles");
         }
 
         private void OnEnable()
@@ -210,7 +209,6 @@ namespace FaeMaze.Props
 
             if (allWaterTiles.Count == 0)
             {
-                Debug.LogWarning($"PukaHazard at {gridPosition}: No other water tiles found to link to!");
                 return;
             }
 
@@ -349,7 +347,6 @@ namespace FaeMaze.Props
             if (roll < noInteractionChance)
             {
                 // 20% - No interaction
-                Debug.Log($"PukaHazard: Visitor at {visitorPos} avoided Puka hazard (no interaction)");
                 return;
             }
             else if (roll < noInteractionChance + teleportChance)
@@ -371,7 +368,6 @@ namespace FaeMaze.Props
         {
             if (linkedWaterTiles.Count == 0)
             {
-                Debug.LogWarning($"PukaHazard: Cannot teleport visitor - no linked water tiles!");
                 return;
             }
 
@@ -381,8 +377,6 @@ namespace FaeMaze.Props
 
             // Teleport the visitor
             visitorObject.transform.position = targetWorldPos;
-
-            Debug.Log($"PukaHazard: Teleported visitor from {fromPos} to {targetTile}");
 
             // Try to recalculate path for the visitor
             var visitorController = visitorObject.GetComponent<VisitorController>();
@@ -427,8 +421,6 @@ namespace FaeMaze.Props
         /// </summary>
         private void KillVisitor(GameObject visitorObject, Vector2Int atPos)
         {
-            Debug.Log($"PukaHazard: Killed visitor at {atPos}");
-
             // Play death sound if available
             FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed(); // Reuse consumption sound
 

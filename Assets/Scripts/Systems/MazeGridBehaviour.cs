@@ -398,7 +398,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"{label} ({logWidth}x{logHeight}):\n{builder}");
         }
 
         private void ApplyTileFromChar(int x, int y, char c, bool isHeart = false)
@@ -487,11 +486,10 @@ namespace FaeMaze.Systems
                 cachedMazeString = mazeString;
                 hasCachedGeneration = true;
 
-                Debug.Log($"ForestMazeGenerator output ({cachedGeneratedTiles.GetLength(0)}x{cachedGeneratedTiles.GetLength(1)}):\n{mazeString}");
+                
             }
             else
             {
-                Debug.Log($"ForestMazeGenerator cached output ({cachedGeneratedTiles.GetLength(0)}x{cachedGeneratedTiles.GetLength(1)}):\n{cachedMazeString}");
             }
 
             TileType[,] tiles = cachedGeneratedTiles;
@@ -821,7 +819,6 @@ namespace FaeMaze.Systems
         {
             if (!useRuntimeGeneration)
             {
-                Debug.LogWarning("RegenerateMaze: Cannot regenerate - not using runtime generation mode");
                 return;
             }
 
@@ -865,7 +862,6 @@ namespace FaeMaze.Systems
                 renderer.RefreshMaze();
             }
 
-            Debug.Log($"Regenerated maze with seed {generatorConfig.randomSeed}. Spawn points: {GetSpawnPointCount()}");
         }
 
         #endregion
