@@ -587,16 +587,19 @@ namespace FaeMaze.Visitors
                 state = VisitorState.Consumed;
                 SetAnimatorDirection(IdleDirection);
 
-                // Notify the Heart that this visitor has arrived (awards essence)
-                if (gameController != null && gameController.Heart != null)
-                {
-                    gameController.Heart.OnVisitorConsumed(this);
-                }
-                else
-                {
-                    Destroy(gameObject);
-                }
+                // Derived classes handle consumption logic (awards essence, stats, etc.)
+                HandleConsumption();
             }
+        }
+
+        /// <summary>
+        /// Called when visitor is consumed by the heart.
+        /// Derived classes override to implement specific consumption behavior.
+        /// </summary>
+        protected virtual void HandleConsumption()
+        {
+            // Default: just destroy the visitor
+            Destroy(gameObject);
         }
 
         #endregion

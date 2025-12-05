@@ -392,58 +392,31 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Path Completion Override
+        #region Consumption Override
 
-        protected override void OnPathCompleted()
+        /// <summary>
+        /// Handles visitor consumption by the heart.
+        /// Tracks stats, awards essence directly, and plays sound.
+        /// </summary>
+        protected override void HandleConsumption()
         {
-            // Clear fascination state
-            isFascinated = false;
-            hasReachedLantern = false;
-            ClearLanternInteraction();
-
-            // Check if we're using the new spawn marker system
-            bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2;
-
-            if (isUsingSpawnMarkers)
+            // Track consumption stats
+            if (FaeMaze.Systems.GameStatsTracker.Instance != null)
             {
-                // ESCAPE: Visitor reached destination spawn point
-                state = VisitorState.Escaping;
-                SetAnimatorDirection(IdleDirection);
-
-                // Visual feedback: fade to transparent
-                if (spriteRenderer != null)
-                {
-                    Color escapingColor = visitorColor;
-                    escapingColor.a = 0.3f;
-                    spriteRenderer.color = escapingColor;
-                }
-
-                Destroy(gameObject, 0.2f);
+                FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
             }
-            else
+
+            // Add essence to game controller
+            if (gameController != null && gameController.Heart != null)
             {
-                // LEGACY CONSUMED: Visitor reached the heart
-                state = VisitorState.Consumed;
-                SetAnimatorDirection(IdleDirection);
-
-                // Track consumption stats
-                if (FaeMaze.Systems.GameStatsTracker.Instance != null)
-                {
-                    FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
-                }
-
-                // Add essence to game controller
-                if (gameController != null && gameController.Heart != null)
-                {
-                    gameController.AddEssence(gameController.Heart.EssencePerVisitor);
-                }
-
-                // Play consumption sound
-                FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
-
-                // Destroy the visitor
-                Destroy(gameObject);
+                gameController.AddEssence(gameController.Heart.EssencePerVisitor);
             }
+
+            // Play consumption sound
+            FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
+
+            // Destroy the visitor
+            Destroy(gameObject);
         }
 
         #endregion
