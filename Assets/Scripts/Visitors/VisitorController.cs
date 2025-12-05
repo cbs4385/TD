@@ -156,6 +156,39 @@ namespace FaeMaze.Visitors
         private int lastDirection = IdleDirection;
         private int currentAnimatorDirection = IdleDirection;
 
+        private bool IsMovementState(VisitorState visitorState)
+        {
+            return visitorState == VisitorState.Walking
+                || visitorState == VisitorState.Fascinated
+                || visitorState == VisitorState.Confused
+                || visitorState == VisitorState.Frightened;
+        }
+
+        private void RefreshStateFromFlags()
+        {
+            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
+            {
+                return;
+            }
+
+            if (isFascinated)
+            {
+                state = VisitorState.Fascinated;
+            }
+            else if (confusionSegmentActive)
+            {
+                state = VisitorState.Confused;
+            }
+            else if (state == VisitorState.Frightened)
+            {
+                return;
+            }
+            else
+            {
+                state = VisitorState.Walking;
+            }
+        }
+
         #endregion
 
         #region Properties
@@ -357,7 +390,7 @@ namespace FaeMaze.Visitors
 
             // Check for FaeLantern influence (grid-based detection)
             // Allow checking even when fascinated to handle multiple lanterns
-            if (state == VisitorState.Walking)
+            if (IsMovementState(state))
             {
                 // Don't check if currently paused at a lantern
                 bool pausedAtLantern = isFascinated && hasReachedLantern && fascinationTimer > 0;
@@ -380,7 +413,7 @@ namespace FaeMaze.Visitors
                 return; // Don't move while fascinated timer is active
             }
 
-            if (state == VisitorState.Walking)
+            if (IsMovementState(state))
             {
                 if (!isCalculatingPath)
                 {
@@ -513,8 +546,8 @@ namespace FaeMaze.Visitors
             // If movement is below threshold but we're walking, retain the last direction
             if (movement.sqrMagnitude <= movementThresholdSqr)
             {
-                // Only return idle if we're actually stopped (not in Walking state)
-                if (state != VisitorState.Walking)
+                // Only return idle if we're actually stopped (not in an active movement state)
+                if (!IsMovementState(state))
                 {
                     return IdleDirection;
                 }
@@ -904,13 +937,14 @@ namespace FaeMaze.Visitors
                         }
                     }
 
-                    state = VisitorState.Walking;
+                    RefreshStateFromFlags();
                 }
                 else
                 {
                     isFascinated = false;
                     hasReachedLantern = false;
                     ClearLanternInteraction();
+                    RefreshStateFromFlags();
                 }
             }
         }
@@ -980,6 +1014,7 @@ namespace FaeMaze.Visitors
                 {
                     confusionSegmentActive = false;
                     DecideRecoveryFromConfusion();
+                    RefreshStateFromFlags();
                 }
                 else
                 {
@@ -1137,6 +1172,7 @@ namespace FaeMaze.Visitors
             confusionStepsTarget = stepsTarget;
             confusionStepsTaken = 0;
             isConfused = true;
+            RefreshStateFromFlags();
         }
 
         private List<Vector2Int> BuildConfusionPath(Vector2Int currentPos, Vector2Int detourStart, int stepsTarget, HashSet<Vector2Int> traversedTiles)
@@ -1409,7 +1445,7 @@ namespace FaeMaze.Visitors
         {
             if (path != null && path.Count > 0 && currentPathIndex < path.Count)
             {
-                state = VisitorState.Walking;
+                RefreshStateFromFlags();
             }
         }
 
@@ -1473,11 +1509,7 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Ensure state is Walking (in case RecalculatePath was called when not walking)
-            if (state != VisitorState.Walking)
-            {
-                state = VisitorState.Walking;
-            }
+            RefreshStateFromFlags();
             isCalculatingPath = false;
         }
 
@@ -1527,14 +1559,15 @@ namespace FaeMaze.Visitors
         /// <param name="lanternGridPosition">Grid position of the lantern</param>
         public void BecomeFascinated(Vector2Int lanternGridPosition)
         {
-            if (state != VisitorState.Walking)
+            if (!IsMovementState(state))
             {
-                return; // Only walking visitors can be fascinated
+                return; // Only actively moving visitors can be fascinated
             }
 
             isFascinated = true;
             fascinationLanternPosition = lanternGridPosition;
             hasReachedLantern = false;
+            RefreshStateFromFlags();
 
             // Immediately discard current path and create new path to lantern
             path = null;
@@ -1652,7 +1685,7 @@ namespace FaeMaze.Visitors
                 }
 
                 // Draw current target
-                if (state == VisitorState.Walking && currentPathIndex < path.Count)
+                if (IsMovementState(state) && currentPathIndex < path.Count)
                 {
                     Gizmos.color = Color.yellow;
                     Vector3 target = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);

@@ -135,6 +135,35 @@ namespace FaeMaze.Visitors
         private int lastDirection = IdleDirection;
         private int currentAnimatorDirection = IdleDirection;
 
+        private bool IsMovementState(VisitorState visitorState)
+        {
+            return visitorState == VisitorState.Walking
+                || visitorState == VisitorState.Fascinated
+                || visitorState == VisitorState.Confused
+                || visitorState == VisitorState.Frightened;
+        }
+
+        private void RefreshStateFromFlags()
+        {
+            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
+            {
+                return;
+            }
+
+            if (isFascinated)
+            {
+                state = VisitorState.Fascinated;
+            }
+            else if (state == VisitorState.Frightened || state == VisitorState.Confused)
+            {
+                return;
+            }
+            else
+            {
+                state = VisitorState.Walking;
+            }
+        }
+
         // Misstep tracking
         private bool isOnMisstepPath;
         private HashSet<Vector2Int> walkedTiles;
@@ -198,7 +227,7 @@ namespace FaeMaze.Visitors
             }
 
             // Check for FaeLantern influence
-            if (state == VisitorState.Walking)
+            if (IsMovementState(state))
             {
                 bool pausedAtLantern = isFascinated && hasReachedLantern && fascinationTimer > 0;
                 if (!pausedAtLantern)
@@ -215,7 +244,7 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            if (state == VisitorState.Walking)
+            if (IsMovementState(state))
             {
                 if (!isCalculatingPath)
                 {
@@ -526,7 +555,7 @@ namespace FaeMaze.Visitors
 
             if (movement.sqrMagnitude <= movementThresholdSqr)
             {
-                if (state != VisitorState.Walking)
+                if (!IsMovementState(state))
                 {
                     return IdleDirection;
                 }
@@ -735,7 +764,7 @@ namespace FaeMaze.Visitors
             isOnMisstepPath = true;
             misstepSegmentStartIndex = 1;
 
-            state = VisitorState.Walking;
+            RefreshStateFromFlags();
         }
 
         /// <summary>
@@ -1004,13 +1033,14 @@ namespace FaeMaze.Visitors
                         }
                     }
 
-                    state = VisitorState.Walking;
+                    RefreshStateFromFlags();
                 }
                 else
                 {
                     isFascinated = false;
                     hasReachedLantern = false;
                     ClearLanternInteraction();
+                    RefreshStateFromFlags();
                 }
             }
         }
@@ -1131,7 +1161,7 @@ namespace FaeMaze.Visitors
         {
             if (path != null && path.Count > 0 && currentPathIndex < path.Count)
             {
-                state = VisitorState.Walking;
+                RefreshStateFromFlags();
             }
         }
 
@@ -1190,10 +1220,7 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            if (state != VisitorState.Walking)
-            {
-                state = VisitorState.Walking;
-            }
+            RefreshStateFromFlags();
             isCalculatingPath = false;
         }
 
@@ -1226,7 +1253,7 @@ namespace FaeMaze.Visitors
 
         public void BecomeFascinated(Vector2Int lanternGridPosition)
         {
-            if (state != VisitorState.Walking)
+            if (!IsMovementState(state))
             {
                 return;
             }
@@ -1234,6 +1261,7 @@ namespace FaeMaze.Visitors
             isFascinated = true;
             fascinationLanternPosition = lanternGridPosition;
             hasReachedLantern = false;
+            RefreshStateFromFlags();
 
             path = null;
             currentPathIndex = 0;
@@ -1472,7 +1500,7 @@ namespace FaeMaze.Visitors
                 }
 
                 // Draw current target
-                if (state == VisitorState.Walking && currentPathIndex < path.Count)
+                if (IsMovementState(state) && currentPathIndex < path.Count)
                 {
                     Gizmos.color = Color.yellow;
                     Vector3 target = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);

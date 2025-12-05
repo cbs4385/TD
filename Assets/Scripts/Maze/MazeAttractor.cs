@@ -404,6 +404,14 @@ namespace FaeMaze.Maze
 
         #region Visitor Path Recalculation
 
+        private bool IsVisitorMoving(Visitors.VisitorController.VisitorState state)
+        {
+            return state == Visitors.VisitorController.VisitorState.Walking
+                || state == Visitors.VisitorController.VisitorState.Fascinated
+                || state == Visitors.VisitorController.VisitorState.Confused
+                || state == Visitors.VisitorController.VisitorState.Frightened;
+        }
+
         /// <summary>
         /// Triggers all active visitors to recalculate their paths.
         /// Called when a new attractor is placed so visitors can take advantage of the new attraction.
@@ -416,7 +424,7 @@ namespace FaeMaze.Maze
             int recalculatedCount = 0;
             foreach (var visitor in visitors)
             {
-                if (visitor != null && visitor.State == Visitors.VisitorController.VisitorState.Walking)
+                if (visitor != null && IsVisitorMoving(visitor.State))
                 {
                     visitor.RecalculatePath();
                     recalculatedCount++;

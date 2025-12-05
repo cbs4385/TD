@@ -248,6 +248,14 @@ namespace FaeMaze.Props
 
         #region Visitor Detection and Interaction
 
+        private bool IsVisitorActive(FaeMaze.Visitors.VisitorControllerBase.VisitorState state)
+        {
+            return state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking
+                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Fascinated
+                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Confused
+                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Frightened;
+        }
+
         /// <summary>
         /// Scans for visitors adjacent to this Puka (within 1 grid tile).
         /// </summary>
@@ -271,7 +279,7 @@ namespace FaeMaze.Props
                 }
 
                 // Check if visitor is walking
-                if (visitor.State != VisitorController.VisitorState.Walking)
+                if (!IsVisitorActive(visitor.State))
                 {
                     continue;
                 }
@@ -294,6 +302,11 @@ namespace FaeMaze.Props
             foreach (var mistakingVisitor in mistakingVisitors)
             {
                 if (mistakingVisitor == null || processedVisitors.Contains(mistakingVisitor.gameObject))
+                {
+                    continue;
+                }
+
+                if (!IsVisitorActive(mistakingVisitor.State))
                 {
                     continue;
                 }

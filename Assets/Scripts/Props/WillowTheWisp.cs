@@ -257,6 +257,14 @@ namespace FaeMaze.Props
         /// Scans for visitors within the influence area and picks the best target.
         /// Prioritizes the closest visitor with the least status effects.
         /// </summary>
+        private bool IsVisitorChaseable(FaeMaze.Visitors.VisitorControllerBase.VisitorState state)
+        {
+            return state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking
+                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Fascinated
+                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Confused
+                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Frightened;
+        }
+
         private void ScanForVisitors()
         {
             if (influenceCells == null || influenceCells.Count == 0)
@@ -272,7 +280,7 @@ namespace FaeMaze.Props
             foreach (var visitor in allVisitors)
             {
                 // Skip if not walking
-                if (visitor.State != VisitorController.VisitorState.Walking)
+                if (!IsVisitorChaseable(visitor.State))
                     continue;
 
                 // Skip if already following a wisp
@@ -683,7 +691,7 @@ namespace FaeMaze.Props
         private void UpdateChasing()
         {
             // Check if target is still valid
-            if (targetVisitor == null || targetVisitor.State != VisitorController.VisitorState.Walking)
+            if (targetVisitor == null || !IsVisitorChaseable(targetVisitor.State))
             {
                 ReturnToWandering();
                 return;

@@ -11,6 +11,9 @@ namespace FaeMaze.Visitors
         {
             Idle,
             Walking,
+            Fascinated,
+            Confused,
+            Frightened,
             Consumed,
             Escaping
         }
