@@ -139,6 +139,7 @@ namespace FaeMaze.Visitors
         protected int lastLoggedWaypointIndex = -1;
         protected float stalledDuration;
         protected bool isPathLoggingActive;
+        protected bool hasMovedSignificantly;
 
         #endregion
 
@@ -179,6 +180,7 @@ namespace FaeMaze.Visitors
 
             stalledDuration = 0f;
             isPathLoggingActive = false;
+            hasMovedSignificantly = false;
         }
 
         protected virtual void Update()
@@ -284,26 +286,31 @@ namespace FaeMaze.Visitors
 
             if (deltaSqr <= MovementEpsilonSqr)
             {
-                stalledDuration += Time.deltaTime;
-
-                if (!isPathLoggingActive && stalledDuration >= StallLoggingDelaySeconds)
+                if (hasMovedSignificantly)
                 {
-                    isPathLoggingActive = true;
+                    stalledDuration += Time.deltaTime;
 
-                    Vector2Int stalledGrid = Vector2Int.zero;
-                    int stalledX = 0;
-                    int stalledY = 0;
-                    bool resolvedGrid = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out stalledX, out stalledY);
-                    if (resolvedGrid)
+                    if (!isPathLoggingActive && stalledDuration >= StallLoggingDelaySeconds)
                     {
-                        stalledGrid = new Vector2Int(stalledX, stalledY);
-                    }
+                        isPathLoggingActive = true;
 
-                    LogVisitorPath($"stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.");
+                        Vector2Int stalledGrid = Vector2Int.zero;
+                        int stalledX = 0;
+                        int stalledY = 0;
+                        bool resolvedGrid = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out stalledX, out stalledY);
+                        if (resolvedGrid)
+                        {
+                            stalledGrid = new Vector2Int(stalledX, stalledY);
+                        }
+
+                        LogVisitorPath($"stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.");
+                    }
                 }
             }
             else
             {
+                hasMovedSignificantly = true;
+
                 if (isPathLoggingActive)
                 {
                     LogVisitorPath($"resumed movement after stalling for {stalledDuration:F2}s.");
@@ -394,6 +401,7 @@ namespace FaeMaze.Visitors
             lastLoggedWaypointIndex = -1;
             stalledDuration = 0f;
             isPathLoggingActive = false;
+            hasMovedSignificantly = false;
 
             RecalculatePath();
         }
