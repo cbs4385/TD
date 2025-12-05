@@ -362,29 +362,17 @@ namespace FaeMaze.Props
 
         #region Visual Setup
 
-        private void CreateVisualSprite()
-        {
-            // Create a glowing circle sprite
-            spriteRenderer.sprite = CreateCircleSprite(32);
-            ApplySpriteSettings();
-        }
-
         private void SetupSpriteRenderer()
         {
-            spriteRenderer = GetComponent<SpriteRenderer>();
-            if (spriteRenderer == null)
-            {
-                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-            }
+            spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
+                gameObject,
+                createProceduralSprite: useProceduralSprite,
+                useSoftEdges: true,
+                resolution: 32,
+                pixelsPerUnit: 32
+            );
 
-            if (useProceduralSprite)
-            {
-                CreateVisualSprite();
-            }
-            else
-            {
-                ApplySpriteSettings();
-            }
+            ApplySpriteSettings();
         }
 
         private void ApplySpriteSettings()
@@ -394,44 +382,17 @@ namespace FaeMaze.Props
                 return;
             }
 
-            spriteRenderer.color = wispColor;
-            spriteRenderer.sortingOrder = sortingOrder;
-
             baseScale = useProceduralSprite
                 ? new Vector3(wispSize, wispSize, 1f)
                 : initialScale;
-            transform.localScale = baseScale;
-        }
 
-        private Sprite CreateCircleSprite(int resolution)
-        {
-            int size = resolution;
-            Texture2D texture = new Texture2D(size, size);
-            Color[] pixels = new Color[size * size];
-
-            Vector2 center = new Vector2(size / 2f, size / 2f);
-            float radius = size / 2f;
-
-            // Create a circle with soft edges (glow effect)
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dist = Vector2.Distance(new Vector2(x, y), center);
-                    float alpha = Mathf.Clamp01(1f - (dist / radius));
-                    pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
-                }
-            }
-
-            texture.SetPixels(pixels);
-            texture.Apply();
-
-            return Sprite.Create(
-                texture,
-                new Rect(0, 0, size, size),
-                new Vector2(0.5f, 0.5f),
-                size
+            ProceduralSpriteFactory.ApplySpriteSettings(
+                spriteRenderer,
+                wispColor,
+                sortingOrder,
+                applyScale: false
             );
+            transform.localScale = baseScale;
         }
 
         private void SetupColliders()

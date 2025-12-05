@@ -313,25 +313,15 @@ namespace FaeMaze.Props
 
         private void SetupSpriteRenderer()
         {
-            // Add SpriteRenderer if not already present
-            _spriteRenderer = GetComponent<SpriteRenderer>();
-            if (_spriteRenderer == null)
-            {
-                _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-            }
-
-            if (useProceduralSprite)
-            {
-                CreateVisualSprite();
-            }
+            _spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
+                gameObject,
+                createProceduralSprite: useProceduralSprite,
+                useSoftEdges: false,
+                resolution: 32,
+                pixelsPerUnit: 32
+            );
 
             ApplySpriteSettings();
-        }
-
-        private void CreateVisualSprite()
-        {
-            // Create a simple circle sprite for the lantern
-            _spriteRenderer.sprite = CreateLanternSprite(32);
         }
 
         private void ApplySpriteSettings()
@@ -341,48 +331,27 @@ namespace FaeMaze.Props
                 return;
             }
 
-            _spriteRenderer.color = lanternColor;
-            _spriteRenderer.sortingOrder = sortingOrder;
-
             // Only override scale when generating a procedural sprite
             if (useProceduralSprite)
             {
-                transform.localScale = new Vector3(lanternSize, lanternSize, 1f);
+                ProceduralSpriteFactory.ApplySpriteSettings(
+                    _spriteRenderer,
+                    lanternColor,
+                    sortingOrder,
+                    lanternSize,
+                    applyScale: true
+                );
             }
             else
             {
+                ProceduralSpriteFactory.ApplySpriteSettings(
+                    _spriteRenderer,
+                    lanternColor,
+                    sortingOrder,
+                    applyScale: false
+                );
                 transform.localScale = _initialScale;
             }
-        }
-
-        private Sprite CreateLanternSprite(int resolution)
-        {
-            int size = resolution;
-            Texture2D texture = new Texture2D(size, size);
-            Color[] pixels = new Color[size * size];
-
-            Vector2 center = new Vector2(size / 2f, size / 2f);
-            float radius = size / 2f;
-
-            // Create a circle (simplified lantern shape)
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dist = Vector2.Distance(new Vector2(x, y), center);
-                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
-                }
-            }
-
-            texture.SetPixels(pixels);
-            texture.Apply();
-
-            return Sprite.Create(
-                texture,
-                new Rect(0, 0, size, size),
-                new Vector2(0.5f, 0.5f),
-                size
-            );
         }
 
         #endregion
