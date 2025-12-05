@@ -300,24 +300,28 @@ namespace FaeMaze.Visitors
             // Add all confusion path tiles
             newPath.AddRange(confusionPath);
 
-            // Create a set of all tiles in the new path so far to avoid duplicates
-            HashSet<Vector2Int> tilesInNewPath = new HashSet<Vector2Int>(newPath);
-
-            // Add recovery path tiles, but skip any that would cause backtracking
+            // Add recovery path tiles, ensuring adjacency is maintained
+            // Skip the first tile if it's the same as confusionEnd to avoid duplication
             int recoveryStartIndex = (recoveryPath.Count > 0 && recoveryPath[0] == confusionEnd) ? 1 : 0;
 
             for (int i = recoveryStartIndex; i < recoveryPath.Count; i++)
             {
                 Vector2Int recoveryTile = recoveryPath[i];
+                Vector2Int lastTileInPath = newPath[newPath.Count - 1];
 
-                // Skip tiles that were already traversed before confusion OR are duplicates in the new path
-                if (traversedTiles.Contains(recoveryTile) || tilesInNewPath.Contains(recoveryTile))
+                // Check if this tile is adjacent to the last tile in the path
+                int manhattan = Mathf.Abs(lastTileInPath.x - recoveryTile.x) + Mathf.Abs(lastTileInPath.y - recoveryTile.y);
+
+                if (manhattan != 1)
                 {
-                    continue; // Skip this tile to prevent backtracking
+                    // Non-adjacent - we've hit a gap in the recovery path due to skipped tiles
+                    // Stop adding tiles from recovery path to prevent non-adjacent jumps
+                    Debug.LogWarning($"[VisitorPath] {name} stopped adding recovery path at index {i} because tile {recoveryTile} is not adjacent to {lastTileInPath}. Recalculating path instead.", this);
+                    RecalculatePath();
+                    return;
                 }
 
                 newPath.Add(recoveryTile);
-                tilesInNewPath.Add(recoveryTile);
             }
 
             path = newPath;
