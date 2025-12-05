@@ -140,6 +140,7 @@ namespace FaeMaze.Visitors
         protected float stalledDuration;
         protected bool isPathLoggingActive;
         protected bool hasMovedSignificantly;
+        protected bool isCurrentlyStalled;
 
         #endregion
 
@@ -181,6 +182,7 @@ namespace FaeMaze.Visitors
             stalledDuration = 0f;
             isPathLoggingActive = false;
             hasMovedSignificantly = false;
+            isCurrentlyStalled = false;
         }
 
         protected virtual void Update()
@@ -258,7 +260,7 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
-            return isPathLoggingActive;
+            return isPathLoggingActive && isCurrentlyStalled;
         }
 
         private void LogVisitorPath(string message)
@@ -286,6 +288,7 @@ namespace FaeMaze.Visitors
 
             if (deltaSqr <= MovementEpsilonSqr)
             {
+                isCurrentlyStalled = true;
                 if (hasMovedSignificantly)
                 {
                     stalledDuration += Time.deltaTime;
@@ -309,12 +312,8 @@ namespace FaeMaze.Visitors
             }
             else
             {
+                isCurrentlyStalled = false;
                 hasMovedSignificantly = true;
-
-                if (isPathLoggingActive)
-                {
-                    LogVisitorPath($"resumed movement after stalling for {stalledDuration:F2}s.");
-                }
 
                 stalledDuration = 0f;
                 isPathLoggingActive = false;
@@ -402,6 +401,7 @@ namespace FaeMaze.Visitors
             stalledDuration = 0f;
             isPathLoggingActive = false;
             hasMovedSignificantly = false;
+            isCurrentlyStalled = false;
 
             RecalculatePath();
         }
@@ -438,6 +438,7 @@ namespace FaeMaze.Visitors
             lastLoggedWaypointIndex = -1;
             stalledDuration = 0f;
             isPathLoggingActive = false;
+            isCurrentlyStalled = false;
 
             RecalculatePath();
         }

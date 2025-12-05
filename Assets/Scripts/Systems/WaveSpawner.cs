@@ -435,8 +435,6 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            Debug.Log($"[WaveSpawner] Built path for visitor from {startPos} (marker {startId}) to {destPos} (marker {destId}). Length {pathNodes.Count}. Path: {FormatPath(pathNodes)}.");
-
             // Get world position for spawn
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(startPos.x, startPos.y);
 
