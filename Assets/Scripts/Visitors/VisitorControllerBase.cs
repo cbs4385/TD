@@ -260,7 +260,7 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
-            return false;
+            return true; // Enabled for debugging visitor stalls
         }
 
         /// <summary>
@@ -397,7 +397,8 @@ namespace FaeMaze.Visitors
                         stalledGrid = new Vector2Int(stalledX, stalledY);
                     }
 
-                    Debug.Log($"[VisitorPath] {name} stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.", this);
+                    Vector2Int targetWaypoint = (path != null && currentPathIndex < path.Count) ? path[currentPathIndex] : Vector2Int.zero;
+                    Debug.Log($"[VisitorPath] {name} stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. currentPathIndex: {currentPathIndex}. Target waypoint: {targetWaypoint}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.", this);
 
                     if (resolvedGrid)
                     {
@@ -1318,6 +1319,8 @@ namespace FaeMaze.Visitors
             currentPathIndex = path.Count > 1 ? 1 : 0;
             hasLoggedPathIssue = false;
             lastLoggedWaypointIndex = -1;
+
+            LogVisitorPath($"set currentPathIndex to {currentPathIndex}. Target waypoint: {(currentPathIndex < path.Count ? path[currentPathIndex].ToString() : "<none>")}.");
 
             LogPathIntegrityIssues(path, currentPos, "recalculated path");
 

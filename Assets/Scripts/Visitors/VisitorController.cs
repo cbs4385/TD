@@ -173,10 +173,13 @@ namespace FaeMaze.Visitors
                 {
                     confusionSegmentActive = false;
                     DecideRecoveryFromConfusion();
+                    currentPathIndex++; // Move to next waypoint in recovery path
                     RefreshStateFromFlags();
+                    return;
                 }
                 else
                 {
+                    currentPathIndex++; // Continue through confusion segment
                     return; // Still traversing a confusion segment; no new detours.
                 }
             }
@@ -325,6 +328,9 @@ namespace FaeMaze.Visitors
             confusionStepsTarget = stepsTarget;
             confusionStepsTaken = 0;
             isConfused = true;
+
+            Debug.Log($"[VisitorPath] {name} began confusion detour. Path length: {path.Count}. currentPathIndex: {currentPathIndex}. Target waypoint: {path[currentPathIndex]}. Confusion end index: {confusionSegmentEndIndex}.", this);
+
             RefreshStateFromFlags();
         }
 
