@@ -327,6 +327,65 @@ namespace FaeMaze.Visitors
             RecalculatePath();
         }
 
+        /// <summary>
+        /// Logs warnings for obvious path integrity problems such as gaps or blocked nodes.
+        /// Helps diagnose invalid paths produced by pathfinding before movement begins.
+        /// </summary>
+        private void LogPathIntegrityIssues(List<Vector2Int> candidatePath, Vector2Int currentPos, string context)
+        {
+            if (candidatePath == null || candidatePath.Count == 0 || mazeGridBehaviour == null)
+            {
+                return;
+            }
+
+            MazeGrid grid = mazeGridBehaviour.Grid;
+
+            // Verify starting step from the visitor's resolved grid position
+            Vector2Int firstWaypoint = candidatePath[0];
+            int distanceFromCurrent = Mathf.Abs(currentPos.x - firstWaypoint.x) + Mathf.Abs(currentPos.y - firstWaypoint.y);
+            if (distanceFromCurrent > 1 && !hasLoggedPathIssue)
+            {
+                Debug.LogWarning($"[VisitorPath] {name} {context}: starting waypoint {firstWaypoint} is not adjacent to current grid position {currentPos}. Path length: {candidatePath.Count}.", this);
+                hasLoggedPathIssue = true;
+            }
+
+            if (grid != null)
+            {
+                var firstNode = grid.GetNode(firstWaypoint.x, firstWaypoint.y);
+                if ((firstNode == null || !firstNode.walkable) && !hasLoggedPathIssue)
+                {
+                    string reason = firstNode == null ? "missing" : "not walkable";
+                    Debug.LogWarning($"[VisitorPath] {name} {context}: starting waypoint {firstWaypoint} is {reason}. Path length: {candidatePath.Count}.", this);
+                    hasLoggedPathIssue = true;
+                }
+            }
+
+            // Validate each subsequent hop for adjacency and walkability
+            for (int i = 1; i < candidatePath.Count; i++)
+            {
+                Vector2Int previous = candidatePath[i - 1];
+                Vector2Int waypoint = candidatePath[i];
+                int manhattan = Mathf.Abs(previous.x - waypoint.x) + Mathf.Abs(previous.y - waypoint.y);
+
+                if (manhattan != 1 && !hasLoggedPathIssue)
+                {
+                    Debug.LogWarning($"[VisitorPath] {name} {context}: non-adjacent step between {previous} (index {i - 1}) and {waypoint} (index {i}). Path length: {candidatePath.Count}.", this);
+                    hasLoggedPathIssue = true;
+                }
+
+                if (grid != null)
+                {
+                    MazeGrid.MazeNode node = grid.GetNode(waypoint.x, waypoint.y);
+                    if ((node == null || !node.walkable) && !hasLoggedPathIssue)
+                    {
+                        string reason = node == null ? "missing" : "not walkable";
+                        Debug.LogWarning($"[VisitorPath] {name} {context}: waypoint {waypoint} at index {i} is {reason}. Path length: {candidatePath.Count}.", this);
+                        hasLoggedPathIssue = true;
+                    }
+                }
+            }
+        }
+
         #endregion
 
         #region Movement
@@ -1011,6 +1070,8 @@ namespace FaeMaze.Visitors
             currentPathIndex = path.Count > 1 ? 1 : 0;
             hasLoggedPathIssue = false;
 
+            LogPathIntegrityIssues(path, currentPos, "recalculated path");
+
             if (path.Count <= 1)
             {
                 isCalculatingPath = false;
@@ -1147,6 +1208,9 @@ namespace FaeMaze.Visitors
                                 currentPathIndex++;
                             }
                         }
+
+                        hasLoggedPathIssue = false;
+                        LogPathIntegrityIssues(path, currentPos, "fascination path");
                     }
                 }
             }
