@@ -430,6 +430,7 @@ namespace FaeMaze.Systems
 
             if (!pathFound || pathNodes.Count == 0)
             {
+                Debug.LogWarning($"[WaveSpawner] Failed to build path for visitor from {startPos} to {destPos} (start marker: {startId}, destination marker: {destId}). Using heart fallback: {destId == '\0' && destPos == mazeGridBehaviour?.HeartGridPos}.");
                 return;
             }
 

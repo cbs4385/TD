@@ -92,6 +92,7 @@ namespace FaeMaze.Visitors
 
         protected List<Vector2Int> path;
         protected int currentPathIndex;
+        protected bool hasLoggedPathIssue;
         protected VisitorState state;
         protected Animator animator;
         protected GameController gameController;
@@ -293,6 +294,7 @@ namespace FaeMaze.Visitors
             originalDestination = gridPath[gridPath.Count - 1];
             waypointsTraversedSinceSpawn = 0;
             ResetDetourState();
+            hasLoggedPathIssue = false;
 
             RecalculatePath();
         }
@@ -320,6 +322,7 @@ namespace FaeMaze.Visitors
 
             waypointsTraversedSinceSpawn = 0;
             ResetDetourState();
+            hasLoggedPathIssue = false;
 
             RecalculatePath();
         }
@@ -438,6 +441,12 @@ namespace FaeMaze.Visitors
                 MazeGrid.MazeNode targetNode = mazeGrid.GetNode(targetGridPos.x, targetGridPos.y);
                 if (targetNode == null || !targetNode.walkable)
                 {
+                    if (!hasLoggedPathIssue)
+                    {
+                        string reason = targetNode == null ? "missing" : "not walkable";
+                        Debug.LogWarning($"[VisitorPath] {name} cannot move to waypoint {targetGridPos} at index {currentPathIndex} because node is {reason}. Path length: {path.Count}.", this);
+                        hasLoggedPathIssue = true;
+                    }
                     return; // Non-walkable nodes remain blocked
                 }
 
@@ -959,6 +968,11 @@ namespace FaeMaze.Visitors
 
             if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
             {
+                if (!hasLoggedPathIssue)
+                {
+                    Debug.LogWarning($"[VisitorPath] {name} could not find path from {currentPos} to destination {originalDestination}.", this);
+                    hasLoggedPathIssue = true;
+                }
                 isCalculatingPath = false;
                 return;
             }
@@ -977,6 +991,7 @@ namespace FaeMaze.Visitors
             }
 
             currentPathIndex = path.Count > 1 ? 1 : 0;
+            hasLoggedPathIssue = false;
 
             if (path.Count <= 1)
             {
