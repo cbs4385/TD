@@ -317,29 +317,27 @@ namespace FaeMaze.Visitors
             if (isStationary)
             {
                 isCurrentlyStalled = true;
+                stalledDuration += Time.deltaTime;
 
-                if (hasMovedSignificantly)
+                bool canReportStall = hasMovedSignificantly || stalledDuration >= StallLoggingDelaySeconds;
+
+                if (canReportStall && !isPathLoggingActive && stalledDuration >= StallLoggingDelaySeconds)
                 {
-                    stalledDuration += Time.deltaTime;
+                    isPathLoggingActive = true;
 
-                    if (!isPathLoggingActive && stalledDuration >= StallLoggingDelaySeconds)
+                    Vector2Int stalledGrid = Vector2Int.zero;
+                    bool resolvedGrid = gridResolved;
+                    if (resolvedGrid)
                     {
-                        isPathLoggingActive = true;
-
-                        Vector2Int stalledGrid = Vector2Int.zero;
-                        bool resolvedGrid = gridResolved;
-                        if (resolvedGrid)
-                        {
-                            stalledGrid = new Vector2Int(remainedInSameCell ? prevX : curX, remainedInSameCell ? prevY : curY);
-                        }
-                        else if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out int stalledX, out int stalledY))
-                        {
-                            resolvedGrid = true;
-                            stalledGrid = new Vector2Int(stalledX, stalledY);
-                        }
-
-                        LogVisitorPath($"stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.");
+                        stalledGrid = new Vector2Int(remainedInSameCell ? prevX : curX, remainedInSameCell ? prevY : curY);
                     }
+                    else if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out int stalledX, out int stalledY))
+                    {
+                        resolvedGrid = true;
+                        stalledGrid = new Vector2Int(stalledX, stalledY);
+                    }
+
+                    LogVisitorPath($"stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.");
                 }
             }
             else
