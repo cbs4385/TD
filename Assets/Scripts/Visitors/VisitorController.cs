@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
@@ -8,7 +7,7 @@ namespace FaeMaze.Visitors
 {
     /// <summary>
     /// Controls a visitor's movement through the maze.
-    /// Visitors follow a path of grid nodes.
+    /// Implements confusion behavior: 25% chance at intersections to take a wrong turn for 15-20 tiles.
     /// When using spawn markers: visitors escape at the destination (no essence).
     /// When using legacy heart: visitors are consumed at the heart (awards essence).
     /// </summary>
@@ -23,48 +22,7 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Enums
-
-        /// <summary>
-        /// Represents a visited tile in the fascinated random walk with its unexplored neighbors.
-        /// </summary>
-        private class FascinatedPathNode
-        {
-            public Vector2Int Position { get; set; }
-            public List<Vector2Int> UnexploredNeighbors { get; set; }
-
-            public FascinatedPathNode(Vector2Int position, List<Vector2Int> unexploredNeighbors)
-            {
-                Position = position;
-                UnexploredNeighbors = new List<Vector2Int>(unexploredNeighbors);
-            }
-
-            public bool HasUnexploredNeighbors => UnexploredNeighbors.Count > 0;
-
-            public Vector2Int PopNextNeighbor()
-            {
-                if (UnexploredNeighbors.Count == 0)
-                    throw new System.InvalidOperationException("No unexplored neighbors to pop");
-
-                Vector2Int next = UnexploredNeighbors[0];
-                UnexploredNeighbors.RemoveAt(0);
-                return next;
-            }
-        }
-
-        #endregion
-
-        #region Serialized Fields
-
-        [Header("Movement Settings")]
-        [SerializeField]
-        [Tooltip("Movement speed in units per second")]
-        private float moveSpeed = 3f;
-
-        [Header("Path Following")]
-        [SerializeField]
-        [Tooltip("Distance threshold to consider a waypoint reached")]
-        private float waypointReachedDistance = 0.05f;
+        #region Confusion-Specific Fields
 
         [Header("Confusion Settings")]
         [SerializeField]
@@ -90,113 +48,11 @@ namespace FaeMaze.Visitors
         [Tooltip("Draw confusion segments in the scene view for debugging")]
         private bool debugConfusionGizmos;
 
-        [Header("Visual Settings")]
-        [SerializeField]
-        [Tooltip("Color of the visitor sprite")]
-        private Color visitorColor = new Color(0.3f, 0.6f, 1f, 1f); // Light blue
-
-        [SerializeField]
-        [Tooltip("Desired world-space diameter (in Unity units) for procedural visitors")]
-        private float visitorSize = 30.0f;
-
-        [SerializeField]
-        [Tooltip("Pixels per unit for procedural visitor sprites (match imported visitor assets)")]
-        private int proceduralPixelsPerUnit = 32;
-
-        [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
-        private int sortingOrder = 15;
-
-        [SerializeField]
-        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
-        private bool useProceduralSprite = false;
-
-        #endregion
-
-        #region Private Fields
-
-        private List<Vector2Int> path;
-        private int currentPathIndex;
-        private VisitorState state;
-        private Animator animator;
-        private GameController gameController;
-        private MazeGridBehaviour mazeGridBehaviour;
-        private bool isEntranced;
-        private float speedMultiplier = 1f;
-        private SpriteRenderer spriteRenderer;
-        private Rigidbody2D rb;
-        private Vector2 authoredSpriteWorldSize;
-        private Vector2Int originalDestination; // Store original destination for confusion recovery
-
         private bool isConfused;
         private bool confusionSegmentActive;
         private int confusionSegmentEndIndex;
         private int confusionStepsTarget;
         private int confusionStepsTaken;
-        private int waypointsTraversedSinceSpawn; // Track progress before allowing confusion
-
-        private bool isCalculatingPath;
-
-        // Fascination state (for FaeLantern)
-        private bool isFascinated;
-        private Vector2Int fascinationLanternPosition;
-        private bool hasReachedLantern;
-        private float fascinationTimer;
-        private FaeMaze.Props.FaeLantern currentFaeLantern;
-
-        // Cooldown tracking per lantern (prevents immediate re-triggering)
-        private Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
-
-        private Vector3 initialScale;
-
-        // Track last 10 tiles reached to prevent short-term backtracking
-        private Queue<Vector2Int> recentlyReachedTiles;
-        private const int MAX_RECENT_TILES = 10;
-
-        // Track visited tiles during fascinated random walk as a tree structure
-        // Each node contains its position and list of unexplored neighbors
-        private List<FascinatedPathNode> fascinatedPathNodes;
-
-        private const string DirectionParameter = "Direction";
-        private const int IdleDirection = 0;
-        private const float MovementEpsilonSqr = 0.0001f;
-
-        // Cached direction to prevent animation flickering when movement delta is small
-        private int lastDirection = IdleDirection;
-        private int currentAnimatorDirection = IdleDirection;
-
-        private bool IsMovementState(VisitorState visitorState)
-        {
-            return visitorState == VisitorState.Walking
-                || visitorState == VisitorState.Fascinated
-                || visitorState == VisitorState.Confused
-                || visitorState == VisitorState.Frightened;
-        }
-
-        private void RefreshStateFromFlags()
-        {
-            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
-            {
-                return;
-            }
-
-            if (isFascinated)
-            {
-                state = VisitorState.Fascinated;
-            }
-            else if (confusionSegmentActive)
-            {
-                state = VisitorState.Confused;
-            }
-            else if (state == VisitorState.Frightened)
-            {
-                return;
-            }
-            else
-            {
-                state = VisitorState.Walking;
-            }
-        }
 
         #endregion
 
@@ -225,113 +81,10 @@ namespace FaeMaze.Visitors
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void Awake()
         {
-            state = VisitorState.Idle;
+            base.Awake();
             isConfused = confusionEnabled;
-            recentlyReachedTiles = new Queue<Vector2Int>();
-            fascinatedPathNodes = new List<FascinatedPathNode>();
-            lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
-            initialScale = transform.localScale;
-            animator = GetComponent<Animator>();
-            spriteRenderer = GetComponent<SpriteRenderer>();
-            CacheAuthoredSpriteSize();
-            SetupSpriteRenderer();
-            SetupPhysics();
-            SetAnimatorDirection(IdleDirection);
-        }
-
-        private void SetupSpriteRenderer()
-        {
-            spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
-                gameObject,
-                createProceduralSprite: useProceduralSprite,
-                useSoftEdges: false,
-                resolution: 32,
-                pixelsPerUnit: proceduralPixelsPerUnit
-            );
-
-            ApplySpriteSettings();
-        }
-
-        private void ApplySpriteSettings()
-        {
-            if (spriteRenderer == null)
-            {
-                return;
-            }
-
-            spriteRenderer.color = visitorColor;
-            spriteRenderer.sortingOrder = sortingOrder;
-
-            if (useProceduralSprite)
-            {
-                float baseSpriteSize = spriteRenderer.sprite != null
-                    ? Mathf.Max(spriteRenderer.sprite.bounds.size.x, spriteRenderer.sprite.bounds.size.y)
-                    : 1f;
-
-                if (baseSpriteSize <= 0f)
-                {
-                    baseSpriteSize = 1f;
-                }
-
-                float targetWorldSize = visitorSize > 0f
-                    ? visitorSize
-                    : Mathf.Max(authoredSpriteWorldSize.x, authoredSpriteWorldSize.y);
-
-                if (targetWorldSize > 0f)
-                {
-                    float scale = targetWorldSize / baseSpriteSize;
-                    transform.localScale = new Vector3(scale, scale, 1f);
-                }
-                else
-                {
-                    transform.localScale = initialScale;
-                }
-            }
-            else
-            {
-                // Preserve the authored prefab scale when using imported visitor visuals.
-                transform.localScale = initialScale;
-            }
-        }
-
-        private void CacheAuthoredSpriteSize()
-        {
-            if (spriteRenderer == null || spriteRenderer.sprite == null)
-            {
-                authoredSpriteWorldSize = Vector2.zero;
-                return;
-            }
-
-            Vector2 spriteSize = spriteRenderer.sprite.bounds.size;
-            authoredSpriteWorldSize = new Vector2(
-                spriteSize.x * transform.localScale.x,
-                spriteSize.y * transform.localScale.y
-            );
-        }
-
-        private void SetupPhysics()
-        {
-            // Add Rigidbody2D for trigger collisions with MazeAttractors
-            rb = GetComponent<Rigidbody2D>();
-            if (rb == null)
-            {
-                rb = gameObject.AddComponent<Rigidbody2D>();
-            }
-
-            rb.bodyType = RigidbodyType2D.Kinematic; // Kinematic so we control movement manually
-            rb.gravityScale = 0f; // No gravity for 2D top-down
-
-            // Add CircleCollider2D for trigger detection
-            CircleCollider2D collider = GetComponent<CircleCollider2D>();
-            if (collider == null)
-            {
-                collider = gameObject.AddComponent<CircleCollider2D>();
-            }
-
-            collider.radius = 0.3f; // Small radius for visitor collision
-            collider.isTrigger = true; // Enable trigger events
         }
 
         private void OnEnable()
@@ -344,640 +97,70 @@ namespace FaeMaze.Visitors
             _activeVisitors.Remove(this);
         }
 
-        private void Update()
-        {
-            // Update lantern cooldowns
-            if (lanternCooldowns != null && lanternCooldowns.Count > 0)
-            {
-                // Create a list of lanterns to update (avoid modifying during iteration)
-                List<FaeMaze.Props.FaeLantern> lanternsToUpdate = new List<FaeMaze.Props.FaeLantern>(lanternCooldowns.Keys);
-                foreach (var lantern in lanternsToUpdate)
-                {
-                    if (lantern != null)
-                    {
-                        lanternCooldowns[lantern] -= Time.deltaTime;
-                        if (lanternCooldowns[lantern] <= 0f)
-                        {
-                            lanternCooldowns.Remove(lantern);
-                        }
-                    }
-                }
-            }
-
-            // Check for FaeLantern influence (grid-based detection)
-            // Allow checking even when fascinated to handle multiple lanterns
-            if (IsMovementState(state))
-            {
-                // Don't check if currently paused at a lantern
-                bool pausedAtLantern = isFascinated && hasReachedLantern && fascinationTimer > 0;
-                if (!pausedAtLantern)
-                {
-                    CheckFaeLanternInfluence();
-                }
-            }
-
-            // Handle fascination timer (2-second pause at lantern)
-            if (isFascinated && hasReachedLantern && fascinationTimer > 0)
-            {
-                fascinationTimer -= Time.deltaTime;
-                if (fascinationTimer <= 0)
-                {
-                    // Timer expired - start random wandering
-                    // The random walk will be handled in HandleConfusionAtWaypoint
-                }
-                SetAnimatorDirection(IdleDirection);
-                return; // Don't move while fascinated timer is active
-            }
-
-            if (IsMovementState(state))
-            {
-                if (!isCalculatingPath)
-                {
-                    UpdateWalking();
-                }
-            }
-            else if (state == VisitorState.Escaping)
-            {
-                // Optionally: add escape animation/effects here
-                // Currently handled in OnPathCompleted with fade and delayed destroy
-            }
-        }
-
         #endregion
 
-        #region Initialization
+        #region State Management
 
-        /// <summary>
-        /// Initializes the visitor with a reference to the game controller.
-        /// </summary>
-        /// <param name="controller">The game controller instance</param>
-        public void Initialize(GameController controller)
+        protected override void RefreshStateFromFlags()
         {
-            gameController = controller;
-
-            if (gameController != null && gameController.MazeGrid != null)
+            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
-                // Find the MazeGridBehaviour in the scene
-                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+                return;
+            }
 
-                if (mazeGridBehaviour == null)
-                {
-                    return;
-                }
+            if (isFascinated)
+            {
+                state = VisitorState.Fascinated;
+            }
+            else if (confusionSegmentActive)
+            {
+                state = VisitorState.Confused;
+            }
+            else if (state == VisitorState.Frightened)
+            {
+                return;
             }
             else
             {
-                return;
+                state = VisitorState.Walking;
             }
-        }
-
-        /// <summary>
-        /// Initializes the visitor using the static GameController instance.
-        /// </summary>
-        public void Initialize()
-        {
-            Initialize(GameController.Instance);
         }
 
         #endregion
 
-        #region Path Management
+        #region Detour Behavior Implementation
 
         /// <summary>
-        /// Sets the path for the visitor to follow and begins walking.
+        /// Resets confusion state when starting a new path or becoming fascinated.
         /// </summary>
-        /// <param name="gridPath">List of grid coordinates forming the path</param>
-        public void SetPath(List<Vector2Int> gridPath)
+        protected override void ResetDetourState()
         {
-            if (gridPath == null || gridPath.Count == 0)
-            {
-                return;
-            }
-
-            originalDestination = gridPath[gridPath.Count - 1];
-            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
             isConfused = confusionEnabled;
-
-            RecalculatePath();
-        }
-
-        /// <summary>
-        /// Sets the path using MazeNode objects.
-        /// </summary>
-        /// <param name="nodePath">List of MazeNode objects forming the path</param>
-        public void SetPath(List<MazeGrid.MazeNode> nodePath)
-        {
-            if (nodePath == null || nodePath.Count == 0)
-            {
-                return;
-            }
-
-            List<Vector2Int> gridPath = new List<Vector2Int>();
-            foreach (var node in nodePath)
-            {
-                gridPath.Add(new Vector2Int(node.x, node.y));
-            }
-
-            if (gridPath.Count > 0)
-            {
-                originalDestination = gridPath[gridPath.Count - 1];
-            }
-
-            waypointsTraversedSinceSpawn = 0; // Reset waypoint counter
-            confusionSegmentActive = false;
-            confusionSegmentEndIndex = 0;
-            isConfused = confusionEnabled;
-
-            RecalculatePath();
-        }
-
-        #endregion
-
-        #region Movement
-
-        private void UpdateAnimatorDirection(Vector2 movement)
-        {
-            SetAnimatorDirection(GetDirectionFromMovement(movement));
-        }
-
-        private void SetAnimatorDirection(int direction)
-        {
-            // Guard against redundant animator parameter writes
-            if (animator != null && currentAnimatorDirection != direction)
-            {
-                animator.SetInteger(DirectionParameter, direction);
-                currentAnimatorDirection = direction;
-            }
-        }
-
-        private int GetDirectionFromMovement(Vector2 movement)
-        {
-            // Use a higher threshold based on movement speed to avoid flickering
-            // When visitor is walking, small deltas between frames shouldn't trigger idle
-            float movementThreshold = moveSpeed * Time.deltaTime * 0.1f;
-            float movementThresholdSqr = movementThreshold * movementThreshold;
-
-            // If movement is below threshold but we're walking, retain the last direction
-            if (movement.sqrMagnitude <= movementThresholdSqr)
-            {
-                // Only return idle if we're actually stopped (not in an active movement state)
-                if (!IsMovementState(state))
-                {
-                    return IdleDirection;
-                }
-
-                // While walking with small movement delta, retain last direction
-                return lastDirection;
-            }
-
-            // Movement is significant - calculate new direction
-            float absX = Mathf.Abs(movement.x);
-            float absY = Mathf.Abs(movement.y);
-
-            // Require a clear dominant axis to prevent flickering when values are close
-            // Use 20% hysteresis: one axis must be at least 1.2x the other to change direction
-            float axisDifference = Mathf.Abs(absX - absY);
-            float axisMin = Mathf.Min(absX, absY);
-
-            if (axisDifference < axisMin * 0.2f && lastDirection != IdleDirection)
-            {
-                // Axes are too close - retain last direction to prevent flickering
-                return lastDirection;
-            }
-
-            int newDirection;
-            if (absY >= absX)
-            {
-                // Vertical movement dominant
-                newDirection = movement.y > 0f ? 1 : 2; // 1 = Up, 2 = Down
-            }
-            else
-            {
-                // Horizontal movement dominant
-                newDirection = movement.x < 0f ? 3 : 4; // 3 = Left, 4 = Right
-            }
-
-            // Update cached direction (only cache non-idle directions)
-            if (newDirection != IdleDirection)
-            {
-                lastDirection = newDirection;
-            }
-
-            return newDirection;
-        }
-
-        private void UpdateWalking()
-        {
-            if (path == null || path.Count == 0)
-            {
-                state = VisitorState.Idle;
-                SetAnimatorDirection(IdleDirection);
-                return;
-            }
-
-            if (mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            // Bounds check for currentPathIndex
-            if (currentPathIndex >= path.Count)
-            {
-                // Path index out of bounds - this can happen if fascinated random walk failed to extend path
-                currentPathIndex = path.Count - 1;
-
-                // If fascinated, clear fascination state since we can't continue
-                if (isFascinated && hasReachedLantern)
-                {
-                    isFascinated = false;
-                    hasReachedLantern = false;
-                    ClearLanternInteraction();
-                    fascinatedPathNodes.Clear();
-                }
-            }
-
-            // Get current target waypoint
-            Vector2Int targetGridPos = path[currentPathIndex];
-            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
-
-            // Move toward target (apply speed multiplier adjusted by tile cost)
-            float moveCost = 1f;
-            MazeGrid mazeGrid = mazeGridBehaviour.Grid;
-            if (mazeGrid != null)
-            {
-                MazeGrid.MazeNode targetNode = mazeGrid.GetNode(targetGridPos.x, targetGridPos.y);
-                if (targetNode == null || !targetNode.walkable)
-                {
-                    return; // Non-walkable nodes remain blocked
-                }
-
-                moveCost = mazeGrid.GetMoveCost(targetGridPos.x, targetGridPos.y);
-            }
-
-            moveCost = Mathf.Max(moveCost, Mathf.Epsilon); // Prevent division by zero
-            float effectiveSpeed = (moveSpeed * speedMultiplier) / moveCost;
-            Vector3 newPosition = Vector3.MoveTowards(
-                transform.position,
-                targetWorldPos,
-                effectiveSpeed * Time.deltaTime
-            );
-
-            Vector3 movementDelta = newPosition - transform.position;
-            UpdateAnimatorDirection(movementDelta);
-
-            // Use Rigidbody2D.MovePosition for proper trigger detection
-            if (rb != null)
-            {
-                rb.MovePosition(newPosition);
-                // Manually sync transforms with physics system to ensure trigger detection works
-                // This is necessary when AutoSyncTransforms is disabled in Physics2D settings
-                Physics2D.SyncTransforms();
-            }
-            else
-            {
-                transform.position = newPosition;
-            }
-
-            // Check if we've reached the waypoint
-            float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
-            if (distanceToTarget < waypointReachedDistance)
-            {
-                OnWaypointReached();
-            }
-        }
-
-        private void OnWaypointReached()
-        {
-            Vector2Int currentWaypoint = path[currentPathIndex];
-
-            // Add to recently reached tiles queue (maintain last 10)
-            if (recentlyReachedTiles != null)
-            {
-                recentlyReachedTiles.Enqueue(currentWaypoint);
-
-                // Remove oldest tiles if we exceed the maximum
-                while (recentlyReachedTiles.Count > MAX_RECENT_TILES)
-                {
-                    recentlyReachedTiles.Dequeue();
-                }
-            }
-
-            // Increment waypoint counter
-            waypointsTraversedSinceSpawn++;
-
-            // Check if fascinated visitor reached the lantern
-            if (isFascinated && !hasReachedLantern && currentPathIndex < path.Count)
-            {
-                if (currentWaypoint == fascinationLanternPosition)
-                {
-                    hasReachedLantern = true;
-
-                    // Start fascination timer (2 seconds by default)
-                    if (currentFaeLantern != null)
-                    {
-                        fascinationTimer = currentFaeLantern.FascinationDuration;
-                    }
-                    else
-                    {
-                        fascinationTimer = 2f; // Fallback
-                    }
-
-                    SetAnimatorDirection(IdleDirection);
-
-                    // Pause at lantern - don't modify path, let timer run
-                    // After timer expires, will resume to original destination
-                    return; // Don't increment or handle confusion
-                }
-                else
-                {
-                    // Fascinated visitor reached intermediate waypoint on path to lantern
-                    // Advance to next waypoint
-                    currentPathIndex++;
-                    if (currentPathIndex >= path.Count)
-                    {
-                        OnPathCompleted();
-                    }
-                    return; // Don't call RecalculatePath for fascinated visitors
-                }
-            }
-
-            // For fascinated visitors doing random walk, handle confusion/path extension
-            if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
-            {
-                // Check if current waypoint is the original destination (exit or heart)
-                if (currentWaypoint == originalDestination)
-                {
-                    OnPathCompleted();
-                    return;
-                }
-
-                // Check if fascinated visitor wandered onto ANY spawn point (exit)
-                // This handles the case where there are multiple exits and the visitor
-                // wanders onto a different exit than their original destination
-                if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2)
-                {
-                    if (mazeGridBehaviour.IsSpawnPoint(currentWaypoint))
-                    {
-                        ForceEscape();
-                        return;
-                    }
-                }
-
-                currentPathIndex++;
-                // Don't reset currentPathIndex - HandleFascinatedRandomWalk handles the case
-                // where currentPathIndex >= path.Count by using path[path.Count - 1] as current position
-                HandleConfusionAtWaypoint();
-                return; // Don't call RecalculatePath for fascinated random walk
-            }
-
-            RecalculatePath();
-        }
-
-        private void OnPathCompleted()
-        {
-            // With spawn marker system: visitors escape (no essence awarded)
-            // With legacy heart system: visitors are consumed (essence awarded)
-
-            // Clear fascination state
-            isFascinated = false;
-            hasReachedLantern = false;
-            ClearLanternInteraction();
-
-            // Check if we're using the new spawn marker system
-            bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2;
-
-            if (isUsingSpawnMarkers)
-            {
-                // ESCAPE: Visitor reached destination spawn point
-                state = VisitorState.Escaping;
-                SetAnimatorDirection(IdleDirection);
-
-                // Visual feedback: fade to transparent
-                if (spriteRenderer != null)
-                {
-                    Color escapingColor = visitorColor;
-                    escapingColor.a = 0.3f; // Fade out
-                    spriteRenderer.color = escapingColor;
-                }
-
-                // Destroy visitor after short delay for visual effect
-                Destroy(gameObject, 0.2f);
-            }
-            else
-            {
-                // LEGACY CONSUMED: Visitor reached the heart
-                state = VisitorState.Consumed;
-                SetAnimatorDirection(IdleDirection);
-
-                // Notify the Heart that this visitor has arrived (awards essence)
-                if (gameController != null && gameController.Heart != null)
-                {
-                    gameController.Heart.OnVisitorConsumed(this);
-                }
-                else
-                {
-                    Destroy(gameObject);
-                }
-            }
-        }
-
-        #endregion
-
-        #region FaeLantern Detection
-
-        private void ClearLanternInteraction()
-        {
-            if (currentFaeLantern != null)
-            {
-                currentFaeLantern.SetIdleDirection();
-            }
-
-            currentFaeLantern = null;
-            fascinationLanternPosition = Vector2Int.zero;
-        }
-
-        /// <summary>
-        /// Checks if the visitor has entered any FaeLantern's influence area.
-        /// Uses grid-based detection to check if current grid position is within
-        /// the flood-filled influence area of any active lantern.
-        /// </summary>
-        private void CheckFaeLanternInfluence()
-        {
-            if (mazeGridBehaviour == null)
-                return;
-
-            // Get current grid position
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
-                return;
-
-            Vector2Int currentGridPos = new Vector2Int(x, y);
-
-            // Check all active FaeLanterns
-            foreach (var lantern in FaeMaze.Props.FaeLantern.All)
-            {
-                if (lantern == null)
-                    continue;
-
-                // Check if this cell is in the lantern's influence
-                if (lantern.IsCellInInfluence(currentGridPos))
-                {
-                    EnterFaeInfluence(lantern, currentGridPos);
-                    break; // Only one lantern can capture a visitor
-                }
-            }
-        }
-
-        /// <summary>
-        /// Called when a visitor enters a FaeLantern's influence area.
-        /// Abandons current path and paths to the lantern.
-        /// Applies cooldown and proc chance checks per spec.
-        /// </summary>
-        private void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern, Vector2Int visitorGridPosition)
-        {
-            // If already fascinated by this same lantern, ignore
-            if (isFascinated && currentFaeLantern == lantern && fascinationLanternPosition == lantern.GridPosition)
-                return;
-
-            // Check cooldown (prevents immediate re-triggering)
-            if (lanternCooldowns.ContainsKey(lantern) && lanternCooldowns[lantern] > 0f)
-            {
-                return;
-            }
-
-            // Check proc chance (probability of fascination)
-            float roll = Random.value;
-            if (roll > lantern.ProcChance)
-            {
-                // Set cooldown even on failed proc to prevent spam checks
-                lanternCooldowns[lantern] = lantern.CooldownSec;
-                return;
-            }
-
-            // Allow re-fascination by a different lantern
-            isFascinated = true;
-            currentFaeLantern = lantern;
-            fascinationLanternPosition = lantern.GridPosition;
-            hasReachedLantern = false;
-            fascinationTimer = 0f; // Will be set when reaching lantern
-
-            // Set cooldown for this lantern
-            lanternCooldowns[lantern] = lantern.CooldownSec;
-
-            // Clear path nodes from previous fascination
-            fascinatedPathNodes.Clear();
-
-            // Abandon current path
-            path = null;
-            currentPathIndex = 0;
-            confusionSegmentActive = false;
-            confusionSegmentEndIndex = 0;
-
-            // Calculate path to lantern
-            if (gameController != null && mazeGridBehaviour != null &&
-                mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-                List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
-                if (gameController.TryFindPath(currentPos, fascinationLanternPosition, pathToLantern) && pathToLantern.Count > 0)
-                {
-                    // Convert to Vector2Int path
-                    path = new List<Vector2Int>();
-                    foreach (var node in pathToLantern)
-                    {
-                        path.Add(new Vector2Int(node.x, node.y));
-                    }
-
-                    // Find starting waypoint
-                    currentPathIndex = 0;
-                    if (path.Count > 1)
-                    {
-                        // Try to find current grid position in the path
-                        for (int i = 0; i < path.Count; i++)
-                        {
-                            if (path[i] == currentPos)
-                            {
-                                currentPathIndex = i;
-                                break;
-                            }
-                        }
-
-                        // If very close to current tile center, advance to next
-                        Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
-                        float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
-                        if (currentPathIndex < path.Count - 1 && distToCurrentTile < waypointReachedDistance)
-                        {
-                            currentPathIndex++;
-                        }
-                    }
-
-                    RefreshStateFromFlags();
-                }
-                else
-                {
-                    isFascinated = false;
-                    hasReachedLantern = false;
-                    ClearLanternInteraction();
-                    RefreshStateFromFlags();
-                }
-            }
-        }
-
-        #endregion
-
-        #region Confusion System
-
-        /// <summary>
-        /// Gets all tiles that have been traversed so far (from spawn to current position).
-        /// Used to prevent backtracking when building confusion paths or random walks.
-        /// </summary>
-        private HashSet<Vector2Int> GetTraversedTiles()
-        {
-            HashSet<Vector2Int> traversed = new HashSet<Vector2Int>();
-
-            if (path == null || path.Count == 0)
-            {
-                return traversed;
-            }
-
-            // Add all tiles from start up to and including current index
-            for (int i = 0; i <= currentPathIndex && i < path.Count; i++)
-            {
-                traversed.Add(path[i]);
-            }
-
-            return traversed;
         }
 
         /// <summary>
         /// Attempts to trigger confusion at the current waypoint if it's an intersection.
         /// For fascinated visitors who have reached the lantern, implements random walk behavior.
         /// </summary>
-        private void HandleConfusionAtWaypoint()
+        protected override void HandleDetourAtWaypoint()
         {
             if (mazeGridBehaviour == null || gameController == null)
             {
                 return;
             }
 
-            // Handle fascinated visitors who have reached the lantern and timer expired
-            if (isFascinated && hasReachedLantern && fascinationTimer <= 0)
-            {
-                HandleFascinatedRandomWalk();
-                return;
-            }
-
             if (!confusionEnabled || currentPathIndex >= path.Count - 1)
             {
+                RecalculatePath();
                 return;
             }
 
             // Prevent confusion for the first 10 waypoints after spawning
-            // This ensures visitors make meaningful progress on their A* path before getting confused
             if (waypointsTraversedSinceSpawn < 10)
             {
+                RecalculatePath();
                 return;
             }
 
@@ -1000,6 +183,7 @@ namespace FaeMaze.Visitors
 
             if (!isConfused)
             {
+                RecalculatePath();
                 return; // Currently navigating normally.
             }
 
@@ -1016,6 +200,7 @@ namespace FaeMaze.Visitors
 
             if (walkableNeighbors.Count < 2)
             {
+                RecalculatePath();
                 return; // Not an intersection
             }
 
@@ -1023,6 +208,7 @@ namespace FaeMaze.Visitors
             float roll = Random.value;
             if (roll > confusionChance)
             {
+                RecalculatePath();
                 return; // No confusion this time
             }
 
@@ -1038,6 +224,7 @@ namespace FaeMaze.Visitors
 
             if (detourDirections.Count == 0)
             {
+                RecalculatePath();
                 return; // No detour options
             }
 
@@ -1047,39 +234,30 @@ namespace FaeMaze.Visitors
             BeginConfusionSegment(currentPos, detourStart);
         }
 
+        #endregion
+
+        #region Confusion System
+
         /// <summary>
-        /// Gets all walkable neighbor positions for a grid position.
+        /// Gets all tiles that have been traversed so far (from spawn to current position).
+        /// Used to prevent backtracking when building confusion paths.
         /// </summary>
-        private List<Vector2Int> GetWalkableNeighbors(Vector2Int gridPos)
+        private HashSet<Vector2Int> GetTraversedTiles()
         {
-            List<Vector2Int> neighbors = new List<Vector2Int>();
+            HashSet<Vector2Int> traversed = new HashSet<Vector2Int>();
 
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            if (path == null || path.Count == 0)
             {
-                return neighbors;
+                return traversed;
             }
 
-            // Check 4 cardinal directions
-            Vector2Int[] directions = new Vector2Int[]
+            // Add all tiles from start up to and including current index
+            for (int i = 0; i <= currentPathIndex && i < path.Count; i++)
             {
-                new Vector2Int(0, 1),   // Up
-                new Vector2Int(0, -1),  // Down
-                new Vector2Int(1, 0),   // Right
-                new Vector2Int(-1, 0)   // Left
-            };
-
-            foreach (var dir in directions)
-            {
-                Vector2Int neighborPos = gridPos + dir;
-                var node = mazeGridBehaviour.Grid.GetNode(neighborPos.x, neighborPos.y);
-
-                if (node != null && node.walkable)
-                {
-                    neighbors.Add(neighborPos);
-                }
+                traversed.Add(path[i]);
             }
 
-            return neighbors;
+            return traversed;
         }
 
         private void BeginConfusionSegment(Vector2Int currentPos, Vector2Int detourStart)
@@ -1093,6 +271,7 @@ namespace FaeMaze.Visitors
 
             if (confusionPath.Count == 0)
             {
+                RecalculatePath();
                 return;
             }
 
@@ -1101,6 +280,7 @@ namespace FaeMaze.Visitors
 
             if (!gameController.TryFindPath(confusionEnd, originalDestination, recoveryPathNodes) || recoveryPathNodes.Count == 0)
             {
+                RecalculatePath();
                 return;
             }
 
@@ -1114,17 +294,15 @@ namespace FaeMaze.Visitors
             List<Vector2Int> newPath = new List<Vector2Int>();
             newPath.Add(currentPos);
 
-            // Add all confusion path tiles (already validated to not backtrack)
+            // Add all confusion path tiles
             newPath.AddRange(confusionPath);
 
             // Create a set of all tiles in the new path so far to avoid duplicates
             HashSet<Vector2Int> tilesInNewPath = new HashSet<Vector2Int>(newPath);
 
             // Add recovery path tiles, but skip any that would cause backtracking
-            // Start from index 0 or 1 depending on whether the first tile duplicates confusionEnd
             int recoveryStartIndex = (recoveryPath.Count > 0 && recoveryPath[0] == confusionEnd) ? 1 : 0;
 
-            int skippedTiles = 0;
             for (int i = recoveryStartIndex; i < recoveryPath.Count; i++)
             {
                 Vector2Int recoveryTile = recoveryPath[i];
@@ -1132,7 +310,6 @@ namespace FaeMaze.Visitors
                 // Skip tiles that were already traversed before confusion OR are duplicates in the new path
                 if (traversedTiles.Contains(recoveryTile) || tilesInNewPath.Contains(recoveryTile))
                 {
-                    skippedTiles++;
                     continue; // Skip this tile to prevent backtracking
                 }
 
@@ -1274,379 +451,17 @@ namespace FaeMaze.Visitors
             isConfused = !recover;
         }
 
-        /// <summary>
-        /// Handles random walk behavior for fascinated visitors after they've reached the lantern.
-        /// Uses a tree structure where each node tracks its unexplored neighbors.
-        /// Backtracks through the node list when dead ends are encountered.
-        /// </summary>
-        private void HandleFascinatedRandomWalk()
-        {
-            // Only extend path if we're near the end (within 3 waypoints)
-            int waypointsRemaining = path.Count - currentPathIndex;
-            if (waypointsRemaining > 3)
-            {
-                return; // Still have enough waypoints ahead
-            }
-
-            // Get the actual current position (where visitor is now)
-            Vector2Int currentPos;
-            if (currentPathIndex == 0 && path.Count > 0)
-            {
-                currentPos = path[0];
-            }
-            else if (currentPathIndex > 0 && currentPathIndex < path.Count)
-            {
-                currentPos = path[currentPathIndex - 1];
-            }
-            else if (currentPathIndex >= path.Count && path.Count > 0)
-            {
-                currentPos = path[path.Count - 1];
-            }
-            else
-            {
-                return;
-            }
-
-            // Initialize path nodes on first call after reaching lantern
-            if (fascinatedPathNodes.Count == 0)
-            {
-                // Get all walkable neighbors
-                List<Vector2Int> neighbors = GetWalkableNeighbors(currentPos);
-
-                // Exclude the tile we came from (the previous tile before reaching lantern)
-                // This ensures visitor continues forward into maze rather than immediately backtracking
-                if (currentPathIndex > 1)
-                {
-                    Vector2Int previousTile = path[currentPathIndex - 2];
-                    neighbors.Remove(previousTile);
-                }
-
-                // Shuffle remaining neighbors randomly
-                ShuffleList(neighbors);
-
-                // Create initial node at lantern position
-                FascinatedPathNode initialNode = new FascinatedPathNode(currentPos, neighbors);
-                fascinatedPathNodes.Add(initialNode);
-            }
-
-            // Get current node (last in list = current position)
-            FascinatedPathNode currentNode = fascinatedPathNodes[fascinatedPathNodes.Count - 1];
-
-            // Check if current node has unexplored neighbors
-            while (!currentNode.HasUnexploredNeighbors && fascinatedPathNodes.Count > 0)
-            {
-                // Dead end - backtrack by removing current node
-                fascinatedPathNodes.RemoveAt(fascinatedPathNodes.Count - 1);
-
-                if (fascinatedPathNodes.Count == 0)
-                {
-                    // Exhausted all paths - visitor has fully explored, trigger completion
-                    OnPathCompleted();
-                    return;
-                }
-
-                // Move to parent node
-                currentNode = fascinatedPathNodes[fascinatedPathNodes.Count - 1];
-                Vector2Int backtrackPos = currentNode.Position;
-
-                // Add backtrack waypoint if we're not already there
-                if (backtrackPos != currentPos)
-                {
-                    path.Add(backtrackPos);
-                    currentPos = backtrackPos;
-                }
-            }
-
-            if (fascinatedPathNodes.Count == 0)
-            {
-                return; // Fully explored
-            }
-
-            // Current node has unexplored neighbors - pick the next one
-            Vector2Int nextPos = currentNode.PopNextNeighbor();
-
-            // Get neighbors of next position and shuffle them
-            List<Vector2Int> nextNeighbors = GetWalkableNeighbors(nextPos);
-
-            // Build set of visited positions for filtering
-            HashSet<Vector2Int> visitedPositions = new HashSet<Vector2Int>();
-            foreach (var node in fascinatedPathNodes)
-            {
-                visitedPositions.Add(node.Position);
-            }
-
-            // Remove neighbors that we've already visited
-            nextNeighbors.RemoveAll(n => visitedPositions.Contains(n));
-            ShuffleList(nextNeighbors);
-
-            // Create new node for next position
-            FascinatedPathNode nextNode = new FascinatedPathNode(nextPos, nextNeighbors);
-            fascinatedPathNodes.Add(nextNode);
-
-            // Add to movement path
-            path.Add(nextPos);
-        }
-
-        /// <summary>
-        /// Shuffles a list in place using Fisher-Yates algorithm.
-        /// </summary>
-        private void ShuffleList<T>(List<T> list)
-        {
-            for (int i = list.Count - 1; i > 0; i--)
-            {
-                int j = Random.Range(0, i + 1);
-                T temp = list[i];
-                list[i] = list[j];
-                list[j] = temp;
-            }
-        }
-
-        #endregion
-
-        #region Public Methods
-
-        /// <summary>
-        /// Stops the visitor's movement.
-        /// </summary>
-        public void Stop()
-        {
-            state = VisitorState.Idle;
-            SetAnimatorDirection(IdleDirection);
-        }
-
-        /// <summary>
-        /// Resumes the visitor's movement if they have a path.
-        /// </summary>
-        public void Resume()
-        {
-            if (path != null && path.Count > 0 && currentPathIndex < path.Count)
-            {
-                RefreshStateFromFlags();
-            }
-        }
-
-        /// <summary>
-        /// Recalculates the path to the original destination.
-        /// Used when new attractors (lanterns) are placed to update the visitor's route.
-        /// </summary>
-        public void RecalculatePath()
-        {
-            if (gameController == null || mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            // Fascinated visitors use random walk, not A* recalculation
-            if (isFascinated)
-            {
-                return;
-            }
-
-            isCalculatingPath = true;
-            // Don't change state to Idle during recalculation - this causes animation flickering
-            // The isCalculatingPath flag prevents movement, so we can keep the walking animation
-
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                isCalculatingPath = false;
-                return;
-            }
-
-            Vector2Int currentPos = new Vector2Int(currentX, currentY);
-            List<MazeGrid.MazeNode> newPathNodes = new List<MazeGrid.MazeNode>();
-
-            if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
-            {
-                isCalculatingPath = false;
-                return;
-            }
-
-            List<Vector2Int> newPath = new List<Vector2Int>();
-            foreach (var node in newPathNodes)
-            {
-                newPath.Add(new Vector2Int(node.x, node.y));
-            }
-
-            path = newPath;
-            recentlyReachedTiles.Clear();
-            if (path.Count > 0)
-            {
-                recentlyReachedTiles.Enqueue(path[0]);
-            }
-
-            currentPathIndex = path.Count > 1 ? 1 : 0;
-            confusionSegmentActive = false;
-            confusionSegmentEndIndex = 0;
-
-            if (path.Count <= 1)
-            {
-                isCalculatingPath = false;
-                OnPathCompleted();
-                return;
-            }
-
-            RefreshStateFromFlags();
-            isCalculatingPath = false;
-        }
-
-        /// <summary>
-        /// Sets the entranced state of this visitor.
-        /// Entranced visitors are affected by Fairy Rings.
-        /// </summary>
-        /// <param name="value">True to mark as entranced, false to clear</param>
-        public void SetEntranced(bool value)
-        {
-            if (isEntranced != value)
-            {
-                isEntranced = value;
-            }
-        }
-
-        /// <summary>
-        /// Forces the visitor to escape immediately.
-        /// Used when visitor needs to despawn without awarding essence.
-        /// </summary>
-        public void ForceEscape()
-        {
-            state = VisitorState.Escaping;
-            SetAnimatorDirection(IdleDirection);
-
-            // Clear fascination state
-            isFascinated = false;
-            hasReachedLantern = false;
-            ClearLanternInteraction();
-
-            // Visual feedback
-            if (spriteRenderer != null)
-            {
-                Color escapingColor = visitorColor;
-                escapingColor.a = 0.3f;
-                spriteRenderer.color = escapingColor;
-            }
-
-            Destroy(gameObject, 0.2f);
-        }
-
-        /// <summary>
-        /// Makes this visitor fascinated by a FaeLantern.
-        /// Fascinated visitors immediately path to the lantern, pause at it,
-        /// then resume their journey to the original destination.
-        /// </summary>
-        /// <param name="lanternGridPosition">Grid position of the lantern</param>
-        public void BecomeFascinated(Vector2Int lanternGridPosition)
-        {
-            if (!IsMovementState(state))
-            {
-                return; // Only actively moving visitors can be fascinated
-            }
-
-            isFascinated = true;
-            fascinationLanternPosition = lanternGridPosition;
-            hasReachedLantern = false;
-            RefreshStateFromFlags();
-
-            // Immediately discard current path and create new path to lantern
-            path = null;
-            currentPathIndex = 0;
-            confusionSegmentActive = false;
-            confusionSegmentEndIndex = 0;
-            waypointsTraversedSinceSpawn = 0;
-
-            // Get current position and pathfind to lantern
-            if (gameController != null && mazeGridBehaviour != null &&
-                mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-                // Find NEW path to lantern (ignores prior A* plan to original destination)
-                List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
-                if (gameController.TryFindPath(currentPos, lanternGridPosition, pathToLantern) && pathToLantern.Count > 0)
-                {
-                    // Convert to Vector2Int path
-                    path = new List<Vector2Int>();
-                    foreach (var node in pathToLantern)
-                    {
-                        path.Add(new Vector2Int(node.x, node.y));
-                    }
-
-                    // Find starting waypoint without backtracking
-                    currentPathIndex = 0;
-                    if (path.Count > 1)
-                    {
-                        // First, try to find current grid position in the path
-                        int currentGridIndex = -1;
-                        for (int i = 0; i < path.Count; i++)
-                        {
-                            if (path[i] == currentPos)
-                            {
-                                currentGridIndex = i;
-                                break;
-                            }
-                        }
-
-                        if (currentGridIndex >= 0)
-                        {
-                            // Found current tile in path - start from there
-                            currentPathIndex = currentGridIndex;
-
-                            // If very close to center, advance to next waypoint
-                            Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
-                            float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
-                            if (currentPathIndex < path.Count - 1 && distToCurrentTile < waypointReachedDistance)
-                            {
-                                currentPathIndex++;
-                            }
-                        }
-                        else
-                        {
-                            // Current tile not in path - use closest waypoint with forward bias
-                            Vector3 currentWorldPos = transform.position;
-                            float closestDist = float.MaxValue;
-
-                            for (int i = 0; i < path.Count; i++)
-                            {
-                                Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
-                                float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
-
-                                // Prefer waypoints ahead by biasing distance for waypoints at later indices
-                                // This ensures we favor forward progress when distances are similar
-                                float biasedDist = dist - (i * 0.01f);
-
-                                if (biasedDist < closestDist)
-                                {
-                                    closestDist = biasedDist;
-                                    currentPathIndex = i;
-                                }
-                            }
-
-                            if (currentPathIndex < path.Count - 1 && closestDist < waypointReachedDistance)
-                            {
-                                currentPathIndex++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         #endregion
 
         #region Gizmos
 
-        private void OnDrawGizmos()
+        protected override void OnDrawGizmos()
         {
-            // Draw current path
+            base.OnDrawGizmos();
+
+            // Draw confusion segment
             if (path != null && path.Count > 0 && mazeGridBehaviour != null)
             {
-                Gizmos.color = Color.cyan;
-
-                for (int i = 0; i < path.Count - 1; i++)
-                {
-                    Vector3 start = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
-                    Vector3 end = mazeGridBehaviour.GridToWorld(path[i + 1].x, path[i + 1].y);
-                    Gizmos.DrawLine(start, end);
-                }
-
                 if (debugConfusionGizmos && confusionSegmentEndIndex > 0)
                 {
                     Gizmos.color = Color.magenta;
@@ -1658,14 +473,6 @@ namespace FaeMaze.Visitors
                         Vector3 end = mazeGridBehaviour.GridToWorld(path[i + 1].x, path[i + 1].y);
                         Gizmos.DrawLine(start, end);
                     }
-                }
-
-                // Draw current target
-                if (IsMovementState(state) && currentPathIndex < path.Count)
-                {
-                    Gizmos.color = Color.yellow;
-                    Vector3 target = mazeGridBehaviour.GridToWorld(path[currentPathIndex].x, path[currentPathIndex].y);
-                    Gizmos.DrawWireSphere(target, 0.3f);
                 }
             }
         }
