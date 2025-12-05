@@ -291,7 +291,9 @@ namespace FaeMaze.Visitors
                     isPathLoggingActive = true;
 
                     Vector2Int stalledGrid = Vector2Int.zero;
-                    bool resolvedGrid = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out int stalledX, out int stalledY);
+                    int stalledX = 0;
+                    int stalledY = 0;
+                    bool resolvedGrid = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out stalledX, out stalledY);
                     if (resolvedGrid)
                     {
                         stalledGrid = new Vector2Int(stalledX, stalledY);
