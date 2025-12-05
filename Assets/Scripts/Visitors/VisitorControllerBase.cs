@@ -289,7 +289,12 @@ namespace FaeMaze.Visitors
             bool gridResolved = false;
             bool remainedInSameCell = false;
 
-            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(previousPosition, out int prevX, out int prevY) && mazeGridBehaviour.WorldToGrid(currentPosition, out int curX, out int curY))
+            int prevX = 0;
+            int prevY = 0;
+            int curX = 0;
+            int curY = 0;
+
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(previousPosition, out prevX, out prevY) && mazeGridBehaviour.WorldToGrid(currentPosition, out curX, out curY))
             {
                 gridResolved = true;
                 remainedInSameCell = prevX == curX && prevY == curY;
