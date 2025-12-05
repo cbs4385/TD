@@ -138,7 +138,7 @@ namespace FaeMaze.Visitors
         protected int waypointsTraversedSinceSpawn;
         protected int lastLoggedWaypointIndex = -1;
         protected float stalledDuration;
-        protected bool isPathLoggingActive;
+        protected bool hasLoggedCurrentStall;
         protected bool hasMovedSignificantly;
         protected bool isCurrentlyStalled;
 
@@ -180,7 +180,7 @@ namespace FaeMaze.Visitors
             SetAnimatorDirection(IdleDirection);
 
             stalledDuration = 0f;
-            isPathLoggingActive = false;
+            hasLoggedCurrentStall = false;
             hasMovedSignificantly = false;
             isCurrentlyStalled = false;
         }
@@ -260,7 +260,7 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
-            return isPathLoggingActive && isCurrentlyStalled;
+            return false;
         }
 
         private void LogVisitorPath(string message)
@@ -321,9 +321,9 @@ namespace FaeMaze.Visitors
 
                 bool canReportStall = hasMovedSignificantly || stalledDuration >= StallLoggingDelaySeconds;
 
-                if (canReportStall && !isPathLoggingActive && stalledDuration >= StallLoggingDelaySeconds)
+                if (canReportStall && !hasLoggedCurrentStall && stalledDuration >= StallLoggingDelaySeconds)
                 {
-                    isPathLoggingActive = true;
+                    hasLoggedCurrentStall = true;
 
                     Vector2Int stalledGrid = Vector2Int.zero;
                     bool resolvedGrid = gridResolved;
@@ -337,7 +337,7 @@ namespace FaeMaze.Visitors
                         stalledGrid = new Vector2Int(stalledX, stalledY);
                     }
 
-                    LogVisitorPath($"stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.");
+                    Debug.Log($"[VisitorPath] {name} stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.", this);
                 }
             }
             else
@@ -346,7 +346,7 @@ namespace FaeMaze.Visitors
                 hasMovedSignificantly = true;
 
                 stalledDuration = 0f;
-                isPathLoggingActive = false;
+                hasLoggedCurrentStall = false;
             }
         }
 
@@ -429,7 +429,7 @@ namespace FaeMaze.Visitors
             hasLoggedPathIssue = false;
             lastLoggedWaypointIndex = -1;
             stalledDuration = 0f;
-            isPathLoggingActive = false;
+            hasLoggedCurrentStall = false;
             hasMovedSignificantly = false;
             isCurrentlyStalled = false;
 
@@ -467,7 +467,7 @@ namespace FaeMaze.Visitors
             hasLoggedPathIssue = false;
             lastLoggedWaypointIndex = -1;
             stalledDuration = 0f;
-            isPathLoggingActive = false;
+            hasLoggedCurrentStall = false;
             isCurrentlyStalled = false;
 
             RecalculatePath();
