@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
@@ -223,6 +224,29 @@ namespace FaeMaze.Visitors
 
         #region Helper Methods
 
+        private string FormatPath(List<Vector2Int> candidatePath)
+        {
+            if (candidatePath == null || candidatePath.Count == 0)
+            {
+                return "<empty>";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < candidatePath.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(" -> ");
+                }
+
+                sb.Append(i);
+                sb.Append(':');
+                sb.Append(candidatePath[i]);
+            }
+
+            return sb.ToString();
+        }
+
         protected bool IsMovementState(VisitorState visitorState)
         {
             return visitorState == VisitorState.Walking
@@ -339,24 +363,23 @@ namespace FaeMaze.Visitors
             }
 
             MazeGrid grid = mazeGridBehaviour.Grid;
+            List<string> issues = new List<string>();
 
             // Verify starting step from the visitor's resolved grid position
             Vector2Int firstWaypoint = candidatePath[0];
             int distanceFromCurrent = Mathf.Abs(currentPos.x - firstWaypoint.x) + Mathf.Abs(currentPos.y - firstWaypoint.y);
-            if (distanceFromCurrent > 1 && !hasLoggedPathIssue)
+            if (distanceFromCurrent > 1)
             {
-                Debug.LogWarning($"[VisitorPath] {name} {context}: starting waypoint {firstWaypoint} is not adjacent to current grid position {currentPos}. Path length: {candidatePath.Count}.", this);
-                hasLoggedPathIssue = true;
+                issues.Add($"start {firstWaypoint} is not adjacent to current grid position {currentPos}");
             }
 
             if (grid != null)
             {
                 var firstNode = grid.GetNode(firstWaypoint.x, firstWaypoint.y);
-                if ((firstNode == null || !firstNode.walkable) && !hasLoggedPathIssue)
+                if (firstNode == null || !firstNode.walkable)
                 {
                     string reason = firstNode == null ? "missing" : "not walkable";
-                    Debug.LogWarning($"[VisitorPath] {name} {context}: starting waypoint {firstWaypoint} is {reason}. Path length: {candidatePath.Count}.", this);
-                    hasLoggedPathIssue = true;
+                    issues.Add($"starting waypoint {firstWaypoint} is {reason}");
                 }
             }
 
@@ -367,22 +390,27 @@ namespace FaeMaze.Visitors
                 Vector2Int waypoint = candidatePath[i];
                 int manhattan = Mathf.Abs(previous.x - waypoint.x) + Mathf.Abs(previous.y - waypoint.y);
 
-                if (manhattan != 1 && !hasLoggedPathIssue)
+                if (manhattan != 1)
                 {
-                    Debug.LogWarning($"[VisitorPath] {name} {context}: non-adjacent step between {previous} (index {i - 1}) and {waypoint} (index {i}). Path length: {candidatePath.Count}.", this);
-                    hasLoggedPathIssue = true;
+                    issues.Add($"non-adjacent step between {previous} (index {i - 1}) and {waypoint} (index {i})");
                 }
 
                 if (grid != null)
                 {
                     MazeGrid.MazeNode node = grid.GetNode(waypoint.x, waypoint.y);
-                    if ((node == null || !node.walkable) && !hasLoggedPathIssue)
+                    if (node == null || !node.walkable)
                     {
                         string reason = node == null ? "missing" : "not walkable";
-                        Debug.LogWarning($"[VisitorPath] {name} {context}: waypoint {waypoint} at index {i} is {reason}. Path length: {candidatePath.Count}.", this);
-                        hasLoggedPathIssue = true;
+                        issues.Add($"waypoint {waypoint} at index {i} is {reason}");
                     }
                 }
+            }
+
+            if (issues.Count > 0)
+            {
+                string pathString = FormatPath(candidatePath);
+                Debug.LogWarning($"[VisitorPath] {name} {context}: detected {issues.Count} path issue(s). Current grid: {currentPos}. Path length: {candidatePath.Count}. Issues: {string.Join("; ", issues)}. Path: {pathString}.", this);
+                hasLoggedPathIssue = true;
             }
         }
 
@@ -500,13 +528,15 @@ namespace FaeMaze.Visitors
 
                 if (manhattan > 1 && !hasLoggedPathIssue)
                 {
-                    Debug.LogWarning($"[VisitorPath] {name} is trying to step from {currentGridPos} to non-adjacent waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}.", this);
+                    string pathString = FormatPath(path);
+                    Debug.LogWarning($"[VisitorPath] {name} is trying to step from {currentGridPos} to non-adjacent waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}. Path: {pathString}.", this);
                     hasLoggedPathIssue = true;
                 }
             }
             else if (!hasLoggedPathIssue)
             {
-                Debug.LogWarning($"[VisitorPath] {name} could not resolve its current grid position while targeting waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}.", this);
+                string pathString = FormatPath(path);
+                Debug.LogWarning($"[VisitorPath] {name} could not resolve its current grid position while targeting waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}. Path: {pathString}.", this);
                 hasLoggedPathIssue = true;
             }
 
