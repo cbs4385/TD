@@ -318,7 +318,7 @@ namespace FaeMaze.Visitors
             }
 
             path = newPath;
-            currentPathIndex = 0;
+            currentPathIndex = 1; // Start at index 1 since index 0 is current position
 
             confusionSegmentActive = true;
             confusionSegmentEndIndex = confusionPath.Count;

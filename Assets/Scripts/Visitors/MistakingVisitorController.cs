@@ -250,7 +250,7 @@ namespace FaeMaze.Visitors
             newPath.AddRange(misstepPath);
 
             path = newPath;
-            currentPathIndex = 0;
+            currentPathIndex = 1; // Start at index 1 since index 0 is current position
             isOnMisstepPath = true;
             misstepSegmentStartIndex = 1;
 
