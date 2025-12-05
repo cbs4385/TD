@@ -278,6 +278,18 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            // Validate confusion path adjacency
+            for (int i = 1; i < confusionPath.Count; i++)
+            {
+                int dist = Mathf.Abs(confusionPath[i].x - confusionPath[i - 1].x) + Mathf.Abs(confusionPath[i].y - confusionPath[i - 1].y);
+                if (dist != 1)
+                {
+                    Debug.LogError($"[VisitorPath] {name} BuildConfusionPath created non-adjacent tiles at indices {i - 1} and {i}: {confusionPath[i - 1]} to {confusionPath[i]} (distance {dist}). Falling back to RecalculatePath.", this);
+                    RecalculatePath();
+                    return;
+                }
+            }
+
             Vector2Int confusionEnd = confusionPath[confusionPath.Count - 1];
             List<MazeGrid.MazeNode> recoveryPathNodes = new List<MazeGrid.MazeNode>();
 
@@ -293,35 +305,62 @@ namespace FaeMaze.Visitors
                 recoveryPath.Add(new Vector2Int(node.x, node.y));
             }
 
+            // Validate recovery path adjacency
+            for (int i = 1; i < recoveryPath.Count; i++)
+            {
+                int dist = Mathf.Abs(recoveryPath[i].x - recoveryPath[i - 1].x) + Mathf.Abs(recoveryPath[i].y - recoveryPath[i - 1].y);
+                if (dist != 1)
+                {
+                    Debug.LogError($"[VisitorPath] {name} A* recovery path has non-adjacent tiles at indices {i - 1} and {i}: {recoveryPath[i - 1]} to {recoveryPath[i]} (distance {dist}). Falling back to RecalculatePath.", this);
+                    RecalculatePath();
+                    return;
+                }
+            }
+
             // Build the combined path: current position + confusion detour + recovery path
             List<Vector2Int> newPath = new List<Vector2Int>();
             newPath.Add(currentPos);
 
-            // Add all confusion path tiles
-            newPath.AddRange(confusionPath);
-
-            // Add recovery path tiles, ensuring adjacency is maintained
-            // Skip the first tile if it's the same as confusionEnd to avoid duplication
-            int recoveryStartIndex = (recoveryPath.Count > 0 && recoveryPath[0] == confusionEnd) ? 1 : 0;
-
-            for (int i = recoveryStartIndex; i < recoveryPath.Count; i++)
+            // Validate currentPos is adjacent to first confusion tile
+            if (confusionPath.Count > 0)
             {
-                Vector2Int recoveryTile = recoveryPath[i];
-                Vector2Int lastTileInPath = newPath[newPath.Count - 1];
-
-                // Check if this tile is adjacent to the last tile in the path
-                int manhattan = Mathf.Abs(lastTileInPath.x - recoveryTile.x) + Mathf.Abs(lastTileInPath.y - recoveryTile.y);
-
-                if (manhattan != 1)
+                int distToFirst = Mathf.Abs(currentPos.x - confusionPath[0].x) + Mathf.Abs(currentPos.y - confusionPath[0].y);
+                if (distToFirst != 1)
                 {
-                    // Non-adjacent - we've hit a gap in the recovery path due to skipped tiles
-                    // Stop adding tiles from recovery path to prevent non-adjacent jumps
-                    Debug.LogWarning($"[VisitorPath] {name} stopped adding recovery path at index {i} because tile {recoveryTile} is not adjacent to {lastTileInPath}. Recalculating path instead.", this);
+                    Debug.LogError($"[VisitorPath] {name} currentPos {currentPos} is not adjacent to first confusion tile {confusionPath[0]} (distance {distToFirst}). Falling back to RecalculatePath.", this);
                     RecalculatePath();
                     return;
                 }
+            }
 
-                newPath.Add(recoveryTile);
+            // Add all confusion path tiles
+            newPath.AddRange(confusionPath);
+
+            // Validate connection between confusion end and recovery start
+            if (recoveryPath.Count > 0 && recoveryPath[0] != confusionEnd)
+            {
+                int distToRecovery = Mathf.Abs(confusionEnd.x - recoveryPath[0].x) + Mathf.Abs(confusionEnd.y - recoveryPath[0].y);
+                Debug.LogError($"[VisitorPath] {name} confusionEnd {confusionEnd} does not match recoveryPath[0] {recoveryPath[0]} (distance {distToRecovery}). Falling back to RecalculatePath.", this);
+                RecalculatePath();
+                return;
+            }
+
+            // Add recovery path tiles, skipping the first one since it duplicates confusionEnd
+            for (int i = 1; i < recoveryPath.Count; i++)
+            {
+                newPath.Add(recoveryPath[i]);
+            }
+
+            // Final validation of complete path
+            for (int i = 1; i < newPath.Count; i++)
+            {
+                int dist = Mathf.Abs(newPath[i].x - newPath[i - 1].x) + Mathf.Abs(newPath[i].y - newPath[i - 1].y);
+                if (dist != 1)
+                {
+                    Debug.LogError($"[VisitorPath] {name} final combined path has non-adjacent tiles at indices {i - 1} and {i}: {newPath[i - 1]} to {newPath[i]} (distance {dist}). Falling back to RecalculatePath.", this);
+                    RecalculatePath();
+                    return;
+                }
             }
 
             path = newPath;
