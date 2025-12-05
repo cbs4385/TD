@@ -57,7 +57,6 @@ namespace FaeMaze.Systems
                     waveManagerObj.transform.SetParent(gameRoot.transform);
                     waveManagerObj.AddComponent<WaveManager>();
 
-                    Debug.Log($"Created WaveManager for {sceneName}");
                 }
 
                 // Auto-start first wave in ProceduralMazeScene
@@ -83,7 +82,6 @@ namespace FaeMaze.Systems
                                 if (prefab != null)
                                 {
                                     visitorPrefabField.SetValue(waveSpawner, prefab);
-                                    Debug.Log("Auto-assigned visitor prefab to WaveSpawner from Resources");
                                 }
                                 else
                                 {
@@ -109,11 +107,9 @@ namespace FaeMaze.Systems
                                 if (mistakingPrefab != null)
                                 {
                                     mistakingVisitorPrefabField.SetValue(waveSpawner, mistakingPrefab);
-                                    Debug.Log("Auto-assigned mistaking visitor prefab to WaveSpawner from Resources");
                                 }
                                 else
                                 {
-                                    Debug.Log("No mistaking visitor prefab found in Resources. WaveSpawner will spawn only regular visitors.");
                                 }
                             }
                         }

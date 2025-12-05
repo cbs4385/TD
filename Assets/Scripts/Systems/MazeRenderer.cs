@@ -117,8 +117,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"MazeRenderer: Rendered {renderedTiles} tiles from generated {width}x{height} grid to UI.");
-
         }
 
         private void CreateTileSprite(int gridX, int gridY, Color color)
