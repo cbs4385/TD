@@ -254,38 +254,37 @@ namespace FaeMaze.Systems
             // UIController is optional at startup
         }
 
-        private void EnsurePlacementUI()
+        /// <summary>
+        /// Helper method to find or instantiate a UI component and parent it under the UIController.
+        /// </summary>
+        /// <typeparam name="T">The component type to find or create</typeparam>
+        /// <param name="gameObjectName">The name to assign to the GameObject if it needs to be created</param>
+        /// <returns>The found or created component instance</returns>
+        private T EnsureUIComponent<T>(string gameObjectName) where T : Component
         {
-            var placementUI = FindFirstObjectByType<PlacementUIController>();
-            if (placementUI != null)
+            var component = FindFirstObjectByType<T>();
+            if (component != null)
             {
-                return;
+                return component;
             }
 
-            GameObject placementUiObject = new GameObject("PlacementUI");
+            GameObject uiObject = new GameObject(gameObjectName);
             if (uiController != null)
             {
-                placementUiObject.transform.SetParent(uiController.transform, false);
+                uiObject.transform.SetParent(uiController.transform, false);
             }
 
-            placementUI = placementUiObject.AddComponent<PlacementUIController>();
+            return uiObject.AddComponent<T>();
+        }
+
+        private void EnsurePlacementUI()
+        {
+            EnsureUIComponent<PlacementUIController>("PlacementUI");
         }
 
         private void EnsureResourcesUI()
         {
-            var resourcesUI = FindFirstObjectByType<FaeMaze.UI.PlayerResourcesUIController>();
-            if (resourcesUI != null)
-            {
-                return;
-            }
-
-            GameObject resourcesUiObject = new GameObject("PlayerResourcesUI");
-            if (uiController != null)
-            {
-                resourcesUiObject.transform.SetParent(uiController.transform, false);
-            }
-
-            resourcesUI = resourcesUiObject.AddComponent<FaeMaze.UI.PlayerResourcesUIController>();
+            EnsureUIComponent<FaeMaze.UI.PlayerResourcesUIController>("PlayerResourcesUI");
         }
 
         #endregion
