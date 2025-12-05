@@ -16,30 +16,16 @@ namespace FaeMaze.Editor
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // Create Camera
-            GameObject cameraObj = new GameObject("Main Camera");
-            Camera camera = cameraObj.AddComponent<Camera>();
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.1f, 0.1f, 0.15f, 1f);
-            camera.orthographic = false;
-            cameraObj.tag = "MainCamera";
-            cameraObj.AddComponent<AudioListener>();
+            GameObject cameraObj = SceneSetupUtilities.CreateCamera(new Color(0.1f, 0.1f, 0.15f, 1f));
 
             // Create EventSystem
-            GameObject eventSystemObj = new GameObject("EventSystem");
-            eventSystemObj.AddComponent<UnityEngine.EventSystems.EventSystem>();
-            eventSystemObj.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+            GameObject eventSystemObj = SceneSetupUtilities.CreateEventSystem();
 
             // Create Canvas
-            GameObject canvasObj = new GameObject("Canvas");
-            Canvas canvas = canvasObj.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            canvasObj.AddComponent<GraphicRaycaster>();
+            GameObject canvasObj = SceneSetupUtilities.CreateCanvas();
 
             // Create main panel
-            GameObject mainPanelObj = CreateUIObject("MainPanel", canvasObj.transform);
+            GameObject mainPanelObj = SceneSetupUtilities.CreateUIObject("MainPanel", canvasObj.transform);
             RectTransform mainRect = mainPanelObj.GetComponent<RectTransform>();
             mainRect.anchorMin = new Vector2(0.2f, 0.15f);
             mainRect.anchorMax = new Vector2(0.8f, 0.85f);
@@ -50,7 +36,7 @@ namespace FaeMaze.Editor
             mainBg.color = new Color(0.15f, 0.15f, 0.2f, 0.95f);
 
             // Title
-            GameObject titleObj = CreateText("Title", mainPanelObj.transform, "GAME OVER", 72, TextAlignmentOptions.Center);
+            GameObject titleObj = SceneSetupUtilities.CreateTextMeshPro("Title", mainPanelObj.transform, "GAME OVER", 72, TextAlignmentOptions.Center);
             RectTransform titleRect = titleObj.GetComponent<RectTransform>();
             titleRect.anchorMin = new Vector2(0, 0.85f);
             titleRect.anchorMax = new Vector2(1, 1);
@@ -59,7 +45,7 @@ namespace FaeMaze.Editor
             titleObj.GetComponent<TextMeshProUGUI>().color = new Color(1f, 0.3f, 0.3f, 1f);
 
             // Stats container
-            GameObject statsContainerObj = CreateUIObject("StatsContainer", mainPanelObj.transform);
+            GameObject statsContainerObj = SceneSetupUtilities.CreateUIObject("StatsContainer", mainPanelObj.transform);
             RectTransform statsRect = statsContainerObj.GetComponent<RectTransform>();
             statsRect.anchorMin = new Vector2(0.1f, 0.25f);
             statsRect.anchorMax = new Vector2(0.9f, 0.80f);
@@ -99,7 +85,7 @@ namespace FaeMaze.Editor
             propsElement.preferredHeight = 200;
 
             // Button container
-            GameObject buttonContainerObj = CreateUIObject("ButtonContainer", mainPanelObj.transform);
+            GameObject buttonContainerObj = SceneSetupUtilities.CreateUIObject("ButtonContainer", mainPanelObj.transform);
             RectTransform buttonRect = buttonContainerObj.GetComponent<RectTransform>();
             buttonRect.anchorMin = new Vector2(0.25f, 0.05f);
             buttonRect.anchorMax = new Vector2(0.75f, 0.18f);
@@ -107,7 +93,7 @@ namespace FaeMaze.Editor
             buttonRect.offsetMax = Vector2.zero;
 
             // Main Menu button
-            Button mainMenuButton = CreateButton("MainMenuButton", buttonContainerObj.transform, "Return to Main Menu", new Color(0.3f, 0.5f, 0.8f));
+            Button mainMenuButton = SceneSetupUtilities.CreateButtonWithTextMeshPro("MainMenuButton", buttonContainerObj.transform, "Return to Main Menu", new Color(0.3f, 0.5f, 0.8f), 32);
             RectTransform buttonRectTransform = mainMenuButton.GetComponent<RectTransform>();
             buttonRectTransform.anchorMin = Vector2.zero;
             buttonRectTransform.anchorMax = Vector2.one;
@@ -129,38 +115,14 @@ namespace FaeMaze.Editor
 
             // Save scene
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/GameOver.unity");
-
         }
 
-        private static GameObject CreateUIObject(string name, Transform parent)
-        {
-            GameObject obj = new GameObject(name);
-            obj.transform.SetParent(parent, false);
-            obj.AddComponent<RectTransform>();
-            return obj;
-        }
-
-        private static GameObject CreateText(string name, Transform parent, string text, int fontSize, TextAlignmentOptions alignment)
-        {
-            GameObject textObj = CreateUIObject(name, parent);
-            TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
-            tmp.text = text;
-            tmp.fontSize = fontSize;
-            tmp.alignment = alignment;
-            tmp.color = Color.white;
-
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font != null)
-            {
-                tmp.font = TMP_FontAsset.CreateFontAsset(font);
-            }
-
-            return textObj;
-        }
-
+        /// <summary>
+        /// Creates a stat row with text. This is specific to the GameOver scene UI structure.
+        /// </summary>
         private static GameObject CreateStatRow(Transform parent, string text)
         {
-            GameObject statObj = CreateText("StatRow", parent, text, 36, TextAlignmentOptions.Center);
+            GameObject statObj = SceneSetupUtilities.CreateTextMeshPro("StatRow", parent, text, 36, TextAlignmentOptions.Center);
 
             RectTransform statRect = statObj.GetComponent<RectTransform>();
             statRect.sizeDelta = new Vector2(0, 60);
@@ -170,24 +132,6 @@ namespace FaeMaze.Editor
             statElement.preferredHeight = 60;
 
             return statObj;
-        }
-
-        private static Button CreateButton(string name, Transform parent, string text, Color color)
-        {
-            GameObject buttonObj = CreateUIObject(name, parent);
-            Image buttonImage = buttonObj.AddComponent<Image>();
-            buttonImage.color = color;
-
-            Button button = buttonObj.AddComponent<Button>();
-
-            GameObject textObj = CreateText("Text", buttonObj.transform, text, 32, TextAlignmentOptions.Center);
-            RectTransform textRect = textObj.GetComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
-
-            return button;
         }
     }
 }
