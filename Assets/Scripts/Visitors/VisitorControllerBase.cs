@@ -263,6 +263,66 @@ namespace FaeMaze.Visitors
             return false;
         }
 
+        /// <summary>
+        /// Emits a warning describing obvious path integrity issues at the current stall location.
+        /// This bypasses the normal logging gate so stalled visitors always surface invalid routes.
+        /// </summary>
+        private void LogStallPathIssues(Vector2Int currentGrid)
+        {
+            if (path == null || path.Count == 0 || mazeGridBehaviour == null)
+            {
+                return;
+            }
+
+            MazeGrid grid = mazeGridBehaviour.Grid;
+            List<string> issues = new List<string>();
+
+            int targetIndex = Mathf.Clamp(currentPathIndex, 0, path.Count - 1);
+            Vector2Int target = path[targetIndex];
+            int manhattanToTarget = Mathf.Abs(currentGrid.x - target.x) + Mathf.Abs(currentGrid.y - target.y);
+            if (manhattanToTarget > 1)
+            {
+                issues.Add($"stalling away from next waypoint {target} (index {targetIndex})");
+            }
+
+            if (grid != null)
+            {
+                MazeGrid.MazeNode targetNode = grid.GetNode(target.x, target.y);
+                if (targetNode == null || !targetNode.walkable)
+                {
+                    string reason = targetNode == null ? "missing" : "not walkable";
+                    issues.Add($"next waypoint {target} is {reason}");
+                }
+            }
+
+            for (int i = targetIndex + 1; i < path.Count; i++)
+            {
+                Vector2Int prev = path[i - 1];
+                Vector2Int next = path[i];
+                int manhattan = Mathf.Abs(prev.x - next.x) + Mathf.Abs(prev.y - next.y);
+                if (manhattan != 1)
+                {
+                    issues.Add($"non-adjacent hop between {prev} (index {i - 1}) and {next} (index {i})");
+                }
+
+                if (grid != null)
+                {
+                    MazeGrid.MazeNode node = grid.GetNode(next.x, next.y);
+                    if (node == null || !node.walkable)
+                    {
+                        string reason = node == null ? "missing" : "not walkable";
+                        issues.Add($"waypoint {next} at index {i} is {reason}");
+                    }
+                }
+            }
+
+            if (issues.Count > 0)
+            {
+                hasLoggedPathIssue = true;
+                Debug.LogWarning($"[VisitorPath] {name} stalled at {currentGrid} with invalid path: {string.Join("; ", issues)}. Path length: {path.Count}. Path: {FormatPath(path)}.", this);
+            }
+        }
+
         private void LogVisitorPath(string message)
         {
             if (ShouldLogVisitorPath())
@@ -338,6 +398,11 @@ namespace FaeMaze.Visitors
                     }
 
                     Debug.Log($"[VisitorPath] {name} stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.", this);
+
+                    if (resolvedGrid)
+                    {
+                        LogStallPathIssues(stalledGrid);
+                    }
                 }
             }
             else
