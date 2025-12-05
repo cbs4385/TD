@@ -312,7 +312,7 @@ namespace FaeMaze.Visitors
                 hasMovedSignificantly = true;
             }
 
-            bool isStationary = remainedInSameCell || deltaSqr <= MovementEpsilonSqr;
+            bool isStationary = deltaSqr <= MovementEpsilonSqr;
 
             if (isStationary)
             {
