@@ -129,6 +129,7 @@ namespace FaeMaze.Visitors
         protected const string DirectionParameter = "Direction";
         protected const int IdleDirection = 0;
         protected const float MovementEpsilonSqr = 0.0001f;
+        protected const float StallLoggingDelaySeconds = 0.35f;
 
         // Cached direction to prevent animation flickering when movement delta is small
         protected int lastDirection = IdleDirection;
@@ -136,6 +137,8 @@ namespace FaeMaze.Visitors
 
         protected int waypointsTraversedSinceSpawn;
         protected int lastLoggedWaypointIndex = -1;
+        protected float stalledDuration;
+        protected bool isPathLoggingActive;
 
         #endregion
 
@@ -173,6 +176,9 @@ namespace FaeMaze.Visitors
             SetupSpriteRenderer();
             SetupPhysics();
             SetAnimatorDirection(IdleDirection);
+
+            stalledDuration = 0f;
+            isPathLoggingActive = false;
         }
 
         protected virtual void Update()
@@ -248,6 +254,64 @@ namespace FaeMaze.Visitors
             return sb.ToString();
         }
 
+        private bool ShouldLogVisitorPath()
+        {
+            return isPathLoggingActive;
+        }
+
+        private void LogVisitorPath(string message)
+        {
+            if (ShouldLogVisitorPath())
+            {
+                Debug.Log($"[VisitorPath] {name} {message}", this);
+            }
+        }
+
+        private bool LogVisitorPathWarning(string message)
+        {
+            if (ShouldLogVisitorPath())
+            {
+                Debug.LogWarning($"[VisitorPath] {name} {message}", this);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void UpdatePathLoggingOnMovement(Vector3 previousPosition, Vector3 currentPosition)
+        {
+            float deltaSqr = (currentPosition - previousPosition).sqrMagnitude;
+
+            if (deltaSqr <= MovementEpsilonSqr)
+            {
+                stalledDuration += Time.deltaTime;
+
+                if (!isPathLoggingActive && stalledDuration >= StallLoggingDelaySeconds)
+                {
+                    isPathLoggingActive = true;
+
+                    Vector2Int stalledGrid = Vector2Int.zero;
+                    bool resolvedGrid = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out int stalledX, out int stalledY);
+                    if (resolvedGrid)
+                    {
+                        stalledGrid = new Vector2Int(stalledX, stalledY);
+                    }
+
+                    LogVisitorPath($"stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.");
+                }
+            }
+            else
+            {
+                if (isPathLoggingActive)
+                {
+                    LogVisitorPath($"resumed movement after stalling for {stalledDuration:F2}s.");
+                }
+
+                stalledDuration = 0f;
+                isPathLoggingActive = false;
+            }
+        }
+
         protected bool IsMovementState(VisitorState visitorState)
         {
             return visitorState == VisitorState.Walking
@@ -316,13 +380,18 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            Debug.Log($"[VisitorPath] {name} SetPath(List<Vector2Int>) with {gridPath.Count} waypoint(s). Provided path: {FormatPath(gridPath)}. Current world position: {transform.position}.", this);
+            if (ShouldLogVisitorPath())
+            {
+                LogVisitorPath($"SetPath(List<Vector2Int>) with {gridPath.Count} waypoint(s). Provided path: {FormatPath(gridPath)}. Current world position: {transform.position}.");
+            }
 
             originalDestination = gridPath[gridPath.Count - 1];
             waypointsTraversedSinceSpawn = 0;
             ResetDetourState();
             hasLoggedPathIssue = false;
             lastLoggedWaypointIndex = -1;
+            stalledDuration = 0f;
+            isPathLoggingActive = false;
 
             RecalculatePath();
         }
@@ -348,12 +417,17 @@ namespace FaeMaze.Visitors
                 originalDestination = gridPath[gridPath.Count - 1];
             }
 
-            Debug.Log($"[VisitorPath] {name} SetPath(List<MazeNode>) with {gridPath.Count} waypoint(s). Provided path: {FormatPath(gridPath)}. Current world position: {transform.position}.", this);
+            if (ShouldLogVisitorPath())
+            {
+                LogVisitorPath($"SetPath(List<MazeNode>) with {gridPath.Count} waypoint(s). Provided path: {FormatPath(gridPath)}. Current world position: {transform.position}.");
+            }
 
             waypointsTraversedSinceSpawn = 0;
             ResetDetourState();
             hasLoggedPathIssue = false;
             lastLoggedWaypointIndex = -1;
+            stalledDuration = 0f;
+            isPathLoggingActive = false;
 
             RecalculatePath();
         }
@@ -416,8 +490,10 @@ namespace FaeMaze.Visitors
             if (issues.Count > 0)
             {
                 string pathString = FormatPath(candidatePath);
-                Debug.LogWarning($"[VisitorPath] {name} {context}: detected {issues.Count} path issue(s). Current grid: {currentPos}. Path length: {candidatePath.Count}. Issues: {string.Join("; ", issues)}. Path: {pathString}.", this);
-                hasLoggedPathIssue = true;
+                if (LogVisitorPathWarning($"{context}: detected {issues.Count} path issue(s). Current grid: {currentPos}. Path length: {candidatePath.Count}. Issues: {string.Join("; ", issues)}. Path: {pathString}."))
+                {
+                    hasLoggedPathIssue = true;
+                }
             }
         }
 
@@ -508,6 +584,8 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            Vector3 previousPosition = transform.position;
+
             // Bounds check for currentPathIndex
             if (currentPathIndex >= path.Count)
             {
@@ -529,7 +607,7 @@ namespace FaeMaze.Visitors
 
             if (currentPathIndex != lastLoggedWaypointIndex)
             {
-                Debug.Log($"[VisitorPath] {name} moving toward waypoint {targetGridPos} (index {currentPathIndex + 1}/{path.Count}). Current grid index: {currentPathIndex}. Path: {FormatPath(path)}.", this);
+                LogVisitorPath($"moving toward waypoint {targetGridPos} (index {currentPathIndex + 1}/{path.Count}). Current grid index: {currentPathIndex}. Path: {FormatPath(path)}.");
                 lastLoggedWaypointIndex = currentPathIndex;
             }
 
@@ -542,15 +620,19 @@ namespace FaeMaze.Visitors
                 if (manhattan > 1 && !hasLoggedPathIssue)
                 {
                     string pathString = FormatPath(path);
-                    Debug.LogWarning($"[VisitorPath] {name} is trying to step from {currentGridPos} to non-adjacent waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}. Path: {pathString}.", this);
-                    hasLoggedPathIssue = true;
+                    if (LogVisitorPathWarning($"is trying to step from {currentGridPos} to non-adjacent waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}. Path: {pathString}."))
+                    {
+                        hasLoggedPathIssue = true;
+                    }
                 }
             }
             else if (!hasLoggedPathIssue)
             {
                 string pathString = FormatPath(path);
-                Debug.LogWarning($"[VisitorPath] {name} could not resolve its current grid position while targeting waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}. Path: {pathString}.", this);
-                hasLoggedPathIssue = true;
+                if (LogVisitorPathWarning($"could not resolve its current grid position while targeting waypoint {targetGridPos} at index {currentPathIndex}. Path length: {path.Count}. Path: {pathString}."))
+                {
+                    hasLoggedPathIssue = true;
+                }
             }
 
             // Move toward target (apply speed multiplier adjusted by tile cost)
@@ -564,9 +646,13 @@ namespace FaeMaze.Visitors
                     if (!hasLoggedPathIssue)
                     {
                         string reason = targetNode == null ? "missing" : "not walkable";
-                        Debug.LogWarning($"[VisitorPath] {name} cannot move to waypoint {targetGridPos} at index {currentPathIndex} because node is {reason}. Path length: {path.Count}.", this);
-                        hasLoggedPathIssue = true;
+                        if (LogVisitorPathWarning($"cannot move to waypoint {targetGridPos} at index {currentPathIndex} because node is {reason}. Path length: {path.Count}."))
+                        {
+                            hasLoggedPathIssue = true;
+                        }
                     }
+
+                    UpdatePathLoggingOnMovement(previousPosition, transform.position);
                     return; // Non-walkable nodes remain blocked
                 }
 
@@ -596,6 +682,8 @@ namespace FaeMaze.Visitors
                 transform.position = newPosition;
             }
 
+            UpdatePathLoggingOnMovement(previousPosition, transform.position);
+
             // Check if we've reached the waypoint
             float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
             if (distanceToTarget < waypointReachedDistance)
@@ -608,7 +696,7 @@ namespace FaeMaze.Visitors
         {
             Vector2Int currentWaypoint = path[currentPathIndex];
 
-            Debug.Log($"[VisitorPath] {name} reached waypoint {currentWaypoint} (index {currentPathIndex + 1}/{path.Count}). Waypoints traversed since spawn: {waypointsTraversedSinceSpawn}.", this);
+            LogVisitorPath($"reached waypoint {currentWaypoint} (index {currentPathIndex + 1}/{path.Count}). Waypoints traversed since spawn: {waypointsTraversedSinceSpawn}.");
 
             // Add to recently reached tiles queue (maintain last 10)
             if (recentlyReachedTiles != null)
@@ -688,7 +776,7 @@ namespace FaeMaze.Visitors
 
         protected virtual void OnPathCompleted()
         {
-            Debug.Log($"[VisitorPath] {name} completed path at world {transform.position}. Waypoints traversed: {waypointsTraversedSinceSpawn}. Path length: {path?.Count ?? 0}.", this);
+            LogVisitorPath($"completed path at world {transform.position}. Waypoints traversed: {waypointsTraversedSinceSpawn}. Path length: {path?.Count ?? 0}.");
 
             // Clear fascination state
             isFascinated = false;
@@ -1083,7 +1171,7 @@ namespace FaeMaze.Visitors
 
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
-                Debug.LogWarning($"[VisitorPath] {name} could not resolve current grid while recalculating path to {originalDestination}.", this);
+                LogVisitorPathWarning($"could not resolve current grid while recalculating path to {originalDestination}.");
                 isCalculatingPath = false;
                 return;
             }
@@ -1091,14 +1179,16 @@ namespace FaeMaze.Visitors
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
             List<MazeGrid.MazeNode> newPathNodes = new List<MazeGrid.MazeNode>();
 
-            Debug.Log($"[VisitorPath] {name} recalculating path from {currentPos} to {originalDestination}.", this);
+            LogVisitorPath($"recalculating path from {currentPos} to {originalDestination}.");
 
             if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
             {
                 if (!hasLoggedPathIssue)
                 {
-                    Debug.LogWarning($"[VisitorPath] {name} could not find path from {currentPos} to destination {originalDestination}.", this);
-                    hasLoggedPathIssue = true;
+                    if (LogVisitorPathWarning($"could not find path from {currentPos} to destination {originalDestination}."))
+                    {
+                        hasLoggedPathIssue = true;
+                    }
                 }
                 isCalculatingPath = false;
                 return;
@@ -1110,7 +1200,7 @@ namespace FaeMaze.Visitors
                 newPath.Add(new Vector2Int(node.x, node.y));
             }
 
-            Debug.Log($"[VisitorPath] {name} recalculated path length {newPath.Count}. Path: {FormatPath(newPath)}.", this);
+            LogVisitorPath($"recalculated path length {newPath.Count}. Path: {FormatPath(newPath)}.");
 
             path = newPath;
             recentlyReachedTiles.Clear();
