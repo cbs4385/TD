@@ -286,9 +286,27 @@ namespace FaeMaze.Visitors
         {
             float deltaSqr = (currentPosition - previousPosition).sqrMagnitude;
 
-            if (deltaSqr <= MovementEpsilonSqr)
+            bool gridResolved = false;
+            bool remainedInSameCell = false;
+
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(previousPosition, out int prevX, out int prevY) && mazeGridBehaviour.WorldToGrid(currentPosition, out int curX, out int curY))
+            {
+                gridResolved = true;
+                remainedInSameCell = prevX == curX && prevY == curY;
+
+                // Consider reaching a new cell as significant movement even if the delta is tiny (e.g., pathfinding nudges)
+                if (!remainedInSameCell)
+                {
+                    hasMovedSignificantly = true;
+                }
+            }
+
+            bool isStationary = remainedInSameCell || deltaSqr <= MovementEpsilonSqr;
+
+            if (isStationary)
             {
                 isCurrentlyStalled = true;
+
                 if (hasMovedSignificantly)
                 {
                     stalledDuration += Time.deltaTime;
@@ -298,11 +316,14 @@ namespace FaeMaze.Visitors
                         isPathLoggingActive = true;
 
                         Vector2Int stalledGrid = Vector2Int.zero;
-                        int stalledX = 0;
-                        int stalledY = 0;
-                        bool resolvedGrid = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out stalledX, out stalledY);
+                        bool resolvedGrid = gridResolved;
                         if (resolvedGrid)
                         {
+                            stalledGrid = new Vector2Int(remainedInSameCell ? prevX : curX, remainedInSameCell ? prevY : curY);
+                        }
+                        else if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(currentPosition, out int stalledX, out int stalledY))
+                        {
+                            resolvedGrid = true;
                             stalledGrid = new Vector2Int(stalledX, stalledY);
                         }
 
