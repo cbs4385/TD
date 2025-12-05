@@ -121,10 +121,16 @@ namespace FaeMaze.Systems
     }
 
     /// <summary>
-    /// Generates a forest-themed maze with variable-width paths,
-    /// undergrowth edges, tree/bramble walls, and water features.
+    /// Generates a forest-themed maze with variable-width corridors using DFS.
+    ///
+    /// This is an alternative implementation to ForestMaze.ForestMazeGenerator that creates
+    /// mazes with variable-width corridors (2-5 tiles) instead of uniform 1-tile passages.
+    /// It uses depth-first search for maze carving and produces more organic-looking paths.
+    ///
+    /// NOTE: Currently unused. The active generator is ForestMaze.ForestMazeGenerator (Kruskal-based).
+    /// This implementation is preserved for potential future use with variable-width corridor requirements.
     /// </summary>
-    public class ForestMazeGenerator
+    public class VariableWidthMazeGenerator
     {
         private ForestMazeConfig config;
         private System.Random rng;
@@ -573,17 +579,11 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Fisher-Yates shuffle for a list.
+        /// Fisher-Yates shuffle for a list using shared utility.
         /// </summary>
         private void Shuffle<T>(List<T> list)
         {
-            for (int i = list.Count - 1; i > 0; i--)
-            {
-                int j = rng.Next(0, i + 1);
-                T temp = list[i];
-                list[i] = list[j];
-                list[j] = temp;
-            }
+            ForestMaze.MazeGeneratorUtilities.Shuffle(list, rng);
         }
 
         /// <summary>

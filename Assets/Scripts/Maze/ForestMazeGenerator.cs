@@ -5,16 +5,20 @@ using System.Text;
 namespace ForestMaze
 {
     /// <summary>
-    /// Generates a forest maze using Kruskal's algorithm.
-    /// 
+    /// Generates a forest maze using Kruskal's algorithm with uniform 1-tile wide passages.
+    ///
+    /// This generator creates a perfect maze (single path between any two points) using
+    /// Kruskal's minimum spanning tree algorithm, then adds decorative terrain features.
+    ///
     /// Tiles:
     ///   Trees/brambles: '#'
     ///   Undergrowth   : ';'
     ///   Water         : '~'
     ///   Center (heart): 'H'
     ///   Path          : '.'
-    /// 
+    ///
     /// The returned maze string is height lines of width characters each.
+    /// For variable-width corridors, see VariableWidthMazeGenerator.
     /// </summary>
     public static class ForestMazeGenerator
     {
@@ -58,8 +62,8 @@ namespace ForestMaze
             if (cellWidth <= 0 || cellHeight <= 0)
                 throw new InvalidOperationException("Maze dimensions too small for cell-based generation.");
 
-            var dsu = new DisjointSet(cellWidth * cellHeight);
-            var edges = new List<Edge>();
+            var dsu = new MazeGeneratorUtilities.DisjointSet(cellWidth * cellHeight);
+            var edges = new List<MazeGeneratorUtilities.Edge>();
 
             // Initialize cells (as path) and build edge list for Kruskal.
             for (int cy = 0; cy < cellHeight; cy++)
@@ -81,20 +85,20 @@ namespace ForestMaze
                     if (cx < cellWidth - 1)
                     {
                         int neighborId = cellId + 1;
-                        edges.Add(new Edge(cellId, neighborId));
+                        edges.Add(new MazeGeneratorUtilities.Edge(cellId, neighborId));
                     }
 
                     // Vertical edge to cell (cx, cy + 1).
                     if (cy < cellHeight - 1)
                     {
                         int neighborId = cellId + cellWidth;
-                        edges.Add(new Edge(cellId, neighborId));
+                        edges.Add(new MazeGeneratorUtilities.Edge(cellId, neighborId));
                     }
                 }
             }
 
             // Shuffle edges for random Kruskal.
-            Shuffle(edges, random);
+            MazeGeneratorUtilities.Shuffle(edges, random);
 
             // Kruskal's algorithm: carve passages between cells.
             foreach (var edge in edges)
@@ -165,11 +169,6 @@ namespace ForestMaze
             }
         }
 
-        private static bool IsPathLike(char c)
-        {
-            return c == '.' || c == 'H';
-        }
-
         #region Center / Entrances / Decoration
 
         private static void MarkCenter(char[,] grid, int width, int height, int cellWidth, int cellHeight)
@@ -225,28 +224,28 @@ namespace ForestMaze
             // Top edge (y = 0) – look one tile inside at y = 1.
             for (int x = minX; x <= maxX; x++)
             {
-                if (IsPathLike(grid[1, x]))
+                if (MazeGeneratorUtilities.IsPathLike(grid[1, x]))
                     topCandidates.Add((x, 0));
             }
 
             // Bottom edge (y = height - 1) – look one tile inside at y = height - 2.
             for (int x = minX; x <= maxX; x++)
             {
-                if (IsPathLike(grid[height - 2, x]))
+                if (MazeGeneratorUtilities.IsPathLike(grid[height - 2, x]))
                     bottomCandidates.Add((x, height - 1));
             }
 
             // Left edge (x = 0) – look one tile inside at x = 1.
             for (int y = minY; y <= maxY; y++)
             {
-                if (IsPathLike(grid[y, 1]))
+                if (MazeGeneratorUtilities.IsPathLike(grid[y, 1]))
                     leftCandidates.Add((0, y));
             }
 
             // Right edge (x = width - 1) – look one tile inside at x = width - 2.
             for (int y = minY; y <= maxY; y++)
             {
-                if (IsPathLike(grid[y, width - 2]))
+                if (MazeGeneratorUtilities.IsPathLike(grid[y, width - 2]))
                     rightCandidates.Add((width - 1, y));
             }
 
@@ -313,7 +312,7 @@ namespace ForestMaze
             else
             {
                 // Original behavior for single entrance
-                Shuffle(edgeGroups, random);
+                MazeGeneratorUtilities.Shuffle(edgeGroups, random);
                 for (int i = 0; i < Math.Min(openings, edgeGroups.Count); i++)
                 {
                     var group = edgeGroups[i];
@@ -401,88 +400,6 @@ namespace ForestMaze
             }
 
             return sb.ToString();
-        }
-
-        #endregion
-
-        #region Helpers (Kruskal support)
-
-        private struct Edge
-        {
-            public int A;
-            public int B;
-
-            public Edge(int a, int b)
-            {
-                A = a;
-                B = b;
-            }
-        }
-
-        private sealed class DisjointSet
-        {
-            private readonly int[] _parent;
-            private readonly byte[] _rank;
-
-            public DisjointSet(int count)
-            {
-                _parent = new int[count];
-                _rank = new byte[count];
-
-                for (int i = 0; i < count; i++)
-                {
-                    _parent[i] = i;
-                    _rank[i] = 0;
-                }
-            }
-
-            private int Find(int x)
-            {
-                if (_parent[x] != x)
-                {
-                    _parent[x] = Find(_parent[x]);
-                }
-
-                return _parent[x];
-            }
-
-            /// <summary>
-            /// Union sets containing x and y. Returns true if a merge happened.
-            /// </summary>
-            public bool Union(int x, int y)
-            {
-                int rx = Find(x);
-                int ry = Find(y);
-
-                if (rx == ry) return false;
-
-                if (_rank[rx] < _rank[ry])
-                {
-                    _parent[rx] = ry;
-                }
-                else if (_rank[rx] > _rank[ry])
-                {
-                    _parent[ry] = rx;
-                }
-                else
-                {
-                    _parent[ry] = rx;
-                    _rank[rx]++;
-                }
-
-                return true;
-            }
-        }
-
-        private static void Shuffle<T>(IList<T> list, Random random)
-        {
-            for (int i = list.Count - 1; i > 0; i--)
-            {
-                int j = random.Next(i + 1);
-                T tmp = list[i];
-                list[i] = list[j];
-                list[j] = tmp;
-            }
         }
 
         #endregion
