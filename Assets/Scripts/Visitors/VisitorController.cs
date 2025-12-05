@@ -14,6 +14,15 @@ namespace FaeMaze.Visitors
     /// </summary>
     public class VisitorController : VisitorControllerBase
     {
+        #region Static Registry
+
+        private static readonly HashSet<VisitorController> _activeVisitors = new HashSet<VisitorController>();
+
+        /// <summary>Gets all active visitors in the scene</summary>
+        public static IReadOnlyCollection<VisitorController> All => _activeVisitors;
+
+        #endregion
+
         #region Enums
 
         /// <summary>
@@ -366,6 +375,16 @@ namespace FaeMaze.Visitors
                 new Vector2(0.5f, 0.5f),
                 proceduralPixelsPerUnit
             );
+        }
+
+        private void OnEnable()
+        {
+            _activeVisitors.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            _activeVisitors.Remove(this);
         }
 
         private void Update()

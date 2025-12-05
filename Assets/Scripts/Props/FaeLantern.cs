@@ -202,6 +202,7 @@ namespace FaeMaze.Props
         /// <summary>
         /// Updates the animator direction to point toward the closest unfascinated visitor in range.
         /// Sets direction to idle (0) if no unfascinated visitors are in the influence area.
+        /// Uses cached visitor registry for efficient lookup.
         /// </summary>
         private void UpdateDirectionToClosestVisitor()
         {
@@ -210,14 +211,11 @@ namespace FaeMaze.Props
                 return;
             }
 
-            // Find all visitors in the scene
-            FaeMaze.Visitors.VisitorController[] allVisitors = FindObjectsByType<FaeMaze.Visitors.VisitorController>(FindObjectsSortMode.None);
-
             FaeMaze.Visitors.VisitorController closestVisitor = null;
             float closestDistance = float.MaxValue;
 
-            // Find the closest unfascinated visitor in the influence area
-            foreach (var visitor in allVisitors)
+            // Iterate through cached visitor registry instead of FindObjectsByType
+            foreach (var visitor in FaeMaze.Visitors.VisitorController.All)
             {
                 if (visitor == null)
                     continue;
