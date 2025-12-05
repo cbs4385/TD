@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -434,6 +435,8 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            Debug.Log($"[WaveSpawner] Built path for visitor from {startPos} (marker {startId}) to {destPos} (marker {destId}). Length {pathNodes.Count}. Path: {FormatPath(pathNodes)}.");
+
             // Get world position for spawn
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(startPos.x, startPos.y);
 
@@ -495,6 +498,34 @@ namespace FaeMaze.Systems
             activeVisitors.Add(visitorObject);
 
             totalVisitorsSpawned++;
+        }
+
+        private string FormatPath(List<MazeGrid.MazeNode> pathNodes)
+        {
+            if (pathNodes == null || pathNodes.Count == 0)
+            {
+                return "<empty>";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < pathNodes.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append(" -> ");
+                }
+
+                var node = pathNodes[i];
+                sb.Append(i);
+                sb.Append(':');
+                sb.Append('(');
+                sb.Append(node.x);
+                sb.Append(',');
+                sb.Append(node.y);
+                sb.Append(')');
+            }
+
+            return sb.ToString();
         }
 
         /// <summary>

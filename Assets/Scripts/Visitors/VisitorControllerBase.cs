@@ -135,6 +135,7 @@ namespace FaeMaze.Visitors
         protected int currentAnimatorDirection = IdleDirection;
 
         protected int waypointsTraversedSinceSpawn;
+        protected int lastLoggedWaypointIndex = -1;
 
         #endregion
 
@@ -315,10 +316,13 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            Debug.Log($"[VisitorPath] {name} SetPath(List<Vector2Int>) with {gridPath.Count} waypoint(s). Provided path: {FormatPath(gridPath)}. Current world position: {transform.position}.", this);
+
             originalDestination = gridPath[gridPath.Count - 1];
             waypointsTraversedSinceSpawn = 0;
             ResetDetourState();
             hasLoggedPathIssue = false;
+            lastLoggedWaypointIndex = -1;
 
             RecalculatePath();
         }
@@ -344,9 +348,12 @@ namespace FaeMaze.Visitors
                 originalDestination = gridPath[gridPath.Count - 1];
             }
 
+            Debug.Log($"[VisitorPath] {name} SetPath(List<MazeNode>) with {gridPath.Count} waypoint(s). Provided path: {FormatPath(gridPath)}. Current world position: {transform.position}.", this);
+
             waypointsTraversedSinceSpawn = 0;
             ResetDetourState();
             hasLoggedPathIssue = false;
+            lastLoggedWaypointIndex = -1;
 
             RecalculatePath();
         }
@@ -520,6 +527,12 @@ namespace FaeMaze.Visitors
             Vector2Int targetGridPos = path[currentPathIndex];
             Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
 
+            if (currentPathIndex != lastLoggedWaypointIndex)
+            {
+                Debug.Log($"[VisitorPath] {name} moving toward waypoint {targetGridPos} (index {currentPathIndex + 1}/{path.Count}). Current grid index: {currentPathIndex}. Path: {FormatPath(path)}.", this);
+                lastLoggedWaypointIndex = currentPathIndex;
+            }
+
             // Validate that the next tile is reachable from the current grid position
             if (mazeGridBehaviour.WorldToGrid(transform.position, out int currentGridX, out int currentGridY))
             {
@@ -594,6 +607,8 @@ namespace FaeMaze.Visitors
         protected virtual void OnWaypointReached()
         {
             Vector2Int currentWaypoint = path[currentPathIndex];
+
+            Debug.Log($"[VisitorPath] {name} reached waypoint {currentWaypoint} (index {currentPathIndex + 1}/{path.Count}). Waypoints traversed since spawn: {waypointsTraversedSinceSpawn}.", this);
 
             // Add to recently reached tiles queue (maintain last 10)
             if (recentlyReachedTiles != null)
@@ -673,6 +688,8 @@ namespace FaeMaze.Visitors
 
         protected virtual void OnPathCompleted()
         {
+            Debug.Log($"[VisitorPath] {name} completed path at world {transform.position}. Waypoints traversed: {waypointsTraversedSinceSpawn}. Path length: {path?.Count ?? 0}.", this);
+
             // Clear fascination state
             isFascinated = false;
             hasReachedLantern = false;
@@ -1066,12 +1083,15 @@ namespace FaeMaze.Visitors
 
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
+                Debug.LogWarning($"[VisitorPath] {name} could not resolve current grid while recalculating path to {originalDestination}.", this);
                 isCalculatingPath = false;
                 return;
             }
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
             List<MazeGrid.MazeNode> newPathNodes = new List<MazeGrid.MazeNode>();
+
+            Debug.Log($"[VisitorPath] {name} recalculating path from {currentPos} to {originalDestination}.", this);
 
             if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
             {
@@ -1090,6 +1110,8 @@ namespace FaeMaze.Visitors
                 newPath.Add(new Vector2Int(node.x, node.y));
             }
 
+            Debug.Log($"[VisitorPath] {name} recalculated path length {newPath.Count}. Path: {FormatPath(newPath)}.", this);
+
             path = newPath;
             recentlyReachedTiles.Clear();
             if (path.Count > 0)
@@ -1099,6 +1121,7 @@ namespace FaeMaze.Visitors
 
             currentPathIndex = path.Count > 1 ? 1 : 0;
             hasLoggedPathIssue = false;
+            lastLoggedWaypointIndex = -1;
 
             LogPathIntegrityIssues(path, currentPos, "recalculated path");
 
