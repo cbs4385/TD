@@ -102,6 +102,15 @@ namespace FaeMaze.Visitors
         [Tooltip("Default duration for Frightened state (seconds)")]
         protected float frightenedDuration = 3f;
 
+        [Header("Lost Mode Settings")]
+        [SerializeField]
+        [Tooltip("Minimum detour path length for Lost state")]
+        protected int minLostDistance = 10;
+
+        [SerializeField]
+        [Tooltip("Maximum detour path length for Lost state")]
+        protected int maxLostDistance = 20;
+
         #endregion
 
         #region Protected Fields
@@ -164,6 +173,10 @@ namespace FaeMaze.Visitors
         protected bool isMesmerized;
         protected bool isLost;
         protected bool isFrightened;
+
+        // Lost segment tracking (for exploratory detours in Lost state)
+        protected bool lostSegmentActive;
+        protected int lostSegmentEndIndex;
 
         #endregion
 
@@ -1768,6 +1781,24 @@ namespace FaeMaze.Visitors
         /// <returns>True if a detour should be attempted, false to use normal pathfinding</returns>
         protected virtual bool ShouldAttemptDetour(Vector2Int currentPos)
         {
+            // Handle active lost segments
+            if (lostSegmentActive)
+            {
+                // Check if we've completed the lost segment
+                if (currentPathIndex <= lostSegmentEndIndex)
+                {
+                    // Still within lost segment - no new detour
+                    return false;
+                }
+
+                // Lost segment completed - clear tracking and continue to recovery path
+                lostSegmentActive = false;
+                LogVisitorPath($"completed lost segment at index {currentPathIndex}. Continuing to destination.");
+                currentPathIndex++;
+                RefreshStateFromFlags();
+                return false;
+            }
+
             // Base implementation checks for state-specific detour conditions
             switch (state)
             {
@@ -1856,30 +1887,167 @@ namespace FaeMaze.Visitors
             // Base implementation for Lost state
             if (state == VisitorState.Lost && IsAtIntersection(currentPos))
             {
-                // Pick a random neighbor direction for lost wandering
+                // Get eligible neighbors (exclude incoming tile and planned forward waypoint)
                 List<Vector2Int> neighbors = GetWalkableNeighbors(currentPos);
 
+                // Exclude incoming tile
                 if (currentPathIndex > 0 && currentPathIndex < path.Count)
                 {
-                    neighbors.Remove(path[currentPathIndex - 1]);
+                    Vector2Int incomingTile = path[currentPathIndex - 1];
+                    neighbors.Remove(incomingTile);
                 }
 
-                if (neighbors.Count > 0)
+                // Exclude planned forward waypoint
+                if (currentPathIndex + 1 < path.Count)
                 {
-                    Vector2Int randomNeighbor = neighbors[Random.Range(0, neighbors.Count)];
-
-                    // Path to random neighbor then recalculate
-                    if (TryFindPathToDestination(currentPos, randomNeighbor, out List<Vector2Int> detourPath))
-                    {
-                        path = detourPath;
-                        currentPathIndex = 1;
-                        return;
-                    }
+                    Vector2Int forwardWaypoint = path[currentPathIndex + 1];
+                    neighbors.Remove(forwardWaypoint);
                 }
+
+                if (neighbors.Count == 0)
+                {
+                    // No valid detour directions - recalculate to destination
+                    RecalculatePath();
+                    return;
+                }
+
+                // Roll random detour length
+                int detourLength = Random.Range(minLostDistance, maxLostDistance + 1);
+
+                // Pick random neighbor to start detour
+                Vector2Int detourStart = neighbors[Random.Range(0, neighbors.Count)];
+
+                // Build exploratory segment
+                List<Vector2Int> lostPath = BuildLostPath(currentPos, detourStart, detourLength, recentlyReachedTiles);
+
+                if (lostPath == null || lostPath.Count == 0)
+                {
+                    // Couldn't build lost path - recalculate to destination
+                    RecalculatePath();
+                    return;
+                }
+
+                // Get destination for current state
+                Vector2Int lostEnd = lostPath[lostPath.Count - 1];
+                Vector2Int destination = GetDestinationForCurrentState(lostEnd);
+
+                // Build recovery path from end of lost segment to destination
+                if (!TryFindPathToDestination(lostEnd, destination, out List<Vector2Int> recoveryPath))
+                {
+                    // Couldn't find recovery path - recalculate to destination
+                    RecalculatePath();
+                    return;
+                }
+
+                // Merge lost path with recovery path
+                List<Vector2Int> fullPath = new List<Vector2Int>();
+                fullPath.AddRange(lostPath);
+
+                // Skip first element of recovery path (duplicate of lostEnd)
+                for (int i = 1; i < recoveryPath.Count; i++)
+                {
+                    fullPath.Add(recoveryPath[i]);
+                }
+
+                // Set the new path
+                path = fullPath;
+                currentPathIndex = 1; // Start at second position (first is currentPos)
+
+                // Track the lost segment
+                lostSegmentActive = true;
+                lostSegmentEndIndex = lostPath.Count - 1;
+
+                LogVisitorPath($"started lost detour: segment length {lostPath.Count}, total path {fullPath.Count}. Lost end: {lostEnd}, destination: {destination}.");
+                return;
             }
 
             // Default fallback: recalculate to destination
             RecalculatePath();
+        }
+
+        /// <summary>
+        /// Builds an exploratory path for Lost state wandering.
+        /// Avoids recently visited tiles, current-segment repeats, and straight-line dead ends.
+        /// </summary>
+        /// <param name="startPos">Starting position</param>
+        /// <param name="detourStart">First step of detour</param>
+        /// <param name="stepsTarget">Target number of steps to take</param>
+        /// <param name="recentTiles">Recently visited tiles to avoid</param>
+        /// <returns>List of positions forming the lost path, or null if unable to build</returns>
+        protected virtual List<Vector2Int> BuildLostPath(Vector2Int startPos, Vector2Int detourStart, int stepsTarget, Queue<Vector2Int> recentTiles)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return null;
+            }
+
+            List<Vector2Int> lostPath = new List<Vector2Int>();
+            HashSet<Vector2Int> recentSet = recentTiles != null ? new HashSet<Vector2Int>(recentTiles) : new HashSet<Vector2Int>();
+            HashSet<Vector2Int> currentSegmentVisited = new HashSet<Vector2Int>();
+
+            Vector2Int current = detourStart;
+            lostPath.Add(current);
+            currentSegmentVisited.Add(current);
+
+            const int MAX_ITERATIONS = 250;
+            int iterations = 0;
+            int stepsTaken = 1;
+
+            while (stepsTaken < stepsTarget && iterations < MAX_ITERATIONS)
+            {
+                iterations++;
+
+                // Get walkable neighbors
+                List<Vector2Int> neighbors = GetWalkableNeighbors(current);
+
+                // Exclude previous tile (no immediate backtracking)
+                if (lostPath.Count > 1)
+                {
+                    Vector2Int previousTile = lostPath[lostPath.Count - 2];
+                    neighbors.Remove(previousTile);
+                }
+
+                // Filter out recently visited tiles
+                List<Vector2Int> validNeighbors = new List<Vector2Int>();
+                foreach (var neighbor in neighbors)
+                {
+                    // Avoid recently reached tiles (from overall tracking)
+                    if (recentSet.Contains(neighbor))
+                        continue;
+
+                    // Avoid tiles visited in current segment
+                    if (currentSegmentVisited.Contains(neighbor))
+                        continue;
+
+                    // Check for straight-line dead ends
+                    // A straight-line dead end is when the neighbor only has 1 walkable neighbor (excluding current)
+                    List<Vector2Int> neighborNeighbors = GetWalkableNeighbors(neighbor);
+                    neighborNeighbors.Remove(current); // Exclude current position
+                    if (neighborNeighbors.Count == 0)
+                    {
+                        // This is a dead end - skip it
+                        continue;
+                    }
+
+                    validNeighbors.Add(neighbor);
+                }
+
+                // If no valid neighbors, we're stuck - return what we have
+                if (validNeighbors.Count == 0)
+                {
+                    break;
+                }
+
+                // Pick a random valid neighbor
+                Vector2Int nextPos = validNeighbors[Random.Range(0, validNeighbors.Count)];
+                lostPath.Add(nextPos);
+                currentSegmentVisited.Add(nextPos);
+                current = nextPos;
+                stepsTaken++;
+            }
+
+            // Return path if we made at least some progress
+            return lostPath.Count > 1 ? lostPath : null;
         }
 
         /// <summary>

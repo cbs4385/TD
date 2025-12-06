@@ -76,6 +76,8 @@ namespace FaeMaze.Visitors
             walkedTiles.Clear();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
+            lostSegmentActive = false;
+            lostSegmentEndIndex = 0;
         }
 
         /// <summary>

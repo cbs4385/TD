@@ -138,6 +138,8 @@ namespace FaeMaze.Visitors
             confusionSegmentActive = false;
             confusionSegmentEndIndex = 0;
             isConfused = confusionEnabled;
+            lostSegmentActive = false;
+            lostSegmentEndIndex = 0;
         }
 
         /// <summary>
