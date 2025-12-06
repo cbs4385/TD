@@ -21,6 +21,8 @@ namespace FaeMaze.Visitors
             Fascinated,
             Confused,
             Frightened,
+            Mesmerized,    // New: entranced/hypnotized state
+            Lost,          // New: wandering aimlessly state
             Consumed,
             Escaping
         }
@@ -87,6 +89,19 @@ namespace FaeMaze.Visitors
         [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
         protected bool useProceduralSprite = false;
 
+        [Header("State Duration Settings")]
+        [SerializeField]
+        [Tooltip("Default duration for Mesmerized state (seconds)")]
+        protected float mesmerizedDuration = 5f;
+
+        [SerializeField]
+        [Tooltip("Default duration for Lost state (seconds)")]
+        protected float lostDuration = 10f;
+
+        [SerializeField]
+        [Tooltip("Default duration for Frightened state (seconds)")]
+        protected float frightenedDuration = 3f;
+
         #endregion
 
         #region Protected Fields
@@ -142,6 +157,14 @@ namespace FaeMaze.Visitors
         protected bool hasMovedSignificantly;
         protected bool isCurrentlyStalled;
 
+        // State duration tracking (for timed states like Mesmerized, Lost, Frightened, etc.)
+        protected VisitorState currentTimedState = VisitorState.Idle;
+        protected float currentStateDuration;
+        protected float currentStateTimer;
+        protected bool isMesmerized;
+        protected bool isLost;
+        protected bool isFrightened;
+
         #endregion
 
         #region Properties
@@ -187,6 +210,16 @@ namespace FaeMaze.Visitors
 
         protected virtual void Update()
         {
+            // Update state duration timers for timed states
+            if (currentTimedState != VisitorState.Idle && currentStateDuration > 0)
+            {
+                currentStateTimer -= Time.deltaTime;
+                if (currentStateTimer <= 0f)
+                {
+                    OnStateExpired(currentTimedState);
+                }
+            }
+
             // Update lantern cooldowns
             if (lanternCooldowns != null && lanternCooldowns.Count > 0)
             {
@@ -421,22 +454,39 @@ namespace FaeMaze.Visitors
             return visitorState == VisitorState.Walking
                 || visitorState == VisitorState.Fascinated
                 || visitorState == VisitorState.Confused
-                || visitorState == VisitorState.Frightened;
+                || visitorState == VisitorState.Frightened
+                || visitorState == VisitorState.Mesmerized
+                || visitorState == VisitorState.Lost;
         }
 
         protected virtual void RefreshStateFromFlags()
         {
+            // Terminal states that cannot be overridden
             if (state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
                 return;
             }
 
-            if (isFascinated)
+            // Timed states take priority (in order of precedence)
+            if (isMesmerized)
+            {
+                state = VisitorState.Mesmerized;
+            }
+            else if (isFrightened)
+            {
+                state = VisitorState.Frightened;
+            }
+            else if (isLost)
+            {
+                state = VisitorState.Lost;
+            }
+            else if (isFascinated)
             {
                 state = VisitorState.Fascinated;
             }
-            else if (state == VisitorState.Frightened || state == VisitorState.Confused)
+            else if (state == VisitorState.Confused)
             {
+                // Confused state managed by derived classes, don't override
                 return;
             }
             else
@@ -1344,6 +1394,91 @@ namespace FaeMaze.Visitors
             {
                 isEntranced = value;
             }
+        }
+
+        /// <summary>
+        /// Sets the visitor to Mesmerized state for a specified duration.
+        /// </summary>
+        /// <param name="duration">Duration in seconds (0 or negative = use default)</param>
+        public virtual void SetMesmerized(float duration = 0f)
+        {
+            if (duration <= 0f)
+            {
+                duration = mesmerizedDuration;
+            }
+
+            isMesmerized = true;
+            SetTimedState(VisitorState.Mesmerized, duration);
+            RefreshStateFromFlags();
+        }
+
+        /// <summary>
+        /// Sets the visitor to Lost state for a specified duration.
+        /// </summary>
+        /// <param name="duration">Duration in seconds (0 or negative = use default)</param>
+        public virtual void SetLost(float duration = 0f)
+        {
+            if (duration <= 0f)
+            {
+                duration = lostDuration;
+            }
+
+            isLost = true;
+            SetTimedState(VisitorState.Lost, duration);
+            RefreshStateFromFlags();
+        }
+
+        /// <summary>
+        /// Sets the visitor to Frightened state for a specified duration.
+        /// </summary>
+        /// <param name="duration">Duration in seconds (0 or negative = use default)</param>
+        public virtual void SetFrightened(float duration = 0f)
+        {
+            if (duration <= 0f)
+            {
+                duration = frightenedDuration;
+            }
+
+            isFrightened = true;
+            SetTimedState(VisitorState.Frightened, duration);
+            RefreshStateFromFlags();
+        }
+
+        /// <summary>
+        /// Internal method to set a timed state with duration tracking.
+        /// </summary>
+        protected virtual void SetTimedState(VisitorState timedState, float duration)
+        {
+            currentTimedState = timedState;
+            currentStateDuration = duration;
+            currentStateTimer = duration;
+        }
+
+        /// <summary>
+        /// Called when a timed state expires. Clears the state flag and reverts to normal behavior.
+        /// </summary>
+        protected virtual void OnStateExpired(VisitorState expiredState)
+        {
+            switch (expiredState)
+            {
+                case VisitorState.Mesmerized:
+                    isMesmerized = false;
+                    break;
+                case VisitorState.Lost:
+                    isLost = false;
+                    break;
+                case VisitorState.Frightened:
+                    isFrightened = false;
+                    break;
+            }
+
+            // Clear timed state tracking
+            currentTimedState = VisitorState.Idle;
+            currentStateDuration = 0f;
+            currentStateTimer = 0f;
+
+            // Refresh state to revert to Walking or other active state
+            RefreshStateFromFlags();
         }
 
         /// <summary>
