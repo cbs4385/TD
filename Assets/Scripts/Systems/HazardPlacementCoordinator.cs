@@ -13,16 +13,19 @@ namespace FaeMaze.Systems
     /// 1. Add this component to a GameObject in your procedural maze scene
     /// 2. Assign hazard prefabs to the config fields (faeLanternConfig.prefab, etc.)
     /// 3. Tune placement parameters (base counts, scaling factors, min/max limits)
-    /// 4. Set autoPlaceOnStart = true for automatic placement, or call PlaceAllHazards() manually
-    /// 5. Hazards will be placed after MazeGridBehaviour initializes
+    /// 4. Set autoPlaceOnStart = true for automatic placement
+    /// 5. Hazards will be placed on first wave and automatically re-placed when waves change
+    /// 6. Alternatively, call OnMazeRegenerated() manually after regenerating the maze
     ///
     /// FLOW:
     /// 1. Wait for MazeGridBehaviour to initialize (Start)
-    /// 2. Query WaveSpawner for current wave number (defaults to 1 if not found)
-    /// 3. Calculate hazard counts using base + (wave * scaling) capped at max
-    /// 4. Find eligible spawn cells (walkable, proper distance from entrance/heart, not occupied)
-    /// 5. Place hazards randomly across eligible cells
-    /// 6. Initialize hazards (water-linking for Puka happens automatically in their Start)
+    /// 2. Place hazards for wave 1 if autoPlaceOnStart is enabled
+    /// 3. Each Update, check if wave number changed via WaveSpawner
+    /// 4. When wave changes, clear old hazards and place new ones based on new wave
+    /// 5. Calculate hazard counts using base + (wave * scaling) capped at max
+    /// 6. Find eligible spawn cells (walkable, proper distance from entrance/heart, not occupied)
+    /// 7. Place hazards randomly across eligible cells
+    /// 8. Initialize hazards (water-linking for Puka happens automatically in their Start)
     ///
     /// PLACEMENT RULES:
     /// - FaeLantern/FairyRing: Avoid water tiles, maintain min distance from entrance/heart
@@ -78,7 +81,7 @@ namespace FaeMaze.Systems
 
         [Header("Hazard Prefabs")]
         [SerializeField]
-        [Tooltip("Configuration for FaeLantern placement")]
+        [Tooltip("FaeLantern configuration. Assign prefab from Assets/Prefabs/Props/FaeLantern.prefab")]
         private HazardTypeConfig faeLanternConfig = new HazardTypeConfig
         {
             baseCount = 2,
@@ -90,7 +93,7 @@ namespace FaeMaze.Systems
         };
 
         [SerializeField]
-        [Tooltip("Configuration for FairyRing placement")]
+        [Tooltip("FairyRing configuration. Assign prefab from Assets/Prefabs/Props/FairyRing.prefab")]
         private HazardTypeConfig fairyRingConfig = new HazardTypeConfig
         {
             baseCount = 1,
@@ -102,7 +105,7 @@ namespace FaeMaze.Systems
         };
 
         [SerializeField]
-        [Tooltip("Configuration for PukaHazard placement")]
+        [Tooltip("PukaHazard configuration. Create prefab if needed or disable this hazard type")]
         private HazardTypeConfig pukaHazardConfig = new HazardTypeConfig
         {
             baseCount = 1,
@@ -111,7 +114,7 @@ namespace FaeMaze.Systems
             minDistanceFromEntrance = 7,
             minDistanceFromHeart = 7,
             preferWaterProximity = true,
-            enabled = true
+            enabled = false  // Disabled by default since prefab may not exist
         };
 
         [Header("Global Settings")]
@@ -141,6 +144,7 @@ namespace FaeMaze.Systems
         private WaveSpawner waveSpawner;
         private HashSet<Vector2Int> occupiedCells;
         private List<GameObject> placedHazards;
+        private int lastPlacedWaveNumber = -1;
 
         #endregion
 
@@ -174,6 +178,27 @@ namespace FaeMaze.Systems
             if (autoPlaceOnStart)
             {
                 PlaceAllHazards();
+            }
+        }
+
+        private void Update()
+        {
+            // Auto-detect wave changes and re-place hazards
+            if (waveSpawner != null && mazeGridBehaviour != null && mazeGridBehaviour.Grid != null)
+            {
+                int currentWave = waveSpawner.CurrentWaveNumber;
+
+                // Check if wave changed and is valid
+                if (currentWave > 0 && currentWave != lastPlacedWaveNumber)
+                {
+                    // Small delay to ensure maze regeneration is complete
+                    // We check every frame, so this will trigger shortly after wave starts
+                    if (autoPlaceOnStart)
+                    {
+                        // Place hazards for new wave
+                        PlaceAllHazards();
+                    }
+                }
             }
         }
 
@@ -228,9 +253,12 @@ namespace FaeMaze.Systems
                 PlaceHazardType("PukaHazard", pukaHazardConfig, currentWave);
             }
 
+            // Track which wave we placed for
+            lastPlacedWaveNumber = currentWave;
+
             if (debugLogging)
             {
-                Debug.Log($"[HazardPlacement] Placed {placedHazards.Count} total hazards");
+                Debug.Log($"[HazardPlacement] Placed {placedHazards.Count} total hazards for wave {currentWave}");
             }
         }
 
@@ -254,6 +282,24 @@ namespace FaeMaze.Systems
             if (occupiedCells != null)
             {
                 occupiedCells.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Call this after maze regeneration to re-place hazards.
+        /// Automatically called when wave changes if autoPlaceOnStart is true.
+        /// </summary>
+        public void OnMazeRegenerated()
+        {
+            // Reset tracking so placement happens immediately
+            lastPlacedWaveNumber = -1;
+
+            // Place hazards (will use current wave number)
+            PlaceAllHazards();
+
+            if (debugLogging)
+            {
+                Debug.Log("[HazardPlacement] Hazards re-placed after maze regeneration");
             }
         }
 
