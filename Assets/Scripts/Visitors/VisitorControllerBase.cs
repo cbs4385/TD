@@ -1309,7 +1309,71 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Recalculates the path to the original destination.
+        /// Attempts to find a path from start to destination using A*.
+        /// Returns true if successful, with the path in the out parameter.
+        /// </summary>
+        protected bool TryFindPathToDestination(Vector2Int start, Vector2Int destination, out List<Vector2Int> pathResult)
+        {
+            pathResult = null;
+
+            if (gameController == null)
+            {
+                return false;
+            }
+
+            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
+            if (!gameController.TryFindPath(start, destination, pathNodes) || pathNodes.Count == 0)
+            {
+                return false;
+            }
+
+            pathResult = new List<Vector2Int>();
+            foreach (var node in pathNodes)
+            {
+                pathResult.Add(new Vector2Int(node.x, node.y));
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Gets the destination for the current visitor state.
+        /// Override in derived classes to add state-specific routing logic.
+        /// </summary>
+        protected virtual Vector2Int GetDestinationForCurrentState(Vector2Int currentPos)
+        {
+            // Default routing logic based on state
+            switch (state)
+            {
+                case VisitorState.Fascinated:
+                    // Fascinated visitors path to the lantern
+                    return fascinationLanternPosition;
+
+                case VisitorState.Mesmerized:
+                    // Mesmerized visitors don't move (duration-based)
+                    return currentPos;
+
+                case VisitorState.Frightened:
+                    // Frightened visitors try to escape - find farthest border tile
+                    // This is a simplified implementation; can be overridden for custom behavior
+                    return originalDestination;
+
+                case VisitorState.Lost:
+                    // Lost visitors eventually head to destination but may take detours
+                    // Base behavior is to use original destination
+                    return originalDestination;
+
+                case VisitorState.Confused:
+                case VisitorState.Walking:
+                case VisitorState.Idle:
+                default:
+                    // Normal states use the original destination
+                    return originalDestination;
+            }
+        }
+
+        /// <summary>
+        /// Recalculates the path to the current state-appropriate destination.
         /// </summary>
         public virtual void RecalculatePath()
         {
@@ -1328,33 +1392,27 @@ namespace FaeMaze.Visitors
 
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
             {
-                LogVisitorPathWarning($"could not resolve current grid while recalculating path to {originalDestination}.");
+                LogVisitorPathWarning($"could not resolve current grid while recalculating path.");
                 isCalculatingPath = false;
                 return;
             }
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
-            List<MazeGrid.MazeNode> newPathNodes = new List<MazeGrid.MazeNode>();
+            Vector2Int destination = GetDestinationForCurrentState(currentPos);
 
-            LogVisitorPath($"recalculating path from {currentPos} to {originalDestination}.");
+            LogVisitorPath($"recalculating path from {currentPos} to {destination} (state: {state}).");
 
-            if (!gameController.TryFindPath(currentPos, originalDestination, newPathNodes) || newPathNodes.Count == 0)
+            if (!TryFindPathToDestination(currentPos, destination, out List<Vector2Int> newPath))
             {
                 if (!hasLoggedPathIssue)
                 {
-                    if (LogVisitorPathWarning($"could not find path from {currentPos} to destination {originalDestination}."))
+                    if (LogVisitorPathWarning($"could not find path from {currentPos} to destination {destination} (state: {state})."))
                     {
                         hasLoggedPathIssue = true;
                     }
                 }
                 isCalculatingPath = false;
                 return;
-            }
-
-            List<Vector2Int> newPath = new List<Vector2Int>();
-            foreach (var node in newPathNodes)
-            {
-                newPath.Add(new Vector2Int(node.x, node.y));
             }
 
             LogVisitorPath($"recalculated path length {newPath.Count}. Path: {FormatPath(newPath)}.");
@@ -1704,11 +1762,125 @@ namespace FaeMaze.Visitors
         #region Abstract Methods - Detour Behavior Hooks
 
         /// <summary>
-        /// Called when visitor reaches a waypoint. Derived classes implement specific detour logic.
-        /// This is where confusion, missteps, or other detour behaviors are triggered.
-        /// Default behavior is to recalculate the path.
+        /// Determines whether a detour should be attempted at the current waypoint based on state.
+        /// Override to add custom detour logic for specific states.
         /// </summary>
-        protected abstract void HandleDetourAtWaypoint();
+        /// <returns>True if a detour should be attempted, false to use normal pathfinding</returns>
+        protected virtual bool ShouldAttemptDetour(Vector2Int currentPos)
+        {
+            // Base implementation checks for state-specific detour conditions
+            switch (state)
+            {
+                case VisitorState.Mesmerized:
+                    // Mesmerized visitors don't move
+                    return false;
+
+                case VisitorState.Frightened:
+                    // Frightened visitors may take evasive detours
+                    // Base behavior: just recalculate path
+                    return false;
+
+                case VisitorState.Lost:
+                    // Lost visitors take random detours at intersections
+                    return IsAtIntersection(currentPos);
+
+                case VisitorState.Confused:
+                    // Confused state handled by derived classes
+                    return true;
+
+                case VisitorState.Fascinated:
+                case VisitorState.Walking:
+                case VisitorState.Idle:
+                default:
+                    // Normal movement states don't detour
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if current position is an intersection (2+ walkable neighbors).
+        /// </summary>
+        protected bool IsAtIntersection(Vector2Int position)
+        {
+            List<Vector2Int> neighbors = GetWalkableNeighbors(position);
+
+            // Exclude previous tile if we have path context
+            if (path != null && currentPathIndex > 0 && currentPathIndex < path.Count)
+            {
+                Vector2Int previousTile = path[currentPathIndex - 1];
+                neighbors.Remove(previousTile);
+            }
+
+            return neighbors.Count >= 2;
+        }
+
+        /// <summary>
+        /// Called when visitor reaches a waypoint. Handles state-aware routing and detour logic.
+        /// Derived classes can override to add custom detour behaviors.
+        /// </summary>
+        protected virtual void HandleDetourAtWaypoint()
+        {
+            if (mazeGridBehaviour == null || gameController == null)
+            {
+                return;
+            }
+
+            // Get current position
+            if (path == null || currentPathIndex >= path.Count)
+            {
+                RecalculatePath();
+                return;
+            }
+
+            Vector2Int currentPos = path[currentPathIndex];
+
+            // Check if current state wants to attempt a detour
+            if (ShouldAttemptDetour(currentPos))
+            {
+                // Let derived class handle state-specific detour logic
+                HandleStateSpecificDetour(currentPos);
+            }
+            else
+            {
+                // No detour - recalculate path to current state's destination
+                RecalculatePath();
+            }
+        }
+
+        /// <summary>
+        /// Handles state-specific detour logic. Override in derived classes.
+        /// Base implementation provides Lost state behavior.
+        /// </summary>
+        protected virtual void HandleStateSpecificDetour(Vector2Int currentPos)
+        {
+            // Base implementation for Lost state
+            if (state == VisitorState.Lost && IsAtIntersection(currentPos))
+            {
+                // Pick a random neighbor direction for lost wandering
+                List<Vector2Int> neighbors = GetWalkableNeighbors(currentPos);
+
+                if (currentPathIndex > 0 && currentPathIndex < path.Count)
+                {
+                    neighbors.Remove(path[currentPathIndex - 1]);
+                }
+
+                if (neighbors.Count > 0)
+                {
+                    Vector2Int randomNeighbor = neighbors[Random.Range(0, neighbors.Count)];
+
+                    // Path to random neighbor then recalculate
+                    if (TryFindPathToDestination(currentPos, randomNeighbor, out List<Vector2Int> detourPath))
+                    {
+                        path = detourPath;
+                        currentPathIndex = 1;
+                        return;
+                    }
+                }
+            }
+
+            // Default fallback: recalculate to destination
+            RecalculatePath();
+        }
 
         /// <summary>
         /// Resets detour-specific state when starting a new path or becoming fascinated.

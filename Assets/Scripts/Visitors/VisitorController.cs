@@ -141,100 +141,106 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Attempts to trigger confusion at the current waypoint if it's an intersection.
-        /// For fascinated visitors who have reached the lantern, implements random walk behavior.
+        /// Determines whether a detour should be attempted based on confusion state.
         /// </summary>
-        protected override void HandleDetourAtWaypoint()
+        protected override bool ShouldAttemptDetour(Vector2Int currentPos)
         {
-            if (mazeGridBehaviour == null || gameController == null)
-            {
-                return;
-            }
-
-            if (!confusionEnabled || currentPathIndex >= path.Count - 1)
-            {
-                RecalculatePath();
-                return;
-            }
-
-            // Prevent confusion for the first 10 waypoints after spawning
-            if (waypointsTraversedSinceSpawn < 10)
-            {
-                RecalculatePath();
-                return;
-            }
-
-            Vector2Int currentPos = path[currentPathIndex];
-
+            // Check if we're in an active confusion segment
             if (confusionSegmentActive)
             {
-                // End of segment reached? Allow recovery logic and new decisions afterward.
-                if (currentPathIndex > confusionSegmentEndIndex)
+                // Still traversing confusion segment
+                if (currentPathIndex <= confusionSegmentEndIndex)
                 {
-                    confusionSegmentActive = false;
-                    DecideRecoveryFromConfusion();
-                    currentPathIndex++; // Move to next waypoint in recovery path
-                    RefreshStateFromFlags();
+                    return false; // Don't interrupt active segment
+                }
+
+                // Segment complete - end it and allow normal routing
+                confusionSegmentActive = false;
+                DecideRecoveryFromConfusion();
+                currentPathIndex++; // Move to next waypoint in recovery path
+                RefreshStateFromFlags();
+                return false;
+            }
+
+            // Check base class state-specific detour logic
+            bool baseWantsDetour = base.ShouldAttemptDetour(currentPos);
+
+            // Confused state: check if we should trigger confusion detour
+            if (state == VisitorState.Confused && isConfused && confusionEnabled)
+            {
+                // Prevent confusion for first 10 waypoints
+                if (waypointsTraversedSinceSpawn < 10)
+                {
+                    return false;
+                }
+
+                // Check if at intersection
+                if (!IsAtIntersection(currentPos))
+                {
+                    return false;
+                }
+
+                // Check if we're near the end of the path
+                if (path == null || currentPathIndex >= path.Count - 1)
+                {
+                    return false;
+                }
+
+                // Roll for confusion chance
+                return Random.value <= confusionChance;
+            }
+
+            return baseWantsDetour;
+        }
+
+        /// <summary>
+        /// Handles confusion-specific detour logic.
+        /// </summary>
+        protected override void HandleStateSpecificDetour(Vector2Int currentPos)
+        {
+            // Handle Confused state detours
+            if (state == VisitorState.Confused && isConfused && confusionEnabled)
+            {
+                // Get next intended position
+                if (currentPathIndex + 1 >= path.Count)
+                {
+                    RecalculatePath();
                     return;
                 }
-                else
+
+                Vector2Int nextPos = path[currentPathIndex + 1];
+                List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
+
+                // Exclude previous tile
+                if (currentPathIndex > 0)
                 {
-                    currentPathIndex++; // Continue through confusion segment
-                    return; // Still traversing a confusion segment; no new detours.
+                    walkableNeighbors.Remove(path[currentPathIndex - 1]);
                 }
-            }
 
-            if (!isConfused)
-            {
-                RecalculatePath();
-                return; // Currently navigating normally.
-            }
-
-            Vector2Int nextPos = path[currentPathIndex + 1];
-
-            // Check if current position is an intersection (2+ walkable neighbors excluding the tile we arrived from)
-            List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
-
-            // Exclude the tile we just came from to find forward options
-            if (currentPathIndex > 0)
-            {
-                walkableNeighbors.Remove(path[currentPathIndex - 1]);
-            }
-
-            if (walkableNeighbors.Count < 2)
-            {
-                RecalculatePath();
-                return; // Not an intersection
-            }
-
-            // Roll for confusion
-            float roll = Random.value;
-            if (roll > confusionChance)
-            {
-                RecalculatePath();
-                return; // No confusion this time
-            }
-
-            // Get confused - pick a non-forward direction
-            List<Vector2Int> detourDirections = new List<Vector2Int>();
-            foreach (var neighbor in walkableNeighbors)
-            {
-                if (neighbor != nextPos) // Don't pick the intended next waypoint
+                // Get detour directions (non-forward directions)
+                List<Vector2Int> detourDirections = new List<Vector2Int>();
+                foreach (var neighbor in walkableNeighbors)
                 {
-                    detourDirections.Add(neighbor);
+                    if (neighbor != nextPos)
+                    {
+                        detourDirections.Add(neighbor);
+                    }
                 }
+
+                if (detourDirections.Count == 0)
+                {
+                    RecalculatePath();
+                    return;
+                }
+
+                // Pick random detour direction
+                Vector2Int detourStart = detourDirections[Random.Range(0, detourDirections.Count)];
+                BeginConfusionSegment(currentPos, detourStart);
+                return;
             }
 
-            if (detourDirections.Count == 0)
-            {
-                RecalculatePath();
-                return; // No detour options
-            }
-
-            // Pick random detour direction
-            Vector2Int detourStart = detourDirections[Random.Range(0, detourDirections.Count)];
-
-            BeginConfusionSegment(currentPos, detourStart);
+            // Fallback to base class implementation (handles Lost state, etc.)
+            base.HandleStateSpecificDetour(currentPos);
         }
 
         #endregion
@@ -291,18 +297,15 @@ namespace FaeMaze.Visitors
             }
 
             Vector2Int confusionEnd = confusionPath[confusionPath.Count - 1];
-            List<MazeGrid.MazeNode> recoveryPathNodes = new List<MazeGrid.MazeNode>();
 
-            if (!gameController.TryFindPath(confusionEnd, originalDestination, recoveryPathNodes) || recoveryPathNodes.Count == 0)
+            // Get recovery destination based on current state
+            Vector2Int recoveryDestination = GetDestinationForCurrentState(confusionEnd);
+
+            // Find path from confusion end to recovery destination
+            if (!TryFindPathToDestination(confusionEnd, recoveryDestination, out List<Vector2Int> recoveryPath))
             {
                 RecalculatePath();
                 return;
-            }
-
-            List<Vector2Int> recoveryPath = new List<Vector2Int>();
-            foreach (var node in recoveryPathNodes)
-            {
-                recoveryPath.Add(new Vector2Int(node.x, node.y));
             }
 
             // Validate recovery path adjacency
