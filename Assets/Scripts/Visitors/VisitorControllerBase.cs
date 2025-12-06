@@ -742,8 +742,8 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // Move toward target (apply speed multiplier adjusted by tile cost)
-            float moveCost = 1f;
+            // Move toward target (apply speed multiplier from terrain)
+            float terrainSpeedMultiplier = 1f;
             MazeGrid mazeGrid = mazeGridBehaviour.Grid;
             if (mazeGrid != null)
             {
@@ -763,11 +763,11 @@ namespace FaeMaze.Visitors
                     return; // Non-walkable nodes remain blocked
                 }
 
-                moveCost = mazeGrid.GetMoveCost(targetGridPos.x, targetGridPos.y);
+                terrainSpeedMultiplier = mazeGrid.GetSpeedMultiplier(targetGridPos.x, targetGridPos.y);
             }
 
-            moveCost = Mathf.Max(moveCost, Mathf.Epsilon); // Prevent division by zero
-            float effectiveSpeed = (moveSpeed * speedMultiplier) / moveCost;
+            terrainSpeedMultiplier = Mathf.Max(terrainSpeedMultiplier, 0.01f); // Prevent zero speed
+            float effectiveSpeed = moveSpeed * speedMultiplier * terrainSpeedMultiplier;
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
                 targetWorldPos,

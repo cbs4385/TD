@@ -28,6 +28,9 @@ namespace FaeMaze.Systems
             /// <summary>Base movement cost for this node (default 1.0)</summary>
             public float baseCost;
 
+            /// <summary>Movement speed multiplier based on terrain (default 1.0)</summary>
+            public float speedMultiplier;
+
             /// <summary>Attraction value applied by Fae props (default 0.0)</summary>
             public float attraction;
 
@@ -46,10 +49,23 @@ namespace FaeMaze.Systems
                 this.y = y;
                 this.walkable = true;
                 this.baseCost = 1.0f;
+                this.speedMultiplier = 1.0f;
                 this.attraction = 0.0f;
                 this.symbol = '#';
                 this.terrain = TileType.TreeBramble;
                 this.isHeart = false;
+            }
+
+            /// <summary>
+            /// Sets terrain type and automatically applies terrain-based properties.
+            /// </summary>
+            public void SetTerrain(TileType terrainType)
+            {
+                this.terrain = terrainType;
+                TerrainProperties.TerrainData data = TerrainProperties.GetTerrainData(terrainType);
+                this.walkable = data.walkable;
+                this.baseCost = data.pathCost;
+                this.speedMultiplier = data.speedMultiplier;
             }
         }
 
@@ -184,6 +200,24 @@ namespace FaeMaze.Systems
 
             float cost = node.baseCost - node.attraction;
             return Mathf.Max(cost, MIN_MOVE_COST);
+        }
+
+        /// <summary>
+        /// Gets the movement speed multiplier for a node based on its terrain type.
+        /// </summary>
+        /// <param name="x">X coordinate</param>
+        /// <param name="y">Y coordinate</param>
+        /// <returns>The speed multiplier (1.0 = normal, &lt;1.0 = slower, &gt;1.0 = faster), or 0 if unwalkable</returns>
+        public float GetSpeedMultiplier(int x, int y)
+        {
+            MazeNode node = GetNode(x, y);
+
+            if (node == null || !node.walkable)
+            {
+                return 0f;
+            }
+
+            return node.speedMultiplier;
         }
 
         /// <summary>

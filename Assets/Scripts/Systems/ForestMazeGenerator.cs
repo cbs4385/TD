@@ -16,6 +16,63 @@ namespace FaeMaze.Systems
     }
 
     /// <summary>
+    /// Defines terrain properties for each tile type including movement costs and speed multipliers.
+    /// </summary>
+    public static class TerrainProperties
+    {
+        /// <summary>
+        /// Represents terrain-specific movement properties.
+        /// </summary>
+        public struct TerrainData
+        {
+            /// <summary>Whether this terrain is walkable</summary>
+            public bool walkable;
+
+            /// <summary>Base pathfinding cost for A* (higher = less preferred)</summary>
+            public float pathCost;
+
+            /// <summary>Movement speed multiplier (lower = slower movement)</summary>
+            public float speedMultiplier;
+
+            public TerrainData(bool walkable, float pathCost, float speedMultiplier)
+            {
+                this.walkable = walkable;
+                this.pathCost = pathCost;
+                this.speedMultiplier = speedMultiplier;
+            }
+        }
+
+        /// <summary>
+        /// Gets the terrain data for a specific tile type.
+        /// </summary>
+        public static TerrainData GetTerrainData(TileType tileType)
+        {
+            switch (tileType)
+            {
+                case TileType.Path:
+                    // Optimal terrain: fast movement, low cost
+                    return new TerrainData(walkable: true, pathCost: 1f, speedMultiplier: 1.0f);
+
+                case TileType.Undergrowth:
+                    // Rough terrain: slower movement, higher cost
+                    return new TerrainData(walkable: true, pathCost: 2f, speedMultiplier: 0.5f);
+
+                case TileType.Water:
+                    // Very slow terrain: very slow movement, very high cost
+                    return new TerrainData(walkable: true, pathCost: 10f, speedMultiplier: 0.15f);
+
+                case TileType.TreeBramble:
+                    // Unwalkable terrain: extremely high cost to prevent pathfinding through it
+                    return new TerrainData(walkable: false, pathCost: 10000f, speedMultiplier: 0f);
+
+                default:
+                    // Default to unwalkable
+                    return new TerrainData(walkable: false, pathCost: 10000f, speedMultiplier: 0f);
+            }
+        }
+    }
+
+    /// <summary>
     /// Configuration for forest maze generation.
     /// </summary>
     [System.Serializable]

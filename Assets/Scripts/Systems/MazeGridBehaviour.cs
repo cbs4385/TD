@@ -408,27 +408,23 @@ namespace FaeMaze.Systems
 
         private void ApplyTileFromTileType(int x, int y, TileType tile, char symbol, bool isHeart = false)
         {
-            bool walkable = tile == TileType.Path || tile == TileType.Undergrowth;
-            float baseCost = tile == TileType.Undergrowth ? 1.5f : 1.0f;
-
             var node = grid.GetNode(x, y);
             if (node == null)
             {
                 return;
             }
 
-            node.walkable = walkable;
-            node.baseCost = walkable ? baseCost : node.baseCost;
+            // Apply terrain properties (sets walkable, baseCost, and speedMultiplier)
+            node.SetTerrain(tile);
             node.symbol = symbol;
-            node.terrain = tile;
             node.isHeart = isHeart;
 
+            // Heart tiles override terrain properties to be walkable paths
             if (isHeart)
             {
-                node.walkable = true;
-                node.baseCost = 1.0f;
+                node.SetTerrain(TileType.Path);
                 node.symbol = 'H';
-                node.terrain = TileType.Path;
+                node.isHeart = true;
             }
         }
 
