@@ -124,13 +124,11 @@ namespace FaeMaze.Visitors
         private void Start()
         {
             // Find required components
-            gameController = GameController.Instance;
-            mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            AcquireDependencies();
             animator = GetComponent<Animator>();
 
             if (gameController == null || mazeGridBehaviour == null)
             {
-                enabled = false;
                 return;
             }
 
@@ -157,12 +155,39 @@ namespace FaeMaze.Visitors
 
         private void Update()
         {
+            if (!AcquireDependencies())
+            {
+                return;
+            }
+
             if (state == RedCapState.Hunting)
             {
                 UpdateTargetSelection();
                 FollowPath();
                 CheckForVisitorContact();
             }
+        }
+
+        private bool AcquireDependencies()
+        {
+            bool ready = true;
+
+            if (gameController == null)
+            {
+                gameController = GameController.Instance;
+            }
+
+            if (mazeGridBehaviour == null)
+            {
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            }
+
+            if (gameController == null || mazeGridBehaviour == null)
+            {
+                ready = false;
+            }
+
+            return ready;
         }
 
         #endregion
@@ -274,6 +299,12 @@ namespace FaeMaze.Visitors
             {
                 // No path or reached end - recalculate
                 RecalculatePathToTarget();
+
+                // If we still don't have a path, move directly toward the visitor as a fallback
+                if (currentPath.Count == 0 && targetVisitor != null)
+                {
+                    MoveDirectlyToward(targetVisitor.transform.position);
+                }
                 return;
             }
 
@@ -300,6 +331,13 @@ namespace FaeMaze.Visitors
                     RecalculatePathToTarget();
                 }
             }
+        }
+
+        private void MoveDirectlyToward(Vector3 targetPosition)
+        {
+            Vector3 direction = (targetPosition - transform.position).normalized;
+            transform.position += direction * moveSpeed * Time.deltaTime;
+            UpdateAnimationDirection(direction);
         }
 
         /// <summary>

@@ -154,20 +154,14 @@ namespace FaeMaze.Props
         private void Start()
         {
             // Find references
-            mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-            gameController = GameController.Instance;
+            AcquireDependencies();
 
             if (animator == null)
             {
                 animator = GetComponent<Animator>();
             }
 
-            if (mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            if (gameController == null)
+            if (!AcquireDependencies())
             {
                 return;
             }
@@ -190,6 +184,11 @@ namespace FaeMaze.Props
 
         private void Update()
         {
+            if (!AcquireDependencies())
+            {
+                return;
+            }
+
             if (enablePulse && spriteRenderer != null)
             {
                 UpdatePulse();
@@ -227,6 +226,28 @@ namespace FaeMaze.Props
             {
                 UpdateLeading();
             }
+        }
+
+        private bool AcquireDependencies()
+        {
+            bool ready = true;
+
+            if (mazeGridBehaviour == null)
+            {
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            }
+
+            if (gameController == null)
+            {
+                gameController = GameController.Instance;
+            }
+
+            if (mazeGridBehaviour == null || gameController == null)
+            {
+                ready = false;
+            }
+
+            return ready;
         }
 
         #endregion

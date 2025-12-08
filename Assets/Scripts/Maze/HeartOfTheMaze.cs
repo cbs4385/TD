@@ -159,6 +159,15 @@ namespace FaeMaze.Maze
 
         private void Awake()
         {
+            // Ensure physics setup for reliable trigger callbacks
+            var rb = GetComponent<Rigidbody2D>();
+            if (rb == null)
+            {
+                rb = gameObject.AddComponent<Rigidbody2D>();
+            }
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.gravityScale = 0f;
+
             // Auto-position from maze grid if enabled
             if (autoPosition)
             {
