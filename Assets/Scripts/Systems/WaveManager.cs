@@ -137,6 +137,9 @@ namespace FaeMaze.Systems
 
             // Hide all UI panels initially
             HideAllPanels();
+
+            // Apply persistent progress before any auto-started waves can run
+            ApplyPersistentWaveProgress();
         }
 
         private void OnEnable()
@@ -153,7 +156,6 @@ namespace FaeMaze.Systems
         {
             SetupButtons();
             LoadSettings();
-            ApplyPersistentWaveProgress();
         }
 
         /// <summary>
