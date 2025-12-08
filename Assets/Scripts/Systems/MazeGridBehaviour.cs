@@ -860,6 +860,27 @@ namespace FaeMaze.Systems
 
         }
 
+        /// <summary>
+        /// Enables runtime maze generation so subsequent regenerations use the procedural generator.
+        /// Clears any cached generation data to ensure a fresh layout on the next regeneration.
+        /// </summary>
+        public void EnableRuntimeGeneration()
+        {
+            if (useRuntimeGeneration)
+            {
+                return;
+            }
+
+            useRuntimeGeneration = true;
+
+            // Clear cache so the first runtime regeneration creates a brand new maze
+            hasCachedGeneration = false;
+            cachedGeneratedTiles = null;
+            cachedGeneratedSymbols = null;
+            cachedMazeString = null;
+            cachedEntranceEdges.Clear();
+        }
+
         #endregion
 
         #region Spawn Point API

@@ -21,6 +21,10 @@ namespace FaeMaze.Systems
         [Tooltip("Reference to the GameController")]
         private GameController gameController;
 
+        [SerializeField]
+        [Tooltip("Reference to the maze grid for switching generation modes")] 
+        private MazeGridBehaviour mazeGridBehaviour;
+
         [Header("UI References")]
         [SerializeField]
         [Tooltip("Panel shown when wave is successful")]
@@ -125,6 +129,11 @@ namespace FaeMaze.Systems
             if (gameController == null)
             {
                 gameController = GameController.Instance;
+            }
+
+            if (mazeGridBehaviour == null)
+            {
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             }
 
             // Hide all UI panels initially
@@ -240,6 +249,12 @@ namespace FaeMaze.Systems
 
             // Invoke event
             OnWaveCompleted?.Invoke(lastCompletedWave);
+
+            // Switch to runtime generation after clearing the first wave (loaded from HedgeMaze1)
+            if (lastCompletedWave == 1 && mazeGridBehaviour != null)
+            {
+                mazeGridBehaviour.EnableRuntimeGeneration();
+            }
 
             // Show success UI
             ShowWaveSuccessPanel();
