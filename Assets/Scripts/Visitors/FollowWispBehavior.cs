@@ -114,7 +114,8 @@ namespace FaeMaze.Visitors
 
                 float speed = visitorController.MoveSpeed * followSpeedMultiplier;
 
-                Vector3 newPosition = transform.position + direction * speed * Time.deltaTime;
+                Vector2 currentPosition = transform.position;
+                Vector2 newPosition = currentPosition + direction * speed * Time.deltaTime;
 
                 // Use rigidbody if available for proper collision detection
                 var rb = GetComponent<Rigidbody2D>();
@@ -125,7 +126,7 @@ namespace FaeMaze.Visitors
                 }
                 else
                 {
-                    transform.position = newPosition;
+                    transform.position = new Vector3(newPosition.x, newPosition.y, transform.position.z);
                 }
             }
         }
