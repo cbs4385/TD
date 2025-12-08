@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 
@@ -90,6 +91,9 @@ namespace FaeMaze.Systems
         private float autoStartTimer = 0f;
         private bool waitingForAutoStart = false;
 
+        // Persistent wave tracking across scenes
+        private static int persistentLastCompletedWave = 0;
+        
         #endregion
 
         #region Events
@@ -127,6 +131,9 @@ namespace FaeMaze.Systems
                 gameController = GameController.Instance;
             }
 
+            // Carry over persistent wave progress when reloading scenes
+            lastCompletedWave = persistentLastCompletedWave;
+
             // Hide all UI panels initially
             HideAllPanels();
         }
@@ -145,6 +152,7 @@ namespace FaeMaze.Systems
         {
             SetupButtons();
             LoadSettings();
+            ApplyPersistentWaveProgress();
         }
 
         /// <summary>
@@ -240,6 +248,16 @@ namespace FaeMaze.Systems
 
             // Invoke event
             OnWaveCompleted?.Invoke(lastCompletedWave);
+
+            // Persist latest wave progress for scene transitions
+            UpdatePersistentWaveProgress();
+
+            // Transition to procedural mazes after the initial FaeMazeScene wave
+            if (ShouldTransitionToProceduralScene())
+            {
+                LoadProceduralMazeScene();
+                return;
+            }
 
             // Show success UI
             ShowWaveSuccessPanel();
@@ -401,6 +419,7 @@ namespace FaeMaze.Systems
             isGameOver = false;
             lastCompletedWave = 0;
             currentRetryCount = 0;
+            ResetPersistentWaveProgress();
 
             // Hide all panels
             HideAllPanels();
@@ -456,6 +475,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public void RestartGame()
         {
+            ResetPersistentWaveProgress();
 
             // Invoke restart event
             OnGameRestart?.Invoke();
@@ -471,6 +491,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public void LoadMainMenu()
         {
+            ResetPersistentWaveProgress();
 
             // Try to load "MainMenu" scene, fall back to current scene reload if not found
             try
@@ -515,12 +536,46 @@ namespace FaeMaze.Systems
         {
 
             isGameOver = false;
-            lastCompletedWave = 0;
+            lastCompletedWave = persistentLastCompletedWave;
             currentRetryCount = 0;
             waitingForAutoStart = false;
             autoStartTimer = 0f;
 
             HideAllPanels();
+        }
+
+        #endregion
+
+        #region Scene Transition Helpers
+
+        private void ApplyPersistentWaveProgress()
+        {
+            if (waveSpawner != null && persistentLastCompletedWave > 0)
+            {
+                waveSpawner.SetCompletedWaveCount(persistentLastCompletedWave);
+            }
+        }
+
+        private void UpdatePersistentWaveProgress()
+        {
+            persistentLastCompletedWave = Mathf.Max(persistentLastCompletedWave, lastCompletedWave);
+        }
+
+        private void ResetPersistentWaveProgress()
+        {
+            persistentLastCompletedWave = 0;
+        }
+
+        private bool ShouldTransitionToProceduralScene()
+        {
+            return SceneManager.GetActiveScene().name == "FaeMazeScene" && lastCompletedWave >= 1;
+        }
+
+        private void LoadProceduralMazeScene()
+        {
+            waitingForAutoStart = false;
+            autoStartTimer = 0f;
+            SceneManager.LoadScene("ProceduralMazeScene");
         }
 
         #endregion

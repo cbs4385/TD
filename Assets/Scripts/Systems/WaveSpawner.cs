@@ -172,6 +172,19 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Setup Helpers
+
+        /// <summary>
+        /// Sets the number of completed waves so the next wave starts from the expected sequence.
+        /// </summary>
+        /// <param name="completedWaveCount">The last completed wave number.</param>
+        public void SetCompletedWaveCount(int completedWaveCount)
+        {
+            currentWaveNumber = Mathf.Max(0, completedWaveCount);
+        }
+
+        #endregion
+
         #region Unity Lifecycle
 
         private void Start()
