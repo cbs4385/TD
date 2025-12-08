@@ -92,6 +92,7 @@ namespace FaeMaze.Visitors
         private SpriteRenderer spriteRenderer;
         private Animator animator;
         private float moveSpeed;
+        private bool initialized;
 
         // Direction tracking for animation
         private const int IdleDirection = 0;
@@ -123,6 +124,33 @@ namespace FaeMaze.Visitors
 
         private void Start()
         {
+            TryInitialize();
+        }
+
+        private void Update()
+        {
+            if (!AcquireDependencies())
+            {
+                return;
+            }
+
+            TryInitialize();
+
+            if (state == RedCapState.Hunting)
+            {
+                UpdateTargetSelection();
+                FollowPath();
+                CheckForVisitorContact();
+            }
+        }
+
+        private void TryInitialize()
+        {
+            if (initialized)
+            {
+                return;
+            }
+
             // Find required components
             AcquireDependencies();
             animator = GetComponent<Animator>();
@@ -151,21 +179,7 @@ namespace FaeMaze.Visitors
 
             // Start hunting
             state = RedCapState.Hunting;
-        }
-
-        private void Update()
-        {
-            if (!AcquireDependencies())
-            {
-                return;
-            }
-
-            if (state == RedCapState.Hunting)
-            {
-                UpdateTargetSelection();
-                FollowPath();
-                CheckForVisitorContact();
-            }
+            initialized = true;
         }
 
         private bool AcquireDependencies()
