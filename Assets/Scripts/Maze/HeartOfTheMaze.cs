@@ -255,6 +255,16 @@ namespace FaeMaze.Maze
             }
         }
 
+        private void OnTriggerStay2D(Collider2D other)
+        {
+            // Catch any visitors that miss the initial enter event
+            var visitor = other.GetComponent<VisitorController>();
+            if (visitor != null)
+            {
+                OnVisitorConsumed(visitor);
+            }
+        }
+
         #endregion
 
         #region Attraction
