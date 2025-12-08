@@ -664,6 +664,15 @@ namespace FaeMaze.Visitors
             SetAnimatorDirection(GetDirectionFromMovement(movement));
         }
 
+        /// <summary>
+        /// Allows external behaviours (e.g., wisp-following) to update the animator's facing direction.
+        /// </summary>
+        /// <param name="movement">The movement or desired facing vector.</param>
+        public void ApplyExternalAnimatorDirection(Vector2 movement)
+        {
+            UpdateAnimatorDirection(movement);
+        }
+
         protected void SetAnimatorDirection(int direction)
         {
             // Guard against redundant animator parameter writes
