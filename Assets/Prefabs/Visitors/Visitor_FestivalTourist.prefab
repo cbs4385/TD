@@ -171,16 +171,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveSpeed: 3
   waypointReachedDistance: 0.05
-  confusionChance: 0.25
-  confusionEnabled: 1
-  minConfusionDistance: 15
-  maxConfusionDistance: 20
-  debugConfusionGizmos: 0
   visitorColor: {r: 0.3, g: 0.6, b: 1, a: 1}
   visitorSize: 0.2
   proceduralPixelsPerUnit: 32
   sortingOrder: 15
   useProceduralSprite: 0
+  mesmerizedDuration: 5
+  lostDuration: 10
+  frightenedDuration: 3
+  minLostDistance: 10
+  maxLostDistance: 20
+  confusionChance: 0.25
+  confusionEnabled: 1
+  minConfusionDistance: 15
+  maxConfusionDistance: 20
+  debugConfusionGizmos: 0
 --- !u!95 &8009058151222248764
 Animator:
   serializedVersion: 7
