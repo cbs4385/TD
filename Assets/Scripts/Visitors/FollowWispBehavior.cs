@@ -103,15 +103,15 @@ namespace FaeMaze.Visitors
             // Get distance to wisp
             float distance = Vector3.Distance(transform.position, targetWisp.transform.position);
 
-            // Face toward the wisp so animations match the leading direction
-            Vector2 directionToWisp = targetWisp.transform.position - transform.position;
-            visitorController.ApplyExternalAnimatorDirection(directionToWisp);
-
             // Only move if we're too far from the wisp
             if (distance > followDistance)
             {
                 // Move toward wisp
-                Vector3 direction = (targetWisp.transform.position - transform.position).normalized;
+                Vector2 direction = (targetWisp.transform.position - transform.position).normalized;
+
+                // Update facing based on actual travel direction, not just wisp position
+                visitorController.ApplyExternalAnimatorDirection(direction);
+
                 float speed = visitorController.MoveSpeed * followSpeedMultiplier;
 
                 Vector3 newPosition = transform.position + direction * speed * Time.deltaTime;
