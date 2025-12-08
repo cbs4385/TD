@@ -306,7 +306,7 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
-            return true; // Enabled for debugging visitor stalls
+            return false;
         }
 
         /// <summary>
@@ -365,26 +365,16 @@ namespace FaeMaze.Visitors
             if (issues.Count > 0)
             {
                 hasLoggedPathIssue = true;
-                Debug.LogWarning($"[VisitorPath] {name} stalled at {currentGrid} with invalid path: {string.Join("; ", issues)}. Path length: {path.Count}. Path: {FormatPath(path)}.", this);
             }
         }
 
         private void LogVisitorPath(string message)
         {
-            if (ShouldLogVisitorPath())
-            {
-                Debug.Log($"[VisitorPath] {name} {message}", this);
-            }
+            // Logging disabled
         }
 
         private bool LogVisitorPathWarning(string message)
         {
-            if (ShouldLogVisitorPath())
-            {
-                Debug.LogWarning($"[VisitorPath] {name} {message}", this);
-                return true;
-            }
-
             return false;
         }
 
@@ -444,8 +434,6 @@ namespace FaeMaze.Visitors
                     }
 
                     Vector2Int targetWaypoint = (path != null && currentPathIndex < path.Count) ? path[currentPathIndex] : Vector2Int.zero;
-                    Debug.Log($"[VisitorPath] {name} stalled for {stalledDuration:F2}s at grid {(resolvedGrid ? stalledGrid.ToString() : "<unknown>")}. currentPathIndex: {currentPathIndex}. Target waypoint: {targetWaypoint}. Path length: {path?.Count ?? 0}. Path: {FormatPath(path)}.", this);
-
                     if (resolvedGrid)
                     {
                         LogStallPathIssues(stalledGrid);

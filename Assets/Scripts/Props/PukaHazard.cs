@@ -123,14 +123,12 @@ namespace FaeMaze.Props
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("PukaHazard: MazeGridBehaviour not found!");
                 return;
             }
 
             // Get grid position
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
             {
-                Debug.LogError("PukaHazard: Could not convert world position to grid position!");
                 return;
             }
 

@@ -159,10 +159,7 @@ Once a visitor passes through a FairyRing:
 - Shows exact center of ring
 
 ### Console Logs
-Currently, FairyRing does not log messages. If you need debugging:
-- Add `Debug.Log($"Visitor {visitor.name} entered FairyRing");` in OnVisitorEnter
-- Add `Debug.Log($"Visitor {visitor.name} exited FairyRing");` in OnVisitorExit
-- Check VisitorController.IsEntranced value in Inspector during play
+Currently, FairyRing does not log messages. Check VisitorController.IsEntranced value in Inspector during play.
 
 ### Inspector Values (during Play Mode)
 Select a Visitor GameObject to see:

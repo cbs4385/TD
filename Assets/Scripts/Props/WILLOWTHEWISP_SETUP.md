@@ -269,8 +269,6 @@ if (gameController.TrySpendEssence(50))
         // Instantiate
         GameObject wisp = Instantiate(wispItem.prefab, worldPos, Quaternion.identity);
         wisp.name = $"WillowTheWisp_{gridPos.x}_{gridPos.y}";
-
-        Debug.Log($"Spawned Willow-the-Wisp at ({gridPos.x}, {gridPos.y})");
     }
 }
 ```

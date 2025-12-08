@@ -85,9 +85,6 @@ namespace FaeMaze.Systems
                                 }
                                 else
                                 {
-                                    Debug.LogError("WaveSpawner is missing visitor prefab! " +
-                                        "Please assign Visitor_FestivalTourist prefab to WaveSpawner in ProceduralMazeScene, " +
-                                        "or move the prefab to Assets/Resources/Prefabs/Visitors/");
                                 }
                             }
                         }
@@ -159,7 +156,6 @@ namespace FaeMaze.Systems
 
             if (runtimeGenMaze == null)
             {
-                Debug.LogError("ProceduralMazeScene: No runtime generation MazeGridBehaviour found!");
                 return;
             }
 
@@ -261,7 +257,6 @@ namespace FaeMaze.Systems
 
                 if (!started)
                 {
-                    Debug.LogError("Failed to auto-start first wave in ProceduralMazeScene after retry");
                 }
             }
 

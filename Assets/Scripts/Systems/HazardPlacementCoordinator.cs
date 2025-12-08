@@ -131,11 +131,6 @@ namespace FaeMaze.Systems
         [Tooltip("Random seed for placement (0 = random each time)")]
         private int randomSeed = 0;
 
-        [Header("Debug")]
-        [SerializeField]
-        [Tooltip("Log placement details to console")]
-        private bool debugLogging = true;
-
         #endregion
 
         #region Private Fields
@@ -159,14 +154,12 @@ namespace FaeMaze.Systems
             // Guard: MazeGridBehaviour is required
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("[HazardPlacement] MazeGridBehaviour not found! Cannot place hazards.");
                 return;
             }
 
             // Guard: Grid must be initialized
             if (mazeGridBehaviour.Grid == null)
             {
-                Debug.LogError("[HazardPlacement] MazeGrid is null! Cannot place hazards.");
                 return;
             }
 
@@ -215,7 +208,6 @@ namespace FaeMaze.Systems
             // Guard: Validate required references
             if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
             {
-                Debug.LogError("[HazardPlacement] Cannot place hazards: MazeGridBehaviour or Grid is null.");
                 return;
             }
 
@@ -231,11 +223,6 @@ namespace FaeMaze.Systems
             // Get current wave number (default to 1 if no WaveSpawner)
             int currentWave = waveSpawner != null ? waveSpawner.CurrentWaveNumber : 1;
             if (currentWave <= 0) currentWave = 1;
-
-            if (debugLogging)
-            {
-                Debug.Log($"[HazardPlacement] Placing hazards for wave {currentWave}");
-            }
 
             // Place each hazard type
             if (faeLanternConfig.enabled && faeLanternConfig.prefab != null)
@@ -255,11 +242,6 @@ namespace FaeMaze.Systems
 
             // Track which wave we placed for
             lastPlacedWaveNumber = currentWave;
-
-            if (debugLogging)
-            {
-                Debug.Log($"[HazardPlacement] Placed {placedHazards.Count} total hazards for wave {currentWave}");
-            }
         }
 
         /// <summary>
@@ -296,11 +278,6 @@ namespace FaeMaze.Systems
 
             // Place hazards (will use current wave number)
             PlaceAllHazards();
-
-            if (debugLogging)
-            {
-                Debug.Log("[HazardPlacement] Hazards re-placed after maze regeneration");
-            }
         }
 
         #endregion
@@ -325,10 +302,6 @@ namespace FaeMaze.Systems
 
             if (eligibleCells.Count == 0)
             {
-                if (debugLogging)
-                {
-                    Debug.LogWarning($"[HazardPlacement] No eligible cells for {typeName}");
-                }
                 return;
             }
 
@@ -360,15 +333,6 @@ namespace FaeMaze.Systems
                 occupiedCells.Add(cell);
                 placed++;
 
-                if (debugLogging)
-                {
-                    Debug.Log($"[HazardPlacement] Placed {typeName} at grid {cell} (world {worldPos})");
-                }
-            }
-
-            if (debugLogging)
-            {
-                Debug.Log($"[HazardPlacement] {typeName}: placed {placed}/{targetCount} (eligible cells: {eligibleCells.Count})");
             }
         }
 

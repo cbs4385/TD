@@ -292,7 +292,6 @@ namespace FaeMaze.Visitors
                 int dist = Mathf.Abs(confusionPath[i].x - confusionPath[i - 1].x) + Mathf.Abs(confusionPath[i].y - confusionPath[i - 1].y);
                 if (dist != 1)
                 {
-                    Debug.LogError($"[VisitorPath] {name} BuildConfusionPath created non-adjacent tiles at indices {i - 1} and {i}: {confusionPath[i - 1]} to {confusionPath[i]} (distance {dist}). Falling back to RecalculatePath.", this);
                     RecalculatePath();
                     return;
                 }
@@ -316,7 +315,6 @@ namespace FaeMaze.Visitors
                 int dist = Mathf.Abs(recoveryPath[i].x - recoveryPath[i - 1].x) + Mathf.Abs(recoveryPath[i].y - recoveryPath[i - 1].y);
                 if (dist != 1)
                 {
-                    Debug.LogError($"[VisitorPath] {name} A* recovery path has non-adjacent tiles at indices {i - 1} and {i}: {recoveryPath[i - 1]} to {recoveryPath[i]} (distance {dist}). Falling back to RecalculatePath.", this);
                     RecalculatePath();
                     return;
                 }
@@ -332,7 +330,6 @@ namespace FaeMaze.Visitors
                 int distToFirst = Mathf.Abs(currentPos.x - confusionPath[0].x) + Mathf.Abs(currentPos.y - confusionPath[0].y);
                 if (distToFirst != 1)
                 {
-                    Debug.LogError($"[VisitorPath] {name} currentPos {currentPos} is not adjacent to first confusion tile {confusionPath[0]} (distance {distToFirst}). Falling back to RecalculatePath.", this);
                     RecalculatePath();
                     return;
                 }
@@ -344,8 +341,6 @@ namespace FaeMaze.Visitors
             // Validate connection between confusion end and recovery start
             if (recoveryPath.Count > 0 && recoveryPath[0] != confusionEnd)
             {
-                int distToRecovery = Mathf.Abs(confusionEnd.x - recoveryPath[0].x) + Mathf.Abs(confusionEnd.y - recoveryPath[0].y);
-                Debug.LogError($"[VisitorPath] {name} confusionEnd {confusionEnd} does not match recoveryPath[0] {recoveryPath[0]} (distance {distToRecovery}). Falling back to RecalculatePath.", this);
                 RecalculatePath();
                 return;
             }
@@ -362,7 +357,6 @@ namespace FaeMaze.Visitors
                 int dist = Mathf.Abs(newPath[i].x - newPath[i - 1].x) + Mathf.Abs(newPath[i].y - newPath[i - 1].y);
                 if (dist != 1)
                 {
-                    Debug.LogError($"[VisitorPath] {name} final combined path has non-adjacent tiles at indices {i - 1} and {i}: {newPath[i - 1]} to {newPath[i]} (distance {dist}). Falling back to RecalculatePath.", this);
                     RecalculatePath();
                     return;
                 }
@@ -376,8 +370,6 @@ namespace FaeMaze.Visitors
             confusionStepsTarget = stepsTarget;
             confusionStepsTaken = 0;
             isConfused = true;
-
-            Debug.Log($"[VisitorPath] {name} began confusion detour. Path length: {path.Count}. currentPathIndex: {currentPathIndex}. Target waypoint: {path[currentPathIndex]}. Confusion end index: {confusionSegmentEndIndex}.", this);
 
             RefreshStateFromFlags();
         }
