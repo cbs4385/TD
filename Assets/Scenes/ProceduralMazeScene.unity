@@ -1291,12 +1291,86 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8e4f9d3b2c6a7e5f9a8b3d1e4c7f2a9b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   slowFactor: 0.5
   enablePulse: 1
   pulseSpeed: 2
   pulseMagnitude: 0.1
+--- !u!1 &9000000000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9000000001}
+  - component: {fileID: 9000000002}
+  m_Layer: 0
+  m_Name: HazardCoordinator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9000000001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9000000000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &9000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccaf4e48914dc7043b290e1a2ce2d292, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  faeLanternConfig:
+    prefab: {fileID: 6000000000, guid: 8f6d3e9a2c1b5d7e4a9f8c2b6e3a7d5c, type: 3}
+    baseCount: 2
+    scalingPerWave: 0.3
+    maxCount: 8
+    minDistanceFromEntrance: 6
+    minDistanceFromHeart: 6
+    preferWaterProximity: 0
+    enabled: 1
+  fairyRingConfig:
+    prefab: {fileID: 7000000000, guid: fbfd5fe94e907804aa601e448f10229e, type: 3}
+    baseCount: 1
+    scalingPerWave: 0.4
+    maxCount: 6
+    minDistanceFromEntrance: 5
+    minDistanceFromHeart: 5
+    preferWaterProximity: 0
+    enabled: 1
+  pukaHazardConfig:
+    prefab: {fileID: 0}
+    baseCount: 1
+    scalingPerWave: 0.2
+    maxCount: 4
+    minDistanceFromEntrance: 7
+    minDistanceFromHeart: 7
+    preferWaterProximity: 1
+    enabled: 0
+  autoPlaceOnStart: 1
+  minHazardSpacing: 2
+  randomSeed: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1308,3 +1382,4 @@ SceneRoots:
   - {fileID: 1100000001}
   - {fileID: 1100000004}
   - {fileID: 8000000001}
+  - {fileID: 9000000001}
