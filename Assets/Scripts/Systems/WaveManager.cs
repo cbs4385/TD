@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
+using System.IO;
 
 namespace FaeMaze.Systems
 {
@@ -255,8 +256,10 @@ namespace FaeMaze.Systems
             // Transition to procedural mazes after the initial FaeMazeScene wave
             if (ShouldTransitionToProceduralScene())
             {
-                LoadProceduralMazeScene();
-                return;
+                if (TryLoadProceduralMazeScene())
+                {
+                    return;
+                }
             }
 
             // Show success UI
@@ -571,11 +574,35 @@ namespace FaeMaze.Systems
             return SceneManager.GetActiveScene().name == "FaeMazeScene" && lastCompletedWave >= 1;
         }
 
-        private void LoadProceduralMazeScene()
+        private bool TryLoadProceduralMazeScene()
         {
             waitingForAutoStart = false;
             autoStartTimer = 0f;
+
+            if (!IsSceneInBuildSettings("ProceduralMazeScene"))
+            {
+                Debug.LogWarning("ProceduralMazeScene is not added to the build settings. Staying in the current scene.");
+                return false;
+            }
+
             SceneManager.LoadScene("ProceduralMazeScene");
+            return true;
+        }
+
+        private bool IsSceneInBuildSettings(string sceneName)
+        {
+            for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+            {
+                string path = SceneUtility.GetScenePathByBuildIndex(i);
+                string name = Path.GetFileNameWithoutExtension(path);
+
+                if (name == sceneName)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         #endregion
