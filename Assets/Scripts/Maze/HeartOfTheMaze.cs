@@ -128,7 +128,7 @@ namespace FaeMaze.Maze
         /// Called when a visitor reaches the heart and is consumed.
         /// </summary>
         /// <param name="visitor">The visitor controller to consume</param>
-        public void OnVisitorConsumed(VisitorController visitor)
+        public void OnVisitorConsumed(VisitorControllerBase visitor)
         {
             if (visitor == null)
             {
@@ -248,7 +248,7 @@ namespace FaeMaze.Maze
         private void OnTriggerEnter2D(Collider2D other)
         {
             // Check if a visitor entered the heart
-            var visitor = other.GetComponent<VisitorController>();
+            var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
                 OnVisitorConsumed(visitor);
@@ -258,7 +258,7 @@ namespace FaeMaze.Maze
         private void OnTriggerStay2D(Collider2D other)
         {
             // Catch any visitors that miss the initial enter event
-            var visitor = other.GetComponent<VisitorController>();
+            var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
                 OnVisitorConsumed(visitor);

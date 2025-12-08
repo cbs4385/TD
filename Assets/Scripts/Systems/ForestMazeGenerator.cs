@@ -58,8 +58,8 @@ namespace FaeMaze.Systems
                     return new TerrainData(walkable: true, pathCost: 2f, speedMultiplier: 0.5f);
 
                 case TileType.Water:
-                    // Very slow terrain: very slow movement, very high cost
-                    return new TerrainData(walkable: true, pathCost: 10f, speedMultiplier: 0.15f);
+                    // Impassable terrain: block pathfinding and movement
+                    return new TerrainData(walkable: false, pathCost: 10000f, speedMultiplier: 0f);
 
                 case TileType.TreeBramble:
                     // Unwalkable terrain: extremely high cost to prevent pathfinding through it
