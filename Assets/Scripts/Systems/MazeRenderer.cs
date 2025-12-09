@@ -156,11 +156,33 @@ namespace FaeMaze.Systems
             spriteRenderer.sprite = spriteToUse;
             spriteRenderer.color = color;
 
-            // Wall sprites render one layer higher
-            spriteRenderer.sortingOrder = isWallSprite ? sortingOrder + 1 : sortingOrder;
+            // Set sorting order based on tile type (water < path < undergrowth < walls)
+            spriteRenderer.sortingOrder = sortingOrder + GetLayerOffsetForSymbol(symbol);
 
             float tileSize = mazeGridBehaviour.TileSize;
             tileObj.transform.localScale = new Vector3(tileSize, tileSize, 1f);
+        }
+
+        /// <summary>
+        /// Returns the layer offset for a given tile symbol.
+        /// Water (0) < Path (1) < Undergrowth (2) < Walls (3)
+        /// </summary>
+        private int GetLayerOffsetForSymbol(char symbol)
+        {
+            switch (symbol)
+            {
+                case '~': // Water
+                    return 0;
+                case '.': // Path
+                case 'H': // Heart (treated as path)
+                    return 1;
+                case ';': // Undergrowth
+                    return 2;
+                case '#': // Tree/bramble walls
+                    return 3;
+                default:
+                    return 1; // Default to path layer
+            }
         }
 
         /// <summary>
