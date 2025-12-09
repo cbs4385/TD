@@ -7,9 +7,9 @@ using FaeMaze.Props;
 namespace FaeMaze.Visitors
 {
     /// <summary>
-    /// Kelpie - A water spirit that lures visitors toward Puka hazards.
-    /// Moves near Puka hazards and attempts to lead visitors into danger.
-    /// Works in tandem with PukaHazard to create deadly water-based traps.
+    /// Kelpie - A water spirit bound to a water tile near Puka hazards.
+    /// Remains stationary and lures adjacent visitors toward the nearby Puka.
+    /// Activates and animates when visitors come near.
     /// </summary>
     public class KelpieController : MonoBehaviour
     {
@@ -18,39 +18,26 @@ namespace FaeMaze.Visitors
         public enum KelpieState
         {
             Idle,
-            PatrollingNearPuka,
-            LuringVisitor
+            Luring
         }
 
         #endregion
 
         #region Serialized Fields
 
-        [Header("Movement Settings")]
+        [Header("Detection Settings")]
         [SerializeField]
-        [Tooltip("Movement speed in units per second")]
-        private float moveSpeed = 2.5f;
+        [Tooltip("How often to scan for adjacent visitors (in seconds)")]
+        private float scanInterval = 0.5f;
 
         [SerializeField]
-        [Tooltip("Distance threshold to consider a waypoint reached")]
-        private float waypointReachedDistance = 0.05f;
+        [Tooltip("Distance to detect adjacent visitors")]
+        private float detectionRadius = 1.5f;
 
         [SerializeField]
-        [Tooltip("Maximum distance from assigned Puka hazard")]
-        private float maxDistanceFromPuka = 5f;
-
-        [Header("Luring Settings")]
-        [SerializeField]
-        [Tooltip("How often to update visitor targeting (in seconds)")]
-        private float targetUpdateInterval = 0.5f;
-
-        [SerializeField]
-        [Tooltip("Maximum distance to detect visitors for luring")]
-        private float visitorDetectionRadius = 8f;
-
-        [SerializeField]
-        [Tooltip("How close the Kelpie tries to get to visitors when luring")]
-        private float luringDistance = 1.5f;
+        [Tooltip("Chance (0-1) that visitor is lured toward Puka when adjacent")]
+        [Range(0f, 1f)]
+        private float lureChance = 0.8f;
 
         [Header("Visual Settings")]
         [SerializeField]
@@ -80,15 +67,13 @@ namespace FaeMaze.Visitors
 
         private KelpieState state = KelpieState.Idle;
         private MazeGridBehaviour mazeGridBehaviour;
-        private GameController gameController;
         private PukaHazard assignedPuka;
-        private List<Vector2Int> currentPath = new List<Vector2Int>();
-        private int currentWaypointIndex;
-        private VisitorControllerBase targetVisitor;
-        private float targetUpdateTimer;
+        private HashSet<GameObject> processedVisitors;
+        private float scanTimer;
         private SpriteRenderer spriteRenderer;
         private Animator animator;
         private bool initialized;
+        private Vector2Int gridPosition;
 
         // Direction tracking for animation
         private const int IdleDirection = 0;
@@ -105,12 +90,17 @@ namespace FaeMaze.Visitors
         /// <summary>Gets the assigned Puka hazard</summary>
         public PukaHazard AssignedPuka => assignedPuka;
 
-        /// <summary>Gets the current target visitor</summary>
-        public VisitorControllerBase TargetVisitor => targetVisitor;
+        /// <summary>Gets the grid position of this Kelpie</summary>
+        public Vector2Int GridPosition => gridPosition;
 
         #endregion
 
         #region Unity Lifecycle
+
+        private void Awake()
+        {
+            processedVisitors = new HashSet<GameObject>();
+        }
 
         private void Start()
         {
@@ -119,35 +109,25 @@ namespace FaeMaze.Visitors
 
         private void Update()
         {
-            if (!AcquireDependencies())
-            {
-                return;
-            }
-
-            TryInitialize();
-
             if (!initialized)
             {
+                TryInitialize();
                 return;
             }
 
-            // Find a Puka to work with if we don't have one
-            if (assignedPuka == null)
+            // Periodically scan for adjacent visitors
+            scanTimer += Time.deltaTime;
+            if (scanTimer >= scanInterval)
             {
-                AssignNearestPuka();
+                scanTimer = 0f;
+                ScanForAdjacentVisitors();
             }
 
-            // Update behavior based on state
-            switch (state)
+            // Update state based on whether we have nearby visitors
+            if (state == KelpieState.Luring)
             {
-                case KelpieState.PatrollingNearPuka:
-                    PatrolNearPuka();
-                    CheckForNearbyVisitors();
-                    break;
-
-                case KelpieState.LuringVisitor:
-                    LureVisitorToPuka();
-                    break;
+                // Play luring animation
+                AnimateLuring();
             }
         }
 
@@ -158,61 +138,44 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            Debug.Log($"[Kelpie] Attempting initialization...");
-
             // Find required components
-            AcquireDependencies();
+            mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             animator = GetComponent<Animator>();
 
-            if (gameController == null || mazeGridBehaviour == null)
+            if (mazeGridBehaviour == null)
             {
-                Debug.LogWarning($"[Kelpie] Cannot initialize - missing dependencies. GameController: {gameController != null}, MazeGrid: {mazeGridBehaviour != null}");
                 return;
             }
+
+            // Get grid position
+            if (mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
+            {
+                gridPosition = new Vector2Int(x, y);
+            }
+
+            // Find nearest Puka
+            AssignNearestPuka();
 
             // Create visual representation only if using procedural sprite
             if (useProceduralSprite)
             {
                 CreateProceduralVisual();
-                Debug.Log($"[Kelpie] Created procedural visual");
             }
             else
             {
                 // Get existing SpriteRenderer if not using procedural
                 spriteRenderer = GetComponentInChildren<SpriteRenderer>();
-                Debug.Log($"[Kelpie] Using existing sprite renderer: {spriteRenderer != null}");
             }
 
             // Initialize animator direction
             if (animator != null)
             {
                 SetAnimatorDirection(IdleDirection);
-                Debug.Log($"[Kelpie] Animator found and initialized");
-            }
-            else
-            {
-                Debug.LogWarning($"[Kelpie] No Animator component found");
             }
 
-            // Start patrolling
-            state = KelpieState.PatrollingNearPuka;
+            // Start idle
+            state = KelpieState.Idle;
             initialized = true;
-            Debug.Log($"[Kelpie] Initialization complete! State set to PatrollingNearPuka");
-        }
-
-        private bool AcquireDependencies()
-        {
-            if (gameController == null)
-            {
-                gameController = GameController.Instance;
-            }
-
-            if (mazeGridBehaviour == null)
-            {
-                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-            }
-
-            return gameController != null && mazeGridBehaviour != null;
         }
 
         #endregion
@@ -251,231 +214,122 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Patrolling Behavior
+        #region Visitor Detection
+
+        private bool IsVisitorActive(VisitorControllerBase.VisitorState state)
+        {
+            return state == VisitorControllerBase.VisitorState.Walking
+                || state == VisitorControllerBase.VisitorState.Fascinated
+                || state == VisitorControllerBase.VisitorState.Confused
+                || state == VisitorControllerBase.VisitorState.Frightened;
+        }
 
         /// <summary>
-        /// Patrols in the vicinity of the assigned Puka hazard.
+        /// Scans for visitors adjacent to this Kelpie.
         /// </summary>
-        private void PatrolNearPuka()
+        private void ScanForAdjacentVisitors()
+        {
+            if (mazeGridBehaviour == null)
+            {
+                return;
+            }
+
+            // Find all visitors in the scene
+            VisitorControllerBase[] allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+
+            bool hasAdjacentVisitor = false;
+
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor == null || processedVisitors.Contains(visitor.gameObject))
+                {
+                    continue;
+                }
+
+                // Check if visitor is active
+                if (!IsVisitorActive(visitor.State))
+                {
+                    continue;
+                }
+
+                // Check if visitor is adjacent (within detection radius)
+                float distance = Vector3.Distance(transform.position, visitor.transform.position);
+                if (distance <= detectionRadius)
+                {
+                    hasAdjacentVisitor = true;
+                    LureVisitor(visitor);
+                }
+            }
+
+            // Update state based on whether we have adjacent visitors
+            if (hasAdjacentVisitor)
+            {
+                if (state != KelpieState.Luring)
+                {
+                    state = KelpieState.Luring;
+                }
+            }
+            else
+            {
+                if (state != KelpieState.Idle)
+                {
+                    state = KelpieState.Idle;
+                    SetAnimatorDirection(IdleDirection);
+                }
+            }
+
+            // Clean up destroyed visitors from processed set
+            processedVisitors.RemoveWhere(v => v == null);
+        }
+
+        /// <summary>
+        /// Lures a visitor toward the assigned Puka.
+        /// </summary>
+        private void LureVisitor(VisitorControllerBase visitor)
+        {
+            if (visitor == null || assignedPuka == null)
+            {
+                return;
+            }
+
+            // Mark as processed
+            processedVisitors.Add(visitor.gameObject);
+
+            // Roll for lure success
+            float roll = Random.value;
+            if (roll > lureChance)
+            {
+                return;
+            }
+
+            // Calculate direction to Puka and animate
+            Vector3 directionToPuka = (assignedPuka.transform.position - transform.position).normalized;
+            int animDirection = GetDirectionFromMovement(new Vector2(directionToPuka.x, directionToPuka.y));
+            SetAnimatorDirection(animDirection);
+
+            // TODO: Could add path modification here to lure visitor toward Puka
+            // For now, the Kelpie just animates when visitors are near
+        }
+
+        /// <summary>
+        /// Animates the Kelpie luring gesture toward the Puka.
+        /// </summary>
+        private void AnimateLuring()
         {
             if (assignedPuka == null)
             {
                 return;
             }
 
-            // If we're far from the Puka, move back toward it
-            float distanceToPuka = Vector3.Distance(transform.position, assignedPuka.transform.position);
-
-            if (distanceToPuka > maxDistanceFromPuka)
-            {
-                // Move directly toward the Puka
-                Vector3 direction = (assignedPuka.transform.position - transform.position).normalized;
-                Vector3 movement = direction * moveSpeed * Time.deltaTime;
-                transform.position += movement;
-                UpdateAnimationDirection(direction);
-            }
-            else if (currentPath.Count == 0 || currentWaypointIndex >= currentPath.Count)
-            {
-                // Pick a random patrol point near the Puka
-                PickRandomPatrolPoint();
-            }
-            else
-            {
-                // Follow current patrol path
-                FollowPath();
-            }
-        }
-
-        /// <summary>
-        /// Picks a random point near the Puka to patrol to.
-        /// </summary>
-        private void PickRandomPatrolPoint()
-        {
-            if (assignedPuka == null || mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            // Get current position
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                return;
-            }
-            Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-            // Pick a random point near the Puka
-            Vector2Int pukaPos = assignedPuka.GridPosition;
-            int radius = Mathf.FloorToInt(maxDistanceFromPuka);
-
-            Vector2Int targetPos = new Vector2Int(
-                pukaPos.x + Random.Range(-radius, radius + 1),
-                pukaPos.y + Random.Range(-radius, radius + 1)
-            );
-
-            // Try to find a path to the target
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (gameController.TryFindPath(currentPos, targetPos, pathNodes))
-            {
-                currentPath.Clear();
-                foreach (var node in pathNodes)
-                {
-                    currentPath.Add(new Vector2Int(node.x, node.y));
-                }
-                currentWaypointIndex = 0;
-            }
-        }
-
-        #endregion
-
-        #region Luring Behavior
-
-        /// <summary>
-        /// Checks for nearby visitors to lure toward the Puka.
-        /// </summary>
-        private void CheckForNearbyVisitors()
-        {
-            targetUpdateTimer -= Time.deltaTime;
-
-            if (targetUpdateTimer <= 0f)
-            {
-                targetUpdateTimer = targetUpdateInterval;
-
-                // Find all visitors in the scene
-                VisitorControllerBase[] allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
-
-                Debug.Log($"[Kelpie] Scanning for visitors - Found {allVisitors.Length} visitors");
-
-                if (allVisitors.Length == 0)
-                {
-                    targetVisitor = null;
-                    return;
-                }
-
-                // Find closest visitor within detection radius
-                VisitorControllerBase closestVisitor = null;
-                float closestDistance = float.MaxValue;
-
-                foreach (var visitor in allVisitors)
-                {
-                    if (visitor == null || visitor.gameObject == null)
-                        continue;
-
-                    float distance = Vector3.Distance(transform.position, visitor.transform.position);
-                    if (distance <= visitorDetectionRadius && distance < closestDistance)
-                    {
-                        closestDistance = distance;
-                        closestVisitor = visitor;
-                    }
-                }
-
-                // If we found a visitor, switch to luring mode
-                if (closestVisitor != null && closestVisitor != targetVisitor)
-                {
-                    Debug.Log($"[Kelpie] New target acquired: {closestVisitor.gameObject.name} at distance {closestDistance:F2}, switching to LuringVisitor state");
-                    targetVisitor = closestVisitor;
-                    state = KelpieState.LuringVisitor;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Lures the target visitor toward the Puka by positioning between visitor and safety.
-        /// </summary>
-        private void LureVisitorToPuka()
-        {
-            // Check if we still have a valid target
-            if (targetVisitor == null || targetVisitor.gameObject == null)
-            {
-                Debug.Log($"[Kelpie] Lost target visitor, returning to patrol");
-                targetVisitor = null;
-                state = KelpieState.PatrollingNearPuka;
-                currentPath.Clear();
-                return;
-            }
-
-            // Check if visitor is too far away
-            float distanceToVisitor = Vector3.Distance(transform.position, targetVisitor.transform.position);
-            if (distanceToVisitor > visitorDetectionRadius * 1.5f)
-            {
-                // Lost the visitor, go back to patrolling
-                Debug.Log($"[Kelpie] Visitor too far away ({distanceToVisitor:F2}), returning to patrol");
-                targetVisitor = null;
-                state = KelpieState.PatrollingNearPuka;
-                currentPath.Clear();
-                return;
-            }
-
-            // Position ourselves between the visitor and safety, leading them toward the Puka
-            // Move toward a position near the visitor, but closer to the Puka
-            Vector3 visitorPos = targetVisitor.transform.position;
-            Vector3 pukaPos = assignedPuka != null ? assignedPuka.transform.position : transform.position;
-
-            // Calculate a luring position between visitor and Puka
-            Vector3 directionToPuka = (pukaPos - visitorPos).normalized;
-            Vector3 luringPosition = visitorPos + directionToPuka * luringDistance;
-
-            // Move toward the luring position
-            Vector3 direction = (luringPosition - transform.position).normalized;
-            Vector3 movement = direction * moveSpeed * Time.deltaTime;
-            transform.position += movement;
-
-            Debug.Log($"[Kelpie] Luring {targetVisitor.gameObject.name}, moving {movement.magnitude:F3} units, direction: {direction}");
-            UpdateAnimationDirection(direction);
-        }
-
-        #endregion
-
-        #region Pathfinding
-
-        /// <summary>
-        /// Follows the current path.
-        /// </summary>
-        private void FollowPath()
-        {
-            if (currentPath.Count == 0 || currentWaypointIndex >= currentPath.Count)
-            {
-                return;
-            }
-
-            // Get current waypoint
-            Vector2Int waypointGridPos = currentPath[currentWaypointIndex];
-            Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(waypointGridPos.x, waypointGridPos.y);
-
-            // Move toward waypoint
-            Vector3 direction = (waypointWorldPos - transform.position).normalized;
-            Vector3 movement = direction * moveSpeed * Time.deltaTime;
-            transform.position += movement;
-
-            // Update animation direction based on movement
-            UpdateAnimationDirection(direction);
-
-            // Check if reached waypoint
-            float distanceToWaypoint = Vector3.Distance(transform.position, waypointWorldPos);
-            if (distanceToWaypoint < waypointReachedDistance)
-            {
-                currentWaypointIndex++;
-            }
+            // Calculate direction to Puka and animate
+            Vector3 directionToPuka = (assignedPuka.transform.position - transform.position).normalized;
+            int animDirection = GetDirectionFromMovement(new Vector2(directionToPuka.x, directionToPuka.y));
+            SetAnimatorDirection(animDirection);
         }
 
         #endregion
 
         #region Animation
-
-        /// <summary>
-        /// Updates the animation direction based on movement vector.
-        /// </summary>
-        private void UpdateAnimationDirection(Vector3 movement)
-        {
-            if (animator == null)
-            {
-                Debug.LogWarning($"[Kelpie] Animator is null, cannot update animation direction");
-                return;
-            }
-
-            // Calculate direction from movement
-            int direction = GetDirectionFromMovement(new Vector2(movement.x, movement.y));
-            SetAnimatorDirection(direction);
-        }
 
         /// <summary>
         /// Gets the direction enum from a movement vector.
@@ -520,7 +374,6 @@ namespace FaeMaze.Visitors
         {
             if (animator != null && currentAnimatorDirection != direction)
             {
-                Debug.Log($"[Kelpie] Setting animator direction to {direction} (0=idle, 1=up, 2=down, 3=left, 4=right)");
                 animator.SetInteger(directionParameterName, direction);
                 currentAnimatorDirection = direction;
             }
@@ -592,47 +445,14 @@ namespace FaeMaze.Visitors
             Gizmos.DrawWireSphere(transform.position, 0.4f);
 
             // Draw detection radius
-            Gizmos.color = new Color(0.1f, 0.8f, 0.8f, 0.2f);
-            Gizmos.DrawWireSphere(transform.position, visitorDetectionRadius);
+            Gizmos.color = new Color(0.1f, 0.8f, 0.8f, 0.3f);
+            Gizmos.DrawWireSphere(transform.position, detectionRadius);
 
             // Draw line to assigned Puka
             if (assignedPuka != null)
             {
-                Gizmos.color = new Color(0f, 1f, 1f, 0.5f);
+                Gizmos.color = state == KelpieState.Luring ? new Color(1f, 0.5f, 0f, 0.7f) : new Color(0f, 1f, 1f, 0.5f);
                 Gizmos.DrawLine(transform.position, assignedPuka.transform.position);
-
-                // Draw max distance circle around Puka
-                Gizmos.color = new Color(0f, 1f, 1f, 0.1f);
-                Gizmos.DrawWireSphere(assignedPuka.transform.position, maxDistanceFromPuka);
-            }
-
-            // Draw line to target visitor
-            if (targetVisitor != null)
-            {
-                Gizmos.color = new Color(1f, 1f, 0f, 0.7f);
-                Gizmos.DrawLine(transform.position, targetVisitor.transform.position);
-            }
-
-            // Draw patrol path
-            if (currentPath != null && currentPath.Count > 0 && mazeGridBehaviour != null)
-            {
-                Gizmos.color = new Color(0f, 1f, 1f, 0.5f);
-
-                for (int i = currentWaypointIndex; i < currentPath.Count; i++)
-                {
-                    Vector3 worldPos = mazeGridBehaviour.GridToWorld(currentPath[i].x, currentPath[i].y);
-                    Gizmos.DrawSphere(worldPos, 0.1f);
-
-                    if (i > currentWaypointIndex)
-                    {
-                        Vector3 prevWorldPos = mazeGridBehaviour.GridToWorld(currentPath[i - 1].x, currentPath[i - 1].y);
-                        Gizmos.DrawLine(prevWorldPos, worldPos);
-                    }
-                    else if (i == currentWaypointIndex)
-                    {
-                        Gizmos.DrawLine(transform.position, worldPos);
-                    }
-                }
             }
         }
 

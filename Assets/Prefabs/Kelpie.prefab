@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 6000000004}
   - component: {fileID: 6000000005}
   - component: {fileID: 6000000006}
+  - component: {fileID: 6000000007}
   m_Layer: 0
   m_Name: Kelpie
   m_TagString: Untagged
@@ -47,12 +48,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7e9c8f1b2d4e5a6c7b8d9e0f1a2b3c4, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  moveSpeed: 2.5
-  waypointReachedDistance: 0.05
-  maxDistanceFromPuka: 5
-  targetUpdateInterval: 0.5
-  visitorDetectionRadius: 8
-  luringDistance: 1.5
+  scanInterval: 0.5
+  detectionRadius: 1.5
+  lureChance: 0.8
   useProceduralSprite: 0
   kelpieColor: {r: 0.1, g: 0.6, b: 0.8, a: 1}
   kelpieSize: 1
@@ -168,3 +166,30 @@ CircleCollider2D:
   m_CompositeOrder: 0
   m_Offset: {x: 0, y: 0}
   m_Radius: 0.3
+--- !u!50 &6000000007
+Rigidbody2D:
+  serializedVersion: 4
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6000000001}
+  m_BodyType: 1
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 0
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDrag: 0
+  m_AngularDrag: 0.05
+  m_GravityScale: 0
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_Interpolate: 0
+  m_SleepingMode: 1
+  m_CollisionDetection: 0
+  m_Constraints: 7
