@@ -128,13 +128,23 @@ namespace FaeMaze.Systems
             tileObj.transform.SetParent(tilesParent);
 
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
+
+            // Add random jitter for wall sprites
+            bool isWallSprite = symbol == '#' && wallSprite != null;
+            if (isWallSprite)
+            {
+                float jitterX = Random.Range(-0.02f, 0.02f); // +/- 2 pixels (assuming 100 pixels per unit)
+                float jitterY = Random.Range(-0.02f, 0.02f);
+                worldPos += new Vector3(jitterX, jitterY, 0f);
+            }
+
             tileObj.transform.position = worldPos;
 
             SpriteRenderer spriteRenderer = tileObj.AddComponent<SpriteRenderer>();
 
             // NEW: use wallSprite for '#' tiles, otherwise fallback to square sprite
             Sprite spriteToUse;
-            if (symbol == '#' && wallSprite != null)
+            if (isWallSprite)
             {
                 spriteToUse = wallSprite;
             }
@@ -145,7 +155,9 @@ namespace FaeMaze.Systems
 
             spriteRenderer.sprite = spriteToUse;
             spriteRenderer.color = color;
-            spriteRenderer.sortingOrder = sortingOrder;
+
+            // Wall sprites render one layer higher
+            spriteRenderer.sortingOrder = isWallSprite ? sortingOrder + 1 : sortingOrder;
 
             float tileSize = mazeGridBehaviour.TileSize;
             tileObj.transform.localScale = new Vector3(tileSize, tileSize, 1f);
