@@ -58,7 +58,7 @@ namespace FaeMaze.HeartPowers
             // Tier III: Devouring Chorus - Check for consumed visitors in lantern influence
             if (definition.tier >= 3 && definition.flag2) // flag2 = enable Devouring Chorus
             {
-                CheckForDev ouringChorus();
+                CheckForDevouringChorus();
             }
         }
 
@@ -348,7 +348,7 @@ namespace FaeMaze.HeartPowers
             // Tier I: Create lingering thorn tiles at edge
             if (definition.tier >= 1 && definition.flag1)
             {
-                CreateLin geringThorns(radius);
+                CreateLingeringThorns(radius);
             }
 
             Debug.Log($"[DreamSnare] Activated at {centerTile}, affected {affectedVisitors.Count} visitors");
