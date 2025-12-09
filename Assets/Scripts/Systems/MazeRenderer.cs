@@ -177,7 +177,7 @@ namespace FaeMaze.Systems
             switch (symbol)
             {
                 case '#':
-                    return Color.clear;
+                    return wallColor;
                 case ';':
                     return undergrowthColor;
                 case '~':
