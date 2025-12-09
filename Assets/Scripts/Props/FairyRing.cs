@@ -87,7 +87,7 @@ namespace FaeMaze.Props
 
         /// <summary>
         /// Called when a visitor enters the Fairy Ring.
-        /// Marks them as entranced and applies speed reduction.
+        /// Marks them as entranced and applies speed reduction.Color.Wh
         /// </summary>
         /// <param name="visitor">The visitor entering the ring</param>
         private void OnVisitorEnter(VisitorControllerBase visitor)

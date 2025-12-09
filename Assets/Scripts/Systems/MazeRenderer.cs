@@ -67,7 +67,7 @@ namespace FaeMaze.Systems
         private void Awake()
         {
             // Force color values to new defaults (overrides serialized values)
-            pathColor = Color.white;
+            pathColor = Color.saddleBrown;
             //wallColor = Color.black;
             //undergrowthColor = new Color(0.5f, 0f, 0.5f, 1f); // Purple
             waterColor = Color.magenta;
