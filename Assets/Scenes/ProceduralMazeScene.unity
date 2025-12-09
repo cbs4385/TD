@@ -419,7 +419,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
-  wallColor: {r: 0.2, g: 0.3, b: 0.2, a: 1}
+  wallSprite: {fileID: -8667466294985060184, guid: dd74cce1944c7674788a8379a69e44b7, type: 3}
+  wallColor: {r: 0, g: 0, b: 0, a: 1}
   undergrowthColor: {r: 0.65, g: 0.75, b: 0.65, a: 1}
   waterColor: {r: 0.35, g: 0.55, b: 0.75, a: 1}
   heartColor: {r: 0.9, g: 0.35, b: 0.35, a: 1}
@@ -1291,8 +1292,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8e4f9d3b2c6a7e5f9a8b3d1e4c7f2a9b, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   slowFactor: 0.5
   enablePulse: 1
   pulseSpeed: 2
@@ -1339,8 +1340,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ccaf4e48914dc7043b290e1a2ce2d292, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   faeLanternConfig:
     prefab: {fileID: 6000000000, guid: 8f6d3e9a2c1b5d7e4a9f8c2b6e3a7d5c, type: 3}
     baseCount: 2

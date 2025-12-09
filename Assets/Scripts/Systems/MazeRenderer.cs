@@ -17,10 +17,13 @@ namespace FaeMaze.Systems
         [Tooltip("Color for walkable path tiles")]
         private Color pathColor = Color.white; // White
 
-        [SerializeField]
-        [Tooltip("Color for wall tiles (trees/brambles)")]
-        private Color wallColor = Color.black; // Black
+        [SerializeField] [Tooltip("Color for wall tiles (trees/brambles)")]
+        private Sprite wallSprite;
 
+        [SerializeField]
+        [Tooltip("Color tint for wall tiles")]
+        private Color wallColor = Color.black;
+        
         [SerializeField]
         [Tooltip("Color for undergrowth tiles")]
         private Color undergrowthColor = new Color(0.5f, 0f, 0.5f, 1f); // Purple
@@ -56,7 +59,7 @@ namespace FaeMaze.Systems
         {
             // Force color values to new defaults (overrides serialized values)
             pathColor = Color.white;
-            wallColor = Color.black;
+            //wallColor = Color.black;
             undergrowthColor = new Color(0.5f, 0f, 0.5f, 1f); // Purple
             waterColor = Color.magenta;
         }
@@ -112,30 +115,38 @@ namespace FaeMaze.Systems
                     Color tileColor = GetColorForSymbol(node.symbol, node.walkable);
 
                     // Create tile sprite
-                    CreateTileSprite(x, y, tileColor);
+                    CreateTileSprite(x, y, node.symbol, tileColor);
                     renderedTiles++;
                 }
             }
 
         }
 
-        private void CreateTileSprite(int gridX, int gridY, Color color)
+        private void CreateTileSprite(int gridX, int gridY, char symbol, Color color)
         {
-            // Create GameObject for this tile
             GameObject tileObj = new GameObject($"Tile_{gridX}_{gridY}");
             tileObj.transform.SetParent(tilesParent);
 
-            // Position in world space
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
             tileObj.transform.position = worldPos;
 
-            // Add SpriteRenderer
             SpriteRenderer spriteRenderer = tileObj.AddComponent<SpriteRenderer>();
-            spriteRenderer.sprite = CreateSquareSprite();
+
+            // NEW: use wallSprite for '#' tiles, otherwise fallback to square sprite
+            Sprite spriteToUse;
+            if (symbol == '#' && wallSprite != null)
+            {
+                spriteToUse = wallSprite;
+            }
+            else
+            {
+                spriteToUse = CreateSquareSprite();
+            }
+
+            spriteRenderer.sprite = spriteToUse;
             spriteRenderer.color = color;
             spriteRenderer.sortingOrder = sortingOrder;
 
-            // Scale to fit grid cell (assuming 1 unit per cell)
             float tileSize = mazeGridBehaviour.TileSize;
             tileObj.transform.localScale = new Vector3(tileSize, tileSize, 1f);
         }
@@ -166,7 +177,7 @@ namespace FaeMaze.Systems
             switch (symbol)
             {
                 case '#':
-                    return wallColor;
+                    return Color.clear;
                 case ';':
                     return undergrowthColor;
                 case '~':
