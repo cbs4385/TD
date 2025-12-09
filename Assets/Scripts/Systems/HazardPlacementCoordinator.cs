@@ -105,7 +105,7 @@ namespace FaeMaze.Systems
         };
 
         [SerializeField]
-        [Tooltip("PukaHazard configuration. Create prefab if needed or disable this hazard type")]
+        [Tooltip("PukaHazard configuration. Spawns with Kelpie guardians")]
         private HazardTypeConfig pukaHazardConfig = new HazardTypeConfig
         {
             baseCount = 1,
@@ -114,7 +114,7 @@ namespace FaeMaze.Systems
             minDistanceFromEntrance = 7,
             minDistanceFromHeart = 7,
             preferWaterProximity = true,
-            enabled = false  // Disabled by default since prefab may not exist
+            enabled = true  // Enabled - spawns Puka with Kelpie guardian
         };
 
         [Header("Global Settings")]

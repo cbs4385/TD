@@ -44,8 +44,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fc50c8c9d2916964b841275d5cfb8a35, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Props.PukaHazard
+  kelpiePrefab: {fileID: 6000000001, guid: f9e8d7c6b5a4e3d2c1b0a9f8e7d6c5b4, type: 3}
+  spawnKelpie: 1
+  kelpieSpawnOffset: {x: 2, y: 0, z: 0}
   noInteractionChance: 0.2
   teleportChance: 0.7
   killChance: 0.1

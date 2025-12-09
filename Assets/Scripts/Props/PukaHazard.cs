@@ -23,6 +23,19 @@ namespace FaeMaze.Props
 
         #region Serialized Fields
 
+        [Header("Kelpie Spawning")]
+        [SerializeField]
+        [Tooltip("Prefab for Kelpie water spirit that lures visitors toward this Puka")]
+        private GameObject kelpiePrefab;
+
+        [SerializeField]
+        [Tooltip("Should this Puka spawn a Kelpie guardian?")]
+        private bool spawnKelpie = true;
+
+        [SerializeField]
+        [Tooltip("Offset from Puka position to spawn Kelpie")]
+        private Vector3 kelpieSpawnOffset = new Vector3(2f, 0f, 0f);
+
         [Header("Interaction Settings")]
         [SerializeField]
         [Tooltip("Chance (0-1) that nothing happens when visitor is adjacent")]
@@ -93,6 +106,7 @@ namespace FaeMaze.Props
         private SpriteRenderer spriteRenderer;
         private Vector3 baseScale;
         private Vector3 initialScale;
+        private GameObject spawnedKelpie;
 
         #endregion
 
@@ -137,6 +151,11 @@ namespace FaeMaze.Props
             // Find and link water tiles
             FindAndLinkWaterTiles();
 
+            // Spawn Kelpie if enabled
+            if (spawnKelpie && kelpiePrefab != null)
+            {
+                SpawnKelpie();
+            }
         }
 
         private void OnEnable()
@@ -485,6 +504,25 @@ namespace FaeMaze.Props
         {
             float pulse = Mathf.Sin(Time.time * pulseSpeed) * pulseMagnitude;
             transform.localScale = baseScale * (1f + pulse);
+        }
+
+        #endregion
+
+        #region Kelpie Spawning
+
+        /// <summary>
+        /// Spawns a Kelpie water spirit near this Puka.
+        /// </summary>
+        private void SpawnKelpie()
+        {
+            if (spawnedKelpie != null)
+            {
+                return; // Already spawned
+            }
+
+            Vector3 spawnPosition = transform.position + kelpieSpawnOffset;
+            spawnedKelpie = Instantiate(kelpiePrefab, spawnPosition, Quaternion.identity);
+            spawnedKelpie.name = $"Kelpie_{gameObject.name}";
         }
 
         #endregion
