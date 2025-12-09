@@ -131,6 +131,7 @@ namespace FaeMaze.Visitors
         {
             if (!AcquireDependencies())
             {
+                Debug.LogWarning($"[RedCap] Failed to acquire dependencies. GameController: {gameController != null}, MazeGrid: {mazeGridBehaviour != null}");
                 return;
             }
 
@@ -142,6 +143,10 @@ namespace FaeMaze.Visitors
                 FollowPath();
                 CheckForVisitorContact();
             }
+            else
+            {
+                Debug.LogWarning($"[RedCap] Not hunting. Current state: {state}, Initialized: {initialized}");
+            }
         }
 
         private void TryInitialize()
@@ -151,12 +156,15 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            Debug.Log($"[RedCap] Attempting initialization...");
+
             // Find required components
             AcquireDependencies();
             animator = GetComponent<Animator>();
 
             if (gameController == null || mazeGridBehaviour == null)
             {
+                Debug.LogWarning($"[RedCap] Cannot initialize - missing dependencies. GameController: {gameController != null}, MazeGrid: {mazeGridBehaviour != null}");
                 return;
             }
 
@@ -164,22 +172,30 @@ namespace FaeMaze.Visitors
             if (useProceduralSprite)
             {
                 CreateProceduralVisual();
+                Debug.Log($"[RedCap] Created procedural visual");
             }
             else
             {
                 // Get existing SpriteRenderer if not using procedural
                 spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+                Debug.Log($"[RedCap] Using existing sprite renderer: {spriteRenderer != null}");
             }
 
             // Initialize animator direction
             if (animator != null)
             {
                 SetAnimatorDirection(IdleDirection);
+                Debug.Log($"[RedCap] Animator found and initialized");
+            }
+            else
+            {
+                Debug.LogWarning($"[RedCap] No Animator component found");
             }
 
             // Start hunting
             state = RedCapState.Hunting;
             initialized = true;
+            Debug.Log($"[RedCap] Initialization complete! State set to Hunting");
         }
 
         private bool AcquireDependencies()
@@ -223,11 +239,14 @@ namespace FaeMaze.Visitors
                 // Find all visitors in the scene
                 VisitorController[] allVisitors = FindObjectsByType<VisitorController>(FindObjectsSortMode.None);
 
+                Debug.Log($"[RedCap] Target update - Found {allVisitors.Length} visitors");
+
                 if (allVisitors.Length == 0)
                 {
                     targetVisitor = null;
                     currentPath.Clear();
                     state = RedCapState.Idle;
+                    Debug.LogWarning($"[RedCap] No visitors found, switching to Idle state");
                     return;
                 }
 
@@ -251,6 +270,7 @@ namespace FaeMaze.Visitors
                 // Update target if we found a new one
                 if (closestVisitor != targetVisitor)
                 {
+                    Debug.Log($"[RedCap] New target acquired: {closestVisitor?.gameObject.name} at distance {closestDistance:F2}");
                     targetVisitor = closestVisitor;
                     RecalculatePathToTarget();
                 }
@@ -264,6 +284,7 @@ namespace FaeMaze.Visitors
         {
             if (targetVisitor == null || gameController == null || mazeGridBehaviour == null)
             {
+                Debug.LogWarning($"[RedCap] Cannot recalculate path - Target: {targetVisitor != null}, GameController: {gameController != null}, MazeGrid: {mazeGridBehaviour != null}");
                 currentPath.Clear();
                 return;
             }
@@ -272,6 +293,7 @@ namespace FaeMaze.Visitors
             int currentX, currentY;
             if (!mazeGridBehaviour.WorldToGrid(transform.position, out currentX, out currentY))
             {
+                Debug.LogError($"[RedCap] Failed to convert RedCap world position {transform.position} to grid");
                 currentPath.Clear();
                 return;
             }
@@ -281,10 +303,13 @@ namespace FaeMaze.Visitors
             int targetX, targetY;
             if (!mazeGridBehaviour.WorldToGrid(targetVisitor.transform.position, out targetX, out targetY))
             {
+                Debug.LogError($"[RedCap] Failed to convert target visitor position {targetVisitor.transform.position} to grid");
                 currentPath.Clear();
                 return;
             }
             Vector2Int targetGridPos = new Vector2Int(targetX, targetY);
+
+            Debug.Log($"[RedCap] Calculating path from grid {currentGridPos} to {targetGridPos}");
 
             // Find path using GameController's pathfinding
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
@@ -297,9 +322,11 @@ namespace FaeMaze.Visitors
                 }
 
                 currentWaypointIndex = 0;
+                Debug.Log($"[RedCap] Path found! {currentPath.Count} waypoints");
             }
             else
             {
+                Debug.LogWarning($"[RedCap] No path found from {currentGridPos} to {targetGridPos}");
                 currentPath.Clear();
             }
         }
@@ -311,12 +338,14 @@ namespace FaeMaze.Visitors
         {
             if (currentPath.Count == 0 || currentWaypointIndex >= currentPath.Count)
             {
+                Debug.Log($"[RedCap] No valid path - PathCount: {currentPath.Count}, WaypointIndex: {currentWaypointIndex}");
                 // No path or reached end - recalculate
                 RecalculatePathToTarget();
 
                 // If we still don't have a path, move directly toward the visitor as a fallback
                 if (currentPath.Count == 0 && targetVisitor != null)
                 {
+                    Debug.Log($"[RedCap] Using direct movement fallback toward {targetVisitor.gameObject.name}");
                     MoveDirectlyToward(targetVisitor.transform.position);
                 }
                 return;
@@ -328,7 +357,10 @@ namespace FaeMaze.Visitors
 
             // Move toward waypoint
             Vector3 direction = (waypointWorldPos - transform.position).normalized;
-            transform.position += direction * moveSpeed * Time.deltaTime;
+            Vector3 movement = direction * moveSpeed * Time.deltaTime;
+            transform.position += movement;
+
+            Debug.Log($"[RedCap] Following path - Waypoint {currentWaypointIndex}/{currentPath.Count}: {waypointGridPos}, Distance: {Vector3.Distance(transform.position, waypointWorldPos):F3}, Moving: {movement.magnitude:F3}");
 
             // Update animation direction based on movement
             UpdateAnimationDirection(direction);
@@ -337,11 +369,13 @@ namespace FaeMaze.Visitors
             float distanceToWaypoint = Vector3.Distance(transform.position, waypointWorldPos);
             if (distanceToWaypoint < waypointReachedDistance)
             {
+                Debug.Log($"[RedCap] Reached waypoint {currentWaypointIndex}");
                 currentWaypointIndex++;
 
                 // Recalculate path periodically to adjust for moving target
                 if (currentWaypointIndex >= currentPath.Count)
                 {
+                    Debug.Log($"[RedCap] Completed path, recalculating...");
                     RecalculatePathToTarget();
                 }
             }
@@ -350,7 +384,9 @@ namespace FaeMaze.Visitors
         private void MoveDirectlyToward(Vector3 targetPosition)
         {
             Vector3 direction = (targetPosition - transform.position).normalized;
-            transform.position += direction * moveSpeed * Time.deltaTime;
+            Vector3 movement = direction * moveSpeed * Time.deltaTime;
+            transform.position += movement;
+            Debug.Log($"[RedCap] Direct movement - Target: {targetPosition}, Distance: {Vector3.Distance(transform.position, targetPosition):F3}, Movement: {movement.magnitude:F3}");
             UpdateAnimationDirection(direction);
         }
 
@@ -421,12 +457,16 @@ namespace FaeMaze.Visitors
         private void CheckForVisitorContact()
         {
             if (targetVisitor == null)
+            {
+                Debug.LogWarning($"[RedCap] CheckForVisitorContact called but targetVisitor is null");
                 return;
+            }
 
             float distance = Vector3.Distance(transform.position, targetVisitor.transform.position);
 
             if (distance <= contactRadius)
             {
+                Debug.Log($"[RedCap] CONTACT! Capturing visitor {targetVisitor.gameObject.name} at distance {distance:F3}");
                 CaptureVisitor(targetVisitor);
             }
         }
@@ -438,10 +478,16 @@ namespace FaeMaze.Visitors
         private void CaptureVisitor(VisitorController visitor)
         {
             if (visitor == null)
+            {
+                Debug.LogWarning($"[RedCap] CaptureVisitor called with null visitor");
                 return;
+            }
+
+            Debug.Log($"[RedCap] Capturing visitor: {visitor.gameObject.name}");
 
             // Calculate essence penalty
             int essencePenalty = Mathf.RoundToInt(baseEssencePerVisitor * essencePenaltyMultiplier);
+            Debug.Log($"[RedCap] Applying essence penalty: -{essencePenalty}");
 
             // Deduct essence from player
             if (gameController != null)
@@ -449,15 +495,21 @@ namespace FaeMaze.Visitors
                 // Use TrySpendEssence to deduct, but we want to force the deduction even if not enough
                 // So we'll use AddEssence with negative value to bypass the spending check
                 gameController.AddEssence(-essencePenalty);
-
+                Debug.Log($"[RedCap] Essence penalty applied successfully");
+            }
+            else
+            {
+                Debug.LogWarning($"[RedCap] Cannot apply essence penalty - GameController is null");
             }
 
             // Despawn the visitor
+            Debug.Log($"[RedCap] Destroying visitor gameobject");
             Destroy(visitor.gameObject);
 
             // Clear target and find a new one
             targetVisitor = null;
             currentPath.Clear();
+            Debug.Log($"[RedCap] Capture complete, target cleared");
         }
 
         #endregion
