@@ -158,12 +158,15 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            Debug.Log($"[Kelpie] Attempting initialization...");
+
             // Find required components
             AcquireDependencies();
             animator = GetComponent<Animator>();
 
             if (gameController == null || mazeGridBehaviour == null)
             {
+                Debug.LogWarning($"[Kelpie] Cannot initialize - missing dependencies. GameController: {gameController != null}, MazeGrid: {mazeGridBehaviour != null}");
                 return;
             }
 
@@ -171,22 +174,30 @@ namespace FaeMaze.Visitors
             if (useProceduralSprite)
             {
                 CreateProceduralVisual();
+                Debug.Log($"[Kelpie] Created procedural visual");
             }
             else
             {
                 // Get existing SpriteRenderer if not using procedural
                 spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+                Debug.Log($"[Kelpie] Using existing sprite renderer: {spriteRenderer != null}");
             }
 
             // Initialize animator direction
             if (animator != null)
             {
                 SetAnimatorDirection(IdleDirection);
+                Debug.Log($"[Kelpie] Animator found and initialized");
+            }
+            else
+            {
+                Debug.LogWarning($"[Kelpie] No Animator component found");
             }
 
             // Start patrolling
             state = KelpieState.PatrollingNearPuka;
             initialized = true;
+            Debug.Log($"[Kelpie] Initialization complete! State set to PatrollingNearPuka");
         }
 
         private bool AcquireDependencies()
@@ -332,6 +343,8 @@ namespace FaeMaze.Visitors
                 // Find all visitors in the scene
                 VisitorControllerBase[] allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
 
+                Debug.Log($"[Kelpie] Scanning for visitors - Found {allVisitors.Length} visitors");
+
                 if (allVisitors.Length == 0)
                 {
                     targetVisitor = null;
@@ -358,6 +371,7 @@ namespace FaeMaze.Visitors
                 // If we found a visitor, switch to luring mode
                 if (closestVisitor != null && closestVisitor != targetVisitor)
                 {
+                    Debug.Log($"[Kelpie] New target acquired: {closestVisitor.gameObject.name} at distance {closestDistance:F2}, switching to LuringVisitor state");
                     targetVisitor = closestVisitor;
                     state = KelpieState.LuringVisitor;
                 }
@@ -372,6 +386,7 @@ namespace FaeMaze.Visitors
             // Check if we still have a valid target
             if (targetVisitor == null || targetVisitor.gameObject == null)
             {
+                Debug.Log($"[Kelpie] Lost target visitor, returning to patrol");
                 targetVisitor = null;
                 state = KelpieState.PatrollingNearPuka;
                 currentPath.Clear();
@@ -383,6 +398,7 @@ namespace FaeMaze.Visitors
             if (distanceToVisitor > visitorDetectionRadius * 1.5f)
             {
                 // Lost the visitor, go back to patrolling
+                Debug.Log($"[Kelpie] Visitor too far away ({distanceToVisitor:F2}), returning to patrol");
                 targetVisitor = null;
                 state = KelpieState.PatrollingNearPuka;
                 currentPath.Clear();
@@ -402,6 +418,8 @@ namespace FaeMaze.Visitors
             Vector3 direction = (luringPosition - transform.position).normalized;
             Vector3 movement = direction * moveSpeed * Time.deltaTime;
             transform.position += movement;
+
+            Debug.Log($"[Kelpie] Luring {targetVisitor.gameObject.name}, moving {movement.magnitude:F3} units, direction: {direction}");
             UpdateAnimationDirection(direction);
         }
 
@@ -449,7 +467,10 @@ namespace FaeMaze.Visitors
         private void UpdateAnimationDirection(Vector3 movement)
         {
             if (animator == null)
+            {
+                Debug.LogWarning($"[Kelpie] Animator is null, cannot update animation direction");
                 return;
+            }
 
             // Calculate direction from movement
             int direction = GetDirectionFromMovement(new Vector2(movement.x, movement.y));
@@ -499,6 +520,7 @@ namespace FaeMaze.Visitors
         {
             if (animator != null && currentAnimatorDirection != direction)
             {
+                Debug.Log($"[Kelpie] Setting animator direction to {direction} (0=idle, 1=up, 2=down, 3=left, 4=right)");
                 animator.SetInteger(directionParameterName, direction);
                 currentAnimatorDirection = direction;
             }
