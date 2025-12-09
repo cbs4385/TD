@@ -3,6 +3,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 using System.IO;
+using FaeMaze.HeartPowers;
 
 namespace FaeMaze.Systems
 {
@@ -22,6 +23,10 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Reference to the GameController")]
         private GameController gameController;
+
+        [SerializeField]
+        [Tooltip("Reference to the HeartPowerManager")]
+        private HeartPowerManager heartPowerManager;
 
         [Header("UI References")]
         [SerializeField]
@@ -132,6 +137,11 @@ namespace FaeMaze.Systems
                 gameController = GameController.Instance;
             }
 
+            if (heartPowerManager == null)
+            {
+                heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
+            }
+
             // Carry over persistent wave progress when reloading scenes
             lastCompletedWave = persistentLastCompletedWave;
 
@@ -240,6 +250,12 @@ namespace FaeMaze.Systems
             // Update last completed wave
             lastCompletedWave = waveSpawner.CurrentWaveNumber;
 
+            // Notify Heart Power Manager
+            if (heartPowerManager != null)
+            {
+                heartPowerManager.OnWaveSuccess();
+            }
+
             // Track stats
             if (GameStatsTracker.Instance != null)
             {
@@ -277,6 +293,11 @@ namespace FaeMaze.Systems
 
         private void HandleWaveFailed()
         {
+            // Notify Heart Power Manager
+            if (heartPowerManager != null)
+            {
+                heartPowerManager.OnWaveFail();
+            }
 
             // Check if game over conditions are met
             bool shouldGameOver = ShouldGameOver();
@@ -448,6 +469,12 @@ namespace FaeMaze.Systems
 
             HideAllPanels();
 
+            // Notify Heart Power Manager
+            if (heartPowerManager != null)
+            {
+                heartPowerManager.OnWaveStart();
+            }
+
             if (waveSpawner != null)
             {
                 waveSpawner.StartWave();
@@ -468,6 +495,12 @@ namespace FaeMaze.Systems
 
 
             HideAllPanels();
+
+            // Notify Heart Power Manager
+            if (heartPowerManager != null)
+            {
+                heartPowerManager.OnWaveStart();
+            }
 
             if (waveSpawner != null)
             {
