@@ -177,7 +177,7 @@ namespace FaeMaze.Systems
             switch (symbol)
             {
                 case '#':
-                    return wallColor;
+                    return Color.white; // Use white to preserve sprite's original colors
                 case ';':
                     return undergrowthColor;
                 case '~':
