@@ -21,10 +21,13 @@ namespace FaeMaze.Systems
         [Tooltip("Sprite for wall tiles (trees/brambles)")]
         private Sprite wallSprite;
 
-
         [SerializeField]
         [Tooltip("Sprite for undergrowth tiles")]
         private Sprite undergrowthSprite;
+
+        [SerializeField]
+        [Tooltip("Sprite for undergrowth tiles")]
+        private Sprite waterSprite;
 
         [SerializeField]
         [Tooltip("Color tint for wall tiles")]
@@ -138,6 +141,7 @@ namespace FaeMaze.Systems
             // Add random jitter for wall sprites
             bool isWallSprite = symbol == '#' && wallSprite != null;
             bool isUndergrowthSprite = symbol == ';' && wallSprite != null;
+            bool isWaterSprite = symbol == '~' && wallSprite != null;
             if (isWallSprite || isUndergrowthSprite)
             {
                 float jitterX = Random.Range(-0.02f, 0.02f); // +/- 2 pixels (assuming 100 pixels per unit)
@@ -158,6 +162,10 @@ namespace FaeMaze.Systems
             else if (isUndergrowthSprite)
             {
                 spriteToUse = undergrowthSprite;
+            }
+            else if (isWaterSprite)
+            {
+                spriteToUse = waterSprite;
             }
             else
             {
@@ -226,7 +234,7 @@ namespace FaeMaze.Systems
                 case ';':
                     return Color.white; // Use white to preserve sprite's original colors
                 case '~':
-                    return waterColor;
+                    return Color.white; // Use white to preserve sprite's original colors
                 case 'H':
                     return heartColor;
                 case '.':

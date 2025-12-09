@@ -90,7 +90,7 @@ namespace FaeMaze.Props
         /// Marks them as entranced and applies speed reduction.
         /// </summary>
         /// <param name="visitor">The visitor entering the ring</param>
-        private void OnVisitorEnter(VisitorController visitor)
+        private void OnVisitorEnter(VisitorControllerBase visitor)
         {
 
             // Mark as entranced (permanent effect - once entranced, always entranced)
@@ -106,7 +106,7 @@ namespace FaeMaze.Props
         /// Restores normal speed but keeps entranced flag set.
         /// </summary>
         /// <param name="visitor">The visitor exiting the ring</param>
-        private void OnVisitorExit(VisitorController visitor)
+        private void OnVisitorExit(VisitorControllerBase visitor)
         {
 
             // Restore normal speed
