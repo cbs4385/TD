@@ -87,7 +87,7 @@ namespace FaeMaze.Visitors
         private GameController gameController;
         private List<Vector2Int> currentPath = new List<Vector2Int>();
         private int currentWaypointIndex;
-        private VisitorController targetVisitor;
+        private VisitorControllerBase targetVisitor;
         private float targetUpdateTimer;
         private SpriteRenderer spriteRenderer;
         private Animator animator;
@@ -107,7 +107,7 @@ namespace FaeMaze.Visitors
         public RedCapState State => state;
 
         /// <summary>Gets the current target visitor</summary>
-        public VisitorController TargetVisitor => targetVisitor;
+        public VisitorControllerBase TargetVisitor => targetVisitor;
 
         /// <summary>Gets the calculated move speed</summary>
         public float MoveSpeed => moveSpeed;
@@ -237,7 +237,7 @@ namespace FaeMaze.Visitors
                 targetUpdateTimer = targetUpdateInterval;
 
                 // Find all visitors in the scene
-                VisitorController[] allVisitors = FindObjectsByType<VisitorController>(FindObjectsSortMode.None);
+                VisitorControllerBase[] allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
 
                 Debug.Log($"[RedCap] Target update - Found {allVisitors.Length} visitors");
 
@@ -251,7 +251,7 @@ namespace FaeMaze.Visitors
                 }
 
                 // Find closest visitor
-                VisitorController closestVisitor = null;
+                VisitorControllerBase closestVisitor = null;
                 float closestDistance = float.MaxValue;
 
                 foreach (var visitor in allVisitors)
@@ -475,7 +475,7 @@ namespace FaeMaze.Visitors
         /// Captures a visitor, despawns them, and charges the essence penalty.
         /// </summary>
         /// <param name="visitor">The visitor to capture</param>
-        private void CaptureVisitor(VisitorController visitor)
+        private void CaptureVisitor(VisitorControllerBase visitor)
         {
             if (visitor == null)
             {
