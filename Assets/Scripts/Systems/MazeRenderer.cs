@@ -17,8 +17,14 @@ namespace FaeMaze.Systems
         [Tooltip("Color for walkable path tiles")]
         private Color pathColor = Color.white; // White
 
-        [SerializeField] [Tooltip("Color for wall tiles (trees/brambles)")]
+        [SerializeField] 
+        [Tooltip("Sprite for wall tiles (trees/brambles)")]
         private Sprite wallSprite;
+
+
+        [SerializeField]
+        [Tooltip("Sprite for undergrowth tiles")]
+        private Sprite undergrowthSprite;
 
         [SerializeField]
         [Tooltip("Color tint for wall tiles")]
@@ -60,7 +66,7 @@ namespace FaeMaze.Systems
             // Force color values to new defaults (overrides serialized values)
             pathColor = Color.white;
             //wallColor = Color.black;
-            undergrowthColor = new Color(0.5f, 0f, 0.5f, 1f); // Purple
+            //undergrowthColor = new Color(0.5f, 0f, 0.5f, 1f); // Purple
             waterColor = Color.magenta;
         }
 
@@ -131,7 +137,8 @@ namespace FaeMaze.Systems
 
             // Add random jitter for wall sprites
             bool isWallSprite = symbol == '#' && wallSprite != null;
-            if (isWallSprite)
+            bool isUndergrowthSprite = symbol == ';' && wallSprite != null;
+            if (isWallSprite || isUndergrowthSprite)
             {
                 float jitterX = Random.Range(-0.02f, 0.02f); // +/- 2 pixels (assuming 100 pixels per unit)
                 float jitterY = Random.Range(-0.02f, 0.02f);
@@ -147,6 +154,10 @@ namespace FaeMaze.Systems
             if (isWallSprite)
             {
                 spriteToUse = wallSprite;
+            }
+            else if (isUndergrowthSprite)
+            {
+                spriteToUse = undergrowthSprite;
             }
             else
             {
@@ -213,7 +224,7 @@ namespace FaeMaze.Systems
                 case '#':
                     return Color.white; // Use white to preserve sprite's original colors
                 case ';':
-                    return undergrowthColor;
+                    return Color.white; // Use white to preserve sprite's original colors
                 case '~':
                     return waterColor;
                 case 'H':
