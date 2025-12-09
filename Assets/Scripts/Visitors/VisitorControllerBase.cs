@@ -678,7 +678,6 @@ namespace FaeMaze.Visitors
             // Guard against redundant animator parameter writes
             if (animator != null && currentAnimatorDirection != direction)
             {
-                Debug.Log($"Setting {DirectionParameter} to {direction} for {name}");
                 animator.SetInteger(DirectionParameter, direction);
                 currentAnimatorDirection = direction;
             }
