@@ -130,7 +130,7 @@ namespace FaeMaze.HeartPowers
             }
         }
 
-        private void CheckForDevoringChorus()
+        private void CheckForDevouringChorus()
         {
             // This would need to hook into visitor consumption events
             // For now, this is a placeholder that would be triggered externally
