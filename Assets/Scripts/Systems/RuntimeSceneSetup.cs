@@ -35,28 +35,37 @@ namespace FaeMaze.Systems
                 SetupProceduralMazeScene();
             }
 
-            // Auto-create WaveManager in both FaeMazeScene and ProceduralMazeScene if it doesn't exist
+            // Auto-create WaveManager and HeartPowerManager in both FaeMazeScene and ProceduralMazeScene if they don't exist
             if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene")
             {
+                // Find or create Systems container
+                GameObject gameRoot = GameObject.Find("GameRoot");
+                if (gameRoot == null)
+                {
+                    gameRoot = GameObject.Find("Systems");
+                    if (gameRoot == null)
+                    {
+                        gameRoot = new GameObject("Systems");
+                    }
+                }
+
+                // Auto-create WaveManager if missing
                 WaveManager waveManager = Object.FindFirstObjectByType<WaveManager>();
                 if (waveManager == null)
                 {
-                    // Find GameRoot or create a Systems container
-                    GameObject gameRoot = GameObject.Find("GameRoot");
-                    if (gameRoot == null)
-                    {
-                        gameRoot = GameObject.Find("Systems");
-                        if (gameRoot == null)
-                        {
-                            gameRoot = new GameObject("Systems");
-                        }
-                    }
-
-                    // Create WaveManager GameObject
                     GameObject waveManagerObj = new GameObject("WaveManager");
                     waveManagerObj.transform.SetParent(gameRoot.transform);
                     waveManagerObj.AddComponent<WaveManager>();
+                }
 
+                // Auto-create HeartPowerManager if missing
+                FaeMaze.HeartPowers.HeartPowerManager heartPowerManager = Object.FindFirstObjectByType<FaeMaze.HeartPowers.HeartPowerManager>();
+                if (heartPowerManager == null)
+                {
+                    GameObject heartPowerManagerObj = new GameObject("HeartPowerManager");
+                    heartPowerManagerObj.transform.SetParent(gameRoot.transform);
+                    heartPowerManagerObj.AddComponent<FaeMaze.HeartPowers.HeartPowerManager>();
+                    Debug.Log($"[RuntimeSceneSetup] Auto-created HeartPowerManager for {sceneName}");
                 }
 
                 // Auto-start first wave in ProceduralMazeScene
@@ -219,6 +228,19 @@ namespace FaeMaze.Systems
                 if (mazeGridField != null)
                 {
                     mazeGridField.SetValue(propController, newMaze);
+                }
+            }
+
+            // Update HeartPowerManager reference
+            var heartPowerManager = Object.FindFirstObjectByType<FaeMaze.HeartPowers.HeartPowerManager>();
+            if (heartPowerManager != null)
+            {
+                var hpmType = typeof(FaeMaze.HeartPowers.HeartPowerManager);
+                var mazeGridField = hpmType.GetField("mazeGridBehaviour",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (mazeGridField != null)
+                {
+                    mazeGridField.SetValue(heartPowerManager, newMaze);
                 }
             }
         }
