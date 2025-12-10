@@ -221,6 +221,18 @@ namespace FaeMaze.Visitors
             isCurrentlyStalled = false;
         }
 
+        protected virtual void OnEnable()
+        {
+            // Register with the visitor registry for efficient lookups
+            VisitorRegistry.Register(this);
+        }
+
+        protected virtual void OnDisable()
+        {
+            // Unregister from the visitor registry
+            VisitorRegistry.Unregister(this);
+        }
+
         protected virtual void Update()
         {
             // Update state duration timers for timed states

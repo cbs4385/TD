@@ -109,15 +109,15 @@ namespace FaeMaze.HeartPowers
 
         private void ApplyEchoingThrum()
         {
-            // Find all visitors and check if their upcoming path enters a lantern influence tile
-            var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            // Use visitor registry instead of expensive FindObjectsByType
+            var visitors = VisitorRegistry.All;
             int lookAheadSteps = definition.intParam2 > 0 ? definition.intParam2 : 5;
 
             foreach (var visitor in visitors)
             {
-                if (visitor.State == VisitorControllerBase.VisitorState.Fascinated)
+                if (visitor == null || visitor.State == VisitorControllerBase.VisitorState.Fascinated)
                 {
-                    continue; // Already fascinated
+                    continue; // Already fascinated or null
                 }
 
                 // Check if visitor's path enters lantern influence within N steps
@@ -150,18 +150,21 @@ namespace FaeMaze.HeartPowers
             }
 
             // Apply strong Heart-ward bias to all visitors in lantern influence
-            var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            // Use visitor registry instead of expensive FindObjectsByType
+            var visitors = VisitorRegistry.All;
             foreach (var v in visitors)
             {
-                if (v.State != VisitorControllerBase.VisitorState.Consumed &&
-                    v.State != VisitorControllerBase.VisitorState.Escaping)
+                if (v == null || v.State == VisitorControllerBase.VisitorState.Consumed ||
+                    v.State == VisitorControllerBase.VisitorState.Escaping)
                 {
-                    Vector2Int vPos = GetVisitorGridPosition(v);
-                    if (lanternInfluenceTiles.Contains(vPos))
-                    {
-                        // Apply temporary strong Heart bias (would need visitor API to modify pathfinding)
-                        Debug.Log($"[HeartbeatOfLonging] Devouring Chorus triggered for visitor at {vPos}");
-                    }
+                    continue;
+                }
+
+                Vector2Int vPos = GetVisitorGridPosition(v);
+                if (lanternInfluenceTiles.Contains(vPos))
+                {
+                    // Apply temporary strong Heart bias (would need visitor API to modify pathfinding)
+                    Debug.Log($"[HeartbeatOfLonging] Devouring Chorus triggered for visitor at {vPos}");
                 }
             }
         }
