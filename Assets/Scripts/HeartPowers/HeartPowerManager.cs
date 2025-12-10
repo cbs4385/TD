@@ -105,18 +105,6 @@ namespace FaeMaze.HeartPowers
 
             _instance = this;
 
-            // Initialize path cost modifier
-            if (mazeGridBehaviour != null)
-            {
-                pathCostModifier = new PathCostModifier(mazeGridBehaviour);
-            }
-
-            // Auto-find GameController if not assigned
-            if (gameController == null)
-            {
-                gameController = GameController.Instance;
-            }
-
             // Initialize all powers as locked, tier 1
             foreach (HeartPowerType powerType in Enum.GetValues(typeof(HeartPowerType)))
             {
@@ -124,10 +112,39 @@ namespace FaeMaze.HeartPowers
                 powerTiers[powerType] = 1;
                 unlockedPowers[powerType] = true; // Start with all unlocked for testing
             }
+        }
 
-            if (debugLog)
+        private void Start()
+        {
+            // Find GameController - do this in Start() to ensure it's initialized
+            if (gameController == null)
             {
-                Debug.Log($"[HeartPowerManager] Using GameController essence system. Current essence: {CurrentEssence}");
+                gameController = GameController.Instance;
+                if (gameController == null)
+                {
+                    gameController = FindFirstObjectByType<GameController>();
+                }
+            }
+
+            if (gameController == null)
+            {
+                Debug.LogError("[HeartPowerManager] CRITICAL: GameController not found! Essence system will not work.");
+            }
+            else if (debugLog)
+            {
+                Debug.Log($"[HeartPowerManager] ✓ Connected to GameController. Current essence: {CurrentEssence}");
+            }
+
+            // Find MazeGridBehaviour if not assigned
+            if (mazeGridBehaviour == null)
+            {
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            }
+
+            // Initialize path cost modifier
+            if (mazeGridBehaviour != null)
+            {
+                pathCostModifier = new PathCostModifier(mazeGridBehaviour);
             }
 
             // Auto-create UI if enabled and not present
