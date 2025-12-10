@@ -14,10 +14,17 @@ namespace FaeMaze.Editor
         {
             // Find HeartPowerManager in the scene
             HeartPowerManager manager = Object.FindFirstObjectByType<HeartPowerManager>();
+            bool createdTemporary = false;
+
             if (manager == null)
             {
-                Debug.LogError("[HeartPowerManagerAutoWire] No HeartPowerManager found in the scene!");
-                return;
+                Debug.LogWarning("[HeartPowerManagerAutoWire] No HeartPowerManager found in the current scene.");
+                Debug.Log("[HeartPowerManagerAutoWire] Creating temporary HeartPowerManager to wire definitions...");
+
+                // Create a temporary HeartPowerManager GameObject
+                GameObject managerObj = new GameObject("HeartPowerManager");
+                manager = managerObj.AddComponent<HeartPowerManager>();
+                createdTemporary = true;
             }
 
             // Load all HeartPowerDefinition assets
@@ -53,10 +60,23 @@ namespace FaeMaze.Editor
                 so.ApplyModifiedProperties();
 
                 EditorUtility.SetDirty(manager);
-                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
+
+                if (!createdTemporary)
+                {
+                    UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
+                }
 
                 Debug.Log($"[HeartPowerManagerAutoWire] ✓ Successfully wired {definitions.Length} power definitions to HeartPowerManager");
-                Debug.Log($"[HeartPowerManagerAutoWire] Don't forget to save the scene!");
+
+                if (createdTemporary)
+                {
+                    Debug.Log($"[HeartPowerManagerAutoWire] Temporary HeartPowerManager created in scene. Save the scene to keep it!");
+                    Debug.Log($"[HeartPowerManagerAutoWire] This manager will be auto-created at runtime if not present.");
+                }
+                else
+                {
+                    Debug.Log($"[HeartPowerManagerAutoWire] Don't forget to save the scene!");
+                }
             }
             else
             {
