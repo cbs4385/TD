@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d, type: 3}
+  m_Name: CovenantWithWisps_T2
+  m_EditorClassIdentifier:
+  powerType: 4
+  displayName: Covenant with the Wisps II
+  description: 'Enhanced wisp control with beacon placement.
+
+    Tier II - Shepherd''s Call: Place Wisp Beacon for targeted patrol.'
+  tier: 2
+  chargeCost: 2
+  cooldown: 16
+  duration: 15
+  radius: 5
+  param1: 0
+  param2: 0
+  param3: 0
+  intParam1: 0
+  intParam2: 0
+  flag1: 1
+  flag2: 0

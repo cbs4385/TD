@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d, type: 3}
+  m_Name: HeartbeatOfLonging_T2
+  m_EditorClassIdentifier:
+  powerType: 0
+  displayName: Heartbeat of Longing II
+  description: 'Amplifies FaeLanterns with enhanced Heart-ward routing.
+
+    Tier II - Hungry Glow: When visitors leave fascination, their routes bias toward the Heart instead of exits.'
+  tier: 2
+  chargeCost: 2
+  cooldown: 15
+  duration: 10
+  radius: 0
+  param1: -3
+  param2: 0
+  param3: 0
+  intParam1: 8
+  intParam2: 7
+  flag1: 1
+  flag2: 0

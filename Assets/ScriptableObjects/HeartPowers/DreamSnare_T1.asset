@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d, type: 3}
+  m_Name: DreamSnare_T1
+  m_EditorClassIdentifier:
+  powerType: 2
+  displayName: Dream Snare
+  description: 'AoE that Mesmerizes visitors, then pushes them into Lost state with Heart bias.
+
+    Tier I - Lingering Thorns: Edge tiles apply Frightened state when stepped on.'
+  tier: 1
+  chargeCost: 1
+  cooldown: 14
+  duration: 8
+  radius: 3
+  param1: 4
+  param2: 2
+  param3: 0
+  intParam1: 0
+  intParam2: 0
+  flag1: 1
+  flag2: 0

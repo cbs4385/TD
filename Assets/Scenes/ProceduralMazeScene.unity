@@ -515,6 +515,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1100000004}
   - component: {fileID: 1100000005}
+  - component: {fileID: 1100000006}
   m_Layer: 0
   m_Name: HeartOfTheMaze
   m_TagString: Untagged
@@ -562,6 +563,45 @@ MonoBehaviour:
   attractionRadius: 5
   attractionStrength: 2
   enableAttraction: 1
+--- !u!114 &1100000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1100000003}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  mazeGridBehaviour: {fileID: 963194231}
+  gameController: {fileID: 1408523522}
+  powerDefinitions:
+  - {fileID: 11400000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 2}
+  - {fileID: 11400000, guid: b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7, type: 2}
+  - {fileID: 11400000, guid: c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8, type: 2}
+  - {fileID: 11400000, guid: d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9, type: 2}
+  - {fileID: 11400000, guid: e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0, type: 2}
+  - {fileID: 11400000, guid: f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1, type: 2}
+  - {fileID: 11400000, guid: a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2, type: 2}
+  - {fileID: 11400000, guid: b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3, type: 2}
+  - {fileID: 11400000, guid: c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4, type: 2}
+  - {fileID: 11400000, guid: d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5, type: 2}
+  - {fileID: 11400000, guid: e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6, type: 2}
+  - {fileID: 11400000, guid: f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7, type: 2}
+  - {fileID: 11400000, guid: a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8, type: 2}
+  - {fileID: 11400000, guid: b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9, type: 2}
+  - {fileID: 11400000, guid: c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0, type: 2}
+  - {fileID: 11400000, guid: d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1, type: 2}
+  - {fileID: 11400000, guid: e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2, type: 2}
+  - {fileID: 11400000, guid: f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3, type: 2}
+  - {fileID: 11400000, guid: a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4, type: 2}
+  - {fileID: 11400000, guid: b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5, type: 2}
+  - {fileID: 11400000, guid: c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6, type: 2}
+  initialChargesPerWave: 3
+  currentEssence: 10
+  debugLog: 1
 --- !u!1 &1408523520
 GameObject:
   m_ObjectHideFlags: 0
