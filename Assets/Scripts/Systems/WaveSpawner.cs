@@ -7,6 +7,7 @@ using TMPro;
 using FaeMaze.Maze;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
+using FaeMaze.HeartPowers;
 
 namespace FaeMaze.Systems
 {
@@ -112,6 +113,7 @@ namespace FaeMaze.Systems
         #region Private Fields
 
         private MazeGridBehaviour mazeGridBehaviour;
+        private HeartPowerManager heartPowerManager;
         private bool isSpawning;
         private bool isWaveActive;
         private bool isWaveFailed;
@@ -191,6 +193,14 @@ namespace FaeMaze.Systems
         {
             // Find the MazeGridBehaviour in the scene
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+
+            // Find the HeartPowerManager in the scene
+            heartPowerManager = HeartPowerManager.Instance;
+            if (heartPowerManager == null)
+            {
+                heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
+            }
+
             ValidateReferences();
 
             // Load settings from GameSettings
@@ -309,6 +319,17 @@ namespace FaeMaze.Systems
             isWaveActive = true;
             isWaveSuccessful = false;
             waveTimeRemaining = waveDuration;
+
+            // Notify Heart Power Manager that wave has started
+            if (heartPowerManager != null)
+            {
+                heartPowerManager.OnWaveStart();
+                Debug.Log($"[WaveSpawner] Notified HeartPowerManager of wave start (Wave {currentWaveNumber})");
+            }
+            else
+            {
+                Debug.LogWarning("[WaveSpawner] HeartPowerManager not found, Heart Powers will not be available this wave");
+            }
 
             // Initialize Red Cap state
             redCapSpawnTimer = redCapSpawnDelay;
