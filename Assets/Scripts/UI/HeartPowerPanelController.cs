@@ -82,6 +82,12 @@ namespace FaeMaze.UI
                 }
             }
 
+            if (heartPowerManager == null)
+            {
+                Debug.LogError("[HeartPowerPanel] HeartPowerManager not found! Panel will not function correctly.");
+                return;
+            }
+
             // Auto-create panel if not assigned
             if (heartPowersPanel == null)
             {
@@ -92,6 +98,7 @@ namespace FaeMaze.UI
             InitializeControls();
 
             Debug.Log("[HeartPowerPanel] Heart Powers panel initialized");
+            Debug.Log($"[HeartPowerPanel] Initial state - Charges: {heartPowerManager.CurrentCharges}, Essence: {heartPowerManager.CurrentEssence}");
         }
 
         private void Update()

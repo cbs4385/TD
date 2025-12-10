@@ -48,6 +48,11 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Enable debug logging")]
         private bool debugLog = true;
 
+        [Header("UI Settings")]
+        [SerializeField]
+        [Tooltip("Automatically create the Heart Powers UI panel if not present")]
+        private bool autoCreateUI = true;
+
         #endregion
 
         #region Private Fields
@@ -116,6 +121,40 @@ namespace FaeMaze.HeartPowers
                 cooldownTimers[powerType] = 0f;
                 powerTiers[powerType] = 1;
                 unlockedPowers[powerType] = true; // Start with all unlocked for testing
+            }
+
+            // Sync essence with GameController if available
+            if (gameController != null)
+            {
+                currentEssence = gameController.CurrentEssence;
+                if (debugLog)
+                {
+                    Debug.Log($"[HeartPowerManager] Synced essence with GameController: {currentEssence}");
+                }
+            }
+
+            // Auto-create UI if enabled and not present
+            if (autoCreateUI)
+            {
+                CreateHeartPowersUIIfNeeded();
+            }
+        }
+
+        private void CreateHeartPowersUIIfNeeded()
+        {
+            // Check if HeartPowerPanelController already exists
+            var existingPanel = FindFirstObjectByType<UI.HeartPowerPanelController>();
+            if (existingPanel == null)
+            {
+                // Create a new GameObject for the panel controller
+                GameObject panelObj = new GameObject("HeartPowerPanelController");
+                panelObj.transform.SetParent(transform);
+                var panelController = panelObj.AddComponent<UI.HeartPowerPanelController>();
+
+                if (debugLog)
+                {
+                    Debug.Log("[HeartPowerManager] Auto-created HeartPowerPanelController");
+                }
             }
         }
 
