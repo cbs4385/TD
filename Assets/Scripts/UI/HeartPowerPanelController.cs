@@ -213,19 +213,18 @@ namespace FaeMaze.UI
             // Create title
             CreateTitle(heartPowersPanel.transform);
 
-            // Create resource displays
-            float yPos = -50f;
-            chargesText = CreateResourceLabel(heartPowersPanel.transform, "Heart Charges: 3", yPos, -150f);
-            essenceText = CreateResourceLabel(heartPowersPanel.transform, "Essence: 10", yPos, 150f);
-            yPos -= 40f;
+            // Create resource displays (top of panel)
+            float yPos = -15f;
+            chargesText = CreateResourceLabel(heartPowersPanel.transform, "Heart Charges: 3", yPos, -200f);
+            essenceText = CreateResourceLabel(heartPowersPanel.transform, "Essence: 10", yPos, 200f);
 
-            // Create power buttons in a horizontal row
-            float buttonWidth = 140f;
-            float buttonHeight = 70f;
-            float spacing = 8f;
+            // Create power buttons in a horizontal row (centered in panel)
+            float buttonWidth = 155f;
+            float buttonHeight = 90f;
+            float spacing = 10f;
             float totalWidth = (buttonWidth * 7) + (spacing * 6);
             float startX = -totalWidth / 2f + buttonWidth / 2f;
-            float buttonYPos = -100f; // Position from top of panel
+            float buttonYPos = -70f; // Center buttons vertically in panel
 
             Debug.Log($"[HeartPowerPanel] Creating 7 buttons: width={buttonWidth}, height={buttonHeight}, totalWidth={totalWidth}");
 
@@ -271,7 +270,7 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(0.5f, 0f);
             rect.pivot = new Vector2(0.5f, 0f);
             rect.anchoredPosition = new Vector2(0f, 10f);
-            rect.sizeDelta = new Vector2(1100f, 180f); // Increased width for 7 buttons
+            rect.sizeDelta = new Vector2(1200f, 140f); // Wider panel, optimized height
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.15f, 0.05f, 0.2f, 0.9f); // Dark purple/magenta tint
@@ -293,12 +292,12 @@ namespace FaeMaze.UI
             rect.anchorMin = new Vector2(0.5f, 1f);
             rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(0f, -10f);
-            rect.sizeDelta = new Vector2(980f, 30f);
+            rect.anchoredPosition = new Vector2(0f, -5f);
+            rect.sizeDelta = new Vector2(1180f, 25f);
 
             TextMeshProUGUI text = titleObj.AddComponent<TextMeshProUGUI>();
             text.text = "HEART POWERS";
-            text.fontSize = 22;
+            text.fontSize = 20;
             text.fontStyle = FontStyles.Bold;
             text.alignment = TextAlignmentOptions.Center;
             text.color = new Color(1f, 0.7f, 0.9f, 1f); // Light magenta
@@ -317,14 +316,14 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
             rect.anchoredPosition = new Vector2(xOffset, yPos);
-            rect.sizeDelta = new Vector2(250f, 30f);
+            rect.sizeDelta = new Vector2(280f, 25f);
 
             TextMeshProUGUI textComp = labelObj.AddComponent<TextMeshProUGUI>();
             textComp.text = text;
-            textComp.fontSize = 18;
+            textComp.fontSize = 16;
             textComp.fontStyle = FontStyles.Bold;
             textComp.alignment = TextAlignmentOptions.Center;
-            textComp.color = Color.white;
+            textComp.color = new Color(1f, 0.84f, 0f); // Gold color
 
             return textComp;
         }
@@ -357,15 +356,16 @@ namespace FaeMaze.UI
             RectTransform textRect = textObj.AddComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(5f, 20f);
+            textRect.offsetMin = new Vector2(5f, 25f);
             textRect.offsetMax = new Vector2(-5f, -5f);
 
             TextMeshProUGUI text = textObj.AddComponent<TextMeshProUGUI>();
             text.text = powerNames[index];
-            text.fontSize = 14;
+            text.fontSize = 13;
             text.alignment = TextAlignmentOptions.Center;
             text.color = Color.white;
             text.enableWordWrapping = true;
+            text.fontStyle = FontStyles.Normal;
 
             buttonLabels[index] = text;
 
@@ -381,13 +381,15 @@ namespace FaeMaze.UI
 
             TextMeshProUGUI cooldownText = cooldownObj.AddComponent<TextMeshProUGUI>();
             cooldownText.text = "";
-            cooldownText.fontSize = 24;
+            cooldownText.fontSize = 28;
             cooldownText.fontStyle = FontStyles.Bold;
             cooldownText.alignment = TextAlignmentOptions.Center;
             cooldownText.color = new Color(1f, 0.3f, 0.3f, 1f);
 
             cooldownTexts[index] = cooldownText;
             cooldownObj.SetActive(false);
+
+            Debug.Log($"[HeartPowerPanel] Button {index} fully configured with Image, Button, Label, and Cooldown text");
 
             return button;
         }
