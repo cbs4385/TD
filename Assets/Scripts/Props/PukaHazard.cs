@@ -47,10 +47,8 @@ namespace FaeMaze.Props
         [Range(0f, 1f)]
         private float teleportChance = 0.7f;
 
-        [SerializeField]
-        [Tooltip("Chance (0-1) that visitor is killed")]
-        [Range(0f, 1f)]
-        private float killChance = 0.1f;
+        // Note: Kill chance is implicit (1.0 - noInteractionChance - teleportChance)
+        // Typically 10% with default settings (1.0 - 0.2 - 0.7 = 0.1)
 
         [SerializeField]
         [Tooltip("How often to scan for adjacent visitors (seconds)")]

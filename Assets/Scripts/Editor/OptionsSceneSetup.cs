@@ -110,8 +110,6 @@ namespace FaeMaze.Editor
             Button backButton = SceneSetupUtilities.CreateButtonWithTextMeshPro("BackButton", buttonPanelObj.transform, "Back to Menu", new Color(0.3f, 0.3f, 0.7f));
 
             // Build settings sections
-            float currentY = -20f;
-
             // Audio Section
             var (audioSection, audioContent) = CreateCollapsibleSection("AudioSection", contentObj.transform, "AUDIO SETTINGS");
             var (sfxVolSlider, sfxVolText) = SceneSetupUtilities.CreateSliderWithLabel(audioContent, "SFX Volume", 0f, 1f, 1f);

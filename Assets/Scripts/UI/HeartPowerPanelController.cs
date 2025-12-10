@@ -441,7 +441,7 @@ namespace FaeMaze.UI
             text.fontSize = 12;
             text.alignment = TextAlignmentOptions.Center;
             text.color = Color.white;
-            text.enableWordWrapping = true;
+            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
             text.fontStyle = FontStyles.Normal;
             text.raycastTarget = false; // Don't block button clicks
 
