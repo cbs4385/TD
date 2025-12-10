@@ -631,7 +631,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1100000003}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 20228909174bcc04a9b1c83dcfb4ece7, type: 3}
+  m_Script: {fileID: 11500000, guid: 7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   mazeGridBehaviour: {fileID: 963194231}
@@ -1530,7 +1530,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 9000000001}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b4acb3d3366578c458fb0944ccad0188, type: 3}
+  m_Script: {fileID: 11500000, guid: 5f6c7d8e9a0b1c2d3e4f5a6b7c8d9e0f, type: 3}
   m_Name:
   m_EditorClassIdentifier:
   heartPowerManager: {fileID: 1100000006}
