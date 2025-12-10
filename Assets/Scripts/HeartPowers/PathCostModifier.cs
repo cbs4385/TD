@@ -32,6 +32,10 @@ namespace FaeMaze.HeartPowers
         private readonly Dictionary<Vector2Int, List<CostModification>> modifiers = new Dictionary<Vector2Int, List<CostModification>>();
         private readonly MazeGridBehaviour gridBehaviour;
 
+        // Reusable buffers to avoid GC allocations during cleanup operations
+        private readonly List<Vector2Int> _tilesToUpdate = new List<Vector2Int>();
+        private readonly List<Vector2Int> _allTilesBuffer = new List<Vector2Int>();
+
         #endregion
 
         #region Constructor
@@ -88,14 +92,15 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void ClearBySource(string sourceId)
         {
-            List<Vector2Int> tilesToUpdate = new List<Vector2Int>();
+            // Clear and reuse the buffer instead of creating new list
+            _tilesToUpdate.Clear();
 
             foreach (var kvp in modifiers)
             {
                 kvp.Value.RemoveAll(m => m.sourceId == sourceId);
                 if (kvp.Value.Count == 0)
                 {
-                    tilesToUpdate.Add(kvp.Key);
+                    _tilesToUpdate.Add(kvp.Key);
                 }
                 else
                 {
@@ -103,7 +108,7 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            foreach (var tile in tilesToUpdate)
+            foreach (var tile in _tilesToUpdate)
             {
                 modifiers.Remove(tile);
                 ApplyModifierToGrid(tile);
@@ -116,7 +121,8 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void CleanupExpired()
         {
-            List<Vector2Int> tilesToUpdate = new List<Vector2Int>();
+            // Clear and reuse the buffer instead of creating new list
+            _tilesToUpdate.Clear();
 
             foreach (var kvp in modifiers)
             {
@@ -125,7 +131,7 @@ namespace FaeMaze.HeartPowers
                 {
                     if (kvp.Value.Count == 0)
                     {
-                        tilesToUpdate.Add(kvp.Key);
+                        _tilesToUpdate.Add(kvp.Key);
                     }
                     else
                     {
@@ -134,7 +140,7 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            foreach (var tile in tilesToUpdate)
+            foreach (var tile in _tilesToUpdate)
             {
                 modifiers.Remove(tile);
                 ApplyModifierToGrid(tile);
@@ -176,10 +182,12 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void ClearAll()
         {
-            List<Vector2Int> allTiles = new List<Vector2Int>(modifiers.Keys);
+            // Clear and reuse the buffer instead of creating new list
+            _allTilesBuffer.Clear();
+            _allTilesBuffer.AddRange(modifiers.Keys);
             modifiers.Clear();
 
-            foreach (var tile in allTiles)
+            foreach (var tile in _allTilesBuffer)
             {
                 ApplyModifierToGrid(tile);
             }
