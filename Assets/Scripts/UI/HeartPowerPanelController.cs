@@ -119,6 +119,7 @@ namespace FaeMaze.UI
 
         private void OnEnable()
         {
+            // Subscribe to HeartPowerManager events
             if (heartPowerManager != null)
             {
                 heartPowerManager.OnChargesChanged += UpdateChargesDisplay;
@@ -127,8 +128,17 @@ namespace FaeMaze.UI
             }
 
             // Also subscribe to GameController essence changes for real-time updates
+            SubscribeToGameControllerEvents();
+        }
+
+        private void SubscribeToGameControllerEvents()
+        {
+            // Try to find GameController if not found yet
             if (GameController.Instance != null)
             {
+                // Unsubscribe first to avoid double subscription
+                GameController.Instance.OnEssenceChanged -= UpdateEssenceDisplay;
+                // Subscribe
                 GameController.Instance.OnEssenceChanged += UpdateEssenceDisplay;
             }
         }
@@ -194,6 +204,9 @@ namespace FaeMaze.UI
 
             Debug.Log($"[HeartPowerPanel] Initialized {successCount}/{powerButtons.Length} button listeners");
 
+            // Ensure we're subscribed to GameController events
+            SubscribeToGameControllerEvents();
+
             // Initialize resource displays
             UpdateResourceDisplays();
 
@@ -204,10 +217,21 @@ namespace FaeMaze.UI
                 Debug.Log("[HeartPowerPanel] Panel set to active (visible)");
             }
 
-            // Debug: Check game state
+            // Debug: Check game state and essence connection
             if (heartPowerManager != null)
             {
                 Debug.Log($"[HeartPowerPanel] Game state check:");
+                Debug.Log($"[HeartPowerPanel]   Charges: {heartPowerManager.CurrentCharges}");
+                Debug.Log($"[HeartPowerPanel]   Essence (from HeartPowerManager): {heartPowerManager.CurrentEssence}");
+                if (GameController.Instance != null)
+                {
+                    Debug.Log($"[HeartPowerPanel]   Essence (from GameController): {GameController.Instance.CurrentEssence}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[HeartPowerPanel]   GameController.Instance is NULL!");
+                }
+
                 for (int i = 0; i < powerTypes.Length; i++)
                 {
                     bool canActivate = heartPowerManager.CanActivatePower(powerTypes[i], out string reason);
@@ -563,7 +587,19 @@ namespace FaeMaze.UI
             if (heartPowerManager != null)
             {
                 UpdateChargesDisplay(heartPowerManager.CurrentCharges);
-                UpdateEssenceDisplay(heartPowerManager.CurrentEssence);
+
+                // Get essence from GameController directly as source of truth
+                int essence = 0;
+                if (GameController.Instance != null)
+                {
+                    essence = GameController.Instance.CurrentEssence;
+                }
+                else if (heartPowerManager.GameController != null)
+                {
+                    essence = heartPowerManager.GameController.CurrentEssence;
+                }
+
+                UpdateEssenceDisplay(essence);
             }
         }
 
