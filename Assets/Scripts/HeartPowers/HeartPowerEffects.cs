@@ -26,8 +26,11 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
+            Debug.Log($"[HeartbeatOfLonging] ═══ EFFECT START ═══");
+
             // Mark all FaeLanterns as Heart-linked for duration
             affectedLanterns.AddRange(FaeLantern.All);
+            Debug.Log($"[HeartbeatOfLonging] Found {affectedLanterns.Count} FaeLanterns to amplify");
 
             // Apply path cost reduction to all lantern influence tiles
             foreach (var lantern in affectedLanterns)
@@ -40,9 +43,11 @@ namespace FaeMaze.HeartPowers
                     float attractionBonus = -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 2.0f);
                     manager.PathModifier.AddModifier(tile, attractionBonus, definition.duration, ModifierSourceId);
                 }
+                Debug.Log($"[HeartbeatOfLonging] Lantern at {lantern.GridPosition} - Influenced {influenceTiles.Count} tiles");
             }
 
-            Debug.Log($"[HeartbeatOfLonging] Activated on {affectedLanterns.Count} lanterns affecting {lanternInfluenceTiles.Count} tiles");
+            Debug.Log($"[HeartbeatOfLonging] ✓ Activated on {affectedLanterns.Count} lanterns affecting {lanternInfluenceTiles.Count} tiles total");
+            Debug.Log($"[HeartbeatOfLonging] Attraction bonus: {-Mathf.Abs(definition.param1 != 0 ? definition.param1 : 2.0f)}, Duration: {definition.duration}s");
         }
 
         public override void Update(float deltaTime)
@@ -212,10 +217,14 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
+            Debug.Log($"[MurmuringPaths] ═══ EFFECT START ═══");
+
             // Convert target position to grid, then create a path segment
             if (manager.MazeGrid.WorldToGrid(targetPosition, out int x, out int y))
             {
                 Vector2Int startTile = new Vector2Int(x, y);
+                Debug.Log($"[MurmuringPaths] Target position {targetPosition} → Grid tile ({x}, {y})");
+
                 pathSegment = GeneratePathSegment(startTile);
 
                 // Determine mode: Lure (default) or Seal (Tier III)
@@ -224,13 +233,20 @@ namespace FaeMaze.HeartPowers
                     ? Mathf.Abs(definition.param2 != 0 ? definition.param2 : 5.0f)  // Positive = expensive
                     : -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 3.0f); // Negative = attractive
 
+                Debug.Log($"[MurmuringPaths] Mode: {(sealMode ? "SEAL (expensive)" : "LURE (attractive)")}, Cost modifier: {costModifier}");
+
                 // Apply cost modifier to segment tiles
                 foreach (var tile in pathSegment)
                 {
                     manager.PathModifier.AddModifier(tile, costModifier, definition.duration, instanceSourceId);
                 }
 
-                Debug.Log($"[MurmuringPaths] Created {(sealMode ? "sealed" : "luring")} path segment with {pathSegment.Count} tiles");
+                Debug.Log($"[MurmuringPaths] ✓ Created {(sealMode ? "sealed" : "luring")} path segment with {pathSegment.Count} tiles");
+                Debug.Log($"[MurmuringPaths] Duration: {definition.duration}s, Source ID: {instanceSourceId}");
+            }
+            else
+            {
+                Debug.LogWarning($"[MurmuringPaths] ✗ Failed to convert target position {targetPosition} to grid!");
             }
         }
 
@@ -310,18 +326,24 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
+            Debug.Log($"[DreamSnare] ═══ EFFECT START ═══");
+
             // Convert target position to grid
             if (!manager.MazeGrid.WorldToGrid(targetPosition, out int x, out int y))
             {
-                Debug.LogWarning("[DreamSnare] Invalid target position");
+                Debug.LogWarning("[DreamSnare] ✗ Invalid target position");
                 return;
             }
 
             centerTile = new Vector2Int(x, y);
             float radius = definition.radius > 0 ? definition.radius : 3f;
+            Debug.Log($"[DreamSnare] Center: {centerTile}, Radius: {radius} tiles");
 
             // Find all visitors in AoE and apply Mesmerized
             var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            Debug.Log($"[DreamSnare] Scanning {visitors.Length} visitors for AoE effect...");
+
+            int mesmerizedCount = 0;
             foreach (var visitor in visitors)
             {
                 Vector3 visitorPos = visitor.transform.position;
@@ -333,14 +355,15 @@ namespace FaeMaze.HeartPowers
                     float mesmerizeDuration = definition.param1 > 0 ? definition.param1 : 4f;
                     visitor.SetMesmerized(mesmerizeDuration);
                     affectedVisitors.Add(visitor);
+                    mesmerizedCount++;
 
-                    Debug.Log($"[DreamSnare] Mesmerized visitor at {visitorPos}");
+                    Debug.Log($"[DreamSnare] → Mesmerized visitor at {visitorPos} (distance: {distance:F2}, duration: {mesmerizeDuration}s)");
 
                     // Tier III: Mark for harvest
                     if (definition.tier >= 3)
                     {
                         // Would need to add a flag to visitor for tracking
-                        Debug.Log($"[DreamSnare] Marked visitor for harvest");
+                        Debug.Log($"[DreamSnare] → Marked visitor for harvest (Tier III bonus)");
                     }
                 }
             }
@@ -351,7 +374,7 @@ namespace FaeMaze.HeartPowers
                 CreateLingeringThorns(radius);
             }
 
-            Debug.Log($"[DreamSnare] Activated at {centerTile}, affected {affectedVisitors.Count} visitors");
+            Debug.Log($"[DreamSnare] ✓ Activated at {centerTile}, mesmerized {mesmerizedCount}/{visitors.Length} visitors");
         }
 
         public override void Update(float deltaTime)
@@ -444,18 +467,28 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
+            Debug.Log($"[FeastwardPanic] ═══ EFFECT START ═══");
+
             heartTile = manager.MazeGrid.HeartGridPos;
+            Debug.Log($"[FeastwardPanic] Heart position: {heartTile}");
 
             // Determine mode: Global or Selective (cone)
             bool selectiveMode = definition.tier >= 1 && definition.flag1; // flag1 = selective terror mode
+            Debug.Log($"[FeastwardPanic] Mode: {(selectiveMode ? "SELECTIVE TERROR (cone)" : "GLOBAL PANIC")}");
 
             var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            Debug.Log($"[FeastwardPanic] Scanning {visitors.Length} visitors...");
+
+            int affectedCount = 0;
+            int skippedCount = 0;
+
             foreach (var visitor in visitors)
             {
                 if (visitor.State == VisitorControllerBase.VisitorState.Mesmerized ||
                     visitor.State == VisitorControllerBase.VisitorState.Consumed ||
                     visitor.State == VisitorControllerBase.VisitorState.Escaping)
                 {
+                    skippedCount++;
                     continue; // Don't affect these states
                 }
 
@@ -473,15 +506,16 @@ namespace FaeMaze.HeartPowers
                     float frightenedDuration = definition.duration > 0 ? definition.duration : 5f;
                     visitor.SetFrightened(frightenedDuration);
                     frightenedVisitors.Add(visitor);
+                    affectedCount++;
 
                     // Apply Heart-ward path bias
                     ApplyHeartwardBias(visitor);
 
-                    Debug.Log($"[FeastwardPanic] Applied panic to visitor at {visitor.transform.position}");
+                    Debug.Log($"[FeastwardPanic] → Applied panic to visitor at {visitor.transform.position} (duration: {frightenedDuration}s)");
                 }
             }
 
-            Debug.Log($"[FeastwardPanic] Activated, affected {frightenedVisitors.Count} visitors");
+            Debug.Log($"[FeastwardPanic] ✓ Activated! Affected: {affectedCount}, Skipped: {skippedCount}, Total scanned: {visitors.Length}");
         }
 
         public override void Update(float deltaTime)

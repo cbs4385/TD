@@ -215,11 +215,16 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public bool TryActivatePower(HeartPowerType powerType, Vector3 worldPosition)
         {
+            if (debugLog)
+            {
+                Debug.Log($"[HeartPowerManager] Attempting to activate power: {powerType} at position {worldPosition}");
+            }
+
             if (!CanActivatePower(powerType, out string reason))
             {
                 if (debugLog)
                 {
-                    Debug.LogWarning($"[HeartPowerManager] Cannot activate {powerType}: {reason}");
+                    Debug.LogWarning($"[HeartPowerManager] ✗ Cannot activate {powerType}: {reason}");
                 }
                 return false;
             }
@@ -227,8 +232,13 @@ namespace FaeMaze.HeartPowers
             HeartPowerDefinition definition = GetPowerDefinition(powerType);
             if (definition == null)
             {
-                Debug.LogError($"[HeartPowerManager] No definition found for {powerType}");
+                Debug.LogError($"[HeartPowerManager] ✗ No definition found for {powerType}");
                 return false;
+            }
+
+            if (debugLog)
+            {
+                Debug.Log($"[HeartPowerManager] Power {powerType} - Cost: {definition.chargeCost} charges, Cooldown: {definition.cooldown}s, Duration: {definition.duration}s");
             }
 
             // Consume charges and start cooldown
@@ -242,7 +252,8 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Activated {powerType} at {worldPosition}");
+                Debug.Log($"[HeartPowerManager] ✓ Successfully activated {powerType} at {worldPosition}");
+                Debug.Log($"[HeartPowerManager] Remaining charges: {currentCharges}, Cooldown started: {definition.cooldown}s");
             }
 
             return true;
@@ -386,7 +397,14 @@ namespace FaeMaze.HeartPowers
 
         private void ConsumeCharges(int amount)
         {
+            int previousCharges = currentCharges;
             currentCharges -= amount;
+
+            if (debugLog)
+            {
+                Debug.Log($"[HeartPowerManager] Consumed {amount} charges ({previousCharges} → {currentCharges})");
+            }
+
             OnChargesChanged?.Invoke(currentCharges);
         }
 
@@ -394,6 +412,11 @@ namespace FaeMaze.HeartPowers
         {
             // Dispatch to specific power implementations
             ActivePowerEffect effect = null;
+
+            if (debugLog)
+            {
+                Debug.Log($"[HeartPowerManager] Creating effect instance for {powerType}...");
+            }
 
             switch (powerType)
             {
@@ -426,20 +449,34 @@ namespace FaeMaze.HeartPowers
                     break;
 
                 default:
-                    Debug.LogWarning($"[HeartPowerManager] Power {powerType} not yet implemented");
+                    Debug.LogWarning($"[HeartPowerManager] ✗ Power {powerType} not yet implemented");
                     return;
             }
 
             if (effect != null)
             {
+                if (debugLog)
+                {
+                    Debug.Log($"[HeartPowerManager] Starting effect for {powerType} (Duration: {effect.Duration}s)");
+                }
+
                 effect.OnStart();
+
                 if (effect.Duration > 0)
                 {
                     activePowers[powerType] = effect;
+                    if (debugLog)
+                    {
+                        Debug.Log($"[HeartPowerManager] Effect {powerType} registered as active (will expire in {effect.Duration}s)");
+                    }
                 }
                 else
                 {
                     // Instant effect, trigger OnEnd immediately
+                    if (debugLog)
+                    {
+                        Debug.Log($"[HeartPowerManager] Effect {powerType} is instant, completing immediately");
+                    }
                     effect.OnEnd();
                 }
             }
