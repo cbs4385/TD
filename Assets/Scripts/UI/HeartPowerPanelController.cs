@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using TMPro;
 using FaeMaze.HeartPowers;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -124,6 +125,12 @@ namespace FaeMaze.UI
                 heartPowerManager.OnEssenceChanged += UpdateEssenceDisplay;
                 heartPowerManager.OnPowerActivated += OnPowerActivated;
             }
+
+            // Also subscribe to GameController essence changes for real-time updates
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged += UpdateEssenceDisplay;
+            }
         }
 
         private void OnDisable()
@@ -133,6 +140,12 @@ namespace FaeMaze.UI
                 heartPowerManager.OnChargesChanged -= UpdateChargesDisplay;
                 heartPowerManager.OnEssenceChanged -= UpdateEssenceDisplay;
                 heartPowerManager.OnPowerActivated -= OnPowerActivated;
+            }
+
+            // Unsubscribe from GameController
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged -= UpdateEssenceDisplay;
             }
         }
 
@@ -207,16 +220,20 @@ namespace FaeMaze.UI
             yPos -= 40f;
 
             // Create power buttons in a horizontal row
-            float buttonWidth = 120f;
-            float buttonHeight = 80f;
-            float spacing = 10f;
+            float buttonWidth = 140f;
+            float buttonHeight = 70f;
+            float spacing = 8f;
             float totalWidth = (buttonWidth * 7) + (spacing * 6);
             float startX = -totalWidth / 2f + buttonWidth / 2f;
+            float buttonYPos = -100f; // Position from top of panel
+
+            Debug.Log($"[HeartPowerPanel] Creating 7 buttons: width={buttonWidth}, height={buttonHeight}, totalWidth={totalWidth}");
 
             for (int i = 0; i < 7; i++)
             {
                 float xPos = startX + (i * (buttonWidth + spacing));
-                powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, -110f, buttonWidth, buttonHeight);
+                powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, buttonYPos, buttonWidth, buttonHeight);
+                Debug.Log($"[HeartPowerPanel] Created button {i} at x={xPos}, y={buttonYPos}");
             }
         }
 
@@ -254,10 +271,12 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(0.5f, 0f);
             rect.pivot = new Vector2(0.5f, 0f);
             rect.anchoredPosition = new Vector2(0f, 10f);
-            rect.sizeDelta = new Vector2(1000f, 200f);
+            rect.sizeDelta = new Vector2(1100f, 180f); // Increased width for 7 buttons
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.15f, 0.05f, 0.2f, 0.9f); // Dark purple/magenta tint
+
+            Debug.Log($"[HeartPowerPanel] Created panel with size: {rect.sizeDelta}");
 
             return panel;
         }

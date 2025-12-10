@@ -39,10 +39,6 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Initial Heart charges at start of each wave")]
         private int initialChargesPerWave = 3;
 
-        [SerializeField]
-        [Tooltip("Current essence (persistent across waves)")]
-        private int currentEssence = 10;
-
         [Header("Debug")]
         [SerializeField]
         [Tooltip("Enable debug logging")]
@@ -75,8 +71,8 @@ namespace FaeMaze.HeartPowers
         /// <summary>Gets the current number of Heart charges</summary>
         public int CurrentCharges => currentCharges;
 
-        /// <summary>Gets the current essence</summary>
-        public int CurrentEssence => currentEssence;
+        /// <summary>Gets the current essence from GameController</summary>
+        public int CurrentEssence => gameController != null ? gameController.CurrentEssence : 0;
 
         /// <summary>Gets the path cost modifier system</summary>
         public PathCostModifier PathModifier => pathCostModifier;
@@ -115,6 +111,12 @@ namespace FaeMaze.HeartPowers
                 pathCostModifier = new PathCostModifier(mazeGridBehaviour);
             }
 
+            // Auto-find GameController if not assigned
+            if (gameController == null)
+            {
+                gameController = GameController.Instance;
+            }
+
             // Initialize all powers as locked, tier 1
             foreach (HeartPowerType powerType in Enum.GetValues(typeof(HeartPowerType)))
             {
@@ -123,14 +125,9 @@ namespace FaeMaze.HeartPowers
                 unlockedPowers[powerType] = true; // Start with all unlocked for testing
             }
 
-            // Sync essence with GameController if available
-            if (gameController != null)
+            if (debugLog)
             {
-                currentEssence = gameController.CurrentEssence;
-                if (debugLog)
-                {
-                    Debug.Log($"[HeartPowerManager] Synced essence with GameController: {currentEssence}");
-                }
+                Debug.Log($"[HeartPowerManager] Using GameController essence system. Current essence: {CurrentEssence}");
             }
 
             // Auto-create UI if enabled and not present
@@ -382,38 +379,42 @@ namespace FaeMaze.HeartPowers
         #region Public Methods - Resources
 
         /// <summary>
-        /// Adds essence to the player's pool.
+        /// Adds essence to the player's pool via GameController.
         /// </summary>
         public void AddEssence(int amount)
         {
-            currentEssence += amount;
-            OnEssenceChanged?.Invoke(currentEssence);
-
-            if (debugLog)
+            if (gameController != null)
             {
-                Debug.Log($"[HeartPowerManager] Added {amount} essence. Total: {currentEssence}");
+                gameController.AddEssence(amount);
+
+                if (debugLog)
+                {
+                    Debug.Log($"[HeartPowerManager] Added {amount} essence via GameController. Total: {CurrentEssence}");
+                }
+
+                // Notify listeners (for UI updates)
+                OnEssenceChanged?.Invoke(CurrentEssence);
             }
         }
 
         /// <summary>
-        /// Spends essence (returns true if successful).
+        /// Spends essence via GameController (returns true if successful).
         /// </summary>
         public bool SpendEssence(int amount)
         {
-            if (currentEssence < amount)
+            if (gameController != null && gameController.TrySpendEssence(amount))
             {
-                return false;
+                if (debugLog)
+                {
+                    Debug.Log($"[HeartPowerManager] Spent {amount} essence via GameController. Remaining: {CurrentEssence}");
+                }
+
+                // Notify listeners (for UI updates)
+                OnEssenceChanged?.Invoke(CurrentEssence);
+                return true;
             }
 
-            currentEssence -= amount;
-            OnEssenceChanged?.Invoke(currentEssence);
-
-            if (debugLog)
-            {
-                Debug.Log($"[HeartPowerManager] Spent {amount} essence. Remaining: {currentEssence}");
-            }
-
-            return true;
+            return false;
         }
 
         /// <summary>
