@@ -179,8 +179,12 @@ namespace FaeMaze.UI
                 {
                     int index = i; // Capture for closure
                     powerButtons[i].onClick.AddListener(() => OnPowerButtonClicked(index));
+
+                    // Force buttons to be interactable for testing - they'll be updated in UpdateButtonStates
+                    powerButtons[i].interactable = true;
+
                     successCount++;
-                    Debug.Log($"[HeartPowerPanel] Button {i} listener added successfully");
+                    Debug.Log($"[HeartPowerPanel] Button {i} listener added successfully, interactable={powerButtons[i].interactable}");
                 }
                 else
                 {
@@ -198,6 +202,17 @@ namespace FaeMaze.UI
             {
                 heartPowersPanel.SetActive(true);
                 Debug.Log("[HeartPowerPanel] Panel set to active (visible)");
+            }
+
+            // Debug: Check game state
+            if (heartPowerManager != null)
+            {
+                Debug.Log($"[HeartPowerPanel] Game state check:");
+                for (int i = 0; i < powerTypes.Length; i++)
+                {
+                    bool canActivate = heartPowerManager.CanActivatePower(powerTypes[i], out string reason);
+                    Debug.Log($"[HeartPowerPanel]   Power {i} ({powerTypes[i]}): canActivate={canActivate}, reason='{reason}'");
+                }
             }
         }
 
@@ -220,6 +235,19 @@ namespace FaeMaze.UI
             else
             {
                 Debug.Log($"[HeartPowerPanel] Using existing Canvas: {canvas.name}");
+
+                // Ensure the existing canvas has a GraphicRaycaster for button clicks
+                GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
+                if (raycaster == null)
+                {
+                    raycaster = canvas.gameObject.AddComponent<GraphicRaycaster>();
+                    raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
+                    Debug.Log("[HeartPowerPanel] Added GraphicRaycaster to existing Canvas");
+                }
+                else
+                {
+                    Debug.Log($"[HeartPowerPanel] Existing Canvas already has GraphicRaycaster (blockingObjects: {raycaster.blockingObjects})");
+                }
             }
 
             // Create the panel at the bottom
@@ -261,7 +289,7 @@ namespace FaeMaze.UI
 
             Canvas canvas = canvasObj.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 1; // Lower priority, let other UI be on top
+            canvas.sortingOrder = 100; // High priority to be on top
 
             CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -270,7 +298,7 @@ namespace FaeMaze.UI
             GraphicRaycaster raycaster = canvasObj.AddComponent<GraphicRaycaster>();
             raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
 
-            Debug.Log("[HeartPowerPanel] Created new Canvas with GraphicRaycaster, sortingOrder=1");
+            Debug.Log("[HeartPowerPanel] Created new Canvas with GraphicRaycaster, sortingOrder=100");
 
             return canvas;
         }
@@ -578,7 +606,10 @@ namespace FaeMaze.UI
 
                 // Check if power can be activated
                 bool canActivate = heartPowerManager.CanActivatePower(powerType, out string reason);
-                powerButtons[i].interactable = canActivate;
+
+                // Keep buttons always clickable so we can see debug messages
+                // But provide visual feedback about availability
+                powerButtons[i].interactable = true;
 
                 // Update cooldown display
                 float cooldownRemaining = heartPowerManager.GetCooldownRemaining(powerType);
@@ -597,8 +628,8 @@ namespace FaeMaze.UI
                 if (buttonImage != null)
                 {
                     buttonImage.color = canActivate
-                        ? new Color(0.4f, 0.2f, 0.5f, 1f)  // Normal purple
-                        : new Color(0.2f, 0.1f, 0.25f, 0.7f); // Dimmed
+                        ? new Color(0.4f, 0.2f, 0.5f, 1f)  // Normal purple (ready)
+                        : new Color(0.2f, 0.1f, 0.25f, 0.7f); // Dimmed (not ready)
                 }
             }
         }
