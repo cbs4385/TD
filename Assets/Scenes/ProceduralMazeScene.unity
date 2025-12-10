@@ -358,6 +358,64 @@ MonoBehaviour:
   minOrthographicSize: 3
   maxOrthographicSize: 20
   mazeGridBehaviour: {fileID: 0}
+--- !u!1 &623669385
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 623669387}
+  - component: {fileID: 623669386}
+  m_Layer: 0
+  m_Name: HeartPowerManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &623669386
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 623669385}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20228909174bcc04a9b1c83dcfb4ece7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.HeartPowers.HeartPowerManager
+  mazeGridBehaviour: {fileID: 0}
+  gameController: {fileID: 0}
+  powerDefinitions:
+  - {fileID: 11400000, guid: 1d585204f22490f43a7912f1087c456c, type: 2}
+  - {fileID: 11400000, guid: f25e9cbb19ce1824ba236ad8ca79b322, type: 2}
+  - {fileID: 11400000, guid: 8bd7c70ddd6d89046bc4975ca2689a77, type: 2}
+  - {fileID: 11400000, guid: 088276d55636eed41909cc7683ddf0e8, type: 2}
+  - {fileID: 11400000, guid: 6713eb53ba147d14f9f5e1061fdaa548, type: 2}
+  - {fileID: 11400000, guid: 9d5d5ee231cb86d4e9f26e833d9f0a57, type: 2}
+  - {fileID: 11400000, guid: 7f3197d983b0117488a0595829ad5b98, type: 2}
+  - {fileID: 11400000, guid: 903e134c3576fa74c87c73f381e568db, type: 2}
+  initialChargesPerWave: 3
+  debugLog: 1
+  autoCreateUI: 1
+--- !u!4 &623669387
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 623669385}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &963194227
 GameObject:
   m_ObjectHideFlags: 0
@@ -573,35 +631,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  mazeGridBehaviour: {fileID: 963194231}
-  gameController: {fileID: 1408523522}
-  powerDefinitions:
-  - {fileID: 11400000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 2}
-  - {fileID: 11400000, guid: b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7, type: 2}
-  - {fileID: 11400000, guid: c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8, type: 2}
-  - {fileID: 11400000, guid: d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9, type: 2}
-  - {fileID: 11400000, guid: e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0, type: 2}
-  - {fileID: 11400000, guid: f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1, type: 2}
-  - {fileID: 11400000, guid: a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2, type: 2}
-  - {fileID: 11400000, guid: b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3, type: 2}
-  - {fileID: 11400000, guid: c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4, type: 2}
-  - {fileID: 11400000, guid: d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5, type: 2}
-  - {fileID: 11400000, guid: e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6, type: 2}
-  - {fileID: 11400000, guid: f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7, type: 2}
-  - {fileID: 11400000, guid: a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8, type: 2}
-  - {fileID: 11400000, guid: b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9, type: 2}
-  - {fileID: 11400000, guid: c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0, type: 2}
-  - {fileID: 11400000, guid: d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1, type: 2}
-  - {fileID: 11400000, guid: e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2, type: 2}
-  - {fileID: 11400000, guid: f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3, type: 2}
-  - {fileID: 11400000, guid: a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4, type: 2}
-  - {fileID: 11400000, guid: b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5, type: 2}
-  - {fileID: 11400000, guid: c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6, type: 2}
-  initialChargesPerWave: 3
-  currentEssence: 10
-  debugLog: 1
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1408523520
 GameObject:
   m_ObjectHideFlags: 0
@@ -1426,3 +1457,4 @@ SceneRoots:
   - {fileID: 1100000004}
   - {fileID: 8000000001}
   - {fileID: 9000000001}
+  - {fileID: 623669387}
