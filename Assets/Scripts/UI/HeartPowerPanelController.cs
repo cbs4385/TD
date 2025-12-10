@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using UnityEngine.EventSystems;
 using TMPro;
 using FaeMaze.HeartPowers;
 using FaeMaze.Systems;
@@ -172,14 +173,23 @@ namespace FaeMaze.UI
         private void InitializeControls()
         {
             // Setup button listeners
+            int successCount = 0;
             for (int i = 0; i < powerButtons.Length; i++)
             {
                 if (powerButtons[i] != null)
                 {
                     int index = i; // Capture for closure
                     powerButtons[i].onClick.AddListener(() => OnPowerButtonClicked(index));
+                    successCount++;
+                    Debug.Log($"[HeartPowerPanel] Button {i} listener added successfully");
+                }
+                else
+                {
+                    Debug.LogWarning($"[HeartPowerPanel] Button {i} is null, skipping listener setup");
                 }
             }
+
+            Debug.Log($"[HeartPowerPanel] Initialized {successCount}/{powerButtons.Length} button listeners");
 
             // Initialize resource displays
             UpdateResourceDisplays();
@@ -188,6 +198,7 @@ namespace FaeMaze.UI
             if (heartPowersPanel != null)
             {
                 heartPowersPanel.SetActive(true);
+                Debug.Log("[HeartPowerPanel] Panel set to active (visible)");
             }
         }
 
@@ -241,6 +252,9 @@ namespace FaeMaze.UI
         /// </summary>
         private Canvas CreateCanvas()
         {
+            // Ensure EventSystem exists for UI interaction
+            EnsureEventSystem();
+
             GameObject canvasObj = new GameObject("HeartPowersCanvas");
             canvasObj.transform.SetParent(transform, false);
 
@@ -258,6 +272,26 @@ namespace FaeMaze.UI
             Debug.Log("[HeartPowerPanel] Created Canvas with GraphicRaycaster");
 
             return canvas;
+        }
+
+        /// <summary>
+        /// Ensures an EventSystem exists in the scene for UI interaction.
+        /// </summary>
+        private void EnsureEventSystem()
+        {
+            EventSystem existingEventSystem = FindFirstObjectByType<EventSystem>();
+            if (existingEventSystem == null)
+            {
+                GameObject eventSystemObj = new GameObject("EventSystem");
+                eventSystemObj.AddComponent<EventSystem>();
+                eventSystemObj.AddComponent<InputSystemUIInputModule>();
+
+                Debug.Log("[HeartPowerPanel] Created EventSystem with InputSystemUIInputModule");
+            }
+            else
+            {
+                Debug.Log("[HeartPowerPanel] EventSystem already exists");
+            }
         }
 
         /// <summary>
@@ -415,6 +449,8 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnPowerButtonClicked(int index)
         {
+            Debug.Log($"[HeartPowerPanel] ★★★ BUTTON CLICK DETECTED ★★★ Index: {index}");
+
             if (heartPowerManager == null)
             {
                 Debug.LogWarning("[HeartPowerPanel] HeartPowerManager not found!");
