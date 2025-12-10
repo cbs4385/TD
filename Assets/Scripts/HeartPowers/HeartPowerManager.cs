@@ -165,13 +165,9 @@ namespace FaeMaze.HeartPowers
             // Update cooldowns
             foreach (HeartPowerType powerType in Enum.GetValues(typeof(HeartPowerType)))
             {
-                if (cooldownTimers[powerType] > 0)
+                if (cooldownTimers.TryGetValue(powerType, out float cooldown) && cooldown > 0)
                 {
-                    cooldownTimers[powerType] -= Time.deltaTime;
-                    if (cooldownTimers[powerType] < 0)
-                    {
-                        cooldownTimers[powerType] = 0;
-                    }
+                    cooldownTimers[powerType] = Mathf.Max(0, cooldown - Time.deltaTime);
                 }
             }
 
