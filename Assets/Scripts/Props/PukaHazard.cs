@@ -358,6 +358,17 @@ namespace FaeMaze.Props
             // Mark as processed
             processedVisitors.Add(visitorObject);
 
+            // Calculate approach direction based on visitor position relative to Puka
+            int direction = CalculateApproachDirection(visitorPos);
+
+            // Set Direction parameter on Animator if present
+            var animator = GetComponent<Animator>();
+            if (animator != null)
+            {
+                animator.SetInteger("Direction", direction);
+                Debug.Log($"[PukaHazard] Visitor approaching from direction {direction} (visitorPos: {visitorPos}, pukaPos: {gridPosition})");
+            }
+
             // Roll for interaction
             float roll = Random.value;
 
@@ -376,6 +387,35 @@ namespace FaeMaze.Props
                 // 10% - Kill visitor
                 KillVisitor(visitorObject, visitorPos);
             }
+        }
+
+        /// <summary>
+        /// Calculates which direction the visitor is approaching from.
+        /// Returns: 1 (+y), 2 (-y), 3 (-x), 4 (+x), or 0 (diagonal/other)
+        /// </summary>
+        private int CalculateApproachDirection(Vector2Int visitorPos)
+        {
+            Vector2Int delta = visitorPos - gridPosition;
+
+            // Check for cardinal directions only (Manhattan distance = 1)
+            if (delta.x == 0 && delta.y == 1)
+            {
+                return 1; // Approaching from +y (north)
+            }
+            else if (delta.x == 0 && delta.y == -1)
+            {
+                return 2; // Approaching from -y (south)
+            }
+            else if (delta.x == -1 && delta.y == 0)
+            {
+                return 3; // Approaching from -x (west)
+            }
+            else if (delta.x == 1 && delta.y == 0)
+            {
+                return 4; // Approaching from +x (east)
+            }
+
+            return 0; // Diagonal or other (shouldn't happen with Manhattan distance check)
         }
 
         /// <summary>
