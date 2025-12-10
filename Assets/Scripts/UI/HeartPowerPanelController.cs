@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
-using UnityEngine.EventSystems;
 using TMPro;
 using FaeMaze.HeartPowers;
 using FaeMaze.Systems;
@@ -215,7 +214,12 @@ namespace FaeMaze.UI
             Canvas canvas = FindFirstObjectByType<Canvas>();
             if (canvas == null)
             {
+                Debug.LogWarning("[HeartPowerPanel] No existing Canvas found, creating new one");
                 canvas = CreateCanvas();
+            }
+            else
+            {
+                Debug.Log($"[HeartPowerPanel] Using existing Canvas: {canvas.name}");
             }
 
             // Create the panel at the bottom
@@ -252,15 +256,12 @@ namespace FaeMaze.UI
         /// </summary>
         private Canvas CreateCanvas()
         {
-            // Ensure EventSystem exists for UI interaction
-            EnsureEventSystem();
-
             GameObject canvasObj = new GameObject("HeartPowersCanvas");
-            canvasObj.transform.SetParent(transform, false);
+            canvasObj.transform.SetParent(null, false); // Don't parent to this controller
 
             Canvas canvas = canvasObj.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 10; // Ensure it's on top
+            canvas.sortingOrder = 1; // Lower priority, let other UI be on top
 
             CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -269,29 +270,9 @@ namespace FaeMaze.UI
             GraphicRaycaster raycaster = canvasObj.AddComponent<GraphicRaycaster>();
             raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
 
-            Debug.Log("[HeartPowerPanel] Created Canvas with GraphicRaycaster");
+            Debug.Log("[HeartPowerPanel] Created new Canvas with GraphicRaycaster, sortingOrder=1");
 
             return canvas;
-        }
-
-        /// <summary>
-        /// Ensures an EventSystem exists in the scene for UI interaction.
-        /// </summary>
-        private void EnsureEventSystem()
-        {
-            EventSystem existingEventSystem = FindFirstObjectByType<EventSystem>();
-            if (existingEventSystem == null)
-            {
-                GameObject eventSystemObj = new GameObject("EventSystem");
-                eventSystemObj.AddComponent<EventSystem>();
-                eventSystemObj.AddComponent<InputSystemUIInputModule>();
-
-                Debug.Log("[HeartPowerPanel] Created EventSystem with InputSystemUIInputModule");
-            }
-            else
-            {
-                Debug.Log("[HeartPowerPanel] EventSystem already exists");
-            }
         }
 
         /// <summary>
