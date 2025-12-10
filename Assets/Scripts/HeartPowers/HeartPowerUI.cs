@@ -13,12 +13,12 @@ namespace FaeMaze.HeartPowers
     {
         #region Serialized Fields
 
-        [Header("References (Optional - will auto-create if null)")]
+        [Header("References")]
         [SerializeField]
-        [Tooltip("Reference to the HeartPowerManager (will auto-find if null)")]
+        [Tooltip("Reference to the HeartPowerManager")]
         private HeartPowerManager heartPowerManager;
 
-        [Header("Resource Display (Optional - will auto-create if null)")]
+        [Header("Resource Display")]
         [SerializeField]
         [Tooltip("Text displaying current Heart charges")]
         private TextMeshProUGUI chargesText;
@@ -26,10 +26,6 @@ namespace FaeMaze.HeartPowers
         [SerializeField]
         [Tooltip("Text displaying current essence")]
         private TextMeshProUGUI essenceText;
-
-        [SerializeField]
-        [Tooltip("Panel containing the resource display")]
-        private GameObject resourcePanel;
 
         [Header("Power Buttons")]
         [SerializeField]
@@ -125,12 +121,6 @@ namespace FaeMaze.HeartPowers
 
         private void OnEnable()
         {
-            // Auto-create resource display if not assigned
-            if (chargesText == null || essenceText == null)
-            {
-                CreateResourceDisplayUI();
-            }
-
             if (heartPowerManager != null)
             {
                 heartPowerManager.OnChargesChanged += UpdateChargesDisplay;
@@ -341,98 +331,6 @@ namespace FaeMaze.HeartPowers
             Vector3 mousePos = Input.mousePosition;
             mousePos.z = Mathf.Abs(mainCamera.transform.position.z);
             return mainCamera.ScreenToWorldPoint(mousePos);
-        }
-
-        #endregion
-
-        #region UI Creation
-
-        /// <summary>
-        /// Automatically creates the resource display UI if not manually set up.
-        /// </summary>
-        private void CreateResourceDisplayUI()
-        {
-            // Find or create canvas
-            Canvas canvas = FindFirstObjectByType<Canvas>();
-            if (canvas == null)
-            {
-                canvas = CreateCanvas();
-            }
-
-            // Create the resource panel
-            resourcePanel = CreateResourcePanel(canvas.transform);
-
-            // Create resource texts
-            float yPos = -15f;
-            chargesText = CreateResourceText(resourcePanel.transform, "Heart Charges: 0", yPos);
-            yPos -= 35f;
-            essenceText = CreateResourceText(resourcePanel.transform, "Essence: 0", yPos);
-        }
-
-        /// <summary>
-        /// Creates a Canvas for the UI.
-        /// </summary>
-        private Canvas CreateCanvas()
-        {
-            GameObject canvasObj = new GameObject("HeartPowerCanvas");
-            canvasObj.transform.SetParent(transform, false);
-
-            Canvas canvas = canvasObj.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 1; // Render on top of other UI
-
-            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-
-            canvasObj.AddComponent<GraphicRaycaster>();
-
-            return canvas;
-        }
-
-        /// <summary>
-        /// Creates the resource display panel.
-        /// </summary>
-        private GameObject CreateResourcePanel(Transform parent)
-        {
-            GameObject panel = new GameObject("HeartPowerResourceDisplay");
-            panel.transform.SetParent(parent, false);
-
-            RectTransform rect = panel.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(10f, -10f);
-            rect.sizeDelta = new Vector2(250f, 100f);
-
-            Image image = panel.AddComponent<Image>();
-            image.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
-
-            return panel;
-        }
-
-        /// <summary>
-        /// Creates a text element for displaying resource values.
-        /// </summary>
-        private TextMeshProUGUI CreateResourceText(Transform parent, string text, float yPos)
-        {
-            GameObject textObj = new GameObject("ResourceText");
-            textObj.transform.SetParent(parent, false);
-
-            RectTransform rect = textObj.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 1f);
-            rect.anchorMax = new Vector2(0.5f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(0f, yPos);
-            rect.sizeDelta = new Vector2(230f, 30f);
-
-            TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
-            tmp.text = text;
-            tmp.fontSize = 18;
-            tmp.alignment = TextAlignmentOptions.Center;
-            tmp.color = Color.white;
-
-            return tmp;
         }
 
         #endregion
