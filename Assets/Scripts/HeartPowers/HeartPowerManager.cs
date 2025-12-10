@@ -11,6 +11,18 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public class HeartPowerManager : MonoBehaviour
     {
+        #region Static Cache
+
+        // Cached array of all HeartPowerType enum values to avoid repeated Enum.GetValues() calls
+        private static readonly HeartPowerType[] _allPowerTypes;
+
+        static HeartPowerManager()
+        {
+            _allPowerTypes = (HeartPowerType[])Enum.GetValues(typeof(HeartPowerType));
+        }
+
+        #endregion
+
         #region Singleton
 
         private static HeartPowerManager _instance;
@@ -64,6 +76,9 @@ namespace FaeMaze.HeartPowers
         // Active power effects (for cleanup and state tracking)
         private Dictionary<HeartPowerType, ActivePowerEffect> activePowers = new Dictionary<HeartPowerType, ActivePowerEffect>();
 
+        // Reusable list for removing expired powers (avoids GC allocation every frame)
+        private readonly List<HeartPowerType> _powersToRemove = new List<HeartPowerType>();
+
         #endregion
 
         #region Properties
@@ -105,8 +120,8 @@ namespace FaeMaze.HeartPowers
 
             _instance = this;
 
-            // Initialize all powers as locked, tier 1
-            foreach (HeartPowerType powerType in Enum.GetValues(typeof(HeartPowerType)))
+            // Initialize all powers as locked, tier 1 (using cached array)
+            foreach (HeartPowerType powerType in _allPowerTypes)
             {
                 cooldownTimers[powerType] = 0f;
                 powerTiers[powerType] = 1;
@@ -179,8 +194,8 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Update cooldowns
-            foreach (HeartPowerType powerType in Enum.GetValues(typeof(HeartPowerType)))
+            // Update cooldowns (using cached array to avoid Enum.GetValues allocation)
+            foreach (HeartPowerType powerType in _allPowerTypes)
             {
                 if (cooldownTimers.TryGetValue(powerType, out float cooldown) && cooldown > 0)
                 {
@@ -191,19 +206,19 @@ namespace FaeMaze.HeartPowers
             // Cleanup expired path modifiers
             pathCostModifier?.CleanupExpired();
 
-            // Update active power effects
-            List<HeartPowerType> toRemove = new List<HeartPowerType>();
+            // Update active power effects (using reusable list to avoid GC allocation)
+            _powersToRemove.Clear();
             foreach (var kvp in activePowers)
             {
                 kvp.Value.Update(Time.deltaTime);
                 if (kvp.Value.IsExpired)
                 {
                     kvp.Value.OnEnd();
-                    toRemove.Add(kvp.Key);
+                    _powersToRemove.Add(kvp.Key);
                 }
             }
 
-            foreach (var powerType in toRemove)
+            foreach (var powerType in _powersToRemove)
             {
                 activePowers.Remove(powerType);
             }
