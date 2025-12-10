@@ -450,6 +450,12 @@ namespace FaeMaze.Systems
             // Hide all panels
             HideAllPanels();
 
+            // Notify Heart Power Manager
+            if (heartPowerManager != null)
+            {
+                heartPowerManager.OnWaveStart();
+            }
+
             // Start first wave
             if (waveSpawner != null)
             {
