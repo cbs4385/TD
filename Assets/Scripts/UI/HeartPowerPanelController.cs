@@ -214,17 +214,17 @@ namespace FaeMaze.UI
             CreateTitle(heartPowersPanel.transform);
 
             // Create resource displays (top of panel)
-            float yPos = -15f;
-            chargesText = CreateResourceLabel(heartPowersPanel.transform, "Heart Charges: 3", yPos, -200f);
-            essenceText = CreateResourceLabel(heartPowersPanel.transform, "Essence: 10", yPos, 200f);
+            float yPos = -10f;
+            chargesText = CreateResourceLabel(heartPowersPanel.transform, "Heart Charges: 3", yPos, -250f);
+            essenceText = CreateResourceLabel(heartPowersPanel.transform, "Essence: 10", yPos, 250f);
 
             // Create power buttons in a horizontal row (centered in panel)
-            float buttonWidth = 155f;
-            float buttonHeight = 90f;
-            float spacing = 10f;
+            float buttonWidth = 160f;
+            float buttonHeight = 100f;
+            float spacing = 5f;
             float totalWidth = (buttonWidth * 7) + (spacing * 6);
             float startX = -totalWidth / 2f + buttonWidth / 2f;
-            float buttonYPos = -70f; // Center buttons vertically in panel
+            float buttonYPos = -75f; // Center buttons vertically in panel
 
             Debug.Log($"[HeartPowerPanel] Creating 7 buttons: width={buttonWidth}, height={buttonHeight}, totalWidth={totalWidth}");
 
@@ -252,7 +252,10 @@ namespace FaeMaze.UI
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
 
-            canvasObj.AddComponent<GraphicRaycaster>();
+            GraphicRaycaster raycaster = canvasObj.AddComponent<GraphicRaycaster>();
+            raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
+
+            Debug.Log("[HeartPowerPanel] Created Canvas with GraphicRaycaster");
 
             return canvas;
         }
@@ -270,7 +273,7 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(0.5f, 0f);
             rect.pivot = new Vector2(0.5f, 0f);
             rect.anchoredPosition = new Vector2(0f, 10f);
-            rect.sizeDelta = new Vector2(1200f, 140f); // Wider panel, optimized height
+            rect.sizeDelta = new Vector2(1200f, 150f); // Taller for larger buttons
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.15f, 0.05f, 0.2f, 0.9f); // Dark purple/magenta tint
@@ -345,9 +348,16 @@ namespace FaeMaze.UI
 
             Image image = buttonObj.AddComponent<Image>();
             image.color = new Color(0.4f, 0.2f, 0.5f, 1f); // Purple
+            image.raycastTarget = true; // Ensure it can be clicked
 
             Button button = buttonObj.AddComponent<Button>();
             button.targetGraphic = image;
+            button.interactable = true; // Ensure button is interactable
+
+            // Add navigation to make it clear it's a button
+            var navigation = button.navigation;
+            navigation.mode = Navigation.Mode.None;
+            button.navigation = navigation;
 
             // Create button text
             GameObject textObj = new GameObject("Text");
@@ -361,11 +371,12 @@ namespace FaeMaze.UI
 
             TextMeshProUGUI text = textObj.AddComponent<TextMeshProUGUI>();
             text.text = powerNames[index];
-            text.fontSize = 13;
+            text.fontSize = 12;
             text.alignment = TextAlignmentOptions.Center;
             text.color = Color.white;
             text.enableWordWrapping = true;
             text.fontStyle = FontStyles.Normal;
+            text.raycastTarget = false; // Don't block button clicks
 
             buttonLabels[index] = text;
 
@@ -381,15 +392,16 @@ namespace FaeMaze.UI
 
             TextMeshProUGUI cooldownText = cooldownObj.AddComponent<TextMeshProUGUI>();
             cooldownText.text = "";
-            cooldownText.fontSize = 28;
+            cooldownText.fontSize = 32;
             cooldownText.fontStyle = FontStyles.Bold;
             cooldownText.alignment = TextAlignmentOptions.Center;
             cooldownText.color = new Color(1f, 0.3f, 0.3f, 1f);
+            cooldownText.raycastTarget = false; // Don't block button clicks
 
             cooldownTexts[index] = cooldownText;
             cooldownObj.SetActive(false);
 
-            Debug.Log($"[HeartPowerPanel] Button {index} fully configured with Image, Button, Label, and Cooldown text");
+            Debug.Log($"[HeartPowerPanel] Button {index} created: pos=({xPos},{yPos}), size=({width}x{height}), interactable={button.interactable}");
 
             return button;
         }
