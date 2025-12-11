@@ -98,6 +98,11 @@ namespace FaeMaze.UI
 
         private Camera mainCamera;
 
+        // Targeting mode state
+        private bool isTargetingMode = false;
+        private HeartPowerType? pendingPowerType = null;
+        private Texture2D originalCursorTexture = null;
+
         #endregion
 
         #region Unity Lifecycle
@@ -159,6 +164,9 @@ namespace FaeMaze.UI
 
             // Handle keyboard shortcuts (1-7 keys)
             HandleKeyboardInput();
+
+            // Handle targeting mode for targeted powers
+            HandleTargetingMode();
         }
 
         private void OnEnable()
@@ -541,35 +549,29 @@ namespace FaeMaze.UI
 
             Debug.Log($"[HeartPowerPanel] Button clicked for power: {powerType} (Index: {index})");
 
-            // Get mouse world position for targeted powers
-            Vector3 targetPosition = GetMouseWorldPosition();
-
             // Check if this is a targeted power
-            bool isTargetedPower = powerType == HeartPowerType.MurmuringPaths ||
-                                   powerType == HeartPowerType.DreamSnare ||
-                                   powerType == HeartPowerType.PukasBargain ||
-                                   powerType == HeartPowerType.FeastwardPanic;
+            bool isTargetedPower = IsTargetedPower(powerType);
 
-            bool success;
             if (isTargetedPower)
             {
-                Debug.Log($"[HeartPowerPanel] Activating targeted power at world position: {targetPosition}");
-                success = heartPowerManager.TryActivatePower(powerType, targetPosition);
+                // Enter targeting mode - wait for player to click on the grid
+                EnterTargetingMode(powerType);
             }
             else
             {
+                // Non-targeted powers activate immediately
                 Debug.Log($"[HeartPowerPanel] Activating global power");
-                success = heartPowerManager.TryActivatePower(powerType);
-            }
+                bool success = heartPowerManager.TryActivatePower(powerType);
 
-            if (success)
-            {
-                Debug.Log($"[HeartPowerPanel] ✓ Power {powerType} activated successfully!");
-            }
-            else
-            {
-                heartPowerManager.CanActivatePower(powerType, out string reason);
-                Debug.LogWarning($"[HeartPowerPanel] ✗ Failed to activate power {powerType}. Reason: {reason}");
+                if (success)
+                {
+                    Debug.Log($"[HeartPowerPanel] ✓ Power {powerType} activated successfully!");
+                }
+                else
+                {
+                    heartPowerManager.CanActivatePower(powerType, out string reason);
+                    Debug.LogWarning($"[HeartPowerPanel] ✗ Failed to activate power {powerType}. Reason: {reason}");
+                }
             }
         }
 
@@ -631,6 +633,137 @@ namespace FaeMaze.UI
             else if (Keyboard.current.digit7Key.wasPressedThisFrame || Keyboard.current.numpad7Key.wasPressedThisFrame)
             {
                 OnPowerButtonClicked(6);
+            }
+        }
+
+        #endregion
+
+        #region Targeting Mode
+
+        /// <summary>
+        /// Checks if a power type requires targeting.
+        /// </summary>
+        private bool IsTargetedPower(HeartPowerType powerType)
+        {
+            return powerType == HeartPowerType.MurmuringPaths ||
+                   powerType == HeartPowerType.DreamSnare ||
+                   powerType == HeartPowerType.PukasBargain ||
+                   powerType == HeartPowerType.FeastwardPanic;
+        }
+
+        /// <summary>
+        /// Enters targeting mode for a power that requires targeting.
+        /// </summary>
+        private void EnterTargetingMode(HeartPowerType powerType)
+        {
+            // First check if power can be activated
+            if (!heartPowerManager.CanActivatePower(powerType, out string reason))
+            {
+                Debug.LogWarning($"[HeartPowerPanel] Cannot activate {powerType}: {reason}");
+                return;
+            }
+
+            isTargetingMode = true;
+            pendingPowerType = powerType;
+
+            // Change cursor to indicate targeting mode (crosshair if available)
+            // Note: Unity's Cursor.SetCursor requires a texture. We'll just log for now.
+            Debug.Log($"[HeartPowerPanel] ⊕ Entered targeting mode for {powerType}. Click on the map to target, or press ESC to cancel.");
+        }
+
+        /// <summary>
+        /// Exits targeting mode without activating the power.
+        /// </summary>
+        private void ExitTargetingMode(bool cancelled = false)
+        {
+            if (isTargetingMode)
+            {
+                if (cancelled)
+                {
+                    Debug.Log($"[HeartPowerPanel] ✗ Targeting cancelled for {pendingPowerType}");
+                }
+
+                isTargetingMode = false;
+                pendingPowerType = null;
+
+                // Restore cursor if we changed it
+                // Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
+            }
+        }
+
+        /// <summary>
+        /// Handles targeting mode input in the Update loop.
+        /// Listens for mouse clicks to select target position.
+        /// </summary>
+        private void HandleTargetingMode()
+        {
+            if (!isTargetingMode || !pendingPowerType.HasValue)
+            {
+                return;
+            }
+
+            // Check for ESC key to cancel targeting
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            {
+                ExitTargetingMode(cancelled: true);
+                return;
+            }
+
+            // Check for left mouse button click
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            {
+                // Get mouse position in screen space
+                Vector3 mouseScreenPos = Mouse.current.position.ReadValue();
+
+                // Convert to world position
+                if (mainCamera == null)
+                {
+                    Debug.LogError("[HeartPowerPanel] Main camera is null, cannot convert mouse position!");
+                    ExitTargetingMode(cancelled: true);
+                    return;
+                }
+
+                Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, mainCamera.nearClipPlane));
+                mouseWorldPos.z = 0; // 2D game on Z=0 plane
+
+                Debug.Log($"[HeartPowerPanel] Mouse clicked at screen: {mouseScreenPos}, world: {mouseWorldPos}");
+
+                // Validate the position is on the grid - NO FALLBACK
+                if (heartPowerManager.MazeGrid == null)
+                {
+                    Debug.LogError("[HeartPowerPanel] MazeGrid is null, cannot validate target position!");
+                    ExitTargetingMode(cancelled: true);
+                    return;
+                }
+
+                if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
+                {
+                    // Invalid position - cancel with user feedback
+                    Debug.LogWarning($"[HeartPowerPanel] ✗ Invalid target position {mouseWorldPos} - not on the grid. Please click on a valid tile.");
+                    // Don't exit targeting mode - let player try again
+                    return;
+                }
+
+                // Valid grid position found!
+                Vector2Int gridPos = new Vector2Int(gridX, gridY);
+                Vector3 targetWorldPos = heartPowerManager.MazeGrid.GridToWorld(gridX, gridY);
+
+                Debug.Log($"[HeartPowerPanel] ✓ Valid target selected: Grid {gridPos}, World {targetWorldPos}");
+
+                // Try to activate the power
+                bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
+
+                if (success)
+                {
+                    Debug.Log($"[HeartPowerPanel] ✓ Power {pendingPowerType.Value} activated successfully at {gridPos}!");
+                    ExitTargetingMode(cancelled: false);
+                }
+                else
+                {
+                    heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
+                    Debug.LogWarning($"[HeartPowerPanel] ✗ Failed to activate power {pendingPowerType.Value} at {gridPos}. Reason: {reason}");
+                    ExitTargetingMode(cancelled: true);
+                }
             }
         }
 
@@ -790,9 +923,16 @@ namespace FaeMaze.UI
 
         /// <summary>
         /// Toggles the panel visibility.
+        /// Cancels targeting mode if active to avoid stuck state.
         /// </summary>
         private void TogglePanel()
         {
+            // Cancel any active targeting mode
+            if (isTargetingMode)
+            {
+                ExitTargetingMode(cancelled: true);
+            }
+
             if (heartPowersPanel != null)
             {
                 bool newState = !heartPowersPanel.activeSelf;
