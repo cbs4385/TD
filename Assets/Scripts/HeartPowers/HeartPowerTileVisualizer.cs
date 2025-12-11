@@ -38,8 +38,12 @@ namespace FaeMaze.HeartPowers
         private float overlaySize = 1.0f;
 
         [SerializeField]
-        [Tooltip("Sorting layer for tile overlays")]
-        private int sortingOrder = 5;
+        [Tooltip("Sorting layer name for tile overlays (e.g., 'Default', 'Terrain', 'Effects')")]
+        private string sortingLayerName = "Default";
+
+        [SerializeField]
+        [Tooltip("Sorting order within the layer for tile overlays")]
+        private int sortingOrder = 100;
 
         [SerializeField]
         [Tooltip("Pulse speed for the glow effect")]
@@ -118,6 +122,8 @@ namespace FaeMaze.HeartPowers
         /// <param name="duration">How long the effect lasts (0 = permanent)</param>
         public void AddTileEffect(Vector2Int tile, HeartPowerType powerType, float intensity, float duration)
         {
+            Debug.Log($"[TileVisualizer] AddTileEffect called: tile={tile}, power={powerType}, intensity={intensity}, duration={duration}");
+
             if (mazeGridBehaviour == null)
             {
                 Debug.LogWarning("[TileVisualizer] Cannot add effect - MazeGridBehaviour is null");
@@ -234,6 +240,7 @@ namespace FaeMaze.HeartPowers
 
             // Get world position for this tile
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(effect.tile.x, effect.tile.y);
+            worldPos.z = 0; // Ensure sprite is at Z=0 for 2D visibility
 
             // Create game object for this effect
             GameObject effectObj = new GameObject($"TileEffect_{effect.powerType}_{effect.tile}");
@@ -244,6 +251,7 @@ namespace FaeMaze.HeartPowers
             SpriteRenderer sr = effectObj.AddComponent<SpriteRenderer>();
             sr.sprite = CreateCircleSprite();
             sr.color = GetColorForPowerType(effect.powerType);
+            sr.sortingLayerName = sortingLayerName;
             sr.sortingOrder = sortingOrder;
 
             // Scale to fit tile
@@ -253,7 +261,7 @@ namespace FaeMaze.HeartPowers
             effect.visualObject = effectObj;
             effect.spriteRenderer = sr;
 
-            Debug.Log($"[TileVisualizer] ✓ Created visual at world pos {worldPos} for tile {effect.tile}, color: {sr.color}, sortingOrder: {sortingOrder}");
+            Debug.Log($"[TileVisualizer] ✓ Created visual at {worldPos} for tile {effect.tile}, color: {sr.color}, layer: '{sr.sortingLayerName}', order: {sr.sortingOrder}, scale: {effectObj.transform.localScale}");
         }
 
         /// <summary>

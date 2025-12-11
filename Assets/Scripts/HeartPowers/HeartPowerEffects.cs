@@ -48,7 +48,12 @@ namespace FaeMaze.HeartPowers
                     {
                         // Intensity based on attraction strength (normalize to 0-1)
                         float intensity = Mathf.Clamp01(Mathf.Abs(attractionBonus) / 5.0f);
+                        Debug.Log($"[HeartbeatOfLonging] Calling AddTileEffect for tile {tile} with intensity {intensity}");
                         manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.HeartbeatOfLonging, intensity, definition.duration);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[HeartbeatOfLonging] TileVisualizer is NULL! Cannot add visual for tile {tile}");
                     }
                 }
                 Debug.Log($"[HeartbeatOfLonging] Lantern at {lantern.GridPosition} - Influenced {influenceTiles.Count} tiles with deep red glow");
