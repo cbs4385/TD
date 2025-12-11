@@ -85,6 +85,15 @@ namespace FaeMaze.HeartPowers
         {
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogError("[TileVisualizer] ✗ MazeGridBehaviour not found! Tile effects will not render.");
+            }
+            else
+            {
+                Debug.Log("[TileVisualizer] ✓ Found MazeGridBehaviour, ready to visualize tile effects");
+            }
+
             // Create container for all effect visuals
             effectsContainer = new GameObject("HeartPowerTileEffects");
             effectsContainer.transform.SetParent(transform);
@@ -109,7 +118,11 @@ namespace FaeMaze.HeartPowers
         /// <param name="duration">How long the effect lasts (0 = permanent)</param>
         public void AddTileEffect(Vector2Int tile, HeartPowerType powerType, float intensity, float duration)
         {
-            if (mazeGridBehaviour == null) return;
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogWarning("[TileVisualizer] Cannot add effect - MazeGridBehaviour is null");
+                return;
+            }
 
             // Ensure tile effects list exists
             if (!tileEffects.ContainsKey(tile))
@@ -239,6 +252,8 @@ namespace FaeMaze.HeartPowers
             // Store references
             effect.visualObject = effectObj;
             effect.spriteRenderer = sr;
+
+            Debug.Log($"[TileVisualizer] ✓ Created visual at world pos {worldPos} for tile {effect.tile}, color: {sr.color}, sortingOrder: {sortingOrder}");
         }
 
         /// <summary>

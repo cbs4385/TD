@@ -803,17 +803,39 @@ namespace FaeMaze.UI
 
         /// <summary>
         /// Gets the mouse position in world space.
+        /// For targeted powers, this should ideally be implemented with a proper targeting mode.
+        /// Currently uses a fallback to Heart position if mouse position is invalid.
         /// </summary>
         private Vector3 GetMouseWorldPosition()
         {
-            if (mainCamera == null)
+            if (mainCamera == null || heartPowerManager == null)
             {
                 return Vector3.zero;
             }
 
-            Vector3 mousePos = Mouse.current.position.ReadValue();
-            mousePos.z = Mathf.Abs(mainCamera.transform.position.z);
-            return mainCamera.ScreenToWorldPoint(mousePos);
+            // Get mouse screen position
+            Vector3 mouseScreenPos = Mouse.current.position.ReadValue();
+
+            // Convert to world position
+            // For orthographic camera, we need to match the camera's z-plane
+            Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, mainCamera.nearClipPlane));
+            mouseWorldPos.z = 0; // Assuming 2D game on Z=0 plane
+
+            Debug.Log($"[HeartPowerPanel] Mouse screen pos: {mouseScreenPos}, world pos: {mouseWorldPos}");
+
+            // Validate the position is on the grid
+            if (heartPowerManager.MazeGrid != null)
+            {
+                if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gx, out int gy))
+                {
+                    // Invalid position - use Heart position as fallback
+                    Debug.LogWarning($"[HeartPowerPanel] Mouse position {mouseWorldPos} is not on grid, using Heart position as fallback");
+                    Vector2Int heartPos = heartPowerManager.MazeGrid.HeartGridPos;
+                    mouseWorldPos = heartPowerManager.MazeGrid.GridToWorld(heartPos.x, heartPos.y);
+                }
+            }
+
+            return mouseWorldPos;
         }
 
         #endregion
