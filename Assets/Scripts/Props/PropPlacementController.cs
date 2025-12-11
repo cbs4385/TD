@@ -100,8 +100,8 @@ namespace FaeMaze.Props
 
         [Header("Build Mode")]
         [SerializeField]
-        [Tooltip("Current build mode state")]
-        private BuildModeState buildModeState = BuildModeState.Active;
+        [Tooltip("Current build mode state (Inactive = disabled, Active = player can place props)")]
+        private BuildModeState buildModeState = BuildModeState.Inactive;
 
         [Header("Cursor")]
         [SerializeField]
