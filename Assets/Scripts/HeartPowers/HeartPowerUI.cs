@@ -82,6 +82,12 @@ namespace FaeMaze.HeartPowers
         private bool isTargetingMode = false;
         private HeartPowerType? pendingPowerType = null;
 
+        /// <summary>
+        /// Public property to check if Heart Power targeting is currently active.
+        /// Other systems should check this before handling mouse clicks.
+        /// </summary>
+        public bool IsTargetingActive => isTargetingMode;
+
         #endregion
 
         #region Unity Lifecycle

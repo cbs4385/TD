@@ -80,6 +80,10 @@ namespace FaeMaze.Props
         [Tooltip("Reference to the Heart Power Panel Controller (optional - prevents prop placement during targeting)")]
         private FaeMaze.UI.HeartPowerPanelController heartPowerPanel;
 
+        [SerializeField]
+        [Tooltip("Reference to the Heart Power UI (optional - prevents prop placement during targeting)")]
+        private FaeMaze.HeartPowers.HeartPowerUI heartPowerUI;
+
         [Header("Placeable Items")]
         [SerializeField]
         [Tooltip("List of all placeable item types")]
@@ -301,7 +305,8 @@ namespace FaeMaze.Props
             }
 
             // Check if Heart Power targeting is active - prevent placing props during targeting
-            if (heartPowerPanel != null && heartPowerPanel.IsTargetingActive)
+            if ((heartPowerPanel != null && heartPowerPanel.IsTargetingActive) ||
+                (heartPowerUI != null && heartPowerUI.IsTargetingActive))
             {
                 return;
             }
@@ -582,7 +587,8 @@ namespace FaeMaze.Props
             }
 
             // Check if Heart Power targeting is active - hide preview during targeting
-            if (heartPowerPanel != null && heartPowerPanel.IsTargetingActive)
+            if ((heartPowerPanel != null && heartPowerPanel.IsTargetingActive) ||
+                (heartPowerUI != null && heartPowerUI.IsTargetingActive))
             {
                 HidePreview();
                 return;
