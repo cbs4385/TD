@@ -65,6 +65,11 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Enable keyboard shortcuts (1-7)")]
         private bool enableKeyboardShortcuts = true;
 
+        [Header("Targeting Mode UI")]
+        [SerializeField]
+        [Tooltip("Text element for displaying targeting instructions (optional)")]
+        private TextMeshProUGUI targetingInstructionText;
+
         #endregion
 
         #region Private Fields
@@ -72,6 +77,10 @@ namespace FaeMaze.HeartPowers
         private Dictionary<HeartPowerType, Button> powerButtons = new Dictionary<HeartPowerType, Button>();
         private Dictionary<HeartPowerType, TextMeshProUGUI> cooldownTexts = new Dictionary<HeartPowerType, TextMeshProUGUI>();
         private Camera mainCamera;
+
+        // Targeting mode state
+        private bool isTargetingMode = false;
+        private HeartPowerType? pendingPowerType = null;
 
         #endregion
 
@@ -129,6 +138,12 @@ namespace FaeMaze.HeartPowers
 
         private void OnDisable()
         {
+            // Cancel targeting mode when UI is disabled to prevent stuck state
+            if (isTargetingMode)
+            {
+                ExitTargetingMode(cancelled: true);
+            }
+
             if (heartPowerManager != null)
             {
                 heartPowerManager.OnChargesChanged -= UpdateChargesDisplay;
@@ -151,6 +166,9 @@ namespace FaeMaze.HeartPowers
             {
                 HandleKeyboardInput();
             }
+
+            // Handle targeting mode for targeted powers
+            HandleTargetingMode();
         }
 
         #endregion
@@ -191,21 +209,17 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // For targeted powers, use mouse position
-            Vector3 targetPosition = GetMouseWorldPosition();
-
             // Check if power requires targeting
-            bool isTargetedPower = powerType == HeartPowerType.MurmuringPaths ||
-                                   powerType == HeartPowerType.DreamSnare ||
-                                   powerType == HeartPowerType.PukasBargain ||
-                                   powerType == HeartPowerType.FeastwardPanic;
+            bool isTargetedPower = IsTargetedPower(powerType);
 
             if (isTargetedPower)
             {
-                heartPowerManager.TryActivatePower(powerType, targetPosition);
+                // Enter targeting mode - wait for player to click on the grid
+                EnterTargetingMode(powerType);
             }
             else
             {
+                // Non-targeted powers activate immediately
                 heartPowerManager.TryActivatePower(powerType);
             }
         }
@@ -243,6 +257,133 @@ namespace FaeMaze.HeartPowers
             else if (Input.GetKeyDown(KeyCode.Alpha7) || Input.GetKeyDown(KeyCode.Keypad7))
             {
                 ActivatePower(HeartPowerType.RingOfInvitations);
+            }
+        }
+
+        #endregion
+
+        #region Targeting Mode
+
+        /// <summary>
+        /// Checks if a power type requires targeting.
+        /// </summary>
+        private bool IsTargetedPower(HeartPowerType powerType)
+        {
+            return powerType == HeartPowerType.MurmuringPaths ||
+                   powerType == HeartPowerType.DreamSnare ||
+                   powerType == HeartPowerType.PukasBargain ||
+                   powerType == HeartPowerType.FeastwardPanic;
+        }
+
+        /// <summary>
+        /// Enters targeting mode for a power that requires targeting.
+        /// </summary>
+        private void EnterTargetingMode(HeartPowerType powerType)
+        {
+            // First check if power can be activated
+            if (!heartPowerManager.CanActivatePower(powerType, out string reason))
+            {
+                Debug.LogWarning($"[HeartPowerUI] Cannot activate {powerType}: {reason}");
+                return;
+            }
+
+            isTargetingMode = true;
+            pendingPowerType = powerType;
+
+            // Show UI feedback if available
+            if (targetingInstructionText != null)
+            {
+                targetingInstructionText.text = $"Click on the map to target {powerType}\n(Press ESC to cancel)";
+                targetingInstructionText.gameObject.SetActive(true);
+            }
+
+            Debug.Log($"[HeartPowerUI] ⊕ Entered targeting mode for {powerType}. Click on the map to target, or press ESC to cancel.");
+        }
+
+        /// <summary>
+        /// Exits targeting mode without activating the power.
+        /// </summary>
+        private void ExitTargetingMode(bool cancelled = false)
+        {
+            if (isTargetingMode)
+            {
+                if (cancelled)
+                {
+                    Debug.Log($"[HeartPowerUI] ✗ Targeting cancelled for {pendingPowerType}");
+                }
+
+                isTargetingMode = false;
+                pendingPowerType = null;
+
+                // Hide UI feedback if available
+                if (targetingInstructionText != null)
+                {
+                    targetingInstructionText.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles targeting mode input in the Update loop.
+        /// Listens for mouse clicks to select target position.
+        /// </summary>
+        private void HandleTargetingMode()
+        {
+            if (!isTargetingMode || !pendingPowerType.HasValue)
+            {
+                return;
+            }
+
+            // Check for ESC key to cancel targeting
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                ExitTargetingMode(cancelled: true);
+                return;
+            }
+
+            // Check for left mouse button click using old Input system
+            if (Input.GetMouseButtonDown(0))
+            {
+                // Get mouse position in world space
+                Vector3 mouseWorldPos = GetMouseWorldPosition();
+
+                Debug.Log($"[HeartPowerUI] Mouse clicked at world position: {mouseWorldPos}");
+
+                // Validate the position is on the grid - NO FALLBACK
+                if (heartPowerManager.MazeGrid == null)
+                {
+                    Debug.LogError("[HeartPowerUI] MazeGrid is null, cannot validate target position!");
+                    ExitTargetingMode(cancelled: true);
+                    return;
+                }
+
+                if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
+                {
+                    // Invalid position - show feedback but don't exit targeting mode
+                    Debug.LogWarning($"[HeartPowerUI] ✗ Invalid target position {mouseWorldPos} - not on the grid. Please click on a valid tile.");
+                    return;
+                }
+
+                // Valid grid position found!
+                Vector2Int gridPos = new Vector2Int(gridX, gridY);
+                Vector3 targetWorldPos = heartPowerManager.MazeGrid.GridToWorld(gridX, gridY);
+
+                Debug.Log($"[HeartPowerUI] ✓ Valid target selected: Grid {gridPos}, World {targetWorldPos}");
+
+                // Try to activate the power
+                bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
+
+                if (success)
+                {
+                    Debug.Log($"[HeartPowerUI] ✓ Power {pendingPowerType.Value} activated successfully at {gridPos}!");
+                    ExitTargetingMode(cancelled: false);
+                }
+                else
+                {
+                    heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
+                    Debug.LogWarning($"[HeartPowerUI] ✗ Failed to activate power {pendingPowerType.Value} at {gridPos}. Reason: {reason}");
+                    ExitTargetingMode(cancelled: true);
+                }
             }
         }
 
@@ -317,16 +458,26 @@ namespace FaeMaze.HeartPowers
 
         #region Utility
 
+        /// <summary>
+        /// Gets the mouse position in world space.
+        /// Converts screen coordinates to world coordinates for 2D orthographic camera.
+        /// </summary>
         private Vector3 GetMouseWorldPosition()
         {
             if (mainCamera == null)
             {
+                Debug.LogError("[HeartPowerUI] Main camera is null!");
                 return Vector3.zero;
             }
 
-            Vector3 mousePos = Input.mousePosition;
-            mousePos.z = Mathf.Abs(mainCamera.transform.position.z);
-            return mainCamera.ScreenToWorldPoint(mousePos);
+            // Get mouse screen position
+            Vector3 mouseScreenPos = Input.mousePosition;
+
+            // Convert to world position for orthographic camera
+            Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, mainCamera.nearClipPlane));
+            mouseWorldPos.z = 0; // Ensure Z=0 for 2D game
+
+            return mouseWorldPos;
         }
 
         #endregion
