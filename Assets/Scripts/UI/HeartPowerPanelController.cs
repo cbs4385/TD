@@ -36,6 +36,7 @@ namespace FaeMaze.UI
         #region Private Fields
 
         private Button[] powerButtons = new Button[7];
+        private Image[] buttonImages = new Image[7];
         private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[7];
         private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[7];
         private TextMeshProUGUI chargesText;
@@ -62,6 +63,38 @@ namespace FaeMaze.UI
             HeartPowerType.PukasBargain,
             HeartPowerType.RingOfInvitations
         };
+
+        // ROYGBIV spectrum colors for each power
+        private readonly Color[] roygbivColors = new Color[]
+        {
+            new Color(0.8f, 0.1f, 0.1f, 1f),  // Power 1: Deep Red
+            new Color(1.0f, 0.5f, 0.0f, 1f),  // Power 2: Warm Orange
+            new Color(1.0f, 0.9f, 0.1f, 1f),  // Power 3: Bright Yellow
+            new Color(0.2f, 0.8f, 0.2f, 1f),  // Power 4: Vivid Green
+            new Color(0.2f, 0.5f, 1.0f, 1f),  // Power 5: Cool Blue
+            new Color(0.3f, 0.0f, 0.5f, 1f),  // Power 6: Indigo
+            new Color(0.6f, 0.2f, 0.8f, 1f)   // Power 7: Vibrant Violet
+        };
+
+        // Base colors (darker versions for inactive state)
+        private readonly Color[] baseColors = new Color[]
+        {
+            new Color(0.3f, 0.05f, 0.05f, 1f),  // Dim Red
+            new Color(0.35f, 0.18f, 0.0f, 1f),  // Dim Orange
+            new Color(0.35f, 0.32f, 0.05f, 1f), // Dim Yellow
+            new Color(0.08f, 0.3f, 0.08f, 1f),  // Dim Green
+            new Color(0.08f, 0.18f, 0.35f, 1f), // Dim Blue
+            new Color(0.12f, 0.0f, 0.2f, 1f),   // Dim Indigo
+            new Color(0.22f, 0.08f, 0.3f, 1f)   // Dim Violet
+        };
+
+        // Glow animation tracking
+        private float[] glowPhase = new float[7];
+        private float[] glowIntensity = new float[7];
+        private float[] flashIntensity = new float[7]; // Flash effect when power is activated
+        private float glowSpeed = 2.0f;
+        private float glowPulseSpeed = 3.0f;
+        private float flashDecaySpeed = 5.0f;
 
         private Camera mainCamera;
 
@@ -98,7 +131,15 @@ namespace FaeMaze.UI
             // Initialize UI controls
             InitializeControls();
 
-            Debug.Log("[HeartPowerPanel] Heart Powers panel initialized");
+            // Initialize glow effects with staggered phases
+            for (int i = 0; i < glowPhase.Length; i++)
+            {
+                glowPhase[i] = i * 0.5f; // Stagger initial phases
+                glowIntensity[i] = 0.0f; // Start with no glow (will increase when powers are ready)
+                flashIntensity[i] = 0.0f; // No flash initially
+            }
+
+            Debug.Log("[HeartPowerPanel] Heart Powers panel initialized with ROYGBIV glow effects");
             Debug.Log($"[HeartPowerPanel] Initial state - Charges: {heartPowerManager.CurrentCharges}, Essence: {heartPowerManager.CurrentEssence}");
         }
 
@@ -112,6 +153,9 @@ namespace FaeMaze.UI
 
             // Update cooldown displays and button states
             UpdateButtonStates();
+
+            // Update ROYGBIV glow effects
+            UpdateGlowEffects();
 
             // Handle keyboard shortcuts (1-7 keys)
             HandleKeyboardInput();
@@ -414,12 +458,15 @@ namespace FaeMaze.UI
             rect.sizeDelta = new Vector2(width, height);
 
             Image image = buttonObj.AddComponent<Image>();
-            image.color = new Color(0.4f, 0.2f, 0.5f, 1f); // Purple
+            image.color = baseColors[index]; // Set initial ROYGBIV base color
             image.raycastTarget = true; // Ensure it can be clicked
 
             Button button = buttonObj.AddComponent<Button>();
             button.targetGraphic = image;
             button.interactable = true; // Ensure button is interactable
+
+            // Store image reference for glow animations
+            buttonImages[index] = image;
 
             // Add navigation to make it clear it's a button
             var navigation = button.navigation;
@@ -532,6 +579,18 @@ namespace FaeMaze.UI
         private void OnPowerActivated(HeartPowerType powerType)
         {
             Debug.Log($"[HeartPowerPanel] Power activated event received: {powerType}");
+
+            // Find which button corresponds to this power and trigger flash effect
+            for (int i = 0; i < powerTypes.Length; i++)
+            {
+                if (powerTypes[i] == powerType)
+                {
+                    // Trigger a bright flash effect
+                    flashIntensity[i] = 1.5f; // Extra bright flash
+                    Debug.Log($"[HeartPowerPanel] Triggering ROYGBIV flash for {powerNames[i]} (color: {roygbivColors[i]})");
+                    break;
+                }
+            }
         }
 
         #endregion
@@ -659,14 +718,69 @@ namespace FaeMaze.UI
                     cooldownTexts[i].gameObject.SetActive(false);
                 }
 
-                // Visual feedback: dim button when not available
-                Image buttonImage = powerButtons[i].GetComponent<Image>();
-                if (buttonImage != null)
+                // Update glow intensity based on availability
+                // Glow effects will be applied by UpdateGlowEffects()
+                if (canActivate)
                 {
-                    buttonImage.color = canActivate
-                        ? new Color(0.4f, 0.2f, 0.5f, 1f)  // Normal purple (ready)
-                        : new Color(0.2f, 0.1f, 0.25f, 0.7f); // Dimmed (not ready)
+                    // Power is ready - increase glow intensity
+                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.0f, Time.deltaTime * glowSpeed);
                 }
+                else
+                {
+                    // Power not ready - decrease glow intensity
+                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 0.0f, Time.deltaTime * glowSpeed);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates the ROYGBIV glow effects for each power button.
+        /// Each button pulses with its assigned color from the spectrum.
+        /// </summary>
+        private void UpdateGlowEffects()
+        {
+            for (int i = 0; i < buttonImages.Length; i++)
+            {
+                if (buttonImages[i] == null) continue;
+
+                // Decay flash intensity over time
+                if (flashIntensity[i] > 0)
+                {
+                    flashIntensity[i] = Mathf.Max(0, flashIntensity[i] - Time.deltaTime * flashDecaySpeed);
+                }
+
+                // Update glow phase with staggered timing for visual variety
+                // Each button starts at a different phase for a cascading effect
+                float phaseOffset = i * 0.5f; // Stagger by 0.5 seconds
+                glowPhase[i] = Time.time * glowPulseSpeed + phaseOffset;
+
+                // Calculate pulse using sine wave (0 to 1)
+                float pulse = (Mathf.Sin(glowPhase[i]) + 1f) * 0.5f;
+
+                // Smooth the pulse to make it more gentle
+                pulse = Mathf.Pow(pulse, 0.7f);
+
+                // Interpolate between base color and full ROYGBIV color
+                // glowIntensity controls how bright the effect is (0 = dim base, 1 = full glow)
+                Color baseColor = baseColors[i];
+                Color glowColor = roygbivColors[i];
+
+                // Calculate pulsing color
+                Color pulsingColor = Color.Lerp(
+                    baseColor,
+                    Color.Lerp(baseColor, glowColor, pulse),
+                    glowIntensity[i]
+                );
+
+                // Add flash effect (brightens the color significantly when activated)
+                Color finalColor = Color.Lerp(
+                    pulsingColor,
+                    glowColor * 1.3f, // Extra bright for flash
+                    flashIntensity[i]
+                );
+
+                // Apply the color to the button image
+                buttonImages[i].color = finalColor;
             }
         }
 
