@@ -103,6 +103,12 @@ namespace FaeMaze.UI
         private HeartPowerType? pendingPowerType = null;
         private Texture2D originalCursorTexture = null;
 
+        /// <summary>
+        /// Public property to check if Heart Power targeting is currently active.
+        /// Other systems should check this before handling mouse clicks.
+        /// </summary>
+        public bool IsTargetingActive => isTargetingMode;
+
         #endregion
 
         #region Unity Lifecycle

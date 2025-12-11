@@ -76,6 +76,10 @@ namespace FaeMaze.Props
         [Tooltip("Reference to the maze grid behaviour")]
         private MazeGridBehaviour mazeGridBehaviour;
 
+        [SerializeField]
+        [Tooltip("Reference to the Heart Power Panel Controller (optional - prevents prop placement during targeting)")]
+        private FaeMaze.UI.HeartPowerPanelController heartPowerPanel;
+
         [Header("Placeable Items")]
         [SerializeField]
         [Tooltip("List of all placeable item types")]
@@ -290,6 +294,18 @@ namespace FaeMaze.Props
         /// </summary>
         private void TryPlaceProp()
         {
+            // Check if mouse is over UI - prevent placing props when clicking UI buttons
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            {
+                return;
+            }
+
+            // Check if Heart Power targeting is active - prevent placing props during targeting
+            if (heartPowerPanel != null && heartPowerPanel.IsTargetingActive)
+            {
+                return;
+            }
+
             // Early exit if no items configured - avoid spam warnings
             if (placeableItems.Count == 0)
             {
@@ -560,6 +576,13 @@ namespace FaeMaze.Props
 
             // Check if mouse is over UI
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            {
+                HidePreview();
+                return;
+            }
+
+            // Check if Heart Power targeting is active - hide preview during targeting
+            if (heartPowerPanel != null && heartPowerPanel.IsTargetingActive)
             {
                 HidePreview();
                 return;
