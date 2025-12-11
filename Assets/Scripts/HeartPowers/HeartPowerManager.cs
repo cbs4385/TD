@@ -339,6 +339,12 @@ namespace FaeMaze.HeartPowers
 
             OnPowerActivated?.Invoke(powerType);
 
+            // If this power affects pathfinding, trigger all visitors to recalculate their paths
+            if (PowerAffectsPathfinding(powerType))
+            {
+                TriggerVisitorPathRecalculation(powerType);
+            }
+
             if (debugLog)
             {
                 Debug.Log($"[HeartPowerManager] ✓ Successfully activated {powerType} at {worldPosition}");
@@ -584,6 +590,62 @@ namespace FaeMaze.HeartPowers
 
             activePowers.Clear();
             pathCostModifier?.ClearAll();
+        }
+
+        #endregion
+
+        #region Visitor Path Recalculation
+
+        /// <summary>
+        /// Checks if a power type affects pathfinding costs and requires visitor path recalculation.
+        /// </summary>
+        private bool PowerAffectsPathfinding(HeartPowerType powerType)
+        {
+            switch (powerType)
+            {
+                case HeartPowerType.HeartbeatOfLonging:
+                case HeartPowerType.MurmuringPaths:
+                case HeartPowerType.DreamSnare:
+                case HeartPowerType.FeastwardPanic:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Triggers all active visitors to recalculate their paths after a power modifies grid costs.
+        /// </summary>
+        private void TriggerVisitorPathRecalculation(HeartPowerType powerType)
+        {
+            // Get all active visitors using the static registry
+            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
+
+            if (activeVisitors == null || activeVisitors.Count == 0)
+            {
+                if (debugLog)
+                {
+                    Debug.Log($"[HeartPowerManager] No active visitors to recalculate paths for {powerType}");
+                }
+                return;
+            }
+
+            int recalculatedCount = 0;
+            foreach (var visitor in activeVisitors)
+            {
+                if (visitor != null && visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Consumed
+                    && visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Escaping
+                    && visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Fascinated)
+                {
+                    visitor.RecalculatePath();
+                    recalculatedCount++;
+                }
+            }
+
+            if (debugLog)
+            {
+                Debug.Log($"[HeartPowerManager] ✓ Triggered path recalculation for {recalculatedCount} visitors after {powerType} activation");
+            }
         }
 
         #endregion
