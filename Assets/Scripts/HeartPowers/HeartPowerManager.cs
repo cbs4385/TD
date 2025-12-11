@@ -71,6 +71,7 @@ namespace FaeMaze.HeartPowers
         private Dictionary<HeartPowerType, bool> unlockedPowers = new Dictionary<HeartPowerType, bool>();
 
         private PathCostModifier pathCostModifier;
+        private HeartPowerTileVisualizer tileVisualizer;
         private bool isGameActive = false;
 
         // Active power effects (for cleanup and state tracking)
@@ -91,6 +92,9 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>Gets the path cost modifier system</summary>
         public PathCostModifier PathModifier => pathCostModifier;
+
+        /// <summary>Gets the tile visualizer for Heart Power effects</summary>
+        public HeartPowerTileVisualizer TileVisualizer => tileVisualizer;
 
         /// <summary>Gets the maze grid behaviour</summary>
         public MazeGridBehaviour MazeGrid => mazeGridBehaviour;
@@ -162,10 +166,31 @@ namespace FaeMaze.HeartPowers
                 pathCostModifier = new PathCostModifier(mazeGridBehaviour);
             }
 
+            // Initialize tile visualizer
+            CreateTileVisualizerIfNeeded();
+
             // Auto-create UI if enabled and not present
             if (autoCreateUI)
             {
                 CreateHeartPowersUIIfNeeded();
+            }
+        }
+
+        private void CreateTileVisualizerIfNeeded()
+        {
+            // Check if HeartPowerTileVisualizer already exists
+            tileVisualizer = FindFirstObjectByType<HeartPowerTileVisualizer>();
+            if (tileVisualizer == null)
+            {
+                // Create a new GameObject for the tile visualizer
+                GameObject visualizerObj = new GameObject("HeartPowerTileVisualizer");
+                visualizerObj.transform.SetParent(transform);
+                tileVisualizer = visualizerObj.AddComponent<HeartPowerTileVisualizer>();
+
+                if (debugLog)
+                {
+                    Debug.Log("[HeartPowerManager] ✓ Created HeartPowerTileVisualizer for ROYGBIV tile effects");
+                }
             }
         }
 

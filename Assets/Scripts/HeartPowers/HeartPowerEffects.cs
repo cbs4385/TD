@@ -42,8 +42,16 @@ namespace FaeMaze.HeartPowers
                     // Negative cost = more attractive (param1 = attraction strength, default -2.0)
                     float attractionBonus = -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 2.0f);
                     manager.PathModifier.AddModifier(tile, attractionBonus, definition.duration, ModifierSourceId);
+
+                    // Add ROYGBIV tile visual (deep red for Power 1)
+                    if (manager.TileVisualizer != null)
+                    {
+                        // Intensity based on attraction strength (normalize to 0-1)
+                        float intensity = Mathf.Clamp01(Mathf.Abs(attractionBonus) / 5.0f);
+                        manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.HeartbeatOfLonging, intensity, definition.duration);
+                    }
                 }
-                Debug.Log($"[HeartbeatOfLonging] Lantern at {lantern.GridPosition} - Influenced {influenceTiles.Count} tiles");
+                Debug.Log($"[HeartbeatOfLonging] Lantern at {lantern.GridPosition} - Influenced {influenceTiles.Count} tiles with deep red glow");
             }
 
             Debug.Log($"[HeartbeatOfLonging] ✓ Activated on {affectedLanterns.Count} lanterns affecting {lanternInfluenceTiles.Count} tiles total");
@@ -71,10 +79,17 @@ namespace FaeMaze.HeartPowers
         {
             // Cleanup path modifiers
             manager.PathModifier.ClearBySource(ModifierSourceId);
+
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.HeartbeatOfLonging);
+            }
+
             affectedLanterns.Clear();
             lanternInfluenceTiles.Clear();
 
-            Debug.Log($"[HeartbeatOfLonging] Effect ended");
+            Debug.Log($"[HeartbeatOfLonging] Effect ended, removed deep red glow from tiles");
         }
 
         private HashSet<Vector2Int> GetLanternInfluenceTiles(FaeLantern lantern)
@@ -242,9 +257,17 @@ namespace FaeMaze.HeartPowers
                 foreach (var tile in pathSegment)
                 {
                     manager.PathModifier.AddModifier(tile, costModifier, definition.duration, instanceSourceId);
+
+                    // Add ROYGBIV tile visual (warm orange for Power 2)
+                    if (manager.TileVisualizer != null)
+                    {
+                        // Intensity based on cost modifier strength (normalize to 0-1)
+                        float intensity = Mathf.Clamp01(Mathf.Abs(costModifier) / 5.0f);
+                        manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.MurmuringPaths, intensity, definition.duration);
+                    }
                 }
 
-                Debug.Log($"[MurmuringPaths] ✓ Created {(sealMode ? "sealed" : "luring")} path segment with {pathSegment.Count} tiles");
+                Debug.Log($"[MurmuringPaths] ✓ Created {(sealMode ? "sealed" : "luring")} path segment with {pathSegment.Count} tiles with warm orange glow");
                 Debug.Log($"[MurmuringPaths] Duration: {definition.duration}s, Source ID: {instanceSourceId}");
             }
             else
@@ -256,8 +279,15 @@ namespace FaeMaze.HeartPowers
         public override void OnEnd()
         {
             manager.PathModifier.ClearBySource(instanceSourceId);
+
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.MurmuringPaths);
+            }
+
             pathSegment.Clear();
-            Debug.Log($"[MurmuringPaths] Effect ended");
+            Debug.Log($"[MurmuringPaths] Effect ended, removed warm orange glow from path segment");
         }
 
         private List<Vector2Int> GeneratePathSegment(Vector2Int startTile)
@@ -342,9 +372,33 @@ namespace FaeMaze.HeartPowers
             float radius = definition.radius > 0 ? definition.radius : 3f;
             Debug.Log($"[DreamSnare] Center: {centerTile}, Radius: {radius} tiles");
 
+            // Add ROYGBIV tile visuals to the AoE (bright yellow for Power 3)
+            if (manager.TileVisualizer != null)
+            {
+                int intRadius = Mathf.CeilToInt(radius);
+                for (int dx = -intRadius; dx <= intRadius; dx++)
+                {
+                    for (int dy = -intRadius; dy <= intRadius; dy++)
+                    {
+                        int manhattanDist = Mathf.Abs(dx) + Mathf.Abs(dy);
+                        if (manhattanDist <= intRadius)
+                        {
+                            Vector2Int tile = new Vector2Int(centerTile.x + dx, centerTile.y + dy);
+                            var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
+                            if (node != null && node.walkable)
+                            {
+                                // Intensity decreases with distance from center
+                                float intensity = 1.0f - (manhattanDist / (float)intRadius) * 0.5f;
+                                manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.DreamSnare, intensity, definition.duration);
+                            }
+                        }
+                    }
+                }
+            }
+
             // Find all visitors in AoE and apply Mesmerized
             var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
-            Debug.Log($"[DreamSnare] Scanning {visitors.Length} visitors for AoE effect...");
+            Debug.Log($"[DreamSnare] Scanning {visitors.Length} visitors for AoE effect with bright yellow glow...");
 
             int mesmerizedCount = 0;
             foreach (var visitor in visitors)
@@ -391,9 +445,15 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.DreamSnare);
+            }
+
             thornTiles.Clear();
             affectedVisitors.Clear();
-            Debug.Log($"[DreamSnare] Effect ended");
+            Debug.Log($"[DreamSnare] Effect ended, removed bright yellow glow from AoE");
         }
 
         private void CreateLingeringThorns(float radius)
