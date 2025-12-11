@@ -596,7 +596,14 @@ namespace FaeMaze.HeartPowers
         {
             frightenedVisitors.Clear();
             manager.PathModifier.ClearBySource(ModifierSourceId);
-            Debug.Log($"[FeastwardPanic] Effect ended");
+
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.FeastwardPanic);
+            }
+
+            Debug.Log($"[FeastwardPanic] Effect ended, removed vivid green glow from panic zones");
         }
 
         private bool IsInCone(Vector3 visitorWorldPos)
@@ -634,6 +641,15 @@ namespace FaeMaze.HeartPowers
                         float costMod = distToHeart * 0.5f - 10f; // Tune this formula
                         manager.PathModifier.AddModifier(tile, costMod, definition.duration,
                             $"{ModifierSourceId}_{visitor.GetInstanceID()}");
+
+                        // Add ROYGBIV tile visual (vivid green for Power 4)
+                        if (manager.TileVisualizer != null)
+                        {
+                            // Intensity based on distance from visitor (closer = stronger effect)
+                            float intensity = 1.0f - (distFromVisitor / radius);
+                            intensity = Mathf.Clamp01(intensity);
+                            manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.FeastwardPanic, intensity, definition.duration);
+                        }
                     }
                 }
             }
@@ -694,10 +710,37 @@ namespace FaeMaze.HeartPowers
             // Find all WillowTheWisp instances
             affectedWisps.AddRange(Object.FindObjectsByType<WillowTheWisp>(FindObjectsSortMode.None));
 
+            // Add ROYGBIV tile visual at beacon position (cool blue for Power 5)
+            if (manager.TileVisualizer != null && manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
+            {
+                Vector2Int beaconTile = new Vector2Int(tx, ty);
+                int radius = definition.intParam1 > 0 ? definition.intParam1 : 5;
+
+                // Create a circular beacon aura
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        int manhattanDist = Mathf.Abs(dx) + Mathf.Abs(dy);
+                        if (manhattanDist <= radius)
+                        {
+                            Vector2Int tile = new Vector2Int(beaconTile.x + dx, beaconTile.y + dy);
+                            var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
+                            if (node != null && node.walkable)
+                            {
+                                // Intensity decreases with distance from beacon
+                                float intensity = 1.0f - (manhattanDist / (float)radius) * 0.6f;
+                                manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.CovenantWithWisps, intensity, definition.duration);
+                            }
+                        }
+                    }
+                }
+            }
+
             foreach (var wisp in affectedWisps)
             {
                 // Mark wisp as controlled (would need WillowTheWisp API modifications)
-                Debug.Log($"[CovenantWithWisps] Controlling wisp at {wisp.transform.position}");
+                Debug.Log($"[CovenantWithWisps] Controlling wisp at {wisp.transform.position} with cool blue beacon");
 
                 // Tier I: Enable twin flames (capture 2 visitors)
                 if (definition.tier >= 1)
@@ -717,8 +760,14 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.CovenantWithWisps);
+            }
+
             affectedWisps.Clear();
-            Debug.Log($"[CovenantWithWisps] Effect ended");
+            Debug.Log($"[CovenantWithWisps] Effect ended, removed cool blue beacon glow");
         }
 
         private void PlaceBeacon(WillowTheWisp wisp)
@@ -795,8 +844,14 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.PukasBargain);
+            }
+
             pactPools.Clear();
-            Debug.Log($"[PukasBargain] Effect ended");
+            Debug.Log($"[PukasBargain] Effect ended, removed indigo glow from pact pools");
         }
 
         private void IdentifyPactPools()
@@ -818,12 +873,20 @@ namespace FaeMaze.HeartPowers
                         if (distToHeart < searchRadius / 2f) // Closer half
                         {
                             pactPools.Add(tile);
+
+                            // Add ROYGBIV tile visual (indigo for Power 6)
+                            if (manager.TileVisualizer != null)
+                            {
+                                // Intensity based on proximity to Heart (closer = stronger)
+                                float intensity = 1.0f - (distToHeart / (searchRadius / 2f)) * 0.4f;
+                                manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.PukasBargain, intensity, definition.duration);
+                            }
                         }
                     }
                 }
             }
 
-            Debug.Log($"[PukasBargain] Identified {pactPools.Count} pact pools");
+            Debug.Log($"[PukasBargain] Identified {pactPools.Count} pact pools with indigo highlights");
         }
 
         public Vector2Int? GetPreferredTeleportTarget()
@@ -920,7 +983,34 @@ namespace FaeMaze.HeartPowers
             foreach (var ring in affectedRings)
             {
                 // Mark ring as Heart-tuned (would need FairyRing API modifications)
-                Debug.Log($"[RingOfInvitations] Enhanced ring at {ring.transform.position}");
+                Debug.Log($"[RingOfInvitations] Enhanced ring at {ring.transform.position} with vibrant violet radiance");
+
+                // Add ROYGBIV tile visuals around each ring (vibrant violet for Power 7)
+                if (manager.TileVisualizer != null && manager.MazeGrid.WorldToGrid(ring.transform.position, out int rx, out int ry))
+                {
+                    Vector2Int ringTile = new Vector2Int(rx, ry);
+                    int ringRadius = definition.intParam2 > 0 ? definition.intParam2 : 3;
+
+                    // Create a circular aura around the ring
+                    for (int dx = -ringRadius; dx <= ringRadius; dx++)
+                    {
+                        for (int dy = -ringRadius; dy <= ringRadius; dy++)
+                        {
+                            int manhattanDist = Mathf.Abs(dx) + Mathf.Abs(dy);
+                            if (manhattanDist <= ringRadius)
+                            {
+                                Vector2Int tile = new Vector2Int(ringTile.x + dx, ringTile.y + dy);
+                                var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
+                                if (node != null && node.walkable)
+                                {
+                                    // Intensity strongest at ring center
+                                    float intensity = 1.0f - (manhattanDist / (float)ringRadius) * 0.5f;
+                                    manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.RingOfInvitations, intensity, definition.duration);
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Tier I: Spawn illusory rings
                 if (definition.tier >= 1)
@@ -929,7 +1019,7 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[RingOfInvitations] Activated on {affectedRings.Count} rings");
+            Debug.Log($"[RingOfInvitations] Activated on {affectedRings.Count} rings with vibrant violet auras");
         }
 
         public override void OnEnd()
@@ -940,9 +1030,15 @@ namespace FaeMaze.HeartPowers
                 ApplyClosingDance();
             }
 
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.RingOfInvitations);
+            }
+
             affectedRings.Clear();
             entrancedVisitors.Clear();
-            Debug.Log($"[RingOfInvitations] Effect ended");
+            Debug.Log($"[RingOfInvitations] Effect ended, removed vibrant violet radiance from rings");
         }
 
         private void SpawnIllusoryRings(FairyRing sourceRing)
