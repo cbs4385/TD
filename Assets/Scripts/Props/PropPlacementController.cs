@@ -191,6 +191,14 @@ namespace FaeMaze.Props
             // Initialize occupancy tracking
             occupiedTiles = new Dictionary<Vector2Int, GameObject>();
 
+            // FORCE build mode to Inactive - props are hazards and should not be player-placeable
+            // This overrides any Inspector settings to ensure build mode is always disabled
+            if (buildModeState == BuildModeState.Active)
+            {
+                Debug.LogWarning("[PropPlacementController] Build mode was Active in Inspector - forcing to Inactive. Props are hazards and should not be manually placed by players.");
+                buildModeState = BuildModeState.Inactive;
+            }
+
             // Validate references
             if (mazeGridBehaviour == null)
             {
