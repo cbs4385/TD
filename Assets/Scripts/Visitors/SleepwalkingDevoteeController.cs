@@ -7,7 +7,7 @@ namespace FaeMaze.Visitors
     /// pulled directly toward the Heart, but reacts strongly to interference.
     /// High-value target for essence rewards.
     /// </summary>
-    public class SleepwalkingDevoteeController : TypedVisitorControllerBase
+    public class SleepwalkingDevoteeController : VisitorControllerBase
     {
         [Header("Devotee Settings")]
         [SerializeField]

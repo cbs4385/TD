@@ -9,8 +9,9 @@ namespace FaeMaze.Visitors
     /// <summary>
     /// Base class for visitor controllers providing shared movement, pathfinding, and fascination logic.
     /// Derived classes implement specific detour behaviors (confusion, missteps, etc.).
+    /// Supports optional archetype configuration for behavior customization.
     /// </summary>
-    public abstract class VisitorControllerBase : MonoBehaviour
+    public abstract class VisitorControllerBase : MonoBehaviour, IArchetypedVisitor
     {
         #region Enums
 
@@ -57,6 +58,11 @@ namespace FaeMaze.Visitors
         #endregion
 
         #region Serialized Fields
+
+        [Header("Archetype Configuration")]
+        [SerializeField]
+        [Tooltip("Optional archetype configuration defining behavioral parameters (fascination, confusion, rewards, etc.)")]
+        protected VisitorArchetypeConfig config;
 
         [Header("Movement Settings")]
         [SerializeField]
@@ -197,6 +203,12 @@ namespace FaeMaze.Visitors
         /// <summary>Gets whether this visitor is fascinated by a FaeLantern</summary>
         public abstract bool IsFascinated { get; }
 
+        /// <summary>Gets the visitor's archetype (from config if available)</summary>
+        public VisitorArchetype Archetype => config != null ? config.Archetype : VisitorArchetype.LanternDrunk;
+
+        /// <summary>Gets the visitor's archetype configuration</summary>
+        public VisitorArchetypeConfig ArchetypeConfig => config;
+
         #endregion
 
         #region Unity Lifecycle
@@ -219,6 +231,16 @@ namespace FaeMaze.Visitors
             hasLoggedCurrentStall = false;
             hasMovedSignificantly = false;
             isCurrentlyStalled = false;
+
+            // Apply archetype-specific settings if config is available
+            if (config != null)
+            {
+                moveSpeed = config.BaseSpeed;
+                mesmerizedDuration = config.InitialMesmerizedDuration;
+                frightenedDuration = config.FrightenedDuration;
+                minLostDistance = Mathf.RoundToInt(config.LostDetourMin);
+                maxLostDistance = Mathf.RoundToInt(config.LostDetourMax);
+            }
         }
 
         protected virtual void OnEnable()
@@ -506,6 +528,61 @@ namespace FaeMaze.Visitors
             {
                 state = VisitorState.Walking;
             }
+        }
+
+        #endregion
+
+        #region Archetype-Aware Behavior Methods
+
+        /// <summary>
+        /// Gets the fascination chance for this visitor.
+        /// Override to apply additional modifiers (e.g., from Heart powers).
+        /// </summary>
+        public virtual float GetFascinationChance()
+        {
+            return config != null ? config.FascinationChance : 0.5f;
+        }
+
+        /// <summary>
+        /// Gets the fascination duration range for this visitor.
+        /// </summary>
+        public virtual (float min, float max) GetFascinationDuration()
+        {
+            if (config != null)
+                return (config.FascinationDurationMin, config.FascinationDurationMax);
+            return (2f, 5f);
+        }
+
+        /// <summary>
+        /// Gets the confusion/misstep chance at intersections for this visitor.
+        /// </summary>
+        public virtual float GetConfusionChance()
+        {
+            return config != null ? config.ConfusionIntersectionChance : 0.25f;
+        }
+
+        /// <summary>
+        /// Gets the frightened speed multiplier for this visitor.
+        /// </summary>
+        public virtual float GetFrightenedSpeedMultiplier()
+        {
+            return config != null ? config.FrightenedSpeedMultiplier : 1.2f;
+        }
+
+        /// <summary>
+        /// Returns whether frightened visitors of this type prefer exits over the heart.
+        /// </summary>
+        public virtual bool ShouldFrightenedPreferExit()
+        {
+            return config != null && config.FrightenedPrefersExit;
+        }
+
+        /// <summary>
+        /// Gets the essence reward for consuming this visitor.
+        /// </summary>
+        public virtual int GetEssenceReward()
+        {
+            return config != null ? config.EssenceReward : 1;
         }
 
         #endregion
@@ -1048,6 +1125,7 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Called when a visitor enters a FaeLantern's influence area.
+        /// Uses archetype-specific fascination parameters if config is available.
         /// </summary>
         protected virtual void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern, Vector2Int visitorGridPosition)
         {
@@ -1055,18 +1133,22 @@ namespace FaeMaze.Visitors
             if (isFascinated && currentFaeLantern == lantern && fascinationLanternPosition == lantern.GridPosition)
                 return;
 
+            // Use archetype-specific cooldown if config available, otherwise use lantern's cooldown
+            float cooldown = config != null ? config.FascinationCooldown : lantern.CooldownSec;
+
             // Check cooldown (prevents immediate re-triggering)
             if (lanternCooldowns.ContainsKey(lantern) && lanternCooldowns[lantern] > 0f)
             {
                 return;
             }
 
-            // Check proc chance (probability of fascination)
+            // Use archetype-specific fascination chance
+            float fascinationChance = GetFascinationChance();
             float roll = Random.value;
-            if (roll > lantern.ProcChance)
+            if (roll > fascinationChance)
             {
                 // Set cooldown even on failed proc to prevent spam checks
-                lanternCooldowns[lantern] = lantern.CooldownSec;
+                lanternCooldowns[lantern] = cooldown;
                 return;
             }
 
@@ -1077,8 +1159,8 @@ namespace FaeMaze.Visitors
             hasReachedLantern = false;
             fascinationTimer = 0f; // Will be set when reaching lantern
 
-            // Set cooldown for this lantern
-            lanternCooldowns[lantern] = lantern.CooldownSec;
+            // Set archetype-specific cooldown for this lantern
+            lanternCooldowns[lantern] = cooldown;
 
             // Clear path nodes from previous fascination
             fascinatedPathNodes.Clear();
@@ -1127,6 +1209,10 @@ namespace FaeMaze.Visitors
                             currentPathIndex++;
                         }
                     }
+
+                    // Use archetype-specific fascination duration (note: duration will be applied when visitor reaches lantern)
+                    var (minDuration, maxDuration) = GetFascinationDuration();
+                    float duration = Random.Range(minDuration, maxDuration);
 
                     RefreshStateFromFlags();
                 }

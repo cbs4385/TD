@@ -7,7 +7,7 @@ namespace FaeMaze.Visitors
     /// LanternDrunk Pilgrim archetype - highly susceptible to fascination and getting lost.
     /// Slow but easy to keep wandering due to high confusion and lantern susceptibility.
     /// </summary>
-    public class LanternDrunkVisitorController : TypedVisitorControllerBase
+    public class LanternDrunkVisitorController : VisitorControllerBase
     {
         #region Static Registry
 

@@ -8,7 +8,7 @@ namespace FaeMaze.Visitors
     /// but highly prone to fight-or-flight when threatened.
     /// Repaths to nearest exit when frightened.
     /// </summary>
-    public class WaryWayfarerVisitorController : TypedVisitorControllerBase
+    public class WaryWayfarerVisitorController : VisitorControllerBase
     {
         #region Misstep-Specific Fields
 

@@ -16,21 +16,21 @@ The Visitor Archetype System allows you to create distinct visitor types with un
 - **`IVisitorArchetypeConfig`** (interface) - Contract for archetype configuration
 - **`VisitorArchetypeConfig`** (ScriptableObject) - Tunable parameters per archetype
 - **`IArchetypedVisitor`** (interface) - Marks visitors as having an archetype
-- **`TypedVisitorControllerBase`** - Base class for archetype-aware visitors
+- **`VisitorControllerBase`** - Unified base class with optional archetype support
 
 ### Archetype Controllers
 
-- **`LanternDrunkVisitorController`** - Extends `TypedVisitorControllerBase`
+- **`LanternDrunkVisitorController`** - Extends `VisitorControllerBase`
   - High confusion chance at intersections
   - Very susceptible to FaeLantern fascination
   - Longer detour segments when lost
 
-- **`WaryWayfarerVisitorController`** - Extends `TypedVisitorControllerBase`
+- **`WaryWayfarerVisitorController`** - Extends `VisitorControllerBase`
   - Low confusion/misstep chance
   - Repaths to nearest exit when frightened
   - Resistant to fascination
 
-- **`SleepwalkingDevoteeController`** - Extends `TypedVisitorControllerBase`
+- **`SleepwalkingDevoteeController`** - Extends `VisitorControllerBase`
   - Starts in Mesmerized state heading to Heart
   - No confusion while mesmerized
   - High essence reward when consumed
@@ -206,7 +206,7 @@ To add a new visitor archetype:
 2. **Create ScriptableObject config** with parameters
 3. **Create controller class**:
    ```csharp
-   public class MyNewVisitorController : TypedVisitorControllerBase
+   public class MyNewVisitorController : VisitorControllerBase
    {
        // Override methods as needed
    }
