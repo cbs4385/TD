@@ -34,11 +34,8 @@ namespace FaeMaze.Visitors
         [Tooltip("Draw confusion segments in the scene view for debugging")]
         private bool debugConfusionGizmos;
 
-        private bool isConfused;
-        private bool confusionSegmentActive;
-        private int confusionSegmentEndIndex;
-        private int confusionStepsTarget;
-        private int confusionStepsTaken;
+        // Note: Confusion state fields (isConfused, confusionSegmentActive, etc.)
+        // are now in VisitorControllerBase as protected fields
 
         #endregion
 
