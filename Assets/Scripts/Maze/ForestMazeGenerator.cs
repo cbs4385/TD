@@ -126,8 +126,8 @@ namespace ForestMaze
                 }
             }
 
-            // Mark the maze center as 'H' (heart) on top of a path tile.
-            MarkCenter(grid, width, height, cellWidth, cellHeight);
+            // Mark a random dead-end as 'H' (heart) instead of center.
+            MarkHeartAtDeadEnd(grid, width, height, random);
 
             // Cut entrances/exits on the outer border.
             AddEntrances(grid, width, height, numberOfEntrances, random);
@@ -169,23 +169,71 @@ namespace ForestMaze
             }
         }
 
-        #region Center / Entrances / Decoration
+        #region Heart / Entrances / Decoration
 
-        private static void MarkCenter(char[,] grid, int width, int height, int cellWidth, int cellHeight)
+        /// <summary>
+        /// Places the heart 'H' at a random dead-end path tile.
+        /// A dead-end is a path tile with only one walkable neighbor.
+        /// </summary>
+        private static void MarkHeartAtDeadEnd(char[,] grid, int width, int height, Random random)
         {
-            int centerCx = cellWidth / 2;
-            int centerCy = cellHeight / 2;
+            var deadEnds = new List<(int x, int y)>();
 
-            int gx = 2 * centerCx + 1;
-            int gy = 2 * centerCy + 1;
-
-            if (gx < 0 || gx >= width || gy < 0 || gy >= height)
-                return;
-
-            // Only override if it's already a path tile.
-            if (grid[gy, gx] == '.')
+            // Find all dead-end tiles (path tiles with exactly one walkable neighbor)
+            for (int y = 1; y < height - 1; y++)
             {
-                grid[gy, gx] = 'H';
+                for (int x = 1; x < width - 1; x++)
+                {
+                    if (MazeGeneratorUtilities.IsPathLike(grid[y, x]))
+                    {
+                        int walkableNeighbors = 0;
+
+                        // Check 4 cardinal directions
+                        if (MazeGeneratorUtilities.IsPathLike(grid[y - 1, x])) walkableNeighbors++; // Up
+                        if (MazeGeneratorUtilities.IsPathLike(grid[y + 1, x])) walkableNeighbors++; // Down
+                        if (MazeGeneratorUtilities.IsPathLike(grid[y, x - 1])) walkableNeighbors++; // Left
+                        if (MazeGeneratorUtilities.IsPathLike(grid[y, x + 1])) walkableNeighbors++; // Right
+
+                        // Dead-end = exactly 1 walkable neighbor
+                        if (walkableNeighbors == 1)
+                        {
+                            deadEnds.Add((x, y));
+                        }
+                    }
+                }
+            }
+
+            // If we found dead-ends, pick one randomly and place the heart
+            if (deadEnds.Count > 0)
+            {
+                var chosenDeadEnd = deadEnds[random.Next(deadEnds.Count)];
+                grid[chosenDeadEnd.y, chosenDeadEnd.x] = 'H';
+            }
+            else
+            {
+                // Fallback to center if no dead-ends found (shouldn't happen in a perfect maze)
+                int centerX = width / 2;
+                int centerY = height / 2;
+
+                // Find nearest path tile to center
+                for (int radius = 0; radius < Math.Max(width, height) / 2; radius++)
+                {
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        for (int dx = -radius; dx <= radius; dx++)
+                        {
+                            int x = centerX + dx;
+                            int y = centerY + dy;
+
+                            if (x >= 0 && x < width && y >= 0 && y < height &&
+                                MazeGeneratorUtilities.IsPathLike(grid[y, x]))
+                            {
+                                grid[y, x] = 'H';
+                                return;
+                            }
+                        }
+                    }
+                }
             }
         }
 
