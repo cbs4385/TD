@@ -795,6 +795,33 @@ namespace FaeMaze.Visitors
             {
                 animator.SetInteger(DirectionParameter, direction);
                 currentAnimatorDirection = direction;
+
+                // Rotate the visual model to face the correct direction
+                // Only rotate if not using procedural sprites (3D model needs rotation)
+                if (!useProceduralSprite && animator != null)
+                {
+                    float zRotation = 0f;
+                    switch (direction)
+                    {
+                        case 0: // Idle - keep current rotation
+                            return;
+                        case 1: // Up (+Y) - original orientation
+                            zRotation = 0f;
+                            break;
+                        case 2: // Down (-Y) - 180 degrees
+                            zRotation = 180f;
+                            break;
+                        case 3: // Left (-X) - 90 degrees
+                            zRotation = 90f;
+                            break;
+                        case 4: // Right (+X) - -90 degrees
+                            zRotation = -90f;
+                            break;
+                    }
+
+                    // Apply rotation to the animator's transform (the child visual object)
+                    animator.transform.localRotation = Quaternion.Euler(0f, 90f, zRotation);
+                }
             }
         }
 
