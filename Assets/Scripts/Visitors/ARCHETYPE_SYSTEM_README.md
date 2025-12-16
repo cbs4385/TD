@@ -16,7 +16,18 @@ The Visitor Archetype System allows you to create distinct visitor types with un
 - **`IVisitorArchetypeConfig`** (interface) - Contract for archetype configuration
 - **`VisitorArchetypeConfig`** (ScriptableObject) - Tunable parameters per archetype
 - **`IArchetypedVisitor`** (interface) - Marks visitors as having an archetype
-- **`VisitorControllerBase`** - Unified base class with optional archetype support
+- **`VisitorControllerBase`** - Unified base class with optional archetype support and shared confusion system
+
+### Shared Systems in Base Class
+
+**Confusion System** - Available to all visitors via base class:
+- `BuildConfusionPath()` - Generates wrong-turn detour paths
+- `BeginConfusionSegment()` - Orchestrates confusion behavior at intersections
+- `GetTraversedTiles()` - Tracks path history to prevent backtracking
+- `IsDeadEndVisible()` - Lookahead for dead-end detection
+- `DecideRecoveryFromConfusion()` - Determines if visitor recovers from confusion
+
+Visitors that use confusion (VisitorController, LanternDrunkVisitorController) inherit these methods and customize behavior via archetype config parameters (confusion chance, detour length, etc.).
 
 ### Archetype Controllers
 
