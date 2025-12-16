@@ -820,7 +820,11 @@ namespace FaeMaze.Visitors
                     }
 
                     // Apply rotation to the animator's transform (the child visual object)
-                    animator.transform.localRotation = Quaternion.Euler(0f, 90f, zRotation);
+                    // Compose rotations: base Y rotation (to orient from Blender space) then Z rotation (for direction)
+                    // Quaternion multiplication order: A * B applies B first, then A
+                    Quaternion baseRotation = Quaternion.Euler(0f, 90f, 0f);
+                    Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
+                    animator.transform.localRotation = directionRotation * baseRotation;
                 }
             }
         }
