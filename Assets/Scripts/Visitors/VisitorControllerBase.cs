@@ -227,12 +227,31 @@ namespace FaeMaze.Visitors
             fascinatedPathNodes = new List<FascinatedPathNode>();
             lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
             initialScale = transform.localScale;
-            animator = GetComponent<Animator>();
-            spriteRenderer = GetComponent<SpriteRenderer>();
+
+            // Look for Animator on this GameObject or children (for Blender imports)
+            animator = GetComponentInChildren<Animator>();
+
+            // Look for SpriteRenderer
+            if (useProceduralSprite)
+            {
+                // Will be created by SetupSpriteRenderer
+                spriteRenderer = GetComponent<SpriteRenderer>();
+            }
+            else
+            {
+                // Use existing SpriteRenderer (may be on child object for Blender imports)
+                spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            }
+
             CacheAuthoredSpriteSize();
             SetupSpriteRenderer();
             SetupPhysics();
-            SetAnimatorDirection(IdleDirection);
+
+            // Initialize animator direction if animator is present
+            if (animator != null)
+            {
+                SetAnimatorDirection(IdleDirection);
+            }
 
             stalledDuration = 0f;
             hasLoggedCurrentStall = false;
@@ -1831,13 +1850,18 @@ namespace FaeMaze.Visitors
 
         protected virtual void SetupSpriteRenderer()
         {
-            spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
-                gameObject,
-                createProceduralSprite: useProceduralSprite,
-                useSoftEdges: false,
-                resolution: 32,
-                pixelsPerUnit: proceduralPixelsPerUnit
-            );
+            // Only create procedural sprite if enabled
+            if (useProceduralSprite)
+            {
+                spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
+                    gameObject,
+                    createProceduralSprite: true,
+                    useSoftEdges: false,
+                    resolution: 32,
+                    pixelsPerUnit: proceduralPixelsPerUnit
+                );
+            }
+            // Otherwise spriteRenderer should already be found via GetComponentInChildren in Awake
 
             ApplySpriteSettings();
         }
