@@ -184,6 +184,13 @@ namespace FaeMaze.Visitors
         protected bool lostSegmentActive;
         protected int lostSegmentEndIndex;
 
+        // Confusion segment tracking (for wrong-turn detours at intersections)
+        protected bool isConfused;
+        protected bool confusionSegmentActive;
+        protected int confusionSegmentEndIndex;
+        protected int confusionStepsTarget;
+        protected int confusionStepsTaken;
+
         #endregion
 
         #region Properties
@@ -2199,6 +2206,280 @@ namespace FaeMaze.Visitors
         /// Derived classes should clear confusion flags, misstep tracking, etc.
         /// </summary>
         protected abstract void ResetDetourState();
+
+        #endregion
+
+        #region Confusion System (Shared)
+
+        /// <summary>
+        /// Gets all tiles that have been traversed so far (from spawn to current position).
+        /// Used to prevent backtracking when building confusion paths.
+        /// </summary>
+        protected HashSet<Vector2Int> GetTraversedTiles()
+        {
+            HashSet<Vector2Int> traversed = new HashSet<Vector2Int>();
+
+            if (path == null || path.Count == 0)
+            {
+                return traversed;
+            }
+
+            // Add all tiles from start up to and including current index
+            for (int i = 0; i <= currentPathIndex && i < path.Count; i++)
+            {
+                traversed.Add(path[i]);
+            }
+
+            return traversed;
+        }
+
+        /// <summary>
+        /// Checks if a position is walkable on the maze grid.
+        /// </summary>
+        protected bool IsWalkable(Vector2Int position)
+        {
+            var node = mazeGridBehaviour.Grid?.GetNode(position.x, position.y);
+            return node != null && node.walkable;
+        }
+
+        /// <summary>
+        /// Checks if a dead end is visible from startPos in the forward direction.
+        /// Returns true if corridor continues straight ahead to a dead end without branches.
+        /// </summary>
+        protected bool IsDeadEndVisible(Vector2Int startPos, Vector2Int forwardDir)
+        {
+            if (forwardDir == Vector2Int.zero)
+            {
+                return false;
+            }
+
+            Vector2Int previous = startPos;
+            Vector2Int current = startPos + forwardDir;
+
+            while (true)
+            {
+                var node = mazeGridBehaviour.Grid?.GetNode(current.x, current.y);
+                if (node == null || !node.walkable)
+                {
+                    return false; // Wall encountered before a dead end
+                }
+
+                List<Vector2Int> neighbors = GetWalkableNeighbors(current);
+                neighbors.Remove(previous);
+
+                if (neighbors.Count == 0)
+                {
+                    return true; // Only way out is back where we came from
+                }
+
+                if (neighbors.Count > 1)
+                {
+                    return false; // Branch or corner blocks line of sight
+                }
+
+                Vector2Int nextForward = neighbors[0] - current;
+                if (nextForward != forwardDir)
+                {
+                    return false; // Would require turning a corner
+                }
+
+                previous = current;
+                current += forwardDir;
+            }
+        }
+
+        /// <summary>
+        /// Builds a confusion path following the detour direction for stepsTarget tiles.
+        /// Avoids backtracking to already-traversed tiles and prevents loops.
+        /// </summary>
+        protected List<Vector2Int> BuildConfusionPath(Vector2Int currentPos, Vector2Int detourStart, int stepsTarget, HashSet<Vector2Int> traversedTiles)
+        {
+            List<Vector2Int> confusionPath = new List<Vector2Int>();
+
+            Vector2Int previousPos = currentPos;
+            Vector2Int nextPos = detourStart;
+            Vector2Int forwardDir = detourStart - currentPos;
+
+            int safetyLimit = 250;
+            int iterations = 0;
+
+            // Track tiles in the confusion path to avoid loops within the detour
+            HashSet<Vector2Int> confusionPathSet = new HashSet<Vector2Int>();
+
+            while (iterations < safetyLimit && confusionPath.Count < stepsTarget)
+            {
+                if (!IsWalkable(nextPos))
+                {
+                    break;
+                }
+
+                // Check if this tile was already traversed before confusion started
+                if (traversedTiles.Contains(nextPos))
+                {
+                    break; // Would backtrack to an earlier position
+                }
+
+                // Check if we're creating a loop within this confusion path
+                if (confusionPathSet.Contains(nextPos))
+                {
+                    break;
+                }
+
+                confusionPath.Add(nextPos);
+                confusionPathSet.Add(nextPos);
+                confusionStepsTaken = confusionPath.Count;
+
+                if (IsDeadEndVisible(nextPos, forwardDir))
+                {
+                    break;
+                }
+
+                List<Vector2Int> neighbors = GetWalkableNeighbors(nextPos);
+                neighbors.Remove(previousPos); // Don't go immediately backward
+
+                // Remove any neighbors that would cause backtracking to already-traversed tiles
+                neighbors.RemoveAll(n => traversedTiles.Contains(n));
+
+                // Also avoid creating loops within the confusion path itself
+                neighbors.RemoveAll(n => confusionPathSet.Contains(n));
+
+                if (neighbors.Count == 0)
+                {
+                    break; // Cannot continue without backtracking
+                }
+
+                Vector2Int preferredForward = nextPos + forwardDir;
+                Vector2Int chosenNext = neighbors.Contains(preferredForward) ? preferredForward : neighbors[Random.Range(0, neighbors.Count)];
+
+                forwardDir = chosenNext - nextPos;
+                previousPos = nextPos;
+                nextPos = chosenNext;
+                iterations++;
+            }
+
+            return confusionPath;
+        }
+
+        /// <summary>
+        /// Begins a confusion segment at a decision point (intersection).
+        /// Builds a detour path in the wrong direction, then plans recovery to destination.
+        /// </summary>
+        protected void BeginConfusionSegment(Vector2Int currentPos, Vector2Int detourStart)
+        {
+            // Use config-based detour lengths (or defaults from base class)
+            int minDist = Mathf.RoundToInt(config != null ? config.LostDetourMin : minLostDistance);
+            int maxDist = Mathf.RoundToInt(config != null ? config.LostDetourMax : maxLostDistance);
+            int stepsTarget = Mathf.Clamp(Random.Range(minDist, maxDist + 1), minDist, maxDist);
+
+            // Use recently reached tiles (last 10) to prevent short-term backtracking
+            HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>(recentlyReachedTiles ?? new Queue<Vector2Int>());
+
+            List<Vector2Int> confusionPath = BuildConfusionPath(currentPos, detourStart, stepsTarget, traversedTiles);
+
+            if (confusionPath.Count == 0)
+            {
+                RecalculatePath();
+                return;
+            }
+
+            // Validate confusion path adjacency
+            for (int i = 1; i < confusionPath.Count; i++)
+            {
+                int dist = Mathf.Abs(confusionPath[i].x - confusionPath[i - 1].x) + Mathf.Abs(confusionPath[i].y - confusionPath[i - 1].y);
+                if (dist != 1)
+                {
+                    RecalculatePath();
+                    return;
+                }
+            }
+
+            Vector2Int confusionEnd = confusionPath[confusionPath.Count - 1];
+
+            // Get recovery destination based on current state
+            Vector2Int recoveryDestination = GetDestinationForCurrentState(confusionEnd);
+
+            // Find path from confusion end to recovery destination
+            if (!TryFindPathToDestination(confusionEnd, recoveryDestination, out List<Vector2Int> recoveryPath))
+            {
+                RecalculatePath();
+                return;
+            }
+
+            // Validate recovery path adjacency
+            for (int i = 1; i < recoveryPath.Count; i++)
+            {
+                int dist = Mathf.Abs(recoveryPath[i].x - recoveryPath[i - 1].x) + Mathf.Abs(recoveryPath[i].y - recoveryPath[i - 1].y);
+                if (dist != 1)
+                {
+                    RecalculatePath();
+                    return;
+                }
+            }
+
+            // Build the combined path: current position + confusion detour + recovery path
+            List<Vector2Int> newPath = new List<Vector2Int>();
+            newPath.Add(currentPos);
+
+            // Validate currentPos is adjacent to first confusion tile
+            if (confusionPath.Count > 0)
+            {
+                int distToFirst = Mathf.Abs(currentPos.x - confusionPath[0].x) + Mathf.Abs(currentPos.y - confusionPath[0].y);
+                if (distToFirst != 1)
+                {
+                    RecalculatePath();
+                    return;
+                }
+            }
+
+            // Add all confusion path tiles
+            newPath.AddRange(confusionPath);
+
+            // Validate connection between confusion end and recovery start
+            if (recoveryPath.Count > 0 && recoveryPath[0] != confusionEnd)
+            {
+                RecalculatePath();
+                return;
+            }
+
+            // Add recovery path tiles, skipping the first one since it duplicates confusionEnd
+            for (int i = 1; i < recoveryPath.Count; i++)
+            {
+                newPath.Add(recoveryPath[i]);
+            }
+
+            // Final validation of complete path
+            for (int i = 1; i < newPath.Count; i++)
+            {
+                int dist = Mathf.Abs(newPath[i].x - newPath[i - 1].x) + Mathf.Abs(newPath[i].y - newPath[i - 1].y);
+                if (dist != 1)
+                {
+                    RecalculatePath();
+                    return;
+                }
+            }
+
+            path = newPath;
+            currentPathIndex = 1; // Start at index 1 since index 0 is current position
+
+            confusionSegmentActive = true;
+            confusionSegmentEndIndex = confusionPath.Count;
+            confusionStepsTarget = stepsTarget;
+            confusionStepsTaken = 0;
+            isConfused = true;
+
+            RefreshStateFromFlags();
+        }
+
+        /// <summary>
+        /// Decides whether visitor recovers from confusion.
+        /// 50% chance to clear confusion flag.
+        /// </summary>
+        protected void DecideRecoveryFromConfusion()
+        {
+            float roll = Random.value;
+            bool recover = roll <= 0.5f;
+            isConfused = !recover;
+        }
 
         #endregion
 
