@@ -289,17 +289,34 @@ namespace FaeMaze.Visitors
         /// </summary>
         private Vector2Int FindNearestExit(Vector2Int currentPos)
         {
-            // Try to find WaveSpawner to get exit spawns
-            var waveSpawner = FindFirstObjectByType<FaeMaze.Systems.WaveSpawner>();
-            if (waveSpawner == null)
-            {
+            // Get all spawn points from maze grid
+            if (mazeGridBehaviour == null)
                 return originalDestination;
+
+            var allSpawns = mazeGridBehaviour.GetAllSpawnPoints();
+            if (allSpawns == null || allSpawns.Count < 2)
+                return originalDestination; // Need at least entrance and one exit
+
+            Vector2Int nearestExit = originalDestination;
+            float shortestDist = float.MaxValue;
+
+            // Find nearest spawn point that isn't the original destination (entrance)
+            foreach (var spawn in allSpawns.Values)
+            {
+                // Skip the entrance (original destination)
+                if (spawn == originalDestination)
+                    continue;
+
+                // Calculate Manhattan distance
+                float dist = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
+                if (dist < shortestDist)
+                {
+                    shortestDist = dist;
+                    nearestExit = spawn;
+                }
             }
 
-            // This would need WaveSpawner to expose exit spawn points
-            // For now, return original destination as fallback
-            // TODO: WaveSpawner should expose GetExitSpawns() method
-            return originalDestination;
+            return nearestExit;
         }
 
         #endregion

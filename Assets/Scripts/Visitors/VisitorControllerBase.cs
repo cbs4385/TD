@@ -1210,10 +1210,6 @@ namespace FaeMaze.Visitors
                         }
                     }
 
-                    // Use archetype-specific fascination duration (note: duration will be applied when visitor reaches lantern)
-                    var (minDuration, maxDuration) = GetFascinationDuration();
-                    float duration = Random.Range(minDuration, maxDuration);
-
                     RefreshStateFromFlags();
                 }
                 else
