@@ -130,8 +130,9 @@ namespace FaeMaze.Visitors
                 if (Random.value < 0.5f)
                 {
                     // Become lost - wander aimlessly
-                    float duration = Random.Range(config != null ? config.LostDetourMin : 5f,
-                                                   config != null ? config.LostDetourMax : 12f);
+                    float minDuration = config != null ? config.LostDetourMin : 5f;
+                    float maxDuration = config != null ? config.LostDetourMax : 12f;
+                    float duration = Random.Range(minDuration, maxDuration);
                     SetLost(duration);
                     Debug.Log($"[SleepwalkingDevotee] Mesmerized ended -> Lost for {duration}s");
                 }
@@ -245,8 +246,9 @@ namespace FaeMaze.Visitors
             {
                 // Trance broken - become Lost
                 isMesmerized = false;
-                float lostDuration = Random.Range(config != null ? config.LostDetourMin : 5f,
-                                                   config != null ? config.LostDetourMax : 12f);
+                float minDuration = config != null ? config.LostDetourMin : 5f;
+                float maxDuration = config != null ? config.LostDetourMax : 12f;
+                float lostDuration = Random.Range(minDuration, maxDuration);
                 SetLost(lostDuration);
                 Debug.Log($"[SleepwalkingDevotee] Trance disturbed and broken! Lost for {lostDuration}s");
             }
@@ -257,27 +259,6 @@ namespace FaeMaze.Visitors
                 currentStateTimer += refreshDuration;
                 currentStateDuration += refreshDuration;
                 Debug.Log($"[SleepwalkingDevotee] Trance disturbed but reinforced! +{refreshDuration}s mesmerized");
-            }
-        }
-
-        #endregion
-
-        #region Consumption Override
-
-        /// <summary>
-        /// Handles visitor consumption by the heart.
-        /// Heart will automatically use archetype-specific essence reward (high for Devotees).
-        /// </summary>
-        protected override void HandleConsumption()
-        {
-            if (gameController != null && gameController.Heart != null)
-            {
-                Debug.Log($"[SleepwalkingDevotee] Consumed! Awarding {GetEssenceReward()} essence");
-                gameController.Heart.OnVisitorConsumed(this);
-            }
-            else
-            {
-                Destroy(gameObject);
             }
         }
 

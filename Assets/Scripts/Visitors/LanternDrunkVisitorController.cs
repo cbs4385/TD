@@ -258,9 +258,9 @@ namespace FaeMaze.Visitors
 
         private void BeginConfusionSegment(Vector2Int currentPos, Vector2Int detourStart)
         {
-            // Use config-based detour lengths
-            int minDist = Mathf.RoundToInt(config != null ? config.LostDetourMin : 6f);
-            int maxDist = Mathf.RoundToInt(config != null ? config.LostDetourMax : 12f);
+            // Use config-based detour lengths (or base class defaults)
+            int minDist = Mathf.RoundToInt(config != null ? config.LostDetourMin : minLostDistance);
+            int maxDist = Mathf.RoundToInt(config != null ? config.LostDetourMax : maxLostDistance);
             int stepsTarget = Mathf.Clamp(Random.Range(minDist, maxDist + 1), minDist, maxDist);
 
             // Use recently reached tiles (last 10) to prevent short-term backtracking
@@ -483,26 +483,6 @@ namespace FaeMaze.Visitors
             float roll = Random.value;
             bool recover = roll <= 0.5f;
             isConfused = !recover;
-        }
-
-        #endregion
-
-        #region Consumption Override
-
-        /// <summary>
-        /// Handles visitor consumption by the heart.
-        /// Heart will automatically use archetype-specific essence reward.
-        /// </summary>
-        protected override void HandleConsumption()
-        {
-            if (gameController != null && gameController.Heart != null)
-            {
-                gameController.Heart.OnVisitorConsumed(this);
-            }
-            else
-            {
-                Destroy(gameObject);
-            }
         }
 
         #endregion

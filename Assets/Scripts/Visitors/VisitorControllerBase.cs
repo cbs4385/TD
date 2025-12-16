@@ -1071,12 +1071,18 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Called when visitor is consumed by the heart.
-        /// Derived classes override to implement specific consumption behavior.
+        /// Delegates to Heart for essence reward and destruction.
         /// </summary>
         protected virtual void HandleConsumption()
         {
-            // Default: just destroy the visitor
-            Destroy(gameObject);
+            if (gameController != null && gameController.Heart != null)
+            {
+                gameController.Heart.OnVisitorConsumed(this);
+            }
+            else
+            {
+                Destroy(gameObject);
+            }
         }
 
         #endregion

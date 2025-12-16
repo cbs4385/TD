@@ -491,26 +491,6 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Consumption Override
-
-        /// <summary>
-        /// Handles visitor consumption by the heart.
-        /// Notifies the Heart to award essence.
-        /// </summary>
-        protected override void HandleConsumption()
-        {
-            if (gameController != null && gameController.Heart != null)
-            {
-                gameController.Heart.OnVisitorConsumed(this);
-            }
-            else
-            {
-                Destroy(gameObject);
-            }
-        }
-
-        #endregion
-
         #region Gizmos
 
         protected override void OnDrawGizmos()
