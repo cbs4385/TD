@@ -820,9 +820,10 @@ namespace FaeMaze.Visitors
                     }
 
                     // Apply rotation to the animator's transform (the child visual object)
-                    // Compose rotations: base Y rotation (to orient from Blender space) then Z rotation (for direction)
-                    // Quaternion multiplication order: A * B applies B first, then A
-                    Quaternion baseRotation = Quaternion.Euler(0f, 90f, 0f);
+                    // Model -X should point in movement direction, model Z should align with game Z (perpendicular to screen)
+                    // For Up: -X points to +Y (requires Z: -90° total rotation: +X toward -Y)
+                    // Base rotation makes -X point up, then direction rotation adjusts from there
+                    Quaternion baseRotation = Quaternion.Euler(0f, 0f, -90f);
                     Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                     animator.transform.localRotation = directionRotation * baseRotation;
                 }
