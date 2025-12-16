@@ -795,40 +795,51 @@ namespace FaeMaze.Visitors
             {
                 animator.SetInteger(DirectionParameter, direction);
                 currentAnimatorDirection = direction;
+            }
 
-                // Rotate the visual model to face the correct direction
-                // Only rotate if not using procedural sprites (3D model needs rotation)
-                if (!useProceduralSprite && animator != null)
+            // Rotate the visual model to face the correct direction
+            // Only rotate if not using procedural sprites (3D model needs rotation)
+            // Apply rotation every frame to ensure it's set (handles initialization and state changes)
+            if (!useProceduralSprite && animator != null)
+            {
+                // For Idle state, use the last movement direction to maintain facing
+                int rotationDirection = direction;
+                if (rotationDirection == IdleDirection && lastDirection != IdleDirection)
                 {
-                    float zRotation = 0f;
-                    switch (direction)
-                    {
-                        case 0: // Idle - keep current rotation
-                            return;
-                        case 1: // Up (+Y)
-                            zRotation = 0f;
-                            break;
-                        case 2: // Down (-Y)
-                            zRotation = 180f;
-                            break;
-                        case 3: // Left (-X)
-                            zRotation = -90f;
-                            break;
-                        case 4: // Right (+X)
-                            zRotation = 90f;
-                            break;
-                    }
-
-                    // Apply rotation to the animator's transform (the child visual object)
-                    // Model Y aligns with game Z (perpendicular to screen, pointing toward camera)
-                    // Model Z points in movement direction (rotates in XY plane)
-                    // Base: Rotate 180° around X to flip model (Y toward camera, Z toward +Y initially)
-                    // Direction: Rotate around game Z to orient model Z toward movement direction
-                    //   Up (+Y): Z: 0°, Right (+X): Z: 90°, Left (-X): Z: -90°, Down (-Y): Z: 180°
-                    Quaternion baseRotation = Quaternion.Euler(180f, 0f, 0f);
-                    Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
-                    animator.transform.localRotation = directionRotation * baseRotation;
+                    rotationDirection = lastDirection;
                 }
+                // If still idle (never moved), default to facing down
+                if (rotationDirection == IdleDirection)
+                {
+                    rotationDirection = 2; // Down
+                }
+
+                float zRotation = 0f;
+                switch (rotationDirection)
+                {
+                    case 1: // Up (+Y)
+                        zRotation = 0f;
+                        break;
+                    case 2: // Down (-Y)
+                        zRotation = 180f;
+                        break;
+                    case 3: // Left (-X)
+                        zRotation = -90f;
+                        break;
+                    case 4: // Right (+X)
+                        zRotation = 90f;
+                        break;
+                }
+
+                // Apply rotation to the animator's transform (the child visual object)
+                // Model Y aligns with game Z (perpendicular to screen, pointing toward camera)
+                // Model Z points in movement direction (rotates in XY plane)
+                // Base: Rotate 180° around X to flip model (Y toward camera, Z toward +Y initially)
+                // Direction: Rotate around game Z to orient model Z toward movement direction
+                //   Up (+Y): Z: 0°, Right (+X): Z: 90°, Left (-X): Z: -90°, Down (-Y): Z: 180°
+                Quaternion baseRotation = Quaternion.Euler(180f, 0f, 0f);
+                Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
+                animator.transform.localRotation = directionRotation * baseRotation;
             }
         }
 
