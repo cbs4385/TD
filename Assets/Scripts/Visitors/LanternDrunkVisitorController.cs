@@ -491,14 +491,12 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Handles visitor consumption by the heart.
-        /// Notifies the Heart to award essence based on archetype.
+        /// Heart will automatically use archetype-specific essence reward.
         /// </summary>
         protected override void HandleConsumption()
         {
             if (gameController != null && gameController.Heart != null)
             {
-                // Award archetype-specific essence
-                int essence = GetEssenceReward();
                 gameController.Heart.OnVisitorConsumed(this);
             }
             else

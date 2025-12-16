@@ -396,28 +396,18 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Handles visitor consumption by the heart.
-        /// Tracks stats, awards essence directly, and plays sound.
+        /// Heart will automatically handle stats, essence rewards, and audio.
         /// </summary>
         protected override void HandleConsumption()
         {
-            // Track consumption stats
-            if (FaeMaze.Systems.GameStatsTracker.Instance != null)
+            if (gameController != null && gameController.Heart != null)
             {
-                FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
+                gameController.Heart.OnVisitorConsumed(this);
             }
-
-            // Add essence to game controller using archetype-specific reward
-            if (gameController != null)
+            else
             {
-                int essence = GetEssenceReward();
-                gameController.AddEssence(essence);
+                Destroy(gameObject);
             }
-
-            // Play consumption sound
-            FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
-
-            // Destroy the visitor
-            Destroy(gameObject);
         }
 
         #endregion

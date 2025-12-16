@@ -141,10 +141,11 @@ namespace FaeMaze.Maze
                 Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
             }
 
-            // Add essence to game controller
+            // Add essence to game controller - use archetype-specific reward if available
             if (GameController.Instance != null)
             {
-                GameController.Instance.AddEssence(essencePerVisitor);
+                int essence = visitor.GetEssenceReward();
+                GameController.Instance.AddEssence(essence);
             }
 
             SoundManager.Instance?.PlayVisitorConsumed();
