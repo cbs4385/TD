@@ -7,12 +7,12 @@ namespace FaeMaze.Visitors
 {
     /// <summary>
     /// A visitor variant that takes intentional missteps at branching points.
-    /// At any tile with multiple unwalked adjacent tiles, there's a 20% chance
-    /// the visitor will choose an incorrect direction. Once on a mistaken path,
-    /// they continue until reaching another branching point, where they recalculate
-    /// an A* path to the destination and apply the misstep chance again.
+    /// At any tile with multiple unwalked adjacent tiles, misstep chance is based on
+    /// archetype config (defaults to 25%). Once on a mistaken path, they continue
+    /// until reaching another branching point, where they recalculate an A* path
+    /// to the destination and apply the misstep chance again.
     ///
-    /// Functionally identical to VisitorController except for the misstep behavior.
+    /// Supports optional VisitorArchetypeConfig for customized behavior parameters.
     /// All other behaviors (animations, speed, fascination states, etc.) are preserved.
     /// </summary>
     public class MistakingVisitorController : VisitorControllerBase
@@ -20,11 +20,6 @@ namespace FaeMaze.Visitors
         #region Misstep-Specific Fields
 
         [Header("Misstep Settings")]
-        [SerializeField]
-        [Tooltip("Chance (0-1) for visitor to take a wrong turn at branches")]
-        [Range(0f, 1f)]
-        private float misstepChance = 0.2f;
-
         [SerializeField]
         [Tooltip("Enable misstep behavior")]
         private bool misstepEnabled = true;
@@ -139,7 +134,8 @@ namespace FaeMaze.Visitors
                 return; // No longer a branch after recalc
             }
 
-            // Roll for misstep
+            // Use archetype-specific misstep chance (or default 0.25)
+            float misstepChance = GetConfusionChance();
             float roll = Random.value;
             if (roll > misstepChance)
             {
@@ -410,10 +406,11 @@ namespace FaeMaze.Visitors
                 FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
             }
 
-            // Add essence to game controller
-            if (gameController != null && gameController.Heart != null)
+            // Add essence to game controller using archetype-specific reward
+            if (gameController != null)
             {
-                gameController.AddEssence(gameController.Heart.EssencePerVisitor);
+                int essence = GetEssenceReward();
+                gameController.AddEssence(essence);
             }
 
             // Play consumption sound

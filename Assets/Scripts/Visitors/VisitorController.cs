@@ -7,7 +7,8 @@ namespace FaeMaze.Visitors
 {
     /// <summary>
     /// Controls a visitor's movement through the maze.
-    /// Implements confusion behavior: 25% chance at intersections to take a wrong turn for 15-20 tiles.
+    /// Implements confusion behavior at intersections based on archetype config (defaults to 25% chance).
+    /// Supports optional VisitorArchetypeConfig for customized behavior parameters.
     /// When using spawn markers: visitors escape at the destination (no essence).
     /// When using legacy heart: visitors are consumed at the heart (awards essence).
     /// </summary>
@@ -26,23 +27,8 @@ namespace FaeMaze.Visitors
 
         [Header("Confusion Settings")]
         [SerializeField]
-        [Tooltip("Chance (0-1) for visitor to get confused at intersections")]
-        [Range(0f, 1f)]
-        private float confusionChance = 0.25f;
-
-        [SerializeField]
         [Tooltip("Whether confusion is enabled")]
         private bool confusionEnabled = true;
-
-        [SerializeField]
-        [Tooltip("Minimum number of tiles to travel on confused detour path")]
-        [Range(5, 50)]
-        private int minConfusionDistance = 15;
-
-        [SerializeField]
-        [Tooltip("Maximum number of tiles to travel on confused detour path")]
-        [Range(5, 50)]
-        private int maxConfusionDistance = 20;
 
         [SerializeField]
         [Tooltip("Draw confusion segments in the scene view for debugging")]
@@ -190,7 +176,8 @@ namespace FaeMaze.Visitors
                     return false;
                 }
 
-                // Roll for confusion chance
+                // Use archetype-specific confusion chance (or default 0.25)
+                float confusionChance = GetConfusionChance();
                 return Random.value <= confusionChance;
             }
 
@@ -275,7 +262,10 @@ namespace FaeMaze.Visitors
 
         private void BeginConfusionSegment(Vector2Int currentPos, Vector2Int detourStart)
         {
-            int stepsTarget = Mathf.Clamp(Random.Range(minConfusionDistance, maxConfusionDistance + 1), minConfusionDistance, maxConfusionDistance);
+            // Use config-based detour lengths (or defaults from base class)
+            int minDist = Mathf.RoundToInt(config != null ? config.LostDetourMin : minLostDistance);
+            int maxDist = Mathf.RoundToInt(config != null ? config.LostDetourMax : maxLostDistance);
+            int stepsTarget = Mathf.Clamp(Random.Range(minDist, maxDist + 1), minDist, maxDist);
 
             // Use recently reached tiles (last 10) to prevent short-term backtracking
             HashSet<Vector2Int> traversedTiles = new HashSet<Vector2Int>(recentlyReachedTiles ?? new Queue<Vector2Int>());
