@@ -800,32 +800,32 @@ namespace FaeMaze.Visitors
                 // Only rotate if not using procedural sprites (3D model needs rotation)
                 if (!useProceduralSprite && animator != null)
                 {
-                    float yRotation = 0f;
+                    float zRotation = 0f;
                     switch (direction)
                     {
                         case 0: // Idle - keep current rotation
                             return;
                         case 1: // Up (+Y)
-                            yRotation = 180f;
+                            zRotation = 180f;
                             break;
                         case 2: // Down (-Y)
-                            yRotation = 0f;
+                            zRotation = 0f;
                             break;
                         case 3: // Left (-X)
-                            yRotation = -90f;
+                            zRotation = 90f;
                             break;
                         case 4: // Right (+X)
-                            yRotation = 90f;
+                            zRotation = -90f;
                             break;
                     }
 
                     // Apply rotation to the animator's transform (the child visual object)
                     // Model Y aligns with game Z (perpendicular to screen, pointing toward camera)
-                    // Model +Z points in movement direction (rotates in XY plane)
-                    // Base: Rotate 90° around X to tip model so Y points toward camera
-                    // Direction: Rotate around Y to orient +Z toward movement direction
+                    // Model Z points in movement direction (rotates in XY plane)
+                    // Base: Rotate 90° around X to tip model forward (Y toward camera, Z toward -Y)
+                    // Direction: Rotate around game Z to orient model Z toward movement direction
                     Quaternion baseRotation = Quaternion.Euler(90f, 0f, 0f);
-                    Quaternion directionRotation = Quaternion.Euler(0f, yRotation, 0f);
+                    Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                     animator.transform.localRotation = directionRotation * baseRotation;
                 }
             }
