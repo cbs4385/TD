@@ -832,13 +832,13 @@ namespace FaeMaze.Visitors
                 }
 
                 // Apply rotation to the animator's transform (the child visual object)
-                // Model Y aligns with game Z (perpendicular to screen, pointing toward camera)
-                // Model Z points in movement direction (rotates in XY plane)
-                // Base: Rotate 180° around X to flip model (Y toward camera, Z toward -Y initially)
-                // Direction: Rotate around game Z to orient model Z toward movement direction
+                // Convert from Blender Y-up to Unity top-down 2D:
+                // - Model +Z aligns with World -Z (perpendicular to screen, away from camera)
+                // - Model -Y aligns with direction of travel (in XY movement plane)
+                // Base: Rotate 90° around X to tip model from standing (Y-up) to lying down for top-down view
+                // Direction: Rotate around game Z to orient model -Y toward movement direction
                 //   Up (+Y): Z: 180°, Right (+X): Z: 90°, Left (-X): Z: -90°, Down (-Y): Z: 0°
-                //   (Swapped Up/Down because Blender animation has character facing opposite direction)
-                Quaternion baseRotation = Quaternion.Euler(180f, 0f, 0f);
+                Quaternion baseRotation = Quaternion.Euler(90f, 0f, 0f);
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                 animator.transform.localRotation = directionRotation * baseRotation;
             }
