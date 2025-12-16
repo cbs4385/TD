@@ -800,31 +800,32 @@ namespace FaeMaze.Visitors
                 // Only rotate if not using procedural sprites (3D model needs rotation)
                 if (!useProceduralSprite && animator != null)
                 {
-                    float zRotation = 0f;
+                    float yRotation = 0f;
                     switch (direction)
                     {
                         case 0: // Idle - keep current rotation
                             return;
-                        case 1: // Up (+Y) - original orientation
-                            zRotation = 0f;
+                        case 1: // Up (+Y)
+                            yRotation = 180f;
                             break;
-                        case 2: // Down (-Y) - 180 degrees
-                            zRotation = 180f;
+                        case 2: // Down (-Y)
+                            yRotation = 0f;
                             break;
-                        case 3: // Left (-X) - 90 degrees
-                            zRotation = 90f;
+                        case 3: // Left (-X)
+                            yRotation = -90f;
                             break;
-                        case 4: // Right (+X) - -90 degrees
-                            zRotation = -90f;
+                        case 4: // Right (+X)
+                            yRotation = 90f;
                             break;
                     }
 
                     // Apply rotation to the animator's transform (the child visual object)
-                    // Model -X should point in movement direction, model Z should align with game Z (perpendicular to screen)
-                    // For Up: -X points to +Y (requires Z: -90° total rotation: +X toward -Y)
-                    // Base rotation makes -X point up, then direction rotation adjusts from there
-                    Quaternion baseRotation = Quaternion.Euler(0f, 0f, -90f);
-                    Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
+                    // Model Y aligns with game Z (perpendicular to screen, pointing toward camera)
+                    // Model +Z points in movement direction (rotates in XY plane)
+                    // Base: Rotate 90° around X to tip model so Y points toward camera
+                    // Direction: Rotate around Y to orient +Z toward movement direction
+                    Quaternion baseRotation = Quaternion.Euler(90f, 0f, 0f);
+                    Quaternion directionRotation = Quaternion.Euler(0f, yRotation, 0f);
                     animator.transform.localRotation = directionRotation * baseRotation;
                 }
             }
