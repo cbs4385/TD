@@ -157,15 +157,16 @@ namespace FaeMaze.Systems
         /// <param name="start">Start position in grid coordinates</param>
         /// <param name="end">End position in grid coordinates</param>
         /// <param name="resultPath">Output list of MazeNodes forming the path</param>
+        /// <param name="attractionMultiplier">Multiplier for attraction effect (1.0 = normal, -1.0 = inverted, 0 = ignore)</param>
         /// <returns>True if path was found, false otherwise</returns>
-        public bool TryFindPath(Vector2Int start, Vector2Int end, List<MazeGrid.MazeNode> resultPath)
+        public bool TryFindPath(Vector2Int start, Vector2Int end, List<MazeGrid.MazeNode> resultPath, float attractionMultiplier = 1.0f)
         {
             if (pathfinder == null)
             {
                 return false;
             }
 
-            return pathfinder.TryFindPath(start.x, start.y, end.x, end.y, resultPath);
+            return pathfinder.TryFindPath(start.x, start.y, end.x, end.y, resultPath, attractionMultiplier);
         }
 
         /// <summary>

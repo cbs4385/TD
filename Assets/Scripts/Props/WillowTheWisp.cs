@@ -471,7 +471,8 @@ namespace FaeMaze.Props
 
             // Find path to random destination
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (gameController.TryFindPath(currentPos, randomDest, pathNodes) && pathNodes.Count > 0)
+            // Wisps use normal attraction (they're mischievous spirits, not affected by visitor states)
+            if (gameController.TryFindPath(currentPos, randomDest, pathNodes, 1.0f) && pathNodes.Count > 0)
             {
                 wanderPath = new List<Vector2Int>();
                 foreach (var node in pathNodes)
@@ -763,7 +764,8 @@ namespace FaeMaze.Props
 
             // Find path to heart
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (gameController.TryFindPath(currentPos, heartGridPosition, pathNodes) && pathNodes.Count > 0)
+            // Wisps use normal attraction (they're mischievous spirits, not affected by visitor states)
+            if (gameController.TryFindPath(currentPos, heartGridPosition, pathNodes, 1.0f) && pathNodes.Count > 0)
             {
                 wanderPath = new List<Vector2Int>();
                 foreach (var node in pathNodes)

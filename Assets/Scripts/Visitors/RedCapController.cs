@@ -288,7 +288,8 @@ namespace FaeMaze.Visitors
 
             // Find path using GameController's pathfinding
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (gameController.TryFindPath(currentGridPos, targetGridPos, pathNodes))
+            // Red Caps use normal attraction (they're single-mindedly hunting, not affected by visitor states)
+            if (gameController.TryFindPath(currentGridPos, targetGridPos, pathNodes, 1.0f))
             {
                 currentPath.Clear();
                 foreach (var node in pathNodes)

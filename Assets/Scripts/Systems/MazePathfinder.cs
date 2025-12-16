@@ -81,8 +81,9 @@ namespace FaeMaze.Systems
         /// <param name="endX">End X coordinate</param>
         /// <param name="endY">End Y coordinate</param>
         /// <param name="resultPath">Output list of MazeNodes forming the path</param>
+        /// <param name="attractionMultiplier">Multiplier for attraction effect (1.0 = normal, -1.0 = inverted, 0 = ignore)</param>
         /// <returns>True if path was found, false otherwise</returns>
-        public bool TryFindPath(int startX, int startY, int endX, int endY, List<MazeGrid.MazeNode> resultPath)
+        public bool TryFindPath(int startX, int startY, int endX, int endY, List<MazeGrid.MazeNode> resultPath, float attractionMultiplier = 1.0f)
         {
             if (grid == null)
             {
@@ -117,8 +118,8 @@ namespace FaeMaze.Systems
             // Clear previous search data
             ClearSearchData();
 
-            // Run A* algorithm
-            PathNode pathEndNode = FindPath(startX, startY, endX, endY);
+            // Run A* algorithm with attraction multiplier
+            PathNode pathEndNode = FindPath(startX, startY, endX, endY, attractionMultiplier);
 
             // Build result path if found
             if (pathEndNode != null)
@@ -134,7 +135,7 @@ namespace FaeMaze.Systems
 
         #region Private Methods - A* Algorithm
 
-        private PathNode FindPath(int startX, int startY, int endX, int endY)
+        private PathNode FindPath(int startX, int startY, int endX, int endY, float attractionMultiplier)
         {
             // Create start node
             PathNode startPathNode = GetOrCreatePathNode(startX, startY);
@@ -164,15 +165,15 @@ namespace FaeMaze.Systems
                 openSetLookup.Remove(currentKey);
                 closedSet.Add(currentKey);
 
-                // Process neighbors
-                ProcessNeighbors(currentNode, endX, endY);
+                // Process neighbors with attraction multiplier
+                ProcessNeighbors(currentNode, endX, endY, attractionMultiplier);
             }
 
             // No path found
             return null;
         }
 
-        private void ProcessNeighbors(PathNode currentNode, int endX, int endY)
+        private void ProcessNeighbors(PathNode currentNode, int endX, int endY, float attractionMultiplier)
         {
             for (int i = 0; i < 4; i++)
             {
@@ -194,8 +195,8 @@ namespace FaeMaze.Systems
                 if (mazeNode == null || !mazeNode.walkable)
                     continue;
 
-                // Calculate costs
-                float movementCost = grid.GetMoveCost(neighborX, neighborY);
+                // Calculate costs with attraction multiplier based on visitor state
+                float movementCost = grid.GetMoveCost(neighborX, neighborY, attractionMultiplier);
                 float tentativeGCost = currentNode.gCost + movementCost;
 
                 // Get or create neighbor PathNode

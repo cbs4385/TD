@@ -266,7 +266,9 @@ namespace FaeMaze.Visitors
         private Vector2Int? GetOptimalNextStep(Vector2Int currentPos)
         {
             List<MazeGrid.MazeNode> optimalPath = new List<MazeGrid.MazeNode>();
-            if (gameController.TryFindPath(currentPos, originalDestination, optimalPath) && optimalPath.Count > 1)
+            // Use state-based attraction multiplier for optimal path calculation
+            float attractionMultiplier = GetAttractionMultiplier();
+            if (gameController.TryFindPath(currentPos, originalDestination, optimalPath, attractionMultiplier) && optimalPath.Count > 1)
             {
                 return new Vector2Int(optimalPath[1].x, optimalPath[1].y);
             }

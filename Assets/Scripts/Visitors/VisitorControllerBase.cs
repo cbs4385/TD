@@ -1095,7 +1095,8 @@ namespace FaeMaze.Visitors
                 Vector2Int currentPos = new Vector2Int(currentX, currentY);
 
                 List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
-                if (gameController.TryFindPath(currentPos, fascinationLanternPosition, pathToLantern) && pathToLantern.Count > 0)
+                // Fascinated visitors use normal attraction (they're already mesmerized)
+                if (gameController.TryFindPath(currentPos, fascinationLanternPosition, pathToLantern, 1.0f) && pathToLantern.Count > 0)
                 {
                     // Convert to Vector2Int path
                     path = new List<Vector2Int>();
@@ -1343,8 +1344,11 @@ namespace FaeMaze.Visitors
                 return false;
             }
 
+            // Use state-based attraction multiplier for pathfinding
+            float attractionMultiplier = GetAttractionMultiplier();
+
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (!gameController.TryFindPath(start, destination, pathNodes) || pathNodes.Count == 0)
+            if (!gameController.TryFindPath(start, destination, pathNodes, attractionMultiplier) || pathNodes.Count == 0)
             {
                 return false;
             }
@@ -1356,6 +1360,47 @@ namespace FaeMaze.Visitors
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Gets the attraction multiplier for pathfinding based on current visitor state.
+        /// Different states perceive tile attractions differently:
+        /// - Walking (1.0): Normal sensitivity - attractions lure, repulsions repel
+        /// - Frightened (-1.0): INVERTED - attractive tiles become repulsive (flee from lures!)
+        /// - Confused (0.5): REDUCED sensitivity - less affected by Heart Powers
+        /// - Lost (0.3): MINIMAL sensitivity - mostly ignores attractions while wandering
+        /// - Fascinated/Mesmerized: Don't use standard pathfinding (special behavior)
+        /// </summary>
+        protected virtual float GetAttractionMultiplier()
+        {
+            switch (state)
+            {
+                case VisitorState.Frightened:
+                    // Frightened visitors FLEE from attractive tiles (inverted)
+                    return -1.0f;
+
+                case VisitorState.Confused:
+                    // Confused visitors are less affected by attractions
+                    return 0.5f;
+
+                case VisitorState.Lost:
+                    // Lost visitors mostly ignore attractions while wandering
+                    return 0.3f;
+
+                case VisitorState.Walking:
+                case VisitorState.Idle:
+                case VisitorState.Escaping:
+                default:
+                    // Normal attraction behavior
+                    return 1.0f;
+
+                case VisitorState.Fascinated:
+                case VisitorState.Mesmerized:
+                case VisitorState.Consumed:
+                    // These states don't use standard pathfinding
+                    // (Fascinated uses random walk, others are stationary/removed)
+                    return 1.0f;
+            }
         }
 
         /// <summary>
@@ -1421,8 +1466,9 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
             Vector2Int destination = GetDestinationForCurrentState(currentPos);
+            float attractionMultiplier = GetAttractionMultiplier();
 
-            LogVisitorPath($"recalculating path from {currentPos} to {destination} (state: {state}).");
+            LogVisitorPath($"recalculating path from {currentPos} to {destination} (state: {state}, attraction multiplier: {attractionMultiplier:F1}x).");
 
             if (!TryFindPathToDestination(currentPos, destination, out List<Vector2Int> newPath))
             {
@@ -1613,7 +1659,8 @@ namespace FaeMaze.Visitors
                 Vector2Int currentPos = new Vector2Int(currentX, currentY);
 
                 List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
-                if (gameController.TryFindPath(currentPos, lanternGridPosition, pathToLantern) && pathToLantern.Count > 0)
+                // Fascinated visitors use normal attraction (they're already mesmerized)
+                if (gameController.TryFindPath(currentPos, lanternGridPosition, pathToLantern, 1.0f) && pathToLantern.Count > 0)
                 {
                     // Convert to Vector2Int path
                     path = new List<Vector2Int>();

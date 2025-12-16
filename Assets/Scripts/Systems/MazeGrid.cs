@@ -184,12 +184,13 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Gets the movement cost for a node, factoring in base cost and attraction.
-        /// Movement cost = baseCost - attraction, clamped to a minimum value.
+        /// Movement cost = baseCost - (attraction * attractionMultiplier), clamped to a minimum value.
         /// </summary>
         /// <param name="x">X coordinate</param>
         /// <param name="y">Y coordinate</param>
+        /// <param name="attractionMultiplier">Multiplier for attraction effect (1.0 = normal, -1.0 = inverted, 0 = ignore)</param>
         /// <returns>The movement cost, or float.MaxValue if node is unwalkable or out of bounds</returns>
-        public float GetMoveCost(int x, int y)
+        public float GetMoveCost(int x, int y, float attractionMultiplier = 1.0f)
         {
             MazeNode node = GetNode(x, y);
 
@@ -198,7 +199,7 @@ namespace FaeMaze.Systems
                 return float.MaxValue;
             }
 
-            float cost = node.baseCost - node.attraction;
+            float cost = node.baseCost - (node.attraction * attractionMultiplier);
             return Mathf.Max(cost, MIN_MOVE_COST);
         }
 
