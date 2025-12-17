@@ -220,7 +220,8 @@ namespace FaeMaze.HeartPowers
     #region Murmuring Paths
 
     /// <summary>
-    /// Creates corridors of desire or sealing, tilting pathfinding costs.
+    /// Creates corridors of desire or sealing from selected tile to the Heart, tilting pathfinding costs.
+    /// Creates a complete path from the clicked tile all the way to the HeartOfMaze.
     /// Tier I: Twin Murmurs - Maintain 2 active segments
     /// Tier II: Labyrinth's Memory - Marked visitors prefer Lost state with Heart bias
     /// Tier III: Sealed Ways - Can increase costs instead to create soft barriers
@@ -298,23 +299,33 @@ namespace FaeMaze.HeartPowers
         private List<Vector2Int> GeneratePathSegment(Vector2Int startTile)
         {
             List<Vector2Int> segment = new List<Vector2Int>();
-            int segmentLength = definition.intParam1 > 0 ? definition.intParam1 : 7; // param1 = segment length
 
-            Vector2Int current = startTile;
-            segment.Add(current);
-
-            // Generate a simple path segment (random walk with constraints)
-            for (int i = 0; i < segmentLength - 1; i++)
+            // Get the heart position
+            if (GameController.Instance == null || GameController.Instance.Heart == null)
             {
-                List<Vector2Int> neighbors = GetWalkableNeighbors(current);
-                if (neighbors.Count == 0)
-                {
-                    break;
-                }
+                Debug.LogWarning($"[MurmuringPaths] Cannot create path to heart - GameController or Heart is null");
+                segment.Add(startTile); // Fallback: just add the start tile
+                return segment;
+            }
 
-                // Prefer continuing in a similar direction
-                current = neighbors[Random.Range(0, neighbors.Count)];
-                segment.Add(current);
+            Vector2Int heartPos = GameController.Instance.Heart.GridPosition;
+            Debug.Log($"[MurmuringPaths] Creating path from ({startTile.x}, {startTile.y}) to Heart at ({heartPos.x}, {heartPos.y})");
+
+            // Use A* pathfinding to create path from start tile to heart
+            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
+            if (GameController.Instance.TryFindPath(startTile, heartPos, pathNodes))
+            {
+                // Convert MazeNodes to Vector2Int positions
+                foreach (var node in pathNodes)
+                {
+                    segment.Add(new Vector2Int(node.x, node.y));
+                }
+                Debug.Log($"[MurmuringPaths] Successfully created path with {segment.Count} tiles to the heart");
+            }
+            else
+            {
+                Debug.LogWarning($"[MurmuringPaths] Failed to find path from ({startTile.x}, {startTile.y}) to Heart - using start tile only");
+                segment.Add(startTile); // Fallback: just add the start tile
             }
 
             return segment;
