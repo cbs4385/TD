@@ -7,11 +7,15 @@ Shader "Custom/VertexColor"
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
         LOD 100
 
         Pass
         {
+            ZWrite On
+            Blend Off
+            Cull Back
+
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
