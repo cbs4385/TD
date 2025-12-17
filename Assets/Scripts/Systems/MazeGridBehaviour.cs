@@ -110,6 +110,9 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform; // Fallback to self
             }
 
+            // Clear static cache to force fresh generation with updated heart placement logic
+            ClearGenerationCache();
+
             // Enforce canonical runtime configuration so generation runs once with a single, shared setup
             generatorConfig = canonicalConfig;
 
@@ -311,6 +314,15 @@ namespace FaeMaze.Systems
         private void MarkHeartTile(Vector2Int position)
         {
             ApplyTileFromTileType(position.x, position.y, TileType.Path, 'H', true);
+        }
+
+        private void ClearGenerationCache()
+        {
+            cachedGeneratedTiles = null;
+            cachedGeneratedSymbols = null;
+            cachedMazeString = null;
+            cachedEntranceEdges.Clear();
+            hasCachedGeneration = false;
         }
 
         private bool HasCachedTilesForConfig(ForestMazeConfig configToCheck)
