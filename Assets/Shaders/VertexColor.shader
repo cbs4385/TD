@@ -46,16 +46,18 @@ Shader "Custom/VertexColor"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                fixed4 tex = tex2D(_MainTex, i.uv);
+                // Debug: Always return vertex color multiplied by fallback
+                // This helps us see if vertex colors exist
                 fixed4 vertColor = i.color;
 
-                // If vertex color is near black (no data), use fallback color
-                if (length(vertColor.rgb) < 0.1)
+                // If vertex alpha is 0, colors likely weren't exported
+                if (vertColor.a < 0.1)
                 {
-                    vertColor = _Color;
+                    return _Color; // Use solid fallback color
                 }
 
-                fixed4 col = tex * vertColor;
+                // Otherwise use vertex color
+                fixed4 col = vertColor * _Color;
                 return col;
             }
             ENDCG
