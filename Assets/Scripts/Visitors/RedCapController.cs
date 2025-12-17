@@ -440,27 +440,27 @@ namespace FaeMaze.Visitors
                 switch (rotationDirection)
                 {
                     case 1: // Up (-Y world): Rotate model +Y to face -Y
-                        zRotation = 180f;
-                        break;
-                    case 2: // Down (+Y world): Rotate model +Y to face +Y
                         zRotation = 0f;
                         break;
+                    case 2: // Down (+Y world): Rotate model +Y to face +Y
+                        zRotation = 180f;
+                        break;
                     case 3: // Left (-X world): Rotate model +Y to face -X
-                        zRotation = 90f;
+                        zRotation = -90f;
                         break;
                     case 4: // Right (+X world): Rotate model +Y to face +X
-                        zRotation = -90f;
+                        zRotation = 90f;
                         break;
                 }
 
                 // Apply rotation to the animator's transform (the child visual object)
-                // RedCap model orientation (with prefab 90° Z rotation):
-                //   - Top: +Z, Front: +Y (rotated from original +X)
+                // RedCap model orientation (with prefab -90° X rotation):
+                //   - Top: +Z, Front: +Y
                 // Game requirements:
                 //   - Top: -Z (away from camera), Front: direction of travel
                 // Base: X: 90°, Y: 180° aligns model top correctly
-                // Direction: Rotate around Z to align model +Y with movement direction
-                //   Right (+X): -90°, Left (-X): 90°, Up (-Y): 180°, Down (+Y): 0°
+                // Direction: Rotate around Z to align model +Y with movement direction (180° offset applied)
+                //   Right (+X): 90°, Left (-X): -90°, Up (-Y): 0°, Down (+Y): 180°
                 Quaternion baseRotation = Quaternion.Euler(90f, 180f, 0f);
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                 animator.transform.localRotation = directionRotation * baseRotation;
