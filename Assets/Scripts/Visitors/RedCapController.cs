@@ -439,29 +439,29 @@ namespace FaeMaze.Visitors
                 float zRotation = 0f;
                 switch (rotationDirection)
                 {
-                    case 1: // Up (+Y) - swapped with Down due to Blender animation orientation
-                        zRotation = 180f;
-                        break;
-                    case 2: // Down (-Y) - swapped with Up due to Blender animation orientation
-                        zRotation = 0f;
-                        break;
-                    case 3: // Left (-X)
+                    case 1: // Up (-Y world): Rotate model +X to face -Y
                         zRotation = -90f;
                         break;
-                    case 4: // Right (+X)
+                    case 2: // Down (+Y world): Rotate model +X to face +Y
                         zRotation = 90f;
+                        break;
+                    case 3: // Left (-X world): Rotate model +X to face -X
+                        zRotation = 180f;
+                        break;
+                    case 4: // Right (+X world): Model +X already faces +X
+                        zRotation = 0f;
                         break;
                 }
 
                 // Apply rotation to the animator's transform (the child visual object)
-                // Convert from Blender Y-up to Unity top-down 2D:
-                // - Model +Z aligns with World -Z (perpendicular to screen, away from camera)
-                // - Model -Y aligns with direction of travel (in XY movement plane)
-                // RedCap model has different base orientation than visitor
-                // Base: X: 90° tips model flat, Y: 180° flips to face camera, Z: 90° corrects axis alignment
-                // Direction: Rotate around game Z to orient model -Y toward movement direction
-                //   Up (+Y): Z: 180°, Right (+X): Z: 90°, Left (-X): Z: -90°, Down (-Y): Z: 0°
-                Quaternion baseRotation = Quaternion.Euler(90f, 180f, 90f);
+                // RedCap model orientation (from Blender export):
+                //   - Top: +Z, Front: +X
+                // Game requirements:
+                //   - Top: -Z (away from camera), Front: direction of travel
+                // Base: X: 180° flips model top from +Z to -Z, keeps front at +X
+                // Direction: Rotate around Z to align model front (+X) with movement direction
+                //   Right (+X): 0°, Left (-X): 180°, Up (-Y): -90°, Down (+Y): 90°
+                Quaternion baseRotation = Quaternion.Euler(180f, 0f, 0f);
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                 animator.transform.localRotation = directionRotation * baseRotation;
             }
