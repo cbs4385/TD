@@ -153,7 +153,8 @@ namespace FaeMaze.Visitors
 
             // Find required components
             AcquireDependencies();
-            animator = GetComponent<Animator>();
+            // Look for Animator on this GameObject or children (for Blender imports)
+            animator = GetComponentInChildren<Animator>();
 
             if (gameController == null || mazeGridBehaviour == null)
             {
@@ -407,14 +408,61 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Sets the animator direction parameter.
+        /// Sets the animator direction parameter and rotates the 3D model.
         /// </summary>
         private void SetAnimatorDirection(int direction)
         {
+            // Guard against redundant animator parameter writes
             if (animator != null && currentAnimatorDirection != direction)
             {
                 animator.SetInteger(directionParameterName, direction);
                 currentAnimatorDirection = direction;
+            }
+
+            // Rotate the visual model to face the correct direction
+            // Only rotate if not using procedural sprites (3D model needs rotation)
+            // Apply rotation every frame to ensure it's set (handles initialization and state changes)
+            if (!useProceduralSprite && animator != null)
+            {
+                // For Idle state, use the last movement direction to maintain facing
+                int rotationDirection = direction;
+                if (rotationDirection == IdleDirection && lastDirection != IdleDirection)
+                {
+                    rotationDirection = lastDirection;
+                }
+                // If still idle (never moved), default to facing down
+                if (rotationDirection == IdleDirection)
+                {
+                    rotationDirection = 2; // Down
+                }
+
+                float zRotation = 0f;
+                switch (rotationDirection)
+                {
+                    case 1: // Up (+Y) - swapped with Down due to Blender animation orientation
+                        zRotation = 180f;
+                        break;
+                    case 2: // Down (-Y) - swapped with Up due to Blender animation orientation
+                        zRotation = 0f;
+                        break;
+                    case 3: // Left (-X)
+                        zRotation = -90f;
+                        break;
+                    case 4: // Right (+X)
+                        zRotation = 90f;
+                        break;
+                }
+
+                // Apply rotation to the animator's transform (the child visual object)
+                // Convert from Blender Y-up to Unity top-down 2D:
+                // - Model +Z aligns with World -Z (perpendicular to screen, away from camera)
+                // - Model -Y aligns with direction of travel (in XY movement plane)
+                // Base: X: 90° tips model flat, Y: 180° flips it to face camera
+                // Direction: Rotate around game Z to orient model -Y toward movement direction
+                //   Up (+Y): Z: 180°, Right (+X): Z: 90°, Left (-X): Z: -90°, Down (-Y): Z: 0°
+                Quaternion baseRotation = Quaternion.Euler(90f, 180f, 0f);
+                Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
+                animator.transform.localRotation = directionRotation * baseRotation;
             }
         }
 
