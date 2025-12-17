@@ -457,10 +457,11 @@ namespace FaeMaze.Visitors
                 // Convert from Blender Y-up to Unity top-down 2D:
                 // - Model +Z aligns with World -Z (perpendicular to screen, away from camera)
                 // - Model -Y aligns with direction of travel (in XY movement plane)
-                // Base: X: 90° tips model flat, Y: 180° flips it to face camera
+                // RedCap model has different base orientation than visitor, trying different rotation
+                // Base: Y: 180° flips to face camera, Z: -90° rotates model to correct orientation
                 // Direction: Rotate around game Z to orient model -Y toward movement direction
                 //   Up (+Y): Z: 180°, Right (+X): Z: 90°, Left (-X): Z: -90°, Down (-Y): Z: 0°
-                Quaternion baseRotation = Quaternion.Euler(90f, 180f, 0f);
+                Quaternion baseRotation = Quaternion.Euler(0f, 180f, -90f);
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                 animator.transform.localRotation = directionRotation * baseRotation;
             }
