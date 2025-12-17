@@ -11,6 +11,8 @@ namespace FaeMaze.HeartPowers
 
     /// <summary>
     /// Amplifies FaeLanterns to pull visitors more strongly and tilt routes through their influence.
+    /// Coverage scales with tier: I = 50% map, II = 75% map, III = 100% map (entire map).
+    /// Attraction strength diminishes with distance from lantern.
     /// Tier I: Echoing Thrum - Early fascination for visitors approaching lantern areas
     /// Tier II: Hungry Glow - Biases post-fascination routes toward Heart
     /// Tier III: Devouring Chorus - Consumed visitors trigger Heart-ward path bias for others
@@ -33,30 +35,36 @@ namespace FaeMaze.HeartPowers
             Debug.Log($"[HeartbeatOfLonging] Found {affectedLanterns.Count} FaeLanterns to amplify");
 
             // Apply path cost reduction to all lantern influence tiles
+            float tierRadius = GetTierBasedRadius();
             foreach (var lantern in affectedLanterns)
             {
-                var influenceTiles = GetLanternInfluenceTiles(lantern);
-                foreach (var tile in influenceTiles)
+                var influenceTiles = GetLanternInfluenceTilesWithDistances(lantern, tierRadius);
+                foreach (var tileData in influenceTiles)
                 {
+                    Vector2Int tile = tileData.Key;
+                    float distanceFromLantern = tileData.Value;
+
                     lanternInfluenceTiles.Add(tile);
-                    // Negative cost = more attractive (param1 = attraction strength, default -2.0)
-                    float attractionBonus = -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 2.0f);
+
+                    // Base attraction strength (param1 = max attraction strength, default -2.0)
+                    float baseAttraction = -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 2.0f);
+
+                    // Apply distance-based falloff (closer = stronger attraction)
+                    float falloffFactor = 1.0f - (distanceFromLantern / tierRadius); // 1.0 at lantern, 0.0 at edge
+                    falloffFactor = Mathf.Clamp01(falloffFactor);
+
+                    float attractionBonus = baseAttraction * falloffFactor;
                     manager.PathModifier.AddModifier(tile, attractionBonus, definition.duration, ModifierSourceId);
 
                     // Add ROYGBIV tile visual (deep red for Power 1)
                     if (manager.TileVisualizer != null)
                     {
-                        // Intensity based on attraction strength (normalize to 0-1)
+                        // Intensity based on attraction strength with falloff (normalize to 0-1)
                         float intensity = Mathf.Clamp01(Mathf.Abs(attractionBonus) / 5.0f);
-                        Debug.Log($"[HeartbeatOfLonging] Calling AddTileEffect for tile {tile} with intensity {intensity}");
                         manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.HeartbeatOfLonging, intensity, definition.duration);
                     }
-                    else
-                    {
-                        Debug.LogWarning($"[HeartbeatOfLonging] TileVisualizer is NULL! Cannot add visual for tile {tile}");
-                    }
                 }
-                Debug.Log($"[HeartbeatOfLonging] Lantern at {lantern.GridPosition} - Influenced {influenceTiles.Count} tiles with deep red glow");
+                Debug.Log($"[HeartbeatOfLonging] Lantern at {lantern.GridPosition} - Influenced {influenceTiles.Count} tiles with deep red glow (tier {definition.tier}, radius: {tierRadius:F1})");
             }
 
             Debug.Log($"[HeartbeatOfLonging] ✓ Activated on {affectedLanterns.Count} lanterns affecting {lanternInfluenceTiles.Count} tiles total");
@@ -97,19 +105,45 @@ namespace FaeMaze.HeartPowers
             Debug.Log($"[HeartbeatOfLonging] Effect ended, removed deep red glow from tiles");
         }
 
-        private HashSet<Vector2Int> GetLanternInfluenceTiles(FaeLantern lantern)
+        /// <summary>
+        /// Calculates tier-based radius for lantern influence.
+        /// Tier I: 50% of max map dimension, Tier II: 75%, Tier III: 100% (entire map)
+        /// </summary>
+        private float GetTierBasedRadius()
         {
-            // Get the lantern's influence area (simplified - assumes flood-fill from lantern position)
-            HashSet<Vector2Int> tiles = new HashSet<Vector2Int>();
-            Vector2Int lanternPos = lantern.GridPosition;
-            int radius = definition.intParam1 > 0 ? definition.intParam1 : 6; // Default influence radius
+            var grid = manager.MazeGrid.Grid;
+            float maxDimension = Mathf.Max(grid.Width, grid.Height);
 
-            // Simple radius-based influence (could be improved with actual flood-fill)
-            for (int dx = -radius; dx <= radius; dx++)
+            float coveragePercent = definition.tier switch
             {
-                for (int dy = -radius; dy <= radius; dy++)
+                1 => 0.5f,  // 50% coverage
+                2 => 0.75f, // 75% coverage
+                3 => 1.0f,  // 100% coverage (entire map)
+                _ => 0.5f   // Default to tier 1
+            };
+
+            float radius = maxDimension * coveragePercent;
+            Debug.Log($"[HeartbeatOfLonging] Tier {definition.tier}: radius={radius:F1} (map: {grid.Width}x{grid.Height}, coverage: {coveragePercent * 100}%)");
+            return radius;
+        }
+
+        /// <summary>
+        /// Gets lantern influence tiles along with their Manhattan distance from the lantern.
+        /// Returns Dictionary where Key = tile position, Value = distance from lantern.
+        /// </summary>
+        private Dictionary<Vector2Int, float> GetLanternInfluenceTilesWithDistances(FaeLantern lantern, float radius)
+        {
+            Dictionary<Vector2Int, float> tiles = new Dictionary<Vector2Int, float>();
+            Vector2Int lanternPos = lantern.GridPosition;
+            int radiusInt = Mathf.CeilToInt(radius);
+
+            // Simple radius-based influence using Manhattan distance
+            for (int dx = -radiusInt; dx <= radiusInt; dx++)
+            {
+                for (int dy = -radiusInt; dy <= radiusInt; dy++)
                 {
-                    if (Mathf.Abs(dx) + Mathf.Abs(dy) <= radius) // Manhattan distance
+                    float manhattanDistance = Mathf.Abs(dx) + Mathf.Abs(dy);
+                    if (manhattanDistance <= radius)
                     {
                         Vector2Int tile = new Vector2Int(lanternPos.x + dx, lanternPos.y + dy);
                         if (manager.MazeGrid.Grid.InBounds(tile.x, tile.y))
@@ -117,7 +151,7 @@ namespace FaeMaze.HeartPowers
                             var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
                             if (node != null && node.walkable)
                             {
-                                tiles.Add(tile);
+                                tiles[tile] = manhattanDistance;
                             }
                         }
                     }
@@ -125,6 +159,14 @@ namespace FaeMaze.HeartPowers
             }
 
             return tiles;
+        }
+
+        private HashSet<Vector2Int> GetLanternInfluenceTiles(FaeLantern lantern)
+        {
+            // Legacy method for backward compatibility - just return keys from new method
+            float tierRadius = GetTierBasedRadius();
+            var tilesWithDistances = GetLanternInfluenceTilesWithDistances(lantern, tierRadius);
+            return new HashSet<Vector2Int>(tilesWithDistances.Keys);
         }
 
         private void ApplyEchoingThrum()
