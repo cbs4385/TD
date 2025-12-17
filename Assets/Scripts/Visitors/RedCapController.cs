@@ -408,7 +408,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Sets the animator direction parameter and rotates the 3D model.
+        /// Sets the animator direction parameter.
         /// </summary>
         private void SetAnimatorDirection(int direction)
         {
@@ -417,50 +417,6 @@ namespace FaeMaze.Visitors
             {
                 animator.SetInteger(directionParameterName, direction);
                 currentAnimatorDirection = direction;
-            }
-
-            // Rotate the visual model to face the correct direction
-            // Only rotate if not using procedural sprites (3D model needs rotation)
-            // Apply rotation every frame to ensure it's set (handles initialization and state changes)
-            if (!useProceduralSprite && animator != null)
-            {
-                // For Idle state, use the last movement direction to maintain facing
-                int rotationDirection = direction;
-                if (rotationDirection == IdleDirection && lastDirection != IdleDirection)
-                {
-                    rotationDirection = lastDirection;
-                }
-                // If still idle (never moved), default to facing down
-                if (rotationDirection == IdleDirection)
-                {
-                    rotationDirection = 2; // Down
-                }
-
-                float yRotation = 0f;
-                switch (rotationDirection)
-                {
-                    case 1: // Up (-Y world): Rotate model +Y to face -Y
-                        yRotation = 0f;
-                        break;
-                    case 2: // Down (+Y world): Rotate model +Y to face +Y
-                        yRotation = 180f;
-                        break;
-                    case 3: // Left (-X world): Rotate model +Y to face -X
-                        yRotation = 90f;
-                        break;
-                    case 4: // Right (+X world): Rotate model +Y to face +X
-                        yRotation = -90f;
-                        break;
-                }
-
-                // Apply rotation to the animator's transform (the child visual object)
-                // RedCap model orientation (with prefab -90° X rotation):
-                //   - Original top (+Z) now at +Y, Original front (+X) stays at +X
-                // After -90° X: model's +Y points forward (was top), rotate around Y axis for direction
-                // Direction rotations around Y axis to align model's +Y with movement:
-                //   Up (-Y world): 0°, Down (+Y): 180°, Left (-X): 90°, Right (+X): -90°
-                Quaternion directionRotation = Quaternion.Euler(0f, yRotation, 0f);
-                animator.transform.localRotation = directionRotation;
             }
         }
 
