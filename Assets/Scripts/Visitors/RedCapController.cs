@@ -408,7 +408,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Sets the animator direction parameter.
+        /// Sets the animator direction parameter and rotates model to face direction of motion.
         /// </summary>
         private void SetAnimatorDirection(int direction)
         {
@@ -417,6 +417,44 @@ namespace FaeMaze.Visitors
             {
                 animator.SetInteger(directionParameterName, direction);
                 currentAnimatorDirection = direction;
+            }
+
+            // Rotate the model to face the direction of motion
+            if (!useProceduralSprite && animator != null)
+            {
+                // Determine which direction to use for rotation
+                int rotationDirection = direction;
+                if (rotationDirection == IdleDirection && lastDirection != IdleDirection)
+                {
+                    rotationDirection = lastDirection;
+                }
+                // Default to facing down if never moved
+                if (rotationDirection == IdleDirection)
+                {
+                    rotationDirection = 2; // Down
+                }
+
+                // Calculate Z-axis rotation based on movement direction
+                // Assuming the model's forward axis in the prefab configuration faces down by default
+                float zRotation = 0f;
+                switch (rotationDirection)
+                {
+                    case 1: // Up (+Y in world)
+                        zRotation = 180f;
+                        break;
+                    case 2: // Down (-Y in world)
+                        zRotation = 0f;
+                        break;
+                    case 3: // Left (-X in world)
+                        zRotation = 90f;
+                        break;
+                    case 4: // Right (+X in world)
+                        zRotation = -90f;
+                        break;
+                }
+
+                // Apply rotation to the animator's transform
+                animator.transform.localRotation = Quaternion.Euler(0f, 0f, zRotation);
             }
         }
 
