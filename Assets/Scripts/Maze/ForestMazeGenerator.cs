@@ -208,32 +208,13 @@ namespace ForestMaze
             {
                 var chosenDeadEnd = deadEnds[random.Next(deadEnds.Count)];
                 grid[chosenDeadEnd.y, chosenDeadEnd.x] = 'H';
+                UnityEngine.Debug.Log($"[ForestMazeGenerator] Placed heart at dead-end: ({chosenDeadEnd.x}, {chosenDeadEnd.y}) - Found {deadEnds.Count} total dead-ends");
             }
             else
             {
-                // Fallback to center if no dead-ends found (shouldn't happen in a perfect maze)
-                int centerX = width / 2;
-                int centerY = height / 2;
-
-                // Find nearest path tile to center
-                for (int radius = 0; radius < Math.Max(width, height) / 2; radius++)
-                {
-                    for (int dy = -radius; dy <= radius; dy++)
-                    {
-                        for (int dx = -radius; dx <= radius; dx++)
-                        {
-                            int x = centerX + dx;
-                            int y = centerY + dy;
-
-                            if (x >= 0 && x < width && y >= 0 && y < height &&
-                                MazeGeneratorUtilities.IsPathLike(grid[y, x]))
-                            {
-                                grid[y, x] = 'H';
-                                return;
-                            }
-                        }
-                    }
-                }
+                // No dead-ends found - this shouldn't happen in a properly generated maze
+                // Log error instead of falling back to center
+                UnityEngine.Debug.LogError($"[ForestMazeGenerator] No dead-ends found in {width}x{height} maze! Cannot place heart.");
             }
         }
 
