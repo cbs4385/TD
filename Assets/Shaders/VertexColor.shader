@@ -3,6 +3,7 @@ Shader "Custom/VertexColor"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
+        _Color ("Fallback Color", Color) = (1,1,1,1)
     }
     SubShader
     {
@@ -32,6 +33,7 @@ Shader "Custom/VertexColor"
 
             sampler2D _MainTex;
             float4 _MainTex_ST;
+            fixed4 _Color;
 
             v2f vert (appdata v)
             {
@@ -44,7 +46,16 @@ Shader "Custom/VertexColor"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                fixed4 col = tex2D(_MainTex, i.uv) * i.color;
+                fixed4 tex = tex2D(_MainTex, i.uv);
+                fixed4 vertColor = i.color;
+
+                // If vertex color is near black (no data), use fallback color
+                if (length(vertColor.rgb) < 0.1)
+                {
+                    vertColor = _Color;
+                }
+
+                fixed4 col = tex * vertColor;
                 return col;
             }
             ENDCG
