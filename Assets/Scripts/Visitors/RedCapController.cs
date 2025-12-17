@@ -439,28 +439,28 @@ namespace FaeMaze.Visitors
                 float zRotation = 0f;
                 switch (rotationDirection)
                 {
-                    case 1: // Up (-Y world): Rotate model +X to face -Y
-                        zRotation = -90f;
-                        break;
-                    case 2: // Down (+Y world): Rotate model +X to face +Y
-                        zRotation = 90f;
-                        break;
-                    case 3: // Left (-X world): Rotate model +X to face -X
+                    case 1: // Up (-Y world): Rotate model +Y to face -Y
                         zRotation = 180f;
                         break;
-                    case 4: // Right (+X world): Model +X already faces +X
+                    case 2: // Down (+Y world): Rotate model +Y to face +Y
                         zRotation = 0f;
+                        break;
+                    case 3: // Left (-X world): Rotate model +Y to face -X
+                        zRotation = 90f;
+                        break;
+                    case 4: // Right (+X world): Rotate model +Y to face +X
+                        zRotation = -90f;
                         break;
                 }
 
                 // Apply rotation to the animator's transform (the child visual object)
-                // RedCap model orientation (from Blender export):
-                //   - Top: +Z, Front: +X
+                // RedCap model orientation (with prefab 90° Z rotation):
+                //   - Top: +Z, Front: +Y (rotated from original +X)
                 // Game requirements:
                 //   - Top: -Z (away from camera), Front: direction of travel
-                // Base: X: 90°, Y: 180° aligns model correctly (matching visitor model)
-                // Direction: Rotate around Z to align model front with movement direction
-                //   Right (+X): 0°, Left (-X): 180°, Up (-Y): -90°, Down (+Y): 90°
+                // Base: X: 90°, Y: 180° aligns model top correctly
+                // Direction: Rotate around Z to align model +Y with movement direction
+                //   Right (+X): -90°, Left (-X): 90°, Up (-Y): 180°, Down (+Y): 0°
                 Quaternion baseRotation = Quaternion.Euler(90f, 180f, 0f);
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                 animator.transform.localRotation = directionRotation * baseRotation;
