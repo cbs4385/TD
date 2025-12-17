@@ -52,7 +52,12 @@ Shader "Custom/VertexColor"
                 // Multiply texture color by vertex color
                 // If no texture is assigned, texColor will be white (1,1,1,1)
                 // If no vertex colors, i.color will be white (1,1,1,1)
-                return texColor * i.color;
+                fixed4 finalColor = texColor * i.color;
+
+                // Force alpha to 1.0 to ensure the model is fully opaque
+                finalColor.a = 1.0;
+
+                return finalColor;
             }
             ENDCG
         }
