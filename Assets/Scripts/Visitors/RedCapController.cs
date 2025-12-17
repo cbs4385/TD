@@ -99,6 +99,10 @@ namespace FaeMaze.Visitors
         private int lastDirection = IdleDirection;
         private int currentAnimatorDirection = IdleDirection;
 
+        // Base rotation from prefab (captured at initialization)
+        private Quaternion baseRotation;
+        private bool baseRotationCaptured = false;
+
         #endregion
 
         #region Properties
@@ -175,6 +179,13 @@ namespace FaeMaze.Visitors
             // Initialize animator direction
             if (animator != null)
             {
+                // Capture the base rotation from the prefab before applying any directional rotation
+                if (!baseRotationCaptured)
+                {
+                    baseRotation = animator.transform.localRotation;
+                    baseRotationCaptured = true;
+                }
+
                 SetAnimatorDirection(IdleDirection);
             }
 
@@ -420,7 +431,7 @@ namespace FaeMaze.Visitors
             }
 
             // Rotate the model to face the direction of motion
-            if (!useProceduralSprite && animator != null)
+            if (!useProceduralSprite && animator != null && baseRotationCaptured)
             {
                 // Determine which direction to use for rotation
                 int rotationDirection = direction;
@@ -435,7 +446,7 @@ namespace FaeMaze.Visitors
                 }
 
                 // Calculate Z-axis rotation based on movement direction
-                // Assuming the model's forward axis in the prefab configuration faces down by default
+                // This rotation is applied on top of the base rotation from the prefab
                 float zRotation = 0f;
                 switch (rotationDirection)
                 {
@@ -453,8 +464,9 @@ namespace FaeMaze.Visitors
                         break;
                 }
 
-                // Apply rotation to the animator's transform
-                animator.transform.localRotation = Quaternion.Euler(0f, 0f, zRotation);
+                // Apply directional rotation on top of the base rotation from the prefab
+                Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
+                animator.transform.localRotation = directionRotation * baseRotation;
             }
         }
 
