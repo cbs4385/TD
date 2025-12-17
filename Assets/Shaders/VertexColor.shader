@@ -46,9 +46,13 @@ Shader "Custom/VertexColor"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                // Debug: Show exactly what vertex colors we're getting
-                // Return vertex color directly to see what Blender exported
-                return i.color;
+                // Sample the texture
+                fixed4 texColor = tex2D(_MainTex, i.uv);
+
+                // Multiply texture color by vertex color
+                // If no texture is assigned, texColor will be white (1,1,1,1)
+                // If no vertex colors, i.color will be white (1,1,1,1)
+                return texColor * i.color;
             }
             ENDCG
         }

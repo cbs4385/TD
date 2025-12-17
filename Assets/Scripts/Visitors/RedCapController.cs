@@ -458,10 +458,10 @@ namespace FaeMaze.Visitors
                 //   - Top: +Z, Front: +X
                 // Game requirements:
                 //   - Top: -Z (away from camera), Front: direction of travel
-                // Base: X: 180° flips model top from +Z to -Z, keeps front at +X
-                // Direction: Rotate around Z to align model front (+X) with movement direction
+                // Base: X: 90°, Y: 180° aligns model correctly (matching visitor model)
+                // Direction: Rotate around Z to align model front with movement direction
                 //   Right (+X): 0°, Left (-X): 180°, Up (-Y): -90°, Down (+Y): 90°
-                Quaternion baseRotation = Quaternion.Euler(180f, 0f, 0f);
+                Quaternion baseRotation = Quaternion.Euler(90f, 180f, 0f);
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
                 animator.transform.localRotation = directionRotation * baseRotation;
             }
