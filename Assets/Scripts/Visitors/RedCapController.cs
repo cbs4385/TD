@@ -436,34 +436,31 @@ namespace FaeMaze.Visitors
                     rotationDirection = 2; // Down
                 }
 
-                float zRotation = 0f;
+                float yRotation = 0f;
                 switch (rotationDirection)
                 {
                     case 1: // Up (-Y world): Rotate model +Y to face -Y
-                        zRotation = 0f;
+                        yRotation = 0f;
                         break;
                     case 2: // Down (+Y world): Rotate model +Y to face +Y
-                        zRotation = 180f;
+                        yRotation = 180f;
                         break;
                     case 3: // Left (-X world): Rotate model +Y to face -X
-                        zRotation = -90f;
+                        yRotation = 90f;
                         break;
                     case 4: // Right (+X world): Rotate model +Y to face +X
-                        zRotation = 90f;
+                        yRotation = -90f;
                         break;
                 }
 
                 // Apply rotation to the animator's transform (the child visual object)
                 // RedCap model orientation (with prefab -90° X rotation):
-                //   - Top: +Z, Front: +Y
-                // Game requirements:
-                //   - Top: -Z (away from camera), Front: direction of travel
-                // Base: X: 90°, Y: 180° aligns model top correctly
-                // Direction: Rotate around Z to align model +Y with movement direction (180° offset applied)
-                //   Right (+X): 90°, Left (-X): -90°, Up (-Y): 0°, Down (+Y): 180°
-                Quaternion baseRotation = Quaternion.Euler(90f, 180f, 0f);
-                Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
-                animator.transform.localRotation = directionRotation * baseRotation;
+                //   - Original top (+Z) now at +Y, Original front (+X) stays at +X
+                // After -90° X: model's +Y points forward (was top), rotate around Y axis for direction
+                // Direction rotations around Y axis to align model's +Y with movement:
+                //   Up (-Y world): 0°, Down (+Y): 180°, Left (-X): 90°, Right (+X): -90°
+                Quaternion directionRotation = Quaternion.Euler(0f, yRotation, 0f);
+                animator.transform.localRotation = directionRotation;
             }
         }
 
