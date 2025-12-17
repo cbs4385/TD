@@ -108,6 +108,15 @@ namespace FaeMaze.Visitors
         [Tooltip("Default duration for Frightened state (seconds)")]
         protected float frightenedDuration = 3f;
 
+        [Header("Red Cap Detection")]
+        [SerializeField]
+        [Tooltip("Distance to detect Red Caps and become frightened")]
+        protected float redCapDetectionRadius = 5f;
+
+        [SerializeField]
+        [Tooltip("How often to check for nearby Red Caps (seconds)")]
+        protected float redCapDetectionInterval = 0.5f;
+
         [Header("Lost Mode Settings")]
         [SerializeField]
         [Tooltip("Minimum detour path length for Lost state")]
@@ -179,6 +188,9 @@ namespace FaeMaze.Visitors
         protected bool isMesmerized;
         protected bool isLost;
         protected bool isFrightened;
+
+        // Red Cap detection tracking
+        protected float redCapDetectionTimer;
 
         // Lost segment tracking (for exploratory detours in Lost state)
         protected bool lostSegmentActive;
@@ -308,6 +320,14 @@ namespace FaeMaze.Visitors
                         }
                     }
                 }
+            }
+
+            // Check for nearby Red Caps
+            redCapDetectionTimer -= Time.deltaTime;
+            if (redCapDetectionTimer <= 0f)
+            {
+                redCapDetectionTimer = redCapDetectionInterval;
+                CheckForNearbyRedCaps();
             }
 
             // Check for FaeLantern influence (grid-based detection)
@@ -1728,6 +1748,38 @@ namespace FaeMaze.Visitors
             isFrightened = true;
             SetTimedState(VisitorState.Frightened, duration);
             RefreshStateFromFlags();
+        }
+
+        /// <summary>
+        /// Checks for nearby Red Caps and triggers frightened state if one is detected within range.
+        /// Only checks if visitor is in an active movement state and not already frightened.
+        /// </summary>
+        protected virtual void CheckForNearbyRedCaps()
+        {
+            // Don't check if already frightened, consumed, or escaping
+            if (isFrightened || state == VisitorState.Consumed || state == VisitorState.Escaping)
+            {
+                return;
+            }
+
+            // Find all Red Caps in the scene
+            RedCapController[] redCaps = FindObjectsByType<RedCapController>(FindObjectsSortMode.None);
+
+            foreach (var redCap in redCaps)
+            {
+                if (redCap == null || redCap.gameObject == null)
+                    continue;
+
+                // Check distance to this Red Cap
+                float distance = Vector3.Distance(transform.position, redCap.transform.position);
+
+                if (distance <= redCapDetectionRadius)
+                {
+                    // Red Cap is nearby! Become frightened
+                    SetFrightened(frightenedDuration);
+                    return; // Only need to detect one
+                }
+            }
         }
 
         /// <summary>
