@@ -125,6 +125,22 @@ namespace FaeMaze.Systems
             if (pathEndNode != null)
             {
                 BuildResultPath(pathEndNode, resultPath);
+
+                // Debug: Check if path contains any water tiles
+                int waterTileCount = 0;
+                foreach (var node in resultPath)
+                {
+                    if (node.terrain == TileType.Water)
+                    {
+                        waterTileCount++;
+                        Debug.LogWarning($"[MazePathfinder] PATH CONTAINS WATER TILE at ({node.x}, {node.y}) - walkable: {node.walkable}, baseCost: {node.baseCost}");
+                    }
+                }
+                if (waterTileCount > 0)
+                {
+                    Debug.LogError($"[MazePathfinder] Found path from ({startX}, {startY}) to ({endX}, {endY}) contains {waterTileCount} WATER tiles!");
+                }
+
                 return true;
             }
 
@@ -193,7 +209,14 @@ namespace FaeMaze.Systems
                 // Check if neighbor is walkable
                 var mazeNode = grid.GetNode(neighborX, neighborY);
                 if (mazeNode == null || !mazeNode.walkable)
+                {
+                    // Debug logging for water tiles specifically
+                    if (mazeNode != null && mazeNode.terrain == TileType.Water)
+                    {
+                        Debug.Log($"[MazePathfinder] Skipping water tile at ({neighborX}, {neighborY}) - walkable: {mazeNode.walkable}, terrain: {mazeNode.terrain}");
+                    }
                     continue;
+                }
 
                 // Calculate costs with attraction multiplier based on visitor state
                 float movementCost = grid.GetMoveCost(neighborX, neighborY, attractionMultiplier);

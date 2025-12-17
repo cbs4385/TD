@@ -994,7 +994,8 @@ namespace FaeMaze.Visitors
                     if (!hasLoggedPathIssue)
                     {
                         string reason = targetNode == null ? "missing" : "not walkable";
-                        if (LogVisitorPathWarning($"cannot move to waypoint {targetGridPos} at index {currentPathIndex} because node is {reason}. Path length: {path.Count}."))
+                        string terrainType = targetNode != null ? targetNode.terrain.ToString() : "unknown";
+                        if (LogVisitorPathWarning($"cannot move to waypoint {targetGridPos} at index {currentPathIndex} because node is {reason} (terrain: {terrainType}, walkable: {targetNode?.walkable}). Path length: {path.Count}."))
                         {
                             hasLoggedPathIssue = true;
                         }
@@ -1002,6 +1003,12 @@ namespace FaeMaze.Visitors
 
                     UpdatePathLoggingOnMovement(previousPosition, transform.position);
                     return; // Non-walkable nodes remain blocked
+                }
+
+                // Debug log when moving to water tiles
+                if (targetNode.terrain == TileType.Water)
+                {
+                    Debug.LogWarning($"[Visitor] {gameObject.name} attempting to move to WATER tile at {targetGridPos} - walkable: {targetNode.walkable}, baseCost: {targetNode.baseCost}");
                 }
 
                 terrainSpeedMultiplier = mazeGrid.GetSpeedMultiplier(targetGridPos.x, targetGridPos.y);
