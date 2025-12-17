@@ -619,8 +619,9 @@ namespace FaeMaze.Systems
                 entranceGridPos = new Vector2Int(0, 0);
             }
 
-            // Find heart position in the center of the maze
-            FindHeartPosition();
+            // Heart position is set during maze parsing from 'H' marker
+            // If no 'H' was found, FindHeartPosition() was already called earlier (line 540-543)
+            // DO NOT call FindHeartPosition() here - it will override the dead-end placement!
 
         }
 
