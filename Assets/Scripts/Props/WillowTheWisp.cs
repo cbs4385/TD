@@ -398,7 +398,8 @@ namespace FaeMaze.Props
 
         private void SetupSpriteRenderer()
         {
-            if (wispModelPrefab != null)
+            // Check if we have a model (either embedded child or from wispModelPrefab)
+            if (wispModelPrefab != null || modelInstance != null)
             {
                 // Model-driven visuals; keep scale consistent and skip sprite setup
                 baseScale = new Vector3(wispSize, wispSize, 1f);
@@ -912,6 +913,9 @@ namespace FaeMaze.Props
                 {
                     modelInstance = childAnimator.gameObject;
                     animator = childAnimator;
+
+                    // Log the rotation for debugging
+                    Debug.Log($"[WillowWisp] Found embedded model with rotation: {modelInstance.transform.localEulerAngles}");
 
                     if (sprite != null)
                     {
