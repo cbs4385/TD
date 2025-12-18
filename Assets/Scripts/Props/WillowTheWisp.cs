@@ -697,10 +697,13 @@ namespace FaeMaze.Props
             state = WispState.Chasing;
             wanderPath = null; // Clear wander path
             currentPathIndex = 0;
+
+            // Generate initial path to visitor
+            GeneratePathToVisitor();
         }
 
         /// <summary>
-        /// Updates the chasing behavior: pursue the target visitor directly.
+        /// Updates the chasing behavior: pursue the target visitor using pathfinding.
         /// </summary>
         private void UpdateChasing()
         {
@@ -722,8 +725,6 @@ namespace FaeMaze.Props
             // Calculate distance to target
             float distance = Vector3.Distance(transform.position, targetVisitor.transform.position);
 
-            UpdateAnimatorDirection(targetVisitor.transform.position - transform.position);
-
             // Check if close enough to capture
             if (distance <= captureDistance)
             {
@@ -731,9 +732,29 @@ namespace FaeMaze.Props
                 return;
             }
 
-            // Move directly toward visitor
-            Vector3 direction = (targetVisitor.transform.position - transform.position).normalized;
-            Vector3 newPosition = transform.position + direction * chaseSpeed * Time.deltaTime;
+            // If we don't have a path or reached the end, generate a new path
+            if (wanderPath == null || wanderPath.Count == 0 || currentPathIndex >= wanderPath.Count)
+            {
+                GeneratePathToVisitor();
+                if (wanderPath == null || wanderPath.Count == 0)
+                {
+                    // Can't find path, return to wandering
+                    ReturnToWandering();
+                    return;
+                }
+            }
+
+            // Follow the path to the visitor
+            Vector2Int targetGridPos = wanderPath[currentPathIndex];
+            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
+
+            UpdateAnimatorDirection(targetWorldPos - transform.position);
+
+            Vector3 newPosition = Vector3.MoveTowards(
+                transform.position,
+                targetWorldPos,
+                chaseSpeed * Time.deltaTime
+            );
 
             if (rb != null)
             {
@@ -743,6 +764,55 @@ namespace FaeMaze.Props
             else
             {
                 transform.position = newPosition;
+            }
+
+            // Check if waypoint reached
+            float waypointDistance = Vector3.Distance(transform.position, targetWorldPos);
+            if (waypointDistance < waypointReachedDistance)
+            {
+                currentPathIndex++;
+            }
+        }
+
+        /// <summary>
+        /// Generates a path to the current target visitor's position.
+        /// </summary>
+        private void GeneratePathToVisitor()
+        {
+            if (mazeGridBehaviour == null || gameController == null || targetVisitor == null)
+                return;
+
+            // Get current grid position
+            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            {
+                return;
+            }
+
+            Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+            // Get visitor's grid position
+            if (!mazeGridBehaviour.WorldToGrid(targetVisitor.transform.position, out int visitorX, out int visitorY))
+            {
+                return;
+            }
+
+            Vector2Int visitorPos = new Vector2Int(visitorX, visitorY);
+
+            // Find path to visitor
+            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
+            if (gameController.TryFindPath(currentPos, visitorPos, pathNodes, 1.0f) && pathNodes.Count > 0)
+            {
+                wanderPath = new List<Vector2Int>();
+                foreach (var node in pathNodes)
+                {
+                    wanderPath.Add(new Vector2Int(node.x, node.y));
+                }
+
+                currentPathIndex = 0;
+            }
+            else
+            {
+                wanderPath = null;
             }
         }
 
