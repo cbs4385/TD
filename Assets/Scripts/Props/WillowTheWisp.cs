@@ -165,6 +165,12 @@ namespace FaeMaze.Props
 
         private void Start()
         {
+            // Log rotation at Start to see if it's being preserved
+            if (modelInstance != null)
+            {
+                Debug.Log($"[WillowWisp] Start - Model rotation: {modelInstance.transform.localEulerAngles}, Root rotation: {transform.localEulerAngles}");
+            }
+
             // Find references
             AcquireDependencies();
 
