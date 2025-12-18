@@ -901,7 +901,15 @@ namespace FaeMaze.Props
                 return;
             }
 
-            modelInstance = Instantiate(wispModelPrefab, transform);
+            // Instantiate using non-generic method to handle FBX references properly
+            var instantiatedObject = (GameObject)Instantiate((UnityEngine.Object)wispModelPrefab, transform);
+            if (instantiatedObject == null)
+            {
+                Debug.LogWarning("Failed to instantiate wisp model prefab. Falling back to sprite rendering.");
+                return;
+            }
+
+            modelInstance = instantiatedObject;
             modelInstance.transform.localPosition = Vector3.zero;
             modelInstance.transform.localRotation = Quaternion.identity;
             modelInstance.transform.localScale = Vector3.one;
