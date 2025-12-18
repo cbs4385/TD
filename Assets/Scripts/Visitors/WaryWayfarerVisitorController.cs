@@ -64,17 +64,26 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            if (isFascinated)
+            // Timed states take priority (in order of precedence)
+            if (isMesmerized)
             {
-                state = VisitorState.Fascinated;
+                state = VisitorState.Mesmerized;
             }
             else if (isFrightened)
             {
                 state = VisitorState.Frightened;
             }
-            else if (state == VisitorState.Lost)
+            else if (isLost)
             {
-                return;
+                state = VisitorState.Lost;
+            }
+            else if (isFascinated)
+            {
+                state = VisitorState.Fascinated;
+            }
+            else if (isLured)
+            {
+                state = VisitorState.Lured;
             }
             else
             {
