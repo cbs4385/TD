@@ -655,12 +655,16 @@ namespace FaeMaze.HeartPowers
                     // MurmuringPaths lures visitors toward the Heart
                     if (isMurmuringPaths && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking)
                     {
-                        visitor.SetLured(true);
+                        visitor.SetLured(true);  // SetLured internally calls RecalculatePath()
                         Debug.Log($"[HeartPowerManager] Set visitor to Lured state for Murmuring Paths");
+                        recalculatedCount++;
                     }
-
-                    visitor.RecalculatePath();
-                    recalculatedCount++;
+                    else if (!isMurmuringPaths)
+                    {
+                        // For other powers, just recalculate paths due to attraction changes
+                        visitor.RecalculatePath();
+                        recalculatedCount++;
+                    }
                 }
             }
 

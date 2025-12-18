@@ -1622,11 +1622,25 @@ namespace FaeMaze.Visitors
                         {
                             if (mazeGridBehaviour.WorldToGrid(heart.transform.position, out int hx, out int hy))
                             {
+                                Debug.Log($"[Visitor] Lured state: pathing to Heart at ({hx}, {hy})");
                                 return new Vector2Int(hx, hy);
                             }
+                            else
+                            {
+                                Debug.LogWarning($"[Visitor] Lured state: Failed to convert Heart world position to grid");
+                            }
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[Visitor] Lured state: Heart or gridBehaviour is null (heart={heart != null}, grid={mazeGridBehaviour != null})");
                         }
                     }
+                    else
+                    {
+                        Debug.LogWarning($"[Visitor] Lured state: gameController is null");
+                    }
                     // Fallback to original destination if Heart not found
+                    Debug.LogWarning($"[Visitor] Lured state: Falling back to original destination {originalDestination}");
                     return originalDestination;
 
                 case VisitorState.Mesmerized:
@@ -1822,12 +1836,15 @@ namespace FaeMaze.Visitors
         {
             if (isLured != value)
             {
+                Debug.Log($"[Visitor] SetLured({value}): changing from {isLured} to {value}, current state: {state}");
                 isLured = value;
                 RefreshStateFromFlags();
+                Debug.Log($"[Visitor] After RefreshStateFromFlags(), new state: {state}");
 
                 // Recalculate path when lured state changes
                 if (value)
                 {
+                    Debug.Log($"[Visitor] Calling RecalculatePath() for Lured visitor");
                     RecalculatePath();
                 }
             }
