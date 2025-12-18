@@ -901,6 +901,8 @@ namespace FaeMaze.Props
                 return;
             }
 
+            SpriteRenderer sprite = GetComponent<SpriteRenderer>();
+
             // First check if there's already an embedded model as a child (from prefab)
             if (transform.childCount > 0)
             {
@@ -911,7 +913,6 @@ namespace FaeMaze.Props
                     modelInstance = childAnimator.gameObject;
                     animator = childAnimator;
 
-                    var sprite = GetComponent<SpriteRenderer>();
                     if (sprite != null)
                     {
                         sprite.enabled = false;
@@ -945,7 +946,6 @@ namespace FaeMaze.Props
                 animator = modelAnimator;
             }
 
-            var sprite = GetComponent<SpriteRenderer>();
             if (sprite != null)
             {
                 sprite.enabled = false;
