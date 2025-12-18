@@ -539,7 +539,8 @@ namespace FaeMaze.Visitors
                 || visitorState == VisitorState.Confused
                 || visitorState == VisitorState.Frightened
                 || visitorState == VisitorState.Mesmerized
-                || visitorState == VisitorState.Lost;
+                || visitorState == VisitorState.Lost
+                || visitorState == VisitorState.Lured;
         }
 
         protected virtual void RefreshStateFromFlags()
