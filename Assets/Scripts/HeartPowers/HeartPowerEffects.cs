@@ -342,31 +342,44 @@ namespace FaeMaze.HeartPowers
         {
             List<Vector2Int> segment = new List<Vector2Int>();
 
+            Debug.LogWarning($"[MurmuringPaths] === GeneratePathSegment called for tile ({startTile.x}, {startTile.y}) ===");
+
             // Get the heart position
-            if (GameController.Instance == null || GameController.Instance.Heart == null)
+            if (GameController.Instance == null)
             {
-                Debug.LogWarning($"[MurmuringPaths] Cannot create path to heart - GameController or Heart is null");
-                segment.Add(startTile); // Fallback: just add the start tile
+                Debug.LogError($"[MurmuringPaths] GameController.Instance is NULL!");
+                segment.Add(startTile);
+                return segment;
+            }
+
+            if (GameController.Instance.Heart == null)
+            {
+                Debug.LogError($"[MurmuringPaths] GameController.Instance.Heart is NULL!");
+                segment.Add(startTile);
                 return segment;
             }
 
             Vector2Int heartPos = GameController.Instance.Heart.GridPosition;
-            Debug.Log($"[MurmuringPaths] Creating path from ({startTile.x}, {startTile.y}) to Heart at ({heartPos.x}, {heartPos.y})");
+            Debug.LogWarning($"[MurmuringPaths] Creating path from ({startTile.x}, {startTile.y}) to Heart at ({heartPos.x}, {heartPos.y})");
 
             // Use A* pathfinding to create path from start tile to heart
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (GameController.Instance.TryFindPath(startTile, heartPos, pathNodes))
+            bool pathFound = GameController.Instance.TryFindPath(startTile, heartPos, pathNodes);
+
+            Debug.LogWarning($"[MurmuringPaths] TryFindPath returned: {pathFound}, pathNodes count: {pathNodes.Count}");
+
+            if (pathFound && pathNodes.Count > 0)
             {
                 // Convert MazeNodes to Vector2Int positions
                 foreach (var node in pathNodes)
                 {
                     segment.Add(new Vector2Int(node.x, node.y));
                 }
-                Debug.Log($"[MurmuringPaths] Successfully created path with {segment.Count} tiles to the heart");
+                Debug.LogWarning($"[MurmuringPaths] ✓ Successfully created path with {segment.Count} tiles to the heart");
             }
             else
             {
-                Debug.LogWarning($"[MurmuringPaths] Failed to find path from ({startTile.x}, {startTile.y}) to Heart - using start tile only");
+                Debug.LogError($"[MurmuringPaths] ✗ Failed to find path from ({startTile.x}, {startTile.y}) to Heart - using start tile only");
                 segment.Add(startTile); // Fallback: just add the start tile
             }
 
