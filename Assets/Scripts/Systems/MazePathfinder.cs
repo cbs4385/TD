@@ -47,6 +47,10 @@ namespace FaeMaze.Systems
         private static readonly int[] dx = { 0, 1, 0, -1 };
         private static readonly int[] dy = { -1, 0, 1, 0 };
 
+        // Heuristic scaling factor to account for attractive tiles
+        // Using MIN_MOVE_COST (0.1) makes heuristic admissible when attraction is present
+        private const float HEURISTIC_SCALE = 0.1f;
+
         #endregion
 
         #region Constructor
@@ -269,8 +273,11 @@ namespace FaeMaze.Systems
 
         private float CalculateHeuristic(int x1, int y1, int x2, int y2)
         {
-            // Manhattan distance
-            return Mathf.Abs(x1 - x2) + Mathf.Abs(y1 - y2);
+            // Manhattan distance scaled to account for potential attractive tiles
+            // Without scaling, heuristic overestimates cost when attractions exist,
+            // preventing A* from exploring cheaper but longer paths with attractions
+            float manhattanDistance = Mathf.Abs(x1 - x2) + Mathf.Abs(y1 - y2);
+            return manhattanDistance * HEURISTIC_SCALE;
         }
 
         private int GetNodeKey(int x, int y)
