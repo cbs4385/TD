@@ -24,6 +24,7 @@ namespace FaeMaze.Visitors
             Frightened,
             Mesmerized,    // New: entranced/hypnotized state
             Lost,          // New: wandering aimlessly state
+            Lured,         // New: drawn toward the Heart by Murmuring Paths
             Consumed,
             Escaping
         }
@@ -1574,6 +1575,10 @@ namespace FaeMaze.Visitors
                     // Lost visitors mostly ignore attractions while wandering
                     return 0.3f;
 
+                case VisitorState.Lured:
+                    // Lured visitors are HIGHLY sensitive to attractions (following Murmuring Paths)
+                    return 1.0f;
+
                 case VisitorState.Walking:
                 case VisitorState.Idle:
                 case VisitorState.Escaping:
@@ -1602,6 +1607,22 @@ namespace FaeMaze.Visitors
                 case VisitorState.Fascinated:
                     // Fascinated visitors path to the lantern
                     return fascinationLanternPosition;
+
+                case VisitorState.Lured:
+                    // Lured visitors path to the Heart (drawn by Murmuring Paths)
+                    if (gameController != null)
+                    {
+                        var heart = gameController.HeartOfTheMaze;
+                        if (heart != null && mazeGridBehaviour != null)
+                        {
+                            if (mazeGridBehaviour.WorldToGrid(heart.transform.position, out int hx, out int hy))
+                            {
+                                return new Vector2Int(hx, hy);
+                            }
+                        }
+                    }
+                    // Fallback to original destination if Heart not found
+                    return originalDestination;
 
                 case VisitorState.Mesmerized:
                     // Mesmerized visitors don't move (duration-based)

@@ -631,12 +631,21 @@ namespace FaeMaze.HeartPowers
             }
 
             int recalculatedCount = 0;
+            bool isMurmuringPaths = (powerType == HeartPowerType.MurmuringPaths);
+
             foreach (var visitor in activeVisitors)
             {
                 if (visitor != null && visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Consumed
                     && visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Escaping
                     && visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Fascinated)
                 {
+                    // MurmuringPaths lures visitors toward the Heart
+                    if (isMurmuringPaths && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking)
+                    {
+                        visitor.SetState(FaeMaze.Visitors.VisitorControllerBase.VisitorState.Lured);
+                        Debug.Log($"[HeartPowerManager] Set visitor to Lured state for Murmuring Paths");
+                    }
+
                     visitor.RecalculatePath();
                     recalculatedCount++;
                 }
