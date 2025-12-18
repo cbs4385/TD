@@ -216,6 +216,7 @@ namespace FaeMaze.HeartPowers
 
             // Reset attraction to 0, then apply total modifier
             // (assumes no other systems are directly modifying attraction outside of this system)
+            float oldAttraction = node.attraction;
             node.attraction = 0f;
 
             if (modifiers.ContainsKey(tile))
@@ -223,6 +224,12 @@ namespace FaeMaze.HeartPowers
                 float total = GetTotalModifier(tile);
                 // Convert costDelta to attraction: negative cost = positive attraction
                 node.attraction = -total;
+
+                // Debug: Log significant attraction changes
+                if (Mathf.Abs(total) > 10.0f)
+                {
+                    Debug.Log($"[PathCostModifier] Tile ({tile.x}, {tile.y}): oldAttraction={oldAttraction:F2}, costDelta={total:F2}, newAttraction={node.attraction:F2}");
+                }
             }
         }
 

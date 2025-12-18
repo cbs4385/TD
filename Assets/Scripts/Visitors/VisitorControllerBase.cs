@@ -1674,18 +1674,33 @@ namespace FaeMaze.Visitors
 
             // Debug: Check if path goes through any tiles with attraction
             int attractiveTileCount = 0;
+            float maxAttraction = 0f;
+            Vector2Int maxAttractionTile = Vector2Int.zero;
+
             foreach (var tile in newPath)
             {
                 var node = mazeGridBehaviour.Grid.GetNode(tile.x, tile.y);
                 if (node != null && Mathf.Abs(node.attraction) > 0.01f)
                 {
                     attractiveTileCount++;
-                    Debug.Log($"[Visitor] Path contains tile ({tile.x}, {tile.y}) with attraction {node.attraction:F2}");
+                    float moveCost = mazeGridBehaviour.Grid.GetMoveCost(tile.x, tile.y, attractionMultiplier);
+                    Debug.Log($"[Visitor] Path tile ({tile.x}, {tile.y}): attraction={node.attraction:F2}, baseCost={node.baseCost:F2}, finalCost={moveCost:F2}");
+
+                    if (Mathf.Abs(node.attraction) > Mathf.Abs(maxAttraction))
+                    {
+                        maxAttraction = node.attraction;
+                        maxAttractionTile = tile;
+                    }
                 }
             }
+
             if (attractiveTileCount > 0)
             {
-                Debug.LogWarning($"[Visitor] Recalculated path uses {attractiveTileCount} tiles with attraction (state: {state}, multiplier: {attractionMultiplier:F1}x)");
+                Debug.LogWarning($"[Visitor] Path uses {attractiveTileCount} attractive tiles (max: {maxAttraction:F2} at {maxAttractionTile}, state: {state}, multiplier: {attractionMultiplier:F1}x)");
+            }
+            else
+            {
+                Debug.LogWarning($"[Visitor] Path uses NO attractive tiles - pathfinding may not be considering Murmuring Paths!");
             }
 
             path = newPath;
