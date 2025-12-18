@@ -344,27 +344,27 @@ namespace FaeMaze.HeartPowers
 
             Debug.LogWarning($"[MurmuringPaths] === GeneratePathSegment called for tile ({startTile.x}, {startTile.y}) ===");
 
-            // Get the heart position
-            if (GameController.Instance == null)
+            // Get the heart position from manager's GameController reference
+            if (manager.GameController == null)
             {
-                Debug.LogError($"[MurmuringPaths] GameController.Instance is NULL!");
+                Debug.LogError($"[MurmuringPaths] manager.GameController is NULL!");
                 segment.Add(startTile);
                 return segment;
             }
 
-            if (GameController.Instance.Heart == null)
+            if (manager.GameController.Heart == null)
             {
-                Debug.LogError($"[MurmuringPaths] GameController.Instance.Heart is NULL!");
+                Debug.LogError($"[MurmuringPaths] manager.GameController.Heart is NULL!");
                 segment.Add(startTile);
                 return segment;
             }
 
-            Vector2Int heartPos = GameController.Instance.Heart.GridPosition;
+            Vector2Int heartPos = manager.GameController.Heart.GridPosition;
             Debug.LogWarning($"[MurmuringPaths] Creating path from ({startTile.x}, {startTile.y}) to Heart at ({heartPos.x}, {heartPos.y})");
 
             // Use A* pathfinding to create path from start tile to heart
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            bool pathFound = GameController.Instance.TryFindPath(startTile, heartPos, pathNodes);
+            bool pathFound = manager.GameController.TryFindPath(startTile, heartPos, pathNodes);
 
             Debug.LogWarning($"[MurmuringPaths] TryFindPath returned: {pathFound}, pathNodes count: {pathNodes.Count}");
 
