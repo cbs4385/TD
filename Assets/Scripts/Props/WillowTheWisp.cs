@@ -103,6 +103,31 @@ namespace FaeMaze.Props
         [Tooltip("Animator controller to apply to the spawned model")]
         private RuntimeAnimatorController wispController;
 
+        [Header("Glow Settings")]
+        [SerializeField]
+        [Tooltip("Enable pulsing glow light effect")]
+        private bool enableGlow = true;
+
+        [SerializeField]
+        [Tooltip("Color of the glow (pastel blue)")]
+        private Color glowColor = new Color(0.7f, 0.85f, 1f, 1f); // Pastel blue
+
+        [SerializeField]
+        [Tooltip("Radius of the glow effect")]
+        private float glowRadius = 3f;
+
+        [SerializeField]
+        [Tooltip("Glow pulse frequency in Hz")]
+        private float glowFrequency = 1.5f;
+
+        [SerializeField]
+        [Tooltip("Minimum glow intensity (50%)")]
+        private float glowMinIntensity = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Maximum glow intensity (100%)")]
+        private float glowMaxIntensity = 1.0f;
+
         #endregion
 
         #region Private Fields
@@ -137,6 +162,7 @@ namespace FaeMaze.Props
 
         private const string DirectionParameter = "Direction";
         private GameObject modelInstance;
+        private Light glowLight;
 
         #endregion
 
@@ -159,6 +185,7 @@ namespace FaeMaze.Props
             SetupModel();
             SetupSpriteRenderer();
             SetupColliders();
+            SetupGlowLight();
             animator = GetComponentInChildren<Animator>(true);
             ApplyAnimatorController();
         }
@@ -211,6 +238,11 @@ namespace FaeMaze.Props
             if (enablePulse && spriteRenderer != null)
             {
                 UpdatePulse();
+            }
+
+            if (enableGlow && glowLight != null)
+            {
+                UpdateGlowPulse();
             }
 
             // Periodically recalculate influence area
@@ -472,6 +504,45 @@ namespace FaeMaze.Props
         {
             float pulse = Mathf.Sin(Time.time * pulseSpeed) * pulseMagnitude;
             transform.localScale = baseScale * (1f + pulse);
+        }
+
+        private void SetupGlowLight()
+        {
+            if (!enableGlow)
+                return;
+
+            // Check if we already have a Light component
+            glowLight = GetComponent<Light>();
+            if (glowLight == null)
+            {
+                glowLight = gameObject.AddComponent<Light>();
+            }
+
+            // Configure the light
+            glowLight.type = LightType.Point;
+            glowLight.color = glowColor;
+            glowLight.range = glowRadius;
+            glowLight.intensity = glowMaxIntensity;
+
+            // Optional: adjust these for better visual quality
+            glowLight.renderMode = LightRenderMode.ForcePixel;
+            glowLight.shadows = LightShadows.None;
+        }
+
+        private void UpdateGlowPulse()
+        {
+            // Calculate pulsing intensity using sine wave
+            // frequency in Hz = cycles per second
+            // Time.time * frequency * 2π gives us the angle for sin wave
+            float angle = Time.time * glowFrequency * 2f * Mathf.PI;
+
+            // Map sin wave from [-1, 1] to [0, 1]
+            float normalizedPulse = (Mathf.Sin(angle) + 1f) / 2f;
+
+            // Map to intensity range [min, max]
+            float intensity = Mathf.Lerp(glowMinIntensity, glowMaxIntensity, normalizedPulse);
+
+            glowLight.intensity = intensity;
         }
 
         #endregion
