@@ -896,7 +896,32 @@ namespace FaeMaze.Props
 
         private void SetupModel()
         {
-            if (wispModelPrefab == null || modelInstance != null)
+            if (modelInstance != null)
+            {
+                return;
+            }
+
+            // First check if there's already an embedded model as a child (from prefab)
+            if (transform.childCount > 0)
+            {
+                // Look for a child with an Animator component
+                var childAnimator = GetComponentInChildren<Animator>(true);
+                if (childAnimator != null && childAnimator.gameObject != gameObject)
+                {
+                    modelInstance = childAnimator.gameObject;
+                    animator = childAnimator;
+
+                    var sprite = GetComponent<SpriteRenderer>();
+                    if (sprite != null)
+                    {
+                        sprite.enabled = false;
+                    }
+                    return;
+                }
+            }
+
+            // No embedded model found, try to instantiate from wispModelPrefab
+            if (wispModelPrefab == null)
             {
                 return;
             }
