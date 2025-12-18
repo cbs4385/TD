@@ -68,6 +68,16 @@ namespace FaeMaze.Systems
                     Debug.Log($"[RuntimeSceneSetup] Auto-created HeartPowerManager for {sceneName}");
                 }
 
+                // Auto-create HeartOfTheMaze if missing
+                FaeMaze.Maze.HeartOfTheMaze heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+                if (heart == null)
+                {
+                    GameObject heartObj = new GameObject("HeartOfTheMaze");
+                    heartObj.transform.SetParent(gameRoot.transform);
+                    heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
+                    Debug.Log($"[RuntimeSceneSetup] Auto-created HeartOfTheMaze for {sceneName}");
+                }
+
                 // Auto-start first wave in ProceduralMazeScene
                 if (sceneName == "ProceduralMazeScene")
                 {

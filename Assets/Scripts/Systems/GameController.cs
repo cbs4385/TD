@@ -253,6 +253,26 @@ namespace FaeMaze.Systems
         private void ValidateReferences()
         {
             // UIController is optional at startup
+
+            // Auto-find HeartOfTheMaze if reference is broken/null
+            if (heart == null)
+            {
+                heart = FindFirstObjectByType<HeartOfTheMaze>();
+                if (heart != null)
+                {
+                    Debug.Log("[GameController] Auto-found HeartOfTheMaze reference");
+                }
+            }
+
+            // Auto-find MazeEntrance if reference is broken/null
+            if (entrance == null)
+            {
+                entrance = FindFirstObjectByType<MazeEntrance>();
+                if (entrance != null)
+                {
+                    Debug.Log("[GameController] Auto-found MazeEntrance reference");
+                }
+            }
         }
 
         /// <summary>
