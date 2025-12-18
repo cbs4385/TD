@@ -126,7 +126,7 @@ MonoBehaviour:
   pulseSpeed: 3
   pulseMagnitude: 0.15
   useProceduralSprite: 0
-  wispModelPrefab: {fileID: 100100000, guid: d7ca16e1cdf74d018119fbccddbb4273, type: 3}
+  wispModelPrefab: {fileID: 100000, guid: d7ca16e1cdf74d018119fbccddbb4273, type: 3}
   wispController: {fileID: 9100000, guid: 85468a3d9dd2b2c41a578d258b624f4e, type: 2}
 --- !u!95 &-4105535882290159223
 Animator:
