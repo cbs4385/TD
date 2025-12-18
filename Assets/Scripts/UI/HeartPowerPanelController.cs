@@ -101,7 +101,6 @@ namespace FaeMaze.UI
         // Targeting mode state
         private bool isTargetingMode = false;
         private HeartPowerType? pendingPowerType = null;
-        private Texture2D originalCursorTexture = null;
 
         /// <summary>
         /// Public property to check if Heart Power targeting is currently active.
