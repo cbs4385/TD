@@ -592,7 +592,7 @@ namespace FaeMaze.HeartPowers
             pathCostModifier?.ClearAll();
 
             // Clear all Lured states when all effects are cleaned up
-            var activeVisitors = GetActiveVisitors();
+            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
             if (activeVisitors != null)
             {
                 foreach (var visitor in activeVisitors)

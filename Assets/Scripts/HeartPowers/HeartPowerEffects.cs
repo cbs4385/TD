@@ -344,7 +344,7 @@ namespace FaeMaze.HeartPowers
             }
 
             // Clear Lured state from all visitors
-            var activeVisitors = manager.GetActiveVisitors();
+            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
             if (activeVisitors != null)
             {
                 foreach (var visitor in activeVisitors)
