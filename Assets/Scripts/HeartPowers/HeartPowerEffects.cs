@@ -344,25 +344,42 @@ namespace FaeMaze.HeartPowers
 
             Debug.LogWarning($"[MurmuringPaths] === GeneratePathSegment called for tile ({startTile.x}, {startTile.y}) ===");
 
-            // Get the heart position from manager's GameController reference
-            if (manager.GameController == null)
+            // Get the heart - try GameController first, then find it dynamically
+            FaeMaze.Maze.HeartOfTheMaze heart = null;
+
+            if (manager.GameController != null && manager.GameController.Heart != null)
             {
-                Debug.LogError($"[MurmuringPaths] manager.GameController is NULL!");
+                heart = manager.GameController.Heart;
+                Debug.LogWarning($"[MurmuringPaths] Found heart from GameController");
+            }
+            else
+            {
+                // Fallback: find heart dynamically (for procedurally generated mazes)
+                heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+                if (heart != null)
+                {
+                    Debug.LogWarning($"[MurmuringPaths] Found heart dynamically using FindFirstObjectByType");
+                }
+            }
+
+            if (heart == null)
+            {
+                Debug.LogError($"[MurmuringPaths] Could not find HeartOfMaze - tried GameController and FindFirstObjectByType");
                 segment.Add(startTile);
                 return segment;
             }
 
-            if (manager.GameController.Heart == null)
-            {
-                Debug.LogError($"[MurmuringPaths] manager.GameController.Heart is NULL!");
-                segment.Add(startTile);
-                return segment;
-            }
-
-            Vector2Int heartPos = manager.GameController.Heart.GridPosition;
+            Vector2Int heartPos = heart.GridPosition;
             Debug.LogWarning($"[MurmuringPaths] Creating path from ({startTile.x}, {startTile.y}) to Heart at ({heartPos.x}, {heartPos.y})");
 
             // Use A* pathfinding to create path from start tile to heart
+            if (manager.GameController == null)
+            {
+                Debug.LogError($"[MurmuringPaths] manager.GameController is NULL - cannot use pathfinding");
+                segment.Add(startTile);
+                return segment;
+            }
+
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
             bool pathFound = manager.GameController.TryFindPath(startTile, heartPos, pathNodes);
 
