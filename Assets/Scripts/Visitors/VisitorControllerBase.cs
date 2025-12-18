@@ -189,6 +189,7 @@ namespace FaeMaze.Visitors
         protected bool isMesmerized;
         protected bool isLost;
         protected bool isFrightened;
+        protected bool isLured;
 
         // Red Cap detection tracking
         protected float redCapDetectionTimer;
@@ -565,6 +566,10 @@ namespace FaeMaze.Visitors
             else if (isFascinated)
             {
                 state = VisitorState.Fascinated;
+            }
+            else if (isLured)
+            {
+                state = VisitorState.Lured;
             }
             else if (state == VisitorState.Confused)
             {
@@ -1612,7 +1617,7 @@ namespace FaeMaze.Visitors
                     // Lured visitors path to the Heart (drawn by Murmuring Paths)
                     if (gameController != null)
                     {
-                        var heart = gameController.HeartOfTheMaze;
+                        var heart = gameController.Heart;
                         if (heart != null && mazeGridBehaviour != null)
                         {
                             if (mazeGridBehaviour.WorldToGrid(heart.transform.position, out int hx, out int hy))
@@ -1807,6 +1812,25 @@ namespace FaeMaze.Visitors
             isFrightened = true;
             SetTimedState(VisitorState.Frightened, duration);
             RefreshStateFromFlags();
+        }
+
+        /// <summary>
+        /// Sets the visitor to Lured state, drawn toward the Heart by Murmuring Paths.
+        /// This state lasts as long as the power is active (managed externally).
+        /// </summary>
+        public virtual void SetLured(bool value)
+        {
+            if (isLured != value)
+            {
+                isLured = value;
+                RefreshStateFromFlags();
+
+                // Recalculate path when lured state changes
+                if (value)
+                {
+                    RecalculatePath();
+                }
+            }
         }
 
         /// <summary>

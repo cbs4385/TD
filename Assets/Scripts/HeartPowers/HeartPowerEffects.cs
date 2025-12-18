@@ -343,6 +343,20 @@ namespace FaeMaze.HeartPowers
                 manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.MurmuringPaths);
             }
 
+            // Clear Lured state from all visitors
+            var activeVisitors = manager.GetActiveVisitors();
+            if (activeVisitors != null)
+            {
+                foreach (var visitor in activeVisitors)
+                {
+                    if (visitor != null && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Lured)
+                    {
+                        visitor.SetLured(false);
+                        Debug.Log($"[MurmuringPaths] Cleared Lured state from visitor");
+                    }
+                }
+            }
+
             pathSegment.Clear();
             Debug.Log($"[MurmuringPaths] Effect ended, removed warm orange glow from path segment");
         }

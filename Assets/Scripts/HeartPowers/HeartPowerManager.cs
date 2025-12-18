@@ -590,6 +590,19 @@ namespace FaeMaze.HeartPowers
 
             activePowers.Clear();
             pathCostModifier?.ClearAll();
+
+            // Clear all Lured states when all effects are cleaned up
+            var activeVisitors = GetActiveVisitors();
+            if (activeVisitors != null)
+            {
+                foreach (var visitor in activeVisitors)
+                {
+                    if (visitor != null && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Lured)
+                    {
+                        visitor.SetLured(false);
+                    }
+                }
+            }
         }
 
         #endregion
@@ -642,7 +655,7 @@ namespace FaeMaze.HeartPowers
                     // MurmuringPaths lures visitors toward the Heart
                     if (isMurmuringPaths && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking)
                     {
-                        visitor.SetState(FaeMaze.Visitors.VisitorControllerBase.VisitorState.Lured);
+                        visitor.SetLured(true);
                         Debug.Log($"[HeartPowerManager] Set visitor to Lured state for Murmuring Paths");
                     }
 
