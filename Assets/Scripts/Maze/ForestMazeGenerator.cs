@@ -208,13 +208,11 @@ namespace ForestMaze
             {
                 var chosenDeadEnd = deadEnds[random.Next(deadEnds.Count)];
                 grid[chosenDeadEnd.y, chosenDeadEnd.x] = 'H';
-                UnityEngine.Debug.Log($"[ForestMazeGenerator] Placed heart at dead-end: ({chosenDeadEnd.x}, {chosenDeadEnd.y}) - Found {deadEnds.Count} total dead-ends");
             }
             else
             {
                 // No dead-ends found - this shouldn't happen in a properly generated maze
                 // Log error instead of falling back to center
-                UnityEngine.Debug.LogError($"[ForestMazeGenerator] No dead-ends found in {width}x{height} maze! Cannot place heart.");
             }
         }
 

@@ -18,8 +18,6 @@ namespace FaeMaze.Editor
 
             if (manager == null)
             {
-                Debug.LogWarning("[HeartPowerManagerAutoWire] No HeartPowerManager found in the current scene.");
-                Debug.Log("[HeartPowerManagerAutoWire] Creating temporary HeartPowerManager to wire definitions...");
 
                 // Create a temporary HeartPowerManager GameObject
                 GameObject managerObj = new GameObject("HeartPowerManager");
@@ -31,7 +29,6 @@ namespace FaeMaze.Editor
             string[] guids = AssetDatabase.FindAssets("t:HeartPowerDefinition");
             if (guids.Length == 0)
             {
-                Debug.LogError("[HeartPowerManagerAutoWire] No HeartPowerDefinition assets found! Run 'FaeMaze > Heart Powers > Generate Power Definitions' first.");
                 return;
             }
 
@@ -40,7 +37,6 @@ namespace FaeMaze.Editor
             {
                 string path = AssetDatabase.GUIDToAssetPath(guids[i]);
                 definitions[i] = AssetDatabase.LoadAssetAtPath<HeartPowerDefinition>(path);
-                Debug.Log($"[HeartPowerManagerAutoWire] Loaded: {definitions[i].displayName} ({definitions[i].powerType})");
             }
 
             // Use SerializedObject to modify the manager
@@ -66,21 +62,16 @@ namespace FaeMaze.Editor
                     UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(manager.gameObject.scene);
                 }
 
-                Debug.Log($"[HeartPowerManagerAutoWire] ✓ Successfully wired {definitions.Length} power definitions to HeartPowerManager");
 
                 if (createdTemporary)
                 {
-                    Debug.Log($"[HeartPowerManagerAutoWire] Temporary HeartPowerManager created in scene. Save the scene to keep it!");
-                    Debug.Log($"[HeartPowerManagerAutoWire] This manager will be auto-created at runtime if not present.");
                 }
                 else
                 {
-                    Debug.Log($"[HeartPowerManagerAutoWire] Don't forget to save the scene!");
                 }
             }
             else
             {
-                Debug.LogError("[HeartPowerManagerAutoWire] Could not find 'powerDefinitions' field on HeartPowerManager!");
             }
         }
     }

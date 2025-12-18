@@ -28,11 +28,9 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            Debug.Log($"[HeartbeatOfLonging] ═══ EFFECT START ═══");
 
             // Mark all FaeLanterns as Heart-linked for duration
             affectedLanterns.AddRange(FaeLantern.All);
-            Debug.Log($"[HeartbeatOfLonging] Found {affectedLanterns.Count} FaeLanterns to amplify");
 
             // Apply path cost reduction to all lantern influence tiles
             float tierRadius = GetTierBasedRadius();
@@ -64,11 +62,8 @@ namespace FaeMaze.HeartPowers
                         manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.HeartbeatOfLonging, intensity, definition.duration);
                     }
                 }
-                Debug.Log($"[HeartbeatOfLonging] Lantern at {lantern.GridPosition} - Influenced {influenceTiles.Count} tiles with deep red glow (tier {definition.tier}, radius: {tierRadius:F1})");
             }
 
-            Debug.Log($"[HeartbeatOfLonging] ✓ Activated on {affectedLanterns.Count} lanterns affecting {lanternInfluenceTiles.Count} tiles total");
-            Debug.Log($"[HeartbeatOfLonging] Attraction bonus: {-Mathf.Abs(definition.param1 != 0 ? definition.param1 : 2.0f)}, Duration: {definition.duration}s");
         }
 
         public override void Update(float deltaTime)
@@ -102,7 +97,6 @@ namespace FaeMaze.HeartPowers
             affectedLanterns.Clear();
             lanternInfluenceTiles.Clear();
 
-            Debug.Log($"[HeartbeatOfLonging] Effect ended, removed deep red glow from tiles");
         }
 
         /// <summary>
@@ -123,7 +117,6 @@ namespace FaeMaze.HeartPowers
             };
 
             float radius = maxDimension * coveragePercent;
-            Debug.Log($"[HeartbeatOfLonging] Tier {definition.tier}: radius={radius:F1} (map: {grid.Width}x{grid.Height}, coverage: {coveragePercent * 100}%)");
             return radius;
         }
 
@@ -192,7 +185,6 @@ namespace FaeMaze.HeartPowers
                 {
                     // Apply fascination if the visitor has a public method for it
                     // (Simplified - would need actual visitor state API)
-                    Debug.Log($"[HeartbeatOfLonging] Echoing Thrum triggered for visitor at {visitorGridPos}");
                 }
             }
         }
@@ -226,7 +218,6 @@ namespace FaeMaze.HeartPowers
                 if (lanternInfluenceTiles.Contains(vPos))
                 {
                     // Apply temporary strong Heart bias (would need visitor API to modify pathfinding)
-                    Debug.Log($"[HeartbeatOfLonging] Devouring Chorus triggered for visitor at {vPos}");
                 }
             }
         }
@@ -283,13 +274,11 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            Debug.Log($"[MurmuringPaths] ═══ EFFECT START ═══");
 
             // Convert target position to grid, then create a path segment
             if (manager.MazeGrid.WorldToGrid(targetPosition, out int x, out int y))
             {
                 Vector2Int startTile = new Vector2Int(x, y);
-                Debug.Log($"[MurmuringPaths] Target position {targetPosition} → Grid tile ({x}, {y})");
 
                 pathSegment = GeneratePathSegment(startTile);
 
@@ -299,10 +288,8 @@ namespace FaeMaze.HeartPowers
                     ? Mathf.Abs(definition.param2 != 0 ? definition.param2 : 5.0f)  // Positive = expensive
                     : -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 50.0f); // Negative = attractive (MUCH stronger to force path following)
 
-                Debug.Log($"[MurmuringPaths] Mode: {(sealMode ? "SEAL (expensive)" : "LURE (attractive)")}, Cost modifier: {costModifier}");
 
                 // Apply cost modifier to segment tiles
-                Debug.LogWarning($"[MurmuringPaths] Applying cost modifier {costModifier} to {pathSegment.Count} tiles");
                 foreach (var tile in pathSegment)
                 {
                     manager.PathModifier.AddModifier(tile, costModifier, definition.duration, instanceSourceId);
@@ -311,7 +298,6 @@ namespace FaeMaze.HeartPowers
                     var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
                     if (node != null)
                     {
-                        Debug.Log($"[MurmuringPaths] Tile ({tile.x}, {tile.y}): attraction = {node.attraction:F2}, baseCost = {node.baseCost:F2}");
                     }
 
                     // Add ROYGBIV tile visual (warm orange for Power 2)
@@ -324,12 +310,9 @@ namespace FaeMaze.HeartPowers
                     }
                 }
 
-                Debug.LogWarning($"[MurmuringPaths] ✓ Created {(sealMode ? "sealed" : "luring")} path segment with {pathSegment.Count} tiles with warm orange glow");
-                Debug.LogWarning($"[MurmuringPaths] Duration: {definition.duration}s, Source ID: {instanceSourceId}");
             }
             else
             {
-                Debug.LogWarning($"[MurmuringPaths] ✗ Failed to convert target position {targetPosition} to grid!");
             }
         }
 
@@ -352,20 +335,17 @@ namespace FaeMaze.HeartPowers
                     if (visitor != null && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Lured)
                     {
                         visitor.SetLured(false);
-                        Debug.Log($"[MurmuringPaths] Cleared Lured state from visitor");
                     }
                 }
             }
 
             pathSegment.Clear();
-            Debug.Log($"[MurmuringPaths] Effect ended, removed warm orange glow from path segment");
         }
 
         private List<Vector2Int> GeneratePathSegment(Vector2Int startTile)
         {
             List<Vector2Int> segment = new List<Vector2Int>();
 
-            Debug.LogWarning($"[MurmuringPaths] === GeneratePathSegment called for tile ({startTile.x}, {startTile.y}) ===");
 
             // Get the heart - try GameController first, then find it dynamically
             FaeMaze.Maze.HeartOfTheMaze heart = null;
@@ -373,7 +353,6 @@ namespace FaeMaze.HeartPowers
             if (manager.GameController != null && manager.GameController.Heart != null)
             {
                 heart = manager.GameController.Heart;
-                Debug.LogWarning($"[MurmuringPaths] Found heart from GameController");
             }
             else
             {
@@ -381,24 +360,20 @@ namespace FaeMaze.HeartPowers
                 heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
                 if (heart != null)
                 {
-                    Debug.LogWarning($"[MurmuringPaths] Found heart dynamically using FindFirstObjectByType");
                 }
             }
 
             if (heart == null)
             {
-                Debug.LogError($"[MurmuringPaths] Could not find HeartOfMaze - tried GameController and FindFirstObjectByType");
                 segment.Add(startTile);
                 return segment;
             }
 
             Vector2Int heartPos = heart.GridPosition;
-            Debug.LogWarning($"[MurmuringPaths] Creating path from ({startTile.x}, {startTile.y}) to Heart at ({heartPos.x}, {heartPos.y})");
 
             // Use A* pathfinding to create path from start tile to heart
             if (manager.GameController == null)
             {
-                Debug.LogError($"[MurmuringPaths] manager.GameController is NULL - cannot use pathfinding");
                 segment.Add(startTile);
                 return segment;
             }
@@ -406,7 +381,6 @@ namespace FaeMaze.HeartPowers
             List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
             bool pathFound = manager.GameController.TryFindPath(startTile, heartPos, pathNodes);
 
-            Debug.LogWarning($"[MurmuringPaths] TryFindPath returned: {pathFound}, pathNodes count: {pathNodes.Count}");
 
             if (pathFound && pathNodes.Count > 0)
             {
@@ -415,11 +389,9 @@ namespace FaeMaze.HeartPowers
                 {
                     segment.Add(new Vector2Int(node.x, node.y));
                 }
-                Debug.LogWarning($"[MurmuringPaths] ✓ Successfully created path with {segment.Count} tiles to the heart");
             }
             else
             {
-                Debug.LogError($"[MurmuringPaths] ✗ Failed to find path from ({startTile.x}, {startTile.y}) to Heart - using start tile only");
                 segment.Add(startTile); // Fallback: just add the start tile
             }
 
@@ -470,18 +442,15 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            Debug.Log($"[DreamSnare] ═══ EFFECT START ═══");
 
             // Convert target position to grid
             if (!manager.MazeGrid.WorldToGrid(targetPosition, out int x, out int y))
             {
-                Debug.LogWarning("[DreamSnare] ✗ Invalid target position");
                 return;
             }
 
             centerTile = new Vector2Int(x, y);
             float radius = definition.radius > 0 ? definition.radius : 3f;
-            Debug.Log($"[DreamSnare] Center: {centerTile}, Radius: {radius} tiles");
 
             // Add ROYGBIV tile visuals to the AoE (bright yellow for Power 3)
             if (manager.TileVisualizer != null)
@@ -509,7 +478,6 @@ namespace FaeMaze.HeartPowers
 
             // Find all visitors in AoE and apply Mesmerized
             var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
-            Debug.Log($"[DreamSnare] Scanning {visitors.Length} visitors for AoE effect with bright yellow glow...");
 
             int mesmerizedCount = 0;
             foreach (var visitor in visitors)
@@ -525,13 +493,11 @@ namespace FaeMaze.HeartPowers
                     affectedVisitors.Add(visitor);
                     mesmerizedCount++;
 
-                    Debug.Log($"[DreamSnare] → Mesmerized visitor at {visitorPos} (distance: {distance:F2}, duration: {mesmerizeDuration}s)");
 
                     // Tier III: Mark for harvest
                     if (definition.tier >= 3)
                     {
                         // Would need to add a flag to visitor for tracking
-                        Debug.Log($"[DreamSnare] → Marked visitor for harvest (Tier III bonus)");
                     }
                 }
             }
@@ -542,7 +508,6 @@ namespace FaeMaze.HeartPowers
                 CreateLingeringThorns(radius);
             }
 
-            Debug.Log($"[DreamSnare] ✓ Activated at {centerTile}, mesmerized {mesmerizedCount}/{visitors.Length} visitors");
         }
 
         public override void Update(float deltaTime)
@@ -564,7 +529,6 @@ namespace FaeMaze.HeartPowers
 
             thornTiles.Clear();
             affectedVisitors.Clear();
-            Debug.Log($"[DreamSnare] Effect ended, removed bright yellow glow from AoE");
         }
 
         private void CreateLingeringThorns(float radius)
@@ -588,7 +552,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[DreamSnare] Created {thornTiles.Count} lingering thorn tiles");
         }
 
         public bool IsTile(Vector2Int tile)
@@ -607,7 +570,6 @@ namespace FaeMaze.HeartPowers
             float frightenedDuration = definition.param2 > 0 ? definition.param2 : 2f;
             visitor.SetFrightened(frightenedDuration);
 
-            Debug.Log($"[DreamSnare] Visitor stepped on thorn tile, applying Frightened");
         }
 
         private Vector2Int GetVisitorGridPosition(VisitorControllerBase visitor)
@@ -641,17 +603,13 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            Debug.Log($"[FeastwardPanic] ═══ EFFECT START ═══");
 
             heartTile = manager.MazeGrid.HeartGridPos;
-            Debug.Log($"[FeastwardPanic] Heart position: {heartTile}");
 
             // Determine mode: Global or Selective (cone)
             bool selectiveMode = definition.tier >= 1 && definition.flag1; // flag1 = selective terror mode
-            Debug.Log($"[FeastwardPanic] Mode: {(selectiveMode ? "SELECTIVE TERROR (cone)" : "GLOBAL PANIC")}");
 
             var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
-            Debug.Log($"[FeastwardPanic] Scanning {visitors.Length} visitors...");
 
             int affectedCount = 0;
             int skippedCount = 0;
@@ -685,11 +643,9 @@ namespace FaeMaze.HeartPowers
                     // Apply Heart-ward path bias
                     ApplyHeartwardBias(visitor);
 
-                    Debug.Log($"[FeastwardPanic] → Applied panic to visitor at {visitor.transform.position} (duration: {frightenedDuration}s)");
                 }
             }
 
-            Debug.Log($"[FeastwardPanic] ✓ Activated! Affected: {affectedCount}, Skipped: {skippedCount}, Total scanned: {visitors.Length}");
         }
 
         public override void Update(float deltaTime)
@@ -714,7 +670,6 @@ namespace FaeMaze.HeartPowers
                 manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.FeastwardPanic);
             }
 
-            Debug.Log($"[FeastwardPanic] Effect ended, removed vivid green glow from panic zones");
         }
 
         private bool IsInCone(Vector3 visitorWorldPos)
@@ -786,7 +741,6 @@ namespace FaeMaze.HeartPowers
             // Optionally refund charge (would need HeartPowerManager API)
             manager.AddCharges(1);
 
-            Debug.Log($"[FeastwardPanic] Hunger Crescendo triggered, extended duration by {extensionTime}s");
         }
 
         private Vector2Int GetVisitorGridPosition(VisitorControllerBase visitor)
@@ -851,7 +805,6 @@ namespace FaeMaze.HeartPowers
             foreach (var wisp in affectedWisps)
             {
                 // Mark wisp as controlled (would need WillowTheWisp API modifications)
-                Debug.Log($"[CovenantWithWisps] Controlling wisp at {wisp.transform.position} with cool blue beacon");
 
                 // Tier I: Enable twin flames (capture 2 visitors)
                 if (definition.tier >= 1)
@@ -866,7 +819,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[CovenantWithWisps] Activated on {affectedWisps.Count} wisps");
         }
 
         public override void OnEnd()
@@ -878,14 +830,12 @@ namespace FaeMaze.HeartPowers
             }
 
             affectedWisps.Clear();
-            Debug.Log($"[CovenantWithWisps] Effect ended, removed cool blue beacon glow");
         }
 
         private void PlaceBeacon(WillowTheWisp wisp)
         {
             // Set wisp to patrol around target position
             // Would need WillowTheWisp API: SetPatrolBeacon(targetPosition, radius)
-            Debug.Log($"[CovenantWithWisps] Placed beacon at {targetPosition} for wisp");
         }
 
         public void OnWispDeliverVisitor(WillowTheWisp wisp, VisitorControllerBase visitor)
@@ -899,7 +849,6 @@ namespace FaeMaze.HeartPowers
             int bonusEssence = definition.intParam1 > 0 ? definition.intParam1 : 2;
             manager.AddEssence(bonusEssence);
 
-            Debug.Log($"[CovenantWithWisps] Burning Tithe granted {bonusEssence} bonus essence");
         }
     }
 
@@ -940,7 +889,6 @@ namespace FaeMaze.HeartPowers
 
             if (targetPuka == null)
             {
-                Debug.LogWarning("[PukasBargain] No Puka found near target");
                 return;
             }
 
@@ -950,7 +898,6 @@ namespace FaeMaze.HeartPowers
                 IdentifyPactPools();
             }
 
-            Debug.Log($"[PukasBargain] Activated on Puka at {targetPuka.transform.position}");
         }
 
         public override void OnEnd()
@@ -962,7 +909,6 @@ namespace FaeMaze.HeartPowers
             }
 
             pactPools.Clear();
-            Debug.Log($"[PukasBargain] Effect ended, removed indigo glow from pact pools");
         }
 
         private void IdentifyPactPools()
@@ -997,7 +943,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[PukasBargain] Identified {pactPools.Count} pact pools with indigo highlights");
         }
 
         public Vector2Int? GetPreferredTeleportTarget()
@@ -1022,7 +967,6 @@ namespace FaeMaze.HeartPowers
                     var node = manager.MazeGrid.Grid.GetNode(adj.x, adj.y);
                     if (node != null && node.terrain == TileType.Water)
                     {
-                        Debug.Log($"[PukasBargain] Undertow activated, teleporting to Heart entrance");
                         return adj;
                     }
                 }
@@ -1062,7 +1006,6 @@ namespace FaeMaze.HeartPowers
                 if (dist <= aoeRadius * manager.MazeGrid.TileSize)
                 {
                     visitor.SetFrightened(3f);
-                    Debug.Log($"[PukasBargain] Drowning Debt triggered fear on visitor at {visitor.transform.position}");
                 }
             }
         }
@@ -1094,7 +1037,6 @@ namespace FaeMaze.HeartPowers
             foreach (var ring in affectedRings)
             {
                 // Mark ring as Heart-tuned (would need FairyRing API modifications)
-                Debug.Log($"[RingOfInvitations] Enhanced ring at {ring.transform.position} with vibrant violet radiance");
 
                 // Add ROYGBIV tile visuals around each ring (vibrant violet for Power 7)
                 if (manager.TileVisualizer != null && manager.MazeGrid.WorldToGrid(ring.transform.position, out int rx, out int ry))
@@ -1130,7 +1072,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[RingOfInvitations] Activated on {affectedRings.Count} rings with vibrant violet auras");
         }
 
         public override void OnEnd()
@@ -1149,7 +1090,6 @@ namespace FaeMaze.HeartPowers
 
             affectedRings.Clear();
             entrancedVisitors.Clear();
-            Debug.Log($"[RingOfInvitations] Effect ended, removed vibrant violet radiance from rings");
         }
 
         private void SpawnIllusoryRings(FairyRing sourceRing)
@@ -1157,7 +1097,6 @@ namespace FaeMaze.HeartPowers
             // Spawn 1-2 temporary ring colliders along Heart-ward paths
             // Would need to instantiate temporary FairyRing objects
             int count = definition.intParam1 > 0 ? definition.intParam1 : 2;
-            Debug.Log($"[RingOfInvitations] Spawning {count} illusory rings from {sourceRing.name}");
 
             // Implementation would create temporary trigger colliders
         }
@@ -1178,7 +1117,6 @@ namespace FaeMaze.HeartPowers
                     {
                         float mesmerizeDuration = definition.param1 > 0 ? definition.param1 : 3f;
                         visitor.SetMesmerized(mesmerizeDuration);
-                        Debug.Log($"[RingOfInvitations] Closing Dance mesmerized visitor at {visitor.transform.position}");
                     }
                 }
             }
@@ -1191,7 +1129,6 @@ namespace FaeMaze.HeartPowers
             // Tier II: Circle Remembered - would need to modify visitor's pathfinding preferences
             if (definition.tier >= 2)
             {
-                Debug.Log($"[RingOfInvitations] Visitor {visitor.name} will remember the circles");
             }
         }
     }

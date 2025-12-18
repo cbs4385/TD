@@ -79,7 +79,6 @@ namespace FaeMaze.Visitors
                     }
                 }
 
-                Debug.Log($"[SleepwalkingDevotee] Initialized in mesmerized state for {currentStateDuration}s, heading toward Heart");
             }
         }
 
@@ -139,7 +138,6 @@ namespace FaeMaze.Visitors
                     float maxDuration = config != null ? config.LostDetourMax : 12f;
                     float duration = Random.Range(minDuration, maxDuration);
                     SetLost(duration);
-                    Debug.Log($"[SleepwalkingDevotee] Mesmerized ended -> Lost for {duration}s");
                 }
                 else
                 {
@@ -147,7 +145,6 @@ namespace FaeMaze.Visitors
                     state = VisitorState.Walking;
                     RefreshStateFromFlags();
                     RecalculatePath();
-                    Debug.Log($"[SleepwalkingDevotee] Mesmerized ended -> Walking");
                 }
             }
             else
@@ -255,7 +252,6 @@ namespace FaeMaze.Visitors
                 float maxDuration = config != null ? config.LostDetourMax : 12f;
                 float lostDuration = Random.Range(minDuration, maxDuration);
                 SetLost(lostDuration);
-                Debug.Log($"[SleepwalkingDevotee] Trance disturbed and broken! Lost for {lostDuration}s");
             }
             else
             {
@@ -263,7 +259,6 @@ namespace FaeMaze.Visitors
                 float refreshDuration = config != null ? config.InitialMesmerizedDuration * 0.5f : 5f;
                 currentStateTimer += refreshDuration;
                 currentStateDuration += refreshDuration;
-                Debug.Log($"[SleepwalkingDevotee] Trance disturbed but reinforced! +{refreshDuration}s mesmerized");
             }
         }
 

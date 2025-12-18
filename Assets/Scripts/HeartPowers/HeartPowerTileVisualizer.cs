@@ -91,11 +91,9 @@ namespace FaeMaze.HeartPowers
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("[TileVisualizer] ✗ MazeGridBehaviour not found! Tile effects will not render.");
             }
             else
             {
-                Debug.Log("[TileVisualizer] ✓ Found MazeGridBehaviour, ready to visualize tile effects");
             }
 
             // Create container for all effect visuals
@@ -122,11 +120,9 @@ namespace FaeMaze.HeartPowers
         /// <param name="duration">How long the effect lasts (0 = permanent)</param>
         public void AddTileEffect(Vector2Int tile, HeartPowerType powerType, float intensity, float duration)
         {
-            Debug.Log($"[TileVisualizer] AddTileEffect called: tile={tile}, power={powerType}, intensity={intensity}, duration={duration}");
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogWarning("[TileVisualizer] Cannot add effect - MazeGridBehaviour is null");
                 return;
             }
 
@@ -164,7 +160,6 @@ namespace FaeMaze.HeartPowers
                 CreateVisualForEffect(newEffect);
                 tileEffects[tile].Add(newEffect);
 
-                Debug.Log($"[TileVisualizer] Added {powerType} effect to tile {tile} (intensity: {intensity}, duration: {duration}s, color: {GetColorForPowerType(powerType)})");
             }
         }
 
@@ -207,7 +202,6 @@ namespace FaeMaze.HeartPowers
                 tileEffects.Remove(tile);
             }
 
-            Debug.Log($"[TileVisualizer] Removed all {powerType} effects");
         }
 
         /// <summary>
@@ -224,7 +218,6 @@ namespace FaeMaze.HeartPowers
             }
 
             tileEffects.Clear();
-            Debug.Log("[TileVisualizer] Cleared all tile effects");
         }
 
         #endregion
@@ -261,7 +254,6 @@ namespace FaeMaze.HeartPowers
             effect.visualObject = effectObj;
             effect.spriteRenderer = sr;
 
-            Debug.Log($"[TileVisualizer] ✓ Created visual at {worldPos} for tile {effect.tile}, color: {sr.color}, layer: '{sr.sortingLayerName}', order: {sr.sortingOrder}, scale: {effectObj.transform.localScale}");
         }
 
         /// <summary>

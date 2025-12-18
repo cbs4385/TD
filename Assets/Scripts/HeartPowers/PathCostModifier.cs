@@ -228,7 +228,6 @@ namespace FaeMaze.HeartPowers
                 // Debug: Log significant attraction changes
                 if (Mathf.Abs(total) > 10.0f)
                 {
-                    Debug.Log($"[PathCostModifier] Tile ({tile.x}, {tile.y}): oldAttraction={oldAttraction:F2}, costDelta={total:F2}, newAttraction={node.attraction:F2}");
                 }
             }
         }

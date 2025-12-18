@@ -129,7 +129,6 @@ namespace FaeMaze.UI
 
             if (heartPowerManager == null)
             {
-                Debug.LogError("[HeartPowerPanel] HeartPowerManager not found! Panel will not function correctly.");
                 return;
             }
 
@@ -150,8 +149,6 @@ namespace FaeMaze.UI
                 flashIntensity[i] = 0.0f; // No flash initially
             }
 
-            Debug.Log("[HeartPowerPanel] Heart Powers panel initialized with ROYGBIV glow effects");
-            Debug.Log($"[HeartPowerPanel] Initial state - Charges: {heartPowerManager.CurrentCharges}, Essence: {heartPowerManager.CurrentEssence}");
         }
 
         private void Update()
@@ -252,15 +249,12 @@ namespace FaeMaze.UI
                     powerButtons[i].interactable = true;
 
                     successCount++;
-                    Debug.Log($"[HeartPowerPanel] Button {i} listener added successfully, interactable={powerButtons[i].interactable}");
                 }
                 else
                 {
-                    Debug.LogWarning($"[HeartPowerPanel] Button {i} is null, skipping listener setup");
                 }
             }
 
-            Debug.Log($"[HeartPowerPanel] Initialized {successCount}/{powerButtons.Length} button listeners");
 
             // Ensure we're subscribed to GameController events
             SubscribeToGameControllerEvents();
@@ -272,28 +266,21 @@ namespace FaeMaze.UI
             if (heartPowersPanel != null)
             {
                 heartPowersPanel.SetActive(true);
-                Debug.Log("[HeartPowerPanel] Panel set to active (visible)");
             }
 
             // Debug: Check game state and essence connection
             if (heartPowerManager != null)
             {
-                Debug.Log($"[HeartPowerPanel] Game state check:");
-                Debug.Log($"[HeartPowerPanel]   Charges: {heartPowerManager.CurrentCharges}");
-                Debug.Log($"[HeartPowerPanel]   Essence (from HeartPowerManager): {heartPowerManager.CurrentEssence}");
                 if (GameController.Instance != null)
                 {
-                    Debug.Log($"[HeartPowerPanel]   Essence (from GameController): {GameController.Instance.CurrentEssence}");
                 }
                 else
                 {
-                    Debug.LogWarning($"[HeartPowerPanel]   GameController.Instance is NULL!");
                 }
 
                 for (int i = 0; i < powerTypes.Length; i++)
                 {
                     bool canActivate = heartPowerManager.CanActivatePower(powerTypes[i], out string reason);
-                    Debug.Log($"[HeartPowerPanel]   Power {i} ({powerTypes[i]}): canActivate={canActivate}, reason='{reason}'");
                 }
             }
         }
@@ -311,12 +298,10 @@ namespace FaeMaze.UI
             Canvas canvas = FindFirstObjectByType<Canvas>();
             if (canvas == null)
             {
-                Debug.LogWarning("[HeartPowerPanel] No existing Canvas found, creating new one");
                 canvas = CreateCanvas();
             }
             else
             {
-                Debug.Log($"[HeartPowerPanel] Using existing Canvas: {canvas.name}");
 
                 // Ensure the existing canvas has a GraphicRaycaster for button clicks
                 GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
@@ -324,11 +309,9 @@ namespace FaeMaze.UI
                 {
                     raycaster = canvas.gameObject.AddComponent<GraphicRaycaster>();
                     raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
-                    Debug.Log("[HeartPowerPanel] Added GraphicRaycaster to existing Canvas");
                 }
                 else
                 {
-                    Debug.Log($"[HeartPowerPanel] Existing Canvas already has GraphicRaycaster (blockingObjects: {raycaster.blockingObjects})");
                 }
             }
 
@@ -351,13 +334,11 @@ namespace FaeMaze.UI
             float startX = -totalWidth / 2f + buttonWidth / 2f;
             float buttonYPos = -75f; // Center buttons vertically in panel
 
-            Debug.Log($"[HeartPowerPanel] Creating 7 buttons: width={buttonWidth}, height={buttonHeight}, totalWidth={totalWidth}");
 
             for (int i = 0; i < 7; i++)
             {
                 float xPos = startX + (i * (buttonWidth + spacing));
                 powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, buttonYPos, buttonWidth, buttonHeight);
-                Debug.Log($"[HeartPowerPanel] Created button {i} at x={xPos}, y={buttonYPos}");
             }
         }
 
@@ -380,7 +361,6 @@ namespace FaeMaze.UI
             GraphicRaycaster raycaster = canvasObj.AddComponent<GraphicRaycaster>();
             raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
 
-            Debug.Log("[HeartPowerPanel] Created new Canvas with GraphicRaycaster, sortingOrder=100");
 
             return canvas;
         }
@@ -403,7 +383,6 @@ namespace FaeMaze.UI
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.15f, 0.05f, 0.2f, 0.9f); // Dark purple/magenta tint
 
-            Debug.Log($"[HeartPowerPanel] Created panel with size: {rect.sizeDelta}");
 
             return panel;
         }
@@ -529,7 +508,6 @@ namespace FaeMaze.UI
             cooldownTexts[index] = cooldownText;
             cooldownObj.SetActive(false);
 
-            Debug.Log($"[HeartPowerPanel] Button {index} created: pos=({xPos},{yPos}), size=({width}x{height}), interactable={button.interactable}");
 
             return button;
         }
@@ -543,17 +521,14 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnPowerButtonClicked(int index)
         {
-            Debug.Log($"[HeartPowerPanel] ★★★ BUTTON CLICK DETECTED ★★★ Index: {index}");
 
             if (heartPowerManager == null)
             {
-                Debug.LogWarning("[HeartPowerPanel] HeartPowerManager not found!");
                 return;
             }
 
             HeartPowerType powerType = powerTypes[index];
 
-            Debug.Log($"[HeartPowerPanel] Button clicked for power: {powerType} (Index: {index})");
 
             // Check if this is a targeted power
             bool isTargetedPower = IsTargetedPower(powerType);
@@ -566,17 +541,14 @@ namespace FaeMaze.UI
             else
             {
                 // Non-targeted powers activate immediately
-                Debug.Log($"[HeartPowerPanel] Activating global power");
                 bool success = heartPowerManager.TryActivatePower(powerType);
 
                 if (success)
                 {
-                    Debug.Log($"[HeartPowerPanel] ✓ Power {powerType} activated successfully!");
                 }
                 else
                 {
                     heartPowerManager.CanActivatePower(powerType, out string reason);
-                    Debug.LogWarning($"[HeartPowerPanel] ✗ Failed to activate power {powerType}. Reason: {reason}");
                 }
             }
         }
@@ -586,7 +558,6 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnPowerActivated(HeartPowerType powerType)
         {
-            Debug.Log($"[HeartPowerPanel] Power activated event received: {powerType}");
 
             // Find which button corresponds to this power and trigger flash effect
             for (int i = 0; i < powerTypes.Length; i++)
@@ -595,7 +566,6 @@ namespace FaeMaze.UI
                 {
                     // Trigger a bright flash effect
                     flashIntensity[i] = 1.5f; // Extra bright flash
-                    Debug.Log($"[HeartPowerPanel] Triggering ROYGBIV flash for {powerNames[i]} (color: {roygbivColors[i]})");
                     break;
                 }
             }
@@ -665,7 +635,6 @@ namespace FaeMaze.UI
             // First check if power can be activated
             if (!heartPowerManager.CanActivatePower(powerType, out string reason))
             {
-                Debug.LogWarning($"[HeartPowerPanel] Cannot activate {powerType}: {reason}");
                 return;
             }
 
@@ -674,7 +643,6 @@ namespace FaeMaze.UI
 
             // Change cursor to indicate targeting mode (crosshair if available)
             // Note: Unity's Cursor.SetCursor requires a texture. We'll just log for now.
-            Debug.Log($"[HeartPowerPanel] ⊕ Entered targeting mode for {powerType}. Click on the map to target, or press ESC to cancel.");
         }
 
         /// <summary>
@@ -686,7 +654,6 @@ namespace FaeMaze.UI
             {
                 if (cancelled)
                 {
-                    Debug.Log($"[HeartPowerPanel] ✗ Targeting cancelled for {pendingPowerType}");
                 }
 
                 isTargetingMode = false;
@@ -724,7 +691,6 @@ namespace FaeMaze.UI
                 // Convert to world position
                 if (mainCamera == null)
                 {
-                    Debug.LogError("[HeartPowerPanel] Main camera is null, cannot convert mouse position!");
                     ExitTargetingMode(cancelled: true);
                     return;
                 }
@@ -732,12 +698,10 @@ namespace FaeMaze.UI
                 Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, mainCamera.nearClipPlane));
                 mouseWorldPos.z = 0; // 2D game on Z=0 plane
 
-                Debug.Log($"[HeartPowerPanel] Mouse clicked at screen: {mouseScreenPos}, world: {mouseWorldPos}");
 
                 // Validate the position is on the grid - NO FALLBACK
                 if (heartPowerManager.MazeGrid == null)
                 {
-                    Debug.LogError("[HeartPowerPanel] MazeGrid is null, cannot validate target position!");
                     ExitTargetingMode(cancelled: true);
                     return;
                 }
@@ -745,7 +709,6 @@ namespace FaeMaze.UI
                 if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
                 {
                     // Invalid position - cancel with user feedback
-                    Debug.LogWarning($"[HeartPowerPanel] ✗ Invalid target position {mouseWorldPos} - not on the grid. Please click on a valid tile.");
                     // Don't exit targeting mode - let player try again
                     return;
                 }
@@ -754,20 +717,17 @@ namespace FaeMaze.UI
                 Vector2Int gridPos = new Vector2Int(gridX, gridY);
                 Vector3 targetWorldPos = heartPowerManager.MazeGrid.GridToWorld(gridX, gridY);
 
-                Debug.Log($"[HeartPowerPanel] ✓ Valid target selected: Grid {gridPos}, World {targetWorldPos}");
 
                 // Try to activate the power
                 bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
 
                 if (success)
                 {
-                    Debug.Log($"[HeartPowerPanel] ✓ Power {pendingPowerType.Value} activated successfully at {gridPos}!");
                     ExitTargetingMode(cancelled: false);
                 }
                 else
                 {
                     heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
-                    Debug.LogWarning($"[HeartPowerPanel] ✗ Failed to activate power {pendingPowerType.Value} at {gridPos}. Reason: {reason}");
                     ExitTargetingMode(cancelled: true);
                 }
             }
@@ -809,7 +769,6 @@ namespace FaeMaze.UI
             if (chargesText != null)
             {
                 chargesText.text = $"Heart Charges: {charges}";
-                Debug.Log($"[HeartPowerPanel] Charges updated: {charges}");
             }
         }
 
@@ -821,7 +780,6 @@ namespace FaeMaze.UI
             if (essenceText != null)
             {
                 essenceText.text = $"Essence: {essence}";
-                Debug.Log($"[HeartPowerPanel] Essence updated: {essence}");
             }
         }
 
@@ -943,7 +901,6 @@ namespace FaeMaze.UI
             {
                 bool newState = !heartPowersPanel.activeSelf;
                 heartPowersPanel.SetActive(newState);
-                Debug.Log($"[HeartPowerPanel] Panel toggled: {(newState ? "visible" : "hidden")}");
             }
         }
 
@@ -967,7 +924,6 @@ namespace FaeMaze.UI
             Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, mainCamera.nearClipPlane));
             mouseWorldPos.z = 0; // Assuming 2D game on Z=0 plane
 
-            Debug.Log($"[HeartPowerPanel] Mouse screen pos: {mouseScreenPos}, world pos: {mouseWorldPos}");
 
             // Validate the position is on the grid
             if (heartPowerManager.MazeGrid != null)
@@ -975,7 +931,6 @@ namespace FaeMaze.UI
                 if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gx, out int gy))
                 {
                     // Invalid position - use Heart position as fallback
-                    Debug.LogWarning($"[HeartPowerPanel] Mouse position {mouseWorldPos} is not on grid, using Heart position as fallback");
                     Vector2Int heartPos = heartPowerManager.MazeGrid.HeartGridPos;
                     mouseWorldPos = heartPowerManager.MazeGrid.GridToWorld(heartPos.x, heartPos.y);
                 }

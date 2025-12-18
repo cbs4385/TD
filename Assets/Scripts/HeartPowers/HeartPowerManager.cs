@@ -147,11 +147,9 @@ namespace FaeMaze.HeartPowers
 
             if (gameController == null)
             {
-                Debug.LogError("[HeartPowerManager] CRITICAL: GameController not found! Essence system will not work.");
             }
             else if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] ✓ Connected to GameController. Current essence: {CurrentEssence}");
             }
 
             // Find MazeGridBehaviour if not assigned
@@ -189,7 +187,6 @@ namespace FaeMaze.HeartPowers
 
                 if (debugLog)
                 {
-                    Debug.Log("[HeartPowerManager] ✓ Created HeartPowerTileVisualizer for ROYGBIV tile effects");
                 }
             }
         }
@@ -207,7 +204,6 @@ namespace FaeMaze.HeartPowers
 
                 if (debugLog)
                 {
-                    Debug.Log("[HeartPowerManager] Auto-created HeartPowerPanelController");
                 }
             }
         }
@@ -263,7 +259,6 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Wave started. Charges reset to {currentCharges}");
             }
 
             OnChargesChanged?.Invoke(currentCharges);
@@ -277,7 +272,6 @@ namespace FaeMaze.HeartPowers
             // Optionally grant bonus charges or essence
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Wave succeeded.");
             }
         }
 
@@ -291,7 +285,6 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Wave failed. Cleaning up effects.");
             }
         }
 
@@ -306,14 +299,12 @@ namespace FaeMaze.HeartPowers
         {
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Attempting to activate power: {powerType} at position {worldPosition}");
             }
 
             if (!CanActivatePower(powerType, out string reason))
             {
                 if (debugLog)
                 {
-                    Debug.LogWarning($"[HeartPowerManager] ✗ Cannot activate {powerType}: {reason}");
                 }
                 return false;
             }
@@ -321,13 +312,11 @@ namespace FaeMaze.HeartPowers
             HeartPowerDefinition definition = GetPowerDefinition(powerType);
             if (definition == null)
             {
-                Debug.LogError($"[HeartPowerManager] ✗ No definition found for {powerType}");
                 return false;
             }
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Power {powerType} - Cost: {definition.chargeCost} charges, Cooldown: {definition.cooldown}s, Duration: {definition.duration}s");
             }
 
             // Consume charges and start cooldown
@@ -347,8 +336,6 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] ✓ Successfully activated {powerType} at {worldPosition}");
-                Debug.Log($"[HeartPowerManager] Remaining charges: {currentCharges}, Cooldown started: {definition.cooldown}s");
             }
 
             return true;
@@ -448,7 +435,6 @@ namespace FaeMaze.HeartPowers
 
                 if (debugLog)
                 {
-                    Debug.Log($"[HeartPowerManager] Added {amount} essence via GameController. Total: {CurrentEssence}");
                 }
 
                 // Notify listeners (for UI updates)
@@ -465,7 +451,6 @@ namespace FaeMaze.HeartPowers
             {
                 if (debugLog)
                 {
-                    Debug.Log($"[HeartPowerManager] Spent {amount} essence via GameController. Remaining: {CurrentEssence}");
                 }
 
                 // Notify listeners (for UI updates)
@@ -486,7 +471,6 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Added {amount} charges. Total: {currentCharges}");
             }
         }
 
@@ -501,7 +485,6 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Consumed {amount} charges ({previousCharges} → {currentCharges})");
             }
 
             OnChargesChanged?.Invoke(currentCharges);
@@ -514,7 +497,6 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] Creating effect instance for {powerType}...");
             }
 
             switch (powerType)
@@ -548,7 +530,6 @@ namespace FaeMaze.HeartPowers
                     break;
 
                 default:
-                    Debug.LogWarning($"[HeartPowerManager] ✗ Power {powerType} not yet implemented");
                     return;
             }
 
@@ -556,7 +537,6 @@ namespace FaeMaze.HeartPowers
             {
                 if (debugLog)
                 {
-                    Debug.Log($"[HeartPowerManager] Starting effect for {powerType} (Duration: {effect.Duration}s)");
                 }
 
                 effect.OnStart();
@@ -566,7 +546,6 @@ namespace FaeMaze.HeartPowers
                     activePowers[powerType] = effect;
                     if (debugLog)
                     {
-                        Debug.Log($"[HeartPowerManager] Effect {powerType} registered as active (will expire in {effect.Duration}s)");
                     }
                 }
                 else
@@ -574,7 +553,6 @@ namespace FaeMaze.HeartPowers
                     // Instant effect, trigger OnEnd immediately
                     if (debugLog)
                     {
-                        Debug.Log($"[HeartPowerManager] Effect {powerType} is instant, completing immediately");
                     }
                     effect.OnEnd();
                 }
@@ -638,7 +616,6 @@ namespace FaeMaze.HeartPowers
             {
                 if (debugLog)
                 {
-                    Debug.Log($"[HeartPowerManager] No active visitors to recalculate paths for {powerType}");
                 }
                 return;
             }
@@ -656,7 +633,6 @@ namespace FaeMaze.HeartPowers
                     if (isMurmuringPaths && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking)
                     {
                         visitor.SetLured(true);  // SetLured internally calls RecalculatePath()
-                        Debug.Log($"[HeartPowerManager] Set visitor to Lured state for Murmuring Paths");
                         recalculatedCount++;
                     }
                     else if (!isMurmuringPaths)
@@ -670,7 +646,6 @@ namespace FaeMaze.HeartPowers
 
             if (debugLog)
             {
-                Debug.Log($"[HeartPowerManager] ✓ Triggered path recalculation for {recalculatedCount} visitors after {powerType} activation");
             }
         }
 

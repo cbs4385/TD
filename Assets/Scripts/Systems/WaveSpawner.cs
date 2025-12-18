@@ -324,11 +324,9 @@ namespace FaeMaze.Systems
             if (heartPowerManager != null)
             {
                 heartPowerManager.OnWaveStart();
-                Debug.Log($"[WaveSpawner] Notified HeartPowerManager of wave start (Wave {currentWaveNumber})");
             }
             else
             {
-                Debug.LogWarning("[WaveSpawner] HeartPowerManager not found, Heart Powers will not be available this wave");
             }
 
             // Initialize Red Cap state

@@ -50,7 +50,6 @@ namespace FaeMaze.Visitors
         {
             if (visitor == null)
             {
-                Debug.LogWarning("[VisitorRegistry] Attempted to register null visitor");
                 return;
             }
 

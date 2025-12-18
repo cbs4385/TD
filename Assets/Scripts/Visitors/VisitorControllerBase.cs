@@ -1015,7 +1015,6 @@ namespace FaeMaze.Visitors
                 // Debug log when moving to water tiles
                 if (targetNode.terrain == TileType.Water)
                 {
-                    Debug.LogWarning($"[Visitor] {gameObject.name} attempting to move to WATER tile at {targetGridPos} - walkable: {targetNode.walkable}, baseCost: {targetNode.baseCost}");
                 }
 
                 terrainSpeedMultiplier = mazeGrid.GetSpeedMultiplier(targetGridPos.x, targetGridPos.y);
@@ -1623,25 +1622,20 @@ namespace FaeMaze.Visitors
                         {
                             if (mazeGridBehaviour.WorldToGrid(heart.transform.position, out int hx, out int hy))
                             {
-                                Debug.Log($"[Visitor] Lured state: pathing to Heart at ({hx}, {hy})");
                                 return new Vector2Int(hx, hy);
                             }
                             else
                             {
-                                Debug.LogWarning($"[Visitor] Lured state: Failed to convert Heart world position to grid");
                             }
                         }
                         else
                         {
-                            Debug.LogWarning($"[Visitor] Lured state: Heart or gridBehaviour is null (heart={heart != null}, grid={mazeGridBehaviour != null})");
                         }
                     }
                     else
                     {
-                        Debug.LogWarning($"[Visitor] Lured state: gameController is null");
                     }
                     // Fallback to original destination if Heart not found
-                    Debug.LogWarning($"[Visitor] Lured state: Falling back to original destination {originalDestination}");
                     return originalDestination;
 
                 case VisitorState.Mesmerized:
@@ -1725,7 +1719,6 @@ namespace FaeMaze.Visitors
                 {
                     attractiveTileCount++;
                     float moveCost = mazeGridBehaviour.Grid.GetMoveCost(tile.x, tile.y, attractionMultiplier);
-                    Debug.Log($"[Visitor] Path tile ({tile.x}, {tile.y}): attraction={node.attraction:F2}, baseCost={node.baseCost:F2}, finalCost={moveCost:F2}");
 
                     if (Mathf.Abs(node.attraction) > Mathf.Abs(maxAttraction))
                     {
@@ -1737,11 +1730,9 @@ namespace FaeMaze.Visitors
 
             if (attractiveTileCount > 0)
             {
-                Debug.LogWarning($"[Visitor] Path uses {attractiveTileCount} attractive tiles (max: {maxAttraction:F2} at {maxAttractionTile}, state: {state}, multiplier: {attractionMultiplier:F1}x)");
             }
             else
             {
-                Debug.LogWarning($"[Visitor] Path uses NO attractive tiles - pathfinding may not be considering Murmuring Paths!");
             }
 
             path = newPath;
@@ -1837,15 +1828,12 @@ namespace FaeMaze.Visitors
         {
             if (isLured != value)
             {
-                Debug.Log($"[Visitor] SetLured({value}): changing from {isLured} to {value}, current state: {state}");
                 isLured = value;
                 RefreshStateFromFlags();
-                Debug.Log($"[Visitor] After RefreshStateFromFlags(), new state: {state}");
 
                 // Recalculate path when lured state changes
                 if (value)
                 {
-                    Debug.Log($"[Visitor] Calling RecalculatePath() for Lured visitor");
                     RecalculatePath();
                 }
             }

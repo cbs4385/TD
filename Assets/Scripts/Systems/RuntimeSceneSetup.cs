@@ -65,7 +65,6 @@ namespace FaeMaze.Systems
                     GameObject heartPowerManagerObj = new GameObject("HeartPowerManager");
                     heartPowerManagerObj.transform.SetParent(gameRoot.transform);
                     heartPowerManagerObj.AddComponent<FaeMaze.HeartPowers.HeartPowerManager>();
-                    Debug.Log($"[RuntimeSceneSetup] Auto-created HeartPowerManager for {sceneName}");
                 }
 
                 // Auto-create HeartOfTheMaze if missing
@@ -75,7 +74,6 @@ namespace FaeMaze.Systems
                     GameObject heartObj = new GameObject("HeartOfTheMaze");
                     heartObj.transform.SetParent(gameRoot.transform);
                     heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
-                    Debug.Log($"[RuntimeSceneSetup] Auto-created HeartOfTheMaze for {sceneName}");
                 }
 
                 // Auto-start first wave in ProceduralMazeScene

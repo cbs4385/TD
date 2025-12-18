@@ -138,12 +138,10 @@ namespace FaeMaze.Systems
                     if (node.terrain == TileType.Water)
                     {
                         waterTileCount++;
-                        Debug.LogWarning($"[MazePathfinder] PATH CONTAINS WATER TILE at ({node.x}, {node.y}) - walkable: {node.walkable}, baseCost: {node.baseCost}");
                     }
                 }
                 if (waterTileCount > 0)
                 {
-                    Debug.LogError($"[MazePathfinder] Found path from ({startX}, {startY}) to ({endX}, {endY}) contains {waterTileCount} WATER tiles!");
                 }
 
                 return true;
@@ -158,7 +156,6 @@ namespace FaeMaze.Systems
 
         private PathNode FindPath(int startX, int startY, int endX, int endY, float attractionMultiplier)
         {
-            Debug.Log($"[Pathfinder] FindPath from ({startX}, {startY}) to ({endX}, {endY}), attractMult={attractionMultiplier:F2}");
 
             // Create start node
             PathNode startPathNode = GetOrCreatePathNode(startX, startY);
@@ -220,7 +217,6 @@ namespace FaeMaze.Systems
                     // Debug logging for water tiles specifically
                     if (mazeNode != null && mazeNode.terrain == TileType.Water)
                     {
-                        Debug.Log($"[MazePathfinder] Skipping water tile at ({neighborX}, {neighborY}) - walkable: {mazeNode.walkable}, terrain: {mazeNode.terrain}");
                     }
                     continue;
                 }
@@ -233,7 +229,6 @@ namespace FaeMaze.Systems
                 var node = grid.GetNode(neighborX, neighborY);
                 if (node != null && Mathf.Abs(node.attraction) > 0.01f)
                 {
-                    Debug.Log($"[Pathfinder] Exploring attractive tile ({neighborX}, {neighborY}): attraction={node.attraction:F2}, movementCost={movementCost:F2}, gCost={tentativeGCost:F2}, attractMult={attractionMultiplier:F2}");
                 }
 
                 // Get or create neighbor PathNode

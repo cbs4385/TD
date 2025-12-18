@@ -57,8 +57,6 @@ namespace FaeMaze.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"[HeartPowerDefinitionGenerator] Successfully generated 7 HeartPowerDefinition assets in {assetPath}");
-            Debug.Log($"[HeartPowerDefinitionGenerator] Next step: Assign these assets to the HeartPowerManager component in the Unity Inspector");
         }
 
         private static void CreatePowerDefinition(
@@ -83,7 +81,6 @@ namespace FaeMaze.Editor
             HeartPowerDefinition existing = AssetDatabase.LoadAssetAtPath<HeartPowerDefinition>(fullPath);
             if (existing != null)
             {
-                Debug.Log($"[HeartPowerDefinitionGenerator] Asset already exists: {fullPath}, skipping...");
                 return;
             }
 
@@ -105,7 +102,6 @@ namespace FaeMaze.Editor
 
             // Create asset
             AssetDatabase.CreateAsset(definition, fullPath);
-            Debug.Log($"[HeartPowerDefinitionGenerator] Created: {fullPath}");
         }
     }
 }

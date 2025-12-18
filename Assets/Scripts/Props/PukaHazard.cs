@@ -364,7 +364,6 @@ namespace FaeMaze.Props
             if (animator != null)
             {
                 animator.SetInteger("Direction", direction);
-                Debug.Log($"[PukaHazard] Visitor approaching from direction {direction} (visitorPos: {visitorPos}, pukaPos: {gridPosition})");
             }
 
             // Roll for interaction

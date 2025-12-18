@@ -622,7 +622,6 @@ namespace FaeMaze.Systems
 
             if (!IsSceneInBuildSettings("ProceduralMazeScene"))
             {
-                Debug.LogWarning("ProceduralMazeScene is not added to the build settings. Staying in the current scene.");
                 return false;
             }
 

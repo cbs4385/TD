@@ -289,7 +289,6 @@ namespace FaeMaze.HeartPowers
             // First check if power can be activated
             if (!heartPowerManager.CanActivatePower(powerType, out string reason))
             {
-                Debug.LogWarning($"[HeartPowerUI] Cannot activate {powerType}: {reason}");
                 return;
             }
 
@@ -303,7 +302,6 @@ namespace FaeMaze.HeartPowers
                 targetingInstructionText.gameObject.SetActive(true);
             }
 
-            Debug.Log($"[HeartPowerUI] ⊕ Entered targeting mode for {powerType}. Click on the map to target, or press ESC to cancel.");
         }
 
         /// <summary>
@@ -315,7 +313,6 @@ namespace FaeMaze.HeartPowers
             {
                 if (cancelled)
                 {
-                    Debug.Log($"[HeartPowerUI] ✗ Targeting cancelled for {pendingPowerType}");
                 }
 
                 isTargetingMode = false;
@@ -353,12 +350,10 @@ namespace FaeMaze.HeartPowers
                 // Get mouse position in world space
                 Vector3 mouseWorldPos = GetMouseWorldPosition();
 
-                Debug.Log($"[HeartPowerUI] Mouse clicked at world position: {mouseWorldPos}");
 
                 // Validate the position is on the grid - NO FALLBACK
                 if (heartPowerManager.MazeGrid == null)
                 {
-                    Debug.LogError("[HeartPowerUI] MazeGrid is null, cannot validate target position!");
                     ExitTargetingMode(cancelled: true);
                     return;
                 }
@@ -366,7 +361,6 @@ namespace FaeMaze.HeartPowers
                 if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
                 {
                     // Invalid position - show feedback but don't exit targeting mode
-                    Debug.LogWarning($"[HeartPowerUI] ✗ Invalid target position {mouseWorldPos} - not on the grid. Please click on a valid tile.");
                     return;
                 }
 
@@ -374,20 +368,17 @@ namespace FaeMaze.HeartPowers
                 Vector2Int gridPos = new Vector2Int(gridX, gridY);
                 Vector3 targetWorldPos = heartPowerManager.MazeGrid.GridToWorld(gridX, gridY);
 
-                Debug.Log($"[HeartPowerUI] ✓ Valid target selected: Grid {gridPos}, World {targetWorldPos}");
 
                 // Try to activate the power
                 bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
 
                 if (success)
                 {
-                    Debug.Log($"[HeartPowerUI] ✓ Power {pendingPowerType.Value} activated successfully at {gridPos}!");
                     ExitTargetingMode(cancelled: false);
                 }
                 else
                 {
                     heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
-                    Debug.LogWarning($"[HeartPowerUI] ✗ Failed to activate power {pendingPowerType.Value} at {gridPos}. Reason: {reason}");
                     ExitTargetingMode(cancelled: true);
                 }
             }
@@ -472,7 +463,6 @@ namespace FaeMaze.HeartPowers
         {
             if (mainCamera == null)
             {
-                Debug.LogError("[HeartPowerUI] Main camera is null!");
                 return Vector3.zero;
             }
 

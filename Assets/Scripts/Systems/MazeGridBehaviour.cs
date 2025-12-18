@@ -265,7 +265,6 @@ namespace FaeMaze.Systems
 
         private void FindHeartPosition()
         {
-            Debug.LogWarning($"[MazeGridBehaviour] FindHeartPosition() called - searching for center fallback position (this should not happen!)");
 
             // Start from approximate center
             int centerX = width / 2;
@@ -276,7 +275,6 @@ namespace FaeMaze.Systems
             {
                 heartGridPos = new Vector2Int(centerX, centerY);
                 MarkHeartTile(heartGridPos);
-                Debug.LogError($"[MazeGridBehaviour] Set heart at CENTER: ({centerX}, {centerY}) - THIS SHOULD NOT HAPPEN!");
                 return;
             }
 
@@ -533,21 +531,17 @@ namespace FaeMaze.Systems
                         heartGridPos = new Vector2Int(x, y);
                         foundHeart = true;
                         heartCount++;
-                        Debug.Log($"[MazeGridBehaviour] Found heart #{heartCount} at ({x}, {y})");
                     }
                 }
             }
 
-            Debug.Log($"[MazeGridBehaviour] Total hearts found in maze string: {heartCount}");
 
             if (!foundHeart)
             {
-                Debug.LogWarning("[MazeGridBehaviour] No heart found in maze - calling FindHeartPosition()");
                 FindHeartPosition();
             }
             else
             {
-                Debug.Log($"[MazeGridBehaviour] Heart position set to: {heartGridPos}");
             }
 
             // Collect entrance positions (prefer carved entrances from the generator)

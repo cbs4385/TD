@@ -260,7 +260,6 @@ namespace FaeMaze.Systems
                 heart = FindFirstObjectByType<HeartOfTheMaze>();
                 if (heart != null)
                 {
-                    Debug.Log("[GameController] Auto-found HeartOfTheMaze reference");
                 }
             }
 
@@ -270,7 +269,6 @@ namespace FaeMaze.Systems
                 entrance = FindFirstObjectByType<MazeEntrance>();
                 if (entrance != null)
                 {
-                    Debug.Log("[GameController] Auto-found MazeEntrance reference");
                 }
             }
         }
