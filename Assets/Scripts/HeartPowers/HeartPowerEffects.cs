@@ -297,7 +297,7 @@ namespace FaeMaze.HeartPowers
                 bool sealMode = definition.tier >= 3 && definition.flag2; // flag2 = seal mode toggle
                 float costModifier = sealMode
                     ? Mathf.Abs(definition.param2 != 0 ? definition.param2 : 5.0f)  // Positive = expensive
-                    : -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 3.0f); // Negative = attractive
+                    : -Mathf.Abs(definition.param1 != 0 ? definition.param1 : 50.0f); // Negative = attractive (MUCH stronger to force path following)
 
                 Debug.Log($"[MurmuringPaths] Mode: {(sealMode ? "SEAL (expensive)" : "LURE (attractive)")}, Cost modifier: {costModifier}");
 
@@ -318,7 +318,8 @@ namespace FaeMaze.HeartPowers
                     if (manager.TileVisualizer != null)
                     {
                         // Intensity based on cost modifier strength (normalize to 0-1)
-                        float intensity = Mathf.Clamp01(Mathf.Abs(costModifier) / 5.0f);
+                        // Use a fixed high intensity since the path should be very visible
+                        float intensity = 0.9f;
                         manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.MurmuringPaths, intensity, definition.duration);
                     }
                 }
