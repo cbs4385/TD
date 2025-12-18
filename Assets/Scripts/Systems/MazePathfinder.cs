@@ -48,8 +48,9 @@ namespace FaeMaze.Systems
         private static readonly int[] dy = { -1, 0, 1, 0 };
 
         // Heuristic scaling factor to account for attractive tiles
-        // Using MIN_MOVE_COST (0.1) makes heuristic admissible when attraction is present
-        private const float HEURISTIC_SCALE = 0.1f;
+        // Set to 0.0 to disable heuristic, making A* equivalent to Dijkstra's algorithm
+        // This ensures the lowest-cost path is found regardless of detours
+        private const float HEURISTIC_SCALE = 0.0f;
 
         #endregion
 
