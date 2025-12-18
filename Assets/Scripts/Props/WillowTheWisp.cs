@@ -94,6 +94,15 @@ namespace FaeMaze.Props
         [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
         private bool useProceduralSprite = false;
 
+        [Header("Model Settings")]
+        [SerializeField]
+        [Tooltip("Model prefab to spawn for the Willow-the-Wisp visuals")]
+        private GameObject wispModelPrefab;
+
+        [SerializeField]
+        [Tooltip("Animator controller to apply to the spawned model")]
+        private RuntimeAnimatorController wispController;
+
         #endregion
 
         #region Private Fields
@@ -127,6 +136,7 @@ namespace FaeMaze.Props
         private Vector2Int heartGridPosition;
 
         private const string DirectionParameter = "Direction";
+        private GameObject modelInstance;
 
         #endregion
 
@@ -146,9 +156,11 @@ namespace FaeMaze.Props
         {
             state = WispState.Wandering;
             initialScale = transform.localScale;
+            SetupModel();
             SetupSpriteRenderer();
             SetupColliders();
-            animator = GetComponent<Animator>();
+            animator = GetComponentInChildren<Animator>(true);
+            ApplyAnimatorController();
         }
 
         private void Start()
@@ -158,7 +170,8 @@ namespace FaeMaze.Props
 
             if (animator == null)
             {
-                animator = GetComponent<Animator>();
+                animator = GetComponentInChildren<Animator>(true);
+                ApplyAnimatorController();
             }
 
             if (!AcquireDependencies())
@@ -385,6 +398,15 @@ namespace FaeMaze.Props
 
         private void SetupSpriteRenderer()
         {
+            if (wispModelPrefab != null)
+            {
+                // Model-driven visuals; keep scale consistent and skip sprite setup
+                baseScale = new Vector3(wispSize, wispSize, 1f);
+                transform.localScale = baseScale;
+                spriteRenderer = null;
+                return;
+            }
+
             spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
                 gameObject,
                 createProceduralSprite: useProceduralSprite,
@@ -400,6 +422,8 @@ namespace FaeMaze.Props
         {
             if (spriteRenderer == null)
             {
+                baseScale = initialScale;
+                transform.localScale = baseScale;
                 return;
             }
 
@@ -868,6 +892,41 @@ namespace FaeMaze.Props
             }
 
             animator.SetInteger(DirectionParameter, directionValue);
+        }
+
+        private void SetupModel()
+        {
+            if (wispModelPrefab == null || modelInstance != null)
+            {
+                return;
+            }
+
+            modelInstance = Instantiate(wispModelPrefab, transform);
+            modelInstance.transform.localPosition = Vector3.zero;
+            modelInstance.transform.localRotation = Quaternion.identity;
+            modelInstance.transform.localScale = Vector3.one;
+
+            var modelAnimator = modelInstance.GetComponentInChildren<Animator>(true);
+            if (modelAnimator != null)
+            {
+                animator = modelAnimator;
+            }
+
+            var sprite = GetComponent<SpriteRenderer>();
+            if (sprite != null)
+            {
+                sprite.enabled = false;
+            }
+        }
+
+        private void ApplyAnimatorController()
+        {
+            if (animator == null || wispController == null)
+            {
+                return;
+            }
+
+            animator.runtimeAnimatorController = wispController;
         }
 
         #endregion
