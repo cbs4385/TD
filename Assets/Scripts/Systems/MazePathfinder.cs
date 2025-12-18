@@ -158,6 +158,8 @@ namespace FaeMaze.Systems
 
         private PathNode FindPath(int startX, int startY, int endX, int endY, float attractionMultiplier)
         {
+            Debug.Log($"[Pathfinder] FindPath from ({startX}, {startY}) to ({endX}, {endY}), attractMult={attractionMultiplier:F2}");
+
             // Create start node
             PathNode startPathNode = GetOrCreatePathNode(startX, startY);
             startPathNode.gCost = 0;
@@ -226,6 +228,13 @@ namespace FaeMaze.Systems
                 // Calculate costs with attraction multiplier based on visitor state
                 float movementCost = grid.GetMoveCost(neighborX, neighborY, attractionMultiplier);
                 float tentativeGCost = currentNode.gCost + movementCost;
+
+                // Debug: Log when we encounter attractive tiles
+                var node = grid.GetNode(neighborX, neighborY);
+                if (node != null && Mathf.Abs(node.attraction) > 0.01f)
+                {
+                    Debug.Log($"[Pathfinder] Exploring attractive tile ({neighborX}, {neighborY}): attraction={node.attraction:F2}, movementCost={movementCost:F2}, gCost={tentativeGCost:F2}, attractMult={attractionMultiplier:F2}");
+                }
 
                 // Get or create neighbor PathNode
                 PathNode neighborPathNode = GetOrCreatePathNode(neighborX, neighborY);
