@@ -1672,6 +1672,22 @@ namespace FaeMaze.Visitors
 
             LogVisitorPath($"recalculated path length {newPath.Count}. Path: {FormatPath(newPath)}.");
 
+            // Debug: Check if path goes through any tiles with attraction
+            int attractiveTileCount = 0;
+            foreach (var tile in newPath)
+            {
+                var node = mazeGridBehaviour.Grid.GetNode(tile.x, tile.y);
+                if (node != null && Mathf.Abs(node.attraction) > 0.01f)
+                {
+                    attractiveTileCount++;
+                    Debug.Log($"[Visitor] Path contains tile ({tile.x}, {tile.y}) with attraction {node.attraction:F2}");
+                }
+            }
+            if (attractiveTileCount > 0)
+            {
+                Debug.LogWarning($"[Visitor] Recalculated path uses {attractiveTileCount} tiles with attraction (state: {state}, multiplier: {attractionMultiplier:F1}x)");
+            }
+
             path = newPath;
             recentlyReachedTiles.Clear();
             if (path.Count > 0)

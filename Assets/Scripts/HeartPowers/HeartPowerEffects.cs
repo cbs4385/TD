@@ -302,9 +302,17 @@ namespace FaeMaze.HeartPowers
                 Debug.Log($"[MurmuringPaths] Mode: {(sealMode ? "SEAL (expensive)" : "LURE (attractive)")}, Cost modifier: {costModifier}");
 
                 // Apply cost modifier to segment tiles
+                Debug.LogWarning($"[MurmuringPaths] Applying cost modifier {costModifier} to {pathSegment.Count} tiles");
                 foreach (var tile in pathSegment)
                 {
                     manager.PathModifier.AddModifier(tile, costModifier, definition.duration, instanceSourceId);
+
+                    // Verify the modifier was applied
+                    var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
+                    if (node != null)
+                    {
+                        Debug.Log($"[MurmuringPaths] Tile ({tile.x}, {tile.y}): attraction = {node.attraction:F2}, baseCost = {node.baseCost:F2}");
+                    }
 
                     // Add ROYGBIV tile visual (warm orange for Power 2)
                     if (manager.TileVisualizer != null)
@@ -315,8 +323,8 @@ namespace FaeMaze.HeartPowers
                     }
                 }
 
-                Debug.Log($"[MurmuringPaths] ✓ Created {(sealMode ? "sealed" : "luring")} path segment with {pathSegment.Count} tiles with warm orange glow");
-                Debug.Log($"[MurmuringPaths] Duration: {definition.duration}s, Source ID: {instanceSourceId}");
+                Debug.LogWarning($"[MurmuringPaths] ✓ Created {(sealMode ? "sealed" : "luring")} path segment with {pathSegment.Count} tiles with warm orange glow");
+                Debug.LogWarning($"[MurmuringPaths] Duration: {definition.duration}s, Source ID: {instanceSourceId}");
             }
             else
             {
