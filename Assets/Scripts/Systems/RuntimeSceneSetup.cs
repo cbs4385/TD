@@ -81,6 +81,7 @@ namespace FaeMaze.Systems
 #if UNITY_EDITOR
                     // In editor, load from Assets/Prefabs using AssetDatabase
                     heartModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/heartofmaze.prefab");
+                    Debug.Log($"[RuntimeSceneSetup] Loaded heartofmaze prefab: {(heartModelPrefab != null ? "SUCCESS" : "FAILED")}");
 #endif
 
                     if (heartModelPrefab != null)
@@ -93,6 +94,7 @@ namespace FaeMaze.Systems
                         if (useModelPrefabField != null)
                         {
                             useModelPrefabField.SetValue(heart, true);
+                            Debug.Log($"[RuntimeSceneSetup] Set useModelPrefab to true");
                         }
 
                         // Set heartModelPrefab field
@@ -101,6 +103,7 @@ namespace FaeMaze.Systems
                         if (heartModelPrefabField != null)
                         {
                             heartModelPrefabField.SetValue(heart, heartModelPrefab);
+                            Debug.Log($"[RuntimeSceneSetup] Set heartModelPrefab field");
                         }
 
                         // Call SetupModel again now that fields are set
@@ -109,6 +112,7 @@ namespace FaeMaze.Systems
                         if (setupModelMethod != null)
                         {
                             setupModelMethod.Invoke(heart, null);
+                            Debug.Log($"[RuntimeSceneSetup] Called SetupModel via reflection");
                         }
 
                         // Disable the sprite renderer if it was created
@@ -116,7 +120,12 @@ namespace FaeMaze.Systems
                         if (spriteRenderer != null)
                         {
                             spriteRenderer.enabled = false;
+                            Debug.Log($"[RuntimeSceneSetup] Disabled sprite renderer");
                         }
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[RuntimeSceneSetup] Failed to load heartofmaze.prefab - heart will use default sprite");
                     }
                 }
 

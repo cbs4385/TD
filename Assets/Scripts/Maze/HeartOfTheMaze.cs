@@ -324,22 +324,28 @@ namespace FaeMaze.Maze
 
         private void SetupModel()
         {
+            Debug.Log($"[HeartOfTheMaze] SetupModel called - modelInstance: {(modelInstance != null ? "EXISTS" : "NULL")}, useModelPrefab: {useModelPrefab}, heartModelPrefab: {(heartModelPrefab != null ? "SET" : "NULL")}");
+
             if (modelInstance != null)
             {
+                Debug.Log("[HeartOfTheMaze] SetupModel: modelInstance already exists, returning");
                 return;
             }
 
             // Check if using model prefab
             if (!useModelPrefab || heartModelPrefab == null)
             {
+                Debug.Log($"[HeartOfTheMaze] SetupModel: Not using model prefab (useModelPrefab={useModelPrefab}, heartModelPrefab={(heartModelPrefab != null ? "SET" : "NULL")})");
                 return;
             }
+
+            Debug.Log("[HeartOfTheMaze] SetupModel: Instantiating model prefab...");
 
             // Instantiate the model prefab
             var instantiatedObject = (GameObject)Instantiate((UnityEngine.Object)heartModelPrefab, transform);
             if (instantiatedObject == null)
             {
-                Debug.LogWarning("Failed to instantiate heart model prefab. Falling back to sprite rendering.");
+                Debug.LogWarning("[HeartOfTheMaze] Failed to instantiate heart model prefab. Falling back to sprite rendering.");
                 useModelPrefab = false;
                 return;
             }
@@ -349,11 +355,14 @@ namespace FaeMaze.Maze
             modelInstance.transform.localRotation = Quaternion.identity;
             modelInstance.transform.localScale = Vector3.one;
 
+            Debug.Log($"[HeartOfTheMaze] SetupModel: Model instantiated successfully - {modelInstance.name}");
+
             // Disable sprite renderer if we have a model
             var sprite = GetComponent<SpriteRenderer>();
             if (sprite != null)
             {
                 sprite.enabled = false;
+                Debug.Log("[HeartOfTheMaze] SetupModel: Disabled sprite renderer");
             }
         }
 
