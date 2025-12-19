@@ -512,6 +512,13 @@ namespace FaeMaze.Props
             if (!enableGlow)
                 return;
 
+            // Remove any old 3D Light components that might conflict
+            var oldLight = GetComponent<Light>();
+            if (oldLight != null)
+            {
+                DestroyImmediate(oldLight);
+            }
+
             // Check if we already have a Light2D component
             glowLight = GetComponent<Light2D>();
             if (glowLight == null)
