@@ -436,10 +436,11 @@ namespace FaeMaze.Maze
                 glowLight.pointLightInnerAngle = 360f;
                 glowLight.pointLightOuterAngle = 360f;
 
-                // Set blend style for 2D lighting (usually 0 = default blend)
-                glowLight.blendStyleIndex = 0;
+                // Use additive blend style (1) for colored lights instead of multiply (0)
+                // Additive blending preserves light colors better
+                glowLight.blendStyleIndex = 1;
 
-                Debug.Log($"[HeartOfTheMaze] Light2D configured - Color: {glowLight.color}, Intensity: {glowLight.intensity}, Radius: {glowLight.pointLightOuterRadius}");
+                Debug.Log($"[HeartOfTheMaze] Light2D configured - Color: {glowLight.color}, Intensity: {glowLight.intensity}, Radius: {glowLight.pointLightOuterRadius}, BlendStyle: {glowLight.blendStyleIndex}");
             }
             catch (System.Exception e)
             {
