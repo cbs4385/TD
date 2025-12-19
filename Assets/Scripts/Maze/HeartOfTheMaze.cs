@@ -359,9 +359,9 @@ namespace FaeMaze.Maze
             }
 
             modelInstance = instantiatedObject;
-            // Preserve the prefab's Z position for proper 2D layering, but center X and Y
-            Vector3 prefabLocalPos = modelInstance.transform.localPosition;
-            modelInstance.transform.localPosition = new Vector3(0, 0, prefabLocalPos.z);
+            // Set position with proper Z offset for 2D layering
+            // The heartofmaze prefab is designed with Z = -0.3
+            modelInstance.transform.localPosition = new Vector3(0, 0, -0.3f);
             // Don't reset rotation and scale - preserve the prefab's configuration
             // modelInstance.transform.localRotation = Quaternion.identity;
             // modelInstance.transform.localScale = Vector3.one;
