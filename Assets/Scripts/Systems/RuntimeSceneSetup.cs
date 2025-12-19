@@ -69,13 +69,24 @@ namespace FaeMaze.Systems
 
                 // Auto-create HeartOfTheMaze if missing
                 FaeMaze.Maze.HeartOfTheMaze heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+                bool heartWasCreated = false;
+
                 if (heart == null)
                 {
                     GameObject heartObj = new GameObject("HeartOfTheMaze");
                     heartObj.transform.SetParent(gameRoot.transform);
                     heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
+                    heartWasCreated = true;
+                    Debug.Log("[RuntimeSceneSetup] Created new HeartOfTheMaze");
+                }
+                else
+                {
+                    Debug.Log("[RuntimeSceneSetup] Found existing HeartOfTheMaze, configuring it");
+                }
 
-                    // Configure heart to use the model prefab
+                // Configure heart to use the model prefab (whether new or existing)
+                if (heart != null)
+                {
                     GameObject heartModelPrefab = null;
 
 #if UNITY_EDITOR
@@ -106,7 +117,7 @@ namespace FaeMaze.Systems
                             Debug.Log($"[RuntimeSceneSetup] Set heartModelPrefab field");
                         }
 
-                        // Call SetupModel again now that fields are set
+                        // Call SetupModel to instantiate the model
                         var setupModelMethod = heartType.GetMethod("SetupModel",
                             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                         if (setupModelMethod != null)
@@ -116,7 +127,7 @@ namespace FaeMaze.Systems
                         }
 
                         // Disable the sprite renderer if it was created
-                        var spriteRenderer = heartObj.GetComponent<SpriteRenderer>();
+                        var spriteRenderer = heart.GetComponent<SpriteRenderer>();
                         if (spriteRenderer != null)
                         {
                             spriteRenderer.enabled = false;
