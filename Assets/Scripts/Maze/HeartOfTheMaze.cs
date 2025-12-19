@@ -246,6 +246,9 @@ namespace FaeMaze.Maze
 
         private void CreateVisualMarker()
         {
+            // Declare collider once at method level
+            CircleCollider2D collider;
+
             // If using model prefab, skip procedural sprite creation
             if (useModelPrefab && modelInstance != null)
             {
@@ -253,7 +256,7 @@ namespace FaeMaze.Maze
                 transform.localScale = baseScale;
 
                 // Add CircleCollider2D for trigger detection
-                CircleCollider2D collider = GetComponent<CircleCollider2D>();
+                collider = GetComponent<CircleCollider2D>();
                 if (collider == null)
                 {
                     collider = gameObject.AddComponent<CircleCollider2D>();
@@ -280,7 +283,7 @@ namespace FaeMaze.Maze
             transform.localScale = baseScale;
 
             // Add CircleCollider2D for trigger detection
-            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            collider = GetComponent<CircleCollider2D>();
             if (collider == null)
             {
                 collider = gameObject.AddComponent<CircleCollider2D>();
