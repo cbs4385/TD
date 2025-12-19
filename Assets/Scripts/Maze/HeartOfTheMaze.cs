@@ -431,8 +431,15 @@ namespace FaeMaze.Maze
                 glowLight.pointLightOuterRadius = glowRadius;
                 glowLight.intensity = glowMaxIntensity;
 
+                // Additional Light2D settings for proper color rendering
+                glowLight.pointLightInnerRadius = 0f;
+                glowLight.pointLightInnerAngle = 360f;
+                glowLight.pointLightOuterAngle = 360f;
+
                 // Set blend style for 2D lighting (usually 0 = default blend)
                 glowLight.blendStyleIndex = 0;
+
+                Debug.Log($"[HeartOfTheMaze] Light2D configured - Color: {glowLight.color}, Intensity: {glowLight.intensity}, Radius: {glowLight.pointLightOuterRadius}");
             }
             catch (System.Exception e)
             {
