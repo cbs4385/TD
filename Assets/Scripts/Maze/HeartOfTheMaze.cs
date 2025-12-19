@@ -67,12 +67,48 @@ namespace FaeMaze.Maze
         [Tooltip("Enable attraction to draw visitors toward the heart")]
         private bool enableAttraction = true;
 
+        [Header("Glow Settings")]
+        [SerializeField]
+        [Tooltip("Enable pulsing glow light effect")]
+        private bool enableGlow = true;
+
+        [SerializeField]
+        [Tooltip("Color of the glow (red)")]
+        private Color glowColor = new Color(1f, 0.2f, 0.2f, 1f); // Red
+
+        [SerializeField]
+        [Tooltip("Radius of the glow effect")]
+        private float glowRadius = 5f;
+
+        [SerializeField]
+        [Tooltip("Glow pulse frequency in Hz")]
+        private float glowFrequency = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Minimum glow intensity (50%)")]
+        private float glowMinIntensity = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Maximum glow intensity (100%)")]
+        private float glowMaxIntensity = 1.0f;
+
+        [Header("Model Settings")]
+        [SerializeField]
+        [Tooltip("Model prefab to use for the heart visuals (optional)")]
+        private GameObject heartModelPrefab;
+
+        [SerializeField]
+        [Tooltip("Use the model prefab instead of procedural sprite")]
+        private bool useModelPrefab = false;
+
         #endregion
 
         #region Private Fields
 
         private SpriteRenderer spriteRenderer;
         private Vector3 baseScale;
+        private Light glowLight;
+        private GameObject modelInstance;
 
         #endregion
 
@@ -160,6 +196,9 @@ namespace FaeMaze.Maze
 
         private void Awake()
         {
+            // Setup model if using prefab
+            SetupModel();
+
             // Ensure physics setup for reliable trigger callbacks
             var rb = GetComponent<Rigidbody2D>();
             if (rb == null)
@@ -168,6 +207,9 @@ namespace FaeMaze.Maze
             }
             rb.bodyType = RigidbodyType2D.Kinematic;
             rb.gravityScale = 0f;
+
+            // Setup glow light
+            SetupGlowLight();
 
             // Auto-position from maze grid if enabled
             if (autoPosition)
@@ -195,10 +237,32 @@ namespace FaeMaze.Maze
                 float pulse = Mathf.PingPong(Time.time * pulseSpeed, pulseAmount);
                 transform.localScale = baseScale * (1f + pulse);
             }
+
+            if (enableGlow && glowLight != null)
+            {
+                UpdateGlowPulse();
+            }
         }
 
         private void CreateVisualMarker()
         {
+            // If using model prefab, skip procedural sprite creation
+            if (useModelPrefab && modelInstance != null)
+            {
+                baseScale = new Vector3(markerSize, markerSize, 1f);
+                transform.localScale = baseScale;
+
+                // Add CircleCollider2D for trigger detection
+                CircleCollider2D collider = GetComponent<CircleCollider2D>();
+                if (collider == null)
+                {
+                    collider = gameObject.AddComponent<CircleCollider2D>();
+                    collider.radius = 0.5f;
+                    collider.isTrigger = true;
+                }
+                return;
+            }
+
             // Add SpriteRenderer if not already present
             spriteRenderer = GetComponent<SpriteRenderer>();
             if (spriteRenderer == null)
@@ -253,6 +317,80 @@ namespace FaeMaze.Maze
                 new Vector2(0.5f, 0.5f),
                 size
             );
+        }
+
+        private void SetupModel()
+        {
+            if (modelInstance != null)
+            {
+                return;
+            }
+
+            // Check if using model prefab
+            if (!useModelPrefab || heartModelPrefab == null)
+            {
+                return;
+            }
+
+            // Instantiate the model prefab
+            var instantiatedObject = (GameObject)Instantiate((UnityEngine.Object)heartModelPrefab, transform);
+            if (instantiatedObject == null)
+            {
+                Debug.LogWarning("Failed to instantiate heart model prefab. Falling back to sprite rendering.");
+                useModelPrefab = false;
+                return;
+            }
+
+            modelInstance = instantiatedObject;
+            modelInstance.transform.localPosition = Vector3.zero;
+            modelInstance.transform.localRotation = Quaternion.identity;
+            modelInstance.transform.localScale = Vector3.one;
+
+            // Disable sprite renderer if we have a model
+            var sprite = GetComponent<SpriteRenderer>();
+            if (sprite != null)
+            {
+                sprite.enabled = false;
+            }
+        }
+
+        private void SetupGlowLight()
+        {
+            if (!enableGlow)
+                return;
+
+            // Check if we already have a Light component
+            glowLight = GetComponent<Light>();
+            if (glowLight == null)
+            {
+                glowLight = gameObject.AddComponent<Light>();
+            }
+
+            // Configure the light
+            glowLight.type = LightType.Point;
+            glowLight.color = glowColor;
+            glowLight.range = glowRadius;
+            glowLight.intensity = glowMaxIntensity;
+
+            // Optional: adjust these for better visual quality
+            glowLight.renderMode = LightRenderMode.ForcePixel;
+            glowLight.shadows = LightShadows.None;
+        }
+
+        private void UpdateGlowPulse()
+        {
+            // Calculate pulsing intensity using sine wave
+            // frequency in Hz = cycles per second
+            // Time.time * frequency * 2π gives us the angle for sin wave
+            float angle = Time.time * glowFrequency * 2f * Mathf.PI;
+
+            // Map sin wave from [-1, 1] to [0, 1]
+            float normalizedPulse = (Mathf.Sin(angle) + 1f) / 2f;
+
+            // Map to intensity range [min, max]
+            float intensity = Mathf.Lerp(glowMinIntensity, glowMaxIntensity, normalizedPulse);
+
+            glowLight.intensity = intensity;
         }
 
         private void OnTriggerEnter2D(Collider2D other)
