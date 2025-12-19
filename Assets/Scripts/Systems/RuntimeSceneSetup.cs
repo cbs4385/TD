@@ -74,6 +74,29 @@ namespace FaeMaze.Systems
                     GameObject heartObj = new GameObject("HeartOfTheMaze");
                     heartObj.transform.SetParent(gameRoot.transform);
                     heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
+
+                    // Configure heart to use the model prefab
+                    var heartModelPrefab = UnityEngine.Resources.Load<GameObject>("Prefabs/heartofmaze");
+                    if (heartModelPrefab != null)
+                    {
+                        var heartType = typeof(FaeMaze.Maze.HeartOfTheMaze);
+
+                        // Set useModelPrefab to true
+                        var useModelPrefabField = heartType.GetField("useModelPrefab",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (useModelPrefabField != null)
+                        {
+                            useModelPrefabField.SetValue(heart, true);
+                        }
+
+                        // Set heartModelPrefab field
+                        var heartModelPrefabField = heartType.GetField("heartModelPrefab",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (heartModelPrefabField != null)
+                        {
+                            heartModelPrefabField.SetValue(heart, heartModelPrefab);
+                        }
+                    }
                 }
 
                 // Auto-start first wave in ProceduralMazeScene
