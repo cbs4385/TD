@@ -73,8 +73,8 @@ namespace FaeMaze.Maze
         private bool enableGlow = true;
 
         [SerializeField]
-        [Tooltip("Color of the glow (red)")]
-        private Color glowColor = new Color(1f, 0.2f, 0.2f, 1f); // Red
+        [Tooltip("Color of the glow (pastel red)")]
+        private Color glowColor = new Color(1f, 0.7f, 0.7f, 1f); // Pastel red
 
         [SerializeField]
         [Tooltip("Radius of the glow effect")]
@@ -82,7 +82,7 @@ namespace FaeMaze.Maze
 
         [SerializeField]
         [Tooltip("Glow pulse frequency in Hz")]
-        private float glowFrequency = 0.5f;
+        private float glowFrequency = 1.5f;
 
         [SerializeField]
         [Tooltip("Minimum glow intensity (50%)")]
@@ -100,6 +100,23 @@ namespace FaeMaze.Maze
         [SerializeField]
         [Tooltip("Use the model prefab instead of procedural sprite")]
         private bool useModelPrefab = false;
+
+        [Header("Animation Settings")]
+        [SerializeField]
+        [Tooltip("Enable rotation and Z-axis animation")]
+        private bool enableModelAnimation = true;
+
+        [SerializeField]
+        [Tooltip("Animation frequency in Hz")]
+        private float animationFrequency = 1.5f;
+
+        [SerializeField]
+        [Tooltip("Minimum Z position for oscillation")]
+        private float minZPosition = -1.3f;
+
+        [SerializeField]
+        [Tooltip("Maximum Z position for oscillation")]
+        private float maxZPosition = -0.3f;
 
         #endregion
 
@@ -249,6 +266,11 @@ namespace FaeMaze.Maze
             if (enableGlow && glowLight != null)
             {
                 UpdateGlowPulse();
+            }
+
+            if (enableModelAnimation && modelInstance != null)
+            {
+                UpdateModelAnimation();
             }
         }
 
@@ -414,6 +436,31 @@ namespace FaeMaze.Maze
             float intensity = Mathf.Lerp(glowMinIntensity, glowMaxIntensity, normalizedPulse);
 
             glowLight.intensity = intensity;
+        }
+
+        private void UpdateModelAnimation()
+        {
+            // Calculate animation phase using sine wave
+            float angle = Time.time * animationFrequency * 2f * Mathf.PI;
+
+            // Rotate around Z axis (full 360-degree rotation)
+            float zRotation = Time.time * animationFrequency * 360f;
+            modelInstance.transform.localRotation = Quaternion.Euler(
+                modelInstance.transform.localRotation.eulerAngles.x,
+                modelInstance.transform.localRotation.eulerAngles.y,
+                zRotation
+            );
+
+            // Oscillate Z position between minZPosition and maxZPosition
+            // Map sin wave from [-1, 1] to [minZ, maxZ]
+            float normalizedSin = (Mathf.Sin(angle) + 1f) / 2f;
+            float zPosition = Mathf.Lerp(maxZPosition, minZPosition, normalizedSin);
+
+            modelInstance.transform.localPosition = new Vector3(
+                modelInstance.transform.localPosition.x,
+                modelInstance.transform.localPosition.y,
+                zPosition
+            );
         }
 
         private void OnTriggerEnter2D(Collider2D other)
