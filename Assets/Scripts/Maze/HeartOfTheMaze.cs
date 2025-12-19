@@ -245,6 +245,9 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
+            // Always ensure we have a trigger collider
+            EnsureTriggerCollider();
+
             // Only create visual marker if not using model prefab
             if (!useModelPrefab || modelInstance == null)
             {
@@ -272,6 +275,25 @@ namespace FaeMaze.Maze
             if (enableModelAnimation && modelInstance != null)
             {
                 UpdateModelAnimation();
+            }
+        }
+
+        private void EnsureTriggerCollider()
+        {
+            // Add CircleCollider2D for trigger detection if not present
+            var collider = GetComponent<CircleCollider2D>();
+            if (collider == null)
+            {
+                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider.radius = 0.5f;
+                collider.isTrigger = true;
+                Debug.Log("[HeartOfTheMaze] Added CircleCollider2D trigger");
+            }
+            else
+            {
+                // Ensure it's set as trigger
+                collider.isTrigger = true;
+                Debug.Log("[HeartOfTheMaze] CircleCollider2D already exists, ensured trigger is enabled");
             }
         }
 
