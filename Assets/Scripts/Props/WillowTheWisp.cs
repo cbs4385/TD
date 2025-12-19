@@ -516,7 +516,11 @@ namespace FaeMaze.Props
             var oldLight = GetComponent<Light>();
             if (oldLight != null)
             {
+#if UNITY_EDITOR
                 DestroyImmediate(oldLight);
+#else
+                Destroy(oldLight);
+#endif
             }
 
             // Check if we already have a Light2D component
