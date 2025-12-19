@@ -227,7 +227,15 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
-            CreateVisualMarker();
+            // Only create visual marker if not using model prefab
+            if (!useModelPrefab || modelInstance == null)
+            {
+                CreateVisualMarker();
+            }
+            else
+            {
+                Debug.Log("[HeartOfTheMaze] Start: Skipping CreateVisualMarker because model is being used");
+            }
         }
 
         private void Update()
