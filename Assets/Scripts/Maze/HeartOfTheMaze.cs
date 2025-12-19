@@ -360,8 +360,9 @@ namespace FaeMaze.Maze
 
             modelInstance = instantiatedObject;
             modelInstance.transform.localPosition = Vector3.zero;
-            modelInstance.transform.localRotation = Quaternion.identity;
-            modelInstance.transform.localScale = Vector3.one;
+            // Don't reset rotation and scale - preserve the prefab's configuration
+            // modelInstance.transform.localRotation = Quaternion.identity;
+            // modelInstance.transform.localScale = Vector3.one;
 
             Debug.Log($"[HeartOfTheMaze] SetupModel: Model instantiated successfully - {modelInstance.name}");
 
