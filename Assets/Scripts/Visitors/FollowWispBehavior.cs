@@ -106,8 +106,18 @@ namespace FaeMaze.Visitors
             // Only move if we're too far from the wisp
             if (distance > followDistance)
             {
-                // Move toward wisp
+                // Calculate direction to wisp
                 Vector2 direction = (targetWisp.transform.position - transform.position).normalized;
+
+                // Check if there's a wall in the way using raycast
+                RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, distance, LayerMask.GetMask("Walls", "Obstacles"));
+
+                // If there's a wall, don't move through it - visitor should stop or pathfind normally
+                if (hit.collider != null)
+                {
+                    // Wall detected, let visitor's normal pathfinding handle it
+                    return;
+                }
 
                 // Update facing based on actual travel direction, not just wisp position
                 visitorController.ApplyExternalAnimatorDirection(direction);

@@ -492,10 +492,13 @@ namespace FaeMaze.Maze
 
         private void OnTriggerEnter2D(Collider2D other)
         {
+            Debug.Log($"[HeartOfTheMaze] OnTriggerEnter2D - collider: {other.name}, has VisitorControllerBase: {other.GetComponent<VisitorControllerBase>() != null}");
+
             // Check if a visitor entered the heart
             var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
+                Debug.Log($"[HeartOfTheMaze] Consuming visitor: {visitor.name}");
                 OnVisitorConsumed(visitor);
             }
         }
