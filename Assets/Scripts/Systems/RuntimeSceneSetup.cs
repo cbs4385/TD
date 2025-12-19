@@ -76,7 +76,13 @@ namespace FaeMaze.Systems
                     heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
 
                     // Configure heart to use the model prefab
-                    var heartModelPrefab = UnityEngine.Resources.Load<GameObject>("Prefabs/heartofmaze");
+                    GameObject heartModelPrefab = null;
+
+#if UNITY_EDITOR
+                    // In editor, load from Assets/Prefabs using AssetDatabase
+                    heartModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/heartofmaze.prefab");
+#endif
+
                     if (heartModelPrefab != null)
                     {
                         var heartType = typeof(FaeMaze.Maze.HeartOfTheMaze);
