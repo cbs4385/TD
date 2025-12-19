@@ -405,32 +405,40 @@ namespace FaeMaze.Maze
             if (!enableGlow)
                 return;
 
-            // Remove any old 3D Light components that might conflict
-            var oldLight = GetComponent<Light>();
-            if (oldLight != null)
+            try
             {
+                // Remove any old 3D Light components that might conflict
+                var oldLight = GetComponent<Light>();
+                if (oldLight != null)
+                {
 #if UNITY_EDITOR
-                DestroyImmediate(oldLight);
+                    DestroyImmediate(oldLight);
 #else
-                Destroy(oldLight);
+                    Destroy(oldLight);
 #endif
-            }
+                }
 
-            // Check if we already have a Light2D component
-            glowLight = GetComponent<Light2D>();
-            if (glowLight == null)
+                // Check if we already have a Light2D component
+                glowLight = GetComponent<Light2D>();
+                if (glowLight == null)
+                {
+                    glowLight = gameObject.AddComponent<Light2D>();
+                }
+
+                // Configure the 2D light
+                glowLight.lightType = Light2D.LightType.Point;
+                glowLight.color = glowColor;
+                glowLight.pointLightOuterRadius = glowRadius;
+                glowLight.intensity = glowMaxIntensity;
+
+                // Set blend style for 2D lighting (usually 0 = default blend)
+                glowLight.blendStyleIndex = 0;
+            }
+            catch (System.Exception e)
             {
-                glowLight = gameObject.AddComponent<Light2D>();
+                Debug.LogWarning($"[HeartOfTheMaze] Failed to setup glow light: {e.Message}");
+                glowLight = null;
             }
-
-            // Configure the 2D light
-            glowLight.lightType = Light2D.LightType.Point;
-            glowLight.color = glowColor;
-            glowLight.pointLightOuterRadius = glowRadius;
-            glowLight.intensity = glowMaxIntensity;
-
-            // Set blend style for 2D lighting (usually 0 = default blend)
-            glowLight.blendStyleIndex = 0;
         }
 
         private void UpdateGlowPulse()
