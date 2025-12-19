@@ -96,6 +96,21 @@ namespace FaeMaze.Systems
                         {
                             heartModelPrefabField.SetValue(heart, heartModelPrefab);
                         }
+
+                        // Call SetupModel again now that fields are set
+                        var setupModelMethod = heartType.GetMethod("SetupModel",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (setupModelMethod != null)
+                        {
+                            setupModelMethod.Invoke(heart, null);
+                        }
+
+                        // Disable the sprite renderer if it was created
+                        var spriteRenderer = heartObj.GetComponent<SpriteRenderer>();
+                        if (spriteRenderer != null)
+                        {
+                            spriteRenderer.enabled = false;
+                        }
                     }
                 }
 
