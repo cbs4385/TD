@@ -122,12 +122,12 @@ namespace FaeMaze.Props
         private float glowFrequency = 1.5f;
 
         [SerializeField]
-        [Tooltip("Minimum glow intensity (50%)")]
-        private float glowMinIntensity = 0.5f;
+        [Tooltip("Minimum glow intensity")]
+        private float glowMinIntensity = 0.15f;
 
         [SerializeField]
-        [Tooltip("Maximum glow intensity (100%)")]
-        private float glowMaxIntensity = 1.0f;
+        [Tooltip("Maximum glow intensity")]
+        private float glowMaxIntensity = 0.3f;
 
         #endregion
 
