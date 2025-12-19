@@ -342,6 +342,43 @@ namespace FaeMaze.HeartPowers
             pathSegment.Clear();
         }
 
+        public override void Update(float deltaTime)
+        {
+            base.Update(deltaTime);
+
+            // Find all active visitors and check if they're on Murmuring Path tiles
+            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
+            if (activeVisitors == null || pathSegment == null || pathSegment.Count == 0)
+                return;
+
+            foreach (var visitor in activeVisitors)
+            {
+                if (visitor == null || visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Consumed)
+                    continue;
+
+                // Get visitor's current grid position
+                if (!manager.MazeGrid.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                    continue;
+
+                Vector2Int visitorTile = new Vector2Int(vx, vy);
+
+                // Check if visitor is on a Murmuring Path tile
+                bool onMurmuringPath = pathSegment.Contains(visitorTile);
+
+                // Set Lured state based on whether they're on the path
+                if (onMurmuringPath && !visitor.IsLured)
+                {
+                    visitor.SetLured(true);
+                }
+                else if (!onMurmuringPath && visitor.IsLured)
+                {
+                    // Only clear Lured if this effect set it (visitor might be on another Murmuring Path)
+                    // For now, we keep them lured until they're far from any path
+                    visitor.SetLured(false);
+                }
+            }
+        }
+
         private List<Vector2Int> GeneratePathSegment(Vector2Int startTile)
         {
             List<Vector2Int> segment = new List<Vector2Int>();
