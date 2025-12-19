@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
@@ -162,7 +163,7 @@ namespace FaeMaze.Props
 
         private const string DirectionParameter = "Direction";
         private GameObject modelInstance;
-        private Light glowLight;
+        private Light2D glowLight;
 
         #endregion
 
@@ -511,22 +512,21 @@ namespace FaeMaze.Props
             if (!enableGlow)
                 return;
 
-            // Check if we already have a Light component
-            glowLight = GetComponent<Light>();
+            // Check if we already have a Light2D component
+            glowLight = GetComponent<Light2D>();
             if (glowLight == null)
             {
-                glowLight = gameObject.AddComponent<Light>();
+                glowLight = gameObject.AddComponent<Light2D>();
             }
 
-            // Configure the light
-            glowLight.type = LightType.Point;
+            // Configure the 2D light
+            glowLight.lightType = Light2D.LightType.Point;
             glowLight.color = glowColor;
-            glowLight.range = glowRadius;
+            glowLight.pointLightOuterRadius = glowRadius;
             glowLight.intensity = glowMaxIntensity;
 
-            // Optional: adjust these for better visual quality
-            glowLight.renderMode = LightRenderMode.ForcePixel;
-            glowLight.shadows = LightShadows.None;
+            // Set blend style for 2D lighting (usually 0 = default blend)
+            glowLight.blendStyleIndex = 0;
         }
 
         private void UpdateGlowPulse()
