@@ -5,7 +5,7 @@ using FaeMaze.Props;
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// Automatically places hazard props (FaeLantern, FairyRing, PukaHazard) on procedurally generated mazes.
+    /// Automatically places hazard props (FaeLantern, FairyRing, Kelpie) on procedurally generated mazes.
     /// Scales hazard counts based on wave/level progression with configurable parameters.
     /// Enforces minimum distances from entrance/heart and prevents overlapping placements.
     ///
@@ -25,11 +25,11 @@ namespace FaeMaze.Systems
     /// 5. Calculate hazard counts using base + (wave * scaling) capped at max
     /// 6. Find eligible spawn cells (walkable, proper distance from entrance/heart, not occupied)
     /// 7. Place hazards randomly across eligible cells
-    /// 8. Initialize hazards (water-linking for Puka happens automatically in their Start)
+    /// 8. Initialize hazards (Kelpies find their nearest water automatically in their Start)
     ///
     /// PLACEMENT RULES:
     /// - FaeLantern/FairyRing: Avoid water tiles, maintain min distance from entrance/heart
-    /// - PukaHazard: Prefer cells near water (within 3 tiles), needs water proximity for linking
+    /// - Kelpie: Prefer cells near water (within 3 tiles), water spirits that lure visitors
     /// - All hazards: Maintain minHazardSpacing between each other to prevent clustering
     /// - Occupied cells are tracked to prevent overlapping placements
     ///
@@ -68,7 +68,7 @@ namespace FaeMaze.Systems
             [Min(0)]
             public int minDistanceFromHeart = 5;
 
-            [Tooltip("For PukaHazard: prefer cells near water tiles")]
+            [Tooltip("For Kelpie: prefer cells near water tiles")]
             public bool preferWaterProximity = false;
 
             [Tooltip("Enabled/disabled for placement")]
@@ -105,8 +105,8 @@ namespace FaeMaze.Systems
         };
 
         [SerializeField]
-        [Tooltip("PukaHazard configuration. Spawns with Kelpie guardians")]
-        private HazardTypeConfig pukaHazardConfig = new HazardTypeConfig
+        [Tooltip("Kelpie configuration. Water spirits that lure visitors toward hazards")]
+        private HazardTypeConfig kelpieConfig = new HazardTypeConfig
         {
             baseCount = 1,
             scalingPerWave = 0.2f,
@@ -114,7 +114,7 @@ namespace FaeMaze.Systems
             minDistanceFromEntrance = 7,
             minDistanceFromHeart = 7,
             preferWaterProximity = true,
-            enabled = true  // Enabled - spawns Puka with Kelpie guardian
+            enabled = true  // Enabled - spawns Kelpie water spirits
         };
 
         [Header("Global Settings")]
@@ -235,9 +235,9 @@ namespace FaeMaze.Systems
                 PlaceHazardType("FairyRing", fairyRingConfig, currentWave);
             }
 
-            if (pukaHazardConfig.enabled && pukaHazardConfig.prefab != null)
+            if (kelpieConfig.enabled && kelpieConfig.prefab != null)
             {
-                PlaceHazardType("PukaHazard", pukaHazardConfig, currentWave);
+                PlaceHazardType("Kelpie", kelpieConfig, currentWave);
             }
 
             // Track which wave we placed for
@@ -423,7 +423,7 @@ namespace FaeMaze.Systems
                         continue;
                     }
 
-                    // Special handling for water proximity (PukaHazard)
+                    // Special handling for water proximity (Kelpie)
                     if (config.preferWaterProximity)
                     {
                         // Only include cells that have water tiles nearby
@@ -434,7 +434,7 @@ namespace FaeMaze.Systems
                     }
                     else
                     {
-                        // For non-Puka hazards, avoid placing on water
+                        // For non-Kelpie hazards, avoid placing on water
                         if (node.terrain == TileType.Water)
                         {
                             continue;
@@ -492,7 +492,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Checks if a cell has water tiles within the specified radius.
-        /// Used for PukaHazard placement which needs water proximity.
+        /// Used for Kelpie placement which needs water proximity.
         /// </summary>
         private bool HasNearbyWaterTiles(Vector2Int cell, int radius)
         {

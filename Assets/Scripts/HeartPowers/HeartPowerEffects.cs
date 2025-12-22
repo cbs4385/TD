@@ -968,14 +968,14 @@ namespace FaeMaze.HeartPowers
     #region Puka's Bargain
 
     /// <summary>
-    /// Bribes a Puka: less random drowning, more helpful teleportation near Heart.
-    /// Tier I: Chosen Channels - Mark Pact Pools as preferred teleport targets
-    /// Tier II: Drowning Debt - Death emits fear AoE with Heart-ward bias
-    /// Tier III: Undertow - Once per wave, teleport visitor adjacent to Heart entrance
+    /// Empowers Kelpies: water spirits lure visitors toward the Heart with enhanced effectiveness.
+    /// Tier I: Chosen Channels - Mark Pact Pools as enhanced lure zones
+    /// Tier II: Luring Song - Enhanced lure radius and effectiveness for Kelpies
+    /// Tier III: Undertow - Kelpies can guide visitors along Heart-ward water paths
     /// </summary>
     public class PukasBargainEffect : ActivePowerEffect
     {
-        private PukaHazard targetPuka;
+        private KelpieController targetKelpie;
         private HashSet<Vector2Int> pactPools = new HashSet<Vector2Int>();
         private bool undertowUsed = false;
 
@@ -984,21 +984,21 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            // Find nearest PukaHazard to target position
-            var pukas = Object.FindObjectsByType<PukaHazard>(FindObjectsSortMode.None);
+            // Find nearest Kelpie to target position
+            var kelpies = Object.FindObjectsByType<KelpieController>(FindObjectsSortMode.None);
             float minDist = float.MaxValue;
 
-            foreach (var puka in pukas)
+            foreach (var kelpie in kelpies)
             {
-                float dist = Vector3.Distance(puka.transform.position, targetPosition);
+                float dist = Vector3.Distance(kelpie.transform.position, targetPosition);
                 if (dist < minDist)
                 {
                     minDist = dist;
-                    targetPuka = puka;
+                    targetKelpie = kelpie;
                 }
             }
 
-            if (targetPuka == null)
+            if (targetKelpie == null)
             {
                 return;
             }
@@ -1093,30 +1093,43 @@ namespace FaeMaze.HeartPowers
             return null;
         }
 
-        public float GetKillChanceModifier()
+        public float GetLureEffectivenessModifier()
         {
-            // Reduce kill chance during bargain
-            return definition.param1 > 0 ? definition.param1 : 0.5f; // Default 50% reduction
+            // Increase lure effectiveness during power
+            return definition.param1 > 0 ? definition.param1 : 1.5f; // Default 50% increase
         }
 
-        public void OnPukaKillVisitor(Vector2Int killLocation)
+        public void OnKelpieLureVisitor(Vector2Int lureLocation)
         {
             if (definition.tier < 2)
             {
                 return;
             }
 
-            // Tier II: Drowning Debt - emit fear AoE
+            // Tier II: Luring Song - enhance nearby Kelpie lure effects
             float aoeRadius = definition.param2 > 0 ? definition.param2 : 3f;
-            Vector3 killWorldPos = manager.MazeGrid.GridToWorld(killLocation.x, killLocation.y);
+            Vector3 lureWorldPos = manager.MazeGrid.GridToWorld(lureLocation.x, lureLocation.y);
 
-            var visitors = Object.FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
-            foreach (var visitor in visitors)
+            // Add ROYGBIV tile visual (indigo for Power 6) around the lure location
+            if (manager.TileVisualizer != null)
             {
-                float dist = Vector3.Distance(visitor.transform.position, killWorldPos);
-                if (dist <= aoeRadius * manager.MazeGrid.TileSize)
+                int radius = Mathf.CeilToInt(aoeRadius);
+                for (int dx = -radius; dx <= radius; dx++)
                 {
-                    visitor.SetFrightened(3f);
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        int manhattanDist = Mathf.Abs(dx) + Mathf.Abs(dy);
+                        if (manhattanDist <= radius)
+                        {
+                            Vector2Int tile = new Vector2Int(lureLocation.x + dx, lureLocation.y + dy);
+                            var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
+                            if (node != null && node.walkable)
+                            {
+                                float intensity = 1.0f - (manhattanDist / (float)radius) * 0.5f;
+                                manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.PukasBargain, intensity, 2f);
+                            }
+                        }
+                    }
                 }
             }
         }

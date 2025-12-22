@@ -2,13 +2,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
-using FaeMaze.Props;
 
 namespace FaeMaze.Visitors
 {
     /// <summary>
-    /// Kelpie - A water spirit bound to a water tile near Puka hazards.
-    /// Remains stationary and lures adjacent visitors toward the nearby Puka.
+    /// Kelpie - A water spirit bound to a water tile.
+    /// Remains stationary and lures adjacent visitors toward water hazards.
     /// Activates and animates when visitors come near.
     /// </summary>
     public class KelpieController : MonoBehaviour
@@ -67,7 +66,7 @@ namespace FaeMaze.Visitors
 
         private KelpieState state = KelpieState.Idle;
         private MazeGridBehaviour mazeGridBehaviour;
-        private PukaHazard assignedPuka;
+        private Vector2Int targetWaterTile;
         private HashSet<GameObject> processedVisitors;
         private float scanTimer;
         private SpriteRenderer spriteRenderer;
@@ -87,8 +86,8 @@ namespace FaeMaze.Visitors
         /// <summary>Gets the current state of the Kelpie</summary>
         public KelpieState State => state;
 
-        /// <summary>Gets the assigned Puka hazard</summary>
-        public PukaHazard AssignedPuka => assignedPuka;
+        /// <summary>Gets the target water tile for luring</summary>
+        public Vector2Int TargetWaterTile => targetWaterTile;
 
         /// <summary>Gets the grid position of this Kelpie</summary>
         public Vector2Int GridPosition => gridPosition;
@@ -153,8 +152,8 @@ namespace FaeMaze.Visitors
                 gridPosition = new Vector2Int(x, y);
             }
 
-            // Find nearest Puka
-            AssignNearestPuka();
+            // Find target water tile (prefer nearby water)
+            FindTargetWaterTile();
 
             // Create visual representation only if using procedural sprite
             if (useProceduralSprite)
@@ -180,36 +179,63 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Puka Assignment
+        #region Water Tile Assignment
 
         /// <summary>
-        /// Assigns the nearest Puka hazard to this Kelpie.
+        /// Finds a target water tile to lure visitors toward.
+        /// Prefers nearby water tiles closer to the Heart.
         /// </summary>
-        private void AssignNearestPuka()
+        private void FindTargetWaterTile()
         {
-            var allPukas = PukaHazard.All;
-
-            if (allPukas.Count == 0)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
             {
                 return;
             }
 
-            PukaHazard nearest = null;
-            float nearestDistance = float.MaxValue;
+            var grid = mazeGridBehaviour.Grid;
+            Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
 
-            foreach (var puka in allPukas)
+            // Search for water tiles near this Kelpie
+            List<Vector2Int> nearbyWaterTiles = new List<Vector2Int>();
+            int searchRadius = 5;
+
+            for (int dx = -searchRadius; dx <= searchRadius; dx++)
             {
-                if (puka == null) continue;
-
-                float distance = Vector3.Distance(transform.position, puka.transform.position);
-                if (distance < nearestDistance)
+                for (int dy = -searchRadius; dy <= searchRadius; dy++)
                 {
-                    nearestDistance = distance;
-                    nearest = puka;
+                    int checkX = gridPosition.x + dx;
+                    int checkY = gridPosition.y + dy;
+
+                    var node = grid.GetNode(checkX, checkY);
+                    if (node != null && node.terrain == TileType.Water)
+                    {
+                        nearbyWaterTiles.Add(new Vector2Int(checkX, checkY));
+                    }
                 }
             }
 
-            assignedPuka = nearest;
+            if (nearbyWaterTiles.Count == 0)
+            {
+                // Default to Heart position if no water found
+                targetWaterTile = heartPos;
+                return;
+            }
+
+            // Select water tile closest to Heart
+            Vector2Int closestToHeart = nearbyWaterTiles[0];
+            float minDist = Vector2Int.Distance(closestToHeart, heartPos);
+
+            foreach (var waterTile in nearbyWaterTiles)
+            {
+                float dist = Vector2Int.Distance(waterTile, heartPos);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    closestToHeart = waterTile;
+                }
+            }
+
+            targetWaterTile = closestToHeart;
         }
 
         #endregion
@@ -283,11 +309,11 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Lures a visitor toward the assigned Puka.
+        /// Lures a visitor toward the target water tile.
         /// </summary>
         private void LureVisitor(VisitorControllerBase visitor)
         {
-            if (visitor == null || assignedPuka == null)
+            if (visitor == null || mazeGridBehaviour == null)
             {
                 return;
             }
@@ -302,28 +328,30 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Calculate direction to Puka and animate
-            Vector3 directionToPuka = (assignedPuka.transform.position - transform.position).normalized;
-            int animDirection = GetDirectionFromMovement(new Vector2(directionToPuka.x, directionToPuka.y));
+            // Calculate direction to target water tile and animate
+            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetWaterTile.x, targetWaterTile.y);
+            Vector3 directionToWater = (targetWorldPos - transform.position).normalized;
+            int animDirection = GetDirectionFromMovement(new Vector2(directionToWater.x, directionToWater.y));
             SetAnimatorDirection(animDirection);
 
-            // TODO: Could add path modification here to lure visitor toward Puka
+            // TODO: Could add path modification here to lure visitor toward water
             // For now, the Kelpie just animates when visitors are near
         }
 
         /// <summary>
-        /// Animates the Kelpie luring gesture toward the Puka.
+        /// Animates the Kelpie luring gesture toward the target water tile.
         /// </summary>
         private void AnimateLuring()
         {
-            if (assignedPuka == null)
+            if (mazeGridBehaviour == null)
             {
                 return;
             }
 
-            // Calculate direction to Puka and animate
-            Vector3 directionToPuka = (assignedPuka.transform.position - transform.position).normalized;
-            int animDirection = GetDirectionFromMovement(new Vector2(directionToPuka.x, directionToPuka.y));
+            // Calculate direction to target water tile and animate
+            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetWaterTile.x, targetWaterTile.y);
+            Vector3 directionToWater = (targetWorldPos - transform.position).normalized;
+            int animDirection = GetDirectionFromMovement(new Vector2(directionToWater.x, directionToWater.y));
             SetAnimatorDirection(animDirection);
         }
 
@@ -448,11 +476,12 @@ namespace FaeMaze.Visitors
             Gizmos.color = new Color(0.1f, 0.8f, 0.8f, 0.3f);
             Gizmos.DrawWireSphere(transform.position, detectionRadius);
 
-            // Draw line to assigned Puka
-            if (assignedPuka != null)
+            // Draw line to target water tile
+            if (mazeGridBehaviour != null)
             {
+                Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetWaterTile.x, targetWaterTile.y);
                 Gizmos.color = state == KelpieState.Luring ? new Color(1f, 0.5f, 0f, 0.7f) : new Color(0f, 1f, 1f, 0.5f);
-                Gizmos.DrawLine(transform.position, assignedPuka.transform.position);
+                Gizmos.DrawLine(transform.position, targetWorldPos);
             }
         }
 
