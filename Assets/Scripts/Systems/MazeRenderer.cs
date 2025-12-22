@@ -118,6 +118,16 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            // Log wallPrefab status for debugging
+            if (wallPrefab != null)
+            {
+                Debug.Log($"MazeRenderer: wallPrefab is set to {wallPrefab.name}");
+            }
+            else
+            {
+                Debug.LogWarning("MazeRenderer: wallPrefab is NULL! Walls will use sprites instead.");
+            }
+
             // Create container for tiles if not assigned
             if (tilesParent == null)
             {
@@ -160,8 +170,8 @@ namespace FaeMaze.Systems
             // Add random jitter for wall sprites
             bool useWallPrefab = symbol == '#' && wallPrefab != null;
             bool isWallSprite = symbol == '#' && wallSprite != null && !useWallPrefab;
-            bool isUndergrowthSprite = symbol == ';' && wallSprite != null;
-            bool isWaterSprite = symbol == '~' && wallSprite != null;
+            bool isUndergrowthSprite = symbol == ';' && undergrowthSprite != null;
+            bool isWaterSprite = symbol == '~' && waterSprite != null;
             if (isWallSprite || isUndergrowthSprite || useWallPrefab)
             {
                 float jitterX = Random.Range(-0.02f, 0.02f); // +/- 2 pixels (assuming 100 pixels per unit)
@@ -173,11 +183,17 @@ namespace FaeMaze.Systems
 
             if (useWallPrefab)
             {
+                Debug.Log($"Using wall prefab for tile at ({gridX}, {gridY})");
                 GameObject wallTile = Instantiate(wallPrefab, tilesParent);
                 wallTile.name = $"Tile_{gridX}_{gridY}_Wall";
                 wallTile.transform.position = worldPos;
                 wallTile.transform.localScale = Vector3.one * tileSize;
                 return;
+            }
+
+            if (symbol == '#')
+            {
+                Debug.LogWarning($"Wall tile at ({gridX}, {gridY}) not using prefab - wallPrefab is null!");
             }
 
             GameObject tileObj = new GameObject($"Tile_{gridX}_{gridY}");
