@@ -466,6 +466,7 @@ MonoBehaviour:
   autoCenterCamera: 1
   defaultWallPrefab: {fileID: 100000, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
   defaultUndergrowthPrefab: {fileID: 5635536503766265964, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
+  defaultWaterPrefab: {fileID: 0}
 --- !u!114 &963194230
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -484,7 +485,7 @@ MonoBehaviour:
   undergrowthSprite: {fileID: 6545382614753218560, guid: 09209a0466d64594c9d95da289847466, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   waterSprite: {fileID: 8509550459451208454, guid: 9b3cc9c7b6214be49a531a88599d9846, type: 3}
-  waterPrefab: {fileID: 6679563812629709639, guid: f64cb6f8073e23b47a16e281c928211e, type: 3}
+  waterPrefab: {fileID: 5797252247512694294, guid: f64cb6f8073e23b47a16e281c928211e, type: 3}
   wallColor: {r: 0, g: 0, b: 0, a: 1}
   undergrowthColor: {r: 0.65, g: 0.75, b: 0.65, a: 1}
   waterColor: {r: 0.35, g: 0.55, b: 0.75, a: 1}
