@@ -30,7 +30,11 @@ namespace FaeMaze.Systems
         private Sprite undergrowthSprite;
 
         [SerializeField]
-        [Tooltip("Sprite for undergrowth tiles")]
+        [Tooltip("Prefab/model for undergrowth tiles")]
+        private GameObject undergrowthPrefab;
+
+        [SerializeField]
+        [Tooltip("Sprite for water tiles")]
         private Sprite waterSprite;
 
         [SerializeField]
@@ -82,6 +86,20 @@ namespace FaeMaze.Systems
             wallPrefab = prefab;
         }
 
+        /// <summary>
+        /// Indicates whether an undergrowth prefab has been assigned.
+        /// </summary>
+        public bool HasUndergrowthPrefab => undergrowthPrefab != null;
+
+        /// <summary>
+        /// Assigns the undergrowth prefab to use when rendering undergrowth tiles.
+        /// </summary>
+        /// <param name="prefab">Prefab or model to instantiate for undergrowth.</param>
+        public void SetUndergrowthPrefab(GameObject prefab)
+        {
+            undergrowthPrefab = prefab;
+        }
+
         #endregion
 
         #region Unity Lifecycle
@@ -118,7 +136,7 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Log wallPrefab status for debugging
+            // Log prefab status for debugging
             if (wallPrefab != null)
             {
                 Debug.Log($"MazeRenderer: wallPrefab is set to {wallPrefab.name}");
@@ -126,6 +144,15 @@ namespace FaeMaze.Systems
             else
             {
                 Debug.LogWarning("MazeRenderer: wallPrefab is NULL! Walls will use sprites instead.");
+            }
+
+            if (undergrowthPrefab != null)
+            {
+                Debug.Log($"MazeRenderer: undergrowthPrefab is set to {undergrowthPrefab.name}");
+            }
+            else
+            {
+                Debug.LogWarning("MazeRenderer: undergrowthPrefab is NULL! Undergrowth will use sprites instead.");
             }
 
             // Create container for tiles if not assigned
@@ -167,12 +194,13 @@ namespace FaeMaze.Systems
         {
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
 
-            // Add random jitter for wall sprites
+            // Add random jitter for wall and undergrowth sprites/prefabs
             bool useWallPrefab = symbol == '#' && wallPrefab != null;
+            bool useUndergrowthPrefab = symbol == ';' && undergrowthPrefab != null;
             bool isWallSprite = symbol == '#' && wallSprite != null && !useWallPrefab;
-            bool isUndergrowthSprite = symbol == ';' && undergrowthSprite != null;
+            bool isUndergrowthSprite = symbol == ';' && undergrowthSprite != null && !useUndergrowthPrefab;
             bool isWaterSprite = symbol == '~' && waterSprite != null;
-            if (isWallSprite || isUndergrowthSprite || useWallPrefab)
+            if (isWallSprite || isUndergrowthSprite || useWallPrefab || useUndergrowthPrefab)
             {
                 float jitterX = Random.Range(-0.02f, 0.02f); // +/- 2 pixels (assuming 100 pixels per unit)
                 float jitterY = Random.Range(-0.02f, 0.02f);
@@ -191,9 +219,24 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            if (useUndergrowthPrefab)
+            {
+                Debug.Log($"Using undergrowth prefab for tile at ({gridX}, {gridY})");
+                GameObject undergrowthTile = Instantiate(undergrowthPrefab, tilesParent);
+                undergrowthTile.name = $"Tile_{gridX}_{gridY}_Undergrowth";
+                undergrowthTile.transform.position = worldPos;
+                undergrowthTile.transform.localScale = Vector3.one * tileSize;
+                return;
+            }
+
             if (symbol == '#')
             {
                 Debug.LogWarning($"Wall tile at ({gridX}, {gridY}) not using prefab - wallPrefab is null!");
+            }
+
+            if (symbol == ';')
+            {
+                Debug.LogWarning($"Undergrowth tile at ({gridX}, {gridY}) not using prefab - undergrowthPrefab is null!");
             }
 
             GameObject tileObj = new GameObject($"Tile_{gridX}_{gridY}");

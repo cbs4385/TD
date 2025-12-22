@@ -23,6 +23,10 @@ namespace FaeMaze.Systems
         [Tooltip("Wall prefab/model to inject when MazeRenderer is missing a reference")]
         private GameObject defaultWallPrefab;
 
+        [SerializeField]
+        [Tooltip("Undergrowth prefab/model to inject when MazeRenderer is missing a reference")]
+        private GameObject defaultUndergrowthPrefab;
+
         private void Awake()
         {
             if (autoAddRenderer)
@@ -48,6 +52,11 @@ namespace FaeMaze.Systems
             if (renderer != null && !renderer.HasWallPrefab && defaultWallPrefab != null)
             {
                 renderer.SetWallPrefab(defaultWallPrefab);
+            }
+
+            if (renderer != null && !renderer.HasUndergrowthPrefab && defaultUndergrowthPrefab != null)
+            {
+                renderer.SetUndergrowthPrefab(defaultUndergrowthPrefab);
             }
         }
 
