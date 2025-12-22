@@ -27,6 +27,10 @@ namespace FaeMaze.Systems
         [Tooltip("Undergrowth prefab/model to inject when MazeRenderer is missing a reference")]
         private GameObject defaultUndergrowthPrefab;
 
+        [SerializeField]
+        [Tooltip("Water prefab/model to inject when MazeRenderer is missing a reference")]
+        private GameObject defaultWaterPrefab;
+
         private void Awake()
         {
             if (autoAddRenderer)
@@ -57,6 +61,11 @@ namespace FaeMaze.Systems
             if (renderer != null && !renderer.HasUndergrowthPrefab && defaultUndergrowthPrefab != null)
             {
                 renderer.SetUndergrowthPrefab(defaultUndergrowthPrefab);
+            }
+
+            if (renderer != null && !renderer.HasWaterPrefab && defaultWaterPrefab != null)
+            {
+                renderer.SetWaterPrefab(defaultWaterPrefab);
             }
         }
 

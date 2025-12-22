@@ -38,6 +38,10 @@ namespace FaeMaze.Systems
         private Sprite waterSprite;
 
         [SerializeField]
+        [Tooltip("Prefab/model for water tiles")]
+        private GameObject waterPrefab;
+
+        [SerializeField]
         [Tooltip("Color tint for wall tiles")]
         private Color wallColor = Color.black;
         
@@ -100,6 +104,20 @@ namespace FaeMaze.Systems
             undergrowthPrefab = prefab;
         }
 
+        /// <summary>
+        /// Indicates whether a water prefab has been assigned.
+        /// </summary>
+        public bool HasWaterPrefab => waterPrefab != null;
+
+        /// <summary>
+        /// Assigns the water prefab to use when rendering water tiles.
+        /// </summary>
+        /// <param name="prefab">Prefab or model to instantiate for water.</param>
+        public void SetWaterPrefab(GameObject prefab)
+        {
+            waterPrefab = prefab;
+        }
+
         #endregion
 
         #region Unity Lifecycle
@@ -155,6 +173,15 @@ namespace FaeMaze.Systems
                 Debug.LogWarning("MazeRenderer: undergrowthPrefab is NULL! Undergrowth will use sprites instead.");
             }
 
+            if (waterPrefab != null)
+            {
+                Debug.Log($"MazeRenderer: waterPrefab is set to {waterPrefab.name}");
+            }
+            else
+            {
+                Debug.LogWarning("MazeRenderer: waterPrefab is NULL! Water will use sprites instead.");
+            }
+
             // Create container for tiles if not assigned
             if (tilesParent == null)
             {
@@ -197,10 +224,11 @@ namespace FaeMaze.Systems
             // Add random jitter for wall and undergrowth sprites/prefabs
             bool useWallPrefab = symbol == '#' && wallPrefab != null;
             bool useUndergrowthPrefab = symbol == ';' && undergrowthPrefab != null;
+            bool useWaterPrefab = symbol == '~' && waterPrefab != null;
             bool isWallSprite = symbol == '#' && wallSprite != null && !useWallPrefab;
             bool isUndergrowthSprite = symbol == ';' && undergrowthSprite != null && !useUndergrowthPrefab;
-            bool isWaterSprite = symbol == '~' && waterSprite != null;
-            if (isWallSprite || isUndergrowthSprite || useWallPrefab || useUndergrowthPrefab)
+            bool isWaterSprite = symbol == '~' && waterSprite != null && !useWaterPrefab;
+            if (isWallSprite || isUndergrowthSprite || isWaterSprite || useWallPrefab || useUndergrowthPrefab || useWaterPrefab)
             {
                 float jitterX = Random.Range(-0.02f, 0.02f); // +/- 2 pixels (assuming 100 pixels per unit)
                 float jitterY = Random.Range(-0.02f, 0.02f);
@@ -229,6 +257,16 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            if (useWaterPrefab)
+            {
+                Debug.Log($"Using water prefab for tile at ({gridX}, {gridY})");
+                GameObject waterTile = Instantiate(waterPrefab, tilesParent);
+                waterTile.name = $"Tile_{gridX}_{gridY}_Water";
+                waterTile.transform.position = worldPos;
+                waterTile.transform.localScale = Vector3.one * tileSize;
+                return;
+            }
+
             if (symbol == '#')
             {
                 Debug.LogWarning($"Wall tile at ({gridX}, {gridY}) not using prefab - wallPrefab is null!");
@@ -237,6 +275,11 @@ namespace FaeMaze.Systems
             if (symbol == ';')
             {
                 Debug.LogWarning($"Undergrowth tile at ({gridX}, {gridY}) not using prefab - undergrowthPrefab is null!");
+            }
+
+            if (symbol == '~')
+            {
+                Debug.LogWarning($"Water tile at ({gridX}, {gridY}) not using prefab - waterPrefab is null!");
             }
 
             GameObject tileObj = new GameObject($"Tile_{gridX}_{gridY}");
