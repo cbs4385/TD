@@ -366,11 +366,11 @@ namespace FaeMaze.HeartPowers
                 bool onMurmuringPath = pathSegment.Contains(visitorTile);
 
                 // Set Lured state based on whether they're on the path
-                if (onMurmuringPath && !visitor.IsLured)
+                if (onMurmuringPath && visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Lured)
                 {
                     visitor.SetLured(true);
                 }
-                else if (!onMurmuringPath && visitor.IsLured)
+                else if (!onMurmuringPath && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Lured)
                 {
                     // Only clear Lured if this effect set it (visitor might be on another Murmuring Path)
                     // For now, we keep them lured until they're far from any path
