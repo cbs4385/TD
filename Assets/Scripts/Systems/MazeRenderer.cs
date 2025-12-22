@@ -66,6 +66,24 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Public API
+
+        /// <summary>
+        /// Indicates whether a wall prefab has been assigned.
+        /// </summary>
+        public bool HasWallPrefab => wallPrefab != null;
+
+        /// <summary>
+        /// Assigns the wall prefab to use when rendering wall tiles.
+        /// </summary>
+        /// <param name="prefab">Prefab or model to instantiate for walls.</param>
+        public void SetWallPrefab(GameObject prefab)
+        {
+            wallPrefab = prefab;
+        }
+
+        #endregion
+
         #region Unity Lifecycle
 
         private void Awake()

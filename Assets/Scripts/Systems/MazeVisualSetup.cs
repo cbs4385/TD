@@ -18,6 +18,11 @@ namespace FaeMaze.Systems
         [Tooltip("Automatically center camera on maze")]
         private bool autoCenterCamera = true;
 
+        [Header("Defaults")]
+        [SerializeField]
+        [Tooltip("Wall prefab/model to inject when MazeRenderer is missing a reference")]
+        private GameObject defaultWallPrefab;
+
         private void Awake()
         {
             if (autoAddRenderer)
@@ -37,6 +42,12 @@ namespace FaeMaze.Systems
             if (renderer == null)
             {
                 gameObject.AddComponent<MazeRenderer>();
+                renderer = GetComponent<MazeRenderer>();
+            }
+
+            if (renderer != null && !renderer.HasWallPrefab && defaultWallPrefab != null)
+            {
+                renderer.SetWallPrefab(defaultWallPrefab);
             }
         }
 
