@@ -1163,7 +1163,7 @@ MonoBehaviour:
     preferWaterProximity: 0
     enabled: 1
   pukaHazardConfig:
-    prefab: {fileID: 6545208890624987273, guid: df14e54a32acc3a4fad28395ea703153, type: 3}
+    prefab: {fileID: 6000000001, guid: f9e8d7c6b5a4e3d2c1b0a9f8e7d6c5b4, type: 3}
     baseCount: 1
     scalingPerWave: 0.2
     maxCount: 4
