@@ -479,6 +479,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
   wallSprite: {fileID: -8667466294985060184, guid: dd74cce1944c7674788a8379a69e44b7, type: 3}
+  wallPrefab: {fileID: 100000, guid: 6d32a2c8d0bf4b24d998f4005c8bba5e, type: 3}
   undergrowthSprite: {fileID: 6545382614753218560, guid: 09209a0466d64594c9d95da289847466, type: 3}
   waterSprite: {fileID: 8509550459451208454, guid: 9b3cc9c7b6214be49a531a88599d9846, type: 3}
   wallColor: {r: 1, g: 1, b: 1, a: 1}

@@ -17,9 +17,13 @@ namespace FaeMaze.Systems
         [Tooltip("Color for walkable path tiles")]
         private Color pathColor = Color.white; // White
 
-        [SerializeField] 
+        [SerializeField]
         [Tooltip("Sprite for wall tiles (trees/brambles)")]
         private Sprite wallSprite;
+
+        [SerializeField]
+        [Tooltip("Prefab/model for wall tiles (trees/brambles)")]
+        private GameObject wallPrefab;
 
         [SerializeField]
         [Tooltip("Sprite for undergrowth tiles")]
@@ -133,22 +137,33 @@ namespace FaeMaze.Systems
 
         private void CreateTileSprite(int gridX, int gridY, char symbol, Color color)
         {
-            GameObject tileObj = new GameObject($"Tile_{gridX}_{gridY}");
-            tileObj.transform.SetParent(tilesParent);
-
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
 
             // Add random jitter for wall sprites
-            bool isWallSprite = symbol == '#' && wallSprite != null;
+            bool useWallPrefab = symbol == '#' && wallPrefab != null;
+            bool isWallSprite = symbol == '#' && wallSprite != null && !useWallPrefab;
             bool isUndergrowthSprite = symbol == ';' && wallSprite != null;
             bool isWaterSprite = symbol == '~' && wallSprite != null;
-            if (isWallSprite || isUndergrowthSprite)
+            if (isWallSprite || isUndergrowthSprite || useWallPrefab)
             {
                 float jitterX = Random.Range(-0.02f, 0.02f); // +/- 2 pixels (assuming 100 pixels per unit)
                 float jitterY = Random.Range(-0.02f, 0.02f);
                 worldPos += new Vector3(jitterX, jitterY, 0f);
             }
 
+            float tileSize = mazeGridBehaviour.TileSize;
+
+            if (useWallPrefab)
+            {
+                GameObject wallTile = Instantiate(wallPrefab, tilesParent);
+                wallTile.name = $"Tile_{gridX}_{gridY}_Wall";
+                wallTile.transform.position = worldPos;
+                wallTile.transform.localScale = Vector3.one * tileSize;
+                return;
+            }
+
+            GameObject tileObj = new GameObject($"Tile_{gridX}_{gridY}");
+            tileObj.transform.SetParent(tilesParent);
             tileObj.transform.position = worldPos;
 
             SpriteRenderer spriteRenderer = tileObj.AddComponent<SpriteRenderer>();
@@ -178,7 +193,6 @@ namespace FaeMaze.Systems
             // Set sorting order based on tile type (water < path < undergrowth < walls)
             spriteRenderer.sortingOrder = sortingOrder + GetLayerOffsetForSymbol(symbol);
 
-            float tileSize = mazeGridBehaviour.TileSize;
             tileObj.transform.localScale = new Vector3(tileSize, tileSize, 1f);
         }
 

@@ -5,6 +5,7 @@ MonoImporter:
   serializedVersion: 2
   defaultReferences:
   - wallSprite: {fileID: -8667466294985060184, guid: dd74cce1944c7674788a8379a69e44b7, type: 3}
+  - wallPrefab: {instanceID: 0}
   - tilesParent: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
