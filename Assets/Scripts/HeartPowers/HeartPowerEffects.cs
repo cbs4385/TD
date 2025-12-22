@@ -265,6 +265,9 @@ namespace FaeMaze.HeartPowers
         private const string ModifierSourceId = "MurmuringPaths";
         private static int segmentCounter = 0;
         private string instanceSourceId;
+        private GameObject pathVisualObject;
+        private LineRenderer pathLineRenderer;
+        private float animationTime = 0f;
 
         public MurmuringPathsEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition)
@@ -293,22 +296,10 @@ namespace FaeMaze.HeartPowers
                 foreach (var tile in pathSegment)
                 {
                     manager.PathModifier.AddModifier(tile, costModifier, definition.duration, instanceSourceId);
-
-                    // Verify the modifier was applied
-                    var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
-                    if (node != null)
-                    {
-                    }
-
-                    // Add ROYGBIV tile visual (warm orange for Power 2)
-                    if (manager.TileVisualizer != null)
-                    {
-                        // Intensity based on cost modifier strength (normalize to 0-1)
-                        // Use a fixed high intensity since the path should be very visible
-                        float intensity = 0.9f;
-                        manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.MurmuringPaths, intensity, definition.duration);
-                    }
                 }
+
+                // Create continuous glowing path visualization
+                CreatePathVisualization(pathSegment, sealMode);
 
             }
             else
@@ -320,10 +311,12 @@ namespace FaeMaze.HeartPowers
         {
             manager.PathModifier.ClearBySource(instanceSourceId);
 
-            // Remove tile visuals
-            if (manager.TileVisualizer != null)
+            // Remove path visualization
+            if (pathVisualObject != null)
             {
-                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.MurmuringPaths);
+                Object.Destroy(pathVisualObject);
+                pathVisualObject = null;
+                pathLineRenderer = null;
             }
 
             // Clear Lured state from all visitors
@@ -345,6 +338,13 @@ namespace FaeMaze.HeartPowers
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
+
+            // Animate the path visual with jagged moving edges
+            animationTime += deltaTime;
+            if (pathLineRenderer != null)
+            {
+                UpdatePathAnimation();
+            }
 
             // Find all active visitors and check if they're on Murmuring Path tiles
             var activeVisitors = FaeMaze.Visitors.VisitorController.All;
@@ -433,6 +433,80 @@ namespace FaeMaze.HeartPowers
             }
 
             return segment;
+        }
+
+        private void CreatePathVisualization(List<Vector2Int> path, bool sealMode)
+        {
+            if (path == null || path.Count == 0 || manager.MazeGrid == null)
+                return;
+
+            // Create GameObject for the path visual
+            pathVisualObject = new GameObject($"MurmuringPath_{instanceSourceId}");
+            pathLineRenderer = pathVisualObject.AddComponent<LineRenderer>();
+
+            // Configure LineRenderer
+            pathLineRenderer.startWidth = 0.8f;
+            pathLineRenderer.endWidth = 0.8f;
+            pathLineRenderer.positionCount = path.Count;
+
+            // Set color (warm orange for lure, reddish for seal)
+            Color pathColor = sealMode
+                ? new Color(0.8f, 0.1f, 0.1f, 0.7f)  // Deep red for seal mode
+                : new Color(1.0f, 0.5f, 0.0f, 0.7f);  // Warm orange for lure mode
+
+            pathLineRenderer.startColor = pathColor;
+            pathLineRenderer.endColor = pathColor;
+
+            // Use additive material for glow effect
+            pathLineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+            pathLineRenderer.material.color = pathColor;
+
+            // Set sorting layer to render above floor but below props
+            pathLineRenderer.sortingLayerName = "Default";
+            pathLineRenderer.sortingOrder = 5;
+
+            // Set positions from path tiles
+            for (int i = 0; i < path.Count; i++)
+            {
+                Vector3 worldPos = manager.MazeGrid.GridToWorld(path[i].x, path[i].y);
+                worldPos.z = -0.1f; // Slightly above floor
+                pathLineRenderer.SetPosition(i, worldPos);
+            }
+        }
+
+        private void UpdatePathAnimation()
+        {
+            if (pathLineRenderer == null || pathSegment == null || pathSegment.Count == 0)
+                return;
+
+            // Create jagged moving edge effect by varying width along the path
+            float baseWidth = 0.8f;
+            float jaggedAmount = 0.3f;
+            float animSpeed = 2.0f;
+
+            // Animate width curve to create moving jagged edges
+            AnimationCurve widthCurve = new AnimationCurve();
+
+            for (int i = 0; i < pathSegment.Count; i++)
+            {
+                float t = (float)i / pathSegment.Count;
+
+                // Create jagged pattern using sine waves at different frequencies
+                float jaggedOffset = Mathf.Sin((t * 10.0f) + (animationTime * animSpeed)) * jaggedAmount;
+                jaggedOffset += Mathf.Sin((t * 5.0f) - (animationTime * animSpeed * 1.5f)) * jaggedAmount * 0.5f;
+
+                float width = baseWidth + jaggedOffset;
+                widthCurve.AddKey(t, width);
+            }
+
+            pathLineRenderer.widthCurve = widthCurve;
+
+            // Pulse the overall alpha
+            float pulseAlpha = 0.5f + Mathf.Sin(animationTime * 3.0f) * 0.2f;
+            Color currentColor = pathLineRenderer.startColor;
+            currentColor.a = pulseAlpha;
+            pathLineRenderer.startColor = currentColor;
+            pathLineRenderer.endColor = currentColor;
         }
 
         private List<Vector2Int> GetWalkableNeighbors(Vector2Int tile)
