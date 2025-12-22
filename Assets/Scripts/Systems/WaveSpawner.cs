@@ -479,8 +479,8 @@ namespace FaeMaze.Systems
                 float roll = Random.value;
                 if (roll < mistakingVisitorChance)
                 {
-                    // Spawn mistaking visitor
-                    MistakingVisitorController mistakingVisitor = Instantiate(mistakingVisitorPrefab, spawnWorldPos, Quaternion.identity);
+                    // Spawn mistaking visitor (rotated 180 degrees on z-axis)
+                    MistakingVisitorController mistakingVisitor = Instantiate(mistakingVisitorPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
                     visitorObject = mistakingVisitor.gameObject;
                     isMistakingVisitor = true;
 
@@ -493,7 +493,7 @@ namespace FaeMaze.Systems
             // Fall back to regular visitor if mistaking visitor wasn't spawned
             if (visitorObject == null && visitorPrefab != null)
             {
-                VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
+                VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
                 visitorObject = visitor.gameObject;
 
                 // Initialize regular visitor
@@ -599,8 +599,8 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Instantiate Red Cap
-            currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.identity);
+            // Instantiate Red Cap (rotated 180 degrees on z-axis)
+            currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
             currentRedCap.name = $"RedCap_Wave{currentWaveNumber}";
 
             hasSpawnedRedCap = true;

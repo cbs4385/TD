@@ -106,8 +106,8 @@ namespace FaeMaze.DebugTools
             // Get world position for spawn
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(entrancePos.x, entrancePos.y) + spawnOffset;
 
-            // Instantiate visitor
-            VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.identity);
+            // Instantiate visitor (rotated 180 degrees on z-axis)
+            VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
             visitor.gameObject.name = $"Visitor_{visitorSpawnCount++}";
 
             SoundManager.Instance?.PlayVisitorSpawn();
