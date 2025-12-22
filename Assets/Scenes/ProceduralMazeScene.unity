@@ -521,7 +521,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeVisualSetup
   autoAddRenderer: 1
   autoCenterCamera: 1
-  defaultWallPrefab: {fileID: 100000, guid: 6d32a2c8d0bf4b24d998f4005c8bba5e, type: 3}
+  defaultWallPrefab: {fileID: 100000, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
 --- !u!114 &963194230
 MonoBehaviour:
   m_ObjectHideFlags: 0
