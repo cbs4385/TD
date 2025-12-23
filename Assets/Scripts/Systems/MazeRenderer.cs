@@ -60,10 +60,6 @@ namespace FaeMaze.Systems
         [Tooltip("Maximum tiles per batch (to avoid meshes that are too large)")]
         private int batchChunkSize = 100;
 
-        [SerializeField]
-        [Tooltip("Enable LOD system for walls and vegetation")]
-        private bool enableLOD = false;
-
         #endregion
 
         #region Private Fields

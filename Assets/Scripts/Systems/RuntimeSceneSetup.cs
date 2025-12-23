@@ -69,14 +69,12 @@ namespace FaeMaze.Systems
 
                 // Auto-create HeartOfTheMaze if missing
                 FaeMaze.Maze.HeartOfTheMaze heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
-                bool heartWasCreated = false;
 
                 if (heart == null)
                 {
                     GameObject heartObj = new GameObject("HeartOfTheMaze");
                     heartObj.transform.SetParent(gameRoot.transform);
                     heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
-                    heartWasCreated = true;
                     Debug.Log("[RuntimeSceneSetup] Created new HeartOfTheMaze");
                 }
                 else
