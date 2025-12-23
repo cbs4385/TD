@@ -12,25 +12,28 @@ namespace FaeMaze.Systems
         #region Private Classes
 
         /// <summary>
-        /// Internal node class for A* pathfinding algorithm.
+        /// Internal node class for A* pathfinding algorithm with 3D support.
         /// </summary>
         private class PathNode
         {
-            public int x;
-            public int y;
+            public MazeGrid.MazeNode mazeNode; // Reference to the actual maze node
             public float gCost; // Cost from start to this node
             public float hCost; // Heuristic cost from this node to end
             public float fCost => gCost + hCost; // Total cost
             public PathNode parent;
 
-            public PathNode(int x, int y)
+            public PathNode(MazeGrid.MazeNode mazeNode)
             {
-                this.x = x;
-                this.y = y;
+                this.mazeNode = mazeNode;
                 this.gCost = float.MaxValue;
                 this.hCost = 0;
                 this.parent = null;
             }
+
+            // Convenience properties for backward compatibility
+            public int x => mazeNode.x;
+            public int y => mazeNode.y;
+            public int z => mazeNode.z;
         }
 
         #endregion
@@ -38,14 +41,10 @@ namespace FaeMaze.Systems
         #region Private Fields
 
         private readonly MazeGrid grid;
-        private readonly Dictionary<int, PathNode> allNodes; // Cache of PathNode objects
+        private readonly Dictionary<long, PathNode> allNodes; // Cache of PathNode objects (now uses long key for 3D)
         private readonly List<PathNode> openSet;
-        private readonly HashSet<int> openSetLookup;
-        private readonly HashSet<int> closedSet;
-
-        // Neighbor offsets (4-directional: up, right, down, left)
-        private static readonly int[] dx = { 0, 1, 0, -1 };
-        private static readonly int[] dy = { -1, 0, 1, 0 };
+        private readonly HashSet<long> openSetLookup;
+        private readonly HashSet<long> closedSet;
 
         // Heuristic scaling factor to account for attractive tiles
         // Set to 0.0 to disable heuristic, making A* equivalent to Dijkstra's algorithm
@@ -68,10 +67,10 @@ namespace FaeMaze.Systems
             }
 
             this.grid = grid;
-            this.allNodes = new Dictionary<int, PathNode>();
+            this.allNodes = new Dictionary<long, PathNode>();
             this.openSet = new List<PathNode>();
-            this.openSetLookup = new HashSet<int>();
-            this.closedSet = new HashSet<int>();
+            this.openSetLookup = new HashSet<long>();
+            this.closedSet = new HashSet<long>();
         }
 
         #endregion
@@ -156,16 +155,22 @@ namespace FaeMaze.Systems
 
         private PathNode FindPath(int startX, int startY, int endX, int endY, float attractionMultiplier)
         {
+            // Get start and end maze nodes
+            MazeGrid.MazeNode startMazeNode = grid.GetNode(startX, startY);
+            if (startMazeNode == null)
+            {
+                return null;
+            }
 
             // Create start node
-            PathNode startPathNode = GetOrCreatePathNode(startX, startY);
+            PathNode startPathNode = GetOrCreatePathNode(startMazeNode);
             startPathNode.gCost = 0;
             startPathNode.hCost = CalculateHeuristic(startX, startY, endX, endY);
             startPathNode.parent = null;
 
             // Add to open set
             openSet.Add(startPathNode);
-            openSetLookup.Add(GetNodeKey(startX, startY));
+            openSetLookup.Add(GetNodeKey(startMazeNode));
 
             // A* main loop
             while (openSet.Count > 0)
@@ -180,7 +185,7 @@ namespace FaeMaze.Systems
                 }
 
                 // Move current node from open to closed set
-                int currentKey = GetNodeKey(currentNode.x, currentNode.y);
+                long currentKey = GetNodeKey(currentNode.mazeNode);
                 openSet.Remove(currentNode);
                 openSetLookup.Remove(currentKey);
                 closedSet.Add(currentKey);
@@ -195,44 +200,36 @@ namespace FaeMaze.Systems
 
         private void ProcessNeighbors(PathNode currentNode, int endX, int endY, float attractionMultiplier)
         {
-            for (int i = 0; i < 4; i++)
+            // Get neighbors including custom connections (stairs, ramps, etc.)
+            List<MazeGrid.MazeNode> neighbors = grid.GetNeighbors(currentNode.mazeNode, true);
+
+            foreach (var neighborMazeNode in neighbors)
             {
-                int neighborX = currentNode.x + dx[i];
-                int neighborY = currentNode.y + dy[i];
-
-                // Check if neighbor is valid
-                if (!grid.InBounds(neighborX, neighborY))
-                    continue;
-
-                int neighborKey = GetNodeKey(neighborX, neighborY);
+                long neighborKey = GetNodeKey(neighborMazeNode);
 
                 // Skip if already in closed set
                 if (closedSet.Contains(neighborKey))
                     continue;
 
-                // Check if neighbor is walkable
-                var mazeNode = grid.GetNode(neighborX, neighborY);
-                if (mazeNode == null || !mazeNode.walkable)
-                {
-                    // Debug logging for water tiles specifically
-                    if (mazeNode != null && mazeNode.terrain == TileType.Water)
-                    {
-                    }
+                // Check if neighbor is walkable (should already be filtered by GetNeighbors, but double-check)
+                if (!neighborMazeNode.walkable)
                     continue;
-                }
 
                 // Calculate costs with attraction multiplier based on visitor state
-                float movementCost = grid.GetMoveCost(neighborX, neighborY, attractionMultiplier);
-                float tentativeGCost = currentNode.gCost + movementCost;
+                float movementCost = grid.GetMoveCost(neighborMazeNode.x, neighborMazeNode.y, attractionMultiplier);
 
-                // Debug: Log when we encounter attractive tiles
-                var node = grid.GetNode(neighborX, neighborY);
-                if (node != null && Mathf.Abs(node.attraction) > 0.01f)
+                // Add extra cost for vertical movement (stairs/ramps)
+                float heightDifference = Mathf.Abs(neighborMazeNode.height - currentNode.mazeNode.height);
+                if (heightDifference > 0.01f)
                 {
+                    // Stairs/ramps cost more than flat movement
+                    movementCost += heightDifference * 0.5f;
                 }
 
+                float tentativeGCost = currentNode.gCost + movementCost;
+
                 // Get or create neighbor PathNode
-                PathNode neighborPathNode = GetOrCreatePathNode(neighborX, neighborY);
+                PathNode neighborPathNode = GetOrCreatePathNode(neighborMazeNode);
 
                 // Check if this path is better
                 bool isInOpenSet = openSetLookup.Contains(neighborKey);
@@ -241,7 +238,7 @@ namespace FaeMaze.Systems
                 {
                     // Update neighbor
                     neighborPathNode.gCost = tentativeGCost;
-                    neighborPathNode.hCost = CalculateHeuristic(neighborX, neighborY, endX, endY);
+                    neighborPathNode.hCost = CalculateHeuristic(neighborMazeNode.x, neighborMazeNode.y, endX, endY);
                     neighborPathNode.parent = currentNode;
 
                     // Add to open set if not already there
@@ -285,20 +282,20 @@ namespace FaeMaze.Systems
             return manhattanDistance * HEURISTIC_SCALE;
         }
 
-        private int GetNodeKey(int x, int y)
+        private long GetNodeKey(MazeGrid.MazeNode node)
         {
-            // Encode x and y into a single int key
-            // Assumes grid size < 65536 (16 bits per coordinate)
-            return (y << 16) | x;
+            // Encode x, y, z into a single long key
+            // Uses 20 bits per coordinate (supports up to 1 million per dimension)
+            return ((long)node.z << 40) | ((long)node.y << 20) | (long)node.x;
         }
 
-        private PathNode GetOrCreatePathNode(int x, int y)
+        private PathNode GetOrCreatePathNode(MazeGrid.MazeNode mazeNode)
         {
-            int key = GetNodeKey(x, y);
+            long key = GetNodeKey(mazeNode);
 
             if (!allNodes.TryGetValue(key, out PathNode node))
             {
-                node = new PathNode(x, y);
+                node = new PathNode(mazeNode);
                 allNodes[key] = node;
             }
             else
@@ -320,10 +317,9 @@ namespace FaeMaze.Systems
             PathNode current = endNode;
             while (current != null)
             {
-                var mazeNode = grid.GetNode(current.x, current.y);
-                if (mazeNode != null)
+                if (current.mazeNode != null)
                 {
-                    resultPath.Add(mazeNode);
+                    resultPath.Add(current.mazeNode);
                 }
                 current = current.parent;
             }

@@ -624,19 +624,46 @@ namespace FaeMaze.Systems
         #region Coordinate Conversion
 
         /// <summary>
-        /// Converts grid coordinates to world position.
+        /// Converts grid coordinates to world position (2D backward compatibility).
         /// </summary>
         /// <param name="x">Grid X coordinate</param>
         /// <param name="y">Grid Y coordinate</param>
-        /// <returns>World position corresponding to the grid cell</returns>
+        /// <returns>World position corresponding to the grid cell at ground level</returns>
         public Vector3 GridToWorld(int x, int y)
+        {
+            return GridToWorld(x, y, 0f);
+        }
+
+        /// <summary>
+        /// Converts grid coordinates to world position with height support.
+        /// </summary>
+        /// <param name="x">Grid X coordinate</param>
+        /// <param name="y">Grid Y coordinate</param>
+        /// <param name="height">Height offset in world units</param>
+        /// <returns>World position corresponding to the grid cell with height</returns>
+        public Vector3 GridToWorld(int x, int y, float height)
         {
             if (mazeOrigin == null)
             {
-                return new Vector3(x * tileSize, y * tileSize, 0);
+                return new Vector3(x * tileSize, y * tileSize, -height);
             }
 
-            return mazeOrigin.position + new Vector3(x * tileSize, y * tileSize, 0);
+            return mazeOrigin.position + new Vector3(x * tileSize, y * tileSize, -height);
+        }
+
+        /// <summary>
+        /// Converts a MazeNode to world position using its stored height.
+        /// </summary>
+        /// <param name="node">The maze node</param>
+        /// <returns>World position corresponding to the node</returns>
+        public Vector3 NodeToWorld(MazeGrid.MazeNode node)
+        {
+            if (node == null)
+            {
+                return Vector3.zero;
+            }
+
+            return GridToWorld(node.x, node.y, node.height);
         }
 
         /// <summary>

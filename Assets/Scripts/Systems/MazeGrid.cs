@@ -12,7 +12,7 @@ namespace FaeMaze.Systems
         #region Nested Types
 
         /// <summary>
-        /// Represents a single node/cell in the maze grid.
+        /// Represents a single node/cell in the maze grid with 3D support.
         /// </summary>
         public class MazeNode
         {
@@ -21,6 +21,12 @@ namespace FaeMaze.Systems
 
             /// <summary>Y coordinate in grid space</summary>
             public int y;
+
+            /// <summary>Z coordinate/layer in grid space (0 = ground level)</summary>
+            public int z;
+
+            /// <summary>Height of this tile in world units (for rendering and pathfinding)</summary>
+            public float height;
 
             /// <summary>Whether this node can be walked through</summary>
             public bool walkable;
@@ -43,10 +49,15 @@ namespace FaeMaze.Systems
             /// <summary>Indicates this tile is the maze heart.</summary>
             public bool isHeart;
 
-            public MazeNode(int x, int y)
+            /// <summary>List of connected nodes for multi-level pathfinding (stairs, ramps, etc.)</summary>
+            public List<MazeNode> customConnections;
+
+            public MazeNode(int x, int y, int z = 0)
             {
                 this.x = x;
                 this.y = y;
+                this.z = z;
+                this.height = 0f;
                 this.walkable = true;
                 this.baseCost = 1.0f;
                 this.speedMultiplier = 1.0f;
@@ -54,6 +65,7 @@ namespace FaeMaze.Systems
                 this.symbol = '#';
                 this.terrain = TileType.TreeBramble;
                 this.isHeart = false;
+                this.customConnections = new List<MazeNode>();
             }
 
             /// <summary>
@@ -237,6 +249,81 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Adds a custom connection between two nodes for multi-level pathfinding.
+        /// Useful for stairs, ramps, teleporters, or other non-standard connections.
+        /// </summary>
+        /// <param name="fromNode">Source node</param>
+        /// <param name="toNode">Target node</param>
+        /// <param name="bidirectional">If true, adds connection in both directions</param>
+        public void AddCustomConnection(MazeNode fromNode, MazeNode toNode, bool bidirectional = true)
+        {
+            if (fromNode == null || toNode == null)
+            {
+                return;
+            }
+
+            if (!fromNode.customConnections.Contains(toNode))
+            {
+                fromNode.customConnections.Add(toNode);
+            }
+
+            if (bidirectional && !toNode.customConnections.Contains(fromNode))
+            {
+                toNode.customConnections.Add(fromNode);
+            }
+        }
+
+        /// <summary>
+        /// Gets all neighbors of a node including custom connections.
+        /// Supports both 2D (4-directional) and 3D (with custom connections) pathfinding.
+        /// </summary>
+        /// <param name="node">The node to get neighbors for</param>
+        /// <param name="includeCustomConnections">Whether to include custom connections (stairs, ramps, etc.)</param>
+        /// <returns>List of neighbor nodes</returns>
+        public List<MazeNode> GetNeighbors(MazeNode node, bool includeCustomConnections = true)
+        {
+            List<MazeNode> neighbors = new List<MazeNode>();
+
+            if (node == null)
+            {
+                return neighbors;
+            }
+
+            // 4-directional neighbors (up, down, left, right)
+            int[] dx = { 0, 0, -1, 1 };
+            int[] dy = { -1, 1, 0, 0 };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int neighborX = node.x + dx[i];
+                int neighborY = node.y + dy[i];
+
+                if (InBounds(neighborX, neighborY))
+                {
+                    MazeNode neighbor = GetNode(neighborX, neighborY);
+                    if (neighbor != null && neighbor.walkable)
+                    {
+                        neighbors.Add(neighbor);
+                    }
+                }
+            }
+
+            // Add custom connections (stairs, ramps, etc.)
+            if (includeCustomConnections && node.customConnections != null)
+            {
+                foreach (var connection in node.customConnections)
+                {
+                    if (connection != null && connection.walkable && !neighbors.Contains(connection))
+                    {
+                        neighbors.Add(connection);
+                    }
+                }
+            }
+
+            return neighbors;
+        }
+
+        /// <summary>
         /// Gets diagnostic information about the grid.
         /// </summary>
         /// <returns>String with grid statistics</returns>
@@ -276,6 +363,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Performs a flood-fill BFS to find all walkable tiles reachable from an origin.
         /// Stops when either the radius or step limit is reached.
+        /// Supports 3D pathfinding with custom connections.
         /// </summary>
         /// <param name="originX">Starting X coordinate</param>
         /// <param name="originY">Starting Y coordinate</param>
@@ -298,27 +386,17 @@ namespace FaeMaze.Systems
                 return reachable;
             }
 
-            // BFS queue: (position, step_count)
-            Queue<(Vector2Int pos, int steps)> queue = new Queue<(Vector2Int, int)>();
-            HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+            // BFS queue: (node, step_count)
+            Queue<(MazeNode node, int steps)> queue = new Queue<(MazeNode, int)>();
+            HashSet<MazeNode> visited = new HashSet<MazeNode>();
 
-            Vector2Int origin = new Vector2Int(originX, originY);
-            queue.Enqueue((origin, 0));
-            visited.Add(origin);
-
-            // 4-directional neighbors
-            Vector2Int[] directions = new Vector2Int[]
-            {
-                new Vector2Int(0, 1),   // Up
-                new Vector2Int(0, -1),  // Down
-                new Vector2Int(1, 0),   // Right
-                new Vector2Int(-1, 0)   // Left
-            };
+            queue.Enqueue((originNode, 0));
+            visited.Add(originNode);
 
             while (queue.Count > 0)
             {
-                var (currentPos, currentSteps) = queue.Dequeue();
-                reachable.Add(currentPos);
+                var (currentNode, currentSteps) = queue.Dequeue();
+                reachable.Add(new Vector2Int(currentNode.x, currentNode.y));
 
                 // Don't explore beyond max flood-fill steps
                 if (currentSteps >= maxFloodFillSteps)
@@ -326,32 +404,23 @@ namespace FaeMaze.Systems
                     continue;
                 }
 
-                // Explore neighbors
-                foreach (var dir in directions)
+                // Get neighbors including custom connections (stairs, ramps)
+                List<MazeNode> neighbors = GetNeighbors(currentNode, true);
+
+                foreach (var neighborNode in neighbors)
                 {
-                    Vector2Int neighborPos = currentPos + dir;
-
                     // Skip if already visited
-                    if (visited.Contains(neighborPos))
-                        continue;
-
-                    // Check bounds
-                    if (!InBounds(neighborPos.x, neighborPos.y))
-                        continue;
-
-                    // Check walkability
-                    var neighborNode = GetNode(neighborPos.x, neighborPos.y);
-                    if (neighborNode == null || !neighborNode.walkable)
+                    if (visited.Contains(neighborNode))
                         continue;
 
                     // Check Manhattan distance from origin (stop when radius is exceeded)
-                    int manhattanDist = Mathf.Abs(neighborPos.x - originX) + Mathf.Abs(neighborPos.y - originY);
+                    int manhattanDist = Mathf.Abs(neighborNode.x - originX) + Mathf.Abs(neighborNode.y - originY);
                     if (manhattanDist > radius)
                         continue;
 
                     // Add to queue
-                    visited.Add(neighborPos);
-                    queue.Enqueue((neighborPos, currentSteps + 1));
+                    visited.Add(neighborNode);
+                    queue.Enqueue((neighborNode, currentSteps + 1));
                 }
             }
 
