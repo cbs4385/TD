@@ -280,7 +280,12 @@ namespace FaeMaze.Systems
                 // Create procedural mesh tile if no prefab available
                 tileObj = CreateProceduralTile(gridX, gridY, symbol, color, tileSize);
                 tileObj.transform.SetParent(tilesParent);
-                tileObj.transform.position = worldPos;
+
+                // Position tile with slight Y-offset for floor tiles
+                // Tiles are 0.1 units high, so offset by -0.05 to place top surface at grid level
+                // For path tiles, we want them visible as ground, so use a small negative offset
+                float yOffset = (symbol == '.') ? 0f : 0f; // All tiles at same level for now
+                tileObj.transform.position = worldPos + new Vector3(0, yOffset, 0);
             }
 
             // Add to batching lists if batching is enabled
@@ -383,8 +388,8 @@ namespace FaeMaze.Systems
                 renderer.material = material;
             }
 
-            // Position offset to account for cube height
-            tileObj.transform.position = new Vector3(0, -0.05f, 0);
+            // Note: Position will be set by caller (CreateTile3D)
+            // No initial position set here to avoid conflicts
 
             return tileObj;
         }

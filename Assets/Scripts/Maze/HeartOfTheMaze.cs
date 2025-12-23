@@ -292,7 +292,8 @@ namespace FaeMaze.Maze
 
             if (heartModelPrefab == null)
             {
-                Debug.LogError("[HeartOfTheMaze] heartModelPrefab is NULL! Heart requires a 3D model prefab.");
+                Debug.LogWarning("[HeartOfTheMaze] heartModelPrefab is NULL! Creating fallback procedural heart visual.");
+                CreateFallbackHeartVisual();
                 return;
             }
 
@@ -302,7 +303,8 @@ namespace FaeMaze.Maze
             modelInstance = Instantiate(heartModelPrefab, transform);
             if (modelInstance == null)
             {
-                Debug.LogError("[HeartOfTheMaze] Failed to instantiate heart model prefab.");
+                Debug.LogError("[HeartOfTheMaze] Failed to instantiate heart model prefab. Creating fallback.");
+                CreateFallbackHeartVisual();
                 return;
             }
 
@@ -335,6 +337,37 @@ namespace FaeMaze.Maze
             else
             {
                 Debug.LogWarning("[HeartOfTheMaze] No MeshRenderers found in model!");
+            }
+        }
+
+        /// <summary>
+        /// Creates a fallback visual for the heart when no model prefab is assigned.
+        /// </summary>
+        private void CreateFallbackHeartVisual()
+        {
+            // Create a simple sphere as fallback
+            modelInstance = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            modelInstance.transform.SetParent(transform);
+            modelInstance.transform.localPosition = new Vector3(0, 0, -0.3f);
+            modelInstance.transform.localScale = Vector3.one * modelSize;
+            modelInstance.name = "Heart_Fallback";
+
+            // Create emissive material
+            MeshRenderer renderer = modelInstance.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                Material heartMat = Systems.PBRMaterialFactory.CreateEmissiveMaterial(
+                    new Color(0.9f, 0.35f, 0.35f), // Base color
+                    emissionColor,
+                    2.0f // Emission intensity
+                );
+                renderer.material = heartMat;
+
+                // Store materials for pulsing
+                materials = new Material[] { heartMat };
+                meshRenderers = new MeshRenderer[] { renderer };
+
+                Debug.Log("[HeartOfTheMaze] Created fallback heart visual with emissive material");
             }
         }
 
