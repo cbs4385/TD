@@ -310,7 +310,13 @@ namespace FaeMaze.Maze
 
             // Set position with proper Z offset
             modelInstance.transform.localPosition = new Vector3(0, 0, -0.3f);
-            modelInstance.transform.localScale = Vector3.one * modelSize;
+
+            // Preserve prefab's scale and multiply by modelSize
+            // (prefab has scale 100, so we keep that and just apply modelSize multiplier)
+            Vector3 prefabScale = modelInstance.transform.localScale;
+            modelInstance.transform.localScale = prefabScale * modelSize;
+
+            Debug.Log($"[HeartOfTheMaze] Model scale: prefab={prefabScale}, final={modelInstance.transform.localScale}");
 
             Debug.Log($"[HeartOfTheMaze] SetupModel: Model instantiated successfully - {modelInstance.name}");
 
