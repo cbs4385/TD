@@ -67,52 +67,63 @@ namespace FaeMaze.Systems
                     heartPowerManagerObj.AddComponent<FaeMaze.HeartPowers.HeartPowerManager>();
                 }
 
-                // Auto-create HeartOfTheMaze if missing
+                // Load heart model prefab first (before creating component)
+                GameObject heartModelPrefab = null;
+
+#if UNITY_EDITOR
+                // In editor, load from Assets/Prefabs using AssetDatabase
+                heartModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/heartofmaze.prefab");
+                Debug.Log($"[RuntimeSceneSetup] Loaded heartofmaze prefab: {(heartModelPrefab != null ? "SUCCESS" : "FAILED")}");
+#else
+                // In builds, try to load from Resources folder
+                heartModelPrefab = UnityEngine.Resources.Load<GameObject>("Prefabs/heartofmaze");
+                Debug.Log($"[RuntimeSceneSetup] Loaded heartofmaze from Resources: {(heartModelPrefab != null ? "SUCCESS" : "FAILED")}");
+#endif
+
+                // Auto-create or find HeartOfTheMaze
                 FaeMaze.Maze.HeartOfTheMaze heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
 
                 if (heart == null)
                 {
+                    // Create GameObject but don't add component yet
                     GameObject heartObj = new GameObject("HeartOfTheMaze");
                     heartObj.transform.SetParent(gameRoot.transform);
+
+                    // Add component with inactive state to prevent Awake() from running
+                    heartObj.SetActive(false);
                     heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
-                    Debug.Log("[RuntimeSceneSetup] Created new HeartOfTheMaze");
-                }
-                else
-                {
-                    Debug.Log("[RuntimeSceneSetup] Found existing HeartOfTheMaze, configuring it");
-                }
 
-                // Configure heart to use the model prefab (whether new or existing)
-                if (heart != null)
-                {
-                    GameObject heartModelPrefab = null;
-
-#if UNITY_EDITOR
-                    // In editor, load from Assets/Prefabs using AssetDatabase
-                    heartModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/heartofmaze.prefab");
-                    Debug.Log($"[RuntimeSceneSetup] Loaded heartofmaze prefab: {(heartModelPrefab != null ? "SUCCESS" : "FAILED")}");
-#endif
-
+                    // Assign prefab BEFORE activating (and triggering Awake)
                     if (heartModelPrefab != null)
                     {
                         var heartType = typeof(FaeMaze.Maze.HeartOfTheMaze);
-
-                        // Set useModelPrefab to true
-                        var useModelPrefabField = heartType.GetField("useModelPrefab",
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        if (useModelPrefabField != null)
-                        {
-                            useModelPrefabField.SetValue(heart, true);
-                            Debug.Log($"[RuntimeSceneSetup] Set useModelPrefab to true");
-                        }
-
-                        // Set heartModelPrefab field
                         var heartModelPrefabField = heartType.GetField("heartModelPrefab",
                             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                         if (heartModelPrefabField != null)
                         {
                             heartModelPrefabField.SetValue(heart, heartModelPrefab);
-                            Debug.Log($"[RuntimeSceneSetup] Set heartModelPrefab field");
+                            Debug.Log($"[RuntimeSceneSetup] Assigned heartModelPrefab before Awake()");
+                        }
+                    }
+
+                    // Now activate to trigger Awake() with prefab already assigned
+                    heartObj.SetActive(true);
+                    Debug.Log("[RuntimeSceneSetup] Created and activated new HeartOfTheMaze with prefab assigned");
+                }
+                else
+                {
+                    Debug.Log("[RuntimeSceneSetup] Found existing HeartOfTheMaze, configuring it");
+
+                    // For existing heart, update prefab and call SetupModel
+                    if (heartModelPrefab != null)
+                    {
+                        var heartType = typeof(FaeMaze.Maze.HeartOfTheMaze);
+                        var heartModelPrefabField = heartType.GetField("heartModelPrefab",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (heartModelPrefabField != null)
+                        {
+                            heartModelPrefabField.SetValue(heart, heartModelPrefab);
+                            Debug.Log($"[RuntimeSceneSetup] Updated heartModelPrefab on existing heart");
                         }
 
                         // Call SetupModel to instantiate the model
@@ -123,18 +134,6 @@ namespace FaeMaze.Systems
                             setupModelMethod.Invoke(heart, null);
                             Debug.Log($"[RuntimeSceneSetup] Called SetupModel via reflection");
                         }
-
-                        // Disable the sprite renderer if it was created
-                        var spriteRenderer = heart.GetComponent<SpriteRenderer>();
-                        if (spriteRenderer != null)
-                        {
-                            spriteRenderer.enabled = false;
-                            Debug.Log($"[RuntimeSceneSetup] Disabled sprite renderer");
-                        }
-                    }
-                    else
-                    {
-                        Debug.LogWarning("[RuntimeSceneSetup] Failed to load heartofmaze.prefab - heart will use default sprite");
                     }
                 }
 
