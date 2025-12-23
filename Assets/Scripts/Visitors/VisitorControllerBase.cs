@@ -77,7 +77,15 @@ namespace FaeMaze.Visitors
 
         [Header("Visual Settings")]
         [SerializeField]
-        [Tooltip("Color of the visitor sprite")]
+        [Tooltip("Use 3D model instead of sprite-based rendering")]
+        protected bool use3DModel = false;
+
+        [SerializeField]
+        [Tooltip("3D model prefab to instantiate for this visitor")]
+        protected GameObject modelPrefab;
+
+        [SerializeField]
+        [Tooltip("Color of the visitor sprite (2D mode only)")]
         protected Color visitorColor = new Color(0.3f, 0.6f, 1f, 1f);
 
         [SerializeField]
@@ -89,11 +97,11 @@ namespace FaeMaze.Visitors
         protected int proceduralPixelsPerUnit = 32;
 
         [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
+        [Tooltip("Sprite rendering layer order (2D mode only)")]
         protected int sortingOrder = 15;
 
         [SerializeField]
-        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
+        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations (2D mode only)")]
         protected bool useProceduralSprite = false;
 
         [Header("State Duration Settings")]
@@ -140,8 +148,15 @@ namespace FaeMaze.Visitors
         protected MazeGridBehaviour mazeGridBehaviour;
         protected bool isEntranced;
         protected float speedMultiplier = 1f;
+
+        // 2D rendering and physics
         protected SpriteRenderer spriteRenderer;
-        protected Rigidbody2D rb;
+        protected Rigidbody2D rb2D;
+
+        // 3D rendering and physics
+        protected GameObject modelInstance;
+        protected Rigidbody rb3D;
+
         protected Vector2 authoredSpriteWorldSize;
         protected Vector2Int originalDestination;
 
@@ -257,8 +272,17 @@ namespace FaeMaze.Visitors
                 spriteRenderer = GetComponentInChildren<SpriteRenderer>();
             }
 
-            CacheAuthoredSpriteSize();
-            SetupSpriteRenderer();
+            // Setup visual representation based on mode
+            if (use3DModel)
+            {
+                Setup3DModel();
+            }
+            else
+            {
+                CacheAuthoredSpriteSize();
+                SetupSpriteRenderer();
+            }
+
             SetupPhysics();
 
             // Initialize animator direction if animator is present
@@ -388,6 +412,27 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if the animator has a parameter with the given name.
+        /// </summary>
+        private bool HasAnimatorParameter(string parameterName)
+        {
+            if (animator == null || string.IsNullOrEmpty(parameterName))
+            {
+                return false;
+            }
+
+            foreach (var param in animator.parameters)
+            {
+                if (param.name == parameterName)
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -803,6 +848,27 @@ namespace FaeMaze.Visitors
 
         protected void UpdateAnimatorDirection(Vector2 movement)
         {
+            // For 3D models, also handle rotation towards movement direction
+            if (use3DModel && modelInstance != null && movement.sqrMagnitude > MovementEpsilonSqr)
+            {
+                // Rotate 3D model to face movement direction
+                Vector3 movementDir = new Vector3(movement.x, movement.y, 0f).normalized;
+
+                // Convert XY movement to 3D rotation (Y-axis up)
+                // In 3D with top-down view, X/Y movement maps to X/Z in 3D space
+                Vector3 facing = new Vector3(movementDir.x, 0f, movementDir.y);
+
+                if (facing.sqrMagnitude > 0.001f)
+                {
+                    Quaternion targetRotation = Quaternion.LookRotation(facing, Vector3.up);
+                    modelInstance.transform.rotation = Quaternion.Slerp(
+                        modelInstance.transform.rotation,
+                        targetRotation,
+                        Time.deltaTime * 10f // Smooth rotation speed
+                    );
+                }
+            }
+
             SetAnimatorDirection(GetDirectionFromMovement(movement));
         }
 
@@ -817,15 +883,44 @@ namespace FaeMaze.Visitors
 
         protected void SetAnimatorDirection(int direction)
         {
-            // Guard against redundant animator parameter writes
-            if (animator != null && currentAnimatorDirection != direction)
+            if (animator == null)
+            {
+                return;
+            }
+
+            // For 3D models with humanoid rigs, use Speed parameter instead of Direction
+            if (use3DModel)
+            {
+                // Set Speed parameter for blend trees (common in humanoid animations)
+                // 0 = idle, 1 = walking/running
+                float speed = direction == IdleDirection ? 0f : 1f;
+
+                // Check if the animator has the Speed parameter
+                if (HasAnimatorParameter("Speed"))
+                {
+                    animator.SetFloat("Speed", speed);
+                }
+
+                // Also set Direction parameter if it exists (for compatibility)
+                if (currentAnimatorDirection != direction && HasAnimatorParameter(DirectionParameter))
+                {
+                    animator.SetInteger(DirectionParameter, direction);
+                    currentAnimatorDirection = direction;
+                }
+
+                // Rotation is handled in UpdateAnimatorDirection for smooth 3D rotation
+                return;
+            }
+
+            // 2D sprite-based animation with Direction parameter
+            if (currentAnimatorDirection != direction)
             {
                 animator.SetInteger(DirectionParameter, direction);
                 currentAnimatorDirection = direction;
             }
 
-            // Rotate the visual model to face the correct direction
-            // Only rotate if not using procedural sprites (3D model needs rotation)
+            // Rotate the visual model to face the correct direction (2D sprites only)
+            // Only rotate if not using procedural sprites
             // Apply rotation every frame to ensure it's set (handles initialization and state changes)
             if (!useProceduralSprite && animator != null)
             {
@@ -1031,16 +1126,32 @@ namespace FaeMaze.Visitors
             Vector3 movementDelta = newPosition - transform.position;
             UpdateAnimatorDirection(movementDelta);
 
-            // Use Rigidbody2D.MovePosition for proper trigger detection
-            if (rb != null)
+            // Use appropriate physics system based on mode
+            if (use3DModel)
             {
-                rb.MovePosition(newPosition);
-                // Manually sync transforms with physics system to ensure trigger detection works
-                Physics2D.SyncTransforms();
+                // 3D physics
+                if (rb3D != null)
+                {
+                    rb3D.MovePosition(newPosition);
+                    Physics.SyncTransforms();
+                }
+                else
+                {
+                    transform.position = newPosition;
+                }
             }
             else
             {
-                transform.position = newPosition;
+                // 2D physics
+                if (rb2D != null)
+                {
+                    rb2D.MovePosition(newPosition);
+                    Physics2D.SyncTransforms();
+                }
+                else
+                {
+                    transform.position = newPosition;
+                }
             }
 
             UpdatePathLoggingOnMovement(previousPosition, transform.position);
@@ -2111,25 +2222,80 @@ namespace FaeMaze.Visitors
 
         protected virtual void SetupPhysics()
         {
-            // Add Rigidbody2D for trigger collisions
-            rb = GetComponent<Rigidbody2D>();
-            if (rb == null)
+            if (use3DModel)
             {
-                rb = gameObject.AddComponent<Rigidbody2D>();
+                // Setup 3D physics
+                rb3D = GetComponent<Rigidbody>();
+                if (rb3D == null)
+                {
+                    rb3D = gameObject.AddComponent<Rigidbody>();
+                }
+
+                rb3D.isKinematic = true;
+                rb3D.useGravity = false;
+
+                // Add CapsuleCollider for trigger detection (better for humanoid characters)
+                CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
+                if (capsuleCollider == null)
+                {
+                    capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
+                    capsuleCollider.height = 1.8f; // Typical humanoid height
+                    capsuleCollider.radius = 0.3f;
+                    capsuleCollider.center = new Vector3(0, 0.9f, 0); // Center at waist
+                }
+
+                capsuleCollider.isTrigger = true;
+            }
+            else
+            {
+                // Setup 2D physics
+                rb2D = GetComponent<Rigidbody2D>();
+                if (rb2D == null)
+                {
+                    rb2D = gameObject.AddComponent<Rigidbody2D>();
+                }
+
+                rb2D.bodyType = RigidbodyType2D.Kinematic;
+                rb2D.gravityScale = 0f;
+
+                // Add CircleCollider2D for trigger detection
+                CircleCollider2D collider = GetComponent<CircleCollider2D>();
+                if (collider == null)
+                {
+                    collider = gameObject.AddComponent<CircleCollider2D>();
+                }
+
+                collider.radius = 0.3f;
+                collider.isTrigger = true;
+            }
+        }
+
+        protected virtual void Setup3DModel()
+        {
+            if (modelPrefab == null)
+            {
+                Debug.LogWarning($"[VisitorControllerBase] use3DModel is true but modelPrefab is null on {gameObject.name}");
+                return;
             }
 
-            rb.bodyType = RigidbodyType2D.Kinematic;
-            rb.gravityScale = 0f;
+            // Instantiate the model prefab
+            modelInstance = Instantiate(modelPrefab, transform);
+            modelInstance.transform.localPosition = Vector3.zero;
+            modelInstance.transform.localRotation = Quaternion.identity;
+            modelInstance.transform.localScale = Vector3.one;
 
-            // Add CircleCollider2D for trigger detection
-            CircleCollider2D collider = GetComponent<CircleCollider2D>();
-            if (collider == null)
+            // Look for Animator in the model (should be on root or child)
+            if (animator == null)
             {
-                collider = gameObject.AddComponent<CircleCollider2D>();
+                animator = modelInstance.GetComponentInChildren<Animator>();
             }
 
-            collider.radius = 0.3f;
-            collider.isTrigger = true;
+            // Disable any sprite renderers if present
+            SpriteRenderer[] sprites = GetComponentsInChildren<SpriteRenderer>();
+            foreach (var sprite in sprites)
+            {
+                sprite.enabled = false;
+            }
         }
 
         #endregion
