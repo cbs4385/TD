@@ -51,12 +51,31 @@ namespace FaeMaze.Systems
         [Tooltip("Parent transform to hold all tile objects")]
         private Transform tilesParent;
 
+        [Header("Optimization Settings")]
+        [SerializeField]
+        [Tooltip("Enable mesh batching to combine tiles and reduce draw calls")]
+        private bool enableMeshBatching = true;
+
+        [SerializeField]
+        [Tooltip("Maximum tiles per batch (to avoid meshes that are too large)")]
+        private int batchChunkSize = 100;
+
+        [SerializeField]
+        [Tooltip("Enable LOD system for walls and vegetation")]
+        private bool enableLOD = false;
+
         #endregion
 
         #region Private Fields
 
         private MazeGridBehaviour mazeGridBehaviour;
         private GameObject tilesContainer;
+
+        // Batching collections
+        private System.Collections.Generic.List<GameObject> wallTiles;
+        private System.Collections.Generic.List<GameObject> undergrowthTiles;
+        private System.Collections.Generic.List<GameObject> waterTiles;
+        private System.Collections.Generic.List<GameObject> pathTiles;
 
         #endregion
 
@@ -177,10 +196,18 @@ namespace FaeMaze.Systems
                 tilesParent = tilesContainer.transform;
             }
 
+            // Initialize batching lists if batching is enabled
+            if (enableMeshBatching)
+            {
+                wallTiles = new System.Collections.Generic.List<GameObject>();
+                undergrowthTiles = new System.Collections.Generic.List<GameObject>();
+                waterTiles = new System.Collections.Generic.List<GameObject>();
+                pathTiles = new System.Collections.Generic.List<GameObject>();
+            }
+
             MazeGrid grid = mazeGridBehaviour.Grid;
             int width = grid.Width;
             int height = grid.Height;
-
 
             int renderedTiles = 0;
 
@@ -201,6 +228,13 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Perform batching after all tiles are created
+            if (enableMeshBatching)
+            {
+                PerformMeshBatching();
+            }
+
+            Debug.Log($"[MazeRenderer] Rendered {renderedTiles} tiles. Batching: {(enableMeshBatching ? "Enabled" : "Disabled")}");
         }
 
         private void CreateTile3D(int gridX, int gridY, char symbol, Color color)
@@ -230,31 +264,104 @@ namespace FaeMaze.Systems
                 tileObj.name = $"Tile_{gridX}_{gridY}_Wall";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.localScale = Vector3.one * tileSize;
-                return;
             }
-
-            if (useUndergrowthPrefab)
+            else if (useUndergrowthPrefab)
             {
                 tileObj = Instantiate(undergrowthPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_Undergrowth";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.localScale = Vector3.one * tileSize;
-                return;
             }
-
-            if (useWaterPrefab)
+            else if (useWaterPrefab)
             {
                 tileObj = Instantiate(waterPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_Water";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.localScale = Vector3.one * tileSize;
-                return;
+            }
+            else
+            {
+                // Create procedural mesh tile if no prefab available
+                tileObj = CreateProceduralTile(gridX, gridY, symbol, color, tileSize);
+                tileObj.transform.SetParent(tilesParent);
+                tileObj.transform.position = worldPos;
             }
 
-            // Create procedural mesh tile if no prefab available
-            tileObj = CreateProceduralTile(gridX, gridY, symbol, color, tileSize);
-            tileObj.transform.SetParent(tilesParent);
-            tileObj.transform.position = worldPos;
+            // Add to batching lists if batching is enabled
+            if (enableMeshBatching && tileObj != null)
+            {
+                AddTileToBatchList(symbol, tileObj);
+            }
+        }
+
+        /// <summary>
+        /// Adds a tile to the appropriate batching list based on its symbol.
+        /// </summary>
+        private void AddTileToBatchList(char symbol, GameObject tileObj)
+        {
+            switch (symbol)
+            {
+                case '#': // Wall
+                    wallTiles?.Add(tileObj);
+                    break;
+                case ';': // Undergrowth
+                    undergrowthTiles?.Add(tileObj);
+                    break;
+                case '~': // Water
+                    waterTiles?.Add(tileObj);
+                    break;
+                case '.': // Path
+                    pathTiles?.Add(tileObj);
+                    break;
+                // Don't batch special tiles like Heart
+            }
+        }
+
+        /// <summary>
+        /// Performs mesh batching to combine tiles and reduce draw calls.
+        /// </summary>
+        private void PerformMeshBatching()
+        {
+            int totalBatchedTiles = 0;
+            int totalBatches = 0;
+
+            // Batch walls
+            if (wallTiles != null && wallTiles.Count > 0)
+            {
+                var batches = MeshBatcher.BatchInChunks(wallTiles, tilesParent, batchChunkSize, destroyOriginals: true);
+                totalBatches += batches.Count;
+                totalBatchedTiles += wallTiles.Count;
+                Debug.Log($"[MazeRenderer] Batched {wallTiles.Count} wall tiles into {batches.Count} batches");
+            }
+
+            // Batch undergrowth
+            if (undergrowthTiles != null && undergrowthTiles.Count > 0)
+            {
+                var batches = MeshBatcher.BatchInChunks(undergrowthTiles, tilesParent, batchChunkSize, destroyOriginals: true);
+                totalBatches += batches.Count;
+                totalBatchedTiles += undergrowthTiles.Count;
+                Debug.Log($"[MazeRenderer] Batched {undergrowthTiles.Count} undergrowth tiles into {batches.Count} batches");
+            }
+
+            // Batch water
+            if (waterTiles != null && waterTiles.Count > 0)
+            {
+                var batches = MeshBatcher.BatchInChunks(waterTiles, tilesParent, batchChunkSize, destroyOriginals: true);
+                totalBatches += batches.Count;
+                totalBatchedTiles += waterTiles.Count;
+                Debug.Log($"[MazeRenderer] Batched {waterTiles.Count} water tiles into {batches.Count} batches");
+            }
+
+            // Batch paths
+            if (pathTiles != null && pathTiles.Count > 0)
+            {
+                var batches = MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, destroyOriginals: true);
+                totalBatches += batches.Count;
+                totalBatchedTiles += pathTiles.Count;
+                Debug.Log($"[MazeRenderer] Batched {pathTiles.Count} path tiles into {batches.Count} batches");
+            }
+
+            Debug.Log($"[MazeRenderer] Total: Batched {totalBatchedTiles} tiles into {totalBatches} combined meshes");
         }
 
         /// <summary>
