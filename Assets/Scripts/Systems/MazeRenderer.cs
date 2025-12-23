@@ -259,6 +259,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Creates a procedural 3D mesh tile (cube) with the specified color.
+        /// Uses PBR materials with appropriate properties based on tile type.
         /// </summary>
         private GameObject CreateProceduralTile(int gridX, int gridY, char symbol, Color color, float tileSize)
         {
@@ -269,9 +270,8 @@ namespace FaeMaze.Systems
             // Make it thin like a floor tile (0.1 height)
             tileObj.transform.localScale = new Vector3(tileSize, 0.1f, tileSize);
 
-            // Create a material with the appropriate color
-            Material material = new Material(Shader.Find("Standard"));
-            material.color = color;
+            // Create a PBR material based on tile type
+            Material material = CreatePBRMaterialForSymbol(symbol, color);
 
             // Apply material to the mesh renderer
             MeshRenderer renderer = tileObj.GetComponent<MeshRenderer>();
@@ -284,6 +284,38 @@ namespace FaeMaze.Systems
             tileObj.transform.position = new Vector3(0, -0.05f, 0);
 
             return tileObj;
+        }
+
+        /// <summary>
+        /// Creates an appropriate PBR material for the given tile symbol.
+        /// </summary>
+        private Material CreatePBRMaterialForSymbol(char symbol, Color color)
+        {
+            switch (symbol)
+            {
+                case '#': // Wall (tree bramble)
+                    return PBRMaterialFactory.CreateWallMaterial(color);
+
+                case ';': // Undergrowth
+                    return PBRMaterialFactory.CreateUndergrowthMaterial(color);
+
+                case '~': // Water
+                    return PBRMaterialFactory.CreateWaterMaterial(color);
+
+                case '.': // Path
+                    return PBRMaterialFactory.CreatePathMaterial(color);
+
+                case 'H': // Heart
+                    return PBRMaterialFactory.CreateEmissiveMaterial(
+                        color,
+                        color * 1.5f, // Slightly brighter emission
+                        1.0f
+                    );
+
+                default:
+                    // Fallback to generic lit material
+                    return PBRMaterialFactory.CreateLitMaterial(color);
+            }
         }
 
         /// <summary>
