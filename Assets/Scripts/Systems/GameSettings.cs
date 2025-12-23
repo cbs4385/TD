@@ -158,13 +158,9 @@ namespace FaeMaze.Systems
                 soundManager.SetMusicVolume(MusicVolume);
             }
 
-            // Apply camera settings
-            CameraController2D cameraController = Object.FindFirstObjectByType<CameraController2D>();
-            if (cameraController != null)
-            {
-                // Note: CameraController2D fields are not directly accessible
-                // They should be exposed via public setters or made serializable
-            }
+            // Apply camera settings (supports both 2D and 3D camera controllers)
+            // Note: Camera controller fields are not directly accessible
+            // They should be exposed via public setters or made serializable if needed
 
             // Other systems will read from GameSettings directly when initialized
         }
