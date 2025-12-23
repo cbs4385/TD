@@ -314,25 +314,38 @@ namespace FaeMaze.Maze
 
             Debug.Log($"[HeartOfTheMaze] SetupModel: Model instantiated successfully - {modelInstance.name}");
 
-            // Collect all mesh renderers and their materials for pulsing animation
+            // Collect all mesh renderers and replace materials with 3D PBR materials
             meshRenderers = modelInstance.GetComponentsInChildren<MeshRenderer>();
             if (meshRenderers != null && meshRenderers.Length > 0)
             {
-                // Create material instances to avoid modifying shared materials
                 System.Collections.Generic.List<Material> matList = new System.Collections.Generic.List<Material>();
                 foreach (var renderer in meshRenderers)
                 {
-                    // Create material instances
-                    Material[] instanceMats = new Material[renderer.materials.Length];
+                    // Replace sprite materials with URP/Lit PBR emissive materials
+                    Material[] pbrMats = new Material[renderer.materials.Length];
                     for (int i = 0; i < renderer.materials.Length; i++)
                     {
-                        instanceMats[i] = new Material(renderer.materials[i]);
-                        matList.Add(instanceMats[i]);
+                        // Get base color from original material if available
+                        Color baseColor = new Color(0.9f, 0.35f, 0.35f); // Default red
+                        if (renderer.materials[i].HasProperty("_Color"))
+                        {
+                            baseColor = renderer.materials[i].GetColor("_Color");
+                        }
+
+                        // Create new PBR emissive material to replace sprite shader
+                        pbrMats[i] = Systems.PBRMaterialFactory.CreateEmissiveMaterial(
+                            baseColor,
+                            emissionColor,
+                            2.0f
+                        );
+                        matList.Add(pbrMats[i]);
                     }
-                    renderer.materials = instanceMats;
+                    renderer.materials = pbrMats;
+                    Debug.Log($"[HeartOfTheMaze] Replaced {pbrMats.Length} sprite materials with PBR materials on {renderer.gameObject.name}");
                 }
                 materials = matList.ToArray();
-                Debug.Log($"[HeartOfTheMaze] Collected {materials.Length} materials for pulsing effect");
+                meshRenderers = modelInstance.GetComponentsInChildren<MeshRenderer>(); // Refresh after material change
+                Debug.Log($"[HeartOfTheMaze] Collected {materials.Length} PBR materials for pulsing effect");
             }
             else
             {
