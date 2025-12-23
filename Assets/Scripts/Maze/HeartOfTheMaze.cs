@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
@@ -7,6 +6,7 @@ namespace FaeMaze.Maze
 {
     /// <summary>
     /// Represents the Heart of the Maze - the goal location where visitors are consumed for essence.
+    /// Uses 3D meshes, materials, and URP 3D lighting.
     /// </summary>
     public class HeartOfTheMaze : MonoBehaviour
     {
@@ -30,21 +30,18 @@ namespace FaeMaze.Maze
         [Tooltip("Amount of essence gained per visitor consumed")]
         private int essencePerVisitor = 10;
 
-        [Header("Visual Settings")]
+        [Header("Model Settings")]
         [SerializeField]
-        [Tooltip("Color of the heart marker")]
-        private Color markerColor = new Color(1f, 0.2f, 0.2f, 1f); // Bright red
+        [Tooltip("Model prefab to use for the heart visuals")]
+        private GameObject heartModelPrefab;
 
         [SerializeField]
-        [Tooltip("Size of the heart marker")]
-        private float markerSize = 1.2f;
+        [Tooltip("Size/scale of the heart model")]
+        private float modelSize = 1.2f;
 
+        [Header("Material Animation Settings")]
         [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
-        private int sortingOrder = 10;
-
-        [SerializeField]
-        [Tooltip("Enable pulsing animation")]
+        [Tooltip("Enable pulsing emission on materials")]
         private bool enablePulse = true;
 
         [SerializeField]
@@ -52,8 +49,12 @@ namespace FaeMaze.Maze
         private float pulseSpeed = 2f;
 
         [SerializeField]
-        [Tooltip("Pulse amount")]
-        private float pulseAmount = 0.2f;
+        [Tooltip("Pulse intensity multiplier")]
+        private float pulseIntensity = 2f;
+
+        [SerializeField]
+        [Tooltip("Base emission color for pulsing")]
+        private Color emissionColor = new Color(1f, 0.2f, 0.2f, 1f);
 
         [Header("Attraction Settings")]
         [SerializeField]
@@ -68,18 +69,18 @@ namespace FaeMaze.Maze
         [Tooltip("Enable attraction to draw visitors toward the heart")]
         private bool enableAttraction = true;
 
-        [Header("Glow Settings")]
+        [Header("3D Lighting Settings")]
         [SerializeField]
-        [Tooltip("Enable pulsing glow light effect")]
+        [Tooltip("Enable pulsing 3D point light effect")]
         private bool enableGlow = true;
 
         [SerializeField]
-        [Tooltip("Color of the glow (pastel red)")]
-        private Color glowColor = new Color(1f, 0.7f, 0.7f, 1f); // Pastel red
+        [Tooltip("Color of the 3D point light glow")]
+        private Color glowColor = new Color(1f, 0.7f, 0.7f, 1f);
 
         [SerializeField]
-        [Tooltip("Radius of the glow effect")]
-        private float glowRadius = 5f;
+        [Tooltip("Range of the 3D point light")]
+        private float glowRange = 10f;
 
         [SerializeField]
         [Tooltip("Glow pulse frequency in Hz")]
@@ -87,20 +88,11 @@ namespace FaeMaze.Maze
 
         [SerializeField]
         [Tooltip("Minimum glow intensity")]
-        private float glowMinIntensity = 0.15f;
+        private float glowMinIntensity = 0.5f;
 
         [SerializeField]
         [Tooltip("Maximum glow intensity")]
-        private float glowMaxIntensity = 0.3f;
-
-        [Header("Model Settings")]
-        [SerializeField]
-        [Tooltip("Model prefab to use for the heart visuals (optional)")]
-        private GameObject heartModelPrefab;
-
-        [SerializeField]
-        [Tooltip("Use the model prefab instead of procedural sprite")]
-        private bool useModelPrefab = false;
+        private float glowMaxIntensity = 2.0f;
 
         [Header("Animation Settings")]
         [SerializeField]
@@ -123,10 +115,10 @@ namespace FaeMaze.Maze
 
         #region Private Fields
 
-        private SpriteRenderer spriteRenderer;
-        private Vector3 baseScale;
-        private Light2D glowLight;
+        private Light glowLight;
         private GameObject modelInstance;
+        private MeshRenderer[] meshRenderers;
+        private Material[] materials;
 
         #endregion
 
@@ -214,19 +206,19 @@ namespace FaeMaze.Maze
 
         private void Awake()
         {
-            // Setup model if using prefab
+            // Setup model and collect mesh renderers/materials
             SetupModel();
 
-            // Ensure physics setup for reliable trigger callbacks
-            var rb = GetComponent<Rigidbody2D>();
+            // Ensure 3D physics setup for reliable trigger callbacks
+            var rb = GetComponent<Rigidbody>();
             if (rb == null)
             {
-                rb = gameObject.AddComponent<Rigidbody2D>();
+                rb = gameObject.AddComponent<Rigidbody>();
             }
-            rb.bodyType = RigidbodyType2D.Kinematic;
-            rb.gravityScale = 0f;
+            rb.isKinematic = true;
+            rb.useGravity = false;
 
-            // Setup glow light
+            // Setup 3D point light
             SetupGlowLight();
 
             // Auto-position from maze grid if enabled
@@ -245,33 +237,25 @@ namespace FaeMaze.Maze
 
         private void Start()
         {
-            // Always ensure we have a trigger collider
+            // Always ensure we have a 3D trigger collider
             EnsureTriggerCollider();
-
-            // Only create visual marker if not using model prefab
-            if (!useModelPrefab || modelInstance == null)
-            {
-                CreateVisualMarker();
-            }
-            else
-            {
-                Debug.Log("[HeartOfTheMaze] Start: Skipping CreateVisualMarker because model is being used");
-            }
         }
 
         private void Update()
         {
-            if (enablePulse && spriteRenderer != null)
+            // Update material emission pulsing
+            if (enablePulse && materials != null && materials.Length > 0)
             {
-                float pulse = Mathf.PingPong(Time.time * pulseSpeed, pulseAmount);
-                transform.localScale = baseScale * (1f + pulse);
+                UpdateMaterialPulse();
             }
 
+            // Update 3D point light pulsing
             if (enableGlow && glowLight != null)
             {
                 UpdateGlowPulse();
             }
 
+            // Update model animation (rotation and Z-axis movement)
             if (enableModelAnimation && modelInstance != null)
             {
                 UpdateModelAnimation();
@@ -280,145 +264,77 @@ namespace FaeMaze.Maze
 
         private void EnsureTriggerCollider()
         {
-            // Add CircleCollider2D for trigger detection if not present
-            var collider = GetComponent<CircleCollider2D>();
+            // Add SphereCollider for 3D trigger detection if not present
+            var collider = GetComponent<SphereCollider>();
             if (collider == null)
             {
-                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider = gameObject.AddComponent<SphereCollider>();
                 collider.radius = 0.5f;
                 collider.isTrigger = true;
-                Debug.Log("[HeartOfTheMaze] Added CircleCollider2D trigger");
+                Debug.Log("[HeartOfTheMaze] Added SphereCollider trigger");
             }
             else
             {
                 // Ensure it's set as trigger
                 collider.isTrigger = true;
-                Debug.Log("[HeartOfTheMaze] CircleCollider2D already exists, ensured trigger is enabled");
+                Debug.Log("[HeartOfTheMaze] SphereCollider already exists, ensured trigger is enabled");
             }
         }
 
-        private void CreateVisualMarker()
-        {
-            // Declare collider once at method level
-            CircleCollider2D collider;
-
-            // If using model prefab, skip procedural sprite creation
-            if (useModelPrefab && modelInstance != null)
-            {
-                baseScale = new Vector3(markerSize, markerSize, 1f);
-                transform.localScale = baseScale;
-
-                // Add CircleCollider2D for trigger detection
-                collider = GetComponent<CircleCollider2D>();
-                if (collider == null)
-                {
-                    collider = gameObject.AddComponent<CircleCollider2D>();
-                    collider.radius = 0.5f;
-                    collider.isTrigger = true;
-                }
-                return;
-            }
-
-            // Add SpriteRenderer if not already present
-            spriteRenderer = GetComponent<SpriteRenderer>();
-            if (spriteRenderer == null)
-            {
-                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-            }
-
-            // Create a heart-shaped sprite (simplified as a circle for now)
-            spriteRenderer.sprite = CreateHeartSprite(32);
-            spriteRenderer.color = markerColor;
-            spriteRenderer.sortingOrder = sortingOrder;
-
-            // Set scale
-            baseScale = new Vector3(markerSize, markerSize, 1f);
-            transform.localScale = baseScale;
-
-            // Add CircleCollider2D for trigger detection
-            collider = GetComponent<CircleCollider2D>();
-            if (collider == null)
-            {
-                collider = gameObject.AddComponent<CircleCollider2D>();
-                collider.radius = 0.5f;
-                collider.isTrigger = true;
-            }
-        }
-
-        private Sprite CreateHeartSprite(int resolution)
-        {
-            int size = resolution;
-            Texture2D texture = new Texture2D(size, size);
-            Color[] pixels = new Color[size * size];
-
-            Vector2 center = new Vector2(size / 2f, size / 2f);
-            float radius = size / 2f;
-
-            // Create a circle (can be enhanced to actual heart shape later)
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dist = Vector2.Distance(new Vector2(x, y), center);
-                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
-                }
-            }
-
-            texture.SetPixels(pixels);
-            texture.Apply();
-
-            return Sprite.Create(
-                texture,
-                new Rect(0, 0, size, size),
-                new Vector2(0.5f, 0.5f),
-                size
-            );
-        }
 
         private void SetupModel()
         {
-            Debug.Log($"[HeartOfTheMaze] SetupModel called - modelInstance: {(modelInstance != null ? "EXISTS" : "NULL")}, useModelPrefab: {useModelPrefab}, heartModelPrefab: {(heartModelPrefab != null ? "SET" : "NULL")}");
-
             if (modelInstance != null)
             {
                 Debug.Log("[HeartOfTheMaze] SetupModel: modelInstance already exists, returning");
                 return;
             }
 
-            // Check if using model prefab
-            if (!useModelPrefab || heartModelPrefab == null)
+            if (heartModelPrefab == null)
             {
-                Debug.Log($"[HeartOfTheMaze] SetupModel: Not using model prefab (useModelPrefab={useModelPrefab}, heartModelPrefab={(heartModelPrefab != null ? "SET" : "NULL")})");
+                Debug.LogError("[HeartOfTheMaze] heartModelPrefab is NULL! Heart requires a 3D model prefab.");
                 return;
             }
 
-            Debug.Log("[HeartOfTheMaze] SetupModel: Instantiating model prefab...");
+            Debug.Log("[HeartOfTheMaze] SetupModel: Instantiating 3D model prefab...");
 
             // Instantiate the model prefab
-            var instantiatedObject = (GameObject)Instantiate((UnityEngine.Object)heartModelPrefab, transform);
-            if (instantiatedObject == null)
+            modelInstance = Instantiate(heartModelPrefab, transform);
+            if (modelInstance == null)
             {
-                Debug.LogWarning("[HeartOfTheMaze] Failed to instantiate heart model prefab. Falling back to sprite rendering.");
-                useModelPrefab = false;
+                Debug.LogError("[HeartOfTheMaze] Failed to instantiate heart model prefab.");
                 return;
             }
 
-            modelInstance = instantiatedObject;
-            // Set position with proper Z offset for 2D layering
-            // The heartofmaze prefab is designed with Z = -0.3
+            // Set position with proper Z offset
             modelInstance.transform.localPosition = new Vector3(0, 0, -0.3f);
-            // Don't reset rotation and scale - preserve the prefab's configuration
-            // modelInstance.transform.localRotation = Quaternion.identity;
-            // modelInstance.transform.localScale = Vector3.one;
+            modelInstance.transform.localScale = Vector3.one * modelSize;
 
             Debug.Log($"[HeartOfTheMaze] SetupModel: Model instantiated successfully - {modelInstance.name}");
 
-            // Disable sprite renderer if we have a model
-            var sprite = GetComponent<SpriteRenderer>();
-            if (sprite != null)
+            // Collect all mesh renderers and their materials for pulsing animation
+            meshRenderers = modelInstance.GetComponentsInChildren<MeshRenderer>();
+            if (meshRenderers != null && meshRenderers.Length > 0)
             {
-                sprite.enabled = false;
-                Debug.Log("[HeartOfTheMaze] SetupModel: Disabled sprite renderer");
+                // Create material instances to avoid modifying shared materials
+                System.Collections.Generic.List<Material> matList = new System.Collections.Generic.List<Material>();
+                foreach (var renderer in meshRenderers)
+                {
+                    // Create material instances
+                    Material[] instanceMats = new Material[renderer.materials.Length];
+                    for (int i = 0; i < renderer.materials.Length; i++)
+                    {
+                        instanceMats[i] = new Material(renderer.materials[i]);
+                        matList.Add(instanceMats[i]);
+                    }
+                    renderer.materials = instanceMats;
+                }
+                materials = matList.ToArray();
+                Debug.Log($"[HeartOfTheMaze] Collected {materials.Length} materials for pulsing effect");
+            }
+            else
+            {
+                Debug.LogWarning("[HeartOfTheMaze] No MeshRenderers found in model!");
             }
         }
 
@@ -427,55 +343,52 @@ namespace FaeMaze.Maze
             if (!enableGlow)
                 return;
 
-            try
+            // Check if we already have a Light component
+            glowLight = GetComponent<Light>();
+            if (glowLight == null)
             {
-                // Remove any old 3D Light components that might conflict
-                var oldLight = GetComponent<Light>();
-                if (oldLight != null)
-                {
-#if UNITY_EDITOR
-                    DestroyImmediate(oldLight);
-#else
-                    Destroy(oldLight);
-#endif
-                }
-
-                // Check if we already have a Light2D component
-                glowLight = GetComponent<Light2D>();
-                if (glowLight == null)
-                {
-                    glowLight = gameObject.AddComponent<Light2D>();
-                }
-
-                // Configure the 2D light
-                glowLight.lightType = Light2D.LightType.Point;
-                glowLight.color = glowColor;
-                glowLight.pointLightOuterRadius = glowRadius;
-                glowLight.intensity = glowMaxIntensity;
-
-                // Additional Light2D settings for proper color rendering
-                glowLight.pointLightInnerRadius = 0f;
-                glowLight.pointLightInnerAngle = 360f;
-                glowLight.pointLightOuterAngle = 360f;
-
-                // Use additive blend style (1) for colored lights instead of multiply (0)
-                // Additive blending preserves light colors better
-                glowLight.blendStyleIndex = 1;
-
-                Debug.Log($"[HeartOfTheMaze] Light2D configured - Color: {glowLight.color}, Intensity: {glowLight.intensity}, Radius: {glowLight.pointLightOuterRadius}, BlendStyle: {glowLight.blendStyleIndex}");
+                glowLight = gameObject.AddComponent<Light>();
             }
-            catch (System.Exception e)
+
+            // Configure the 3D point light
+            glowLight.type = LightType.Point;
+            glowLight.color = glowColor;
+            glowLight.range = glowRange;
+            glowLight.intensity = glowMaxIntensity;
+
+            // Optional: Set light to use realtime mode for URP
+            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
+
+            // Optional: Enable shadows if desired (can be expensive)
+            glowLight.shadows = LightShadows.None;
+
+            Debug.Log($"[HeartOfTheMaze] 3D Point Light configured - Color: {glowLight.color}, Intensity: {glowLight.intensity}, Range: {glowLight.range}");
+        }
+
+        private void UpdateMaterialPulse()
+        {
+            // Calculate pulsing using sine wave
+            float angle = Time.time * pulseSpeed * 2f * Mathf.PI;
+            float normalizedPulse = (Mathf.Sin(angle) + 1f) / 2f; // [0, 1]
+
+            // Calculate emission intensity
+            float emissionStrength = normalizedPulse * pulseIntensity;
+
+            // Apply to all materials
+            foreach (var mat in materials)
             {
-                Debug.LogWarning($"[HeartOfTheMaze] Failed to setup glow light: {e.Message}");
-                glowLight = null;
+                if (mat == null) continue;
+
+                // Set emission color with pulsing intensity
+                Color finalEmission = emissionColor * emissionStrength;
+                mat.SetColor("_EmissionColor", finalEmission);
+                mat.EnableKeyword("_EMISSION");
             }
         }
 
         private void UpdateGlowPulse()
         {
             // Calculate pulsing intensity using sine wave
-            // frequency in Hz = cycles per second
-            // Time.time * frequency * 2π gives us the angle for sin wave
             float angle = Time.time * glowFrequency * 2f * Mathf.PI;
 
             // Map sin wave from [-1, 1] to [0, 1]
@@ -512,9 +425,9 @@ namespace FaeMaze.Maze
             );
         }
 
-        private void OnTriggerEnter2D(Collider2D other)
+        private void OnTriggerEnter(Collider other)
         {
-            Debug.Log($"[HeartOfTheMaze] OnTriggerEnter2D - collider: {other.name}, has VisitorControllerBase: {other.GetComponent<VisitorControllerBase>() != null}");
+            Debug.Log($"[HeartOfTheMaze] OnTriggerEnter - collider: {other.name}, has VisitorControllerBase: {other.GetComponent<VisitorControllerBase>() != null}");
 
             // Check if a visitor entered the heart
             var visitor = other.GetComponent<VisitorControllerBase>();
@@ -525,7 +438,7 @@ namespace FaeMaze.Maze
             }
         }
 
-        private void OnTriggerStay2D(Collider2D other)
+        private void OnTriggerStay(Collider other)
         {
             // Catch any visitors that miss the initial enter event
             var visitor = other.GetComponent<VisitorControllerBase>();
