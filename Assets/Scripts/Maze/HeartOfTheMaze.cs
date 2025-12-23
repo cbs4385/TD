@@ -333,12 +333,8 @@ namespace FaeMaze.Maze
                     Material[] pbrMats = new Material[renderer.materials.Length];
                     for (int i = 0; i < renderer.materials.Length; i++)
                     {
-                        // Get base color from original material if available
-                        Color baseColor = new Color(0.9f, 0.35f, 0.35f); // Default red
-                        if (renderer.materials[i].HasProperty("_Color"))
-                        {
-                            baseColor = renderer.materials[i].GetColor("_Color");
-                        }
+                        // Use heart color for base - don't read from sprite material (it's white!)
+                        Color baseColor = new Color(0.9f, 0.35f, 0.35f); // Rich red/pink
 
                         // Create new PBR emissive material to replace sprite shader
                         pbrMats[i] = Systems.PBRMaterialFactory.CreateEmissiveMaterial(
@@ -350,7 +346,7 @@ namespace FaeMaze.Maze
 
                         // Debug material properties
                         Debug.Log($"[HeartOfTheMaze] Created PBR material {i}: baseColor={baseColor}, emission={emissionColor}, " +
-                                  $"_BaseColor={pbrMats[i].GetColor("_BaseColor")}, _EmissionColor={pbrMats[i].GetColor("_EmissionColor")}");
+                                  $"shader={pbrMats[i].shader.name}");
                     }
                     renderer.materials = pbrMats;
                     Debug.Log($"[HeartOfTheMaze] Replaced {pbrMats.Length} sprite materials with PBR materials on {renderer.gameObject.name}");
