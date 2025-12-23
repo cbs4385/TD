@@ -317,6 +317,8 @@ namespace FaeMaze.Maze
             modelInstance.transform.localScale = prefabScale * modelSize;
 
             Debug.Log($"[HeartOfTheMaze] Model scale: prefab={prefabScale}, final={modelInstance.transform.localScale}");
+            Debug.Log($"[HeartOfTheMaze] Model position: local={modelInstance.transform.localPosition}, world={modelInstance.transform.position}");
+            Debug.Log($"[HeartOfTheMaze] Parent position: {transform.position}");
 
             Debug.Log($"[HeartOfTheMaze] SetupModel: Model instantiated successfully - {modelInstance.name}");
 
@@ -345,6 +347,10 @@ namespace FaeMaze.Maze
                             2.0f
                         );
                         matList.Add(pbrMats[i]);
+
+                        // Debug material properties
+                        Debug.Log($"[HeartOfTheMaze] Created PBR material {i}: baseColor={baseColor}, emission={emissionColor}, " +
+                                  $"_BaseColor={pbrMats[i].GetColor("_BaseColor")}, _EmissionColor={pbrMats[i].GetColor("_EmissionColor")}");
                     }
                     renderer.materials = pbrMats;
                     Debug.Log($"[HeartOfTheMaze] Replaced {pbrMats.Length} sprite materials with PBR materials on {renderer.gameObject.name}");
