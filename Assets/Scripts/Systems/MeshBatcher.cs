@@ -43,13 +43,13 @@ namespace FaeMaze.Systems
                 {
                     meshFilters.Add(mf);
 
-                    // Get material from first object
+                    // Get material from first object (use .material to get instance, not sharedMaterial)
                     if (sharedMaterial == null)
                     {
                         MeshRenderer mr = obj.GetComponent<MeshRenderer>();
-                        if (mr != null && mr.sharedMaterial != null)
+                        if (mr != null && mr.material != null)
                         {
-                            sharedMaterial = mr.sharedMaterial;
+                            sharedMaterial = mr.material;
                         }
                     }
                 }
@@ -147,9 +147,9 @@ namespace FaeMaze.Systems
                 if (obj == null) continue;
 
                 MeshRenderer mr = obj.GetComponent<MeshRenderer>();
-                if (mr != null && mr.sharedMaterial != null)
+                if (mr != null && mr.material != null)
                 {
-                    Material mat = mr.sharedMaterial;
+                    Material mat = mr.material;  // Use .material to get instance
 
                     if (!materialGroups.ContainsKey(mat))
                     {
