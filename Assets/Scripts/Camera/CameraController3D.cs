@@ -429,7 +429,7 @@ namespace FaeMaze.Cameras
             {
                 focusPoint = targetPosition;
                 isFocusing = false;
-                ClampToMazeBounds();
+                // ClampToMazeBounds(); // Disabled for free camera movement
             }
             else
             {
