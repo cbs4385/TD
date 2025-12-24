@@ -455,11 +455,12 @@ namespace FaeMaze.Maze
             // Calculate animation phase using sine wave
             float angle = Time.time * animationFrequency * 2f * Mathf.PI;
 
-            // Rotate around Z axis (full 360-degree rotation)
-            float zRotation = Time.time * animationFrequency * 360f;
+            // Rotate around Z axis based on camera facing to keep bobbing vertical to the player
+            float zRotation = GetCameraAlignedZRotation();
+            Vector3 currentEuler = modelInstance.transform.localRotation.eulerAngles;
             modelInstance.transform.localRotation = Quaternion.Euler(
-                modelInstance.transform.localRotation.eulerAngles.x,
-                modelInstance.transform.localRotation.eulerAngles.y,
+                currentEuler.x,
+                currentEuler.y,
                 zRotation
             );
 
@@ -473,6 +474,30 @@ namespace FaeMaze.Maze
                 modelInstance.transform.localPosition.y,
                 zPosition
             );
+        }
+
+        private float GetCameraAlignedZRotation()
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                return 0f;
+            }
+
+            Vector3 forward = mainCamera.transform.forward;
+            forward.z = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                forward = Vector3.down;
+            }
+            forward.Normalize();
+
+            if (Mathf.Abs(forward.x) > Mathf.Abs(forward.y))
+            {
+                return forward.x > 0f ? 270f : 90f;
+            }
+
+            return forward.y > 0f ? 180f : 0f;
         }
 
         private void OnTriggerEnter(Collider other)
