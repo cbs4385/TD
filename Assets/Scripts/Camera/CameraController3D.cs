@@ -384,8 +384,8 @@ namespace FaeMaze.Cameras
         private void UpdateCameraPosition()
         {
             // Calculate camera position based on orbit parameters
-            Quaternion rotation = Quaternion.Euler(currentPitch, currentYaw, 0f);
-            Vector3 direction = rotation * Vector3.back;
+            Quaternion pitchYawRotation = Quaternion.Euler(currentPitch, currentYaw, 0f);
+            Vector3 direction = pitchYawRotation * Vector3.back;
 
             // Apply collision detection
             float finalDistance = currentDistance;
@@ -394,13 +394,20 @@ namespace FaeMaze.Cameras
                 finalDistance = GetCollisionAdjustedDistance(direction);
             }
 
-            Vector3 desiredPosition = focusPoint + direction * finalDistance;
+            // Calculate camera position relative to focus point
+            Vector3 offset = direction * finalDistance;
+
+            // Apply roll rotation around world Z-axis (for map spinning)
+            Quaternion rollRotation = Quaternion.AngleAxis(currentRoll, Vector3.forward);
+            offset = rollRotation * offset;
+
+            // Set camera position
+            Vector3 desiredPosition = focusPoint + offset;
             transform.position = desiredPosition;
             transform.LookAt(focusPoint);
 
-            // Apply Z rotation: 180° base flip + currentRoll for map spinning
-            float totalRoll = 180f + currentRoll;
-            transform.Rotate(Vector3.forward, totalRoll, Space.Self);
+            // Apply 180-degree Z rotation to flip Y axis (make -Y point down)
+            transform.Rotate(Vector3.forward, 180f, Space.Self);
         }
 
         private float GetCollisionAdjustedDistance(Vector3 direction)
