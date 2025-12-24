@@ -484,20 +484,25 @@ namespace FaeMaze.Maze
                 return 0f;
             }
 
-            Vector3 forward = mainCamera.transform.forward;
-            forward.z = 0f;
-            if (forward.sqrMagnitude < 0.0001f)
+            Vector3 planarForward = Vector3.ProjectOnPlane(mainCamera.transform.forward, Vector3.forward);
+            if (planarForward.sqrMagnitude < 0.0001f)
             {
-                forward = Vector3.down;
-            }
-            forward.Normalize();
-
-            if (Mathf.Abs(forward.x) > Mathf.Abs(forward.y))
-            {
-                return forward.x > 0f ? 270f : 90f;
+                planarForward = Vector3.ProjectOnPlane(mainCamera.transform.up, Vector3.forward);
             }
 
-            return forward.y > 0f ? 180f : 0f;
+            if (planarForward.sqrMagnitude < 0.0001f)
+            {
+                planarForward = Vector3.down;
+            }
+
+            planarForward.Normalize();
+
+            if (Mathf.Abs(planarForward.x) > Mathf.Abs(planarForward.y))
+            {
+                return planarForward.x > 0f ? 270f : 90f;
+            }
+
+            return planarForward.y > 0f ? 180f : 0f;
         }
 
         private void OnTriggerEnter(Collider other)
