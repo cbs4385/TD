@@ -84,6 +84,9 @@ namespace FaeMaze.Cameras
         private float trackingLogTimer;
         private bool trackingVisitorLostLogged;
 
+        // Debug tracking
+        private bool hasLoggedStartup = false;
+
         #endregion
 
         #region Unity Lifecycle
@@ -114,7 +117,17 @@ namespace FaeMaze.Cameras
         {
             if (cam == null)
             {
+                Debug.LogWarning("[Camera] Update() called but cam is null!");
                 return;
+            }
+
+            if (!hasLoggedStartup)
+            {
+                hasLoggedStartup = true;
+                Debug.Log($"[Camera] CameraController3D is running. Initial state: focusPoint={focusPoint}, " +
+                          $"isFocusing={isFocusing}, isOrbiting={isOrbiting}, currentDistance={currentDistance}");
+                Debug.Log($"[Camera] Input System - Keyboard available: {(UnityEngine.InputSystem.Keyboard.current != null)}, " +
+                          $"Mouse available: {(UnityEngine.InputSystem.Mouse.current != null)}");
             }
 
             HandleFocusShortcuts();
