@@ -695,6 +695,9 @@ namespace FaeMaze.Cameras
             Vector3 worldUp = Vector3.forward;
             Vector3 offset = -forward * focalFollowDistance + worldUp * focalHeightOffset;
 
+            // Ensure camera is exactly 7 units away from focal point
+            offset = offset.normalized * 7f;
+
             Vector3 desiredPosition = focalPointTransform.position + offset;
 
             transform.position = desiredPosition;
