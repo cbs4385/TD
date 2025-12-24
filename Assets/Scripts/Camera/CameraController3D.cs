@@ -390,6 +390,9 @@ namespace FaeMaze.Cameras
             Vector3 desiredPosition = focusPoint + direction * finalDistance;
             transform.position = desiredPosition;
             transform.LookAt(focusPoint);
+
+            // Apply 180-degree Z rotation to flip Y axis (make -Y point down instead of up)
+            transform.Rotate(Vector3.forward, 180f, Space.Self);
         }
 
         private float GetCollisionAdjustedDistance(Vector3 direction)
