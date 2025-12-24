@@ -375,8 +375,11 @@ namespace FaeMaze.Systems
             tileObj.name = $"Tile_{gridX}_{gridY}_{GetTileTypeName(symbol)}";
 
             // Scale the cube to tile size
-            // Make it thin like a floor tile (0.1 height)
-            tileObj.transform.localScale = new Vector3(tileSize, 0.1f, tileSize);
+            // Make it thin like a floor tile, but oriented for X/Y plane
+            tileObj.transform.localScale = new Vector3(tileSize, tileSize, 0.1f);
+
+            // Rotate 90 degrees around X-axis to fill X/Y plane instead of X/Z plane
+            tileObj.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
             // Create a PBR material based on tile type
             Material material = CreatePBRMaterialForSymbol(symbol, color);
