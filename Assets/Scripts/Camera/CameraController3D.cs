@@ -131,6 +131,7 @@ namespace FaeMaze.Cameras
 
         // Focal point state
         private bool focalPointInitialized;
+        private bool focalCameraPoseInitialized;
 
         #endregion
 
@@ -201,27 +202,7 @@ namespace FaeMaze.Cameras
             if (useFocalPointMode)
             {
                 InitializeFocalPoint();
-                if (focalPointTransform != null)
-                {
-                    transform.SetPositionAndRotation(new Vector3(1f, 2f, -3f), Quaternion.Euler(-45f, 0f, 0f));
-
-                    Vector3 startOffset = transform.position - focalPointTransform.position;
-                    Vector3 forward = focalPointTransform.forward;
-                    forward.z = 0f;
-                    if (forward.sqrMagnitude > 0.0001f)
-                    {
-                        forward.Normalize();
-                    }
-                    else
-                    {
-                        forward = Vector3.right;
-                    }
-
-                    Vector3 mazeUp = GetMazeUpDirection();
-                    focalFollowDistance = Mathf.Max(0f, Vector3.Dot(-forward, startOffset));
-                    focalHeightOffset = Vector3.Dot(mazeUp, startOffset);
-                }
-
+                TryConfigureInitialFocalCameraPose();
                 _focusPoint = focalPointTransform != null ? focalPointTransform.position : _focusPoint;
                 return;
             }
@@ -243,6 +224,8 @@ namespace FaeMaze.Cameras
                 {
                     InitializeFocalPoint();
                 }
+
+                TryConfigureInitialFocalCameraPose();
 
                 HandleFocalPointInput();
                 UpdateFocalPointCameraPosition();
@@ -604,6 +587,32 @@ namespace FaeMaze.Cameras
 
             _focusPoint = startPosition;
             focalPointInitialized = true;
+        }
+
+        private void TryConfigureInitialFocalCameraPose()
+        {
+            if (focalCameraPoseInitialized || !focalPointInitialized || focalPointTransform == null)
+            {
+                return;
+            }
+
+            Vector3 facingDirection = GetPathDirectionToHeart();
+            if (facingDirection.sqrMagnitude < 0.0001f)
+            {
+                facingDirection = Vector3.up;
+            }
+
+            Vector3 mazeUp = GetMazeUpDirection();
+            Vector3 offset = -facingDirection.normalized * 3f + mazeUp * -3f;
+
+            Vector3 desiredPosition = focalPointTransform.position + offset;
+            transform.position = desiredPosition;
+            transform.rotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, mazeUp);
+
+            focalFollowDistance = 3f;
+            focalHeightOffset = Vector3.Dot(mazeUp, offset);
+
+            focalCameraPoseInitialized = true;
         }
 
         private Vector3 GetPathDirectionToHeart()
