@@ -133,27 +133,44 @@ namespace FaeMaze.Cameras
         private void HandleKeyboardPan()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || isOrbiting)
+            if (keyboard == null)
             {
                 return;
+            }
+
+            if (isOrbiting)
+            {
+                Debug.Log("[Camera] Keyboard pan blocked - camera is orbiting");
+                return;
+            }
+
+            // Allow keyboard panning even during focus - user should be able to override focus
+            if (isFocusing)
+            {
+                Debug.Log("[Camera] Keyboard pan cancelling focus state");
+                isFocusing = false;  // Cancel focus when user manually pans
             }
 
             Vector2 movement = Vector2.zero;
             if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
             {
                 movement.y += 1f;
+                Debug.Log("[Camera] W key pressed - moving UP (Y+)");
             }
             if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
             {
                 movement.y -= 1f;
+                Debug.Log("[Camera] S key pressed - moving DOWN (Y-)");
             }
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
                 movement.x += 1f;
+                Debug.Log("[Camera] D key pressed - moving RIGHT (X+)");
             }
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
                 movement.x -= 1f;
+                Debug.Log("[Camera] A key pressed - moving LEFT (X-)");
             }
 
             if (movement.sqrMagnitude <= 0f)
@@ -161,10 +178,8 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // Pan in XY plane (since maze is in XY, not XZ)
-            // Project camera vectors onto XY plane (normal = Z-axis)
-            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.forward).normalized;
-            Vector3 right = Vector3.ProjectOnPlane(transform.right, Vector3.forward).normalized;
+            // Store old focus point for debugging
+            Vector3 oldFocusPoint = focusPoint;
 
             // For XY plane movement, use world-space directions directly
             // Right/Left (A/D) = X-axis, Up/Down (W/S) = Y-axis
@@ -173,6 +188,10 @@ namespace FaeMaze.Cameras
 
             Vector3 delta = (worldRight * movement.x + worldUp * movement.y) * panSpeed * Time.deltaTime;
             focusPoint += delta;
+
+            Debug.Log($"[Camera] Keyboard Pan: movement={movement}, delta={delta}, " +
+                      $"oldFocus={oldFocusPoint}, newFocus={focusPoint}, " +
+                      $"panSpeed={panSpeed}, deltaTime={Time.deltaTime}");
         }
 
         private void HandleFocusShortcuts()
@@ -302,6 +321,8 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            Debug.Log($"[Camera] HandleFocusMovement: isFocusing=true, focusVisitor={(focusVisitor != null ? "active" : "null")}");
+
             if (focusVisitor != null)
             {
                 focusTargetPosition = new Vector3(
@@ -313,6 +334,7 @@ namespace FaeMaze.Cameras
                 if (trackingLogTimer <= 0f)
                 {
                     trackingLogTimer = trackingLogInterval;
+                    Debug.Log($"[Camera] Tracking visitor at {focusTargetPosition}");
                 }
 
                 trackingVisitorLostLogged = false;
@@ -326,9 +348,12 @@ namespace FaeMaze.Cameras
             Vector3 newPosition = Vector3.MoveTowards(currentPosition, focusTargetPosition, focusLerpSpeed * Time.deltaTime);
             focusPoint = newPosition;
 
+            Debug.Log($"[Camera] Focus movement: current={currentPosition}, target={focusTargetPosition}, new={newPosition}");
+
             if (focusVisitor == null && Vector3.SqrMagnitude(newPosition - focusTargetPosition) < 0.0001f)
             {
                 isFocusing = false;
+                Debug.Log("[Camera] Focus movement complete - isFocusing set to false");
             }
         }
 
