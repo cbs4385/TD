@@ -122,7 +122,8 @@ namespace FaeMaze.Cameras
             HandleMouseControls();
             HandleScrollZoom();
             HandleFocusMovement();
-            ClampToMazeBounds();
+            // Removed bounds clamping - camera can now move anywhere
+            // ClampToMazeBounds();
             UpdateCameraPosition();
         }
 
@@ -232,7 +233,8 @@ namespace FaeMaze.Cameras
                 Vector2 mouseDelta = mouse.delta.ReadValue();
                 currentYaw += mouseDelta.x * orbitSpeed * Time.deltaTime;
                 currentPitch -= mouseDelta.y * orbitSpeed * Time.deltaTime;
-                currentPitch = Mathf.Clamp(currentPitch, minPitch, maxPitch);
+                // Removed pitch clamping - camera can now rotate freely
+                // currentPitch = Mathf.Clamp(currentPitch, minPitch, maxPitch);
             }
 
             // Handle pan drag
@@ -261,10 +263,9 @@ namespace FaeMaze.Cameras
 
             // Dolly in/out
             float zoomFactor = Mathf.Exp(-scroll * dollySpeed * Time.deltaTime);
-            currentDistance = Mathf.Clamp(
-                currentDistance * zoomFactor,
-                minDistance,
-                maxDistance);
+            currentDistance = currentDistance * zoomFactor;
+            // Removed distance clamping - camera can now zoom freely
+            // currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
         }
 
         private Vector3 GetMouseWorldPosition()
