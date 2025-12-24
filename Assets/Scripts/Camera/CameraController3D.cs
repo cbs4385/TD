@@ -711,10 +711,10 @@ namespace FaeMaze.Cameras
             if (rollLogTimer <= 0f)
             {
                 rollLogTimer = RollLogInterval;
-                Vector3 euler = transform.rotation.eulerAngles;
-                if (Mathf.Abs(euler.z) > 1f && Mathf.Abs(euler.z - 360f) > 1f)
+                Vector3 rollEuler = transform.rotation.eulerAngles;
+                if (Mathf.Abs(rollEuler.z) > 1f && Mathf.Abs(rollEuler.z - 360f) > 1f)
                 {
-                    Debug.Log($"[CameraController3D] Focal follow roll detected -> rollZ: {euler.z:F2}, pos: {transform.position}, forward: {forward}, up: {worldUp}, offset: {offset}");
+                    Debug.Log($"[CameraController3D] Focal follow roll detected -> rollZ: {rollEuler.z:F2}, pos: {transform.position}, forward: {forward}, up: {worldUp}, offset: {offset}");
                 }
             }
         }
