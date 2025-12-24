@@ -2274,7 +2274,6 @@ namespace FaeMaze.Visitors
         {
             if (modelPrefab == null)
             {
-                Debug.LogWarning($"[VisitorControllerBase] use3DModel is true but modelPrefab is null on {gameObject.name}");
                 return;
             }
 

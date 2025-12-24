@@ -33,13 +33,11 @@ namespace FaeMaze.Systems
             Shader litShader = Shader.Find("Universal Render Pipeline/Lit");
             if (litShader == null)
             {
-                Debug.LogWarning("[PBRMaterialFactory] URP/Lit shader not found! Falling back to Standard shader.");
                 litShader = Shader.Find("Standard");
             }
 
             if (litShader == null)
             {
-                Debug.LogError("[PBRMaterialFactory] Neither URP/Lit nor Standard shader found! Using default shader.");
                 return new Material(Shader.Find("Diffuse")) { color = baseColor, name = materialName };
             }
 
@@ -79,13 +77,11 @@ namespace FaeMaze.Systems
             Shader unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
             if (unlitShader == null)
             {
-                Debug.LogWarning("[PBRMaterialFactory] URP/Unlit shader not found! Falling back to Unlit/Color.");
                 unlitShader = Shader.Find("Unlit/Color");
             }
 
             if (unlitShader == null)
             {
-                Debug.LogError("[PBRMaterialFactory] No unlit shader found! Using default shader.");
                 return new Material(Shader.Find("Diffuse")) { color = baseColor, name = materialName };
             }
 
@@ -219,7 +215,6 @@ namespace FaeMaze.Systems
             if (baseTexture != null)
             {
                 material.SetTexture("_BaseMap", baseTexture);
-                Debug.Log($"[PBRMaterialFactory] Applied texture {baseTexture.name} to material {materialName}");
             }
 
             return material;

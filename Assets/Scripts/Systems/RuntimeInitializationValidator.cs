@@ -69,7 +69,6 @@ namespace FaeMaze.Systems
             // Final Report
             validationReport.AppendLine();
             validationReport.AppendLine("=== Validation Complete ===");
-            Debug.Log(validationReport.ToString());
 
             validationComplete = true;
         }

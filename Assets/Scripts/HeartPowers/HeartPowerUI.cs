@@ -385,7 +385,6 @@ namespace FaeMaze.HeartPowers
                         else
                         {
                             // Failed - keep in targeting mode but show feedback
-                            Debug.LogWarning($"[HeartPowerUI] Failed to activate {pendingPowerType.Value}: {reason}");
                         }
                     }
                 }

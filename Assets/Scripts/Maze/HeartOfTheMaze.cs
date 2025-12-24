@@ -271,13 +271,11 @@ namespace FaeMaze.Maze
                 collider = gameObject.AddComponent<SphereCollider>();
                 collider.radius = 0.5f;
                 collider.isTrigger = true;
-                Debug.Log("[HeartOfTheMaze] Added SphereCollider trigger");
             }
             else
             {
                 // Ensure it's set as trigger
                 collider.isTrigger = true;
-                Debug.Log("[HeartOfTheMaze] SphereCollider already exists, ensured trigger is enabled");
             }
         }
 
@@ -286,24 +284,19 @@ namespace FaeMaze.Maze
         {
             if (modelInstance != null)
             {
-                Debug.Log("[HeartOfTheMaze] SetupModel: modelInstance already exists, returning");
                 return;
             }
 
             if (heartModelPrefab == null)
             {
-                Debug.LogWarning("[HeartOfTheMaze] heartModelPrefab is NULL! Creating fallback procedural heart visual.");
                 CreateFallbackHeartVisual();
                 return;
             }
-
-            Debug.Log("[HeartOfTheMaze] SetupModel: Instantiating 3D model prefab...");
 
             // Instantiate the model prefab
             modelInstance = Instantiate(heartModelPrefab, transform);
             if (modelInstance == null)
             {
-                Debug.LogError("[HeartOfTheMaze] Failed to instantiate heart model prefab. Creating fallback.");
                 CreateFallbackHeartVisual();
                 return;
             }
@@ -315,12 +308,6 @@ namespace FaeMaze.Maze
             // (prefab has scale 100, so we keep that and just apply modelSize multiplier)
             Vector3 prefabScale = modelInstance.transform.localScale;
             modelInstance.transform.localScale = prefabScale * modelSize;
-
-            Debug.Log($"[HeartOfTheMaze] Model scale: prefab={prefabScale}, final={modelInstance.transform.localScale}");
-            Debug.Log($"[HeartOfTheMaze] Model position: local={modelInstance.transform.localPosition}, world={modelInstance.transform.position}");
-            Debug.Log($"[HeartOfTheMaze] Parent position: {transform.position}");
-
-            Debug.Log($"[HeartOfTheMaze] SetupModel: Model instantiated successfully - {modelInstance.name}");
 
             // Collect all mesh renderers and replace materials with 3D PBR materials
             meshRenderers = modelInstance.GetComponentsInChildren<MeshRenderer>();
@@ -345,11 +332,6 @@ namespace FaeMaze.Maze
                             {
                                 baseTexture = originalMat.GetTexture("_BaseMap");
                             }
-
-                            if (baseTexture != null)
-                            {
-                                Debug.Log($"[HeartOfTheMaze] Preserved texture {baseTexture.name} from original material");
-                            }
                         }
 
                         // Use heart color for base tint
@@ -368,23 +350,14 @@ namespace FaeMaze.Maze
                             $"Heart_Material_{i}"
                         );
                         matList.Add(pbrMats[i]);
-
-                        // Debug material properties
-                        Debug.Log($"[HeartOfTheMaze] Created PBR material {i}: baseColor={baseColor}, " +
-                                  $"emission={brightEmission * emissionIntensity}, " +
-                                  $"texture={baseTexture?.name ?? "none"}, " +
-                                  $"shader={pbrMats[i].shader.name}");
                     }
                     renderer.materials = pbrMats;
-                    Debug.Log($"[HeartOfTheMaze] Replaced {pbrMats.Length} sprite materials with PBR materials on {renderer.gameObject.name}");
                 }
                 materials = matList.ToArray();
                 meshRenderers = modelInstance.GetComponentsInChildren<MeshRenderer>(); // Refresh after material change
-                Debug.Log($"[HeartOfTheMaze] Collected {materials.Length} PBR materials for pulsing effect");
             }
             else
             {
-                Debug.LogWarning("[HeartOfTheMaze] No MeshRenderers found in model!");
             }
         }
 
@@ -414,8 +387,6 @@ namespace FaeMaze.Maze
                 // Store materials for pulsing
                 materials = new Material[] { heartMat };
                 meshRenderers = new MeshRenderer[] { renderer };
-
-                Debug.Log("[HeartOfTheMaze] Created fallback heart visual with emissive material");
             }
         }
 
@@ -442,8 +413,6 @@ namespace FaeMaze.Maze
 
             // Optional: Enable shadows if desired (can be expensive)
             glowLight.shadows = LightShadows.None;
-
-            Debug.Log($"[HeartOfTheMaze] 3D Point Light configured - Color: {glowLight.color}, Intensity: {glowLight.intensity}, Range: {glowLight.range}");
         }
 
         private void UpdateMaterialPulse()
@@ -508,13 +477,10 @@ namespace FaeMaze.Maze
 
         private void OnTriggerEnter(Collider other)
         {
-            Debug.Log($"[HeartOfTheMaze] OnTriggerEnter - collider: {other.name}, has VisitorControllerBase: {other.GetComponent<VisitorControllerBase>() != null}");
-
             // Check if a visitor entered the heart
             var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
-                Debug.Log($"[HeartOfTheMaze] Consuming visitor: {visitor.name}");
                 OnVisitorConsumed(visitor);
             }
         }

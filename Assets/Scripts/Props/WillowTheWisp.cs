@@ -196,7 +196,6 @@ namespace FaeMaze.Props
             // Log rotation at Start to see if it's being preserved
             if (modelInstance != null)
             {
-                Debug.Log($"[WillowWisp] Start - Model rotation: {modelInstance.transform.localEulerAngles}, Root rotation: {transform.localEulerAngles}");
             }
 
             // Find references
@@ -547,11 +546,9 @@ namespace FaeMaze.Props
                 // Additive blending preserves light colors better
                 glowLight.blendStyleIndex = 1;
 
-                Debug.Log($"[WillowTheWisp] Light2D configured - Color: {glowLight.color}, Intensity: {glowLight.intensity}, Radius: {glowLight.pointLightOuterRadius}, BlendStyle: {glowLight.blendStyleIndex}");
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"[WillowTheWisp] Failed to setup glow light: {e.Message}");
                 glowLight = null;
             }
         }
@@ -1088,9 +1085,6 @@ namespace FaeMaze.Props
                     modelInstance = childAnimator.gameObject;
                     animator = childAnimator;
 
-                    // Log the rotation for debugging
-                    Debug.Log($"[WillowWisp] Found embedded model with rotation: {modelInstance.transform.localEulerAngles}");
-
                     if (sprite != null)
                     {
                         sprite.enabled = false;
@@ -1109,7 +1103,6 @@ namespace FaeMaze.Props
             var instantiatedObject = (GameObject)Instantiate((UnityEngine.Object)wispModelPrefab, transform);
             if (instantiatedObject == null)
             {
-                Debug.LogWarning("Failed to instantiate wisp model prefab. Falling back to sprite rendering.");
                 return;
             }
 

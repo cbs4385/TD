@@ -131,7 +131,6 @@ namespace FaeMaze.Systems
         /// </summary>
         public void LogReport()
         {
-            Debug.Log(GetStatsReport());
         }
 
         /// <summary>

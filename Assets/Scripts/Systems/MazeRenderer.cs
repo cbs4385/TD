@@ -156,31 +156,19 @@ namespace FaeMaze.Systems
             }
 
             // Log prefab status for debugging
-            if (wallPrefab != null)
+            if (wallPrefab == null)
             {
-                Debug.Log($"MazeRenderer: wallPrefab is set to {wallPrefab.name}");
-            }
-            else
-            {
-                Debug.LogWarning("MazeRenderer: wallPrefab is NULL! Walls will use procedural meshes instead.");
+                // Walls will use procedural meshes when the prefab is not assigned.
             }
 
-            if (undergrowthPrefab != null)
+            if (undergrowthPrefab == null)
             {
-                Debug.Log($"MazeRenderer: undergrowthPrefab is set to {undergrowthPrefab.name}");
-            }
-            else
-            {
-                Debug.LogWarning("MazeRenderer: undergrowthPrefab is NULL! Undergrowth will use procedural meshes instead.");
+                // Undergrowth will use procedural meshes when the prefab is not assigned.
             }
 
-            if (waterPrefab != null)
+            if (waterPrefab == null)
             {
-                Debug.Log($"MazeRenderer: waterPrefab is set to {waterPrefab.name}");
-            }
-            else
-            {
-                Debug.LogWarning("MazeRenderer: waterPrefab is NULL! Water will use procedural meshes instead.");
+                // Water will use procedural meshes when the prefab is not assigned.
             }
 
             // Create container for tiles if not assigned
@@ -230,7 +218,6 @@ namespace FaeMaze.Systems
                 PerformMeshBatching();
             }
 
-            Debug.Log($"[MazeRenderer] Rendered {renderedTiles} tiles. Batching: {(enableMeshBatching ? "Enabled" : "Disabled")}");
         }
 
         private void CreateTile3D(int gridX, int gridY, char symbol, Color color)
@@ -332,7 +319,6 @@ namespace FaeMaze.Systems
                 var batches = MeshBatcher.BatchInChunks(wallTiles, tilesParent, batchChunkSize, destroyOriginals: true);
                 totalBatches += batches.Count;
                 totalBatchedTiles += wallTiles.Count;
-                Debug.Log($"[MazeRenderer] Batched {wallTiles.Count} wall tiles into {batches.Count} batches");
             }
 
             // Batch undergrowth
@@ -341,7 +327,6 @@ namespace FaeMaze.Systems
                 var batches = MeshBatcher.BatchInChunks(undergrowthTiles, tilesParent, batchChunkSize, destroyOriginals: true);
                 totalBatches += batches.Count;
                 totalBatchedTiles += undergrowthTiles.Count;
-                Debug.Log($"[MazeRenderer] Batched {undergrowthTiles.Count} undergrowth tiles into {batches.Count} batches");
             }
 
             // Batch water
@@ -350,7 +335,6 @@ namespace FaeMaze.Systems
                 var batches = MeshBatcher.BatchInChunks(waterTiles, tilesParent, batchChunkSize, destroyOriginals: true);
                 totalBatches += batches.Count;
                 totalBatchedTiles += waterTiles.Count;
-                Debug.Log($"[MazeRenderer] Batched {waterTiles.Count} water tiles into {batches.Count} batches");
             }
 
             // Batch paths
@@ -359,10 +343,7 @@ namespace FaeMaze.Systems
                 var batches = MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, destroyOriginals: true);
                 totalBatches += batches.Count;
                 totalBatchedTiles += pathTiles.Count;
-                Debug.Log($"[MazeRenderer] Batched {pathTiles.Count} path tiles into {batches.Count} batches");
             }
-
-            Debug.Log($"[MazeRenderer] Total: Batched {totalBatchedTiles} tiles into {totalBatches} combined meshes");
         }
 
         /// <summary>
