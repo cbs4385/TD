@@ -613,12 +613,14 @@ namespace FaeMaze.Cameras
 
             Vector3 desiredPosition = focalPointTransform.position + offset;
             Vector3 worldUp = Vector3.forward;
-            transform.position = desiredPosition;
-            transform.rotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
+            Vector3 planarForward = facingDirection;
+            planarForward.z = 0f;
+            float rollDeg = GetCardinalRollFromForward(planarForward);
 
+            transform.SetPositionAndRotation(
+                desiredPosition,
+                Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp) * Quaternion.Euler(0f, 0f, rollDeg));
             Vector3 euler = transform.rotation.eulerAngles;
-            euler.z = 0f;
-            transform.rotation = Quaternion.Euler(euler);
             Debug.Log($"[CameraController3D] Initial focal camera pose -> position: {transform.position}, lookTarget: {focalPointTransform.position}, forward: {facingDirection}, up: {worldUp}, euler: {euler}");
 
             focalFollowDistance = 3f;
@@ -697,13 +699,10 @@ namespace FaeMaze.Cameras
 
             Vector3 desiredPosition = focalPointTransform.position + offset;
 
-            transform.position = desiredPosition;
-            transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, worldUp);
+            Quaternion lookRotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
+            float rollDeg = GetCardinalRollFromForward(forward);
 
-            // Force Z rotation to 0 to prevent unwanted roll
-            Vector3 euler = transform.rotation.eulerAngles;
-            euler.z = 0f;
-            transform.rotation = Quaternion.Euler(euler);
+            transform.SetPositionAndRotation(desiredPosition, lookRotation * Quaternion.Euler(0f, 0f, rollDeg));
 
             _focusPoint = focalPointTransform.position;
 
@@ -717,6 +716,41 @@ namespace FaeMaze.Cameras
                     Debug.Log($"[CameraController3D] Focal follow roll detected -> rollZ: {rollEuler.z:F2}, pos: {transform.position}, forward: {forward}, up: {worldUp}, offset: {offset}");
                 }
             }
+        }
+
+        private static float GetCardinalRollFromForward(Vector3 planarForward)
+        {
+            if (planarForward.sqrMagnitude < 0.0001f)
+            {
+                return 0f;
+            }
+
+            planarForward.Normalize();
+
+            Vector3[] cardinals =
+            {
+                Vector3.down, // -Y
+                Vector3.left, // -X
+                Vector3.up,   // +Y
+                Vector3.right // +X
+            };
+
+            float[] rolls = { 0f, 90f, 180f, 270f };
+
+            float bestDot = float.NegativeInfinity;
+            float bestRoll = 0f;
+
+            for (int i = 0; i < cardinals.Length; i++)
+            {
+                float dot = Vector3.Dot(planarForward, cardinals[i]);
+                if (dot > bestDot)
+                {
+                    bestDot = dot;
+                    bestRoll = rolls[i];
+                }
+            }
+
+            return bestRoll;
         }
 
         private Vector3 GetMazeUpDirection()
