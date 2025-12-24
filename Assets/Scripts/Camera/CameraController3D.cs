@@ -153,19 +153,19 @@ namespace FaeMaze.Cameras
 
             if (isOrbiting)
             {
-                Debug.Log("[Camera] Keyboard pan blocked - camera is orbiting");
+                Debug.Log("[Camera] Keyboard input blocked - camera is orbiting");
                 return;
             }
 
-            // Allow keyboard panning even during focus - user should be able to override focus
+            // Allow keyboard input even during focus - user should be able to override focus
             if (isFocusing)
             {
-                Debug.Log("[Camera] Keyboard pan cancelling focus state");
-                isFocusing = false;  // Cancel focus when user manually pans
+                Debug.Log("[Camera] Keyboard input cancelling focus state");
+                isFocusing = false;  // Cancel focus when user manually controls camera
             }
 
+            // Handle W/S for vertical panning (inverted for 180° rotation)
             Vector2 movement = Vector2.zero;
-            // Inverted controls to compensate for 180° camera rotation
             if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
             {
                 movement.y -= 1f;  // Inverted: W moves down in world space
@@ -176,36 +176,41 @@ namespace FaeMaze.Cameras
                 movement.y += 1f;  // Inverted: S moves up in world space
                 Debug.Log("[Camera] S key pressed - moving DOWN (Y+)");
             }
+
+            // Handle A/D for camera rotation (yaw)
+            float rotationInput = 0f;
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
-                movement.x -= 1f;  // Inverted: D moves left in world space
-                Debug.Log("[Camera] D key pressed - moving RIGHT (X-)");
+                rotationInput += 1f;  // Rotate right
+                Debug.Log("[Camera] D key pressed - rotating RIGHT");
             }
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
-                movement.x += 1f;  // Inverted: A moves right in world space
-                Debug.Log("[Camera] A key pressed - moving LEFT (X+)");
+                rotationInput -= 1f;  // Rotate left
+                Debug.Log("[Camera] A key pressed - rotating LEFT");
             }
 
-            if (movement.sqrMagnitude <= 0f)
+            // Apply rotation
+            if (Mathf.Abs(rotationInput) > 0f)
             {
-                return;
+                float rotationDelta = rotationInput * orbitSpeed * Time.deltaTime;
+                currentYaw += rotationDelta;
+                Debug.Log($"[Camera] Keyboard Rotation: rotationInput={rotationInput}, " +
+                          $"rotationDelta={rotationDelta}, newYaw={currentYaw}");
             }
 
-            // Store old focus point for debugging
-            Vector3 oldFocusPoint = focusPoint;
+            // Apply vertical panning
+            if (movement.sqrMagnitude > 0f)
+            {
+                Vector3 oldFocusPoint = focusPoint;
+                Vector3 worldUp = Vector3.up;  // Y-axis
+                Vector3 delta = worldUp * movement.y * panSpeed * Time.deltaTime;
+                focusPoint += delta;
 
-            // For XY plane movement, use world-space directions directly
-            // Right/Left (A/D) = X-axis, Up/Down (W/S) = Y-axis
-            Vector3 worldRight = Vector3.right;  // X-axis
-            Vector3 worldUp = Vector3.up;        // Y-axis
-
-            Vector3 delta = (worldRight * movement.x + worldUp * movement.y) * panSpeed * Time.deltaTime;
-            focusPoint += delta;
-
-            Debug.Log($"[Camera] Keyboard Pan: movement={movement}, delta={delta}, " +
-                      $"oldFocus={oldFocusPoint}, newFocus={focusPoint}, " +
-                      $"panSpeed={panSpeed}, deltaTime={Time.deltaTime}");
+                Debug.Log($"[Camera] Keyboard Pan: movement={movement}, delta={delta}, " +
+                          $"oldFocus={oldFocusPoint}, newFocus={focusPoint}, " +
+                          $"panSpeed={panSpeed}, deltaTime={Time.deltaTime}");
+            }
         }
 
         private void HandleFocusShortcuts()
