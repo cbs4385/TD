@@ -186,7 +186,7 @@ namespace FaeMaze.Cameras
                 focusPoint += movement;
             }
 
-            // A/D: Rotate map around Y-axis at focus point
+            // A/D: Rotate map around Z-axis at focus point (tile's perpendicular axis)
             float rotationInput = 0f;
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
@@ -387,7 +387,7 @@ namespace FaeMaze.Cameras
             // Calculate camera position relative to focus point
             Vector3 offset = direction * finalDistance;
 
-            // Rotate camera position around Y-axis at focus point
+            // Rotate camera position around tile's Z-axis at focus point (perpendicular to XY plane)
             Quaternion mapSpinRotation = Quaternion.AngleAxis(mapRotation, Vector3.back);
             offset = mapSpinRotation * offset;
 
