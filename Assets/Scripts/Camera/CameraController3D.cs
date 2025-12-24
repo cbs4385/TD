@@ -133,6 +133,11 @@ namespace FaeMaze.Cameras
         private bool focalPointInitialized;
         private bool focalCameraPoseInitialized;
 
+        // Debugging
+        private float rollLogTimer;
+        private const float RollLogInterval = 0.5f;
+        private bool loggedMazeUpFlip;
+
         #endregion
 
         #region Public Properties
@@ -585,6 +590,8 @@ namespace FaeMaze.Cameras
                 startPosition,
                 Quaternion.LookRotation(facingDirection, GetMazeUpDirection()));
 
+            Debug.Log($"[CameraController3D] Focal point initialized at {startPosition} with forward {facingDirection} and up {GetMazeUpDirection()}");
+
             _focusPoint = startPosition;
             focalPointInitialized = true;
         }
@@ -608,6 +615,9 @@ namespace FaeMaze.Cameras
             Vector3 desiredPosition = focalPointTransform.position + offset;
             transform.position = desiredPosition;
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
+
+            Vector3 euler = transform.rotation.eulerAngles;
+            Debug.Log($"[CameraController3D] Initial focal camera pose -> position: {transform.position}, lookTarget: {focalPointTransform.position}, forward: {facingDirection}, up: {worldUp}, euler: {euler}");
 
             focalFollowDistance = 3f;
             focalHeightOffset = Vector3.Dot(worldUp, offset);
@@ -688,6 +698,17 @@ namespace FaeMaze.Cameras
             transform.position = desiredPosition;
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, worldUp);
             _focusPoint = focalPointTransform.position;
+
+            rollLogTimer -= Time.deltaTime;
+            if (rollLogTimer <= 0f)
+            {
+                rollLogTimer = RollLogInterval;
+                Vector3 euler = transform.rotation.eulerAngles;
+                if (Mathf.Abs(euler.z) > 1f && Mathf.Abs(euler.z - 360f) > 1f)
+                {
+                    Debug.Log($"[CameraController3D] Focal follow roll detected -> rollZ: {euler.z:F2}, pos: {transform.position}, forward: {forward}, up: {worldUp}, offset: {offset}");
+                }
+            }
         }
 
         private Vector3 GetMazeUpDirection()
@@ -708,6 +729,11 @@ namespace FaeMaze.Cameras
             if (Vector3.Dot(mazeUp, Vector3.forward) < 0f)
             {
                 mazeUp = -mazeUp;
+                if (!loggedMazeUpFlip)
+                {
+                    loggedMazeUpFlip = true;
+                    Debug.Log($"[CameraController3D] Maze up vector flipped toward +Z: {mazeUp}");
+                }
             }
 
             return mazeUp.normalized;
