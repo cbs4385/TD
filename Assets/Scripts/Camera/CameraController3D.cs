@@ -701,9 +701,9 @@ namespace FaeMaze.Cameras
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, worldUp);
 
             // Apply 180-degree Z-axis rotation correction
-            Vector3 euler = transform.rotation.eulerAngles;
-            euler.z += 180f;
-            transform.rotation = Quaternion.Euler(euler);
+            Vector3 correctedEuler = transform.rotation.eulerAngles;
+            correctedEuler.z += 180f;
+            transform.rotation = Quaternion.Euler(correctedEuler);
 
             _focusPoint = focalPointTransform.position;
 
