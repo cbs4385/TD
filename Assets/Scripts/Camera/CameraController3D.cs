@@ -703,6 +703,13 @@ namespace FaeMaze.Cameras
                 return Vector3.forward;
             }
 
+            // Always prefer the positive Z-facing up direction so the camera isn't rolled 180°
+            // when the maze is mirrored through the XY plane.
+            if (Vector3.Dot(mazeUp, Vector3.forward) < 0f)
+            {
+                mazeUp = -mazeUp;
+            }
+
             return mazeUp.normalized;
         }
 
