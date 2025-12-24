@@ -609,18 +609,10 @@ namespace FaeMaze.Cameras
                 facingDirection = Vector3.up;
             }
 
-            Vector3 worldUp = new Vector3(transform.position.x, transform.position.y, -1f);
-            if (worldUp.sqrMagnitude < 0.0001f)
-            {
-                worldUp = Vector3.forward;
-            }
-            else
-            {
-                worldUp.Normalize();
-            }
-            Vector3 offset = -facingDirection.normalized * 3f + worldUp * -3f;
+            Vector3 offset = -facingDirection.normalized * 3f + Vector3.back * 3f;
 
             Vector3 desiredPosition = focalPointTransform.position + offset;
+            Vector3 worldUp = Vector3.forward;
             transform.position = desiredPosition;
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
 
@@ -630,7 +622,7 @@ namespace FaeMaze.Cameras
             Debug.Log($"[CameraController3D] Initial focal camera pose -> position: {transform.position}, lookTarget: {focalPointTransform.position}, forward: {facingDirection}, up: {worldUp}, euler: {euler}");
 
             focalFollowDistance = 3f;
-            focalHeightOffset = Vector3.Dot(worldUp, offset);
+            focalHeightOffset = -3f;
 
             focalCameraPoseInitialized = true;
         }
@@ -700,15 +692,7 @@ namespace FaeMaze.Cameras
                 forward = Vector3.right;
             }
 
-            Vector3 worldUp = new Vector3(transform.position.x, transform.position.y, -1f);
-            if (worldUp.sqrMagnitude < 0.0001f)
-            {
-                worldUp = Vector3.forward;
-            }
-            else
-            {
-                worldUp.Normalize();
-            }
+            Vector3 worldUp = Vector3.forward;
             Vector3 offset = -forward * focalFollowDistance + worldUp * focalHeightOffset;
 
             Vector3 desiredPosition = focalPointTransform.position + offset;
