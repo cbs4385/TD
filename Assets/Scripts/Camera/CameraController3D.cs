@@ -617,6 +617,8 @@ namespace FaeMaze.Cameras
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
 
             Vector3 euler = transform.rotation.eulerAngles;
+            euler.z = 0f;
+            transform.rotation = Quaternion.Euler(euler);
             Debug.Log($"[CameraController3D] Initial focal camera pose -> position: {transform.position}, lookTarget: {focalPointTransform.position}, forward: {facingDirection}, up: {worldUp}, euler: {euler}");
 
             focalFollowDistance = 3f;
