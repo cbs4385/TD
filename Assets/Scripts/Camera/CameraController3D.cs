@@ -186,7 +186,7 @@ namespace FaeMaze.Cameras
                 focusPoint += movement;
             }
 
-            // A/D: Rotate map around Z-axis at focus point (spin like a map on a table)
+            // A/D: Rotate map around Y-axis at focus point
             float rotationInput = 0f;
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
@@ -387,8 +387,8 @@ namespace FaeMaze.Cameras
             // Calculate camera position relative to focus point
             Vector3 offset = direction * finalDistance;
 
-            // Rotate camera position around Z-axis at focus point (map spinning)
-            Quaternion mapSpinRotation = Quaternion.AngleAxis(mapRotation, Vector3.forward);
+            // Rotate camera position around Y-axis at focus point
+            Quaternion mapSpinRotation = Quaternion.AngleAxis(mapRotation, Vector3.up);
             offset = mapSpinRotation * offset;
 
             // Ensure XY distance stays perfectly constant (prevent drift)
