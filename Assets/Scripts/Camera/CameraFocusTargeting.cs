@@ -1,5 +1,5 @@
 using UnityEngine;
-using FaeMaze.Maze;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Cameras
 {
