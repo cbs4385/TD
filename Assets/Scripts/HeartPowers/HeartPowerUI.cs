@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using FaeMaze.Cameras;
 
 namespace FaeMaze.HeartPowers
 {
@@ -16,6 +17,10 @@ namespace FaeMaze.HeartPowers
         [SerializeField]
         [Tooltip("Reference to the HeartPowerManager")]
         private HeartPowerManager heartPowerManager;
+
+        [SerializeField]
+        [Tooltip("Reference to the Camera Focus Targeting system")]
+        private CameraFocusTargeting cameraFocusTargeting;
 
         [Header("Resource Display")]
         [SerializeField]
@@ -100,6 +105,12 @@ namespace FaeMaze.HeartPowers
             if (heartPowerManager == null)
             {
                 heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
+            }
+
+            // Find CameraFocusTargeting if not assigned
+            if (cameraFocusTargeting == null)
+            {
+                cameraFocusTargeting = FindFirstObjectByType<CameraFocusTargeting>();
             }
 
             // Map buttons to power types
@@ -344,42 +355,79 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Check for left mouse button click using old Input system
-            if (Input.GetMouseButtonDown(0))
+            // Use camera focus targeting instead of mouse clicks
+            if (cameraFocusTargeting != null)
             {
-                // Get mouse position in world space
-                Vector3 mouseWorldPos = GetMouseWorldPosition();
-
-
-                // Validate the position is on the grid - NO FALLBACK
-                if (heartPowerManager.MazeGrid == null)
+                // Check if a tile is focused
+                if (cameraFocusTargeting.TryGetFocusedTile(out Vector2Int gridPos, out Vector3 targetWorldPos))
                 {
-                    ExitTargetingMode(cancelled: true);
-                    return;
-                }
+                    // Show visual feedback for valid/invalid target
+                    bool canActivate = heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
+                    if (canActivate)
+                    {
+                        cameraFocusTargeting.ShowValidTarget();
+                    }
+                    else
+                    {
+                        cameraFocusTargeting.ShowInvalidTarget();
+                    }
 
-                if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
-                {
-                    // Invalid position - show feedback but don't exit targeting mode
-                    return;
-                }
+                    // Check for spacebar or left mouse button to confirm targeting
+                    if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
+                    {
+                        // Try to activate the power at the focused tile
+                        bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
 
-                // Valid grid position found!
-                Vector2Int gridPos = new Vector2Int(gridX, gridY);
-                Vector3 targetWorldPos = heartPowerManager.MazeGrid.GridToWorld(gridX, gridY);
-
-
-                // Try to activate the power
-                bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
-
-                if (success)
-                {
-                    ExitTargetingMode(cancelled: false);
+                        if (success)
+                        {
+                            ExitTargetingMode(cancelled: false);
+                        }
+                        else
+                        {
+                            // Failed - keep in targeting mode but show feedback
+                            Debug.LogWarning($"[HeartPowerUI] Failed to activate {pendingPowerType.Value}: {reason}");
+                        }
+                    }
                 }
                 else
                 {
-                    heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
-                    ExitTargetingMode(cancelled: true);
+                    // No tile focused - show invalid state
+                    if (cameraFocusTargeting != null)
+                    {
+                        cameraFocusTargeting.ShowInvalidTarget();
+                    }
+                }
+            }
+            else
+            {
+                // Fallback to old mouse-based targeting if camera focus targeting is not available
+                if (Input.GetMouseButtonDown(0))
+                {
+                    Vector3 mouseWorldPos = GetMouseWorldPosition();
+
+                    if (heartPowerManager.MazeGrid == null)
+                    {
+                        ExitTargetingMode(cancelled: true);
+                        return;
+                    }
+
+                    if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
+                    {
+                        return;
+                    }
+
+                    Vector3 targetWorldPos = heartPowerManager.MazeGrid.GridToWorld(gridX, gridY);
+                    bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
+
+                    if (success)
+                    {
+                        ExitTargetingMode(cancelled: false);
+                    }
+                    else
+                    {
+                        heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
+                        ExitTargetingMode(cancelled: true);
+                    }
                 }
             }
         }
