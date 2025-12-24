@@ -122,7 +122,7 @@ namespace FaeMaze.Cameras
             HandleMouseControls();
             HandleScrollZoom();
             HandleFocusMovement();
-            ClampToMazeBounds();
+            // ClampToMazeBounds(); // Disabled for free camera movement
             UpdateCameraPosition();
         }
 
