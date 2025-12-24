@@ -122,8 +122,7 @@ namespace FaeMaze.Cameras
             HandleMouseControls();
             HandleScrollZoom();
             HandleFocusMovement();
-            // Removed bounds clamping - camera can now move anywhere
-            // ClampToMazeBounds();
+            ClampToMazeBounds();
             UpdateCameraPosition();
         }
 
@@ -379,10 +378,13 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // Clamp focus point to maze bounds
+            // Allow camera to move ±10 units beyond maze edges
+            float padding = 10f;
+
+            // Clamp focus point to maze bounds with padding
             Vector3 clampedFocus = focusPoint;
-            clampedFocus.x = Mathf.Clamp(clampedFocus.x, origin.x, origin.x + width);
-            clampedFocus.y = Mathf.Clamp(clampedFocus.y, origin.y, origin.y + height);
+            clampedFocus.x = Mathf.Clamp(clampedFocus.x, origin.x - padding, origin.x + width + padding);
+            clampedFocus.y = Mathf.Clamp(clampedFocus.y, origin.y - padding, origin.y + height + padding);
             clampedFocus.z = 0f; // Keep on maze plane
             focusPoint = clampedFocus;
         }
