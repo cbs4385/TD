@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Systems;
@@ -13,6 +14,31 @@ namespace FaeMaze.Cameras
     public class CameraController3D : MonoBehaviour
     {
         #region Serialized Fields
+
+        [Header("Focal Point Settings")]
+        [SerializeField]
+        [Tooltip("Enable third-person focal point controls")]
+        private bool useFocalPointMode = true;
+
+        [SerializeField]
+        [Tooltip("Speed for moving the focal point forward/backward")]
+        private float focalMoveSpeed = 6f;
+
+        [SerializeField]
+        [Tooltip("Speed in degrees per second for rotating the focal point")]
+        private float focalTurnSpeed = 120f;
+
+        [SerializeField]
+        [Tooltip("Constant camera distance behind the focal point")]
+        private float focalFollowDistance = 3f;
+
+        [SerializeField]
+        [Tooltip("Constant camera height above the focal point")]
+        private float focalHeightOffset = 2f;
+
+        [SerializeField]
+        [Tooltip("Optional transform to use as the focal point (otherwise created at runtime)")]
+        private Transform focalPointTransform;
 
         [Header("Movement Settings")]
         [SerializeField]
@@ -103,6 +129,9 @@ namespace FaeMaze.Cameras
         private float trackingLogTimer;
         private bool trackingVisitorLostLogged;
 
+        // Focal point state
+        private bool focalPointInitialized;
+
         #endregion
 
         #region Public Properties
@@ -169,6 +198,13 @@ namespace FaeMaze.Cameras
 
         private void Start()
         {
+            if (useFocalPointMode)
+            {
+                InitializeFocalPoint();
+                UpdateFocalPointCameraPosition();
+                return;
+            }
+
             // Position camera based on initial orbit parameters
             UpdateCameraPosition();
         }
@@ -177,6 +213,18 @@ namespace FaeMaze.Cameras
         {
             if (cam == null)
             {
+                return;
+            }
+
+            if (useFocalPointMode)
+            {
+                if (!focalPointInitialized)
+                {
+                    InitializeFocalPoint();
+                }
+
+                HandleFocalPointInput();
+                UpdateFocalPointCameraPosition();
                 return;
             }
 
@@ -251,6 +299,63 @@ namespace FaeMaze.Cameras
             if (Mathf.Abs(yawInput) > 0.001f)
             {
                 _yawDeg += yawInput * orbitSpeed * Time.deltaTime;
+            }
+        }
+
+        private void HandleFocalPointInput()
+        {
+            if (!useFocalPointMode || focalPointTransform == null)
+            {
+                return;
+            }
+
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
+            {
+                return;
+            }
+
+            float moveInput = 0f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+            {
+                moveInput += 1f;
+            }
+
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+            {
+                moveInput -= 1f;
+            }
+
+            float turnInput = 0f;
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+            {
+                turnInput -= 1f;
+            }
+
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+            {
+                turnInput += 1f;
+            }
+
+            if (Mathf.Abs(moveInput) > 0.001f)
+            {
+                Vector3 forward = focalPointTransform.forward;
+                forward.z = 0f;
+                if (forward.sqrMagnitude > 0.0001f)
+                {
+                    forward.Normalize();
+                }
+                else
+                {
+                    forward = Vector3.right;
+                }
+
+                focalPointTransform.position += forward * moveInput * focalMoveSpeed * Time.deltaTime;
+            }
+
+            if (Mathf.Abs(turnInput) > 0.001f)
+            {
+                focalPointTransform.Rotate(Vector3.up, turnInput * focalTurnSpeed * Time.deltaTime, Space.World);
             }
         }
 
@@ -434,6 +539,108 @@ namespace FaeMaze.Cameras
             {
                 isFocusing = false;
             }
+        }
+
+        #endregion
+
+        #region Focal Point Mode
+
+        private void InitializeFocalPoint()
+        {
+            if (focalPointInitialized)
+            {
+                return;
+            }
+
+            if (focalPointTransform == null)
+            {
+                GameObject focalPointObj = new GameObject("Focal Point");
+                focalPointTransform = focalPointObj.transform;
+            }
+
+            Vector3 startPosition = _focusPoint;
+            if (GameController.Instance != null && GameController.Instance.Heart != null)
+            {
+                startPosition = GameController.Instance.Heart.transform.position;
+                startPosition.z = 0f;
+            }
+
+            Vector3 facingDirection = GetPathDirectionToHeart();
+            focalPointTransform.position = startPosition;
+
+            if (facingDirection.sqrMagnitude > 0.0001f)
+            {
+                focalPointTransform.rotation = Quaternion.LookRotation(facingDirection, Vector3.up);
+            }
+            else
+            {
+                focalPointTransform.rotation = Quaternion.identity;
+            }
+
+            _focusPoint = startPosition;
+            focalPointInitialized = true;
+        }
+
+        private Vector3 GetPathDirectionToHeart()
+        {
+            if (GameController.Instance == null || mazeGridBehaviour == null)
+            {
+                return Vector3.zero;
+            }
+
+            var entrance = GameController.Instance.Entrance;
+            var heart = GameController.Instance.Heart;
+
+            if (entrance == null || heart == null)
+            {
+                return Vector3.zero;
+            }
+
+            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
+            bool pathFound = GameController.Instance.TryFindPath(entrance.GridPosition, heart.GridPosition, pathNodes);
+            if (!pathFound || pathNodes.Count < 2)
+            {
+                return Vector3.zero;
+            }
+
+            MazeGrid.MazeNode lastNode = pathNodes[pathNodes.Count - 1];
+            MazeGrid.MazeNode previousNode = pathNodes[pathNodes.Count - 2];
+
+            Vector3 lastWorld = mazeGridBehaviour.NodeToWorld(lastNode);
+            Vector3 previousWorld = mazeGridBehaviour.NodeToWorld(previousNode);
+            Vector3 direction = lastWorld - previousWorld;
+            direction.z = 0f;
+
+            if (direction.sqrMagnitude > 0.0001f)
+            {
+                direction.Normalize();
+            }
+
+            return direction;
+        }
+
+        private void UpdateFocalPointCameraPosition()
+        {
+            if (!useFocalPointMode || focalPointTransform == null)
+            {
+                return;
+            }
+
+            Vector3 forward = focalPointTransform.forward;
+            forward.z = 0f;
+            if (forward.sqrMagnitude > 0.0001f)
+            {
+                forward.Normalize();
+            }
+            else
+            {
+                forward = Vector3.right;
+            }
+
+            Vector3 offset = -forward * focalFollowDistance + Vector3.up * focalHeightOffset;
+            transform.position = focalPointTransform.position + offset;
+            transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, Vector3.up);
+            _focusPoint = focalPointTransform.position;
         }
 
         #endregion
