@@ -358,7 +358,7 @@ namespace FaeMaze.Cameras
 
             if (turnInput != 0)
             {
-                focalPointTransform.Rotate(Vector3.up, turnInput * focalTurnSpeed, Space.World);
+                focalPointTransform.Rotate(Vector3.forward, turnInput * focalTurnSpeed, Space.World);
             }
         }
 
@@ -573,7 +573,7 @@ namespace FaeMaze.Cameras
 
             if (facingDirection.sqrMagnitude > 0.0001f)
             {
-                focalPointTransform.rotation = Quaternion.LookRotation(facingDirection, Vector3.up);
+                focalPointTransform.rotation = Quaternion.LookRotation(facingDirection, Vector3.forward);
             }
             else
             {
@@ -640,9 +640,9 @@ namespace FaeMaze.Cameras
                 forward = Vector3.right;
             }
 
-            Vector3 offset = -forward * focalFollowDistance + Vector3.up * focalHeightOffset;
+            Vector3 offset = -forward * focalFollowDistance + Vector3.forward * focalHeightOffset;
             transform.position = focalPointTransform.position + offset;
-            transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, Vector3.up);
+            transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, Vector3.forward);
             _focusPoint = focalPointTransform.position;
         }
 
