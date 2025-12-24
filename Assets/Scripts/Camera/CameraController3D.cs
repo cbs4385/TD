@@ -69,6 +69,7 @@ namespace FaeMaze.Cameras
         private float currentYaw;
         private float currentPitch = 45f;
         private float currentDistance = 15f;
+        private float currentRoll = 0f;  // Z-axis rotation for map spinning
 
         // Mouse drag state
         private bool isOrbiting;
@@ -177,26 +178,26 @@ namespace FaeMaze.Cameras
                 Debug.Log("[Camera] S key pressed - moving DOWN (Y+)");
             }
 
-            // Handle A/D for camera rotation (yaw)
+            // Handle A/D for camera rotation around Z axis (map spinning)
             float rotationInput = 0f;
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
-                rotationInput += 1f;  // Rotate right
-                Debug.Log("[Camera] D key pressed - rotating RIGHT");
+                rotationInput -= 1f;  // Rotate clockwise (negative Z rotation)
+                Debug.Log("[Camera] D key pressed - rotating RIGHT (clockwise)");
             }
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
-                rotationInput -= 1f;  // Rotate left
-                Debug.Log("[Camera] A key pressed - rotating LEFT");
+                rotationInput += 1f;  // Rotate counter-clockwise (positive Z rotation)
+                Debug.Log("[Camera] A key pressed - rotating LEFT (counter-clockwise)");
             }
 
-            // Apply rotation
+            // Apply Z-axis rotation (roll)
             if (Mathf.Abs(rotationInput) > 0f)
             {
                 float rotationDelta = rotationInput * orbitSpeed * Time.deltaTime;
-                currentYaw += rotationDelta;
+                currentRoll += rotationDelta;
                 Debug.Log($"[Camera] Keyboard Rotation: rotationInput={rotationInput}, " +
-                          $"rotationDelta={rotationDelta}, newYaw={currentYaw}");
+                          $"rotationDelta={rotationDelta}, newRoll={currentRoll}");
             }
 
             // Apply vertical panning
@@ -397,8 +398,9 @@ namespace FaeMaze.Cameras
             transform.position = desiredPosition;
             transform.LookAt(focusPoint);
 
-            // Apply 180-degree Z rotation to flip Y axis (make -Y point down instead of up)
-            transform.Rotate(Vector3.forward, 180f, Space.Self);
+            // Apply Z rotation: 180° base flip + currentRoll for map spinning
+            float totalRoll = 180f + currentRoll;
+            transform.Rotate(Vector3.forward, totalRoll, Space.Self);
         }
 
         private float GetCollisionAdjustedDistance(Vector3 direction)
