@@ -103,6 +103,20 @@ namespace FaeMaze.Systems
         /// <summary>Gets the world-space size of a single grid tile.</summary>
         public float TileSize => tileSize;
 
+        /// <summary>Gets the up direction for the maze, accounting for XY-plane reflection.</summary>
+        public Vector3 MazeUpDirection
+        {
+            get
+            {
+                if (mazeOrigin != null && mazeOrigin.lossyScale.z < 0f)
+                {
+                    return Vector3.back;
+                }
+
+                return Vector3.forward;
+            }
+        }
+
         #endregion
 
         #region Unity Lifecycle
