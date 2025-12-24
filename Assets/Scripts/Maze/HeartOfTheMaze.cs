@@ -333,19 +333,46 @@ namespace FaeMaze.Maze
                     Material[] pbrMats = new Material[renderer.materials.Length];
                     for (int i = 0; i < renderer.materials.Length; i++)
                     {
-                        // Use heart color for base - don't read from sprite material (it's white!)
+                        Material originalMat = renderer.materials[i];
+
+                        // Try to preserve texture from original material
+                        Texture baseTexture = null;
+                        if (originalMat != null)
+                        {
+                            // Try common texture property names
+                            baseTexture = originalMat.GetTexture("_MainTex");
+                            if (baseTexture == null)
+                            {
+                                baseTexture = originalMat.GetTexture("_BaseMap");
+                            }
+
+                            if (baseTexture != null)
+                            {
+                                Debug.Log($"[HeartOfTheMaze] Preserved texture {baseTexture.name} from original material");
+                            }
+                        }
+
+                        // Use heart color for base tint
                         Color baseColor = new Color(0.9f, 0.35f, 0.35f); // Rich red/pink
 
-                        // Create new PBR emissive material to replace sprite shader
-                        pbrMats[i] = Systems.PBRMaterialFactory.CreateEmissiveMaterial(
+                        // Use bright warm emission color (orange-yellow) for visible glow
+                        Color brightEmission = new Color(1.0f, 0.6f, 0.2f); // Bright orange
+                        float emissionIntensity = 3.0f; // Higher intensity for visibility
+
+                        // Create new PBR emissive material with texture support
+                        pbrMats[i] = Systems.PBRMaterialFactory.CreateEmissiveMaterialWithTexture(
                             baseColor,
-                            emissionColor,
-                            2.0f
+                            brightEmission,
+                            emissionIntensity,
+                            baseTexture,
+                            $"Heart_Material_{i}"
                         );
                         matList.Add(pbrMats[i]);
 
                         // Debug material properties
-                        Debug.Log($"[HeartOfTheMaze] Created PBR material {i}: baseColor={baseColor}, emission={emissionColor}, " +
+                        Debug.Log($"[HeartOfTheMaze] Created PBR material {i}: baseColor={baseColor}, " +
+                                  $"emission={brightEmission * emissionIntensity}, " +
+                                  $"texture={baseTexture?.name ?? "none"}, " +
                                   $"shader={pbrMats[i].shader.name}");
                     }
                     renderer.materials = pbrMats;

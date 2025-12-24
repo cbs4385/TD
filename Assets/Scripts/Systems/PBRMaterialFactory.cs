@@ -187,6 +187,44 @@ namespace FaeMaze.Systems
             );
         }
 
+        /// <summary>
+        /// Creates an emissive material with texture support for glowing objects.
+        /// Preserves the base texture from the original material if available.
+        /// </summary>
+        /// <param name="baseColor">The base color tint</param>
+        /// <param name="emissionColor">The emission color</param>
+        /// <param name="emissionIntensity">Emission intensity multiplier</param>
+        /// <param name="baseTexture">Optional base texture to apply</param>
+        /// <param name="materialName">Optional name for the material</param>
+        /// <returns>A PBR material with emission and texture</returns>
+        public static Material CreateEmissiveMaterialWithTexture(
+            Color baseColor,
+            Color emissionColor,
+            float emissionIntensity = 1.0f,
+            Texture baseTexture = null,
+            string materialName = "PBR_Emissive_Textured")
+        {
+            Color finalEmission = emissionColor * emissionIntensity;
+
+            Material material = CreateLitMaterial(
+                baseColor,
+                materialName,
+                enableEmission: true,
+                emissionColor: finalEmission,
+                metallic: 0.0f,
+                smoothness: 0.6f
+            );
+
+            // Apply texture if provided
+            if (baseTexture != null)
+            {
+                material.SetTexture("_BaseMap", baseTexture);
+                Debug.Log($"[PBRMaterialFactory] Applied texture {baseTexture.name} to material {materialName}");
+            }
+
+            return material;
+        }
+
         #endregion
     }
 }
