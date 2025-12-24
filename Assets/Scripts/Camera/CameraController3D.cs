@@ -699,6 +699,12 @@ namespace FaeMaze.Cameras
 
             transform.position = desiredPosition;
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, worldUp);
+
+            // Force Z rotation to 0 to prevent unwanted roll
+            Vector3 euler = transform.rotation.eulerAngles;
+            euler.z = 0f;
+            transform.rotation = Quaternion.Euler(euler);
+
             _focusPoint = focalPointTransform.position;
 
             rollLogTimer -= Time.deltaTime;
