@@ -374,12 +374,12 @@ namespace FaeMaze.Systems
             GameObject tileObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             tileObj.name = $"Tile_{gridX}_{gridY}_{GetTileTypeName(symbol)}";
 
-            // Scale the cube to tile size
-            // Make it thin like a floor tile, but oriented for X/Y plane
+            // Scale the cube to fill X/Y plane
+            // Wide in X and Y, thin in Z (faces camera directly)
             tileObj.transform.localScale = new Vector3(tileSize, tileSize, 0.1f);
 
-            // Rotate 90 degrees around X-axis to fill X/Y plane instead of X/Z plane
-            tileObj.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            // No rotation needed - cube scaled (X, Y, thin Z) naturally fills X/Y plane
+            // Front and back faces have normals along ±Z axis, facing the camera
 
             // Create a PBR material based on tile type
             Material material = CreatePBRMaterialForSymbol(symbol, color);
