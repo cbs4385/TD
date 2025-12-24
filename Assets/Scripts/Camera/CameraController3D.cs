@@ -69,6 +69,7 @@ namespace FaeMaze.Cameras
         private float currentYaw = 0f;
         private float currentPitch = 45f;
         private float currentDistance = 15f;
+        private float mapRotation = 0f; // Z-axis rotation for spinning the map
 
         // Mouse drag state
         private bool isOrbiting;
@@ -185,21 +186,21 @@ namespace FaeMaze.Cameras
                 focusPoint += movement;
             }
 
-            // A/D: Rotate camera yaw around Z-axis at focus point
+            // A/D: Rotate map around Z-axis at focus point (spin like a map on a table)
             float rotationInput = 0f;
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
-                rotationInput += 1f;  // Rotate right
+                rotationInput += 1f;  // Rotate clockwise
             }
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
-                rotationInput -= 1f;  // Rotate left
+                rotationInput -= 1f;  // Rotate counter-clockwise
             }
 
             if (Mathf.Abs(rotationInput) > 0f)
             {
                 float rotationDelta = rotationInput * orbitSpeed * Time.deltaTime;
-                currentYaw += rotationDelta;
+                mapRotation += rotationDelta;
             }
         }
 
@@ -385,6 +386,10 @@ namespace FaeMaze.Cameras
 
             // Calculate camera position relative to focus point
             Vector3 offset = direction * finalDistance;
+
+            // Rotate camera position around Z-axis at focus point (map spinning)
+            Quaternion mapSpinRotation = Quaternion.AngleAxis(mapRotation, Vector3.forward);
+            offset = mapSpinRotation * offset;
 
             // Set camera position
             Vector3 desiredPosition = focusPoint + offset;
