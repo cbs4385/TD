@@ -561,24 +561,24 @@ namespace FaeMaze.Cameras
                 focalPointTransform = focalPointObj.transform;
             }
 
-            Vector3 startPosition = _focusPoint;
-            if (GameController.Instance != null && GameController.Instance.Heart != null)
+            if (GameController.Instance == null || GameController.Instance.Heart == null)
             {
-                startPosition = GameController.Instance.Heart.transform.position;
-                startPosition.z = 0f;
+                // Wait until the heart exists so we can place the focal point correctly.
+                return;
             }
+
+            Vector3 startPosition = GameController.Instance.Heart.transform.position;
+            startPosition.z = 0f;
 
             Vector3 facingDirection = GetPathDirectionToHeart();
-            focalPointTransform.position = startPosition;
+            if (facingDirection.sqrMagnitude < 0.0001f)
+            {
+                facingDirection = Vector3.up;
+            }
 
-            if (facingDirection.sqrMagnitude > 0.0001f)
-            {
-                focalPointTransform.rotation = Quaternion.LookRotation(facingDirection, Vector3.forward);
-            }
-            else
-            {
-                focalPointTransform.rotation = Quaternion.identity;
-            }
+            focalPointTransform.SetPositionAndRotation(
+                startPosition,
+                Quaternion.LookRotation(facingDirection, Vector3.forward));
 
             _focusPoint = startPosition;
             focalPointInitialized = true;
@@ -586,7 +586,7 @@ namespace FaeMaze.Cameras
 
         private Vector3 GetPathDirectionToHeart()
         {
-            if (GameController.Instance == null || mazeGridBehaviour == null)
+            if (GameController.Instance == null)
             {
                 return Vector3.zero;
             }
@@ -599,27 +599,36 @@ namespace FaeMaze.Cameras
                 return Vector3.zero;
             }
 
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            bool pathFound = GameController.Instance.TryFindPath(entrance.GridPosition, heart.GridPosition, pathNodes);
-            if (!pathFound || pathNodes.Count < 2)
+            if (mazeGridBehaviour != null)
             {
-                return Vector3.zero;
+                List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
+                bool pathFound = GameController.Instance.TryFindPath(entrance.GridPosition, heart.GridPosition, pathNodes);
+                if (pathFound && pathNodes.Count >= 2)
+                {
+                    MazeGrid.MazeNode lastNode = pathNodes[pathNodes.Count - 1];
+                    MazeGrid.MazeNode previousNode = pathNodes[pathNodes.Count - 2];
+
+                    Vector3 lastWorld = mazeGridBehaviour.NodeToWorld(lastNode);
+                    Vector3 previousWorld = mazeGridBehaviour.NodeToWorld(previousNode);
+                    Vector3 direction = lastWorld - previousWorld;
+                    direction.z = 0f;
+
+                    if (direction.sqrMagnitude > 0.0001f)
+                    {
+                        direction.Normalize();
+                        return direction;
+                    }
+                }
             }
 
-            MazeGrid.MazeNode lastNode = pathNodes[pathNodes.Count - 1];
-            MazeGrid.MazeNode previousNode = pathNodes[pathNodes.Count - 2];
-
-            Vector3 lastWorld = mazeGridBehaviour.NodeToWorld(lastNode);
-            Vector3 previousWorld = mazeGridBehaviour.NodeToWorld(previousNode);
-            Vector3 direction = lastWorld - previousWorld;
-            direction.z = 0f;
-
-            if (direction.sqrMagnitude > 0.0001f)
+            Vector3 fallbackDirection = heart.transform.position - entrance.transform.position;
+            fallbackDirection.z = 0f;
+            if (fallbackDirection.sqrMagnitude < 0.0001f)
             {
-                direction.Normalize();
+                return Vector3.up;
             }
 
-            return direction;
+            return fallbackDirection.normalized;
         }
 
         private void UpdateFocalPointCameraPosition()
