@@ -66,10 +66,9 @@ namespace FaeMaze.Cameras
 
         // Orbit state
         private Vector3 focusPoint;
-        private float currentYaw;
+        private float currentYaw = 0f;
         private float currentPitch = 45f;
         private float currentDistance = 15f;
-        private float currentRoll = 0f;  // Z-axis rotation for map spinning
 
         // Mouse drag state
         private bool isOrbiting;
@@ -154,63 +153,53 @@ namespace FaeMaze.Cameras
 
             if (isOrbiting)
             {
-                Debug.Log("[Camera] Keyboard input blocked - camera is orbiting");
                 return;
             }
 
-            // Allow keyboard input even during focus - user should be able to override focus
+            // Cancel focus when user manually controls camera
             if (isFocusing)
             {
-                Debug.Log("[Camera] Keyboard input cancelling focus state");
-                isFocusing = false;  // Cancel focus when user manually controls camera
+                isFocusing = false;
             }
 
-            // Handle W/S for vertical panning (inverted for 180° rotation)
-            Vector2 movement = Vector2.zero;
+            // W/S: Move focus point forward/backward along camera view direction (projected on XY plane)
+            float forwardInput = 0f;
             if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
             {
-                movement.y -= 1f;  // Inverted: W moves down in world space
-                Debug.Log("[Camera] W key pressed - moving UP (Y-)");
+                forwardInput += 1f;
             }
             if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
             {
-                movement.y += 1f;  // Inverted: S moves up in world space
-                Debug.Log("[Camera] S key pressed - moving DOWN (Y+)");
+                forwardInput -= 1f;
             }
 
-            // Handle A/D for camera rotation around Z axis (map spinning)
+            if (Mathf.Abs(forwardInput) > 0f)
+            {
+                // Get camera forward direction projected on XY plane
+                Vector3 cameraPos = transform.position;
+                Vector3 cameraProjection = new Vector3(cameraPos.x, cameraPos.y, 0f);
+                Vector3 forwardDir = (focusPoint - cameraProjection).normalized;
+
+                // Move focus point along this direction
+                Vector3 movement = forwardDir * forwardInput * panSpeed * Time.deltaTime;
+                focusPoint += movement;
+            }
+
+            // A/D: Rotate camera yaw around Z-axis at focus point
             float rotationInput = 0f;
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
-                rotationInput -= 1f;  // Rotate clockwise (negative Z rotation)
-                Debug.Log("[Camera] D key pressed - rotating RIGHT (clockwise)");
+                rotationInput += 1f;  // Rotate right
             }
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
-                rotationInput += 1f;  // Rotate counter-clockwise (positive Z rotation)
-                Debug.Log("[Camera] A key pressed - rotating LEFT (counter-clockwise)");
+                rotationInput -= 1f;  // Rotate left
             }
 
-            // Apply Z-axis rotation (roll)
             if (Mathf.Abs(rotationInput) > 0f)
             {
                 float rotationDelta = rotationInput * orbitSpeed * Time.deltaTime;
-                currentRoll += rotationDelta;
-                Debug.Log($"[Camera] Keyboard Rotation: rotationInput={rotationInput}, " +
-                          $"rotationDelta={rotationDelta}, newRoll={currentRoll}");
-            }
-
-            // Apply vertical panning
-            if (movement.sqrMagnitude > 0f)
-            {
-                Vector3 oldFocusPoint = focusPoint;
-                Vector3 worldUp = Vector3.up;  // Y-axis
-                Vector3 delta = worldUp * movement.y * panSpeed * Time.deltaTime;
-                focusPoint += delta;
-
-                Debug.Log($"[Camera] Keyboard Pan: movement={movement}, delta={delta}, " +
-                          $"oldFocus={oldFocusPoint}, newFocus={focusPoint}, " +
-                          $"panSpeed={panSpeed}, deltaTime={Time.deltaTime}");
+                currentYaw += rotationDelta;
             }
         }
 
@@ -396,10 +385,6 @@ namespace FaeMaze.Cameras
 
             // Calculate camera position relative to focus point
             Vector3 offset = direction * finalDistance;
-
-            // Apply roll rotation around world Z-axis (for map spinning)
-            Quaternion rollRotation = Quaternion.AngleAxis(currentRoll, Vector3.forward);
-            offset = rollRotation * offset;
 
             // Set camera position
             Vector3 desiredPosition = focusPoint + offset;
