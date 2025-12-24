@@ -21,12 +21,12 @@ namespace FaeMaze.Cameras
         private bool useFocalPointMode = true;
 
         [SerializeField]
-        [Tooltip("Speed for moving the focal point forward/backward")]
-        private float focalMoveSpeed = 6f;
+        [Tooltip("Step distance for moving the focal point forward/backward per key press")]
+        private float focalMoveSpeed = 1f;
 
         [SerializeField]
-        [Tooltip("Speed in degrees per second for rotating the focal point")]
-        private float focalTurnSpeed = 120f;
+        [Tooltip("Degrees to rotate the focal point per key press")]
+        private float focalTurnSpeed = 90f;
 
         [SerializeField]
         [Tooltip("Constant camera distance behind the focal point")]
@@ -34,7 +34,7 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Constant camera height above the focal point")]
-        private float focalHeightOffset = 2f;
+        private float focalHeightOffset = 3f;
 
         [SerializeField]
         [Tooltip("Optional transform to use as the focal point (otherwise created at runtime)")]
@@ -315,29 +315,29 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            float moveInput = 0f;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+            int moveInput = 0;
+            if (keyboard.wKey.wasPressedThisFrame || keyboard.upArrowKey.wasPressedThisFrame)
             {
-                moveInput += 1f;
+                moveInput += 1;
             }
 
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+            if (keyboard.sKey.wasPressedThisFrame || keyboard.downArrowKey.wasPressedThisFrame)
             {
-                moveInput -= 1f;
+                moveInput -= 1;
             }
 
-            float turnInput = 0f;
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+            int turnInput = 0;
+            if (keyboard.aKey.wasPressedThisFrame || keyboard.leftArrowKey.wasPressedThisFrame)
             {
-                turnInput -= 1f;
+                turnInput -= 1;
             }
 
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+            if (keyboard.dKey.wasPressedThisFrame || keyboard.rightArrowKey.wasPressedThisFrame)
             {
-                turnInput += 1f;
+                turnInput += 1;
             }
 
-            if (Mathf.Abs(moveInput) > 0.001f)
+            if (moveInput != 0)
             {
                 Vector3 forward = focalPointTransform.forward;
                 forward.z = 0f;
@@ -350,12 +350,15 @@ namespace FaeMaze.Cameras
                     forward = Vector3.right;
                 }
 
-                focalPointTransform.position += forward * moveInput * focalMoveSpeed * Time.deltaTime;
+                focalPointTransform.position += forward * moveInput * focalMoveSpeed;
+                Vector3 planarPosition = focalPointTransform.position;
+                planarPosition.z = 0f;
+                focalPointTransform.position = planarPosition;
             }
 
-            if (Mathf.Abs(turnInput) > 0.001f)
+            if (turnInput != 0)
             {
-                focalPointTransform.Rotate(Vector3.up, turnInput * focalTurnSpeed * Time.deltaTime, Space.World);
+                focalPointTransform.Rotate(Vector3.up, turnInput * focalTurnSpeed, Space.World);
             }
         }
 
