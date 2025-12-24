@@ -73,11 +73,9 @@ namespace FaeMaze.Systems
 #if UNITY_EDITOR
                 // In editor, load from Assets/Prefabs using AssetDatabase
                 heartModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/heartofmaze.prefab");
-                Debug.Log($"[RuntimeSceneSetup] Loaded heartofmaze prefab: {(heartModelPrefab != null ? "SUCCESS" : "FAILED")}");
 #else
                 // In builds, try to load from Resources folder
                 heartModelPrefab = UnityEngine.Resources.Load<GameObject>("Prefabs/heartofmaze");
-                Debug.Log($"[RuntimeSceneSetup] Loaded heartofmaze from Resources: {(heartModelPrefab != null ? "SUCCESS" : "FAILED")}");
 #endif
 
                 // Auto-create or find HeartOfTheMaze
@@ -102,18 +100,14 @@ namespace FaeMaze.Systems
                         if (heartModelPrefabField != null)
                         {
                             heartModelPrefabField.SetValue(heart, heartModelPrefab);
-                            Debug.Log($"[RuntimeSceneSetup] Assigned heartModelPrefab before Awake()");
                         }
                     }
 
                     // Now activate to trigger Awake() with prefab already assigned
                     heartObj.SetActive(true);
-                    Debug.Log("[RuntimeSceneSetup] Created and activated new HeartOfTheMaze with prefab assigned");
                 }
                 else
                 {
-                    Debug.Log("[RuntimeSceneSetup] Found existing HeartOfTheMaze, configuring it");
-
                     // For existing heart, update prefab and call SetupModel
                     if (heartModelPrefab != null)
                     {
@@ -123,7 +117,6 @@ namespace FaeMaze.Systems
                         if (heartModelPrefabField != null)
                         {
                             heartModelPrefabField.SetValue(heart, heartModelPrefab);
-                            Debug.Log($"[RuntimeSceneSetup] Updated heartModelPrefab on existing heart");
                         }
 
                         // Call SetupModel to instantiate the model
@@ -132,7 +125,6 @@ namespace FaeMaze.Systems
                         if (setupModelMethod != null)
                         {
                             setupModelMethod.Invoke(heart, null);
-                            Debug.Log($"[RuntimeSceneSetup] Called SetupModel via reflection");
                         }
                     }
                 }
