@@ -201,7 +201,28 @@ namespace FaeMaze.Cameras
             if (useFocalPointMode)
             {
                 InitializeFocalPoint();
-                UpdateFocalPointCameraPosition();
+                if (focalPointTransform != null)
+                {
+                    transform.SetPositionAndRotation(new Vector3(1f, 2f, -3f), Quaternion.Euler(-45f, 0f, 0f));
+
+                    Vector3 startOffset = transform.position - focalPointTransform.position;
+                    Vector3 forward = focalPointTransform.forward;
+                    forward.z = 0f;
+                    if (forward.sqrMagnitude > 0.0001f)
+                    {
+                        forward.Normalize();
+                    }
+                    else
+                    {
+                        forward = Vector3.right;
+                    }
+
+                    Vector3 mazeUp = GetMazeUpDirection();
+                    focalFollowDistance = Mathf.Max(0f, Vector3.Dot(-forward, startOffset));
+                    focalHeightOffset = Vector3.Dot(mazeUp, startOffset);
+                }
+
+                _focusPoint = focalPointTransform != null ? focalPointTransform.position : _focusPoint;
                 return;
             }
 
@@ -651,8 +672,7 @@ namespace FaeMaze.Cameras
             }
 
             Vector3 mazeUp = GetMazeUpDirection();
-            float height = Mathf.Abs(focalHeightOffset);
-            Vector3 offset = -forward * focalFollowDistance + mazeUp * height;
+            Vector3 offset = -forward * focalFollowDistance + mazeUp * focalHeightOffset;
 
             Vector3 desiredPosition = focalPointTransform.position + offset;
 
@@ -672,11 +692,6 @@ namespace FaeMaze.Cameras
             if (mazeUp.sqrMagnitude < 0.0001f)
             {
                 return Vector3.forward;
-            }
-
-            if (mazeUp.z < 0f)
-            {
-                mazeUp = -mazeUp;
             }
 
             return mazeUp.normalized;
