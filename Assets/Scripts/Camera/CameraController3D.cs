@@ -54,6 +54,19 @@ namespace FaeMaze.Cameras
         [Tooltip("Radius for collision sphere")]
         private float collisionRadius = 0.5f;
 
+        [Header("Orbit Options")]
+        [SerializeField]
+        [Tooltip("Automatically orbit around the focus point at orbit speed")]
+        private bool autoOrbit = false;
+
+        [SerializeField]
+        [Tooltip("Optional default focus point when the scene starts")]
+        private Transform defaultFocusTarget;
+
+        [SerializeField]
+        [Tooltip("Fallback focus position if no target is provided")]
+        private Vector3 defaultFocusPosition = Vector3.zero;
+
         [Header("References")]
         [SerializeField]
         private MazeGridBehaviour mazeGridBehaviour;
@@ -69,7 +82,6 @@ namespace FaeMaze.Cameras
         private float currentYaw = 0f;
         private float currentPitch = 45f;
         private float currentDistance = 15f;
-        private float mapRotation = 0f; // Z-axis rotation for spinning the map
 
         // Mouse drag state
         private bool isOrbiting;
@@ -103,9 +115,27 @@ namespace FaeMaze.Cameras
                 cam.fieldOfView = 60f;
             }
 
-            // Initialize focus point at current position
-            focusPoint = transform.position;
-            focusPoint.z = 0f; // Keep focus on XY plane
+            // Initialize focus point from defaults
+            focusPoint = defaultFocusTarget != null
+                ? defaultFocusTarget.position
+                : defaultFocusPosition;
+
+            if (focusPoint == transform.position)
+            {
+                focusPoint = transform.position + transform.forward * currentDistance;
+            }
+
+            if (cam != null)
+            {
+                Vector3 toCamera = transform.position - focusPoint;
+                if (toCamera.sqrMagnitude > 0.0001f)
+                {
+                    currentDistance = Mathf.Clamp(toCamera.magnitude, minDistance, maxDistance);
+                    currentYaw = Mathf.Atan2(toCamera.x, toCamera.z) * Mathf.Rad2Deg;
+                    currentPitch = Mathf.Asin(toCamera.y / toCamera.magnitude) * Mathf.Rad2Deg;
+                    currentPitch = Mathf.Clamp(currentPitch, minPitch, maxPitch);
+                }
+            }
         }
 
         private void Start()
@@ -133,9 +163,11 @@ namespace FaeMaze.Cameras
 
             HandleFocusShortcuts();
             HandleKeyboardPan();
+            HandleKeyboardOrbit();
             HandleMouseControls();
             HandleScrollZoom();
             HandleFocusMovement();
+            ApplyAutoOrbit();
             // ClampToMazeBounds(); // Disabled for free camera movement
             UpdateCameraPosition();
         }
@@ -163,7 +195,7 @@ namespace FaeMaze.Cameras
                 isFocusing = false;
             }
 
-            // W/S: Move focus point forward/backward along camera view direction (projected on XY plane)
+            // W/S: Move focus point forward/backward along camera view direction (projected on XZ plane)
             float forwardInput = 0f;
             if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
             {
@@ -176,31 +208,39 @@ namespace FaeMaze.Cameras
 
             if (Mathf.Abs(forwardInput) > 0f)
             {
-                // Get camera forward direction projected on XY plane
-                Vector3 cameraPos = transform.position;
-                Vector3 cameraProjection = new Vector3(cameraPos.x, cameraPos.y, 0f);
-                Vector3 forwardDir = (focusPoint - cameraProjection).normalized;
+                // Get camera forward direction projected on XZ plane
+                Vector3 forwardDir = transform.forward;
+                forwardDir.y = 0f;
+                forwardDir.Normalize();
 
                 // Move focus point along this direction
                 Vector3 movement = forwardDir * forwardInput * panSpeed * Time.deltaTime;
                 focusPoint += movement;
             }
+        }
 
-            // A/D: Rotate map around Z-axis at focus point (tile's perpendicular axis)
-            float rotationInput = 0f;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+        private void HandleKeyboardOrbit()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
             {
-                rotationInput += 1f;  // Rotate clockwise
+                return;
             }
+
+            float yawInput = 0f;
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
-                rotationInput -= 1f;  // Rotate counter-clockwise
+                yawInput -= 1f;
+            }
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+            {
+                yawInput += 1f;
             }
 
-            if (Mathf.Abs(rotationInput) > 0f)
+            if (Mathf.Abs(yawInput) > 0f)
             {
-                float rotationDelta = rotationInput * orbitSpeed * Time.deltaTime;
-                mapRotation += rotationDelta;
+                isFocusing = false;
+                currentYaw += yawInput * orbitSpeed * Time.deltaTime;
             }
         }
 
@@ -267,8 +307,7 @@ namespace FaeMaze.Cameras
                 Vector2 mouseDelta = mouse.delta.ReadValue();
                 currentYaw += mouseDelta.x * orbitSpeed * Time.deltaTime;
                 currentPitch -= mouseDelta.y * orbitSpeed * Time.deltaTime;
-                // Removed pitch clamping - camera can now rotate freely
-                // currentPitch = Mathf.Clamp(currentPitch, minPitch, maxPitch);
+                currentPitch = Mathf.Clamp(currentPitch, minPitch, maxPitch);
             }
 
             // Handle pan drag
@@ -279,6 +318,16 @@ namespace FaeMaze.Cameras
                 focusPoint += delta;
                 lastMouseWorldPosition = GetMouseWorldPosition();
             }
+        }
+
+        private void ApplyAutoOrbit()
+        {
+            if (!autoOrbit)
+            {
+                return;
+            }
+
+            currentYaw += orbitSpeed * Time.deltaTime;
         }
 
         private void HandleScrollZoom()
@@ -298,8 +347,7 @@ namespace FaeMaze.Cameras
             // Dolly in/out
             float zoomFactor = Mathf.Exp(-scroll * dollySpeed * Time.deltaTime);
             currentDistance = currentDistance * zoomFactor;
-            // Removed distance clamping - camera can now zoom freely
-            // currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
+            currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
         }
 
         private Vector3 GetMouseWorldPosition()
@@ -312,9 +360,9 @@ namespace FaeMaze.Cameras
 
             Vector2 mousePosition = mouse.position.ReadValue();
 
-            // Raycast to find intersection with Z=0 plane (maze ground)
+            // Raycast to find intersection with Y=0 plane (maze ground)
             Ray ray = cam.ScreenPointToRay(new Vector3(mousePosition.x, mousePosition.y, 0f));
-            Plane groundPlane = new Plane(Vector3.forward, Vector3.zero);
+            Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
 
             if (groundPlane.Raycast(ray, out float enter))
             {
@@ -335,10 +383,7 @@ namespace FaeMaze.Cameras
 
             if (focusVisitor != null)
             {
-                focusTargetPosition = new Vector3(
-                    focusVisitor.transform.position.x,
-                    focusVisitor.transform.position.y,
-                    0f);
+                focusTargetPosition = focusVisitor.transform.position;
 
                 trackingLogTimer -= Time.deltaTime;
                 if (trackingLogTimer <= 0f)
@@ -387,27 +432,12 @@ namespace FaeMaze.Cameras
             // Calculate camera position relative to focus point
             Vector3 offset = direction * finalDistance;
 
-            // Rotate camera position around tile's Z-axis at focus point (perpendicular to XY plane)
-            Quaternion mapSpinRotation = Quaternion.AngleAxis(mapRotation, Vector3.back);
-            offset = mapSpinRotation * offset;
-
-            // Ensure XY distance stays perfectly constant (prevent drift)
-            Vector3 xyOffset = new Vector3(offset.x, offset.y, 0f);
-            float currentXYDist = xyOffset.magnitude;
-            float targetXYDist = Mathf.Sqrt(finalDistance * finalDistance - offset.z * offset.z);
-            if (currentXYDist > 0.001f && Mathf.Abs(currentXYDist - targetXYDist) > 0.001f)
-            {
-                xyOffset = xyOffset.normalized * targetXYDist;
-                offset = new Vector3(xyOffset.x, xyOffset.y, offset.z);
-            }
-
             // Set camera position
             Vector3 desiredPosition = focusPoint + offset;
             transform.position = desiredPosition;
 
-            // Look at focal point with down as world up (equivalent to 180° Z-flip)
-            // This keeps the camera's up direction perfectly vertical in world space
-            transform.LookAt(focusPoint, Vector3.down);
+            // Look at focal point with world up
+            transform.LookAt(focusPoint, Vector3.up);
         }
 
         private float GetCollisionAdjustedDistance(Vector3 direction)
@@ -423,7 +453,9 @@ namespace FaeMaze.Cameras
                 collisionLayers))
             {
                 // Reduce distance to avoid collision
-                return Mathf.Max(hit.distance - collisionRadius, minDistance);
+                float adjusted = Mathf.Max(hit.distance - collisionRadius, minDistance);
+                currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
+                return adjusted;
             }
 
             return currentDistance;
@@ -484,8 +516,9 @@ namespace FaeMaze.Cameras
         public void FocusOnPosition(Vector3 worldPos, bool instant = false, float lerpSpeed = 10f)
         {
             focusVisitor = null;
-            Vector3 targetPosition = new Vector3(worldPos.x, worldPos.y, 0f);
+            Vector3 targetPosition = worldPos;
             focusTargetPosition = targetPosition;
+            currentDistance = Mathf.Clamp(Vector3.Distance(transform.position, targetPosition), minDistance, maxDistance);
 
             if (instant)
             {
@@ -500,6 +533,13 @@ namespace FaeMaze.Cameras
                 isFocusing = true;
             }
         }
+
+        public void SetFocusPoint(Vector3 worldPos)
+        {
+            FocusOnPosition(worldPos, true);
+        }
+
+        public Vector3 FocusPoint => focusPoint;
 
         /// <summary>
         /// Focuses on the Heart of the Maze.
