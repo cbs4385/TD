@@ -108,12 +108,18 @@ namespace FaeMaze.Systems
         {
             get
             {
-                if (mazeOrigin != null && mazeOrigin.lossyScale.z < 0f)
+                if (mazeOrigin == null)
                 {
-                    return Vector3.back;
+                    return Vector3.forward;
                 }
 
-                return Vector3.forward;
+                Vector3 mazeUp = mazeOrigin.forward;
+                if (mazeUp.sqrMagnitude < 0.0001f)
+                {
+                    return Vector3.forward;
+                }
+
+                return mazeUp.normalized;
             }
         }
 

@@ -34,7 +34,7 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Constant camera height above the focal point")]
-        private float focalHeightOffset = 3f;
+        private float focalHeightOffset = 2f;
 
         [SerializeField]
         [Tooltip("Optional transform to use as the focal point (otherwise created at runtime)")]
@@ -663,12 +663,23 @@ namespace FaeMaze.Cameras
 
         private Vector3 GetMazeUpDirection()
         {
-            if (mazeGridBehaviour != null)
+            if (mazeGridBehaviour == null)
             {
-                return mazeGridBehaviour.MazeUpDirection;
+                return Vector3.forward;
             }
 
-            return Vector3.forward;
+            Vector3 mazeUp = mazeGridBehaviour.MazeUpDirection;
+            if (mazeUp.sqrMagnitude < 0.0001f)
+            {
+                return Vector3.forward;
+            }
+
+            if (mazeUp.z < 0f)
+            {
+                mazeUp = -mazeUp;
+            }
+
+            return mazeUp.normalized;
         }
 
         #endregion
