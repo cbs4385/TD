@@ -161,11 +161,17 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // Pan relative to camera orientation (but only in XY plane)
-            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
-            Vector3 right = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
+            // Pan in XY plane (since maze is in XY, not XZ)
+            // Project camera vectors onto XY plane (normal = Z-axis)
+            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.forward).normalized;
+            Vector3 right = Vector3.ProjectOnPlane(transform.right, Vector3.forward).normalized;
 
-            Vector3 delta = (right * movement.x + forward * movement.y) * panSpeed * Time.deltaTime;
+            // For XY plane movement, use world-space directions directly
+            // Right/Left (A/D) = X-axis, Up/Down (W/S) = Y-axis
+            Vector3 worldRight = Vector3.right;  // X-axis
+            Vector3 worldUp = Vector3.up;        // Y-axis
+
+            Vector3 delta = (worldRight * movement.x + worldUp * movement.y) * panSpeed * Time.deltaTime;
             focusPoint += delta;
         }
 
