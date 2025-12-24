@@ -165,25 +165,26 @@ namespace FaeMaze.Cameras
             }
 
             Vector2 movement = Vector2.zero;
+            // Inverted controls to compensate for 180° camera rotation
             if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
             {
-                movement.y += 1f;
-                Debug.Log("[Camera] W key pressed - moving UP (Y+)");
+                movement.y -= 1f;  // Inverted: W moves down in world space
+                Debug.Log("[Camera] W key pressed - moving UP (Y-)");
             }
             if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
             {
-                movement.y -= 1f;
-                Debug.Log("[Camera] S key pressed - moving DOWN (Y-)");
+                movement.y += 1f;  // Inverted: S moves up in world space
+                Debug.Log("[Camera] S key pressed - moving DOWN (Y+)");
             }
             if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
-                movement.x += 1f;
-                Debug.Log("[Camera] D key pressed - moving RIGHT (X+)");
+                movement.x -= 1f;  // Inverted: D moves left in world space
+                Debug.Log("[Camera] D key pressed - moving RIGHT (X-)");
             }
             if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
-                movement.x -= 1f;
-                Debug.Log("[Camera] A key pressed - moving LEFT (X-)");
+                movement.x += 1f;  // Inverted: A moves right in world space
+                Debug.Log("[Camera] A key pressed - moving LEFT (X+)");
             }
 
             if (movement.sqrMagnitude <= 0f)
