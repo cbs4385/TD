@@ -43,8 +43,13 @@ namespace FaeMaze.Systems
 
         [Header("Grid Sizing")]
         [SerializeField]
-        [Tooltip("World-space size of a single maze tile")] 
+        [Tooltip("World-space size of a single maze tile")]
         private float tileSize = 1f;
+
+        [Header("Orientation")]
+        [SerializeField]
+        [Tooltip("Mirror the maze and models through the XY plane to correct vertical orientation.")]
+        private bool reflectThroughXYPlane = true;
 
         [Header("Debug Visualization")]
         [SerializeField]
@@ -110,6 +115,8 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform; // Fallback to self
             }
 
+            ApplyXYPlaneReflection();
+
             // Clear static cache to force fresh generation with updated heart placement logic
             ClearGenerationCache();
 
@@ -134,6 +141,26 @@ namespace FaeMaze.Systems
             {
                 GameController.Instance.RegisterMazeGrid(grid);
             }
+        }
+
+        #endregion
+
+        #region Orientation
+
+        private void ApplyXYPlaneReflection()
+        {
+            if (!reflectThroughXYPlane || mazeOrigin == null)
+            {
+                return;
+            }
+
+            Vector3 scale = mazeOrigin.localScale;
+            scale.z = -Mathf.Abs(scale.z);
+            mazeOrigin.localScale = scale;
+
+            Vector3 originPosition = mazeOrigin.position;
+            originPosition.z = Mathf.Abs(originPosition.z);
+            mazeOrigin.position = originPosition;
         }
 
         #endregion

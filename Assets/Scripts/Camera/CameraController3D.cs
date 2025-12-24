@@ -649,8 +649,16 @@ namespace FaeMaze.Cameras
                 forward = Vector3.right;
             }
 
-            Vector3 offset = -forward * focalFollowDistance + Vector3.forward * focalHeightOffset;
-            transform.position = focalPointTransform.position + offset;
+            float height = Mathf.Abs(focalHeightOffset);
+            Vector3 offset = -forward * focalFollowDistance + Vector3.forward * height;
+
+            Vector3 desiredPosition = focalPointTransform.position + offset;
+            if (desiredPosition.z < focalPointTransform.position.z)
+            {
+                desiredPosition.z = focalPointTransform.position.z + height;
+            }
+
+            transform.position = desiredPosition;
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - transform.position, Vector3.forward);
             _focusPoint = focalPointTransform.position;
         }
