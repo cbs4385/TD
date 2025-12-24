@@ -617,9 +617,12 @@ namespace FaeMaze.Cameras
             planarForward.z = 0f;
             float rollDeg = GetCardinalRollFromForward(planarForward);
 
+            Quaternion lookRotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
+            Quaternion rollRotation = Quaternion.AngleAxis(rollDeg, lookRotation * Vector3.forward);
+
             transform.SetPositionAndRotation(
                 desiredPosition,
-                Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp) * Quaternion.Euler(0f, 0f, rollDeg));
+                rollRotation * lookRotation);
             Vector3 euler = transform.rotation.eulerAngles;
             Debug.Log($"[CameraController3D] Initial focal camera pose -> position: {transform.position}, lookTarget: {focalPointTransform.position}, forward: {facingDirection}, up: {worldUp}, euler: {euler}");
 
@@ -701,8 +704,9 @@ namespace FaeMaze.Cameras
 
             Quaternion lookRotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
             float rollDeg = GetCardinalRollFromForward(forward);
+            Quaternion rollRotation = Quaternion.AngleAxis(rollDeg, lookRotation * Vector3.forward);
 
-            transform.SetPositionAndRotation(desiredPosition, lookRotation * Quaternion.Euler(0f, 0f, rollDeg));
+            transform.SetPositionAndRotation(desiredPosition, rollRotation * lookRotation);
 
             _focusPoint = focalPointTransform.position;
 
