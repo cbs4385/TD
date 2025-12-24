@@ -350,13 +350,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 534669902}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 598d9facc1e14532ab0f400c72c107cf, type: 3}
+  m_Script: {fileID: 11500000, guid: a06ba20d660250c4c9177a3c61f741ab, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Cameras.CameraController3D
   panSpeed: 10
-  zoomSpeed: 5
-  minOrthographicSize: 3
-  maxOrthographicSize: 20
+  orbitSpeed: 100
+  dollySpeed: 5
+  minPitch: 10
+  maxPitch: 80
+  minDistance: 5
+  maxDistance: 30
+  enableCollisionDetection: 1
+  collisionLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  collisionRadius: 0.5
   mazeGridBehaviour: {fileID: 0}
 --- !u!1 &623669385
 GameObject:
@@ -479,19 +487,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21a41d6b956888d49bd606d9620f27e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
-  pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
-  wallSprite: {fileID: 0}
   wallPrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
-  undergrowthSprite: {fileID: 6545382614753218560, guid: 09209a0466d64594c9d95da289847466, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
-  waterSprite: {fileID: 8509550459451208454, guid: 9b3cc9c7b6214be49a531a88599d9846, type: 3}
   waterPrefab: {fileID: 5797252247512694294, guid: f64cb6f8073e23b47a16e281c928211e, type: 3}
+  pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
   wallColor: {r: 0, g: 0, b: 0, a: 1}
   undergrowthColor: {r: 0.65, g: 0.75, b: 0.65, a: 1}
   waterColor: {r: 0.35, g: 0.55, b: 0.75, a: 1}
   heartColor: {r: 0.9, g: 0.35, b: 0.35, a: 1}
-  sortingOrder: 0
   tilesParent: {fileID: 0}
+  enableMeshBatching: 1
+  batchChunkSize: 100
 --- !u!114 &963194231
 MonoBehaviour:
   m_ObjectHideFlags: 0

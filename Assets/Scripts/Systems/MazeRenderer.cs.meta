@@ -1,14 +1,2 @@
 fileFormatVersion: 2
 guid: 21a41d6b956888d49bd606d9620f27e9
-MonoImporter:
-  externalObjects: {}
-  serializedVersion: 2
-  defaultReferences:
-  - wallSprite: {instanceID: 0}
-  - wallPrefab: {instanceID: 0}
-  - tilesParent: {instanceID: 0}
-  executionOrder: 0
-  icon: {instanceID: 0}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 

@@ -388,7 +388,7 @@ namespace FaeMaze.Cameras
             Vector3 offset = direction * finalDistance;
 
             // Rotate camera position around Y-axis at focus point
-            Quaternion mapSpinRotation = Quaternion.AngleAxis(mapRotation, Vector3.up);
+            Quaternion mapSpinRotation = Quaternion.AngleAxis(mapRotation, Vector3.back);
             offset = mapSpinRotation * offset;
 
             // Ensure XY distance stays perfectly constant (prevent drift)
