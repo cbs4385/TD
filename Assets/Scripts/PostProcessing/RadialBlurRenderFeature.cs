@@ -38,10 +38,16 @@ namespace FaeMaze.PostProcessing
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
+            Debug.Log($"[RadialBlurRenderFeature] AddRenderPasses called, renderPass={renderPass != null}, material={material != null}");
+
             if (renderPass == null || material == null)
+            {
+                Debug.LogWarning($"[RadialBlurRenderFeature] Cannot add render pass: renderPass={renderPass != null}, material={material != null}");
                 return;
+            }
 
             renderer.EnqueuePass(renderPass);
+            Debug.Log("[RadialBlurRenderFeature] Render pass enqueued successfully");
         }
 
         protected override void Dispose(bool disposing)
