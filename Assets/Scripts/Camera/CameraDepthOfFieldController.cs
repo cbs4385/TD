@@ -23,11 +23,11 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Focus distance (where the scene is sharp)")]
-        private float focusDistance = 383f;
+        private float focusDistance = 10f;
 
         [SerializeField]
         [Tooltip("Aperture value (lower = more blur)")]
-        private float aperture = 0.5f;
+        private float aperture = 16f;
 
         [SerializeField]
         [Tooltip("Gaussian blur start distance")]
@@ -86,7 +86,7 @@ namespace FaeMaze.Cameras
             depthOfField.aperture.value = aperture;
 
             depthOfField.focalLength.overrideState = true;
-            depthOfField.focalLength.value = 300f;
+            depthOfField.focalLength.value = 50f;
 
             depthOfField.bladeCount.overrideState = true;
             depthOfField.bladeCount.value = 6;

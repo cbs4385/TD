@@ -38,9 +38,9 @@ namespace FaeMaze.Cameras
                 {
                     existingDof = existingVolume.profile.Add<DepthOfField>(true);
                     existingDof.mode.value = DepthOfFieldMode.Bokeh;
-                    existingDof.focusDistance.value = 383f;
-                    existingDof.aperture.value = 0.5f; // Very low aperture for strong blur
-                    existingDof.focalLength.value = 300f; // Long focal length for tilt-shift effect
+                    existingDof.focusDistance.value = 10f; // Focus on center of maze
+                    existingDof.aperture.value = 16f; // Higher aperture for subtle blur
+                    existingDof.focalLength.value = 50f; // Standard focal length
                     existingDof.bladeCount.value = 6;
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) component to existing profile");
                 }
@@ -89,9 +89,9 @@ namespace FaeMaze.Cameras
             {
                 newDof = profile.Add<DepthOfField>(true);
                 newDof.mode.value = DepthOfFieldMode.Bokeh;
-                newDof.focusDistance.value = 383f;
-                newDof.aperture.value = 0.5f; // Very low aperture for strong blur
-                newDof.focalLength.value = 300f; // Long focal length for tilt-shift effect
+                newDof.focusDistance.value = 10f; // Focus on center of maze
+                newDof.aperture.value = 16f; // Higher aperture for subtle blur
+                newDof.focalLength.value = 50f; // Standard focal length
                 newDof.bladeCount.value = 6;
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) component to profile");
             }
