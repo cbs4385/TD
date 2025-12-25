@@ -66,10 +66,12 @@ Shader "Hidden/PostProcess/RadialBlur"
                 // Far from center = much stronger blur
                 float blurRadius = blurAmount * 0.08 * (1.0 + normalizedDistance * 4.0);
 
+                [loop]
                 for (int ring = 0; ring <= rings; ring++)
                 {
                     float ringRadius = blurRadius * ((float)ring / (float)rings);
 
+                    [loop]
                     for (int i = 0; i < samples; i++)
                     {
                         float angle = (float)i / (float)samples * 6.28318530718; // 2*PI
