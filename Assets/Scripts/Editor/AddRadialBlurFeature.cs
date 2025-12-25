@@ -63,19 +63,18 @@ namespace FaeMaze.Editor
             // Add to renderer asset
             AssetDatabase.AddObjectToAsset(feature, rendererData);
 
-            // Use reflection to access the rendererFeatures list directly
-            var rendererFeaturesField = typeof(UniversalRendererData).GetField("m_RendererFeatures",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            // Use SerializedObject to properly modify and persist the feature list
+            var serializedRenderer = new SerializedObject(rendererData);
+            var rendererFeaturesProperty = serializedRenderer.FindProperty("m_RendererFeatures");
 
-            if (rendererFeaturesField != null)
-            {
-                var featuresList = rendererFeaturesField.GetValue(rendererData) as System.Collections.Generic.List<ScriptableRendererFeature>;
-                if (featuresList != null)
-                {
-                    featuresList.Add(feature);
-                    Debug.Log($"[AddRadialBlurFeature] Added feature to list, count={featuresList.Count}");
-                }
-            }
+            // Add the feature to the array
+            rendererFeaturesProperty.arraySize++;
+            rendererFeaturesProperty.GetArrayElementAtIndex(rendererFeaturesProperty.arraySize - 1).objectReferenceValue = feature;
+
+            // Apply the changes to the serialized object
+            serializedRenderer.ApplyModifiedProperties();
+
+            Debug.Log($"[AddRadialBlurFeature] Added feature to list, count={rendererFeaturesProperty.arraySize}");
 
             EditorUtility.SetDirty(rendererData);
             EditorUtility.SetDirty(feature);
