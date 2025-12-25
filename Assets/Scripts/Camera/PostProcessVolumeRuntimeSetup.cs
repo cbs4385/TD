@@ -38,11 +38,21 @@ namespace FaeMaze.Cameras
                 {
                     existingDof = existingVolume.profile.Add<DepthOfField>(true);
                     existingDof.mode.value = DepthOfFieldMode.Bokeh;
-                    existingDof.focusDistance.value = 10f; // Focus on center of maze
-                    existingDof.aperture.value = 16f; // Higher aperture for subtle blur
-                    existingDof.focalLength.value = 50f; // Standard focal length
+                    existingDof.focusDistance.value = 10f;
+                    existingDof.aperture.value = 5.6f; // Lower aperture for more blur
+                    existingDof.focalLength.value = 50f;
                     existingDof.bladeCount.value = 6;
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) component to existing profile");
+                }
+
+                // Add Vignette for edge darkening/blur effect
+                if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
+                {
+                    existingVignette = existingVolume.profile.Add<Vignette>(true);
+                    existingVignette.intensity.value = 0.35f; // Moderate darkening at edges
+                    existingVignette.smoothness.value = 0.4f; // Smooth falloff
+                    existingVignette.rounded.value = false; // Not rounded for better coverage
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
                 }
 
                 // Ensure it has the controller
@@ -89,11 +99,21 @@ namespace FaeMaze.Cameras
             {
                 newDof = profile.Add<DepthOfField>(true);
                 newDof.mode.value = DepthOfFieldMode.Bokeh;
-                newDof.focusDistance.value = 10f; // Focus on center of maze
-                newDof.aperture.value = 16f; // Higher aperture for subtle blur
-                newDof.focalLength.value = 50f; // Standard focal length
+                newDof.focusDistance.value = 10f;
+                newDof.aperture.value = 5.6f; // Lower aperture for more blur
+                newDof.focalLength.value = 50f;
                 newDof.bladeCount.value = 6;
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) component to profile");
+            }
+
+            // Add Vignette for edge darkening/blur effect
+            if (!profile.TryGet<Vignette>(out var newVignette))
+            {
+                newVignette = profile.Add<Vignette>(true);
+                newVignette.intensity.value = 0.35f; // Moderate darkening at edges
+                newVignette.smoothness.value = 0.4f; // Smooth falloff
+                newVignette.rounded.value = false; // Not rounded for better coverage
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
             }
 
             // Add controller
