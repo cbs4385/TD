@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEditor;
 using System.Linq;
+using FaeMaze.PostProcessing;
 
 namespace FaeMaze.Editor
 {
@@ -33,7 +34,8 @@ namespace FaeMaze.Editor
 
             // Check if RadialBlurRenderFeature already exists
             var existingFeature = rendererData.rendererFeatures
-                .FirstOrDefault(f => f != null && f.GetType().Name == "RadialBlurRenderFeature");
+                .OfType<RadialBlurRenderFeature>()
+                .FirstOrDefault();
 
             if (existingFeature != null)
             {
@@ -50,40 +52,15 @@ namespace FaeMaze.Editor
                 return;
             }
 
-            // Create an instance of RadialBlurRenderFeature using reflection
-            var featureType = System.Type.GetType("FaeMaze.PostProcessing.RadialBlurRenderFeature, Assembly-CSharp");
-            if (featureType == null)
-            {
-                Debug.LogError("[AddRadialBlurFeature] Could not find RadialBlurRenderFeature type. Make sure the script is compiled.");
-                return;
-            }
-
-            var feature = ScriptableObject.CreateInstance(featureType) as ScriptableRendererFeature;
-            if (feature == null)
-            {
-                Debug.LogError("[AddRadialBlurFeature] Failed to create RadialBlurRenderFeature instance");
-                return;
-            }
-
+            // Create an instance of RadialBlurRenderFeature
+            var feature = ScriptableObject.CreateInstance<RadialBlurRenderFeature>();
             feature.name = "RadialBlur";
-
-            // Set the shader using reflection
-            var settingsField = featureType.GetField("settings");
-            if (settingsField != null)
-            {
-                var settings = settingsField.GetValue(feature);
-                var shaderField = settings.GetType().GetField("shader");
-                if (shaderField != null)
-                {
-                    shaderField.SetValue(settings, radialBlurShader);
-                    settingsField.SetValue(feature, settings);
-                }
-            }
+            feature.settings.shader = radialBlurShader;
 
             // Add to renderer
             AssetDatabase.AddObjectToAsset(feature, rendererData);
 
-            // Use reflection to add to rendererFeatures list since it might be private
+            // Use SerializedObject to add to rendererFeatures list
             var rendererFeaturesProperty = new SerializedObject(rendererData).FindProperty("m_RendererFeatures");
             rendererFeaturesProperty.arraySize++;
             rendererFeaturesProperty.GetArrayElementAtIndex(rendererFeaturesProperty.arraySize - 1).objectReferenceValue = feature;
@@ -119,7 +96,8 @@ namespace FaeMaze.Editor
 
             // Find RadialBlurRenderFeature
             var feature = rendererData.rendererFeatures
-                .FirstOrDefault(f => f != null && f.GetType().Name == "RadialBlurRenderFeature");
+                .OfType<RadialBlurRenderFeature>()
+                .FirstOrDefault();
 
             if (feature == null)
             {
