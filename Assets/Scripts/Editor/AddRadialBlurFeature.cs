@@ -76,12 +76,26 @@ namespace FaeMaze.Editor
 
             Debug.Log($"[AddRadialBlurFeature] Added feature to list, count={rendererFeaturesProperty.arraySize}");
 
+            // Trigger OnValidate to rebuild internal state
+            var onValidateMethod = typeof(UniversalRendererData).GetMethod("OnValidate",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (onValidateMethod != null)
+            {
+                onValidateMethod.Invoke(rendererData, null);
+                Debug.Log("[AddRadialBlurFeature] Called OnValidate on renderer data");
+            }
+
+            // Mark assets as dirty and save
             EditorUtility.SetDirty(rendererData);
             EditorUtility.SetDirty(feature);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
+            AssetDatabase.SaveAssetIfDirty(rendererData);
+            AssetDatabase.SaveAssetIfDirty(feature);
 
-            Debug.Log("[AddRadialBlurFeature] Successfully added RadialBlurRenderFeature to ForwardRenderer3D!");
+            // Force Unity to reimport the asset to ensure changes are persisted
+            string assetPath = AssetDatabase.GetAssetPath(rendererData);
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+
+            Debug.Log($"[AddRadialBlurFeature] Successfully added RadialBlurRenderFeature to ForwardRenderer3D at {assetPath}");
             Selection.activeObject = feature;
         }
 
