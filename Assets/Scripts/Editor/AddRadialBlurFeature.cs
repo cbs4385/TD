@@ -57,22 +57,29 @@ namespace FaeMaze.Editor
             feature.name = "RadialBlur";
             feature.settings.shader = radialBlurShader;
 
-            // Add to renderer
+            // Trigger Create() to properly initialize with the shader
+            feature.Create();
+
+            // Add to renderer asset
             AssetDatabase.AddObjectToAsset(feature, rendererData);
 
-            // Use SerializedObject to add to rendererFeatures list
-            var rendererFeaturesProperty = new SerializedObject(rendererData).FindProperty("m_RendererFeatures");
-            rendererFeaturesProperty.arraySize++;
-            rendererFeaturesProperty.GetArrayElementAtIndex(rendererFeaturesProperty.arraySize - 1).objectReferenceValue = feature;
-            rendererFeaturesProperty.serializedObject.ApplyModifiedProperties();
+            // Use reflection to access the rendererFeatures list directly
+            var rendererFeaturesField = typeof(UniversalRendererData).GetField("m_RendererFeatures",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            if (rendererFeaturesField != null)
+            {
+                var featuresList = rendererFeaturesField.GetValue(rendererData) as System.Collections.Generic.List<ScriptableRendererFeature>;
+                if (featuresList != null)
+                {
+                    featuresList.Add(feature);
+                    Debug.Log($"[AddRadialBlurFeature] Added feature to list, count={featuresList.Count}");
+                }
+            }
 
             EditorUtility.SetDirty(rendererData);
             EditorUtility.SetDirty(feature);
             AssetDatabase.SaveAssets();
-
-            // Trigger Create() to properly initialize with the shader
-            feature.Create();
-
             AssetDatabase.Refresh();
 
             Debug.Log("[AddRadialBlurFeature] Successfully added RadialBlurRenderFeature to ForwardRenderer3D!");
