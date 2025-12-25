@@ -3,6 +3,7 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using System;
 using System.Reflection;
+using FaeMaze.PostProcessing;
 
 namespace FaeMaze.Cameras
 {
@@ -13,7 +14,6 @@ namespace FaeMaze.Cameras
     public static class PostProcessVolumeRuntimeSetup
     {
         private static bool hasSetup = false;
-        private static Type radialBlurType = null;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void SetupPostProcessVolume()
@@ -153,87 +153,31 @@ namespace FaeMaze.Cameras
         }
 
         /// <summary>
-        /// Attempts to add RadialBlur component to profile using reflection
-        /// This avoids compile-time dependency on FaeMaze.PostProcessing assembly
+        /// Attempts to add RadialBlur component to profile
         /// </summary>
         private static void TryAddRadialBlur(VolumeProfile profile)
         {
             if (profile == null)
                 return;
 
-            // Cache the RadialBlur type lookup
-            if (radialBlurType == null)
-            {
-                // Search through all loaded assemblies to find RadialBlur type
-                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    radialBlurType = assembly.GetType("FaeMaze.PostProcessing.RadialBlur");
-                    if (radialBlurType != null)
-                    {
-                        Debug.Log($"[PostProcessVolumeRuntimeSetup] Found RadialBlur type in assembly: {assembly.GetName().Name}");
-                        break;
-                    }
-                }
-
-                if (radialBlurType == null)
-                {
-                    Debug.LogWarning("[PostProcessVolumeRuntimeSetup] RadialBlur type not found in any loaded assembly. Skipping radial blur setup.");
-                    return;
-                }
-            }
-
             // Check if RadialBlur already exists in profile
-            MethodInfo tryGetMethod = typeof(VolumeProfile).GetMethod("TryGet");
-            if (tryGetMethod != null)
+            if (profile.TryGet<RadialBlur>(out var existingBlur))
             {
-                MethodInfo genericTryGet = tryGetMethod.MakeGenericMethod(radialBlurType);
-                object[] parameters = new object[] { null };
-                bool hasComponent = (bool)genericTryGet.Invoke(profile, parameters);
-
-                if (hasComponent)
-                {
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] RadialBlur already exists in profile");
-                    return;
-                }
+                Debug.Log("[PostProcessVolumeRuntimeSetup] RadialBlur already exists in profile");
+                return;
             }
 
             // Add RadialBlur component
-            MethodInfo addMethod = typeof(VolumeProfile).GetMethod("Add");
-            if (addMethod != null)
+            var radialBlur = profile.Add<RadialBlur>(true);
+            if (radialBlur != null)
             {
-                MethodInfo genericAdd = addMethod.MakeGenericMethod(radialBlurType);
-                object radialBlur = genericAdd.Invoke(profile, new object[] { true });
+                // Set properties directly
+                radialBlur.enabled.value = true;
+                radialBlur.blurAngleDegrees.value = 10f;
+                radialBlur.blurIntensity.value = 0.8f;
+                radialBlur.blurSamples.value = 12;
 
-                if (radialBlur != null)
-                {
-                    // Set properties using reflection
-                    SetVolumeParameter(radialBlur, "enabled", true);
-                    SetVolumeParameter(radialBlur, "blurAngleDegrees", 10f);
-                    SetVolumeParameter(radialBlur, "blurIntensity", 0.8f);
-                    SetVolumeParameter(radialBlur, "blurSamples", 12);
-
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Sets a VolumeParameter value using reflection
-        /// </summary>
-        private static void SetVolumeParameter<T>(object component, string paramName, T value)
-        {
-            FieldInfo field = component.GetType().GetField(paramName);
-            if (field != null)
-            {
-                object parameter = field.GetValue(component);
-                if (parameter != null)
-                {
-                    PropertyInfo valueProperty = parameter.GetType().GetProperty("value");
-                    if (valueProperty != null)
-                    {
-                        valueProperty.SetValue(parameter, value);
-                    }
-                }
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
             }
         }
     }

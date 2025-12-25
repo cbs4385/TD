@@ -53,9 +53,8 @@ namespace FaeMaze.PostProcessing
     public class RadialBlurRenderPass : ScriptableRenderPass
     {
         private Material material;
-        private object radialBlur; // Use object type to avoid compile-time dependency
+        private RadialBlur radialBlur;
         private RTHandle tempRTHandle;
-        private static Type radialBlurType;
 
         private static readonly int BlurAngleDegreesID = Shader.PropertyToID("_BlurAngleDegrees");
         private static readonly int BlurIntensityID = Shader.PropertyToID("_BlurIntensity");
@@ -65,38 +64,17 @@ namespace FaeMaze.PostProcessing
         {
             this.material = material;
             profilingSampler = new ProfilingSampler("RadialBlur");
-
-            // Cache RadialBlur type lookup - search through all loaded assemblies
-            if (radialBlurType == null)
-            {
-                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    radialBlurType = assembly.GetType("FaeMaze.PostProcessing.RadialBlur");
-                    if (radialBlurType != null)
-                        break;
-                }
-            }
         }
 
         public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
         {
-            if (radialBlurType == null)
-                return;
-
             var stack = VolumeManager.instance.stack;
-
-            // Use reflection to get RadialBlur component
-            MethodInfo getComponentMethod = typeof(VolumeStack).GetMethod("GetComponent");
-            if (getComponentMethod != null)
-            {
-                MethodInfo genericMethod = getComponentMethod.MakeGenericMethod(radialBlurType);
-                radialBlur = genericMethod.Invoke(stack, null);
-            }
+            radialBlur = stack.GetComponent<RadialBlur>();
         }
 
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            if (material == null || radialBlur == null || !IsRadialBlurActive())
+            if (material == null || radialBlur == null || !radialBlur.IsActive())
                 return;
 
             var cameraData = renderingData.cameraData;
@@ -105,10 +83,10 @@ namespace FaeMaze.PostProcessing
 
             CommandBuffer cmd = CommandBufferPool.Get("RadialBlur");
 
-            // Set shader properties using reflection
-            material.SetFloat(BlurAngleDegreesID, GetFloatParameter("blurAngleDegrees"));
-            material.SetFloat(BlurIntensityID, GetFloatParameter("blurIntensity"));
-            material.SetFloat(BlurSamplesID, GetIntParameter("blurSamples"));
+            // Set shader properties directly
+            material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
+            material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
+            material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
 
             // Get source
             var source = cameraData.renderer.cameraColorTargetHandle;
@@ -125,55 +103,6 @@ namespace FaeMaze.PostProcessing
 
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
-        }
-
-        private bool IsRadialBlurActive()
-        {
-            if (radialBlur == null)
-                return false;
-
-            MethodInfo isActiveMethod = radialBlur.GetType().GetMethod("IsActive");
-            if (isActiveMethod != null)
-            {
-                return (bool)isActiveMethod.Invoke(radialBlur, null);
-            }
-            return false;
-        }
-
-        private float GetFloatParameter(string paramName)
-        {
-            FieldInfo field = radialBlur.GetType().GetField(paramName);
-            if (field != null)
-            {
-                object parameter = field.GetValue(radialBlur);
-                if (parameter != null)
-                {
-                    PropertyInfo valueProperty = parameter.GetType().GetProperty("value");
-                    if (valueProperty != null)
-                    {
-                        return (float)valueProperty.GetValue(parameter);
-                    }
-                }
-            }
-            return 0f;
-        }
-
-        private float GetIntParameter(string paramName)
-        {
-            FieldInfo field = radialBlur.GetType().GetField(paramName);
-            if (field != null)
-            {
-                object parameter = field.GetValue(radialBlur);
-                if (parameter != null)
-                {
-                    PropertyInfo valueProperty = parameter.GetType().GetProperty("value");
-                    if (valueProperty != null)
-                    {
-                        return (int)valueProperty.GetValue(parameter);
-                    }
-                }
-            }
-            return 0;
         }
 
         public void Dispose()
