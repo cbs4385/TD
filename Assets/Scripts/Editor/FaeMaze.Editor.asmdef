@@ -1,0 +1,21 @@
+{
+    "name": "FaeMaze.Editor",
+    "rootNamespace": "FaeMaze.Editor",
+    "references": [
+        "FaeMaze",
+        "FaeMaze.PostProcessing",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
