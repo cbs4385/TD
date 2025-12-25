@@ -702,6 +702,12 @@ namespace FaeMaze.Cameras
             // Ensure camera is exactly 7 units away from focal point
             offset = offset.normalized * 7f;
 
+            // Ensure camera is on the negative Z side (behind the XY plane)
+            if (offset.z > 0)
+            {
+                offset.z = -offset.z;
+            }
+
             Vector3 desiredPosition = focalPointTransform.position + offset;
 
             transform.position = desiredPosition;
