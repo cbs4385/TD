@@ -23,23 +23,23 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Focus distance (where the scene is sharp)")]
-        private float focusDistance = 10f;
+        private float focusDistance = 383f;
 
         [SerializeField]
         [Tooltip("Aperture value (lower = more blur)")]
-        private float aperture = 5.6f;
+        private float aperture = 2.8f;
 
         [SerializeField]
         [Tooltip("Gaussian blur start distance")]
-        private float gaussianStart = 10f;
+        private float gaussianStart = 320f;
 
         [SerializeField]
         [Tooltip("Gaussian blur end distance")]
-        private float gaussianEnd = 30f;
+        private float gaussianEnd = 420f;
 
         [SerializeField]
         [Tooltip("Maximum blur radius")]
-        private float gaussianMaxRadius = 1f;
+        private float gaussianMaxRadius = 2.5f;
 
         private DepthOfField depthOfField;
 
@@ -124,9 +124,10 @@ namespace FaeMaze.Cameras
             if (depthOfField != null)
             {
                 // Adjust Gaussian blur parameters based on intensity
-                depthOfField.gaussianStart.value = Mathf.Lerp(20f, 5f, intensity);
-                depthOfField.gaussianEnd.value = Mathf.Lerp(40f, 20f, intensity);
-                depthOfField.gaussianMaxRadius.value = Mathf.Lerp(0.5f, 1.5f, intensity);
+                // Values scaled for camera distance at Z=-383
+                depthOfField.gaussianStart.value = Mathf.Lerp(380f, 280f, intensity);
+                depthOfField.gaussianEnd.value = Mathf.Lerp(460f, 360f, intensity);
+                depthOfField.gaussianMaxRadius.value = Mathf.Lerp(1f, 4f, intensity);
             }
 
             gaussianStart = depthOfField.gaussianStart.value;
