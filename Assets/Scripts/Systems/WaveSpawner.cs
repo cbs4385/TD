@@ -8,6 +8,7 @@ using FaeMaze.Maze;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
 using FaeMaze.HeartPowers;
+using UnityEngine.TextCore.Text;
 
 namespace FaeMaze.Systems
 {

@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 using TMPro;
 using FaeMaze.HeartPowers;
 using FaeMaze.Systems;
+using UnityEngine.TextCore.Text;
 
 namespace FaeMaze.UI
 {
