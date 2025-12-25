@@ -1,7 +1,8 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
-using FaeMaze.PostProcessing;
+using System;
+using System.Reflection;
 
 namespace FaeMaze.Cameras
 {
@@ -12,6 +13,7 @@ namespace FaeMaze.Cameras
     public static class PostProcessVolumeRuntimeSetup
     {
         private static bool hasSetup = false;
+        private static Type radialBlurType = null;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void SetupPostProcessVolume()
@@ -56,16 +58,8 @@ namespace FaeMaze.Cameras
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
                 }
 
-                // Add RadialBlur for angle-based edge blur
-                if (existingVolume.profile != null && !existingVolume.profile.TryGet<RadialBlur>(out var existingRadialBlur))
-                {
-                    existingRadialBlur = existingVolume.profile.Add<RadialBlur>(true);
-                    existingRadialBlur.enabled.value = true;
-                    existingRadialBlur.blurAngleDegrees.value = 10f; // Blur beyond 10 degrees from center
-                    existingRadialBlur.blurIntensity.value = 0.8f; // Strong blur intensity
-                    existingRadialBlur.blurSamples.value = 12; // High quality blur
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to existing profile");
-                }
+                // Add RadialBlur for angle-based edge blur (using reflection to avoid compile-time dependency)
+                TryAddRadialBlur(existingVolume.profile);
 
                 // Ensure it has the controller
                 if (existingVolume.GetComponent<CameraDepthOfFieldController>() == null)
@@ -128,16 +122,8 @@ namespace FaeMaze.Cameras
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
             }
 
-            // Add RadialBlur for angle-based edge blur
-            if (!profile.TryGet<RadialBlur>(out var newRadialBlur))
-            {
-                newRadialBlur = profile.Add<RadialBlur>(true);
-                newRadialBlur.enabled.value = true;
-                newRadialBlur.blurAngleDegrees.value = 10f; // Blur beyond 10 degrees from center
-                newRadialBlur.blurIntensity.value = 0.8f; // Strong blur intensity
-                newRadialBlur.blurSamples.value = 12; // High quality blur
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
-            }
+            // Add RadialBlur for angle-based edge blur (using reflection to avoid compile-time dependency)
+            TryAddRadialBlur(profile);
 
             // Add controller
             volumeObject.AddComponent<CameraDepthOfFieldController>();
@@ -162,6 +148,87 @@ namespace FaeMaze.Cameras
                 else
                 {
                     Debug.LogWarning("[PostProcessVolumeRuntimeSetup] Main Camera does not have URP camera data");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to add RadialBlur component to profile using reflection
+        /// This avoids compile-time dependency on FaeMaze.PostProcessing assembly
+        /// </summary>
+        private static void TryAddRadialBlur(VolumeProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            // Cache the RadialBlur type lookup
+            if (radialBlurType == null)
+            {
+                radialBlurType = Type.GetType("FaeMaze.PostProcessing.RadialBlur, FaeMaze.PostProcessing");
+                if (radialBlurType == null)
+                {
+                    // Try fallback for Assembly-CSharp (if assembly definitions aren't set up)
+                    radialBlurType = Type.GetType("FaeMaze.PostProcessing.RadialBlur, Assembly-CSharp");
+                }
+
+                if (radialBlurType == null)
+                {
+                    Debug.LogWarning("[PostProcessVolumeRuntimeSetup] RadialBlur type not found. Skipping radial blur setup.");
+                    return;
+                }
+            }
+
+            // Check if RadialBlur already exists in profile
+            MethodInfo tryGetMethod = typeof(VolumeProfile).GetMethod("TryGet");
+            if (tryGetMethod != null)
+            {
+                MethodInfo genericTryGet = tryGetMethod.MakeGenericMethod(radialBlurType);
+                object[] parameters = new object[] { null };
+                bool hasComponent = (bool)genericTryGet.Invoke(profile, parameters);
+
+                if (hasComponent)
+                {
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] RadialBlur already exists in profile");
+                    return;
+                }
+            }
+
+            // Add RadialBlur component
+            MethodInfo addMethod = typeof(VolumeProfile).GetMethod("Add");
+            if (addMethod != null)
+            {
+                MethodInfo genericAdd = addMethod.MakeGenericMethod(radialBlurType);
+                object radialBlur = genericAdd.Invoke(profile, new object[] { true });
+
+                if (radialBlur != null)
+                {
+                    // Set properties using reflection
+                    SetVolumeParameter(radialBlur, "enabled", true);
+                    SetVolumeParameter(radialBlur, "blurAngleDegrees", 10f);
+                    SetVolumeParameter(radialBlur, "blurIntensity", 0.8f);
+                    SetVolumeParameter(radialBlur, "blurSamples", 12);
+
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sets a VolumeParameter value using reflection
+        /// </summary>
+        private static void SetVolumeParameter<T>(object component, string paramName, T value)
+        {
+            FieldInfo field = component.GetType().GetField(paramName);
+            if (field != null)
+            {
+                object parameter = field.GetValue(component);
+                if (parameter != null)
+                {
+                    PropertyInfo valueProperty = parameter.GetType().GetProperty("value");
+                    if (valueProperty != null)
+                    {
+                        valueProperty.SetValue(parameter, value);
+                    }
                 }
             }
         }
