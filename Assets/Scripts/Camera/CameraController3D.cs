@@ -324,29 +324,29 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            int moveInput = 0;
-            if (keyboard.wKey.wasPressedThisFrame || keyboard.upArrowKey.wasPressedThisFrame)
+            float moveInput = 0f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
             {
-                moveInput += 1;
+                moveInput += 1f;
             }
 
-            if (keyboard.sKey.wasPressedThisFrame || keyboard.downArrowKey.wasPressedThisFrame)
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
             {
-                moveInput -= 1;
+                moveInput -= 1f;
             }
 
-            int turnInput = 0;
-            if (keyboard.aKey.wasPressedThisFrame || keyboard.leftArrowKey.wasPressedThisFrame)
+            float turnInput = 0f;
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
             {
-                turnInput -= 1;
+                turnInput -= 1f;
             }
 
-            if (keyboard.dKey.wasPressedThisFrame || keyboard.rightArrowKey.wasPressedThisFrame)
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
             {
-                turnInput += 1;
+                turnInput += 1f;
             }
 
-            if (moveInput != 0)
+            if (Mathf.Abs(moveInput) > 0.001f)
             {
                 Vector3 forward = focalPointTransform.forward;
                 forward.z = 0f;
@@ -359,16 +359,16 @@ namespace FaeMaze.Cameras
                     forward = Vector3.right;
                 }
 
-                focalPointTransform.position += forward * moveInput * focalMoveSpeed;
+                focalPointTransform.position += forward * moveInput * focalMoveSpeed * Time.deltaTime;
                 Vector3 planarPosition = focalPointTransform.position;
                 planarPosition.z = 0f;
                 focalPointTransform.position = planarPosition;
             }
 
-            if (turnInput != 0)
+            if (Mathf.Abs(turnInput) > 0.001f)
             {
                 Vector3 up = GetMazeUpDirection();
-                focalPointTransform.Rotate(up, turnInput * focalTurnSpeed, Space.World);
+                focalPointTransform.Rotate(up, turnInput * focalTurnSpeed * Time.deltaTime, Space.World);
             }
         }
 
