@@ -42,6 +42,7 @@ namespace FaeMaze.PostProcessing
         {
             if (disposing)
             {
+                renderPass?.Dispose();
                 CoreUtils.Destroy(material);
             }
         }
@@ -51,8 +52,7 @@ namespace FaeMaze.PostProcessing
     {
         private Material material;
         private RadialBlur radialBlur;
-        private RTHandle source;
-        private RTHandle destination;
+        private RTHandle tempRTHandle;
 
         private static readonly int BlurAngleDegreesID = Shader.PropertyToID("_BlurAngleDegrees");
         private static readonly int BlurIntensityID = Shader.PropertyToID("_BlurIntensity");
@@ -89,21 +89,23 @@ namespace FaeMaze.PostProcessing
             // Get source
             var source = cameraData.renderer.cameraColorTargetHandle;
 
-            // Create temporary RT for destination
+            // Create temporary RT for destination using modern URP API
             RenderTextureDescriptor descriptor = renderingData.cameraData.cameraTargetDescriptor;
             descriptor.depthBufferBits = 0;
 
-            cmd.GetTemporaryRT(Shader.PropertyToID("_TempRadialBlur"), descriptor, FilterMode.Bilinear);
-            RTHandle tempRT = RTHandles.Alloc("_TempRadialBlur");
+            RenderingUtils.ReAllocateHandleIfNeeded(ref tempRTHandle, descriptor, FilterMode.Bilinear, TextureWrapMode.Clamp, name: "_TempRadialBlur");
 
             // Blit with radial blur shader
-            Blitter.BlitCameraTexture(cmd, source, tempRT, material, 0);
-            Blitter.BlitCameraTexture(cmd, tempRT, source);
-
-            cmd.ReleaseTemporaryRT(Shader.PropertyToID("_TempRadialBlur"));
+            Blitter.BlitCameraTexture(cmd, source, tempRTHandle, material, 0);
+            Blitter.BlitCameraTexture(cmd, tempRTHandle, source);
 
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
+        }
+
+        public void Dispose()
+        {
+            tempRTHandle?.Release();
         }
     }
 }
