@@ -164,16 +164,20 @@ namespace FaeMaze.Cameras
             // Cache the RadialBlur type lookup
             if (radialBlurType == null)
             {
-                radialBlurType = Type.GetType("FaeMaze.PostProcessing.RadialBlur, FaeMaze.PostProcessing");
-                if (radialBlurType == null)
+                // Search through all loaded assemblies to find RadialBlur type
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    // Try fallback for Assembly-CSharp (if assembly definitions aren't set up)
-                    radialBlurType = Type.GetType("FaeMaze.PostProcessing.RadialBlur, Assembly-CSharp");
+                    radialBlurType = assembly.GetType("FaeMaze.PostProcessing.RadialBlur");
+                    if (radialBlurType != null)
+                    {
+                        Debug.Log($"[PostProcessVolumeRuntimeSetup] Found RadialBlur type in assembly: {assembly.GetName().Name}");
+                        break;
+                    }
                 }
 
                 if (radialBlurType == null)
                 {
-                    Debug.LogWarning("[PostProcessVolumeRuntimeSetup] RadialBlur type not found. Skipping radial blur setup.");
+                    Debug.LogWarning("[PostProcessVolumeRuntimeSetup] RadialBlur type not found in any loaded assembly. Skipping radial blur setup.");
                     return;
                 }
             }

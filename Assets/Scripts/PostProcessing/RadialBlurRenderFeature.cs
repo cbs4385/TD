@@ -66,11 +66,15 @@ namespace FaeMaze.PostProcessing
             this.material = material;
             profilingSampler = new ProfilingSampler("RadialBlur");
 
-            // Cache RadialBlur type lookup
+            // Cache RadialBlur type lookup - search through all loaded assemblies
             if (radialBlurType == null)
             {
-                radialBlurType = Type.GetType("FaeMaze.PostProcessing.RadialBlur, FaeMaze.PostProcessing")
-                    ?? Type.GetType("FaeMaze.PostProcessing.RadialBlur, Assembly-CSharp");
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    radialBlurType = assembly.GetType("FaeMaze.PostProcessing.RadialBlur");
+                    if (radialBlurType != null)
+                        break;
+                }
             }
         }
 
