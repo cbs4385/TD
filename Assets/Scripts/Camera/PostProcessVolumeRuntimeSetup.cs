@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using FaeMaze.PostProcessing;
 
 namespace FaeMaze.Cameras
 {
@@ -53,6 +54,17 @@ namespace FaeMaze.Cameras
                     existingVignette.smoothness.value = 0.4f; // Smooth falloff
                     existingVignette.rounded.value = false; // Not rounded for better coverage
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
+                }
+
+                // Add RadialBlur for angle-based edge blur
+                if (existingVolume.profile != null && !existingVolume.profile.TryGet<RadialBlur>(out var existingRadialBlur))
+                {
+                    existingRadialBlur = existingVolume.profile.Add<RadialBlur>(true);
+                    existingRadialBlur.enabled.value = true;
+                    existingRadialBlur.blurAngleDegrees.value = 10f; // Blur beyond 10 degrees from center
+                    existingRadialBlur.blurIntensity.value = 0.8f; // Strong blur intensity
+                    existingRadialBlur.blurSamples.value = 12; // High quality blur
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to existing profile");
                 }
 
                 // Ensure it has the controller
@@ -114,6 +126,17 @@ namespace FaeMaze.Cameras
                 newVignette.smoothness.value = 0.4f; // Smooth falloff
                 newVignette.rounded.value = false; // Not rounded for better coverage
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
+            }
+
+            // Add RadialBlur for angle-based edge blur
+            if (!profile.TryGet<RadialBlur>(out var newRadialBlur))
+            {
+                newRadialBlur = profile.Add<RadialBlur>(true);
+                newRadialBlur.enabled.value = true;
+                newRadialBlur.blurAngleDegrees.value = 10f; // Blur beyond 10 degrees from center
+                newRadialBlur.blurIntensity.value = 0.8f; // Strong blur intensity
+                newRadialBlur.blurSamples.value = 12; // High quality blur
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
             }
 
             // Add controller
