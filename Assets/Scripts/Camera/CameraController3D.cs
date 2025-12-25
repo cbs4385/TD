@@ -606,7 +606,8 @@ namespace FaeMaze.Cameras
             Vector3 facingDirection = GetPathDirectionToHeart();
             if (facingDirection.sqrMagnitude < 0.0001f)
             {
-                facingDirection = Vector3.up;
+                // Heart/Entrance not ready yet, try again next frame
+                return;
             }
 
             Vector3 offset = -facingDirection.normalized * 3f + Vector3.back * 3f;
