@@ -27,6 +27,9 @@ namespace FaeMaze.UI
         [SerializeField] private TextMeshProUGUI cameraMaxZoomText;
         [SerializeField] private Slider cameraMovementSpeedSlider;
         [SerializeField] private TextMeshProUGUI cameraMovementSpeedText;
+        [SerializeField] private Toggle enableDepthOfFieldToggle;
+        [SerializeField] private Slider depthOfFieldIntensitySlider;
+        [SerializeField] private TextMeshProUGUI depthOfFieldIntensityText;
 
         [Header("Visitor Gameplay Settings")]
         [SerializeField] private Slider visitorSpeedSlider;
@@ -94,6 +97,10 @@ namespace FaeMaze.UI
                 cameraMaxZoomSlider.onValueChanged.AddListener(OnCameraMaxZoomChanged);
             if (cameraMovementSpeedSlider != null)
                 cameraMovementSpeedSlider.onValueChanged.AddListener(OnCameraMovementSpeedChanged);
+            if (enableDepthOfFieldToggle != null)
+                enableDepthOfFieldToggle.onValueChanged.AddListener(OnEnableDepthOfFieldChanged);
+            if (depthOfFieldIntensitySlider != null)
+                depthOfFieldIntensitySlider.onValueChanged.AddListener(OnDepthOfFieldIntensityChanged);
 
             // Visitor Gameplay
             if (visitorSpeedSlider != null)
@@ -155,6 +162,10 @@ namespace FaeMaze.UI
             UpdateValueText(cameraMaxZoomText, GameSettings.CameraMaxZoom, "{0:F1}");
             SetSliderValue(cameraMovementSpeedSlider, GameSettings.CameraMovementSpeed, 0.1f, 10f);
             UpdateValueText(cameraMovementSpeedText, GameSettings.CameraMovementSpeed, "{0:F1}");
+            if (enableDepthOfFieldToggle != null)
+                enableDepthOfFieldToggle.isOn = GameSettings.EnableDepthOfField;
+            SetSliderValue(depthOfFieldIntensitySlider, GameSettings.DepthOfFieldIntensity, 0f, 1f);
+            UpdateValueText(depthOfFieldIntensityText, GameSettings.DepthOfFieldIntensity, "{0:P0}");
 
             // Visitor Gameplay
             SetSliderValue(visitorSpeedSlider, GameSettings.VisitorSpeed, 0.5f, 10f);
@@ -224,6 +235,16 @@ namespace FaeMaze.UI
         private void OnCameraMovementSpeedChanged(float value)
         {
             UpdateValueText(cameraMovementSpeedText, value, "{0:F1}");
+        }
+
+        private void OnEnableDepthOfFieldChanged(bool value)
+        {
+            // Toggle is handled directly
+        }
+
+        private void OnDepthOfFieldIntensityChanged(float value)
+        {
+            UpdateValueText(depthOfFieldIntensityText, value, "{0:P0}");
         }
 
         // Visitor callbacks
@@ -324,6 +345,9 @@ namespace FaeMaze.UI
             GameSettings.CameraMinZoom = GetSliderValue(cameraMinZoomSlider);
             GameSettings.CameraMaxZoom = GetSliderValue(cameraMaxZoomSlider);
             GameSettings.CameraMovementSpeed = GetSliderValue(cameraMovementSpeedSlider);
+            if (enableDepthOfFieldToggle != null)
+                GameSettings.EnableDepthOfField = enableDepthOfFieldToggle.isOn;
+            GameSettings.DepthOfFieldIntensity = GetSliderValue(depthOfFieldIntensitySlider);
 
             // Visitor Gameplay
             GameSettings.VisitorSpeed = GetSliderValue(visitorSpeedSlider);

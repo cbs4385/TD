@@ -122,6 +122,8 @@ namespace FaeMaze.Editor
             var (minZoomSlider, minZoomText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Min Zoom", 1f, 10f, 3f);
             var (maxZoomSlider, maxZoomText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Max Zoom", 10f, 50f, 20f);
             var (movementSpeedSlider, movementSpeedText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Movement Speed", 0.1f, 10f, 1f);
+            Toggle depthOfFieldToggle = SceneSetupUtilities.CreateToggle(cameraContent, "Enable Depth of Field", true);
+            var (depthOfFieldIntensitySlider, depthOfFieldIntensityText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Depth of Field Intensity", 0f, 1f, 0.5f);
 
             // Visitor Gameplay Section
             var (visitorSection, visitorContent) = CreateCollapsibleSection("VisitorSection", contentObj.transform, "VISITOR GAMEPLAY");
@@ -165,6 +167,9 @@ namespace FaeMaze.Editor
             optionsManagerSO.FindProperty("cameraMaxZoomText").objectReferenceValue = maxZoomText;
             optionsManagerSO.FindProperty("cameraMovementSpeedSlider").objectReferenceValue = movementSpeedSlider;
             optionsManagerSO.FindProperty("cameraMovementSpeedText").objectReferenceValue = movementSpeedText;
+            optionsManagerSO.FindProperty("enableDepthOfFieldToggle").objectReferenceValue = depthOfFieldToggle;
+            optionsManagerSO.FindProperty("depthOfFieldIntensitySlider").objectReferenceValue = depthOfFieldIntensitySlider;
+            optionsManagerSO.FindProperty("depthOfFieldIntensityText").objectReferenceValue = depthOfFieldIntensityText;
 
             // Visitor
             optionsManagerSO.FindProperty("visitorSpeedSlider").objectReferenceValue = visSpeedSlider;

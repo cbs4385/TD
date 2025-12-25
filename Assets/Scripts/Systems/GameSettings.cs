@@ -53,6 +53,18 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetFloat("CameraMovementSpeed", Mathf.Max(0.1f, value));
         }
 
+        public static bool EnableDepthOfField
+        {
+            get => PlayerPrefs.GetInt("EnableDepthOfField", 1) == 1;
+            set => PlayerPrefs.SetInt("EnableDepthOfField", value ? 1 : 0);
+        }
+
+        public static float DepthOfFieldIntensity
+        {
+            get => PlayerPrefs.GetFloat("DepthOfFieldIntensity", 0.5f);
+            set => PlayerPrefs.SetFloat("DepthOfFieldIntensity", Mathf.Clamp01(value));
+        }
+
         // Visitor Gameplay Settings
         public static float VisitorSpeed
         {
