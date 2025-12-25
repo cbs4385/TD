@@ -11,7 +11,7 @@ namespace FaeMaze.PostProcessing
         [System.Serializable]
         public class Settings
         {
-            public RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
+            public RenderPassEvent renderPassEvent = RenderPassEvent.AfterRenderingPostProcessing;
             public Shader shader;
         }
 
