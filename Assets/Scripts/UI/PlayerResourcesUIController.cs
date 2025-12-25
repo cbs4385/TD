@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using FaeMaze.Systems;
 using UnityEngine.TextCore.Text;
+using FontStyles = TMPro.FontStyles;
 
 namespace FaeMaze.UI
 {
