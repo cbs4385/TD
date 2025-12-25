@@ -259,6 +259,7 @@ MonoBehaviour:
     randomSeed: 0
   mazeOrigin: {fileID: 330585546}
   tileSize: 1
+  reflectThroughXYPlane: 1
   drawGridGizmos: 1
   drawAttractionHeatmap: 1
 --- !u!1 &534669902
@@ -411,6 +412,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a06ba20d660250c4c9177a3c61f741ab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Cameras.CameraController3D
+  useFocalPointMode: 1
+  focalMoveSpeed: 1
+  focalTurnSpeed: 90
+  focalFollowDistance: 3
+  focalHeightOffset: 2
+  focalPointTransform: {fileID: 0}
   panSpeed: 10
   orbitSpeed: 100
   dollySpeed: 5
@@ -418,12 +425,65 @@ MonoBehaviour:
   maxPitch: 80
   minDistance: 5
   maxDistance: 30
+  enableDistanceConstraints: 0
+  autoOrbit: 0
   enableCollisionDetection: 1
   collisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295
   collisionRadius: 0.5
+  defaultFocusPoint: {x: 0, y: 0, z: 0}
+  defaultFocusTransform: {fileID: 0}
   mazeGridBehaviour: {fileID: 0}
+--- !u!1 &879032712
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 879032714}
+  - component: {fileID: 879032713}
+  m_Layer: 0
+  m_Name: PostProcessVolume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &879032713
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 879032712}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 10
+  blendDistance: 0
+  weight: 1
+  sharedProfile: {fileID: 11400000, guid: 4747d4426edf0ca4c88a72ca861ec499, type: 2}
+--- !u!4 &879032714
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 879032712}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 482.1652, y: 303.70502, z: -383.6443}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &963194227
 GameObject:
   m_ObjectHideFlags: 0
@@ -523,6 +583,7 @@ MonoBehaviour:
     randomSeed: 0
   mazeOrigin: {fileID: 330585546}
   tileSize: 1
+  reflectThroughXYPlane: 1
   drawGridGizmos: 1
   drawAttractionHeatmap: 1
 --- !u!1 &1408523520
@@ -1143,3 +1204,4 @@ SceneRoots:
   - {fileID: 170076735}
   - {fileID: 1534669903}
   - {fileID: 4000000001}
+  - {fileID: 879032714}
