@@ -24,11 +24,35 @@ namespace FaeMaze.Cameras
 
             hasSetup = true;
 
+            // Ensure Main Camera has post-processing enabled
+            Camera mainCamera = Camera.main;
+            if (mainCamera != null)
+            {
+                var cameraData = mainCamera.GetUniversalAdditionalCameraData();
+                if (cameraData != null && !cameraData.renderPostProcessing)
+                {
+                    cameraData.renderPostProcessing = true;
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Enabled post-processing on Main Camera");
+                }
+            }
+
             // Check if Volume already exists
             Volume existingVolume = Object.FindFirstObjectByType<Volume>();
             if (existingVolume != null)
             {
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Volume already exists");
+
+                // Ensure DepthOfField component exists in profile
+                if (existingVolume.profile != null && !existingVolume.profile.TryGet<DepthOfField>(out var dof))
+                {
+                    dof = existingVolume.profile.Add<DepthOfField>(true);
+                    dof.mode.value = DepthOfFieldMode.Gaussian;
+                    dof.gaussianStart.value = 320f;
+                    dof.gaussianEnd.value = 420f;
+                    dof.gaussianMaxRadius.value = 2.5f;
+                    dof.focusDistance.value = 383f;
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField component to existing profile");
+                }
 
                 // Ensure it has the controller
                 if (existingVolume.GetComponent<CameraDepthOfFieldController>() == null)
@@ -69,19 +93,39 @@ namespace FaeMaze.Cameras
             volume.priority = 1;
             volume.profile = profile;
 
+            // Ensure DepthOfField component exists in profile
+            if (!profile.TryGet<DepthOfField>(out var dof))
+            {
+                dof = profile.Add<DepthOfField>(true);
+                dof.mode.value = DepthOfFieldMode.Gaussian;
+                dof.gaussianStart.value = 320f;
+                dof.gaussianEnd.value = 420f;
+                dof.gaussianMaxRadius.value = 2.5f;
+                dof.focusDistance.value = 383f;
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField component to profile");
+            }
+
             // Add controller
             volumeObject.AddComponent<CameraDepthOfFieldController>();
 
             Debug.Log("[PostProcessVolumeRuntimeSetup] Created PostProcessVolume with depth of field");
 
-            // Verify Main Camera has post-processing enabled
+            // Ensure Main Camera has post-processing enabled
             Camera mainCamera = Camera.main;
             if (mainCamera != null)
             {
                 var cameraData = mainCamera.GetUniversalAdditionalCameraData();
-                if (cameraData != null && !cameraData.renderPostProcessing)
+                if (cameraData != null)
                 {
-                    Debug.LogWarning("[PostProcessVolumeRuntimeSetup] Post-processing is disabled on Main Camera");
+                    if (!cameraData.renderPostProcessing)
+                    {
+                        cameraData.renderPostProcessing = true;
+                        Debug.Log("[PostProcessVolumeRuntimeSetup] Enabled post-processing on Main Camera");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("[PostProcessVolumeRuntimeSetup] Main Camera does not have URP camera data");
                 }
             }
         }
