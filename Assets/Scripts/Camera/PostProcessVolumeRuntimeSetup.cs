@@ -31,7 +31,7 @@ namespace FaeMaze.Cameras
             EnableCameraPostProcessing();
 
             // Check if Volume already exists
-            Volume existingVolume = Object.FindFirstObjectByType<Volume>();
+            Volume existingVolume = UnityEngine.Object.FindFirstObjectByType<Volume>();
             if (existingVolume != null)
             {
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Volume already exists");
