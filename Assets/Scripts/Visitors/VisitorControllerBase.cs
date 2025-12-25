@@ -420,7 +420,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         private bool HasAnimatorParameter(string parameterName)
         {
-            if (animator == null || string.IsNullOrEmpty(parameterName))
+            if (animator == null || animator.runtimeAnimatorController == null || string.IsNullOrEmpty(parameterName))
             {
                 return false;
             }
@@ -913,7 +913,7 @@ namespace FaeMaze.Visitors
             }
 
             // 2D sprite-based animation with Direction parameter
-            if (currentAnimatorDirection != direction)
+            if (currentAnimatorDirection != direction && HasAnimatorParameter(DirectionParameter))
             {
                 animator.SetInteger(DirectionParameter, direction);
                 currentAnimatorDirection = direction;
