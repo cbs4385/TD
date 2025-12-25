@@ -204,6 +204,9 @@ namespace FaeMaze.Cameras
 
         private void Start()
         {
+            // Load camera movement speed from settings
+            focalMoveSpeed = GameSettings.CameraMovementSpeed;
+
             if (useFocalPointMode)
             {
                 InitializeFocalPoint();

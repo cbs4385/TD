@@ -47,6 +47,12 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetFloat("CameraMaxZoom", Mathf.Max(5f, value));
         }
 
+        public static float CameraMovementSpeed
+        {
+            get => PlayerPrefs.GetFloat("CameraMovementSpeed", 1f);
+            set => PlayerPrefs.SetFloat("CameraMovementSpeed", Mathf.Max(0.1f, value));
+        }
+
         // Visitor Gameplay Settings
         public static float VisitorSpeed
         {

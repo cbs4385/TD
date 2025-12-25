@@ -25,6 +25,8 @@ namespace FaeMaze.UI
         [SerializeField] private TextMeshProUGUI cameraMinZoomText;
         [SerializeField] private Slider cameraMaxZoomSlider;
         [SerializeField] private TextMeshProUGUI cameraMaxZoomText;
+        [SerializeField] private Slider cameraMovementSpeedSlider;
+        [SerializeField] private TextMeshProUGUI cameraMovementSpeedText;
 
         [Header("Visitor Gameplay Settings")]
         [SerializeField] private Slider visitorSpeedSlider;
@@ -90,6 +92,8 @@ namespace FaeMaze.UI
                 cameraMinZoomSlider.onValueChanged.AddListener(OnCameraMinZoomChanged);
             if (cameraMaxZoomSlider != null)
                 cameraMaxZoomSlider.onValueChanged.AddListener(OnCameraMaxZoomChanged);
+            if (cameraMovementSpeedSlider != null)
+                cameraMovementSpeedSlider.onValueChanged.AddListener(OnCameraMovementSpeedChanged);
 
             // Visitor Gameplay
             if (visitorSpeedSlider != null)
@@ -149,6 +153,8 @@ namespace FaeMaze.UI
             UpdateValueText(cameraMinZoomText, GameSettings.CameraMinZoom, "{0:F1}");
             SetSliderValue(cameraMaxZoomSlider, GameSettings.CameraMaxZoom, 10f, 50f);
             UpdateValueText(cameraMaxZoomText, GameSettings.CameraMaxZoom, "{0:F1}");
+            SetSliderValue(cameraMovementSpeedSlider, GameSettings.CameraMovementSpeed, 0.1f, 10f);
+            UpdateValueText(cameraMovementSpeedText, GameSettings.CameraMovementSpeed, "{0:F1}");
 
             // Visitor Gameplay
             SetSliderValue(visitorSpeedSlider, GameSettings.VisitorSpeed, 0.5f, 10f);
@@ -213,6 +219,11 @@ namespace FaeMaze.UI
         private void OnCameraMaxZoomChanged(float value)
         {
             UpdateValueText(cameraMaxZoomText, value, "{0:F1}");
+        }
+
+        private void OnCameraMovementSpeedChanged(float value)
+        {
+            UpdateValueText(cameraMovementSpeedText, value, "{0:F1}");
         }
 
         // Visitor callbacks
@@ -312,6 +323,7 @@ namespace FaeMaze.UI
             GameSettings.CameraZoomSpeed = GetSliderValue(cameraZoomSpeedSlider);
             GameSettings.CameraMinZoom = GetSliderValue(cameraMinZoomSlider);
             GameSettings.CameraMaxZoom = GetSliderValue(cameraMaxZoomSlider);
+            GameSettings.CameraMovementSpeed = GetSliderValue(cameraMovementSpeedSlider);
 
             // Visitor Gameplay
             GameSettings.VisitorSpeed = GetSliderValue(visitorSpeedSlider);
