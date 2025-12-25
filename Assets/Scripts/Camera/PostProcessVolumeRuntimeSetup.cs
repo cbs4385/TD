@@ -37,12 +37,12 @@ namespace FaeMaze.Cameras
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<DepthOfField>(out var existingDof))
                 {
                     existingDof = existingVolume.profile.Add<DepthOfField>(true);
-                    existingDof.mode.value = DepthOfFieldMode.Gaussian;
-                    existingDof.gaussianStart.value = 320f;
-                    existingDof.gaussianEnd.value = 420f;
-                    existingDof.gaussianMaxRadius.value = 2.5f;
+                    existingDof.mode.value = DepthOfFieldMode.Bokeh;
                     existingDof.focusDistance.value = 383f;
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField component to existing profile");
+                    existingDof.aperture.value = 0.5f; // Very low aperture for strong blur
+                    existingDof.focalLength.value = 300f; // Long focal length for tilt-shift effect
+                    existingDof.bladeCount.value = 6;
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) component to existing profile");
                 }
 
                 // Ensure it has the controller
@@ -88,12 +88,12 @@ namespace FaeMaze.Cameras
             if (!profile.TryGet<DepthOfField>(out var newDof))
             {
                 newDof = profile.Add<DepthOfField>(true);
-                newDof.mode.value = DepthOfFieldMode.Gaussian;
-                newDof.gaussianStart.value = 320f;
-                newDof.gaussianEnd.value = 420f;
-                newDof.gaussianMaxRadius.value = 2.5f;
+                newDof.mode.value = DepthOfFieldMode.Bokeh;
                 newDof.focusDistance.value = 383f;
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField component to profile");
+                newDof.aperture.value = 0.5f; // Very low aperture for strong blur
+                newDof.focalLength.value = 300f; // Long focal length for tilt-shift effect
+                newDof.bladeCount.value = 6;
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) component to profile");
             }
 
             // Add controller

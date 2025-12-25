@@ -27,7 +27,7 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Aperture value (lower = more blur)")]
-        private float aperture = 2.8f;
+        private float aperture = 0.5f;
 
         [SerializeField]
         [Tooltip("Gaussian blur start distance")]
@@ -74,29 +74,25 @@ namespace FaeMaze.Cameras
         {
             if (depthOfField == null) return;
 
-            // Set mode to Gaussian for tilt-shift effect
+            // Set mode to Bokeh for depth-based blur
             depthOfField.mode.overrideState = true;
-            depthOfField.mode.value = DepthOfFieldMode.Gaussian;
+            depthOfField.mode.value = DepthOfFieldMode.Bokeh;
 
-            // Apply Gaussian mode settings
-            depthOfField.gaussianStart.overrideState = true;
-            depthOfField.gaussianStart.value = gaussianStart;
-
-            depthOfField.gaussianEnd.overrideState = true;
-            depthOfField.gaussianEnd.value = gaussianEnd;
-
-            depthOfField.gaussianMaxRadius.overrideState = true;
-            depthOfField.gaussianMaxRadius.value = gaussianMaxRadius;
-
-            depthOfField.highQualitySampling.overrideState = true;
-            depthOfField.highQualitySampling.value = true;
-
-            // Apply focus settings (for Bokeh mode, but kept for compatibility)
+            // Apply Bokeh mode settings for tilt-shift effect
             depthOfField.focusDistance.overrideState = true;
             depthOfField.focusDistance.value = focusDistance;
 
             depthOfField.aperture.overrideState = true;
             depthOfField.aperture.value = aperture;
+
+            depthOfField.focalLength.overrideState = true;
+            depthOfField.focalLength.value = 300f;
+
+            depthOfField.bladeCount.overrideState = true;
+            depthOfField.bladeCount.value = 6;
+
+            depthOfField.bladeCurvature.overrideState = true;
+            depthOfField.bladeCurvature.value = 1f;
 
             // Enable/disable the effect
             depthOfField.active = enableDepthOfField;
