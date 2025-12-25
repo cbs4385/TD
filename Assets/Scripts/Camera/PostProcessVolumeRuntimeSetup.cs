@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
-using FaeMaze.PostProcessing;
+// using FaeMaze.PostProcessing; // Temporarily commented to allow compilation
 
 namespace FaeMaze.Cameras
 {
@@ -57,6 +57,8 @@ namespace FaeMaze.Cameras
                 }
 
                 // Add RadialBlur for angle-based edge blur
+                // Temporarily commented to allow compilation
+                /*
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<RadialBlur>(out var existingRadialBlur))
                 {
                     existingRadialBlur = existingVolume.profile.Add<RadialBlur>(true);
@@ -66,6 +68,7 @@ namespace FaeMaze.Cameras
                     existingRadialBlur.blurSamples.value = 12; // High quality blur
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to existing profile");
                 }
+                */
 
                 // Ensure it has the controller
                 if (existingVolume.GetComponent<CameraDepthOfFieldController>() == null)
@@ -129,6 +132,8 @@ namespace FaeMaze.Cameras
             }
 
             // Add RadialBlur for angle-based edge blur
+            // Temporarily commented to allow compilation
+            /*
             if (!profile.TryGet<RadialBlur>(out var newRadialBlur))
             {
                 newRadialBlur = profile.Add<RadialBlur>(true);
@@ -138,6 +143,7 @@ namespace FaeMaze.Cameras
                 newRadialBlur.blurSamples.value = 12; // High quality blur
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
             }
+            */
 
             // Add controller
             volumeObject.AddComponent<CameraDepthOfFieldController>();
