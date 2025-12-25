@@ -121,6 +121,7 @@ namespace FaeMaze.Editor
             var (zoomSpeedSlider, zoomSpeedText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Zoom Speed", 1f, 20f, 5f);
             var (minZoomSlider, minZoomText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Min Zoom", 1f, 10f, 3f);
             var (maxZoomSlider, maxZoomText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Max Zoom", 10f, 50f, 20f);
+            var (movementSpeedSlider, movementSpeedText) = SceneSetupUtilities.CreateSliderWithLabel(cameraContent, "Movement Speed", 0.1f, 10f, 1f);
 
             // Visitor Gameplay Section
             var (visitorSection, visitorContent) = CreateCollapsibleSection("VisitorSection", contentObj.transform, "VISITOR GAMEPLAY");
@@ -162,6 +163,8 @@ namespace FaeMaze.Editor
             optionsManagerSO.FindProperty("cameraMinZoomText").objectReferenceValue = minZoomText;
             optionsManagerSO.FindProperty("cameraMaxZoomSlider").objectReferenceValue = maxZoomSlider;
             optionsManagerSO.FindProperty("cameraMaxZoomText").objectReferenceValue = maxZoomText;
+            optionsManagerSO.FindProperty("cameraMovementSpeedSlider").objectReferenceValue = movementSpeedSlider;
+            optionsManagerSO.FindProperty("cameraMovementSpeedText").objectReferenceValue = movementSpeedText;
 
             // Visitor
             optionsManagerSO.FindProperty("visitorSpeedSlider").objectReferenceValue = visSpeedSlider;
