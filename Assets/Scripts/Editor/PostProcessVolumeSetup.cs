@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using FaeMaze.Cameras;
@@ -47,7 +48,7 @@ namespace FaeMaze.Editor
             EditorSceneManager.SaveScene(scene);
         }
 
-        private static void SetupSceneInternal(UnityEditor.SceneManagement.Scene scene)
+        private static void SetupSceneInternal(Scene scene)
         {
             // Load the profile
             var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PROFILE_PATH);
