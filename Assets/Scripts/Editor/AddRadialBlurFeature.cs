@@ -67,7 +67,12 @@ namespace FaeMaze.Editor
             rendererFeaturesProperty.serializedObject.ApplyModifiedProperties();
 
             EditorUtility.SetDirty(rendererData);
+            EditorUtility.SetDirty(feature);
             AssetDatabase.SaveAssets();
+
+            // Trigger Create() to properly initialize with the shader
+            feature.Create();
+
             AssetDatabase.Refresh();
 
             Debug.Log("[AddRadialBlurFeature] Successfully added RadialBlurRenderFeature to ForwardRenderer3D!");
