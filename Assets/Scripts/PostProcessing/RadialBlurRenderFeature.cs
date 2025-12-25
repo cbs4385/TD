@@ -21,6 +21,8 @@ namespace FaeMaze.PostProcessing
 
         public override void Create()
         {
+            Debug.Log($"[RadialBlurRenderFeature] Create() called, shader={settings.shader?.name ?? "null"}");
+
             if (settings.shader == null)
             {
                 Debug.LogWarning("[RadialBlurRenderFeature] Shader is not assigned");
@@ -30,6 +32,8 @@ namespace FaeMaze.PostProcessing
             material = CoreUtils.CreateEngineMaterial(settings.shader);
             renderPass = new RadialBlurRenderPass(material);
             renderPass.renderPassEvent = settings.renderPassEvent;
+
+            Debug.Log($"[RadialBlurRenderFeature] Created material and render pass successfully, event={settings.renderPassEvent}");
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
