@@ -23,11 +23,11 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Focus distance (where the scene is sharp)")]
-        private float focusDistance = 10f;
+        private float focusDistance = 5f;
 
         [SerializeField]
         [Tooltip("Aperture value (lower = more blur)")]
-        private float aperture = 5.6f;
+        private float aperture = 0.1f;
 
         [SerializeField]
         [Tooltip("Gaussian blur start distance")]
