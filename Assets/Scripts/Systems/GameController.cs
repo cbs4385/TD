@@ -433,16 +433,16 @@ namespace FaeMaze.Systems
             Shader litParticleShader = Shader.Find("Particles/Standard Surface");
             if (litParticleShader != null)
             {
-                if (thinParticleRenderer.sharedMaterial == null || thinParticleRenderer.sharedMaterial.shader != litParticleShader)
+                var material = thinParticleRenderer.sharedMaterial;
+                if (material == null || material.shader != litParticleShader)
                 {
-                    var material = new Material(litParticleShader)
+                    material = new Material(litParticleShader)
                     {
                         color = Color.white
                     };
                     thinParticleRenderer.sharedMaterial = material;
                 }
 
-                var material = thinParticleRenderer.sharedMaterial;
                 material.DisableKeyword("_EMISSION");
                 material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
                 material.SetColor("_EmissionColor", Color.black);
