@@ -23,10 +23,6 @@ Shader "Hidden/PostProcess/RadialBlur"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
-            TEXTURE2D_X(_BlitTexture);
-            // URP's Blitter binds a linear clamp sampler named sampler_LinearClamp for _BlitTexture
-            SAMPLER(sampler_LinearClamp);
-
             float _ClearRadiusPercent;  // Clear radius as percentage (80 = center 80% is clear, outer 20% is blurred)
             float _BlurIntensity;       // Intensity of the blur effect
             float _BlurSamples;         // Number of blur samples
