@@ -36,8 +36,31 @@ Shader "Hidden/PostProcess/RadialBlur"
             {
                 float2 uv = input.texcoord;
 
-                // Just return the original texture without ANY processing
-                return SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
+                // Sample the original color
+                float4 color = SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
+
+                // Calculate distance from center
+                float2 center = float2(0.5, 0.5);
+                float distanceFromCenter = length(uv - center);
+
+                // Normalize distance (0 = center, ~0.707 = corner)
+                float normalizedDist = distanceFromCenter / 0.707;
+
+                // Calculate vignette darkness based on distance
+                // blurAngleDegrees controls where darkening starts (0-100%)
+                float vignetteStart = _BlurAngleDegrees / 100.0;
+
+                // Calculate darkness factor (0 = no darkening, 1 = full darkening)
+                float darkness = 0.0;
+                if (normalizedDist > vignetteStart)
+                {
+                    // Progressive darkening from vignette start to edge
+                    float edgeFactor = (normalizedDist - vignetteStart) / (1.0 - vignetteStart);
+                    darkness = saturate(edgeFactor) * _BlurIntensity;
+                }
+
+                // Apply darkening by lerping toward black
+                return lerp(color, float4(0, 0, 0, color.a), darkness);
             }
             ENDHLSL
         }
