@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using FaeMaze.PostProcessing;
 
 namespace FaeMaze.Systems
@@ -49,6 +50,7 @@ namespace FaeMaze.Systems
         #region Private Fields
 
         private RadialBlur radialBlur;
+        private Vignette vignette;
         private float essenceDecayTimer;
 
         #endregion
@@ -86,6 +88,12 @@ namespace FaeMaze.Systems
                 Debug.LogError("[EssenceBlurController] RadialBlur component not found in volume profile!");
                 enabled = false;
                 return;
+            }
+
+            // Get the base vignette so we can mirror coverage/intensity
+            if (!globalVolume.profile.TryGet(out vignette))
+            {
+                Debug.LogWarning("[EssenceBlurController] Vignette component not found in volume profile. Coverage will only apply to radial blur.");
             }
 
             // Maximize blur effects if enabled
@@ -179,11 +187,19 @@ namespace FaeMaze.Systems
             radialBlur.blurAngleDegrees.value = clearAreaPercentage;
 
             // Calculate vignette coverage (linear from 0-200 essence)
-            // 0 essence = 100% coverage (maximum darkening)
-            // 200 essence = 0% coverage (no vignette)
-            // Formula: vignetteCoverage = 100 - (essence * 0.5) = (200 - 2*essence) / 2 %
-            float vignetteCoveragePercentage = Mathf.Clamp(100f - (currentEssence * 0.5f), 0f, 100f);
+            // 0 essence = 100% coverage/intensity (maximum darkening)
+            // 200 essence = 0% coverage/intensity (no vignette)
+            // Formula: vignetteCoverage = 100 - (0.9 * essence)
+            float vignetteCoveragePercentage = Mathf.Clamp(100f - (currentEssence * 0.9f), 0f, 100f);
+            float vignetteIntensityValue = vignetteCoveragePercentage / 100f;
+
             radialBlur.vignetteCoverage.value = vignetteCoveragePercentage;
+            radialBlur.vignetteIntensity.value = vignetteIntensityValue;
+
+            if (vignette != null)
+            {
+                vignette.intensity.value = vignetteIntensityValue;
+            }
 
             if (debugLog && Time.frameCount % 60 == 0) // Log every 60 frames to avoid spam
             {
