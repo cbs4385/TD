@@ -142,7 +142,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   enableGlow: 1
   glowColor: {r: 0.9, g: 0.85, b: 1, a: 1}
-  glowRadius: 5
+  glowRange: 5
   glowFrequency: 0.5
   glowMinIntensity: 0.3
   glowMaxIntensity: 0.6

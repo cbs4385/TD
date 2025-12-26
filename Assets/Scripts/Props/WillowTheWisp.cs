@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
@@ -104,18 +103,18 @@ namespace FaeMaze.Props
         [Tooltip("Animator controller to apply to the spawned model")]
         private RuntimeAnimatorController wispController;
 
-        [Header("Glow Settings")]
+        [Header("3D Glow Settings")]
         [SerializeField]
-        [Tooltip("Enable pulsing glow light effect")]
+        [Tooltip("Enable pulsing 3D point light effect")]
         private bool enableGlow = true;
 
         [SerializeField]
-        [Tooltip("Color of the glow (pastel blue)")]
+        [Tooltip("Color of the 3D point light glow (pastel blue)")]
         private Color glowColor = new Color(0.7f, 0.85f, 1f, 1f); // Pastel blue
 
         [SerializeField]
-        [Tooltip("Radius of the glow effect")]
-        private float glowRadius = 3f;
+        [Tooltip("Range of the 3D point light")]
+        private float glowRange = 3f;
 
         [SerializeField]
         [Tooltip("Glow pulse frequency in Hz")]
@@ -123,11 +122,11 @@ namespace FaeMaze.Props
 
         [SerializeField]
         [Tooltip("Minimum glow intensity")]
-        private float glowMinIntensity = 0.15f;
+        private float glowMinIntensity = 0.5f;
 
         [SerializeField]
         [Tooltip("Maximum glow intensity")]
-        private float glowMaxIntensity = 0.3f;
+        private float glowMaxIntensity = 1.5f;
 
         #endregion
 
@@ -163,7 +162,7 @@ namespace FaeMaze.Props
 
         private const string DirectionParameter = "Direction";
         private GameObject modelInstance;
-        private Light2D glowLight;
+        private Light glowLight;
 
         #endregion
 
@@ -511,46 +510,24 @@ namespace FaeMaze.Props
             if (!enableGlow)
                 return;
 
-            try
+            // Check if we already have a Light component
+            glowLight = GetComponent<Light>();
+            if (glowLight == null)
             {
-                // Remove any old 3D Light components that might conflict
-                var oldLight = GetComponent<Light>();
-                if (oldLight != null)
-                {
-#if UNITY_EDITOR
-                    DestroyImmediate(oldLight);
-#else
-                    Destroy(oldLight);
-#endif
-                }
-
-                // Check if we already have a Light2D component
-                glowLight = GetComponent<Light2D>();
-                if (glowLight == null)
-                {
-                    glowLight = gameObject.AddComponent<Light2D>();
-                }
-
-                // Configure the 2D light
-                glowLight.lightType = Light2D.LightType.Point;
-                glowLight.color = glowColor;
-                glowLight.pointLightOuterRadius = glowRadius;
-                glowLight.intensity = glowMaxIntensity;
-
-                // Additional Light2D settings for proper color rendering
-                glowLight.pointLightInnerRadius = 0f;
-                glowLight.pointLightInnerAngle = 360f;
-                glowLight.pointLightOuterAngle = 360f;
-
-                // Use additive blend style (1) for colored lights instead of multiply (0)
-                // Additive blending preserves light colors better
-                glowLight.blendStyleIndex = 1;
-
+                glowLight = gameObject.AddComponent<Light>();
             }
-            catch (System.Exception e)
-            {
-                glowLight = null;
-            }
+
+            // Configure the 3D point light
+            glowLight.type = LightType.Point;
+            glowLight.color = glowColor;
+            glowLight.range = glowRange;
+            glowLight.intensity = glowMaxIntensity;
+
+            // Set light to use realtime mode for URP
+            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
+
+            // Disable shadows for performance
+            glowLight.shadows = LightShadows.None;
         }
 
         private void UpdateGlowPulse()

@@ -1,10 +1,9 @@
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
 
 namespace FaeMaze.Visitors
 {
     /// <summary>
-    /// Adds a slowly pulsing glow effect to visitor models.
+    /// Adds a slowly pulsing glow effect to visitor models using 3D point lights.
     /// </summary>
     public class VisitorGlow : MonoBehaviour
     {
@@ -16,12 +15,12 @@ namespace FaeMaze.Visitors
         private bool enableGlow = true;
 
         [SerializeField]
-        [Tooltip("Color of the glow")]
+        [Tooltip("Color of the 3D point light glow")]
         private Color glowColor = new Color(0.9f, 0.85f, 1f, 1f); // Soft purple-white
 
         [SerializeField]
-        [Tooltip("Radius of the glow effect")]
-        private float glowRadius = 5f;
+        [Tooltip("Range of the 3D point light")]
+        private float glowRange = 5f;
 
         [SerializeField]
         [Tooltip("Glow pulse frequency in Hz (lower = slower pulse)")]
@@ -39,7 +38,7 @@ namespace FaeMaze.Visitors
 
         #region Private Fields
 
-        private Light2D glowLight;
+        private Light glowLight;
 
         #endregion
 
@@ -67,46 +66,24 @@ namespace FaeMaze.Visitors
             if (!enableGlow)
                 return;
 
-            try
+            // Check if we already have a Light component
+            glowLight = GetComponent<Light>();
+            if (glowLight == null)
             {
-                // Remove any old 3D Light components that might conflict
-                var oldLight = GetComponent<Light>();
-                if (oldLight != null)
-                {
-#if UNITY_EDITOR
-                    DestroyImmediate(oldLight);
-#else
-                    Destroy(oldLight);
-#endif
-                }
-
-                // Check if we already have a Light2D component
-                glowLight = GetComponent<Light2D>();
-                if (glowLight == null)
-                {
-                    glowLight = gameObject.AddComponent<Light2D>();
-                }
-
-                // Configure the 2D light
-                glowLight.lightType = Light2D.LightType.Point;
-                glowLight.color = glowColor;
-                glowLight.pointLightOuterRadius = glowRadius;
-                glowLight.intensity = glowMaxIntensity;
-
-                // Additional Light2D settings for proper color rendering
-                glowLight.pointLightInnerRadius = 0f;
-                glowLight.pointLightInnerAngle = 360f;
-                glowLight.pointLightOuterAngle = 360f;
-
-                // Use additive blend style (1) for colored lights instead of multiply (0)
-                // Additive blending preserves light colors better
-                glowLight.blendStyleIndex = 1;
+                glowLight = gameObject.AddComponent<Light>();
             }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning($"[VisitorGlow] Failed to setup glow light: {e.Message}");
-                glowLight = null;
-            }
+
+            // Configure the 3D point light
+            glowLight.type = LightType.Point;
+            glowLight.color = glowColor;
+            glowLight.range = glowRange;
+            glowLight.intensity = glowMaxIntensity;
+
+            // Set light to use realtime mode for URP
+            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
+
+            // Disable shadows for performance
+            glowLight.shadows = LightShadows.None;
         }
 
         private void UpdateGlowPulse()
@@ -154,14 +131,14 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Sets the glow radius at runtime.
+        /// Sets the glow range at runtime.
         /// </summary>
-        public void SetGlowRadius(float radius)
+        public void SetGlowRange(float range)
         {
-            glowRadius = radius;
+            glowRange = range;
             if (glowLight != null)
             {
-                glowLight.pointLightOuterRadius = radius;
+                glowLight.range = range;
             }
         }
 
