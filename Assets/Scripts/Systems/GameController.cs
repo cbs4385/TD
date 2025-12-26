@@ -116,6 +116,17 @@ namespace FaeMaze.Systems
 
             currentEssence = Mathf.Max(0, startingEssence);
 
+            // Ensure particle system spawner component exists
+            EnsureParticleSystemSpawner();
+        }
+
+        private void EnsureParticleSystemSpawner()
+        {
+            // Check if this GameObject already has a MazeParticleSystemSpawner
+            if (GetComponent<MazeParticleSystemSpawner>() == null)
+            {
+                gameObject.AddComponent<MazeParticleSystemSpawner>();
+            }
         }
 
         private void Start()
