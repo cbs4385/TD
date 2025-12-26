@@ -160,13 +160,13 @@ namespace FaeMaze.Systems
                         defaultMat = new Material(Shader.Find("Particles/Standard Surface"));
                     }
 
-                    // Set very dark base color so particles are barely visible when unlit
-                    defaultMat.SetColor("_BaseColor", new Color(0.05f, 0.05f, 0.05f, 1f));
+                    // Set light gray base color with low alpha - bright enough to reflect light but transparent enough to be invisible when unlit
+                    defaultMat.SetColor("_BaseColor", new Color(0.8f, 0.8f, 0.8f, 0.15f));
 
                     // Configure material to be highly responsive to lights
                     if (defaultMat.HasProperty("_Smoothness"))
                     {
-                        defaultMat.SetFloat("_Smoothness", 0.95f); // Very smooth for light reflection
+                        defaultMat.SetFloat("_Smoothness", 0.85f); // Smooth for light reflection
                     }
                     if (defaultMat.HasProperty("_Metallic"))
                     {

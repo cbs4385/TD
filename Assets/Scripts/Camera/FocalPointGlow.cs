@@ -44,6 +44,10 @@ namespace FaeMaze.Cameras
         [Tooltip("Maximum glow intensity")]
         private float glowMaxIntensity = 2.0f;
 
+        [SerializeField]
+        [Tooltip("Z offset for light position to illuminate tile surface")]
+        private float lightZOffset = -2.5f;
+
         #endregion
 
         #region Private Fields
@@ -131,10 +135,10 @@ namespace FaeMaze.Cameras
                 // Get the center of the tile in world space
                 Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
 
-                // Position the light at the tile center
+                // Position the light at the tile center with Z offset to illuminate the tile surface
                 if (lightObject != null)
                 {
-                    lightObject.transform.position = tileWorldPos;
+                    lightObject.transform.position = new Vector3(tileWorldPos.x, tileWorldPos.y, lightZOffset);
                 }
             }
         }
