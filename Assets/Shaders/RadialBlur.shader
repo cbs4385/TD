@@ -3,6 +3,9 @@ Shader "Hidden/PostProcess/RadialBlur"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
+        _BlurAngleDegrees ("Clear Radius Percentage", Float) = 85.0
+        _BlurIntensity ("Blur Intensity", Float) = 0.5
+        _BlurSamples ("Blur Samples", Float) = 8.0
     }
 
     SubShader
