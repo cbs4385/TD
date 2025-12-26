@@ -26,8 +26,30 @@ namespace FaeMaze.Systems
                 renderer = mazeGrid.gameObject.AddComponent<MazeRenderer>();
             }
 
+            // Setup particle system
+            SetupParticleSystem(mazeGrid);
+
             // Setup camera
             SetupCamera(mazeGrid);
+        }
+
+        private static void SetupParticleSystem(MazeGridBehaviour mazeGrid)
+        {
+            // Check if a MazeParticleSystem already exists in the scene
+            MazeParticleSystem existingParticleSystem = Object.FindFirstObjectByType<MazeParticleSystem>();
+            if (existingParticleSystem != null)
+            {
+                return; // Already exists, don't create another
+            }
+
+            // Create a new GameObject for the particle system
+            GameObject particleSystemObj = new GameObject("MazeParticleSystem");
+            MazeParticleSystem particleSystem = particleSystemObj.AddComponent<MazeParticleSystem>();
+
+            // Position at world origin
+            particleSystemObj.transform.position = Vector3.zero;
+
+            Debug.Log("[MazeAutoInitializer] Created MazeParticleSystem");
         }
 
         private static void SetupCamera(MazeGridBehaviour mazeGrid)

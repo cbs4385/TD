@@ -4,7 +4,7 @@ using FaeMaze.Systems;
 namespace FaeMaze.Cameras
 {
     /// <summary>
-    /// Creates a pulsing lime green glow effect at the focal point tile position.
+    /// Creates a pulsing 3D point light glow effect at the focal point tile position.
     /// </summary>
     public class FocalPointGlow : MonoBehaviour
     {
@@ -19,37 +19,37 @@ namespace FaeMaze.Cameras
         [Tooltip("Reference to the focal point transform")]
         private Transform focalPointTransform;
 
-        [Header("Glow Settings")]
+        [Header("3D Glow Settings")]
         [SerializeField]
-        [Tooltip("Lime green color for the glow")]
-        private Color glowColor = new Color(0.5f, 1.0f, 0.0f, 0.7f); // Lime green
+        [Tooltip("Enable pulsing 3D point light effect")]
+        private bool enableGlow = true;
 
         [SerializeField]
-        [Tooltip("Minimum alpha for pulse (0-1)")]
-        private float minAlpha = 0.3f;
+        [Tooltip("Color of the 3D point light glow")]
+        private Color glowColor = new Color(0.5f, 1.0f, 0.0f, 1f); // Lime green
 
         [SerializeField]
-        [Tooltip("Maximum alpha for pulse (0-1)")]
-        private float maxAlpha = 0.9f;
+        [Tooltip("Range of the 3D point light")]
+        private float glowRange = 8f;
 
         [SerializeField]
         [Tooltip("Pulse speed in Hz")]
         private float pulseSpeed = 2.0f;
 
         [SerializeField]
-        [Tooltip("Size of the glow sprite relative to tile size")]
-        private float glowSize = 1.2f;
+        [Tooltip("Minimum glow intensity")]
+        private float glowMinIntensity = 0.5f;
 
         [SerializeField]
-        [Tooltip("Z-offset for rendering (should be slightly above the tile)")]
-        private float zOffset = -0.1f;
+        [Tooltip("Maximum glow intensity")]
+        private float glowMaxIntensity = 2.0f;
 
         #endregion
 
         #region Private Fields
 
-        private SpriteRenderer glowSprite;
-        private float pulsePhase;
+        private Light glowLight;
+        private GameObject lightObject;
 
         #endregion
 
@@ -74,12 +74,12 @@ namespace FaeMaze.Cameras
                 }
             }
 
-            CreateGlowSprite();
+            CreateGlowLight();
         }
 
         private void Update()
         {
-            if (glowSprite != null && focalPointTransform != null && mazeGridBehaviour != null)
+            if (enableGlow && glowLight != null && focalPointTransform != null && mazeGridBehaviour != null)
             {
                 UpdateGlowPosition();
                 UpdateGlowPulse();
@@ -90,63 +90,31 @@ namespace FaeMaze.Cameras
 
         #region Glow Creation
 
-        private void CreateGlowSprite()
+        private void CreateGlowLight()
         {
-            // Create a child GameObject for the glow sprite
-            GameObject glowObj = new GameObject("FocalPointGlow");
-            glowObj.transform.SetParent(transform, false);
+            if (!enableGlow)
+                return;
 
-            // Add SpriteRenderer
-            glowSprite = glowObj.AddComponent<SpriteRenderer>();
-            glowSprite.sprite = CreateCircleSprite();
-            glowSprite.color = glowColor;
-            glowSprite.sortingOrder = 100; // Render on top of most things
+            // Create a child GameObject for the light
+            lightObject = new GameObject("FocalPointLight");
+            lightObject.transform.SetParent(transform, false);
 
-            // Set initial size
-            float tileSize = mazeGridBehaviour != null ? mazeGridBehaviour.TileSize : 1.0f;
-            glowObj.transform.localScale = Vector3.one * tileSize * glowSize;
+            // Add Light component
+            glowLight = lightObject.AddComponent<Light>();
 
-            Debug.Log("[FocalPointGlow] Glow sprite created with lime green color");
-        }
+            // Configure the 3D point light
+            glowLight.type = LightType.Point;
+            glowLight.color = glowColor;
+            glowLight.range = glowRange;
+            glowLight.intensity = glowMaxIntensity;
 
-        /// <summary>
-        /// Creates a soft-edged circle sprite for the glow effect.
-        /// </summary>
-        private Sprite CreateCircleSprite()
-        {
-            int resolution = 128;
-            Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
-            texture.filterMode = FilterMode.Bilinear;
+            // Set light to use realtime mode for URP
+            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
 
-            Color[] pixels = new Color[resolution * resolution];
-            Vector2 center = new Vector2(resolution / 2f, resolution / 2f);
-            float radius = resolution / 2f;
+            // Disable shadows for performance
+            glowLight.shadows = LightShadows.None;
 
-            for (int y = 0; y < resolution; y++)
-            {
-                for (int x = 0; x < resolution; x++)
-                {
-                    Vector2 pos = new Vector2(x, y);
-                    float distance = Vector2.Distance(pos, center);
-                    float normalizedDistance = distance / radius;
-
-                    // Soft falloff using smoothstep
-                    float alpha = 1f - Mathf.SmoothStep(0f, 1f, normalizedDistance);
-                    alpha = Mathf.Pow(alpha, 2f); // Make it even softer
-
-                    pixels[y * resolution + x] = new Color(1f, 1f, 1f, alpha);
-                }
-            }
-
-            texture.SetPixels(pixels);
-            texture.Apply();
-
-            return Sprite.Create(
-                texture,
-                new Rect(0, 0, resolution, resolution),
-                new Vector2(0.5f, 0.5f),
-                resolution / 2f
-            );
+            Debug.Log("[FocalPointGlow] 3D point light created with lime green color");
         }
 
         #endregion
@@ -163,33 +131,28 @@ namespace FaeMaze.Cameras
                 // Get the center of the tile in world space
                 Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
 
-                // Position the glow at the tile center with z-offset
-                if (glowSprite != null)
+                // Position the light at the tile center
+                if (lightObject != null)
                 {
-                    glowSprite.transform.position = new Vector3(
-                        tileWorldPos.x,
-                        tileWorldPos.y,
-                        tileWorldPos.z + zOffset
-                    );
+                    lightObject.transform.position = tileWorldPos;
                 }
             }
         }
 
         private void UpdateGlowPulse()
         {
-            // Update pulse phase
-            pulsePhase += Time.deltaTime * pulseSpeed * Mathf.PI * 2f;
+            // Calculate pulsing intensity using sine wave
+            float angle = Time.time * pulseSpeed * 2f * Mathf.PI;
 
-            // Calculate alpha using sine wave
-            float normalizedPulse = (Mathf.Sin(pulsePhase) + 1f) * 0.5f; // 0 to 1
-            float alpha = Mathf.Lerp(minAlpha, maxAlpha, normalizedPulse);
+            // Map sin wave from [-1, 1] to [0, 1]
+            float normalizedPulse = (Mathf.Sin(angle) + 1f) / 2f;
 
-            // Apply alpha to the glow sprite
-            if (glowSprite != null)
+            // Map to intensity range [min, max]
+            float intensity = Mathf.Lerp(glowMinIntensity, glowMaxIntensity, normalizedPulse);
+
+            if (glowLight != null)
             {
-                Color color = glowColor;
-                color.a = alpha;
-                glowSprite.color = color;
+                glowLight.intensity = intensity;
             }
         }
 
