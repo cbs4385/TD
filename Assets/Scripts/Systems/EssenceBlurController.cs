@@ -173,30 +173,16 @@ namespace FaeMaze.Systems
 
             // Calculate blur clear area (linear from 0-200 essence)
             // 0 essence = 0% clear (everything blurred)
-            // 100 essence = 50% clear (outer 50% blurred)
             // 200 essence = 100% clear (no blur)
-            // Formula: clearArea = (essence / 200) * 100 = essence * 0.5
+            // Formula: clearArea = essence * 0.5 = (essence / 2)%
             float clearAreaPercentage = Mathf.Clamp(currentEssence * 0.5f, 0f, 100f);
             radialBlur.blurAngleDegrees.value = clearAreaPercentage;
 
-            // Calculate vignette coverage (piecewise linear)
-            // 0 essence = 90% coverage
-            // 100 essence = 25% coverage
-            // 200 essence = 0% coverage
-            float vignetteCoveragePercentage;
-            if (currentEssence <= 100)
-            {
-                // Linear interpolation from 90% to 25% over 0-100 essence
-                // vignette = 90 - (essence / 100) * 65
-                vignetteCoveragePercentage = 90f - (currentEssence / 100f) * 65f;
-            }
-            else
-            {
-                // Linear interpolation from 25% to 0% over 100-200 essence
-                // vignette = 25 - ((essence - 100) / 100) * 25
-                vignetteCoveragePercentage = 25f - ((currentEssence - 100f) / 100f) * 25f;
-            }
-            vignetteCoveragePercentage = Mathf.Clamp(vignetteCoveragePercentage, 0f, 100f);
+            // Calculate vignette coverage (linear from 0-200 essence)
+            // 0 essence = 100% coverage (maximum darkening)
+            // 200 essence = 0% coverage (no vignette)
+            // Formula: vignetteCoverage = 100 - (essence * 0.5) = (200 - 2*essence) / 2 %
+            float vignetteCoveragePercentage = Mathf.Clamp(100f - (currentEssence * 0.5f), 0f, 100f);
             radialBlur.vignetteCoverage.value = vignetteCoveragePercentage;
 
             if (debugLog && Time.frameCount % 60 == 0) // Log every 60 frames to avoid spam
