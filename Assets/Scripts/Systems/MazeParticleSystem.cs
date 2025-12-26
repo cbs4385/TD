@@ -3,8 +3,9 @@ using UnityEngine;
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// Creates an unlit particle effect that covers the maze area and extends on the z-plane from 0 to -5.
-    /// Particles reflect model glows from 3D lights (wisp, heart, visitors).
+    /// Creates a lit particle effect that covers the maze area and extends on the z-plane from 0 to -5.
+    /// Particles are dark by default and only become visible when illuminated by 3D point lights
+    /// from models (wisp, heart, visitors), helping players locate glowing entities in the maze.
     /// </summary>
     [RequireComponent(typeof(ParticleSystem))]
     public class MazeParticleSystem : MonoBehaviour
@@ -19,15 +20,15 @@ namespace FaeMaze.Systems
         [Header("Particle Settings")]
         [SerializeField]
         [Tooltip("Number of particles to emit")]
-        private int maxParticles = 500;
+        private int maxParticles = 1000;
 
         [SerializeField]
         [Tooltip("Particle size")]
-        private float particleSize = 0.05f;
+        private float particleSize = 0.08f;
 
         [SerializeField]
-        [Tooltip("Particle color (tinted by lights)")]
-        private Color particleColor = new Color(0.9f, 0.9f, 1f, 0.3f);
+        [Tooltip("Particle base color (should be near-black so particles only show when lit)")]
+        private Color particleColor = new Color(0.05f, 0.05f, 0.05f, 1f);
 
         [SerializeField]
         [Tooltip("Minimum Z position (closest to camera)")]
@@ -51,7 +52,7 @@ namespace FaeMaze.Systems
 
         [Header("Material Settings")]
         [SerializeField]
-        [Tooltip("Use unlit material that receives light influence")]
+        [Tooltip("Optional custom lit material (uses URP Particles/Lit shader if not set)")]
         private Material particleMaterial;
 
         #endregion
@@ -151,11 +152,31 @@ namespace FaeMaze.Systems
                 }
                 else
                 {
-                    // Create simple unlit material with alpha blending
-                    Material defaultMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+                    // Create lit material that responds to lights
+                    // Particles will only be visible when illuminated by nearby point lights
+                    Material defaultMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Lit"));
+                    if (defaultMat.shader == null || defaultMat.shader.name == "Hidden/InternalErrorShader")
+                    {
+                        // Fallback to simple lit if particle lit shader not found
+                        defaultMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                    }
+
                     defaultMat.SetColor("_BaseColor", particleColor);
-                    defaultMat.SetFloat("_Surface", 1); // Transparent
-                    defaultMat.SetFloat("_Blend", 0); // Alpha blend
+
+                    // Configure for proper lighting response
+                    defaultMat.SetFloat("_Smoothness", 0.2f);
+                    defaultMat.SetFloat("_Metallic", 0f);
+
+                    // Make particles additive/translucent so they blend with lights
+                    if (defaultMat.HasProperty("_Surface"))
+                    {
+                        defaultMat.SetFloat("_Surface", 1); // Transparent
+                    }
+                    if (defaultMat.HasProperty("_Blend"))
+                    {
+                        defaultMat.SetFloat("_Blend", 0); // Alpha blend
+                    }
+
                     defaultMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                     defaultMat.EnableKeyword("_ALPHABLEND_ON");
                     defaultMat.renderQueue = 3000; // Transparent queue
@@ -163,9 +184,12 @@ namespace FaeMaze.Systems
                     particleRenderer.material = defaultMat;
                 }
 
-                // Enable receiving lights so particles reflect nearby glow effects
+                // Enable receiving lights so particles are illuminated by nearby point lights
                 particleRenderer.receiveShadows = false;
                 particleRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+                // Enable light probes for better lighting
+                particleRenderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.BlendProbes;
             }
         }
 
