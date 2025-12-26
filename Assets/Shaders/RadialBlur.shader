@@ -23,42 +23,13 @@ Shader "Hidden/PostProcess/RadialBlur"
             #pragma fragment Frag
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-            // Alias the include-provided types when present; otherwise declare a minimal
-            // set so the shader still compiles in environments without the URP header.
-            #if defined(UNIVERSAL_BLIT_INCLUDED)
-                #define BlitAttributes Attributes
-                #define BlitVaryings Varyings
-            #else
-                TEXTURE2D_X(_BlitTexture);
-                SAMPLER(sampler_BlitTexture);
-
-                struct BlitAttributes
-                {
-                    float4 positionOS : POSITION;
-                    float2 texcoord   : TEXCOORD0;
-                };
-
-                struct BlitVaryings
-                {
-                    float4 positionCS : SV_POSITION;
-                    float2 texcoord   : TEXCOORD0;
-                };
-
-                BlitVaryings Vert(BlitAttributes input)
-                {
-                    BlitVaryings output;
-                    output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
-                    output.texcoord = input.texcoord;
-                    return output;
-                }
-            #endif
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl"
 
             float _BlurAngleDegrees;  // Clear radius as percentage (10 = 10% of screen radius is clear)
             float _BlurIntensity;      // Intensity of the blur effect
             float _BlurSamples;        // Number of blur samples
 
-            float4 Frag(BlitVaryings input) : SV_Target
+            float4 Frag(Varyings input) : SV_Target
             {
                 float2 uv = input.texcoord;
 
