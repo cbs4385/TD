@@ -73,6 +73,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                 int samples = (int)_BlurSamples;
                 float blurRadius = blurFactor * 0.02; // Small blur radius
 
+                [loop]
                 for (int i = 0; i < samples; i++)
                 {
                     float angle = (float)i / (float)samples * 6.28318530718;
