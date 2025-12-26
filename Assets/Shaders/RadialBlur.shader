@@ -36,30 +36,44 @@ Shader "Hidden/PostProcess/RadialBlur"
             {
                 float2 uv = input.texcoord;
 
-                // DIAGNOSTIC: Test if texture sampling works at all
-                float4 color = SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
-
-                // DIAGNOSTIC: If color is pure white or black, show UV as color for debugging
-                if (color.r > 0.99 && color.g > 0.99 && color.b > 0.99)
-                {
-                    // Texture is white - show UV pattern instead to confirm shader is running
-                    return float4(uv.x, uv.y, 0, 1);
-                }
-
-                // Normal vignette logic
+                // Calculate distance from center
                 float2 center = float2(0.5, 0.5);
                 float distanceFromCenter = length(uv - center);
-                float normalizedDist = distanceFromCenter / 0.707;
-                float vignetteStart = _BlurAngleDegrees / 100.0;
 
-                float darkness = 0.0;
-                if (normalizedDist > vignetteStart)
+                // Normalize distance (0 = center, 1 = corner)
+                float normalizedDist = distanceFromCenter / 0.707;
+
+                // Calculate where blur should start (blurAngleDegrees% toward edge)
+                float blurStart = _BlurAngleDegrees / 100.0;
+
+                // If we're inside the clear zone, return unblurred
+                if (normalizedDist < blurStart)
                 {
-                    float edgeFactor = (normalizedDist - vignetteStart) / (1.0 - vignetteStart);
-                    darkness = saturate(edgeFactor) * _BlurIntensity;
+                    return SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
                 }
 
-                return lerp(color, float4(0, 0, 0, color.a), darkness);
+                // Calculate blur strength from 0 (at blur start) to intensity (at edge)
+                float blurFactor = (normalizedDist - blurStart) / max(1.0 - blurStart, 0.001);
+                blurFactor = saturate(blurFactor) * _BlurIntensity;
+
+                // Apply radial blur by sampling multiple points in a circle
+                float4 blurAccum = float4(0, 0, 0, 0);
+                int samples = (int)_BlurSamples;
+
+                // Blur radius increases with distance from center and intensity
+                float blurRadius = blurFactor * 0.03;
+
+                [loop]
+                for (int i = 0; i < samples; i++)
+                {
+                    float angle = (float)i / (float)samples * 6.28318530718; // 2*PI
+                    float2 offset = float2(cos(angle), sin(angle)) * blurRadius;
+                    float2 sampleUV = uv + offset;
+
+                    blurAccum += SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, sampleUV);
+                }
+
+                return blurAccum / (float)samples;
             }
             ENDHLSL
         }
