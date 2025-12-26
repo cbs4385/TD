@@ -171,15 +171,32 @@ namespace FaeMaze.Systems
         {
             int currentEssence = gameController.CurrentEssence;
 
-            // Calculate blur clear area: essence/5 %
-            // Higher essence = larger clear area in center
-            float clearAreaPercentage = Mathf.Clamp(currentEssence / 5f, 0f, 100f);
+            // Calculate blur clear area (linear from 0-200 essence)
+            // 0 essence = 0% clear (everything blurred)
+            // 100 essence = 50% clear (outer 50% blurred)
+            // 200 essence = 100% clear (no blur)
+            // Formula: clearArea = (essence / 200) * 100 = essence * 0.5
+            float clearAreaPercentage = Mathf.Clamp(currentEssence * 0.5f, 0f, 100f);
             radialBlur.blurAngleDegrees.value = clearAreaPercentage;
 
-            // Calculate vignette coverage: essence/10 %
-            // INVERSE: Higher essence = LESS vignette coverage (more screen visible)
-            // We want 0 essence = 100% coverage, 1000 essence = 0% coverage
-            float vignetteCoveragePercentage = Mathf.Clamp(100f - (currentEssence / 10f), 0f, 100f);
+            // Calculate vignette coverage (piecewise linear)
+            // 0 essence = 90% coverage
+            // 100 essence = 25% coverage
+            // 200 essence = 0% coverage
+            float vignetteCoveragePercentage;
+            if (currentEssence <= 100)
+            {
+                // Linear interpolation from 90% to 25% over 0-100 essence
+                // vignette = 90 - (essence / 100) * 65
+                vignetteCoveragePercentage = 90f - (currentEssence / 100f) * 65f;
+            }
+            else
+            {
+                // Linear interpolation from 25% to 0% over 100-200 essence
+                // vignette = 25 - ((essence - 100) / 100) * 25
+                vignetteCoveragePercentage = 25f - ((currentEssence - 100f) / 100f) * 25f;
+            }
+            vignetteCoveragePercentage = Mathf.Clamp(vignetteCoveragePercentage, 0f, 100f);
             radialBlur.vignetteCoverage.value = vignetteCoveragePercentage;
 
             if (debugLog && Time.frameCount % 60 == 0) // Log every 60 frames to avoid spam
