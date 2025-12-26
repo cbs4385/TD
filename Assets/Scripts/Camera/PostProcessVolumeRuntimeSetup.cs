@@ -36,13 +36,6 @@ namespace FaeMaze.Cameras
             {
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Volume already exists");
 
-                // Disable DepthOfField if it exists
-                if (existingVolume.profile != null && existingVolume.profile.TryGet<DepthOfField>(out var existingDof))
-                {
-                    existingDof.active = false;
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Disabled DepthOfField effect");
-                }
-
                 // Add Vignette for edge darkening effect
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
                 {
@@ -87,13 +80,6 @@ namespace FaeMaze.Cameras
             volume.isGlobal = true;
             volume.priority = 1;
             volume.profile = profile;
-
-            // Disable DepthOfField if it exists in the profile
-            if (profile.TryGet<DepthOfField>(out var existingDof))
-            {
-                existingDof.active = false;
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Disabled DepthOfField effect in profile");
-            }
 
             // Add Vignette for edge darkening effect
             if (!profile.TryGet<Vignette>(out var newVignette))
