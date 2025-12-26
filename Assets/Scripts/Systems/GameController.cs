@@ -49,7 +49,7 @@ namespace FaeMaze.Systems
         [Header("Essence Settings")]
         [SerializeField]
         [Tooltip("Essence amount the player starts with when the game begins")]
-        private int startingEssence = 100;
+        private int startingEssence = 200;
 
         #endregion
 
