@@ -783,7 +783,7 @@ MonoBehaviour:
   entrance: {fileID: 0}
   heart: {fileID: 0}
   uiController: {fileID: 2096385509}
-  startingEssence: 100
+  startingEssence: 200
 --- !u!114 &1408523523
 MonoBehaviour:
   m_ObjectHideFlags: 0
