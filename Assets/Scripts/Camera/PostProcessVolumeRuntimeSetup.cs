@@ -61,8 +61,8 @@ namespace FaeMaze.Cameras
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added subtle Vignette component to existing profile");
                 }
 
-                // RadialBlur disabled - causing white screen issue
-                // TryAddRadialBlur(existingVolume.profile);
+                // Ensure radial blur exists so vignette-style blur is applied to map tiles
+                TryAddRadialBlur(existingVolume.profile);
 
                 // Ensure it has the controller
                 if (existingVolume.GetComponent<CameraDepthOfFieldController>() == null)
@@ -128,8 +128,8 @@ namespace FaeMaze.Cameras
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added subtle Vignette component to profile");
             }
 
-            // RadialBlur disabled - causing white screen issue
-            // TryAddRadialBlur(profile);
+            // Ensure radial blur exists on the created profile for vignette-style blur
+            TryAddRadialBlur(profile);
 
             // Add controller
             volumeObject.AddComponent<CameraDepthOfFieldController>();
@@ -180,7 +180,7 @@ namespace FaeMaze.Cameras
                 // Set properties directly - vignette effect with 95% clear center
                 radialBlur.enabled.value = true;
                 radialBlur.clearRadiusPercent.value = 95f;  // Center 95% is clear, only outer 5% is blurred
-                radialBlur.blurIntensity.value = 0.8f;
+                radialBlur.blurIntensity.value = 0.6f; // Modest intensity to avoid white-screen issues
                 radialBlur.blurSamples.value = 12;
 
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
