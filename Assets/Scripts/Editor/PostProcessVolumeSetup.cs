@@ -80,25 +80,6 @@ namespace FaeMaze.Editor
             volume.priority = 1;
             volume.profile = profile;
 
-            // Add CameraDepthOfFieldController if not present
-            var controller = volumeObject.GetComponent<CameraDepthOfFieldController>();
-            if (controller == null)
-            {
-                controller = volumeObject.AddComponent<CameraDepthOfFieldController>();
-                Debug.Log($"[PostProcessVolumeSetup] Added CameraDepthOfFieldController to {scene.name}");
-            }
-
-            // Setup controller via reflection to set private serialized fields
-            var serializedObject = new SerializedObject(controller);
-            serializedObject.FindProperty("postProcessVolume").objectReferenceValue = volume;
-            serializedObject.FindProperty("enableDepthOfField").boolValue = true;
-            serializedObject.FindProperty("focusDistance").floatValue = 383f;
-            serializedObject.FindProperty("aperture").floatValue = 2.8f;
-            serializedObject.FindProperty("gaussianStart").floatValue = 320f;
-            serializedObject.FindProperty("gaussianEnd").floatValue = 420f;
-            serializedObject.FindProperty("gaussianMaxRadius").floatValue = 2.5f;
-            serializedObject.ApplyModifiedProperties();
-
             // Find and configure Main Camera
             Camera mainCamera = GameObject.FindGameObjectWithTag("MainCamera")?.GetComponent<Camera>();
             if (mainCamera != null)

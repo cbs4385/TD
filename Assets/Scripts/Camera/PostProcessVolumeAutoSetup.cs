@@ -30,13 +30,6 @@ namespace FaeMaze.Cameras
             if (existingVolume != null)
             {
                 Debug.Log("[PostProcessVolumeAutoSetup] Volume already exists, skipping setup");
-
-                // Ensure it has the controller
-                if (existingVolume.GetComponent<CameraDepthOfFieldController>() == null)
-                {
-                    var controller = existingVolume.gameObject.AddComponent<CameraDepthOfFieldController>();
-                    Debug.Log("[PostProcessVolumeAutoSetup] Added CameraDepthOfFieldController to existing volume");
-                }
                 return;
             }
 
@@ -75,10 +68,7 @@ namespace FaeMaze.Cameras
             volume.priority = 1;
             volume.profile = profile;
 
-            // Add controller
-            var depthController = volumeObject.AddComponent<CameraDepthOfFieldController>();
-
-            Debug.Log("[PostProcessVolumeAutoSetup] Created and configured PostProcessVolume with depth of field controller");
+            Debug.Log("[PostProcessVolumeAutoSetup] Created and configured PostProcessVolume");
 
             // Verify Main Camera has post-processing enabled
             Camera mainCamera = Camera.main;
