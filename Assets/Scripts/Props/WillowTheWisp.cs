@@ -547,7 +547,7 @@ namespace FaeMaze.Props
                 glowLight.blendStyleIndex = 1;
 
             }
-            catch (System.Exception e)
+            catch (System.Exception)
             {
                 glowLight = null;
             }

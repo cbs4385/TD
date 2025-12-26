@@ -73,12 +73,14 @@ namespace FaeMaze.PostProcessing
             profilingSampler = new ProfilingSampler("RadialBlur");
         }
 
+        [Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
         public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
         {
             var stack = VolumeManager.instance.stack;
             radialBlur = stack.GetComponent<RadialBlur>();
         }
 
+        [Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
             if (material == null || radialBlur == null || !radialBlur.IsActive())
