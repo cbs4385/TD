@@ -27,31 +27,34 @@ Shader "Hidden/PostProcess/RadialBlur"
             // Try to pull in the URP Blit bindings when available; fall back to locally
             // declaring the texture/sampler if the include is missing in the installed
             // package version.
-            #if defined(UNITY_SHADER_INCLUDE_TEST)
-                #if UNITY_SHADER_INCLUDE_TEST("Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl")
-                    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl"
-                #endif
+            #if defined(UNITY_SHADER_INCLUDE_TEST) && UNITY_SHADER_INCLUDE_TEST("Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl")
+                #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl"
             #endif
 
-            #if !defined(UNIVERSAL_BLIT_INCLUDED)
+            // Alias the include-provided types when present; otherwise declare a minimal
+            // set so the shader still compiles in environments without the URP header.
+            #if defined(UNIVERSAL_BLIT_INCLUDED)
+                #define BlitAttributes Attributes
+                #define BlitVaryings Varyings
+            #else
                 TEXTURE2D_X(_BlitTexture);
                 SAMPLER(sampler_BlitTexture);
 
-                struct Attributes
+                struct BlitAttributes
                 {
                     float4 positionOS : POSITION;
                     float2 texcoord   : TEXCOORD0;
                 };
 
-                struct Varyings
+                struct BlitVaryings
                 {
                     float4 positionCS : SV_POSITION;
                     float2 texcoord   : TEXCOORD0;
                 };
 
-                Varyings Vert(Attributes input)
+                BlitVaryings Vert(BlitAttributes input)
                 {
-                    Varyings output;
+                    BlitVaryings output;
                     output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                     output.texcoord = input.texcoord;
                     return output;
@@ -62,7 +65,7 @@ Shader "Hidden/PostProcess/RadialBlur"
             float _BlurIntensity;      // Intensity of the blur effect
             float _BlurSamples;        // Number of blur samples
 
-            float4 Frag(Varyings input) : SV_Target
+            float4 Frag(BlitVaryings input) : SV_Target
             {
                 float2 uv = input.texcoord;
 
