@@ -148,7 +148,7 @@ namespace FaeMaze.Cameras
                 radialBlur.enabled.value = false;  // Disable RadialBlur for now
 
                 radialBlur.blurAngleDegrees.overrideState = true;
-                radialBlur.blurAngleDegrees.value = 75f;  // 75% of screen is clear
+                radialBlur.blurAngleDegrees.value = 85f;  // 85% of screen is clear - only blur outer 15%
 
                 radialBlur.blurIntensity.overrideState = true;
                 radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
