@@ -37,17 +37,7 @@ namespace FaeMaze.Cameras
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Volume already exists");
 
                 // Add Vignette for edge darkening effect
-                if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
-                {
-                    existingVignette = existingVolume.profile.Add<Vignette>(true);
-                    existingVignette.intensity.overrideState = true;
-                    existingVignette.intensity.value = 0.35f; // Moderate darkening at edges
-                    existingVignette.smoothness.overrideState = true;
-                    existingVignette.smoothness.value = 0.4f; // Smooth falloff
-                    existingVignette.rounded.overrideState = true;
-                    existingVignette.rounded.value = false; // Not rounded for better coverage
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
-                }
+                EnsureVignette(existingVolume.profile);
 
                 // Add RadialBlur for angle-based edge blur
                 TryAddRadialBlur(existingVolume.profile);
@@ -85,17 +75,7 @@ namespace FaeMaze.Cameras
             volume.profile = profile;
 
             // Add Vignette for edge darkening effect
-            if (!profile.TryGet<Vignette>(out var newVignette))
-            {
-                newVignette = profile.Add<Vignette>(true);
-                newVignette.intensity.overrideState = true;
-                newVignette.intensity.value = 0.35f; // Moderate darkening at edges
-                newVignette.smoothness.overrideState = true;
-                newVignette.smoothness.value = 0.4f; // Smooth falloff
-                newVignette.rounded.overrideState = true;
-                newVignette.rounded.value = false; // Not rounded for better coverage
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
-            }
+            EnsureVignette(profile);
 
             // Add RadialBlur for angle-based edge blur
             TryAddRadialBlur(profile);
@@ -160,7 +140,7 @@ namespace FaeMaze.Cameras
                     radialBlur.enabled.value = false;  // Disable RadialBlur for new components
                     radialBlur.blurAngleDegrees.value = 85f;  // 85% of screen is clear - only blur outer 15%
                     radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
-                    radialBlur.blurSamples.value = 8;
+                    radialBlur.blurSamples.value = 4;
                 }
                 else
                 {
@@ -174,6 +154,28 @@ namespace FaeMaze.Cameras
 
                 Debug.Log($"[PostProcessVolumeRuntimeSetup] {(isNew ? "Added" : "Updated")} RadialBlur component: clearRadius={radialBlur.blurAngleDegrees.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}, enabled={radialBlur.enabled.value}");
             }
+        }
+
+        /// <summary>
+        /// Ensures a Vignette exists on the given profile and is configured with rounded edges.
+        /// </summary>
+        private static void EnsureVignette(VolumeProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            if (!profile.TryGet<Vignette>(out var vignette))
+            {
+                vignette = profile.Add<Vignette>(true);
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
+            }
+
+            vignette.intensity.overrideState = true;
+            vignette.intensity.value = 0.35f; // Moderate darkening at edges
+            vignette.smoothness.overrideState = true;
+            vignette.smoothness.value = 0.4f; // Smooth falloff
+            vignette.rounded.overrideState = true;
+            vignette.rounded.value = true; // Rounded edges as requested
         }
     }
 }

@@ -36,7 +36,7 @@ namespace FaeMaze.Systems
         private bool maximizeBlurIntensity = true;
 
         [SerializeField]
-        [Tooltip("Maximize blur samples to 16")]
+        [Tooltip("Force blur samples to 4 for performance")]
         private bool maximizeBlurSamples = true;
 
         [Header("Debug")]
@@ -100,10 +100,10 @@ namespace FaeMaze.Systems
 
             if (maximizeBlurSamples)
             {
-                radialBlur.blurSamples.value = 16;
+                radialBlur.blurSamples.value = 4;
                 if (debugLog)
                 {
-                    Debug.Log("[EssenceBlurController] Maximized blur samples to 16");
+                    Debug.Log("[EssenceBlurController] Set blur samples to 4 for performance");
                 }
             }
 

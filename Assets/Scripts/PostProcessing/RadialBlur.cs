@@ -17,7 +17,7 @@ namespace FaeMaze.PostProcessing
         public ClampedFloatParameter blurIntensity = new ClampedFloatParameter(0.5f, 0f, 1f);
 
         [Tooltip("Number of blur samples (higher = better quality, lower performance)")]
-        public ClampedIntParameter blurSamples = new ClampedIntParameter(8, 4, 16);
+        public ClampedIntParameter blurSamples = new ClampedIntParameter(4, 4, 16);
 
         [Tooltip("Vignette coverage as percentage (0-100). Higher values = more screen darkening.")]
         public ClampedFloatParameter vignetteCoverage = new ClampedFloatParameter(0f, 0f, 100f);

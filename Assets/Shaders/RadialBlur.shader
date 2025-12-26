@@ -5,7 +5,7 @@ Shader "Hidden/PostProcess/RadialBlur"
         _MainTex ("Texture", 2D) = "white" {}
         _BlurAngleDegrees ("Clear Radius Percentage", Float) = 85.0
         _BlurIntensity ("Blur Intensity", Float) = 0.5
-        _BlurSamples ("Blur Samples", Float) = 8.0
+        _BlurSamples ("Blur Samples", Float) = 4.0
         _VignetteCoverage ("Vignette Coverage Percentage", Float) = 0.0
         _VignetteIntensity ("Vignette Darkness Intensity", Float) = 0.8
     }
