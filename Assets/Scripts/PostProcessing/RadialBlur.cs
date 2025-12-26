@@ -10,8 +10,8 @@ namespace FaeMaze.PostProcessing
         [Tooltip("Enable or disable the radial blur effect")]
         public BoolParameter enabled = new BoolParameter(false);
 
-        [Tooltip("Angle in degrees from camera center where blur starts (pixels within this angle remain sharp)")]
-        public ClampedFloatParameter blurAngleDegrees = new ClampedFloatParameter(10f, 0f, 60f);
+        [Tooltip("Percentage of screen radius that remains clear (80 = center 80% is sharp, outer 20% is blurred)")]
+        public ClampedFloatParameter clearRadiusPercent = new ClampedFloatParameter(80f, 0f, 100f);
 
         [Tooltip("Intensity of the blur effect")]
         public ClampedFloatParameter blurIntensity = new ClampedFloatParameter(0.5f, 0f, 1f);

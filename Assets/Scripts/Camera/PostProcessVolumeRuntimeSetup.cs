@@ -171,9 +171,9 @@ namespace FaeMaze.Cameras
             var radialBlur = profile.Add<RadialBlur>(true);
             if (radialBlur != null)
             {
-                // Set properties directly
+                // Set properties directly - vignette effect with 85% clear center
                 radialBlur.enabled.value = true;
-                radialBlur.blurAngleDegrees.value = 10f;
+                radialBlur.clearRadiusPercent.value = 85f;  // Center 85% is clear, outer 15% is blurred
                 radialBlur.blurIntensity.value = 0.8f;
                 radialBlur.blurSamples.value = 12;
 

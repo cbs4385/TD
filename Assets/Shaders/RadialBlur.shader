@@ -25,9 +25,9 @@ Shader "Hidden/PostProcess/RadialBlur"
             TEXTURE2D_X(_MainTex);
             SAMPLER(sampler_MainTex);
 
-            float _BlurAngleDegrees;  // Clear radius as percentage (10 = 10% of screen radius is clear)
-            float _BlurIntensity;      // Intensity of the blur effect
-            float _BlurSamples;        // Number of blur samples
+            float _ClearRadiusPercent;  // Clear radius as percentage (80 = center 80% is clear, outer 20% is blurred)
+            float _BlurIntensity;       // Intensity of the blur effect
+            float _BlurSamples;         // Number of blur samples
 
             float4 Frag(Varyings input) : SV_Target
             {
@@ -40,9 +40,9 @@ Shader "Hidden/PostProcess/RadialBlur"
                 // Normalize distance (0 at center, ~0.707 at corners for square screen)
                 float distanceFromCenter = length(offset);
 
-                // Convert _BlurAngleDegrees from percentage to screen space radius
-                // e.g., 10 means 10% of screen, which is 0.1 in normalized coords
-                float clearRadius = _BlurAngleDegrees / 100.0;
+                // Convert _ClearRadiusPercent from percentage to screen space radius
+                // e.g., 80 means 80% of screen, which is 0.8 in normalized coords
+                float clearRadius = _ClearRadiusPercent / 100.0;
 
                 // If within the clear radius, return original pixel
                 if (distanceFromCenter < clearRadius)

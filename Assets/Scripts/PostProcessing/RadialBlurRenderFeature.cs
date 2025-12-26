@@ -63,7 +63,7 @@ namespace FaeMaze.PostProcessing
         private RadialBlur radialBlur;
         private RTHandle tempRTHandle;
 
-        private static readonly int BlurAngleDegreesID = Shader.PropertyToID("_BlurAngleDegrees");
+        private static readonly int ClearRadiusPercentID = Shader.PropertyToID("_ClearRadiusPercent");
         private static readonly int BlurIntensityID = Shader.PropertyToID("_BlurIntensity");
         private static readonly int BlurSamplesID = Shader.PropertyToID("_BlurSamples");
 
@@ -93,7 +93,7 @@ namespace FaeMaze.PostProcessing
             CommandBuffer cmd = CommandBufferPool.Get("RadialBlur");
 
             // Set shader properties directly
-            material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
+            material.SetFloat(ClearRadiusPercentID, radialBlur.clearRadiusPercent.value);
             material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
             material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
 
@@ -134,11 +134,11 @@ namespace FaeMaze.PostProcessing
                 return;
 
             // Set shader properties
-            material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
+            material.SetFloat(ClearRadiusPercentID, radialBlur.clearRadiusPercent.value);
             material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
             material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
 
-            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Applying blur with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}");
+            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Applying blur with clearRadius={radialBlur.clearRadiusPercent.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}");
 
             // Get source texture
             TextureHandle source = resourceData.activeColorTexture;
