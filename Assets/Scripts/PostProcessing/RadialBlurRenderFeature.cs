@@ -39,16 +39,12 @@ namespace FaeMaze.PostProcessing
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            Debug.Log($"[RadialBlurRenderFeature] AddRenderPasses called, renderPass={renderPass != null}, material={material != null}");
-
             if (renderPass == null || material == null)
             {
-                Debug.LogWarning($"[RadialBlurRenderFeature] Cannot add render pass: renderPass={renderPass != null}, material={material != null}");
                 return;
             }
 
             renderer.EnqueuePass(renderPass);
-            Debug.Log("[RadialBlurRenderFeature] Render pass enqueued successfully");
         }
 
         protected override void Dispose(bool disposing)
@@ -85,23 +81,8 @@ namespace FaeMaze.PostProcessing
 
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            if (material == null)
-            {
-                Debug.LogWarning("[RadialBlurRenderPass] Material is null");
+            if (material == null || radialBlur == null || !radialBlur.IsActive())
                 return;
-            }
-
-            if (radialBlur == null)
-            {
-                Debug.LogWarning("[RadialBlurRenderPass] RadialBlur component is null");
-                return;
-            }
-
-            if (!radialBlur.IsActive())
-            {
-                Debug.LogWarning("[RadialBlurRenderPass] RadialBlur is not active");
-                return;
-            }
 
             var cameraData = renderingData.cameraData;
             if (cameraData.cameraType != CameraType.Game)
@@ -113,8 +94,6 @@ namespace FaeMaze.PostProcessing
             material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
             material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
             material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
-
-            Debug.Log($"[RadialBlurRenderPass] Executing with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}");
 
             // Get source
             var source = cameraData.renderer.cameraColorTargetHandle;
@@ -157,8 +136,6 @@ namespace FaeMaze.PostProcessing
             material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
             material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
 
-            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph executing with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}");
-
             // Get source texture
             TextureHandle source = resourceData.activeColorTexture;
 
@@ -183,8 +160,9 @@ namespace FaeMaze.PostProcessing
                 });
             }
 
-            // Copy destination back to source
+            // Update both camera color and active color texture to use the blurred result
             resourceData.cameraColor = destination;
+            resourceData.activeColorTexture = destination;
         }
 
         private class PassData
