@@ -36,6 +36,26 @@ Shader "Hidden/PostProcess/RadialBlur"
             #if !defined(UNIVERSAL_BLIT_INCLUDED)
                 TEXTURE2D_X(_BlitTexture);
                 SAMPLER(sampler_BlitTexture);
+
+                struct Attributes
+                {
+                    float4 positionOS : POSITION;
+                    float2 texcoord   : TEXCOORD0;
+                };
+
+                struct Varyings
+                {
+                    float4 positionCS : SV_POSITION;
+                    float2 texcoord   : TEXCOORD0;
+                };
+
+                Varyings Vert(Attributes input)
+                {
+                    Varyings output;
+                    output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                    output.texcoord = input.texcoord;
+                    return output;
+                }
             #endif
 
             float _BlurAngleDegrees;  // Clear radius as percentage (10 = 10% of screen radius is clear)
