@@ -39,7 +39,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                 // If within the clear radius, return original pixel
                 if (distanceFromCenter < clearRadius)
                 {
-                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_BlitTexture, uv);
+                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
                 }
 
                 // Calculate blur amount based on distance from clear radius
@@ -71,7 +71,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                         float2 sampleUV = uv + sampleOffset;
 
                         float weight = 1.0;
-                        color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_BlitTexture, sampleUV) * weight;
+                        color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, sampleUV) * weight;
                         totalWeight += weight;
                     }
                 }
