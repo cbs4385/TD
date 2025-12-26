@@ -162,42 +162,29 @@ namespace FaeMaze.PostProcessing
             // Get source texture
             TextureHandle source = resourceData.activeColorTexture;
 
-            // Create temporary texture
+            // Create a temporary destination texture
             RenderTextureDescriptor descriptor = cameraData.cameraTargetDescriptor;
             descriptor.depthBufferBits = 0;
+            TextureHandle destination = UniversalRenderer.CreateRenderGraphTexture(renderGraph, descriptor, "_RadialBlurDest", false);
 
-            TextureHandle tempTexture = UniversalRenderer.CreateRenderGraphTexture(renderGraph, descriptor, "_TempRadialBlur", false);
-
-            // First pass: Blit from source to temp with radial blur
+            // Single pass: Blit with radial blur effect
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("Radial Blur", out var passData, profilingSampler))
             {
                 passData.material = material;
                 passData.source = source;
-                passData.tempTexture = tempTexture;
 
                 builder.UseTexture(source, AccessFlags.Read);
-                builder.SetRenderAttachment(tempTexture, 0);
+                builder.SetRenderAttachment(destination, 0);
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
-                    // Blit from source to temp with radial blur
+                    // Apply radial blur from source to destination
                     Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), data.material, 0);
                 });
             }
 
-            // Second pass: blit back to source
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Radial Blur Blit Back", out var passData, profilingSampler))
-            {
-                passData.source = tempTexture;
-
-                builder.UseTexture(tempTexture, AccessFlags.Read);
-                builder.SetRenderAttachment(source, 0);
-
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
-                {
-                    Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), null, 0);
-                });
-            }
+            // Copy destination back to source
+            resourceData.cameraColor = destination;
         }
 
         private class PassData
