@@ -17,10 +17,6 @@ Shader "Hidden/PostProcess/RadialBlur"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
-            // Source color provided by URP's Blitter
-            TEXTURE2D_X(_BlitTexture);
-            SAMPLER(sampler_BlitTexture);
-
             float _ClearRadiusPercent;  // Clear radius as percentage (80 = center 80% is clear, outer 20% is blurred)
             float _BlurIntensity;       // Intensity of the blur effect
             float _BlurSamples;         // Number of blur samples
