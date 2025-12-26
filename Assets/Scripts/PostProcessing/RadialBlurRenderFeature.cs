@@ -136,6 +136,8 @@ namespace FaeMaze.PostProcessing
             material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
             material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
 
+            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Applying blur with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}");
+
             // Get source texture
             TextureHandle source = resourceData.activeColorTexture;
 
@@ -143,6 +145,8 @@ namespace FaeMaze.PostProcessing
             RenderTextureDescriptor descriptor = cameraData.cameraTargetDescriptor;
             descriptor.depthBufferBits = 0;
             TextureHandle destination = UniversalRenderer.CreateRenderGraphTexture(renderGraph, descriptor, "_RadialBlurDest", false);
+
+            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Created textures, source valid={source.IsValid()}, dest valid={destination.IsValid()}");
 
             // Apply radial blur from source to destination
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("Radial Blur", out var passData, profilingSampler))
@@ -155,13 +159,17 @@ namespace FaeMaze.PostProcessing
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
+                    Debug.Log($"[RadialBlurRenderPass] RenderFunc executing: material={data.material != null}, source valid={data.source.IsValid()}");
                     // Apply radial blur from source to destination
                     Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), data.material, 0);
+                    Debug.Log("[RadialBlurRenderPass] RenderFunc: Blit completed");
                 });
             }
 
+            Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: Updating cameraColor to destination");
             // Update the camera color to use the blurred result
             resourceData.cameraColor = destination;
+            Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: Complete");
         }
 
         private class PassData
