@@ -172,12 +172,12 @@ namespace FaeMaze.Cameras
             if (radialBlur != null)
             {
                 // Set properties directly
-                radialBlur.enabled.value = true;
-                radialBlur.blurAngleDegrees.value = 50f;  // 50% of screen is clear, blur on outer 50%
-                radialBlur.blurIntensity.value = 0.5f;    // Reduced intensity for subtler effect
-                radialBlur.blurSamples.value = 12;
+                radialBlur.enabled.value = false;  // Disable RadialBlur for now
+                radialBlur.blurAngleDegrees.value = 75f;  // 75% of screen is clear
+                radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
+                radialBlur.blurSamples.value = 8;
 
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
+                Debug.Log($"[PostProcessVolumeRuntimeSetup] Added RadialBlur component: clearRadius={radialBlur.blurAngleDegrees.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}, enabled={radialBlur.enabled.value}");
             }
         }
     }
