@@ -173,8 +173,8 @@ namespace FaeMaze.Cameras
             {
                 // Set properties directly
                 radialBlur.enabled.value = true;
-                radialBlur.blurAngleDegrees.value = 10f;
-                radialBlur.blurIntensity.value = 0.8f;
+                radialBlur.blurAngleDegrees.value = 50f;  // 50% of screen is clear, blur on outer 50%
+                radialBlur.blurIntensity.value = 0.5f;    // Reduced intensity for subtler effect
                 radialBlur.blurSamples.value = 12;
 
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added RadialBlur component to profile");
