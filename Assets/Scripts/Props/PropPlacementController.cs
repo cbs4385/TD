@@ -154,25 +154,12 @@ namespace FaeMaze.Props
 
         /// <summary>
         /// Checks if Heart Power targeting is currently active.
-        /// Lazily finds Heart Power UI systems if not already found.
+        /// DISABLED: Targeting mode has been removed. All powers now automatically target the focal point.
         /// </summary>
         private bool IsHeartPowerTargetingActive()
         {
-            // Lazily find HeartPowerPanelController if not assigned
-            if (heartPowerPanel == null)
-            {
-                heartPowerPanel = FindFirstObjectByType<FaeMaze.UI.HeartPowerPanelController>();
-            }
-
-            // Lazily find HeartPowerUI if not assigned
-            if (heartPowerUI == null)
-            {
-                heartPowerUI = FindFirstObjectByType<FaeMaze.HeartPowers.HeartPowerUI>();
-            }
-
-            // Check if either UI system is in targeting mode
-            return (heartPowerPanel != null && heartPowerPanel.IsTargetingActive) ||
-                   (heartPowerUI != null && heartPowerUI.IsTargetingActive);
+            // Targeting mode is disabled - all powers now automatically target the focal point
+            return false;
         }
 
         #endregion
