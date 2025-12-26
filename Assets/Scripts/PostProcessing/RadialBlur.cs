@@ -23,7 +23,7 @@ namespace FaeMaze.PostProcessing
         public ClampedFloatParameter vignetteCoverage = new ClampedFloatParameter(0f, 0f, 100f);
 
         [Tooltip("Vignette darkness intensity (0-1). Higher values = darker vignette.")]
-        public ClampedFloatParameter vignetteIntensity = new ClampedFloatParameter(0.8f, 0f, 1f);
+        public ClampedFloatParameter vignetteIntensity = new ClampedFloatParameter(1f, 0f, 1f);
 
         public bool IsActive() => enabled.value;
 

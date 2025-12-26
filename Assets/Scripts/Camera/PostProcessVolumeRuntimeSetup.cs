@@ -133,14 +133,16 @@ namespace FaeMaze.Cameras
                 radialBlur.blurAngleDegrees.overrideState = true;
                 radialBlur.blurIntensity.overrideState = true;
                 radialBlur.blurSamples.overrideState = true;
+                radialBlur.vignetteIntensity.overrideState = true;
 
                 // Only set default values for new components
                 if (isNew)
                 {
                     radialBlur.enabled.value = false;  // Disable RadialBlur for new components
                     radialBlur.blurAngleDegrees.value = 85f;  // 85% of screen is clear - only blur outer 15%
-                    radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
+                    radialBlur.blurIntensity.value = 1f;    // Strong blur by default
                     radialBlur.blurSamples.value = 4;
+                    radialBlur.vignetteIntensity.value = 1f; // Fully darkened when enabled
                 }
                 else
                 {
@@ -171,9 +173,9 @@ namespace FaeMaze.Cameras
             }
 
             vignette.intensity.overrideState = true;
-            vignette.intensity.value = 0.35f; // Moderate darkening at edges
+            vignette.intensity.value = 1f; // Maximum darkening at edges by default
             vignette.smoothness.overrideState = true;
-            vignette.smoothness.value = 0.4f; // Smooth falloff
+            vignette.smoothness.value = 1f; // Smoothest falloff
             vignette.rounded.overrideState = true;
             vignette.rounded.value = true; // Rounded edges as requested
         }
