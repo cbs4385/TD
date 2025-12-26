@@ -91,11 +91,19 @@ namespace FaeMaze.PostProcessing
                 return;
 
             // Set shader properties
-            material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
-            material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
-            material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
+            float angleValue = radialBlur.blurAngleDegrees.value;
+            float intensityValue = radialBlur.blurIntensity.value;
+            float samplesValue = radialBlur.blurSamples.value;
 
-            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Applying blur with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}");
+            material.SetFloat(BlurAngleDegreesID, angleValue);
+            material.SetFloat(BlurIntensityID, intensityValue);
+            material.SetFloat(BlurSamplesID, samplesValue);
+
+            // Verify what was actually set
+            float verifyAngle = material.GetFloat(BlurAngleDegreesID);
+            float verifyIntensity = material.GetFloat(BlurIntensityID);
+
+            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Set angle={angleValue}, intensity={intensityValue}, samples={samplesValue}");
 
             // Get source texture
             TextureHandle source = resourceData.activeColorTexture;
