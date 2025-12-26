@@ -25,8 +25,8 @@ Shader "Hidden/PostProcess/RadialBlur"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
-            TEXTURE2D_X(_MainTex);
-            SAMPLER(sampler_MainTex);
+            TEXTURE2D_X(_BlitTexture);
+            SAMPLER(sampler_BlitTexture);
 
             float _BlurAngleDegrees;  // Clear radius as percentage (10 = 10% of screen radius is clear)
             float _BlurIntensity;      // Intensity of the blur effect
@@ -37,7 +37,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                 float2 uv = input.texcoord;
 
                 // Simple passthrough for testing
-                return SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
+                return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_BlitTexture, uv);
             }
             ENDHLSL
         }
