@@ -40,12 +40,16 @@ Shader "Hidden/PostProcess/RadialBlur"
             {
                 float2 uv = input.texcoord;
 
-                // Calculate distance from center
+                // Calculate distance from center and keep the vignette perfectly round
+                // by correcting for aspect ratio (so 1,1 reaches the screen corners)
                 float2 center = float2(0.5, 0.5);
-                float distanceFromCenter = length(uv - center);
+                float2 aspectCorrectedUV = (uv - center);
+                aspectCorrectedUV.x *= (_ScreenParams.x / _ScreenParams.y);
+                float distanceFromCenter = length(aspectCorrectedUV);
 
-                // Normalize distance (0 = center, 1 = corner)
-                float normalizedDist = distanceFromCenter / 0.707;
+                // Normalize distance (0 = center, 1 = furthest corner after aspect correction)
+                float maxDistance = length(float2(0.5 * (_ScreenParams.x / _ScreenParams.y), 0.5));
+                float normalizedDist = saturate(distanceFromCenter / maxDistance);
 
                 // Calculate where blur should start (blurAngleDegrees% toward edge)
                 float blurStart = _BlurAngleDegrees / 100.0;
@@ -79,18 +83,14 @@ Shader "Hidden/PostProcess/RadialBlur"
 
                 float4 finalColor = blurAccum / (float)samples;
 
-                // Apply vignette effect
+                // Apply vignette effect with rounded falloff
                 // Calculate where vignette should start (inverse of coverage percentage)
-                float vignetteStart = 1.0 - (_VignetteCoverage / 100.0);
+                float vignetteStart = saturate(1.0 - (_VignetteCoverage / 100.0));
 
-                // Calculate vignette darkening factor
-                float vignetteFactor = 0.0;
-                if (normalizedDist > vignetteStart)
-                {
-                    // Gradually darken from vignette start to edge
-                    vignetteFactor = (normalizedDist - vignetteStart) / max(1.0 - vignetteStart, 0.001);
-                    vignetteFactor = saturate(vignetteFactor) * _VignetteIntensity;
-                }
+                // Calculate vignette darkening factor with smoother roundness
+                float vignetteFactor = saturate((normalizedDist - vignetteStart) / max(1.0 - vignetteStart, 0.001));
+                vignetteFactor = pow(vignetteFactor, 2.0); // Rounded, smoother edge
+                vignetteFactor *= _VignetteIntensity;
 
                 // Apply darkening
                 finalColor.rgb *= (1.0 - vignetteFactor);
