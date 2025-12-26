@@ -36,7 +36,7 @@ namespace FaeMaze.Editor
             {
                 Debug.LogWarning($"[AddRadialBlurToVolume] RadialBlur already exists in profile at {path}");
                 Debug.Log($"  - enabled: {existingBlur.enabled.value}");
-                Debug.Log($"  - blurAngleDegrees: {existingBlur.blurAngleDegrees.value}");
+                Debug.Log($"  - clearRadiusPercent: {existingBlur.clearRadiusPercent.value}%");
                 Debug.Log($"  - blurIntensity: {existingBlur.blurIntensity.value}");
                 Selection.activeObject = profile;
                 return;
@@ -45,12 +45,12 @@ namespace FaeMaze.Editor
             // Add RadialBlur component
             var radialBlur = profile.Add<RadialBlur>(overrides: true);
 
-            // Configure with good default values
+            // Configure with good default values for vignette effect
             radialBlur.enabled.value = true;
             radialBlur.enabled.overrideState = true;
 
-            radialBlur.blurAngleDegrees.value = 10f;  // 10% of screen from center is clear
-            radialBlur.blurAngleDegrees.overrideState = true;
+            radialBlur.clearRadiusPercent.value = 85f;  // Center 85% is clear, outer 15% is blurred
+            radialBlur.clearRadiusPercent.overrideState = true;
 
             radialBlur.blurIntensity.value = 0.8f;  // Strong blur
             radialBlur.blurIntensity.overrideState = true;
@@ -64,7 +64,7 @@ namespace FaeMaze.Editor
 
             Debug.Log($"[AddRadialBlurToVolume] Successfully added RadialBlur to profile at {path}");
             Debug.Log("  - enabled: true");
-            Debug.Log("  - blurAngleDegrees: 10 (center 10% is clear)");
+            Debug.Log("  - clearRadiusPercent: 85 (center 85% is clear, outer 15% is blurred)");
             Debug.Log("  - blurIntensity: 0.8");
             Debug.Log("  - blurSamples: 12");
 
