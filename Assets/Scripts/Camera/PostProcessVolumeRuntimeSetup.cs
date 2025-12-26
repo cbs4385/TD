@@ -61,8 +61,8 @@ namespace FaeMaze.Cameras
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
                 }
 
-                // Add RadialBlur for angle-based edge blur (using reflection to avoid compile-time dependency)
-                TryAddRadialBlur(existingVolume.profile);
+                // RadialBlur disabled - causing white screen issue
+                // TryAddRadialBlur(existingVolume.profile);
 
                 // Ensure it has the controller
                 if (existingVolume.GetComponent<CameraDepthOfFieldController>() == null)
@@ -128,8 +128,8 @@ namespace FaeMaze.Cameras
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
             }
 
-            // Add RadialBlur for angle-based edge blur (using reflection to avoid compile-time dependency)
-            TryAddRadialBlur(profile);
+            // RadialBlur disabled - causing white screen issue
+            // TryAddRadialBlur(profile);
 
             // Add controller
             volumeObject.AddComponent<CameraDepthOfFieldController>();
