@@ -6,6 +6,8 @@ Shader "Hidden/PostProcess/RadialBlur"
         _BlurAngleDegrees ("Clear Radius Percentage", Float) = 85.0
         _BlurIntensity ("Blur Intensity", Float) = 0.5
         _BlurSamples ("Blur Samples", Float) = 8.0
+        _VignetteCoverage ("Vignette Coverage Percentage", Float) = 0.0
+        _VignetteIntensity ("Vignette Darkness Intensity", Float) = 0.8
     }
 
     SubShader
@@ -28,9 +30,11 @@ Shader "Hidden/PostProcess/RadialBlur"
             TEXTURE2D_X(_MainTex);
             SAMPLER(sampler_MainTex);
 
-            float _BlurAngleDegrees;  // Clear radius as percentage (10 = 10% of screen radius is clear)
-            float _BlurIntensity;      // Intensity of the blur effect
-            float _BlurSamples;        // Number of blur samples
+            float _BlurAngleDegrees;     // Clear radius as percentage (10 = 10% of screen radius is clear)
+            float _BlurIntensity;        // Intensity of the blur effect
+            float _BlurSamples;          // Number of blur samples
+            float _VignetteCoverage;     // Vignette coverage as percentage (0-100)
+            float _VignetteIntensity;    // Vignette darkness intensity (0-1)
 
             float4 Frag(Varyings input) : SV_Target
             {
@@ -73,7 +77,25 @@ Shader "Hidden/PostProcess/RadialBlur"
                     blurAccum += SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, sampleUV);
                 }
 
-                return blurAccum / (float)samples;
+                float4 finalColor = blurAccum / (float)samples;
+
+                // Apply vignette effect
+                // Calculate where vignette should start (inverse of coverage percentage)
+                float vignetteStart = 1.0 - (_VignetteCoverage / 100.0);
+
+                // Calculate vignette darkening factor
+                float vignetteFactor = 0.0;
+                if (normalizedDist > vignetteStart)
+                {
+                    // Gradually darken from vignette start to edge
+                    vignetteFactor = (normalizedDist - vignetteStart) / max(1.0 - vignetteStart, 0.001);
+                    vignetteFactor = saturate(vignetteFactor) * _VignetteIntensity;
+                }
+
+                // Apply darkening
+                finalColor.rgb *= (1.0 - vignetteFactor);
+
+                return finalColor;
             }
             ENDHLSL
         }

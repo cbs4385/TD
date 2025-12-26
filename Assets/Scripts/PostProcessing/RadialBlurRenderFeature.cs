@@ -64,6 +64,8 @@ namespace FaeMaze.PostProcessing
         private static readonly int BlurAngleDegreesID = Shader.PropertyToID("_BlurAngleDegrees");
         private static readonly int BlurIntensityID = Shader.PropertyToID("_BlurIntensity");
         private static readonly int BlurSamplesID = Shader.PropertyToID("_BlurSamples");
+        private static readonly int VignetteCoverageID = Shader.PropertyToID("_VignetteCoverage");
+        private static readonly int VignetteIntensityID = Shader.PropertyToID("_VignetteIntensity");
 
         public RadialBlurRenderPass(Material material)
         {
@@ -94,16 +96,20 @@ namespace FaeMaze.PostProcessing
             float angleValue = radialBlur.blurAngleDegrees.value;
             float intensityValue = radialBlur.blurIntensity.value;
             float samplesValue = radialBlur.blurSamples.value;
+            float vignetteCoverageValue = radialBlur.vignetteCoverage.value;
+            float vignetteIntensityValue = radialBlur.vignetteIntensity.value;
 
             material.SetFloat(BlurAngleDegreesID, angleValue);
             material.SetFloat(BlurIntensityID, intensityValue);
             material.SetFloat(BlurSamplesID, samplesValue);
+            material.SetFloat(VignetteCoverageID, vignetteCoverageValue);
+            material.SetFloat(VignetteIntensityID, vignetteIntensityValue);
 
             // Verify what was actually set
             float verifyAngle = material.GetFloat(BlurAngleDegreesID);
             float verifyIntensity = material.GetFloat(BlurIntensityID);
 
-            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Set angle={angleValue}, intensity={intensityValue}, samples={samplesValue}");
+            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Set angle={angleValue}, intensity={intensityValue}, samples={samplesValue}, vignette={vignetteCoverageValue}/{vignetteIntensityValue}");
 
             // Get source texture
             TextureHandle source = resourceData.activeColorTexture;

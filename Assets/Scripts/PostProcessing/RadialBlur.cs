@@ -19,6 +19,12 @@ namespace FaeMaze.PostProcessing
         [Tooltip("Number of blur samples (higher = better quality, lower performance)")]
         public ClampedIntParameter blurSamples = new ClampedIntParameter(8, 4, 16);
 
+        [Tooltip("Vignette coverage as percentage (0-100). Higher values = more screen darkening.")]
+        public ClampedFloatParameter vignetteCoverage = new ClampedFloatParameter(0f, 0f, 100f);
+
+        [Tooltip("Vignette darkness intensity (0-1). Higher values = darker vignette.")]
+        public ClampedFloatParameter vignetteIntensity = new ClampedFloatParameter(0.8f, 0f, 1f);
+
         public bool IsActive() => enabled.value;
 
         public bool IsTileCompatible() => false;
