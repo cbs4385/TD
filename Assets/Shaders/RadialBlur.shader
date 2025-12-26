@@ -19,7 +19,7 @@ Shader "Hidden/PostProcess/RadialBlur"
             Name "RadialBlur"
 
             HLSLPROGRAM
-            #pragma vertex Vert
+            #pragma vertex VertDefault
             #pragma fragment Frag
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
