@@ -3,6 +3,7 @@ using UnityEngine;
 using FaeMaze.Maze;
 using FaeMaze.UI;
 using FaeMaze.Visitors;
+using UnityEngine.Rendering;
 
 namespace FaeMaze.Systems
 {
@@ -62,6 +63,9 @@ namespace FaeMaze.Systems
         private static int? persistentEssence;
 
         private const string ParticleLayerObjectName = "ThinParticleLayer";
+        private const float ParticleLayerDepth = 5f;
+        private ParticleSystem thinParticleSystem;
+        private ParticleSystemRenderer thinParticleRenderer;
 
         #endregion
 
@@ -167,6 +171,8 @@ namespace FaeMaze.Systems
 
             // Create pathfinder once grid is registered
             pathfinder = new MazePathfinder(mazeGrid);
+
+            UpdateThinParticleLayerToMaze();
         }
 
         /// <summary>
@@ -332,24 +338,18 @@ namespace FaeMaze.Systems
         {
             if (GameObject.Find(ParticleLayerObjectName) != null)
             {
+                thinParticleSystem = GameObject.Find(ParticleLayerObjectName).GetComponent<ParticleSystem>();
+                thinParticleRenderer = thinParticleSystem != null ? thinParticleSystem.GetComponent<ParticleSystemRenderer>() : null;
+                ApplyThinParticleLighting();
+                UpdateThinParticleLayerToMaze();
                 return;
             }
 
-            Vector3 minBounds = Vector3.zero;
-            Vector3 maxBounds = new Vector3(1f, 1f, -5f);
-            Vector3 center = (minBounds + maxBounds) * 0.5f;
-            Vector3 size = new Vector3(
-                Mathf.Abs(maxBounds.x - minBounds.x),
-                Mathf.Abs(maxBounds.y - minBounds.y),
-                Mathf.Abs(maxBounds.z - minBounds.z)
-            );
-
             GameObject layerObject = new GameObject(ParticleLayerObjectName);
             layerObject.transform.SetParent(transform, false);
-            layerObject.transform.position = center;
 
-            ParticleSystem particleSystem = layerObject.AddComponent<ParticleSystem>();
-            var main = particleSystem.main;
+            thinParticleSystem = layerObject.AddComponent<ParticleSystem>();
+            var main = thinParticleSystem.main;
             main.loop = true;
             main.playOnAwake = true;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
@@ -358,15 +358,88 @@ namespace FaeMaze.Systems
             main.startSize = 0.025f;
             main.maxParticles = 300;
 
-            var emission = particleSystem.emission;
+            var emission = thinParticleSystem.emission;
             emission.rateOverTime = 60f;
 
-            var shape = particleSystem.shape;
+            var shape = thinParticleSystem.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = size;
 
-            var renderer = particleSystem.GetComponent<ParticleSystemRenderer>();
-            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            thinParticleRenderer = thinParticleSystem.GetComponent<ParticleSystemRenderer>();
+            thinParticleRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+            ApplyThinParticleLighting();
+
+            UpdateThinParticleLayerToMaze();
+        }
+
+        private void UpdateThinParticleLayerToMaze()
+        {
+            if (thinParticleSystem == null)
+            {
+                return;
+            }
+
+            float tileSize = 1f;
+            var gridBehaviour = FindObjectOfType<MazeGridBehaviour>();
+            if (gridBehaviour != null)
+            {
+                tileSize = Mathf.Max(0.01f, gridBehaviour.TileSize);
+            }
+
+            Vector3 origin = mazeOrigin != null ? mazeOrigin.position : Vector3.zero;
+            Vector3 minBounds = origin;
+            Vector3 maxBounds = origin + new Vector3(
+                (mazeGrid != null ? mazeGrid.Width : 1) * tileSize,
+                (mazeGrid != null ? mazeGrid.Height : 1) * tileSize,
+                -ParticleLayerDepth
+            );
+
+            UpdateThinParticleLayerBounds(minBounds, maxBounds);
+        }
+
+        private void UpdateThinParticleLayerBounds(Vector3 minBounds, Vector3 maxBounds)
+        {
+            if (thinParticleSystem == null)
+            {
+                return;
+            }
+
+            Vector3 center = (minBounds + maxBounds) * 0.5f;
+            Vector3 size = new Vector3(
+                Mathf.Abs(maxBounds.x - minBounds.x),
+                Mathf.Abs(maxBounds.y - minBounds.y),
+                Mathf.Abs(maxBounds.z - minBounds.z)
+            );
+
+            thinParticleSystem.transform.position = center;
+
+            var shape = thinParticleSystem.shape;
+            shape.scale = size;
+        }
+
+        private void ApplyThinParticleLighting()
+        {
+            if (thinParticleRenderer == null)
+            {
+                return;
+            }
+
+            thinParticleRenderer.receiveShadows = true;
+            thinParticleRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            thinParticleRenderer.lightProbeUsage = LightProbeUsage.BlendProbes;
+            thinParticleRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+
+            Shader litParticleShader = Shader.Find("Particles/Standard Surface");
+            if (litParticleShader != null)
+            {
+                if (thinParticleRenderer.sharedMaterial == null || thinParticleRenderer.sharedMaterial.shader != litParticleShader)
+                {
+                    var material = new Material(litParticleShader)
+                    {
+                        color = Color.white
+                    };
+                    thinParticleRenderer.sharedMaterial = material;
+                }
+            }
         }
 
         public static void ResetPersistentEssence()
