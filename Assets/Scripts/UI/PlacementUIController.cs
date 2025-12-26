@@ -266,7 +266,7 @@ namespace FaeMaze.UI
             }
             else
             {
-                ConfigureCanvasForCamera(canvas);
+                ConfigureCanvasForCamera(canvas, false);
             }
 
             // Create the build panel
@@ -309,7 +309,7 @@ namespace FaeMaze.UI
             canvasObj.transform.SetParent(transform, false);
 
             Canvas canvas = canvasObj.AddComponent<Canvas>();
-            ConfigureCanvasForCamera(canvas);
+            ConfigureCanvasForCamera(canvas, true);
 
             CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -320,9 +320,15 @@ namespace FaeMaze.UI
             return canvas;
         }
 
-        private void ConfigureCanvasForCamera(Canvas canvas)
+        private void ConfigureCanvasForCamera(Canvas canvas, bool forceCameraMode)
         {
             if (canvas == null)
+            {
+                return;
+            }
+
+            bool preserveExistingOverlay = !forceCameraMode && canvas.renderMode == RenderMode.ScreenSpaceOverlay;
+            if (preserveExistingOverlay)
             {
                 return;
             }
