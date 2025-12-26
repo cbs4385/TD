@@ -15,7 +15,28 @@ Shader "Hidden/PostProcess/RadialBlur"
             #pragma fragment Frag
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+
+            struct Attributes
+            {
+                uint vertexID : SV_VertexID;
+            };
+
+            struct Varyings
+            {
+                float4 positionHCS : SV_POSITION;
+                float2 texcoord : TEXCOORD0;
+            };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionHCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                output.texcoord = GetFullScreenTriangleTexCoord(input.vertexID);
+                return output;
+            }
+
+            TEXTURE2D_X(_BlitTexture);
+            SAMPLER(sampler_LinearClamp);
 
             float _ClearRadiusPercent;  // Clear radius as percentage (80 = center 80% is clear, outer 20% is blurred)
             float _BlurIntensity;       // Intensity of the blur effect
