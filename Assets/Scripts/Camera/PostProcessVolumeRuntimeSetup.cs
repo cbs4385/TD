@@ -36,17 +36,20 @@ namespace FaeMaze.Cameras
             {
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Volume already exists");
 
-                // Ensure DepthOfField component exists in profile
+                // Depth of Field disabled - not needed for gameplay visibility
+                // If you want background blur, uncomment and adjust aperture to 32 or higher for subtle effect
+                /*
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<DepthOfField>(out var existingDof))
                 {
                     existingDof = existingVolume.profile.Add<DepthOfField>(true);
                     existingDof.mode.value = DepthOfFieldMode.Bokeh;
-                    existingDof.focusDistance.value = 5f; // Focus closer to camera
-                    existingDof.aperture.value = 0.1f; // Extremely low aperture for strong blur
+                    existingDof.focusDistance.value = 5f;
+                    existingDof.aperture.value = 32f; // Higher aperture = less blur
                     existingDof.focalLength.value = 50f;
                     existingDof.bladeCount.value = 6;
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) with extreme blur settings");
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) with subtle blur");
                 }
+                */
 
                 // Add Vignette for edge darkening/blur effect
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
@@ -100,17 +103,20 @@ namespace FaeMaze.Cameras
             volume.priority = 1;
             volume.profile = profile;
 
-            // Ensure DepthOfField component exists in profile
+            // Depth of Field disabled - not needed for gameplay visibility
+            // If you want background blur, uncomment and adjust aperture to 32 or higher for subtle effect
+            /*
             if (!profile.TryGet<DepthOfField>(out var newDof))
             {
                 newDof = profile.Add<DepthOfField>(true);
                 newDof.mode.value = DepthOfFieldMode.Bokeh;
-                newDof.focusDistance.value = 5f; // Focus closer to camera
-                newDof.aperture.value = 0.1f; // Extremely low aperture for strong blur
+                newDof.focusDistance.value = 5f;
+                newDof.aperture.value = 32f; // Higher aperture = less blur
                 newDof.focalLength.value = 50f;
                 newDof.bladeCount.value = 6;
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) with extreme blur settings");
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) with subtle blur");
             }
+            */
 
             // Add Vignette for edge darkening/blur effect
             if (!profile.TryGet<Vignette>(out var newVignette))
@@ -171,9 +177,9 @@ namespace FaeMaze.Cameras
             var radialBlur = profile.Add<RadialBlur>(true);
             if (radialBlur != null)
             {
-                // Set properties directly - vignette effect with 85% clear center
+                // Set properties directly - vignette effect with 95% clear center
                 radialBlur.enabled.value = true;
-                radialBlur.clearRadiusPercent.value = 85f;  // Center 85% is clear, outer 15% is blurred
+                radialBlur.clearRadiusPercent.value = 95f;  // Center 95% is clear, only outer 5% is blurred
                 radialBlur.blurIntensity.value = 0.8f;
                 radialBlur.blurSamples.value = 12;
 

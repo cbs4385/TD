@@ -49,7 +49,7 @@ namespace FaeMaze.Editor
             radialBlur.enabled.value = true;
             radialBlur.enabled.overrideState = true;
 
-            radialBlur.clearRadiusPercent.value = 85f;  // Center 85% is clear, outer 15% is blurred
+            radialBlur.clearRadiusPercent.value = 95f;  // Center 95% is clear, only outer 5% is blurred
             radialBlur.clearRadiusPercent.overrideState = true;
 
             radialBlur.blurIntensity.value = 0.8f;  // Strong blur
@@ -64,7 +64,7 @@ namespace FaeMaze.Editor
 
             Debug.Log($"[AddRadialBlurToVolume] Successfully added RadialBlur to profile at {path}");
             Debug.Log("  - enabled: true");
-            Debug.Log("  - clearRadiusPercent: 85 (center 85% is clear, outer 15% is blurred)");
+            Debug.Log("  - clearRadiusPercent: 95 (center 95% is clear, only outer 5% is blurred)");
             Debug.Log("  - blurIntensity: 0.8");
             Debug.Log("  - blurSamples: 12");
 
