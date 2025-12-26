@@ -136,13 +136,20 @@ namespace FaeMaze.PostProcessing
         // Unity 6 / URP 17 RenderGraph API
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
-            if (material == null || radialBlur == null || !radialBlur.IsActive())
+            if (material == null)
                 return;
 
             var resourceData = frameData.Get<UniversalResourceData>();
             var cameraData = frameData.Get<UniversalCameraData>();
 
             if (cameraData.cameraType != CameraType.Game)
+                return;
+
+            // Get RadialBlur component from volume stack
+            var stack = VolumeManager.instance.stack;
+            var radialBlur = stack.GetComponent<RadialBlur>();
+
+            if (radialBlur == null || !radialBlur.IsActive())
                 return;
 
             // Set shader properties
