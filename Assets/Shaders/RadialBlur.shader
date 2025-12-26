@@ -27,8 +27,10 @@ Shader "Hidden/PostProcess/RadialBlur"
             // Try to pull in the URP Blit bindings when available; fall back to locally
             // declaring the texture/sampler if the include is missing in the installed
             // package version.
-            #if defined(UNITY_SHADER_INCLUDE_TEST) && UNITY_SHADER_INCLUDE_TEST(Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl)
-                #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl"
+            #if defined(UNITY_SHADER_INCLUDE_TEST)
+                #if UNITY_SHADER_INCLUDE_TEST("Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl")
+                    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Blit.hlsl"
+                #endif
             #endif
 
             #if !defined(UNIVERSAL_BLIT_INCLUDED)
