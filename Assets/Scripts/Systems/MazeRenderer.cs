@@ -175,8 +175,8 @@ namespace FaeMaze.Systems
             if (tilesParent == null)
             {
                 tilesContainer = new GameObject("MazeTiles");
-                tilesContainer.transform.SetParent(transform);
-                tilesContainer.transform.localPosition = Vector3.zero;
+                tilesContainer.transform.SetParent(transform.parent); // Set parent to same level as MazeOrigin
+                tilesContainer.transform.position = mazeGridBehaviour.transform.position; // Align with MazeOrigin
                 tilesParent = tilesContainer.transform;
             }
 
