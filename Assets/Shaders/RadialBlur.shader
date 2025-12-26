@@ -1,11 +1,5 @@
 Shader "Hidden/PostProcess/RadialBlur"
 {
-    Properties
-    {
-        // Texture populated by URP's Blitter during custom render passes
-        _BlitTexture ("Texture", 2D) = "white" {}
-    }
-
     SubShader
     {
         Tags { "RenderType"="Opaque" "RenderPipeline"="UniversalPipeline" }
@@ -22,6 +16,10 @@ Shader "Hidden/PostProcess/RadialBlur"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+
+            // Source color provided by URP's Blitter
+            TEXTURE2D_X(_BlitTexture);
+            SAMPLER(sampler_BlitTexture);
 
             float _ClearRadiusPercent;  // Clear radius as percentage (80 = center 80% is clear, outer 20% is blurred)
             float _BlurIntensity;       // Intensity of the blur effect
@@ -45,7 +43,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                 // If within the clear radius, return original pixel
                 if (distanceFromCenter < clearRadius)
                 {
-                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
+                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_BlitTexture, uv);
                 }
 
                 // Calculate blur amount based on distance from clear radius
@@ -77,7 +75,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                         float2 sampleUV = uv + sampleOffset;
 
                         float weight = 1.0;
-                        color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, sampleUV) * weight;
+                        color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_BlitTexture, sampleUV) * weight;
                         totalWeight += weight;
                     }
                 }
