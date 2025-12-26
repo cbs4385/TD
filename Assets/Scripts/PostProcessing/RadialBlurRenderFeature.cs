@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering.RenderGraphModule;
 using System;
 using System.Reflection;
 
@@ -130,6 +131,72 @@ namespace FaeMaze.PostProcessing
 
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
+        }
+
+        // Unity 6 / URP 17 RenderGraph API
+        public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
+        {
+            if (material == null || radialBlur == null || !radialBlur.IsActive())
+                return;
+
+            var resourceData = frameData.Get<UniversalResourceData>();
+            var cameraData = frameData.Get<UniversalCameraData>();
+
+            if (cameraData.cameraType != CameraType.Game)
+                return;
+
+            // Set shader properties
+            material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
+            material.SetFloat(BlurIntensityID, radialBlur.blurIntensity.value);
+            material.SetFloat(BlurSamplesID, radialBlur.blurSamples.value);
+
+            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph executing with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}");
+
+            // Create pass data
+            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Radial Blur", out var passData, profilingSampler))
+            {
+                passData.material = material;
+
+                // Get source texture
+                TextureHandle source = resourceData.activeColorTexture;
+
+                // Create temporary texture
+                RenderTextureDescriptor descriptor = cameraData.cameraTargetDescriptor;
+                descriptor.depthBufferBits = 0;
+
+                TextureHandle tempTexture = UniversalRenderer.CreateRenderGraphTexture(renderGraph, descriptor, "_TempRadialBlur", false);
+
+                // Set textures as readable/writable
+                passData.source = builder.UseTexture(source, AccessFlags.Read);
+                passData.tempTexture = builder.UseTexture(tempTexture, AccessFlags.ReadWrite);
+                builder.SetRenderAttachment(tempTexture, 0);
+
+                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                {
+                    // Blit from source to temp with radial blur
+                    Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), data.material, 0);
+                });
+
+                // Second pass: blit back to source
+                using (var builder2 = renderGraph.AddRasterRenderPass<PassData>("Radial Blur Blit Back", out var passData2, profilingSampler))
+                {
+                    passData2.material = material;
+                    passData2.source = builder2.UseTexture(tempTexture, AccessFlags.Read);
+                    builder2.SetRenderAttachment(source, 0);
+
+                    builder2.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                    {
+                        Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), null, 0);
+                    });
+                }
+            }
+        }
+
+        private class PassData
+        {
+            public Material material;
+            public TextureHandle source;
+            public TextureHandle tempTexture;
         }
 
         public void Dispose()
