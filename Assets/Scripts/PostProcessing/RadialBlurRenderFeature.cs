@@ -127,6 +127,10 @@ namespace FaeMaze.PostProcessing
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
                     Debug.Log($"[RadialBlurRenderPass] RenderFunc executing: material={data.material != null}, source valid={data.source.IsValid()}");
+
+                    // CRITICAL FIX: Explicitly set the source texture to _MainTex
+                    data.material.SetTexture("_MainTex", data.source);
+
                     // Apply radial blur from source to destination
                     Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), data.material, 0);
                     Debug.Log("[RadialBlurRenderPass] RenderFunc: Blit completed");
