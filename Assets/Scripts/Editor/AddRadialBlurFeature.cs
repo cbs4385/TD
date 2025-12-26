@@ -15,20 +15,13 @@ namespace FaeMaze.Editor
         [MenuItem("FaeMaze/Add Radial Blur Render Feature")]
         public static void AddFeature()
         {
-            // Find the Renderer2D asset
-            string[] guids = AssetDatabase.FindAssets("t:UniversalRendererData Renderer2D");
-            if (guids.Length == 0)
-            {
-                Debug.LogError("[AddRadialBlurFeature] Could not find Renderer2D asset");
-                return;
-            }
-
-            string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+            // Load the Renderer2D asset directly
+            string path = "Assets/Settings/Renderer2D.asset";
             var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(path);
 
             if (rendererData == null)
             {
-                Debug.LogError("[AddRadialBlurFeature] Could not load Renderer2D asset");
+                Debug.LogError("[AddRadialBlurFeature] Could not load Renderer2D asset at " + path);
                 return;
             }
 
@@ -102,20 +95,13 @@ namespace FaeMaze.Editor
         [MenuItem("FaeMaze/Remove Radial Blur Render Feature")]
         public static void RemoveFeature()
         {
-            // Find the Renderer2D asset
-            string[] guids = AssetDatabase.FindAssets("t:UniversalRendererData Renderer2D");
-            if (guids.Length == 0)
-            {
-                Debug.LogError("[RemoveRadialBlurFeature] Could not find Renderer2D asset");
-                return;
-            }
-
-            string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+            // Load the Renderer2D asset directly
+            string path = "Assets/Settings/Renderer2D.asset";
             var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(path);
 
             if (rendererData == null)
             {
-                Debug.LogError("[RemoveRadialBlurFeature] Could not load Renderer2D asset");
+                Debug.LogError("[RemoveRadialBlurFeature] Could not load Renderer2D asset at " + path);
                 return;
             }
 
