@@ -51,7 +51,11 @@ namespace FaeMaze.Editor
         {
             GameObject canvasObj = new GameObject("Canvas");
             Canvas canvas = canvasObj.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            Camera uiCamera = Camera.main;
+
+            canvas.renderMode = uiCamera != null ? RenderMode.ScreenSpaceCamera : RenderMode.ScreenSpaceOverlay;
+            canvas.worldCamera = uiCamera;
+            canvas.planeDistance = Mathf.Max(canvas.planeDistance, 1f);
 
             CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;

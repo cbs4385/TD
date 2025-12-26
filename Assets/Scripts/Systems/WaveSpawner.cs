@@ -677,7 +677,6 @@ namespace FaeMaze.Systems
                 {
                     GameObject canvasObj = new GameObject("WaveSpawnerCanvas");
                     uiCanvas = canvasObj.AddComponent<Canvas>();
-                    uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
 
                     CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
                     scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -686,6 +685,8 @@ namespace FaeMaze.Systems
                     canvasObj.AddComponent<GraphicRaycaster>();
                 }
             }
+
+            ConfigureCanvasForCamera(uiCanvas);
 
             // Create panel container - positioned at TOP MIDDLE
             uiPanel = new GameObject("WaveInfoPanel");
@@ -759,6 +760,24 @@ namespace FaeMaze.Systems
             visitorCountText.alignment = TextAlignmentOptions.Center;
             visitorCountText.text = "Visitors: 0/0 (Active: 0)";
 
+        }
+
+        private void ConfigureCanvasForCamera(Canvas canvas)
+        {
+            if (canvas == null)
+            {
+                return;
+            }
+
+            Camera uiCamera = Camera.main;
+            if (uiCamera == null)
+            {
+                uiCamera = FindFirstObjectByType<Camera>();
+            }
+
+            canvas.renderMode = uiCamera != null ? RenderMode.ScreenSpaceCamera : RenderMode.ScreenSpaceOverlay;
+            canvas.worldCamera = uiCamera;
+            canvas.planeDistance = Mathf.Max(canvas.planeDistance, 1f);
         }
 
         /// <summary>
