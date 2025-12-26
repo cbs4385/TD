@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 using FaeMaze.Cameras;
+using FaeMaze.Systems;
 
 namespace FaeMaze.HeartPowers
 {
@@ -70,11 +71,6 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Enable keyboard shortcuts (1-7)")]
         private bool enableKeyboardShortcuts = true;
 
-        [Header("Targeting Mode UI")]
-        [SerializeField]
-        [Tooltip("Text element for displaying targeting instructions (optional)")]
-        private TextMeshProUGUI targetingInstructionText;
-
         #endregion
 
         #region Private Fields
@@ -82,16 +78,6 @@ namespace FaeMaze.HeartPowers
         private Dictionary<HeartPowerType, Button> powerButtons = new Dictionary<HeartPowerType, Button>();
         private Dictionary<HeartPowerType, TextMeshProUGUI> cooldownTexts = new Dictionary<HeartPowerType, TextMeshProUGUI>();
         private Camera mainCamera;
-
-        // Targeting mode state
-        private bool isTargetingMode = false;
-        private HeartPowerType? pendingPowerType = null;
-
-        /// <summary>
-        /// Public property to check if Heart Power targeting is currently active.
-        /// Other systems should check this before handling mouse clicks.
-        /// </summary>
-        public bool IsTargetingActive => isTargetingMode;
 
         #endregion
 

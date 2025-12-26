@@ -105,16 +105,6 @@ namespace FaeMaze.UI
 
         private Camera mainCamera;
 
-        // Targeting mode state
-        private bool isTargetingMode = false;
-        private HeartPowerType? pendingPowerType = null;
-
-        /// <summary>
-        /// Public property to check if Heart Power targeting is currently active.
-        /// Other systems should check this before handling mouse clicks.
-        /// </summary>
-        public bool IsTargetingActive => isTargetingMode;
-
         #endregion
 
         #region Unity Lifecycle
@@ -805,16 +795,9 @@ namespace FaeMaze.UI
 
         /// <summary>
         /// Toggles the panel visibility.
-        /// Cancels targeting mode if active to avoid stuck state.
         /// </summary>
         private void TogglePanel()
         {
-            // Cancel any active targeting mode
-            if (isTargetingMode)
-            {
-                ExitTargetingMode(cancelled: true);
-            }
-
             if (heartPowersPanel != null)
             {
                 bool newState = !heartPowersPanel.activeSelf;
