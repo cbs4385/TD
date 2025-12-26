@@ -46,7 +46,7 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Z offset for light position to illuminate tile surface")]
-        private float lightZOffset = -2.5f;
+        private float lightZOffset = -0.5f;
 
         #endregion
 
