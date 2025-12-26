@@ -7,7 +7,7 @@ using FaeMaze.PostProcessing;
 namespace FaeMaze.Editor
 {
     /// <summary>
-    /// Editor utility to programmatically add RadialBlurRenderFeature to Renderer2D
+    /// Editor utility to programmatically add RadialBlurRenderFeature to ForwardRenderer3D
     /// This bypasses the UI dropdown issue in Unity 6
     /// </summary>
     public static class AddRadialBlurFeature
@@ -15,13 +15,13 @@ namespace FaeMaze.Editor
         [MenuItem("FaeMaze/Add Radial Blur Render Feature")]
         public static void AddFeature()
         {
-            // Load the Renderer2D asset directly
-            string path = "Assets/Settings/Renderer2D.asset";
+            // Load the ForwardRenderer3D asset directly
+            string path = "Assets/Settings/ForwardRenderer3D.asset";
             var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(path);
 
             if (rendererData == null)
             {
-                Debug.LogError("[AddRadialBlurFeature] Could not load Renderer2D asset at " + path);
+                Debug.LogError("[AddRadialBlurFeature] Could not load ForwardRenderer3D asset at " + path);
                 return;
             }
 
@@ -32,7 +32,7 @@ namespace FaeMaze.Editor
 
             if (existingFeature != null)
             {
-                Debug.LogWarning("[AddRadialBlurFeature] RadialBlurRenderFeature already exists on Renderer2D");
+                Debug.LogWarning("[AddRadialBlurRenderFeature] RadialBlurRenderFeature already exists on ForwardRenderer3D");
                 Selection.activeObject = existingFeature;
                 return;
             }
@@ -88,20 +88,20 @@ namespace FaeMaze.Editor
             string assetPath = AssetDatabase.GetAssetPath(rendererData);
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
 
-            Debug.Log($"[AddRadialBlurFeature] Successfully added RadialBlurRenderFeature to Renderer2D at {assetPath}");
+            Debug.Log($"[AddRadialBlurFeature] Successfully added RadialBlurRenderFeature to ForwardRenderer3D at {assetPath}");
             Selection.activeObject = feature;
         }
 
         [MenuItem("FaeMaze/Remove Radial Blur Render Feature")]
         public static void RemoveFeature()
         {
-            // Load the Renderer2D asset directly
-            string path = "Assets/Settings/Renderer2D.asset";
+            // Load the ForwardRenderer3D asset directly
+            string path = "Assets/Settings/ForwardRenderer3D.asset";
             var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(path);
 
             if (rendererData == null)
             {
-                Debug.LogError("[RemoveRadialBlurFeature] Could not load Renderer2D asset at " + path);
+                Debug.LogError("[RemoveRadialBlurFeature] Could not load ForwardRenderer3D asset at " + path);
                 return;
             }
 
@@ -112,7 +112,7 @@ namespace FaeMaze.Editor
 
             if (feature == null)
             {
-                Debug.LogWarning("[RemoveRadialBlurFeature] RadialBlurRenderFeature not found on Renderer2D");
+                Debug.LogWarning("[RemoveRadialBlurFeature] RadialBlurRenderFeature not found on ForwardRenderer3D");
                 return;
             }
 
@@ -136,7 +136,7 @@ namespace FaeMaze.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log("[RemoveRadialBlurFeature] Successfully removed RadialBlurRenderFeature from Renderer2D");
+            Debug.Log("[RemoveRadialBlurFeature] Successfully removed RadialBlurRenderFeature from ForwardRenderer3D");
         }
     }
 }
