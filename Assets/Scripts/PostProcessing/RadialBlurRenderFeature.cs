@@ -115,34 +115,21 @@ namespace FaeMaze.PostProcessing
         // Unity 6 / URP 17 RenderGraph API
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
-            Debug.Log("[RadialBlurRenderPass] RecordRenderGraph called");
-
             if (material == null)
-            {
-                Debug.LogWarning("[RadialBlurRenderPass] RecordRenderGraph: material is null");
                 return;
-            }
 
             var resourceData = frameData.Get<UniversalResourceData>();
             var cameraData = frameData.Get<UniversalCameraData>();
 
             if (cameraData.cameraType != CameraType.Game)
-            {
-                Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: skipping non-Game camera");
                 return;
-            }
 
             // Get RadialBlur component from volume stack
             var stack = VolumeManager.instance.stack;
             var radialBlur = stack.GetComponent<RadialBlur>();
 
             if (radialBlur == null || !radialBlur.IsActive())
-            {
-                Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: RadialBlur is null or inactive");
                 return;
-            }
-
-            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Executing blur with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}");
 
             // Set shader properties
             material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
