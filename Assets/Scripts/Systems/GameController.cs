@@ -127,6 +127,8 @@ namespace FaeMaze.Systems
                 configuredStartingEssence = startingEssence;
             }
 
+            configuredStartingEssence = Mathf.Max(startingEssence, configuredStartingEssence);
+            GameSettings.StartingEssence = configuredStartingEssence;
             startingEssence = configuredStartingEssence;
 
             if (!persistentEssence.HasValue)
@@ -424,7 +426,7 @@ namespace FaeMaze.Systems
             }
 
             thinParticleRenderer.receiveShadows = true;
-            thinParticleRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            thinParticleRenderer.shadowCastingMode = ShadowCastingMode.On;
             thinParticleRenderer.lightProbeUsage = LightProbeUsage.BlendProbes;
             thinParticleRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
 
@@ -439,6 +441,12 @@ namespace FaeMaze.Systems
                     };
                     thinParticleRenderer.sharedMaterial = material;
                 }
+
+                var material = thinParticleRenderer.sharedMaterial;
+                material.DisableKeyword("_EMISSION");
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+                material.SetColor("_EmissionColor", Color.black);
+                material.renderQueue = (int)RenderQueue.Transparent;
             }
         }
 
