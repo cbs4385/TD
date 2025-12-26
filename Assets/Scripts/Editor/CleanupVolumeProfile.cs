@@ -10,7 +10,7 @@ namespace FaeMaze.Editor
     /// </summary>
     public static class CleanupVolumeProfile
     {
-        [MenuItem("FaeMaze/Cleanup Volume Profile (Remove Blur Effects)")]
+        [MenuItem("FaeMaze/Cleanup Volume Profile (Remove Blur and Dark Effects)")]
         public static void CleanupProfile()
         {
             // Find the PostProcessingProfile asset
@@ -49,6 +49,14 @@ namespace FaeMaze.Editor
                 modified = true;
             }
 
+            // Remove Vignette if it exists (can make scene too dark)
+            if (profile.TryGet<Vignette>(out var vignette))
+            {
+                profile.Remove<Vignette>();
+                Debug.Log("[CleanupVolumeProfile] Removed Vignette component");
+                modified = true;
+            }
+
             if (modified)
             {
                 // Mark asset as dirty and save
@@ -60,7 +68,7 @@ namespace FaeMaze.Editor
             }
             else
             {
-                Debug.Log("[CleanupVolumeProfile] No blur effects found in profile - nothing to clean up");
+                Debug.Log("[CleanupVolumeProfile] No problematic effects found in profile - nothing to clean up");
             }
 
             Selection.activeObject = profile;

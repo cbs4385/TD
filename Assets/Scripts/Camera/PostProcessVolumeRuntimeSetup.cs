@@ -51,15 +51,18 @@ namespace FaeMaze.Cameras
                 }
                 */
 
-                // Add Vignette for edge darkening/blur effect
+                // Vignette disabled - making scene too dark
+                // If you want subtle edge darkening, uncomment and adjust intensity to 0.1-0.15 for very subtle effect
+                /*
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
                 {
                     existingVignette = existingVolume.profile.Add<Vignette>(true);
-                    existingVignette.intensity.value = 0.35f; // Moderate darkening at edges
+                    existingVignette.intensity.value = 0.15f; // Very subtle darkening at edges
                     existingVignette.smoothness.value = 0.4f; // Smooth falloff
                     existingVignette.rounded.value = false; // Not rounded for better coverage
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
                 }
+                */
 
                 // RadialBlur disabled - causing white screen issue
                 // TryAddRadialBlur(existingVolume.profile);
@@ -118,15 +121,18 @@ namespace FaeMaze.Cameras
             }
             */
 
-            // Add Vignette for edge darkening/blur effect
+            // Vignette disabled - making scene too dark
+            // If you want subtle edge darkening, uncomment and adjust intensity to 0.1-0.15 for very subtle effect
+            /*
             if (!profile.TryGet<Vignette>(out var newVignette))
             {
                 newVignette = profile.Add<Vignette>(true);
-                newVignette.intensity.value = 0.35f; // Moderate darkening at edges
+                newVignette.intensity.value = 0.15f; // Very subtle darkening at edges
                 newVignette.smoothness.value = 0.4f; // Smooth falloff
                 newVignette.rounded.value = false; // Not rounded for better coverage
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
             }
+            */
 
             // RadialBlur disabled - causing white screen issue
             // TryAddRadialBlur(profile);
