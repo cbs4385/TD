@@ -40,8 +40,11 @@ namespace FaeMaze.Cameras
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
                 {
                     existingVignette = existingVolume.profile.Add<Vignette>(true);
+                    existingVignette.intensity.overrideState = true;
                     existingVignette.intensity.value = 0.35f; // Moderate darkening at edges
+                    existingVignette.smoothness.overrideState = true;
                     existingVignette.smoothness.value = 0.4f; // Smooth falloff
+                    existingVignette.rounded.overrideState = true;
                     existingVignette.rounded.value = false; // Not rounded for better coverage
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
                 }
@@ -85,8 +88,11 @@ namespace FaeMaze.Cameras
             if (!profile.TryGet<Vignette>(out var newVignette))
             {
                 newVignette = profile.Add<Vignette>(true);
+                newVignette.intensity.overrideState = true;
                 newVignette.intensity.value = 0.35f; // Moderate darkening at edges
+                newVignette.smoothness.overrideState = true;
                 newVignette.smoothness.value = 0.4f; // Smooth falloff
+                newVignette.rounded.overrideState = true;
                 newVignette.rounded.value = false; // Not rounded for better coverage
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
             }
@@ -137,10 +143,17 @@ namespace FaeMaze.Cameras
             var radialBlur = profile.Add<RadialBlur>(true);
             if (radialBlur != null)
             {
-                // Set properties directly
+                // Set properties with override states
+                radialBlur.enabled.overrideState = true;
                 radialBlur.enabled.value = false;  // Disable RadialBlur for now
+
+                radialBlur.blurAngleDegrees.overrideState = true;
                 radialBlur.blurAngleDegrees.value = 75f;  // 75% of screen is clear
+
+                radialBlur.blurIntensity.overrideState = true;
                 radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
+
+                radialBlur.blurSamples.overrideState = true;
                 radialBlur.blurSamples.value = 8;
 
                 Debug.Log($"[PostProcessVolumeRuntimeSetup] Added RadialBlur component: clearRadius={radialBlur.blurAngleDegrees.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}, enabled={radialBlur.enabled.value}");
