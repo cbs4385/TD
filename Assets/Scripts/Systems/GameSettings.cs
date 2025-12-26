@@ -142,7 +142,7 @@ namespace FaeMaze.Systems
 
         public static int StartingEssence
         {
-            get => PlayerPrefs.GetInt("StartingEssence", 100);
+            get => PlayerPrefs.GetInt("StartingEssence", 200);
             set => PlayerPrefs.SetInt("StartingEssence", Mathf.Max(0, value));
         }
 

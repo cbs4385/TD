@@ -49,7 +49,7 @@ namespace FaeMaze.Systems
         [Header("Essence Settings")]
         [SerializeField]
         [Tooltip("Essence amount the player starts with when the game begins")]
-        private int startingEssence = 100;
+        private int startingEssence = 200;
 
         #endregion
 
@@ -59,6 +59,9 @@ namespace FaeMaze.Systems
         private MazePathfinder pathfinder;
         private int currentEssence;
         private VisitorController lastSpawnedVisitor;
+        private static int? persistentEssence;
+
+        private const string ParticleLayerObjectName = "ThinParticleLayer";
 
         #endregion
 
@@ -114,7 +117,22 @@ namespace FaeMaze.Systems
 
             _instance = this;
 
-            currentEssence = Mathf.Max(0, startingEssence);
+            int configuredStartingEssence = GameSettings.StartingEssence;
+            if (configuredStartingEssence <= 0)
+            {
+                configuredStartingEssence = startingEssence;
+            }
+
+            startingEssence = configuredStartingEssence;
+
+            if (!persistentEssence.HasValue)
+            {
+                persistentEssence = Mathf.Max(0, configuredStartingEssence);
+            }
+
+            currentEssence = Mathf.Max(0, persistentEssence.Value);
+
+            EnsureThinParticleLayer();
 
         }
 
@@ -209,6 +227,8 @@ namespace FaeMaze.Systems
 
             currentEssence += amount;
 
+            persistentEssence = currentEssence;
+
             // Invoke event for essence change
             OnEssenceChanged?.Invoke(currentEssence);
         }
@@ -228,6 +248,8 @@ namespace FaeMaze.Systems
             if (currentEssence >= cost)
             {
                 currentEssence -= cost;
+
+                persistentEssence = currentEssence;
 
                 // Invoke event for essence change
                 OnEssenceChanged?.Invoke(currentEssence);
@@ -304,6 +326,60 @@ namespace FaeMaze.Systems
         private void EnsureResourcesUI()
         {
             EnsureUIComponent<FaeMaze.UI.PlayerResourcesUIController>("PlayerResourcesUI");
+        }
+
+        private void EnsureThinParticleLayer()
+        {
+            if (GameObject.Find(ParticleLayerObjectName) != null)
+            {
+                return;
+            }
+
+            Vector3 minBounds = Vector3.zero;
+            Vector3 maxBounds = new Vector3(1f, 1f, -5f);
+            Vector3 center = (minBounds + maxBounds) * 0.5f;
+            Vector3 size = new Vector3(
+                Mathf.Abs(maxBounds.x - minBounds.x),
+                Mathf.Abs(maxBounds.y - minBounds.y),
+                Mathf.Abs(maxBounds.z - minBounds.z)
+            );
+
+            GameObject layerObject = new GameObject(ParticleLayerObjectName);
+            layerObject.transform.SetParent(transform, false);
+            layerObject.transform.position = center;
+
+            ParticleSystem particleSystem = layerObject.AddComponent<ParticleSystem>();
+            var main = particleSystem.main;
+            main.loop = true;
+            main.playOnAwake = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startLifetime = 1.5f;
+            main.startSpeed = 0.1f;
+            main.startSize = 0.025f;
+            main.maxParticles = 300;
+
+            var emission = particleSystem.emission;
+            emission.rateOverTime = 60f;
+
+            var shape = particleSystem.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = size;
+
+            var renderer = particleSystem.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        }
+
+        public static void ResetPersistentEssence()
+        {
+            persistentEssence = null;
+        }
+
+        private void OnDestroy()
+        {
+            if (_instance == this)
+            {
+                persistentEssence = currentEssence;
+            }
         }
 
         #endregion

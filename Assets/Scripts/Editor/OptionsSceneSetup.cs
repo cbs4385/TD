@@ -145,7 +145,7 @@ namespace FaeMaze.Editor
             var (flowSection, flowContent) = CreateCollapsibleSection("FlowSection", contentObj.transform, "GAME FLOW");
             Toggle autoStartToggle = SceneSetupUtilities.CreateToggle(flowContent, "Auto-Start Next Wave", false);
             var (autoDelaySlider, autoDelayText) = SceneSetupUtilities.CreateSliderWithLabel(flowContent, "Auto-Start Delay (s)", 0f, 10f, 2f);
-            var (essenceSlider, essenceText) = SceneSetupUtilities.CreateSliderWithLabel(flowContent, "Starting Essence", 0f, 1000f, 100f);
+            var (essenceSlider, essenceText) = SceneSetupUtilities.CreateSliderWithLabel(flowContent, "Starting Essence", 0f, 1000f, 200f);
 
             // Wire up OptionsManager references using SerializedObject
             SerializedObject optionsManagerSO = new SerializedObject(optionsManager);

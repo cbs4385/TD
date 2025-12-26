@@ -520,6 +520,7 @@ namespace FaeMaze.Systems
         public void RestartGame()
         {
             ResetPersistentWaveProgress();
+            GameController.ResetPersistentEssence();
 
             // Invoke restart event
             OnGameRestart?.Invoke();
@@ -536,6 +537,7 @@ namespace FaeMaze.Systems
         public void LoadMainMenu()
         {
             ResetPersistentWaveProgress();
+            GameController.ResetPersistentEssence();
 
             // Try to load "MainMenu" scene, fall back to current scene reload if not found
             try
