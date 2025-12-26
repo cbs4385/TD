@@ -24,7 +24,8 @@ Shader "Hidden/PostProcess/RadialBlur"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
             TEXTURE2D_X(_BlitTexture);
-            SAMPLER(sampler_BlitTexture);
+            // URP's Blitter binds a linear clamp sampler named sampler_LinearClamp for _BlitTexture
+            SAMPLER(sampler_LinearClamp);
 
             float _ClearRadiusPercent;  // Clear radius as percentage (80 = center 80% is clear, outer 20% is blurred)
             float _BlurIntensity;       // Intensity of the blur effect
@@ -48,7 +49,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                 // If within the clear radius, return original pixel
                 if (distanceFromCenter < clearRadius)
                 {
-                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_BlitTexture, uv);
+                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
                 }
 
                 // Calculate blur amount based on distance from clear radius
@@ -80,7 +81,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                         float2 sampleUV = uv + sampleOffset;
 
                         float weight = 1.0;
-                        color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_BlitTexture, sampleUV) * weight;
+                        color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, sampleUV) * weight;
                         totalWeight += weight;
                     }
                 }
