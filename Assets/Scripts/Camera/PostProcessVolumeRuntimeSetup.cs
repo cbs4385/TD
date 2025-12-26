@@ -133,30 +133,47 @@ namespace FaeMaze.Cameras
                 return;
 
             // Check if RadialBlur already exists in profile
-            if (profile.TryGet<RadialBlur>(out var existingBlur))
+            RadialBlur radialBlur;
+            bool isNew = !profile.TryGet<RadialBlur>(out radialBlur);
+
+            if (!isNew)
             {
-                Debug.Log("[PostProcessVolumeRuntimeSetup] RadialBlur already exists in profile");
-                return;
+                Debug.Log("[PostProcessVolumeRuntimeSetup] RadialBlur already exists in profile, ensuring override states are set");
+            }
+            else
+            {
+                // Add RadialBlur component
+                radialBlur = profile.Add<RadialBlur>(true);
             }
 
-            // Add RadialBlur component
-            var radialBlur = profile.Add<RadialBlur>(true);
             if (radialBlur != null)
             {
-                // Set properties with override states
+                // Set properties with override states (whether new or existing)
                 radialBlur.enabled.overrideState = true;
-                radialBlur.enabled.value = false;  // Disable RadialBlur for now
+                if (isNew)
+                {
+                    radialBlur.enabled.value = false;  // Disable RadialBlur for new components
+                }
 
                 radialBlur.blurAngleDegrees.overrideState = true;
-                radialBlur.blurAngleDegrees.value = 85f;  // 85% of screen is clear - only blur outer 15%
+                if (isNew)
+                {
+                    radialBlur.blurAngleDegrees.value = 85f;  // 85% of screen is clear - only blur outer 15%
+                }
 
                 radialBlur.blurIntensity.overrideState = true;
-                radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
+                if (isNew)
+                {
+                    radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
+                }
 
                 radialBlur.blurSamples.overrideState = true;
-                radialBlur.blurSamples.value = 8;
+                if (isNew)
+                {
+                    radialBlur.blurSamples.value = 8;
+                }
 
-                Debug.Log($"[PostProcessVolumeRuntimeSetup] Added RadialBlur component: clearRadius={radialBlur.blurAngleDegrees.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}, enabled={radialBlur.enabled.value}");
+                Debug.Log($"[PostProcessVolumeRuntimeSetup] {(isNew ? "Added" : "Updated")} RadialBlur component: clearRadius={radialBlur.blurAngleDegrees.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}, enabled={radialBlur.enabled.value}");
             }
         }
     }
