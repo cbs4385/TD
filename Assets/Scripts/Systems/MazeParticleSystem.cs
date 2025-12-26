@@ -27,8 +27,8 @@ namespace FaeMaze.Systems
         private float particleSize = 0.08f;
 
         [SerializeField]
-        [Tooltip("Particle base color (should be near-black so particles only show when lit)")]
-        private Color particleColor = new Color(0.05f, 0.05f, 0.05f, 1f);
+        [Tooltip("Particle base color (white, brightness determined by lights)")]
+        private Color particleColor = new Color(1f, 1f, 1f, 0.8f);
 
         [SerializeField]
         [Tooltip("Minimum Z position (closest to camera)")]
@@ -152,44 +152,62 @@ namespace FaeMaze.Systems
                 }
                 else
                 {
-                    // Create lit material that responds to lights
-                    // Particles will only be visible when illuminated by nearby point lights
+                    // Create lit particle material that responds to 3D point lights
                     Material defaultMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Lit"));
                     if (defaultMat.shader == null || defaultMat.shader.name == "Hidden/InternalErrorShader")
                     {
-                        // Fallback to simple lit if particle lit shader not found
-                        defaultMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                        // Fallback to built-in lit particles
+                        defaultMat = new Material(Shader.Find("Particles/Standard Surface"));
                     }
 
-                    defaultMat.SetColor("_BaseColor", particleColor);
+                    // Set very dark base color so particles are barely visible when unlit
+                    defaultMat.SetColor("_BaseColor", new Color(0.05f, 0.05f, 0.05f, 1f));
 
-                    // Configure for proper lighting response
-                    defaultMat.SetFloat("_Smoothness", 0.2f);
-                    defaultMat.SetFloat("_Metallic", 0f);
+                    // Configure material to be highly responsive to lights
+                    if (defaultMat.HasProperty("_Smoothness"))
+                    {
+                        defaultMat.SetFloat("_Smoothness", 0.95f); // Very smooth for light reflection
+                    }
+                    if (defaultMat.HasProperty("_Metallic"))
+                    {
+                        defaultMat.SetFloat("_Metallic", 0.0f); // Non-metallic for better diffuse response
+                    }
 
-                    // Make particles additive/translucent so they blend with lights
+                    // Use transparent surface with additive blending
                     if (defaultMat.HasProperty("_Surface"))
                     {
                         defaultMat.SetFloat("_Surface", 1); // Transparent
                     }
                     if (defaultMat.HasProperty("_Blend"))
                     {
-                        defaultMat.SetFloat("_Blend", 0); // Alpha blend
+                        defaultMat.SetFloat("_Blend", 1); // Additive
+                    }
+                    if (defaultMat.HasProperty("_SrcBlend"))
+                    {
+                        defaultMat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                    }
+                    if (defaultMat.HasProperty("_DstBlend"))
+                    {
+                        defaultMat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One); // Additive
+                    }
+                    if (defaultMat.HasProperty("_ZWrite"))
+                    {
+                        defaultMat.SetFloat("_ZWrite", 0); // No depth write for transparent
                     }
 
                     defaultMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                    defaultMat.EnableKeyword("_ALPHABLEND_ON");
+                    defaultMat.EnableKeyword("_BLENDMODE_ADD");
                     defaultMat.renderQueue = 3000; // Transparent queue
 
                     particleRenderer.material = defaultMat;
                 }
 
-                // Enable receiving lights so particles are illuminated by nearby point lights
+                // Configure particle renderer for light interaction
                 particleRenderer.receiveShadows = false;
                 particleRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-                // Enable light probes for better lighting
-                particleRenderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.BlendProbes;
+                // Use vertex streams to allow lights to affect particles
+                particleRenderer.enableGPUInstancing = true;
             }
         }
 
