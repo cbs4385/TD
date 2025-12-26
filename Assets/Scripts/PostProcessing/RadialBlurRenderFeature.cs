@@ -115,21 +115,34 @@ namespace FaeMaze.PostProcessing
         // Unity 6 / URP 17 RenderGraph API
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
+            Debug.Log("[RadialBlurRenderPass] RecordRenderGraph called");
+
             if (material == null)
+            {
+                Debug.LogWarning("[RadialBlurRenderPass] RecordRenderGraph: material is null");
                 return;
+            }
 
             var resourceData = frameData.Get<UniversalResourceData>();
             var cameraData = frameData.Get<UniversalCameraData>();
 
             if (cameraData.cameraType != CameraType.Game)
+            {
+                Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: skipping non-Game camera");
                 return;
+            }
 
             // Get RadialBlur component from volume stack
             var stack = VolumeManager.instance.stack;
             var radialBlur = stack.GetComponent<RadialBlur>();
 
             if (radialBlur == null || !radialBlur.IsActive())
+            {
+                Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: RadialBlur is null or inactive");
                 return;
+            }
+
+            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Executing blur with angle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}");
 
             // Set shader properties
             material.SetFloat(BlurAngleDegreesID, radialBlur.blurAngleDegrees.value);
@@ -144,7 +157,7 @@ namespace FaeMaze.PostProcessing
             descriptor.depthBufferBits = 0;
             TextureHandle destination = UniversalRenderer.CreateRenderGraphTexture(renderGraph, descriptor, "_RadialBlurDest", false);
 
-            // Pass 1: Apply radial blur from source to destination
+            // Apply radial blur from source to destination
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("Radial Blur", out var passData, profilingSampler))
             {
                 passData.material = material;
@@ -160,20 +173,8 @@ namespace FaeMaze.PostProcessing
                 });
             }
 
-            // Pass 2: Copy the blurred result back to the camera color
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Copy Radial Blur Result", out var passData, profilingSampler))
-            {
-                passData.source = destination;
-
-                builder.UseTexture(destination, AccessFlags.Read);
-                builder.SetRenderAttachment(source, 0);
-
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
-                {
-                    // Copy blurred result back to source (simple copy, no material)
-                    Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), null, 0);
-                });
-            }
+            // Update the camera color to use the blurred result
+            resourceData.cameraColor = destination;
         }
 
         private class PassData
