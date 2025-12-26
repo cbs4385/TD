@@ -150,27 +150,26 @@ namespace FaeMaze.Cameras
             {
                 // Set properties with override states (whether new or existing)
                 radialBlur.enabled.overrideState = true;
+                radialBlur.blurAngleDegrees.overrideState = true;
+                radialBlur.blurIntensity.overrideState = true;
+                radialBlur.blurSamples.overrideState = true;
+
+                // Only set default values for new components
                 if (isNew)
                 {
                     radialBlur.enabled.value = false;  // Disable RadialBlur for new components
-                }
-
-                radialBlur.blurAngleDegrees.overrideState = true;
-                if (isNew)
-                {
                     radialBlur.blurAngleDegrees.value = 85f;  // 85% of screen is clear - only blur outer 15%
-                }
-
-                radialBlur.blurIntensity.overrideState = true;
-                if (isNew)
-                {
                     radialBlur.blurIntensity.value = 0.3f;    // Low intensity for subtle vignette
-                }
-
-                radialBlur.blurSamples.overrideState = true;
-                if (isNew)
-                {
                     radialBlur.blurSamples.value = 8;
+                }
+                else
+                {
+                    // For existing components, ensure values are reasonable (fix if 0)
+                    if (radialBlur.blurAngleDegrees.value < 1f)
+                    {
+                        radialBlur.blurAngleDegrees.value = 85f;
+                        Debug.Log("[PostProcessVolumeRuntimeSetup] Fixed RadialBlur angle from 0 to 85%");
+                    }
                 }
 
                 Debug.Log($"[PostProcessVolumeRuntimeSetup] {(isNew ? "Added" : "Updated")} RadialBlur component: clearRadius={radialBlur.blurAngleDegrees.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}, enabled={radialBlur.enabled.value}");
