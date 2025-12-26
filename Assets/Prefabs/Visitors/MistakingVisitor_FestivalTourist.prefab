@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5000000003}
   - component: {fileID: 5000000004}
   - component: {fileID: -7839346307179120839}
+  - component: {fileID: 5000000006}
   m_Layer: 0
   m_Name: MistakingVisitor_FestivalTourist
   m_TagString: Visitor
@@ -127,6 +128,24 @@ MonoBehaviour:
   maxLostDistance: 20
   misstepEnabled: 1
   debugMisstepGizmos: 0
+--- !u!114 &5000000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f7e9a2b8c4d1e6f9a0b3c5d7e8f1a2b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  enableGlow: 1
+  glowColor: {r: 0.9, g: 0.85, b: 1, a: 1}
+  glowRadius: 5
+  glowFrequency: 0.5
+  glowMinIntensity: 0.3
+  glowMaxIntensity: 0.6
 --- !u!1001 &8543076974471628864
 PrefabInstance:
   m_ObjectHideFlags: 0
