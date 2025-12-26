@@ -156,6 +156,16 @@ namespace FaeMaze.Cameras
             set => autoOrbit = value;
         }
 
+        /// <summary>
+        /// Gets the focal point transform (for third-person camera mode).
+        /// </summary>
+        public Transform FocalPointTransform => focalPointTransform;
+
+        /// <summary>
+        /// Gets the focal point position in world space.
+        /// </summary>
+        public Vector3 FocalPointPosition => focalPointTransform != null ? focalPointTransform.position : _focusPoint;
+
         #endregion
 
         #region Unity Lifecycle
@@ -595,8 +605,33 @@ namespace FaeMaze.Cameras
 
             Debug.Log($"[CameraController3D] Focal point initialized at {startPosition} with forward {facingDirection} and up {GetMazeUpDirection()}");
 
+            // Add pulsing lime green glow to the focal point
+            AddFocalPointGlow();
+
             _focusPoint = startPosition;
             focalPointInitialized = true;
+        }
+
+        private void AddFocalPointGlow()
+        {
+            if (focalPointTransform == null)
+            {
+                return;
+            }
+
+            // Check if glow already exists
+            FocalPointGlow existingGlow = focalPointTransform.GetComponent<FocalPointGlow>();
+            if (existingGlow != null)
+            {
+                return;
+            }
+
+            // Add the glow component
+            FocalPointGlow glow = focalPointTransform.gameObject.AddComponent<FocalPointGlow>();
+            glow.SetFocalPointTransform(focalPointTransform);
+            glow.SetMazeGridBehaviour(mazeGridBehaviour);
+
+            Debug.Log("[CameraController3D] Added pulsing lime green glow to focal point");
         }
 
         private void TryConfigureInitialFocalCameraPose()

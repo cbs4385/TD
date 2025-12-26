@@ -19,8 +19,8 @@ namespace FaeMaze.HeartPowers
         private HeartPowerManager heartPowerManager;
 
         [SerializeField]
-        [Tooltip("Reference to the Camera Focus Targeting system")]
-        private CameraFocusTargeting cameraFocusTargeting;
+        [Tooltip("Reference to the CameraController3D")]
+        private CameraController3D cameraController;
 
         [Header("Resource Display")]
         [SerializeField]
@@ -107,10 +107,10 @@ namespace FaeMaze.HeartPowers
                 heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
             }
 
-            // Find CameraFocusTargeting if not assigned
-            if (cameraFocusTargeting == null)
+            // Find CameraController3D if not assigned
+            if (cameraController == null)
             {
-                cameraFocusTargeting = FindFirstObjectByType<CameraFocusTargeting>();
+                cameraController = FindFirstObjectByType<CameraController3D>();
             }
 
             // Map buttons to power types
@@ -155,12 +155,6 @@ namespace FaeMaze.HeartPowers
 
         private void OnDisable()
         {
-            // Cancel targeting mode when UI is disabled to prevent stuck state
-            if (isTargetingMode)
-            {
-                ExitTargetingMode(cancelled: true);
-            }
-
             if (heartPowerManager != null)
             {
                 heartPowerManager.OnChargesChanged -= UpdateChargesDisplay;
@@ -226,19 +220,41 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Check if power requires targeting
-            bool isTargetedPower = IsTargetedPower(powerType);
+            // Get the focal point position from the camera controller
+            Vector3 targetPosition = GetFocalPointPosition();
 
-            if (isTargetedPower)
+            // All powers now activate at the focal point
+            bool success = heartPowerManager.TryActivatePower(powerType, targetPosition);
+
+            if (success)
             {
-                // Enter targeting mode - wait for player to click on the grid
-                EnterTargetingMode(powerType);
+                Debug.Log($"[HeartPowerUI] Activated {powerType} at focal point position {targetPosition}");
             }
             else
             {
-                // Non-targeted powers activate immediately
-                heartPowerManager.TryActivatePower(powerType);
+                heartPowerManager.CanActivatePower(powerType, out string reason);
+                Debug.Log($"[HeartPowerUI] Failed to activate {powerType}: {reason}");
             }
+        }
+
+        /// <summary>
+        /// Gets the focal point position from the camera controller.
+        /// Falls back to the Heart position if camera controller is not available.
+        /// </summary>
+        private Vector3 GetFocalPointPosition()
+        {
+            if (cameraController != null)
+            {
+                return cameraController.FocalPointPosition;
+            }
+
+            // Fallback to Heart position if camera controller is not available
+            if (GameController.Instance != null && GameController.Instance.Heart != null)
+            {
+                return GameController.Instance.Heart.transform.position;
+            }
+
+            return Vector3.zero;
         }
 
         #endregion
@@ -279,156 +295,15 @@ namespace FaeMaze.HeartPowers
 
         #endregion
 
-        #region Targeting Mode
-
-        /// <summary>
-        /// Checks if a power type requires targeting.
-        /// </summary>
-        private bool IsTargetedPower(HeartPowerType powerType)
-        {
-            return powerType == HeartPowerType.MurmuringPaths ||
-                   powerType == HeartPowerType.DreamSnare ||
-                   powerType == HeartPowerType.PukasBargain ||
-                   powerType == HeartPowerType.FeastwardPanic;
-        }
-
-        /// <summary>
-        /// Enters targeting mode for a power that requires targeting.
-        /// </summary>
-        private void EnterTargetingMode(HeartPowerType powerType)
-        {
-            // First check if power can be activated
-            if (!heartPowerManager.CanActivatePower(powerType, out string reason))
-            {
-                return;
-            }
-
-            isTargetingMode = true;
-            pendingPowerType = powerType;
-
-            // Show UI feedback if available
-            if (targetingInstructionText != null)
-            {
-                targetingInstructionText.text = $"Click on the map to target {powerType}\n(Press ESC to cancel)";
-                targetingInstructionText.gameObject.SetActive(true);
-            }
-
-        }
-
-        /// <summary>
-        /// Exits targeting mode without activating the power.
-        /// </summary>
-        private void ExitTargetingMode(bool cancelled = false)
-        {
-            if (isTargetingMode)
-            {
-                if (cancelled)
-                {
-                }
-
-                isTargetingMode = false;
-                pendingPowerType = null;
-
-                // Hide UI feedback if available
-                if (targetingInstructionText != null)
-                {
-                    targetingInstructionText.gameObject.SetActive(false);
-                }
-            }
-        }
+        #region Targeting Mode (Disabled - All powers now target focal point)
 
         /// <summary>
         /// Handles targeting mode input in the Update loop.
-        /// Listens for mouse clicks to select target position.
+        /// DISABLED: All powers now automatically target the focal point tile.
         /// </summary>
         private void HandleTargetingMode()
         {
-            if (!isTargetingMode || !pendingPowerType.HasValue)
-            {
-                return;
-            }
-
-            // Check for ESC key to cancel targeting
-            if (Input.GetKeyDown(KeyCode.Escape))
-            {
-                ExitTargetingMode(cancelled: true);
-                return;
-            }
-
-            // Use camera focus targeting instead of mouse clicks
-            if (cameraFocusTargeting != null)
-            {
-                // Check if a tile is focused
-                if (cameraFocusTargeting.TryGetFocusedTile(out Vector2Int gridPos, out Vector3 targetWorldPos))
-                {
-                    // Show visual feedback for valid/invalid target
-                    bool canActivate = heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
-                    if (canActivate)
-                    {
-                        cameraFocusTargeting.ShowValidTarget();
-                    }
-                    else
-                    {
-                        cameraFocusTargeting.ShowInvalidTarget();
-                    }
-
-                    // Check for spacebar or left mouse button to confirm targeting
-                    if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
-                    {
-                        // Try to activate the power at the focused tile
-                        bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
-
-                        if (success)
-                        {
-                            ExitTargetingMode(cancelled: false);
-                        }
-                        else
-                        {
-                            // Failed - keep in targeting mode but show feedback
-                        }
-                    }
-                }
-                else
-                {
-                    // No tile focused - show invalid state
-                    if (cameraFocusTargeting != null)
-                    {
-                        cameraFocusTargeting.ShowInvalidTarget();
-                    }
-                }
-            }
-            else
-            {
-                // Fallback to old mouse-based targeting if camera focus targeting is not available
-                if (Input.GetMouseButtonDown(0))
-                {
-                    Vector3 mouseWorldPos = GetMouseWorldPosition();
-
-                    if (heartPowerManager.MazeGrid == null)
-                    {
-                        ExitTargetingMode(cancelled: true);
-                        return;
-                    }
-
-                    if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
-                    {
-                        return;
-                    }
-
-                    Vector3 targetWorldPos = heartPowerManager.MazeGrid.GridToWorld(gridX, gridY);
-                    bool success = heartPowerManager.TryActivatePower(pendingPowerType.Value, targetWorldPos);
-
-                    if (success)
-                    {
-                        ExitTargetingMode(cancelled: false);
-                    }
-                    else
-                    {
-                        heartPowerManager.CanActivatePower(pendingPowerType.Value, out string reason);
-                        ExitTargetingMode(cancelled: true);
-                    }
-                }
-            }
+            // No-op: Targeting mode is disabled. All powers now automatically target the focal point.
         }
 
         #endregion
