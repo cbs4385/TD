@@ -9,7 +9,7 @@ namespace FaeMaze.Cameras
 {
     /// <summary>
     /// Automatically sets up PostProcessVolume when any scene loads
-    /// This ensures depth of field effect is always available
+    /// This ensures vignette and radial blur effects are available
     /// </summary>
     public static class PostProcessVolumeRuntimeSetup
     {
@@ -36,19 +36,14 @@ namespace FaeMaze.Cameras
             {
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Volume already exists");
 
-                // Ensure DepthOfField component exists in profile
-                if (existingVolume.profile != null && !existingVolume.profile.TryGet<DepthOfField>(out var existingDof))
+                // Disable DepthOfField if it exists
+                if (existingVolume.profile != null && existingVolume.profile.TryGet<DepthOfField>(out var existingDof))
                 {
-                    existingDof = existingVolume.profile.Add<DepthOfField>(true);
-                    existingDof.mode.value = DepthOfFieldMode.Bokeh;
-                    existingDof.focusDistance.value = 5f; // Focus closer to camera
-                    existingDof.aperture.value = 0.1f; // Extremely low aperture for strong blur
-                    existingDof.focalLength.value = 50f;
-                    existingDof.bladeCount.value = 6;
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) with extreme blur settings");
+                    existingDof.active = false;
+                    Debug.Log("[PostProcessVolumeRuntimeSetup] Disabled DepthOfField effect");
                 }
 
-                // Add Vignette for edge darkening/blur effect
+                // Add Vignette for edge darkening effect
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
                 {
                     existingVignette = existingVolume.profile.Add<Vignette>(true);
@@ -58,15 +53,8 @@ namespace FaeMaze.Cameras
                     Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
                 }
 
-                // Add RadialBlur for angle-based edge blur (using reflection to avoid compile-time dependency)
+                // Add RadialBlur for angle-based edge blur
                 TryAddRadialBlur(existingVolume.profile);
-
-                // Ensure it has the controller
-                if (existingVolume.GetComponent<CameraDepthOfFieldController>() == null)
-                {
-                    existingVolume.gameObject.AddComponent<CameraDepthOfFieldController>();
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added CameraDepthOfFieldController");
-                }
                 return;
             }
 
@@ -100,19 +88,14 @@ namespace FaeMaze.Cameras
             volume.priority = 1;
             volume.profile = profile;
 
-            // Ensure DepthOfField component exists in profile
-            if (!profile.TryGet<DepthOfField>(out var newDof))
+            // Disable DepthOfField if it exists in the profile
+            if (profile.TryGet<DepthOfField>(out var existingDof))
             {
-                newDof = profile.Add<DepthOfField>(true);
-                newDof.mode.value = DepthOfFieldMode.Bokeh;
-                newDof.focusDistance.value = 5f; // Focus closer to camera
-                newDof.aperture.value = 0.1f; // Extremely low aperture for strong blur
-                newDof.focalLength.value = 50f;
-                newDof.bladeCount.value = 6;
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Added DepthOfField (Bokeh mode) with extreme blur settings");
+                existingDof.active = false;
+                Debug.Log("[PostProcessVolumeRuntimeSetup] Disabled DepthOfField effect in profile");
             }
 
-            // Add Vignette for edge darkening/blur effect
+            // Add Vignette for edge darkening effect
             if (!profile.TryGet<Vignette>(out var newVignette))
             {
                 newVignette = profile.Add<Vignette>(true);
@@ -122,13 +105,10 @@ namespace FaeMaze.Cameras
                 Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
             }
 
-            // Add RadialBlur for angle-based edge blur (using reflection to avoid compile-time dependency)
+            // Add RadialBlur for angle-based edge blur
             TryAddRadialBlur(profile);
 
-            // Add controller
-            volumeObject.AddComponent<CameraDepthOfFieldController>();
-
-            Debug.Log("[PostProcessVolumeRuntimeSetup] Created PostProcessVolume with depth of field");
+            Debug.Log("[PostProcessVolumeRuntimeSetup] Created PostProcessVolume with vignette effects");
         }
 
         private static void EnableCameraPostProcessing()
