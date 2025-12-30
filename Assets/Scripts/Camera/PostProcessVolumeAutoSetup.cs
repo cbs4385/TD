@@ -29,7 +29,6 @@ namespace FaeMaze.Cameras
             Volume existingVolume = FindFirstObjectByType<Volume>();
             if (existingVolume != null)
             {
-                Debug.Log("[PostProcessVolumeAutoSetup] Volume already exists, skipping setup");
                 return;
             }
 
@@ -47,7 +46,6 @@ namespace FaeMaze.Cameras
                     {
                         string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]);
                         profile = UnityEditor.AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
-                        Debug.Log($"[PostProcessVolumeAutoSetup] Found profile at {path}");
                     }
                     #endif
                 }
@@ -55,7 +53,6 @@ namespace FaeMaze.Cameras
 
             if (profile == null)
             {
-                Debug.LogError("[PostProcessVolumeAutoSetup] Could not find PostProcessingProfile. Please assign it in the inspector.");
                 return;
             }
 
@@ -68,7 +65,6 @@ namespace FaeMaze.Cameras
             volume.priority = 1;
             volume.profile = profile;
 
-            Debug.Log("[PostProcessVolumeAutoSetup] Created and configured PostProcessVolume");
 
             // Verify Main Camera has post-processing enabled
             Camera mainCamera = Camera.main;
@@ -79,7 +75,6 @@ namespace FaeMaze.Cameras
                 {
                     if (!cameraData.renderPostProcessing)
                     {
-                        Debug.LogWarning("[PostProcessVolumeAutoSetup] Post-processing is disabled on Main Camera. Please enable it in the camera settings.");
                     }
                 }
             }

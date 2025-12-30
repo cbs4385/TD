@@ -22,11 +22,9 @@ namespace FaeMaze.PostProcessing
 
         public override void Create()
         {
-            Debug.Log($"[RadialBlurRenderFeature] Create() called, shader={settings.shader?.name ?? "null"}");
 
             if (settings.shader == null)
             {
-                Debug.LogWarning("[RadialBlurRenderFeature] Shader is not assigned");
                 return;
             }
 
@@ -34,7 +32,6 @@ namespace FaeMaze.PostProcessing
             renderPass = new RadialBlurRenderPass(material);
             renderPass.renderPassEvent = settings.renderPassEvent;
 
-            Debug.Log($"[RadialBlurRenderFeature] Created material and render pass successfully, event={settings.renderPassEvent}");
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
@@ -109,7 +106,6 @@ namespace FaeMaze.PostProcessing
             float verifyAngle = material.GetFloat(BlurAngleDegreesID);
             float verifyIntensity = material.GetFloat(BlurIntensityID);
 
-            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Set angle={angleValue}, intensity={intensityValue}, samples={samplesValue}, vignette={vignetteCoverageValue}/{vignetteIntensityValue}");
 
             // Get source texture
             TextureHandle source = resourceData.activeColorTexture;
@@ -119,7 +115,6 @@ namespace FaeMaze.PostProcessing
             descriptor.depthBufferBits = 0;
             TextureHandle destination = UniversalRenderer.CreateRenderGraphTexture(renderGraph, descriptor, "_RadialBlurDest", false);
 
-            Debug.Log($"[RadialBlurRenderPass] RecordRenderGraph: Created textures, source valid={source.IsValid()}, dest valid={destination.IsValid()}");
 
             // Apply radial blur from source to destination
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("Radial Blur", out var passData, profilingSampler))
@@ -132,21 +127,17 @@ namespace FaeMaze.PostProcessing
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
-                    Debug.Log($"[RadialBlurRenderPass] RenderFunc executing: material={data.material != null}, source valid={data.source.IsValid()}");
 
                     // CRITICAL FIX: Explicitly set the source texture to _MainTex
                     data.material.SetTexture("_MainTex", data.source);
 
                     // Apply radial blur from source to destination
                     Blitter.BlitTexture(context.cmd, data.source, new Vector4(1, 1, 0, 0), data.material, 0);
-                    Debug.Log("[RadialBlurRenderPass] RenderFunc: Blit completed");
                 });
             }
 
-            Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: Updating cameraColor to destination");
             // Update the camera color to use the blurred result
             resourceData.cameraColor = destination;
-            Debug.Log("[RadialBlurRenderPass] RecordRenderGraph: Complete");
         }
 
         private class PassData

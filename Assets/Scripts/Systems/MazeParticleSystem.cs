@@ -81,7 +81,6 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour == null)
             {
-                Debug.LogWarning("[MazeParticleSystem] MazeGridBehaviour not found. Particle system may not cover the correct area.");
                 return;
             }
 
@@ -243,7 +242,6 @@ namespace FaeMaze.Systems
             var shape = particleSystemComponent.shape;
             shape.scale = new Vector3(worldWidth, worldHeight, zDepth);
 
-            Debug.Log($"[MazeParticleSystem] Configured particle system for maze of size {width}x{height} (world: {worldWidth}x{worldHeight}), Z-depth: {minZ} to {maxZ}");
         }
 
         #endregion

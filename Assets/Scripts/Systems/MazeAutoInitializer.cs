@@ -49,7 +49,6 @@ namespace FaeMaze.Systems
             // Position at world origin
             particleSystemObj.transform.position = Vector3.zero;
 
-            Debug.Log("[MazeAutoInitializer] Created MazeParticleSystem");
         }
 
         private static void SetupCamera(MazeGridBehaviour mazeGrid)

@@ -22,7 +22,6 @@ namespace FaeMaze.Editor
         {
             SetupScene(FAE_MAZE_SCENE);
             SetupScene(PROCEDURAL_MAZE_SCENE);
-            Debug.Log("[PostProcessVolumeSetup] All scenes configured successfully!");
         }
 
         [MenuItem("FaeMaze/Setup Post-Processing/Setup Current Scene")]
@@ -31,14 +30,12 @@ namespace FaeMaze.Editor
             var activeScene = EditorSceneManager.GetActiveScene();
             if (!activeScene.IsValid())
             {
-                Debug.LogError("[PostProcessVolumeSetup] No active scene found");
                 return;
             }
 
             SetupSceneInternal(activeScene);
             EditorSceneManager.MarkSceneDirty(activeScene);
             EditorSceneManager.SaveScene(activeScene);
-            Debug.Log($"[PostProcessVolumeSetup] Scene '{activeScene.name}' configured successfully!");
         }
 
         private static void SetupScene(string scenePath)
@@ -54,7 +51,6 @@ namespace FaeMaze.Editor
             var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(PROFILE_PATH);
             if (profile == null)
             {
-                Debug.LogError($"[PostProcessVolumeSetup] Could not find profile at {PROFILE_PATH}");
                 return;
             }
 
@@ -67,12 +63,10 @@ namespace FaeMaze.Editor
                 // Create new volume GameObject
                 volumeObject = new GameObject("PostProcessVolume");
                 volume = volumeObject.AddComponent<Volume>();
-                Debug.Log($"[PostProcessVolumeSetup] Created new PostProcessVolume in {scene.name}");
             }
             else
             {
                 volumeObject = volume.gameObject;
-                Debug.Log($"[PostProcessVolumeSetup] Found existing PostProcessVolume in {scene.name}");
             }
 
             // Configure volume
@@ -88,16 +82,13 @@ namespace FaeMaze.Editor
                 if (cameraData != null)
                 {
                     cameraData.renderPostProcessing = true;
-                    Debug.Log($"[PostProcessVolumeSetup] Enabled post-processing on Main Camera in {scene.name}");
                 }
                 else
                 {
-                    Debug.LogWarning($"[PostProcessVolumeSetup] Main Camera in {scene.name} does not have URP camera data");
                 }
             }
             else
             {
-                Debug.LogWarning($"[PostProcessVolumeSetup] Could not find Main Camera in {scene.name}");
             }
         }
     }

@@ -21,7 +21,6 @@ namespace FaeMaze.Editor
 
             if (rendererData == null)
             {
-                Debug.LogError("[AddRadialBlurFeature] Could not load ForwardRenderer3D asset at " + path);
                 return;
             }
 
@@ -32,7 +31,6 @@ namespace FaeMaze.Editor
 
             if (existingFeature != null)
             {
-                Debug.LogWarning("[AddRadialBlurRenderFeature] RadialBlurRenderFeature already exists on ForwardRenderer3D");
                 Selection.activeObject = existingFeature;
                 return;
             }
@@ -41,7 +39,6 @@ namespace FaeMaze.Editor
             Shader radialBlurShader = Shader.Find("Hidden/PostProcess/RadialBlur");
             if (radialBlurShader == null)
             {
-                Debug.LogError("[AddRadialBlurFeature] Could not find RadialBlur shader. Make sure 'Hidden/PostProcess/RadialBlur' shader exists.");
                 return;
             }
 
@@ -67,7 +64,6 @@ namespace FaeMaze.Editor
             // Apply the changes to the serialized object
             serializedRenderer.ApplyModifiedProperties();
 
-            Debug.Log($"[AddRadialBlurFeature] Added feature to list, count={rendererFeaturesProperty.arraySize}");
 
             // Trigger OnValidate to rebuild internal state
             var onValidateMethod = typeof(UniversalRendererData).GetMethod("OnValidate",
@@ -75,7 +71,6 @@ namespace FaeMaze.Editor
             if (onValidateMethod != null)
             {
                 onValidateMethod.Invoke(rendererData, null);
-                Debug.Log("[AddRadialBlurFeature] Called OnValidate on renderer data");
             }
 
             // Mark assets as dirty and save
@@ -88,7 +83,6 @@ namespace FaeMaze.Editor
             string assetPath = AssetDatabase.GetAssetPath(rendererData);
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
 
-            Debug.Log($"[AddRadialBlurFeature] Successfully added RadialBlurRenderFeature to ForwardRenderer3D at {assetPath}");
             Selection.activeObject = feature;
         }
 
@@ -101,7 +95,6 @@ namespace FaeMaze.Editor
 
             if (rendererData == null)
             {
-                Debug.LogError("[RemoveRadialBlurFeature] Could not load ForwardRenderer3D asset at " + path);
                 return;
             }
 
@@ -112,7 +105,6 @@ namespace FaeMaze.Editor
 
             if (feature == null)
             {
-                Debug.LogWarning("[RemoveRadialBlurFeature] RadialBlurRenderFeature not found on ForwardRenderer3D");
                 return;
             }
 
@@ -136,7 +128,6 @@ namespace FaeMaze.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log("[RemoveRadialBlurFeature] Successfully removed RadialBlurRenderFeature from ForwardRenderer3D");
         }
     }
 }

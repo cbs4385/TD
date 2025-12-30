@@ -22,7 +22,6 @@ namespace FaeMaze.Systems
             MazeParticleSystem existingParticleSystem = FindFirstObjectByType<MazeParticleSystem>();
             if (existingParticleSystem != null)
             {
-                Debug.Log("[MazeParticleSystemSpawner] MazeParticleSystem already exists in scene");
                 return; // Already exists, don't create another
             }
 
@@ -33,7 +32,6 @@ namespace FaeMaze.Systems
             // Position at world origin
             particleSystemObj.transform.position = Vector3.zero;
 
-            Debug.Log("[MazeParticleSystemSpawner] Created MazeParticleSystem");
         }
     }
 }

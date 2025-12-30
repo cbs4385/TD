@@ -34,8 +34,6 @@ namespace FaeMaze.Cameras
             Volume existingVolume = UnityEngine.Object.FindFirstObjectByType<Volume>();
             if (existingVolume != null)
             {
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Volume already exists");
-
                 // Add Vignette for edge darkening effect
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
                 {
@@ -46,7 +44,6 @@ namespace FaeMaze.Cameras
                     existingVignette.smoothness.value = 0.4f; // Smooth falloff
                     existingVignette.rounded.overrideState = true;
                     existingVignette.rounded.value = false; // Not rounded for better coverage
-                    Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to existing profile");
                 }
 
                 // Add RadialBlur for angle-based edge blur
@@ -71,7 +68,6 @@ namespace FaeMaze.Cameras
 
             if (profile == null)
             {
-                Debug.LogWarning("[PostProcessVolumeRuntimeSetup] Could not find PostProcessingProfile");
                 return;
             }
 
@@ -94,13 +90,10 @@ namespace FaeMaze.Cameras
                 newVignette.smoothness.value = 0.4f; // Smooth falloff
                 newVignette.rounded.overrideState = true;
                 newVignette.rounded.value = false; // Not rounded for better coverage
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Added Vignette component to profile");
             }
 
             // Add RadialBlur for angle-based edge blur
             TryAddRadialBlur(profile);
-
-            Debug.Log("[PostProcessVolumeRuntimeSetup] Created PostProcessVolume with vignette effects");
         }
 
         private static void EnableCameraPostProcessing()
@@ -114,12 +107,7 @@ namespace FaeMaze.Cameras
                     if (!cameraData.renderPostProcessing)
                     {
                         cameraData.renderPostProcessing = true;
-                        Debug.Log("[PostProcessVolumeRuntimeSetup] Enabled post-processing on Main Camera");
                     }
-                }
-                else
-                {
-                    Debug.LogWarning("[PostProcessVolumeRuntimeSetup] Main Camera does not have URP camera data");
                 }
             }
         }
@@ -136,11 +124,7 @@ namespace FaeMaze.Cameras
             RadialBlur radialBlur;
             bool isNew = !profile.TryGet<RadialBlur>(out radialBlur);
 
-            if (!isNew)
-            {
-                Debug.Log("[PostProcessVolumeRuntimeSetup] RadialBlur already exists in profile, ensuring override states are set");
-            }
-            else
+            if (isNew)
             {
                 // Add RadialBlur component
                 radialBlur = profile.Add<RadialBlur>(true);
@@ -168,11 +152,8 @@ namespace FaeMaze.Cameras
                     if (radialBlur.blurAngleDegrees.value < 1f)
                     {
                         radialBlur.blurAngleDegrees.value = 85f;
-                        Debug.Log("[PostProcessVolumeRuntimeSetup] Fixed RadialBlur angle from 0 to 85%");
                     }
                 }
-
-                Debug.Log($"[PostProcessVolumeRuntimeSetup] {(isNew ? "Added" : "Updated")} RadialBlur component: clearRadius={radialBlur.blurAngleDegrees.value}%, intensity={radialBlur.blurIntensity.value}, samples={radialBlur.blurSamples.value}, enabled={radialBlur.enabled.value}");
             }
         }
     }

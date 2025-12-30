@@ -75,7 +75,6 @@ namespace FaeMaze.Systems
 
             if (globalVolume == null)
             {
-                Debug.LogError("[EssenceBlurController] No global volume found! Blur effects will not work.");
                 enabled = false;
                 return;
             }
@@ -83,7 +82,6 @@ namespace FaeMaze.Systems
             // Get RadialBlur component from volume
             if (!globalVolume.profile.TryGet(out radialBlur))
             {
-                Debug.LogError("[EssenceBlurController] RadialBlur component not found in volume profile!");
                 enabled = false;
                 return;
             }
@@ -94,7 +92,6 @@ namespace FaeMaze.Systems
                 radialBlur.blurIntensity.value = 1.0f;
                 if (debugLog)
                 {
-                    Debug.Log("[EssenceBlurController] Maximized blur intensity to 1.0");
                 }
             }
 
@@ -103,7 +100,6 @@ namespace FaeMaze.Systems
                 radialBlur.blurSamples.value = 16;
                 if (debugLog)
                 {
-                    Debug.Log("[EssenceBlurController] Maximized blur samples to 16");
                 }
             }
 
@@ -115,7 +111,6 @@ namespace FaeMaze.Systems
 
             if (debugLog)
             {
-                Debug.Log("[EssenceBlurController] Initialized successfully");
             }
         }
 
@@ -157,7 +152,6 @@ namespace FaeMaze.Systems
 
                     if (debugLog)
                     {
-                        Debug.Log($"[EssenceBlurController] Essence decayed by {decayAmount}. New value: {gameController.CurrentEssence}");
                     }
                 }
             }
@@ -187,7 +181,6 @@ namespace FaeMaze.Systems
 
             if (debugLog && Time.frameCount % 60 == 0) // Log every 60 frames to avoid spam
             {
-                Debug.Log($"[EssenceBlurController] Essence: {currentEssence}, Clear Area: {clearAreaPercentage:F1}%, Vignette Coverage: {vignetteCoveragePercentage:F1}%");
             }
         }
 

@@ -603,7 +603,6 @@ namespace FaeMaze.Cameras
                 startPosition,
                 Quaternion.LookRotation(facingDirection, GetMazeUpDirection()));
 
-            Debug.Log($"[CameraController3D] Focal point initialized at {startPosition} with forward {facingDirection} and up {GetMazeUpDirection()}");
 
             // Add pulsing lime green glow to the focal point
             AddFocalPointGlow();
@@ -631,7 +630,6 @@ namespace FaeMaze.Cameras
             glow.SetFocalPointTransform(focalPointTransform);
             glow.SetMazeGridBehaviour(mazeGridBehaviour);
 
-            Debug.Log("[CameraController3D] Added pulsing lime green glow to focal point");
         }
 
         private void TryConfigureInitialFocalCameraPose()
@@ -658,7 +656,6 @@ namespace FaeMaze.Cameras
             Vector3 euler = transform.rotation.eulerAngles;
             euler.z = 0f;
             transform.rotation = Quaternion.Euler(euler);
-            Debug.Log($"[CameraController3D] Initial focal camera pose -> position: {transform.position}, lookTarget: {focalPointTransform.position}, forward: {facingDirection}, up: {worldUp}, euler: {euler}");
 
             focalFollowDistance = 3f;
             focalHeightOffset = -3f;
@@ -762,7 +759,6 @@ namespace FaeMaze.Cameras
                 Vector3 euler = transform.rotation.eulerAngles;
                 if (Mathf.Abs(euler.z) > 1f && Mathf.Abs(euler.z - 360f) > 1f)
                 {
-                    Debug.Log($"[CameraController3D] Focal follow roll detected -> rollZ: {euler.z:F2}, pos: {transform.position}, forward: {forward}, up: {worldUp}, offset: {offset}");
                 }
             }
         }
@@ -788,7 +784,6 @@ namespace FaeMaze.Cameras
                 if (!loggedMazeUpFlip)
                 {
                     loggedMazeUpFlip = true;
-                    Debug.Log($"[CameraController3D] Maze up vector flipped toward +Z: {mazeUp}");
                 }
             }
 

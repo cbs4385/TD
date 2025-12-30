@@ -18,7 +18,6 @@ namespace FaeMaze.Editor
 
             if (guids.Length == 0)
             {
-                Debug.LogError("[AddRadialBlurToVolume] Could not find PostProcessingProfile. Please create a VolumeProfile asset first.");
                 return;
             }
 
@@ -27,17 +26,12 @@ namespace FaeMaze.Editor
 
             if (profile == null)
             {
-                Debug.LogError($"[AddRadialBlurToVolume] Could not load VolumeProfile at {path}");
                 return;
             }
 
             // Check if RadialBlur already exists
             if (profile.TryGet<RadialBlur>(out var existingBlur))
             {
-                Debug.LogWarning($"[AddRadialBlurToVolume] RadialBlur already exists in profile at {path}");
-                Debug.Log($"  - enabled: {existingBlur.enabled.value}");
-                Debug.Log($"  - blurAngleDegrees: {existingBlur.blurAngleDegrees.value}");
-                Debug.Log($"  - blurIntensity: {existingBlur.blurIntensity.value}");
                 Selection.activeObject = profile;
                 return;
             }
@@ -62,11 +56,6 @@ namespace FaeMaze.Editor
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssetIfDirty(profile);
 
-            Debug.Log($"[AddRadialBlurToVolume] Successfully added RadialBlur to profile at {path}");
-            Debug.Log("  - enabled: true");
-            Debug.Log("  - blurAngleDegrees: 10 (center 10% is clear)");
-            Debug.Log("  - blurIntensity: 0.8");
-            Debug.Log("  - blurSamples: 12");
 
             Selection.activeObject = profile;
         }
@@ -79,7 +68,6 @@ namespace FaeMaze.Editor
 
             if (guids.Length == 0)
             {
-                Debug.LogError("[RemoveRadialBlurFromVolume] Could not find PostProcessingProfile.");
                 return;
             }
 
@@ -88,14 +76,12 @@ namespace FaeMaze.Editor
 
             if (profile == null)
             {
-                Debug.LogError($"[RemoveRadialBlurFromVolume] Could not load VolumeProfile at {path}");
                 return;
             }
 
             // Check if RadialBlur exists
             if (!profile.TryGet<RadialBlur>(out var radialBlur))
             {
-                Debug.LogWarning($"[RemoveRadialBlurFromVolume] RadialBlur not found in profile at {path}");
                 return;
             }
 
@@ -106,7 +92,6 @@ namespace FaeMaze.Editor
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssetIfDirty(profile);
 
-            Debug.Log($"[RemoveRadialBlurFromVolume] Successfully removed RadialBlur from profile at {path}");
         }
     }
 }

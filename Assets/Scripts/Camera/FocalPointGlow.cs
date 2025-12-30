@@ -118,7 +118,6 @@ namespace FaeMaze.Cameras
             // Disable shadows for performance
             glowLight.shadows = LightShadows.None;
 
-            Debug.Log("[FocalPointGlow] 3D point light created with lime green color");
         }
 
         #endregion
