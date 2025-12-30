@@ -11,6 +11,7 @@ namespace FaeMaze.HeartPowers
         FeastwardPanic,         // Global/cone Frightened toward Heart
         CovenantWithWisps,      // Control WillowTheWisp behavior
         PukasBargain,           // Bias PukaHazard teleports
-        RingOfInvitations       // Enhance FairyRing entrancement
+        RingOfInvitations,      // Enhance FairyRing entrancement
+        HeartwardGrasp          // Pull visitor through wall to Heart
     }
 }

@@ -1245,4 +1245,323 @@ namespace FaeMaze.HeartPowers
     }
 
     #endregion
+
+    #region Heartward Grasp
+
+    /// <summary>
+    /// Pulls a visitor through a wall toward the Heart.
+    /// Tier I: Extended Reach - Increased pull range
+    /// Tier II: Relentless Grasp - Stronger path bias after pull
+    /// Tier III: Crushing Embrace - Applies Mesmerized after pull
+    /// </summary>
+    public class HeartwardGraspEffect : ActivePowerEffect
+    {
+        private GameObject graspVisual;
+        private VisitorControllerBase targetVisitor;
+        private Vector2Int pullDestination;
+        private const string ModifierSourceId = "HeartwardGrasp";
+        private bool pullExecuted = false;
+
+        public HeartwardGraspEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
+            : base(manager, definition, targetPosition) { }
+
+        public override void OnStart()
+        {
+            // Convert target position to grid
+            if (!manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
+            {
+                return;
+            }
+
+            Vector2Int targetTile = new Vector2Int(tx, ty);
+            Vector2Int heartTile = manager.MazeGrid.HeartGridPos;
+
+            // Find nearest visitor at or adjacent to target tile
+            targetVisitor = FindNearestVisitor(targetTile);
+
+            if (targetVisitor == null)
+            {
+                return;
+            }
+
+            // Get visitor's current position
+            if (!manager.MazeGrid.WorldToGrid(targetVisitor.transform.position, out int vx, out int vy))
+            {
+                return;
+            }
+
+            Vector2Int visitorTile = new Vector2Int(vx, vy);
+
+            // Check if there's a wall between visitor and Heart
+            if (!IsWallBetween(visitorTile, heartTile))
+            {
+                return;
+            }
+
+            // Find Heart-adjacent walkable tile for destination
+            pullDestination = FindHeartAdjacentDestination(heartTile);
+
+            if (pullDestination == Vector2Int.zero)
+            {
+                return;
+            }
+
+            // Instantiate grasp prefab for animation
+            InstantiateGraspVisual(visitorTile, pullDestination);
+
+            // Execute the pull (teleport visitor)
+            ExecutePull();
+
+            // Apply Heart-ward path bias
+            ApplyHeartwardBias();
+        }
+
+        public override void Update(float deltaTime)
+        {
+            base.Update(deltaTime);
+
+            // Clean up grasp visual after animation
+            if (graspVisual != null && elapsedTime > 1.0f)
+            {
+                Object.Destroy(graspVisual);
+                graspVisual = null;
+            }
+        }
+
+        public override void OnEnd()
+        {
+            // Clean up path modifiers
+            manager.PathModifier.ClearBySource(ModifierSourceId);
+
+            // Clean up visual
+            if (graspVisual != null)
+            {
+                Object.Destroy(graspVisual);
+                graspVisual = null;
+            }
+
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.HeartwardGrasp);
+            }
+        }
+
+        private VisitorControllerBase FindNearestVisitor(Vector2Int targetTile)
+        {
+            // Get pull range from definition (param1 = pull range, default 2)
+            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 2;
+
+            // Use visitor registry instead of FindObjectsByType
+            var visitors = VisitorRegistry.All;
+            VisitorControllerBase nearest = null;
+            float minDistance = float.MaxValue;
+
+            foreach (var visitor in visitors)
+            {
+                if (visitor == null ||
+                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
+                {
+                    continue;
+                }
+
+                // Get visitor grid position
+                if (!manager.MazeGrid.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                {
+                    continue;
+                }
+
+                Vector2Int visitorTile = new Vector2Int(vx, vy);
+
+                // Check if within range (Manhattan distance)
+                int distance = Mathf.Abs(visitorTile.x - targetTile.x) + Mathf.Abs(visitorTile.y - targetTile.y);
+
+                if (distance <= pullRange && distance < minDistance)
+                {
+                    nearest = visitor;
+                    minDistance = distance;
+                }
+            }
+
+            return nearest;
+        }
+
+        private bool IsWallBetween(Vector2Int from, Vector2Int to)
+        {
+            // Simple wall detection: check if there's at least one non-walkable tile
+            // between the visitor and the Heart
+            Vector2Int direction = to - from;
+            int steps = Mathf.Max(Mathf.Abs(direction.x), Mathf.Abs(direction.y));
+
+            if (steps == 0) return false;
+
+            // Check tiles along the line
+            for (int i = 1; i < steps; i++)
+            {
+                float t = (float)i / steps;
+                int checkX = Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t));
+                int checkY = Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t));
+
+                var node = manager.MazeGrid.Grid.GetNode(checkX, checkY);
+                if (node != null && !node.walkable)
+                {
+                    return true; // Found a wall
+                }
+            }
+
+            return false;
+        }
+
+        private Vector2Int FindHeartAdjacentDestination(Vector2Int heartTile)
+        {
+            // Check all 4 cardinal directions for walkable tiles
+            Vector2Int[] directions = new Vector2Int[]
+            {
+                Vector2Int.up,
+                Vector2Int.down,
+                Vector2Int.left,
+                Vector2Int.right
+            };
+
+            foreach (var dir in directions)
+            {
+                Vector2Int candidate = heartTile + dir;
+                var node = manager.MazeGrid.Grid.GetNode(candidate.x, candidate.y);
+
+                if (node != null && node.walkable)
+                {
+                    return candidate;
+                }
+            }
+
+            // No adjacent walkable tile found
+            return Vector2Int.zero;
+        }
+
+        private void InstantiateGraspVisual(Vector2Int from, Vector2Int to)
+        {
+            // Load grasp prefab
+            GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
+
+            if (graspPrefab == null)
+            {
+                // Try alternative path
+                graspPrefab = Resources.Load<GameObject>("grasp");
+            }
+
+            if (graspPrefab == null)
+            {
+                return;
+            }
+
+            // Instantiate at midpoint between visitor and destination
+            Vector3 fromWorld = manager.MazeGrid.GridToWorld(from.x, from.y);
+            Vector3 toWorld = manager.MazeGrid.GridToWorld(to.x, to.y);
+            Vector3 midpoint = (fromWorld + toWorld) / 2f;
+            midpoint.z = -0.5f; // Above floor
+
+            graspVisual = Object.Instantiate(graspPrefab, midpoint, Quaternion.identity);
+
+            // Add tile visualizer effects along pull path
+            if (manager.TileVisualizer != null)
+            {
+                // Create a line of tiles from visitor to destination
+                int steps = Mathf.Max(Mathf.Abs(to.x - from.x), Mathf.Abs(to.y - from.y));
+
+                for (int i = 0; i <= steps; i++)
+                {
+                    float t = steps > 0 ? (float)i / steps : 0;
+                    int tileX = Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t));
+                    int tileY = Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t));
+
+                    Vector2Int tile = new Vector2Int(tileX, tileY);
+                    float intensity = 1.0f - (i / (float)steps) * 0.5f; // Fade along path
+
+                    manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.HeartwardGrasp, intensity, 2.0f);
+                }
+            }
+        }
+
+        private void ExecutePull()
+        {
+            if (targetVisitor == null || pullDestination == Vector2Int.zero)
+            {
+                return;
+            }
+
+            // Convert destination to world position
+            Vector3 destinationWorld = manager.MazeGrid.GridToWorld(pullDestination.x, pullDestination.y);
+
+            // Teleport visitor
+            targetVisitor.transform.position = destinationWorld;
+
+            // Force path recalculation
+            targetVisitor.RecalculatePath();
+
+            // Tier III: Apply Mesmerized state
+            if (definition.tier >= 3 && definition.flag1)
+            {
+                float mesmerizeDuration = definition.param3 > 0 ? definition.param3 : 3f;
+                targetVisitor.SetMesmerized(mesmerizeDuration);
+            }
+
+            pullExecuted = true;
+        }
+
+        private void ApplyHeartwardBias()
+        {
+            if (targetVisitor == null)
+            {
+                return;
+            }
+
+            // Get bias strength from definition (param2 = bias strength, default -3.0)
+            // Tier II increases strength
+            float biasStrength = definition.param2 != 0 ? definition.param2 : -3.0f;
+
+            if (definition.tier >= 2 && definition.flag2) // flag2 = relentless grasp
+            {
+                biasStrength *= 2.0f; // Double strength for Tier II
+            }
+
+            biasStrength = -Mathf.Abs(biasStrength); // Ensure negative (attractive)
+
+            // Apply path cost modifier in a radius around the visitor
+            Vector2Int heartTile = manager.MazeGrid.HeartGridPos;
+            int biasRadius = definition.intParam1 > 0 ? definition.intParam1 : 8;
+
+            // Get visitor's current position
+            if (!manager.MazeGrid.WorldToGrid(targetVisitor.transform.position, out int vx, out int vy))
+            {
+                return;
+            }
+
+            Vector2Int visitorTile = new Vector2Int(vx, vy);
+
+            for (int dx = -biasRadius; dx <= biasRadius; dx++)
+            {
+                for (int dy = -biasRadius; dy <= biasRadius; dy++)
+                {
+                    Vector2Int tile = new Vector2Int(visitorTile.x + dx, visitorTile.y + dy);
+                    var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
+
+                    if (node != null && node.walkable)
+                    {
+                        float distToHeart = Vector2Int.Distance(tile, heartTile);
+                        float distFromVisitor = Vector2Int.Distance(tile, visitorTile);
+
+                        // Tiles closer to Heart get stronger bias
+                        float normalizedDist = 1.0f - Mathf.Clamp01(distToHeart / biasRadius);
+                        float costMod = biasStrength * normalizedDist;
+
+                        manager.PathModifier.AddModifier(tile, costMod, definition.duration,
+                            $"{ModifierSourceId}_{targetVisitor.GetInstanceID()}");
+                    }
+                }
+            }
+        }
+    }
+
+    #endregion
 }

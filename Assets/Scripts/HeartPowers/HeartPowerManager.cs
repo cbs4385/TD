@@ -529,6 +529,10 @@ namespace FaeMaze.HeartPowers
                     effect = new RingOfInvitationsEffect(this, definition, worldPosition);
                     break;
 
+                case HeartPowerType.HeartwardGrasp:
+                    effect = new HeartwardGraspEffect(this, definition, worldPosition);
+                    break;
+
                 default:
                     return;
             }
@@ -598,6 +602,7 @@ namespace FaeMaze.HeartPowers
                 case HeartPowerType.MurmuringPaths:
                 case HeartPowerType.DreamSnare:
                 case HeartPowerType.FeastwardPanic:
+                case HeartPowerType.HeartwardGrasp:
                     return true;
                 default:
                     return false;
