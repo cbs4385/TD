@@ -1739,10 +1739,7 @@ namespace FaeMaze.HeartPowers
             }
 
             // Play sound
-            if (Systems.SoundManager.Instance != null)
-            {
-                Systems.SoundManager.Instance.PlayVisitorConsumed();
-            }
+            SoundManager.Instance?.PlayVisitorConsumed();
 
             // Destroy the visitor
             Object.Destroy(visitor.gameObject);
