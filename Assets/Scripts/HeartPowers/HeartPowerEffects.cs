@@ -1268,44 +1268,59 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
+            Debug.Log($"[HeartwardGrasp] OnStart - Target position: {targetPosition}");
+
             // Convert target position to grid
             if (!manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
             {
+                Debug.Log("[HeartwardGrasp] Failed to convert target position to grid");
                 return;
             }
 
             Vector2Int targetTile = new Vector2Int(tx, ty);
             Vector2Int heartTile = manager.MazeGrid.HeartGridPos;
+            Debug.Log($"[HeartwardGrasp] Target tile: {targetTile}, Heart tile: {heartTile}");
 
             // Find nearest visitor at or adjacent to target tile
             targetVisitor = FindNearestVisitor(targetTile);
 
             if (targetVisitor == null)
             {
+                Debug.Log("[HeartwardGrasp] No visitor found near target tile");
                 return;
             }
+
+            Debug.Log($"[HeartwardGrasp] Found visitor: {targetVisitor.name}");
 
             // Get visitor's current position
             if (!manager.MazeGrid.WorldToGrid(targetVisitor.transform.position, out int vx, out int vy))
             {
+                Debug.Log("[HeartwardGrasp] Failed to convert visitor position to grid");
                 return;
             }
 
             Vector2Int visitorTile = new Vector2Int(vx, vy);
+            Debug.Log($"[HeartwardGrasp] Visitor tile: {visitorTile}");
 
             // Check if there's a wall between visitor and Heart
             if (!IsWallBetween(visitorTile, heartTile))
             {
+                Debug.Log("[HeartwardGrasp] No wall between visitor and Heart");
                 return;
             }
+
+            Debug.Log("[HeartwardGrasp] Wall found between visitor and Heart");
 
             // Find Heart-adjacent walkable tile for destination
             pullDestination = FindHeartAdjacentDestination(heartTile);
 
             if (pullDestination == Vector2Int.zero)
             {
+                Debug.Log("[HeartwardGrasp] No walkable destination tile adjacent to Heart");
                 return;
             }
+
+            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination}");
 
             // Instantiate grasp prefab for animation
             InstantiateGraspVisual(visitorTile, pullDestination);
@@ -1585,22 +1600,28 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
+            Debug.Log($"[DevouringMaw] OnStart - Target position: {targetPosition}");
+
             // Convert target position to grid
             if (!manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
             {
+                Debug.Log("[DevouringMaw] Failed to convert target position to grid");
                 return;
             }
 
             targetTile = new Vector2Int(tx, ty);
+            Debug.Log($"[DevouringMaw] Target tile: {targetTile}");
 
             // Find visitor on the targeted tile
             VisitorControllerBase targetVisitor = FindVisitorOnTile(targetTile);
 
             if (targetVisitor == null)
             {
+                Debug.Log("[DevouringMaw] No visitor found on target tile");
                 return;
             }
 
+            Debug.Log($"[DevouringMaw] Found visitor on tile: {targetVisitor.name}");
             consumedVisitor = targetVisitor;
 
             // Instantiate devour prefab for visual
@@ -1613,6 +1634,7 @@ namespace FaeMaze.HeartPowers
             }
 
             // Consume the visitor (grant essence and destroy)
+            Debug.Log($"[DevouringMaw] Consuming visitor: {targetVisitor.name}");
             ConsumeVisitor(targetVisitor);
 
             // Tier I: Apply fear to nearby visitors

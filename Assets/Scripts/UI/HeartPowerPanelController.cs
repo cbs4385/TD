@@ -532,29 +532,29 @@ namespace FaeMaze.UI
         /// </summary>
         private void OnPowerButtonClicked(int index)
         {
-
             if (heartPowerManager == null)
             {
+                Debug.LogWarning("[HeartPowerPanelController] OnPowerButtonClicked: HeartPowerManager is null");
                 return;
             }
 
             HeartPowerType powerType = powerTypes[index];
 
+            if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
+            {
+                Debug.Log($"[HeartPowerPanelController] Button clicked for {powerType} (index {index})");
+            }
+
             // Get the focal point position from the camera controller
             Vector3 targetPosition = GetFocalPointPosition();
 
-            // All powers now activate at the focal point
-            bool success = heartPowerManager.TryActivatePower(powerType, targetPosition);
+            if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
+            {
+                Debug.Log($"[HeartPowerPanelController] Focal point position: {targetPosition}");
+            }
 
-            if (success)
-            {
-                Debug.Log($"[HeartPowerPanelController] Activated {powerType} at focal point position {targetPosition}");
-            }
-            else
-            {
-                heartPowerManager.CanActivatePower(powerType, out string reason);
-                Debug.Log($"[HeartPowerPanelController] Failed to activate {powerType}: {reason}");
-            }
+            // All powers now activate at the focal point
+            heartPowerManager.TryActivatePower(powerType, targetPosition);
         }
 
         /// <summary>
@@ -636,10 +636,12 @@ namespace FaeMaze.UI
             }
             else if (Keyboard.current.digit8Key.wasPressedThisFrame || Keyboard.current.numpad8Key.wasPressedThisFrame)
             {
+                Debug.Log("[HeartPowerPanelController] Keyboard 8 pressed - HeartwardGrasp");
                 OnPowerButtonClicked(7);
             }
             else if (Keyboard.current.digit9Key.wasPressedThisFrame || Keyboard.current.numpad9Key.wasPressedThisFrame)
             {
+                Debug.Log("[HeartPowerPanelController] Keyboard 9 pressed - DevouringMaw");
                 OnPowerButtonClicked(8);
             }
         }

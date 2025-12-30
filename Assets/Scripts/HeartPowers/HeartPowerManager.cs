@@ -297,14 +297,16 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public bool TryActivatePower(HeartPowerType powerType, Vector3 worldPosition)
         {
-            if (debugLog)
+            if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
             {
+                Debug.Log($"[HeartPowerManager] TryActivatePower called for {powerType} at {worldPosition}");
             }
 
             if (!CanActivatePower(powerType, out string reason))
             {
-                if (debugLog)
+                if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
                 {
+                    Debug.Log($"[HeartPowerManager] Cannot activate {powerType}: {reason}");
                 }
                 return false;
             }
@@ -530,10 +532,12 @@ namespace FaeMaze.HeartPowers
                     break;
 
                 case HeartPowerType.HeartwardGrasp:
+                    Debug.Log($"[HeartPowerManager] Activating HeartwardGrasp at {worldPosition}");
                     effect = new HeartwardGraspEffect(this, definition, worldPosition);
                     break;
 
                 case HeartPowerType.DevouringMaw:
+                    Debug.Log($"[HeartPowerManager] Activating DevouringMaw at {worldPosition}");
                     effect = new DevouringMawEffect(this, definition, worldPosition);
                     break;
 

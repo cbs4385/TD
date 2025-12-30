@@ -228,17 +228,7 @@ namespace FaeMaze.HeartPowers
             Vector3 targetPosition = GetFocalPointPosition();
 
             // All powers now activate at the focal point
-            bool success = heartPowerManager.TryActivatePower(powerType, targetPosition);
-
-            if (success)
-            {
-                Debug.Log($"[HeartPowerUI] Activated {powerType} at focal point position {targetPosition}");
-            }
-            else
-            {
-                heartPowerManager.CanActivatePower(powerType, out string reason);
-                Debug.Log($"[HeartPowerUI] Failed to activate {powerType}: {reason}");
-            }
+            heartPowerManager.TryActivatePower(powerType, targetPosition);
         }
 
         /// <summary>
