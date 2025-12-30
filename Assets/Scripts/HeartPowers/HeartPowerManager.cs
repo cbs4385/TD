@@ -124,12 +124,64 @@ namespace FaeMaze.HeartPowers
 
             _instance = this;
 
+            // Load power definitions from Resources if not set
+            LoadPowerDefinitionsFromResources();
+
             // Initialize all powers as locked, tier 1 (using cached array)
             foreach (HeartPowerType powerType in _allPowerTypes)
             {
                 cooldownTimers[powerType] = 0f;
                 powerTiers[powerType] = 1;
                 unlockedPowers[powerType] = true; // Start with all unlocked for testing
+            }
+        }
+
+        private void LoadPowerDefinitionsFromResources()
+        {
+            // Load all HeartPowerDefinition assets from Resources
+            HeartPowerDefinition[] loadedDefinitions = Resources.LoadAll<HeartPowerDefinition>("ScriptableObjects/HeartPowers");
+
+            if (loadedDefinitions == null || loadedDefinitions.Length == 0)
+            {
+                // Try alternative path without ScriptableObjects folder
+                loadedDefinitions = Resources.LoadAll<HeartPowerDefinition>("HeartPowers");
+            }
+
+            if (loadedDefinitions != null && loadedDefinitions.Length > 0)
+            {
+                // Merge with existing definitions
+                if (powerDefinitions == null || powerDefinitions.Length == 0)
+                {
+                    powerDefinitions = loadedDefinitions;
+                }
+                else
+                {
+                    // Combine existing and loaded definitions
+                    var combinedList = new List<HeartPowerDefinition>(powerDefinitions);
+
+                    foreach (var loaded in loadedDefinitions)
+                    {
+                        // Check if this definition already exists
+                        bool exists = false;
+                        foreach (var existing in powerDefinitions)
+                        {
+                            if (existing != null && loaded != null &&
+                                existing.powerType == loaded.powerType &&
+                                existing.tier == loaded.tier)
+                            {
+                                exists = true;
+                                break;
+                            }
+                        }
+
+                        if (!exists)
+                        {
+                            combinedList.Add(loaded);
+                        }
+                    }
+
+                    powerDefinitions = combinedList.ToArray();
+                }
             }
         }
 
