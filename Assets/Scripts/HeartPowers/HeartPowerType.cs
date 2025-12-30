@@ -12,6 +12,7 @@ namespace FaeMaze.HeartPowers
         CovenantWithWisps,      // Control WillowTheWisp behavior
         PukasBargain,           // Bias PukaHazard teleports
         RingOfInvitations,      // Enhance FairyRing entrancement
-        HeartwardGrasp          // Pull visitor through wall to Heart
+        HeartwardGrasp,         // Pull visitor through wall to Heart
+        DevouringMaw            // Instantly consume visitor on tile
     }
 }

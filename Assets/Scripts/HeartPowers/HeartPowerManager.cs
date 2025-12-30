@@ -533,6 +533,10 @@ namespace FaeMaze.HeartPowers
                     effect = new HeartwardGraspEffect(this, definition, worldPosition);
                     break;
 
+                case HeartPowerType.DevouringMaw:
+                    effect = new DevouringMawEffect(this, definition, worldPosition);
+                    break;
+
                 default:
                     return;
             }

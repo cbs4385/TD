@@ -1564,4 +1564,280 @@ namespace FaeMaze.HeartPowers
     }
 
     #endregion
+
+    #region Devouring Maw
+
+    /// <summary>
+    /// Instantly consumes a visitor on the targeted tile, granting essence.
+    /// Tier I: Echoing Terror - Applies fear to nearby visitors
+    /// Tier II: Draining Embrace - Slows nearby visitors briefly
+    /// Tier III: Soul Harvest - Extra essence and temporary charge bonus
+    /// </summary>
+    public class DevouringMawEffect : ActivePowerEffect
+    {
+        private GameObject devourVisual;
+        private VisitorControllerBase consumedVisitor;
+        private Vector2Int targetTile;
+
+        public DevouringMawEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
+            : base(manager, definition, targetPosition) { }
+
+        public override void OnStart()
+        {
+            // Convert target position to grid
+            if (!manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
+            {
+                return;
+            }
+
+            targetTile = new Vector2Int(tx, ty);
+
+            // Find visitor on the targeted tile
+            VisitorControllerBase targetVisitor = FindVisitorOnTile(targetTile);
+
+            if (targetVisitor == null)
+            {
+                return;
+            }
+
+            consumedVisitor = targetVisitor;
+
+            // Instantiate devour prefab for visual
+            InstantiateDevourVisual(targetTile);
+
+            // Add tile visualizer effect
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.AddTileEffect(targetTile, HeartPowerType.DevouringMaw, 1.0f, 2.0f);
+            }
+
+            // Consume the visitor (grant essence and destroy)
+            ConsumeVisitor(targetVisitor);
+
+            // Tier I: Apply fear to nearby visitors
+            if (definition.tier >= 1 && definition.flag1)
+            {
+                ApplyEchoingTerror(targetTile);
+            }
+
+            // Tier II: Slow nearby visitors
+            if (definition.tier >= 2 && definition.flag2)
+            {
+                ApplyDrainingEmbrace(targetTile);
+            }
+
+            // Tier III: Extra essence and charge bonus
+            if (definition.tier >= 3)
+            {
+                ApplySoulHarvest();
+            }
+        }
+
+        public override void Update(float deltaTime)
+        {
+            base.Update(deltaTime);
+
+            // Clean up devour visual after animation
+            if (devourVisual != null && elapsedTime > 1.5f)
+            {
+                Object.Destroy(devourVisual);
+                devourVisual = null;
+            }
+        }
+
+        public override void OnEnd()
+        {
+            // Clean up visual
+            if (devourVisual != null)
+            {
+                Object.Destroy(devourVisual);
+                devourVisual = null;
+            }
+
+            // Remove tile visuals
+            if (manager.TileVisualizer != null)
+            {
+                manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.DevouringMaw);
+            }
+        }
+
+        private VisitorControllerBase FindVisitorOnTile(Vector2Int tile)
+        {
+            // Use visitor registry
+            var visitors = VisitorRegistry.All;
+
+            foreach (var visitor in visitors)
+            {
+                if (visitor == null ||
+                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
+                {
+                    continue;
+                }
+
+                // Get visitor grid position
+                if (!manager.MazeGrid.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                {
+                    continue;
+                }
+
+                Vector2Int visitorTile = new Vector2Int(vx, vy);
+
+                // Check if visitor is on target tile
+                if (visitorTile == tile)
+                {
+                    return visitor;
+                }
+            }
+
+            return null;
+        }
+
+        private void InstantiateDevourVisual(Vector2Int tile)
+        {
+            // Load devour prefab
+            GameObject devourPrefab = Resources.Load<GameObject>("Prefabs/Props/devour");
+
+            if (devourPrefab == null)
+            {
+                // Try alternative path
+                devourPrefab = Resources.Load<GameObject>("devour");
+            }
+
+            if (devourPrefab == null)
+            {
+                return;
+            }
+
+            // Instantiate at tile position
+            Vector3 worldPos = manager.MazeGrid.GridToWorld(tile.x, tile.y);
+            worldPos.z = -0.5f; // Above floor
+
+            devourVisual = Object.Instantiate(devourPrefab, worldPos, Quaternion.identity);
+        }
+
+        private void ConsumeVisitor(VisitorControllerBase visitor)
+        {
+            if (visitor == null)
+            {
+                return;
+            }
+
+            // Get essence reward
+            int essence = visitor.GetEssenceReward();
+
+            // Add essence to GameController
+            if (manager.GameController != null)
+            {
+                manager.GameController.AddEssence(essence);
+            }
+
+            // Track stats
+            if (Systems.GameStatsTracker.Instance != null)
+            {
+                Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
+            }
+
+            // Play sound
+            if (Systems.SoundManager.Instance != null)
+            {
+                Systems.SoundManager.Instance.PlayVisitorConsumed();
+            }
+
+            // Destroy the visitor
+            Object.Destroy(visitor.gameObject);
+        }
+
+        private void ApplyEchoingTerror(Vector2Int centerTile)
+        {
+            // Get fear radius from definition (param1 = fear radius, default 3)
+            int fearRadius = definition.param1 > 0 ? (int)definition.param1 : 3;
+            float fearDuration = definition.param2 > 0 ? definition.param2 : 3f;
+
+            // Find all visitors within radius
+            var visitors = VisitorRegistry.All;
+
+            foreach (var visitor in visitors)
+            {
+                if (visitor == null ||
+                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                    visitor.State == VisitorControllerBase.VisitorState.Escaping ||
+                    visitor == consumedVisitor) // Don't affect the consumed visitor
+                {
+                    continue;
+                }
+
+                // Get visitor grid position
+                if (!manager.MazeGrid.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                {
+                    continue;
+                }
+
+                Vector2Int visitorTile = new Vector2Int(vx, vy);
+
+                // Check if within radius (Manhattan distance)
+                int distance = Mathf.Abs(visitorTile.x - centerTile.x) + Mathf.Abs(visitorTile.y - centerTile.y);
+
+                if (distance <= fearRadius)
+                {
+                    // Apply Frightened state
+                    visitor.SetFrightened(fearDuration);
+                }
+            }
+        }
+
+        private void ApplyDrainingEmbrace(Vector2Int centerTile)
+        {
+            // Get slow radius and duration from definition
+            int slowRadius = definition.intParam1 > 0 ? definition.intParam1 : 3;
+            float slowDuration = definition.param3 > 0 ? definition.param3 : 4f;
+
+            // Find all visitors within radius
+            var visitors = VisitorRegistry.All;
+
+            foreach (var visitor in visitors)
+            {
+                if (visitor == null ||
+                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                    visitor.State == VisitorControllerBase.VisitorState.Escaping ||
+                    visitor == consumedVisitor)
+                {
+                    continue;
+                }
+
+                // Get visitor grid position
+                if (!manager.MazeGrid.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                {
+                    continue;
+                }
+
+                Vector2Int visitorTile = new Vector2Int(vx, vy);
+
+                // Check if within radius
+                int distance = Mathf.Abs(visitorTile.x - centerTile.x) + Mathf.Abs(visitorTile.y - centerTile.y);
+
+                if (distance <= slowRadius)
+                {
+                    // Apply slow (using Mesmerize as slow effect)
+                    visitor.SetMesmerized(slowDuration);
+                }
+            }
+        }
+
+        private void ApplySoulHarvest()
+        {
+            // Extra essence bonus
+            int bonusEssence = definition.intParam2 > 0 ? definition.intParam2 : 3;
+
+            if (manager.GameController != null)
+            {
+                manager.GameController.AddEssence(bonusEssence);
+            }
+
+            // Temporary charge bonus
+            manager.AddCharges(1);
+        }
+    }
+
+    #endregion
 }

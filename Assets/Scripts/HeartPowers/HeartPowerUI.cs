@@ -65,6 +65,10 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Button for Heartward Grasp (Key: 8)")]
         private Button graspButton;
 
+        [SerializeField]
+        [Tooltip("Button for Devouring Maw (Key: 9)")]
+        private Button devourButton;
+
         [Header("Button Text Elements")]
         [SerializeField]
         [Tooltip("Text elements for displaying cooldowns on buttons")]
@@ -120,9 +124,11 @@ namespace FaeMaze.HeartPowers
                 powerButtons[HeartPowerType.RingOfInvitations] = ringButton;
             if (graspButton != null)
                 powerButtons[HeartPowerType.HeartwardGrasp] = graspButton;
+            if (devourButton != null)
+                powerButtons[HeartPowerType.DevouringMaw] = devourButton;
 
             // Map cooldown texts
-            if (buttonCooldownTexts != null && buttonCooldownTexts.Length >= 8)
+            if (buttonCooldownTexts != null && buttonCooldownTexts.Length >= 9)
             {
                 cooldownTexts[HeartPowerType.HeartbeatOfLonging] = buttonCooldownTexts[0];
                 cooldownTexts[HeartPowerType.MurmuringPaths] = buttonCooldownTexts[1];
@@ -132,6 +138,7 @@ namespace FaeMaze.HeartPowers
                 cooldownTexts[HeartPowerType.PukasBargain] = buttonCooldownTexts[5];
                 cooldownTexts[HeartPowerType.RingOfInvitations] = buttonCooldownTexts[6];
                 cooldownTexts[HeartPowerType.HeartwardGrasp] = buttonCooldownTexts[7];
+                cooldownTexts[HeartPowerType.DevouringMaw] = buttonCooldownTexts[8];
             }
 
             SetupButtons();
@@ -197,6 +204,8 @@ namespace FaeMaze.HeartPowers
                 ringButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.RingOfInvitations));
             if (graspButton != null)
                 graspButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.HeartwardGrasp));
+            if (devourButton != null)
+                devourButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.DevouringMaw));
         }
 
         #endregion
@@ -289,6 +298,10 @@ namespace FaeMaze.HeartPowers
             else if (Input.GetKeyDown(KeyCode.Alpha8) || Input.GetKeyDown(KeyCode.Keypad8))
             {
                 ActivatePower(HeartPowerType.HeartwardGrasp);
+            }
+            else if (Input.GetKeyDown(KeyCode.Alpha9) || Input.GetKeyDown(KeyCode.Keypad9))
+            {
+                ActivatePower(HeartPowerType.DevouringMaw);
             }
         }
 

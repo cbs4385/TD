@@ -75,7 +75,8 @@ namespace FaeMaze.HeartPowers
             new Color(0.2f, 0.5f, 1.0f, 1f),  // Power 5: Cool Blue
             new Color(0.3f, 0.0f, 0.5f, 1f),  // Power 6: Indigo
             new Color(0.6f, 0.2f, 0.8f, 1f),  // Power 7: Vibrant Violet
-            new Color(0.9f, 0.1f, 0.5f, 1f)   // Power 8: Crimson
+            new Color(0.9f, 0.1f, 0.5f, 1f),  // Power 8: Crimson
+            new Color(0.5f, 0.0f, 0.2f, 1f)   // Power 9: Dark Burgundy
         };
 
         // Reusable lists for cleanup

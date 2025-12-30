@@ -42,10 +42,10 @@ namespace FaeMaze.UI
 
         #region Private Fields
 
-        private Button[] powerButtons = new Button[8];
-        private Image[] buttonImages = new Image[8];
-        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[8];
-        private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[8];
+        private Button[] powerButtons = new Button[9];
+        private Image[] buttonImages = new Image[9];
+        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[9];
+        private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[9];
         private TextMeshProUGUI chargesText;
         private TextMeshProUGUI essenceText;
 
@@ -58,7 +58,8 @@ namespace FaeMaze.UI
             "5: Covenant\nwith Wisps",
             "6: Puka's\nBargain",
             "7: Ring of\nInvitations",
-            "8: Heartward\nGrasp"
+            "8: Heartward\nGrasp",
+            "9: Devouring\nMaw"
         };
 
         private readonly HeartPowerType[] powerTypes = new HeartPowerType[]
@@ -70,7 +71,8 @@ namespace FaeMaze.UI
             HeartPowerType.CovenantWithWisps,
             HeartPowerType.PukasBargain,
             HeartPowerType.RingOfInvitations,
-            HeartPowerType.HeartwardGrasp
+            HeartPowerType.HeartwardGrasp,
+            HeartPowerType.DevouringMaw
         };
 
         // ROYGBIV spectrum colors for each power
@@ -83,7 +85,8 @@ namespace FaeMaze.UI
             new Color(0.2f, 0.5f, 1.0f, 1f),  // Power 5: Cool Blue
             new Color(0.3f, 0.0f, 0.5f, 1f),  // Power 6: Indigo
             new Color(0.6f, 0.2f, 0.8f, 1f),  // Power 7: Vibrant Violet
-            new Color(0.9f, 0.1f, 0.5f, 1f)   // Power 8: Crimson (wraps back to red spectrum)
+            new Color(0.9f, 0.1f, 0.5f, 1f),  // Power 8: Crimson
+            new Color(0.5f, 0.0f, 0.2f, 1f)   // Power 9: Dark Burgundy
         };
 
         // Base colors (darker versions for inactive state)
@@ -96,13 +99,14 @@ namespace FaeMaze.UI
             new Color(0.08f, 0.18f, 0.35f, 1f), // Dim Blue
             new Color(0.12f, 0.0f, 0.2f, 1f),   // Dim Indigo
             new Color(0.22f, 0.08f, 0.3f, 1f),  // Dim Violet
-            new Color(0.32f, 0.05f, 0.18f, 1f)  // Dim Crimson
+            new Color(0.32f, 0.05f, 0.18f, 1f), // Dim Crimson
+            new Color(0.18f, 0.0f, 0.08f, 1f)   // Dim Dark Burgundy
         };
 
         // Glow animation tracking
-        private float[] glowPhase = new float[8];
-        private float[] glowIntensity = new float[8];
-        private float[] flashIntensity = new float[8]; // Flash effect when power is activated
+        private float[] glowPhase = new float[9];
+        private float[] glowIntensity = new float[9];
+        private float[] flashIntensity = new float[9]; // Flash effect when power is activated
         private float glowSpeed = 2.0f;
         private float glowPulseSpeed = 3.0f;
         private float flashDecaySpeed = 5.0f;
@@ -333,15 +337,15 @@ namespace FaeMaze.UI
             essenceText = CreateResourceLabel(heartPowersPanel.transform, "Essence: 10", yPos, 250f);
 
             // Create power buttons in a horizontal row (centered in panel)
-            float buttonWidth = 140f;  // Slightly smaller to fit 8 buttons
+            float buttonWidth = 125f;  // Smaller to fit 9 buttons
             float buttonHeight = 100f;
-            float spacing = 5f;
-            float totalWidth = (buttonWidth * 8) + (spacing * 7);
+            float spacing = 4f;
+            float totalWidth = (buttonWidth * 9) + (spacing * 8);
             float startX = -totalWidth / 2f + buttonWidth / 2f;
             float buttonYPos = -75f; // Center buttons vertically in panel
 
 
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 9; i++)
             {
                 float xPos = startX + (i * (buttonWidth + spacing));
                 powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, buttonYPos, buttonWidth, buttonHeight);
@@ -633,6 +637,10 @@ namespace FaeMaze.UI
             else if (Keyboard.current.digit8Key.wasPressedThisFrame || Keyboard.current.numpad8Key.wasPressedThisFrame)
             {
                 OnPowerButtonClicked(7);
+            }
+            else if (Keyboard.current.digit9Key.wasPressedThisFrame || Keyboard.current.numpad9Key.wasPressedThisFrame)
+            {
+                OnPowerButtonClicked(8);
             }
         }
 
