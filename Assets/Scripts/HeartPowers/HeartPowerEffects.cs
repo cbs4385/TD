@@ -4,6 +4,7 @@ using UnityEngine;
 using FaeMaze.Props;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
+using FaeMaze.Audio;
 
 namespace FaeMaze.HeartPowers
 {
