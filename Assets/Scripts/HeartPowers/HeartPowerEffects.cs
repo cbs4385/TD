@@ -1311,16 +1311,17 @@ namespace FaeMaze.HeartPowers
 
             Debug.Log("[HeartwardGrasp] Wall found between visitor and Heart");
 
-            // Find Heart-adjacent walkable tile for destination
-            pullDestination = FindHeartAdjacentDestination(heartTile);
+            // Find destination along vector toward Heart
+            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
+            pullDestination = FindPullDestination(visitorTile, heartTile, pullRange);
 
             if (pullDestination == Vector2Int.zero)
             {
-                Debug.Log("[HeartwardGrasp] No walkable destination tile adjacent to Heart");
+                Debug.Log("[HeartwardGrasp] No walkable destination tile found along pull path");
                 return;
             }
 
-            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination}");
+            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} (distance: {Vector2Int.Distance(visitorTile, pullDestination)} tiles)");
 
             // Instantiate grasp prefab for animation
             InstantiateGraspVisual(visitorTile, pullDestination);
@@ -1365,8 +1366,8 @@ namespace FaeMaze.HeartPowers
 
         private VisitorControllerBase FindNearestVisitor(Vector2Int targetTile)
         {
-            // Get pull range from definition (param1 = pull range, default 2)
-            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 2;
+            // Get pull range from definition (param1 = pull range, default 3)
+            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
 
             // Use visitor registry instead of FindObjectsByType
             var visitors = VisitorRegistry.All;
@@ -1429,30 +1430,50 @@ namespace FaeMaze.HeartPowers
             return false;
         }
 
-        private Vector2Int FindHeartAdjacentDestination(Vector2Int heartTile)
+        private Vector2Int FindPullDestination(Vector2Int visitorTile, Vector2Int heartTile, int pullRange)
         {
-            // Check all 4 cardinal directions for walkable tiles
-            Vector2Int[] directions = new Vector2Int[]
-            {
-                Vector2Int.up,
-                Vector2Int.down,
-                Vector2Int.left,
-                Vector2Int.right
-            };
+            // Calculate direction vector from visitor to Heart
+            Vector2 direction = new Vector2(heartTile.x - visitorTile.x, heartTile.y - visitorTile.y);
+            float magnitude = direction.magnitude;
 
-            foreach (var dir in directions)
+            if (magnitude < 0.01f)
             {
-                Vector2Int candidate = heartTile + dir;
-                var node = manager.MazeGrid.Grid.GetNode(candidate.x, candidate.y);
+                // Visitor is already at Heart position
+                return Vector2Int.zero;
+            }
+
+            // Normalize direction
+            direction /= magnitude;
+
+            // Step along the direction vector for up to pullRange tiles
+            // Find the first walkable tile encountered
+            Vector2Int lastWalkable = Vector2Int.zero;
+
+            for (int step = 1; step <= pullRange; step++)
+            {
+                // Calculate position along the vector
+                Vector2 newPos = new Vector2(visitorTile.x, visitorTile.y) + direction * step;
+                Vector2Int candidateTile = new Vector2Int(Mathf.RoundToInt(newPos.x), Mathf.RoundToInt(newPos.y));
+
+                // Check if this tile is walkable
+                var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
 
                 if (node != null && node.walkable)
                 {
-                    return candidate;
+                    lastWalkable = candidateTile;
+                }
+                else
+                {
+                    // Hit a wall, return the last walkable tile we found
+                    if (lastWalkable != Vector2Int.zero)
+                    {
+                        return lastWalkable;
+                    }
                 }
             }
 
-            // No adjacent walkable tile found
-            return Vector2Int.zero;
+            // Return the last walkable tile we found within range
+            return lastWalkable;
         }
 
         private void InstantiateGraspVisual(Vector2Int from, Vector2Int to)
