@@ -1633,9 +1633,11 @@ namespace FaeMaze.HeartPowers
             // Calculate perpendicular vector for margin checking (±1 tile)
             Vector2 perpendicular = new Vector2(-direction.y, direction.x);
 
-            // Search for first walkable tile PAST a wall
+            // Collect all eligible walkable tiles, preferring ones past a wall
             int maxSearchDistance = 10;
             bool foundWall = false;
+            List<Vector2Int> walkableTiles = new List<Vector2Int>();
+            List<Vector2Int> walkableTilesPastWall = new List<Vector2Int>();
 
             for (int step = 1; step <= maxSearchDistance; step++)
             {
@@ -1657,7 +1659,18 @@ namespace FaeMaze.HeartPowers
                     if (node != null && !node.walkable)
                     {
                         stepHasWall = true;
-                        break;
+                    }
+                    else if (node != null && node.walkable)
+                    {
+                        // Collect walkable tiles
+                        if (!walkableTiles.Contains(candidateTile))
+                        {
+                            walkableTiles.Add(candidateTile);
+                            if (foundWall)
+                            {
+                                walkableTilesPastWall.Add(candidateTile);
+                            }
+                        }
                     }
                 }
 
@@ -1665,24 +1678,34 @@ namespace FaeMaze.HeartPowers
                 {
                     foundWall = true;
                 }
-                else if (foundWall)
+            }
+
+            // Prefer tiles past a wall, otherwise use any walkable tile
+            List<Vector2Int> eligibleTiles = walkableTilesPastWall.Count > 0 ? walkableTilesPastWall : walkableTiles;
+
+            if (eligibleTiles.Count == 0)
+            {
+                Debug.LogWarning($"[HeartwardGrasp] No walkable tiles found within {maxSearchDistance} tiles toward heart");
+                return Vector2Int.zero;
+            }
+
+            // Return the tile closest to the heart
+            Vector2Int closestTile = eligibleTiles[0];
+            float closestDistance = Vector2.Distance(closestTile, to);
+
+            foreach (var tile in eligibleTiles)
+            {
+                float distance = Vector2.Distance(tile, to);
+                if (distance < closestDistance)
                 {
-                    // We've passed through a wall and now found walkable tiles
-                    // Return the first walkable one
-                    foreach (var candidateTile in candidates)
-                    {
-                        var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
-                        if (node != null && node.walkable)
-                        {
-                            Debug.Log($"[HeartwardGrasp] Found destination at {candidateTile}, step {step} from activation (past wall)");
-                            return candidateTile;
-                        }
-                    }
+                    closestDistance = distance;
+                    closestTile = tile;
                 }
             }
 
-            Debug.LogWarning($"[HeartwardGrasp] No walkable tile found past a wall within {maxSearchDistance} tiles toward heart");
-            return Vector2Int.zero;
+            string context = walkableTilesPastWall.Count > 0 ? "past wall" : "no wall found";
+            Debug.Log($"[HeartwardGrasp] Found destination at {closestTile} ({context}, closest to heart from {eligibleTiles.Count} options)");
+            return closestTile;
         }
 
         private void ApplyTierEffects()
