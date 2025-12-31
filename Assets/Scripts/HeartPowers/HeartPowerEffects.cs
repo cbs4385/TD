@@ -1619,7 +1619,7 @@ namespace FaeMaze.HeartPowers
 
         private Vector2Int FindFirstWalkableAlongVector(Vector2Int from, Vector2Int to)
         {
-            // Calculate direction vector
+            // Calculate direction vector from activation to heart
             Vector2 direction = new Vector2(to.x - from.x, to.y - from.y);
             float magnitude = direction.magnitude;
 
@@ -1630,22 +1630,37 @@ namespace FaeMaze.HeartPowers
 
             direction /= magnitude;
 
-            // Step along the direction vector to find first walkable tile
-            int maxSteps = Mathf.CeilToInt(magnitude);
+            // Calculate perpendicular vector for margin checking (±1 tile)
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
 
-            for (int step = 1; step <= maxSteps; step++)
+            // Search only a short distance (e.g., 5 tiles) for the first walkable tile
+            int maxSearchDistance = 5;
+
+            for (int step = 1; step <= maxSearchDistance; step++)
             {
-                Vector2 position = new Vector2(from.x, from.y) + direction * step;
-                Vector2Int candidateTile = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
+                Vector2 centerPos = new Vector2(from.x, from.y) + direction * step;
 
-                var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
-
-                if (node != null && node.walkable)
+                // Check center tile and ±1 perpendicular
+                Vector2Int[] candidates = new Vector2Int[]
                 {
-                    return candidateTile;
+                    new Vector2Int(Mathf.RoundToInt(centerPos.x), Mathf.RoundToInt(centerPos.y)), // Center
+                    new Vector2Int(Mathf.RoundToInt(centerPos.x + perpendicular.x), Mathf.RoundToInt(centerPos.y + perpendicular.y)), // +1 perpendicular
+                    new Vector2Int(Mathf.RoundToInt(centerPos.x - perpendicular.x), Mathf.RoundToInt(centerPos.y - perpendicular.y))  // -1 perpendicular
+                };
+
+                foreach (var candidateTile in candidates)
+                {
+                    var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
+
+                    if (node != null && node.walkable)
+                    {
+                        Debug.Log($"[HeartwardGrasp] Found destination at {candidateTile}, step {step} from activation");
+                        return candidateTile;
+                    }
                 }
             }
 
+            Debug.LogWarning($"[HeartwardGrasp] No walkable tile found within {maxSearchDistance} tiles toward heart");
             return Vector2Int.zero;
         }
 
