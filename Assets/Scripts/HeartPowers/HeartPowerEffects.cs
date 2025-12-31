@@ -1259,20 +1259,19 @@ namespace FaeMaze.HeartPowers
     {
         private enum AnimationPhase
         {
-            InitialPause,    // 0.0 - 0.75s: Visitor stopped at start tile
-            PullToWall,      // 0.75 - 1.0s: Pull visitor into wall (to grasp tile)
-            Repositioning,   // 1.0s: Move to wall tile along vector, instant
+            InitialPause,      // 0.0 - 0.75s: Visitor stopped
+            PullToActivation,  // 0.75 - 1.0s: Pull visitor toward activation tile
+            Repositioning,     // 1.0s: Reposition visitor to activation, instant
             PushToDestination, // 1.0 - 1.25s: Push visitor to destination
-            FinalPause,      // 1.25 - 2.0s: Wait for grasp animation to finish
-            Complete         // 2.0s+: Cleanup
+            FinalPause,        // 1.25 - 2.0s: Wait for grasp animation to finish
+            Complete           // 2.0s+: Cleanup
         }
 
         private GameObject graspVisual;
         private VisitorControllerBase targetVisitor;
-        private Vector2Int visitorStartTile;
-        private Vector2Int graspTile;
-        private Vector2Int wallTile;
-        private Vector2Int pullDestination;
+        private Vector2Int activationTile;      // Where power was activated (focal point)
+        private Vector2Int visitorStartTile;    // Where visitor starts
+        private Vector2Int pullDestination;     // First walkable tile along activation→heart
         private const string ModifierSourceId = "HeartwardGrasp";
 
         private AnimationPhase currentPhase = AnimationPhase.InitialPause;
@@ -1282,7 +1281,7 @@ namespace FaeMaze.HeartPowers
         private bool visitorMovementStopped = false;
 
         // Grasp visual animation tracking
-        private Vector3 graspOriginalPosition;
+        private Vector3 graspBasePosition;      // Grasp stays at activation tile
         private Vector3 graspAnimationDirection;
 
         public HeartwardGraspEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
@@ -1292,23 +1291,24 @@ namespace FaeMaze.HeartPowers
         {
             Debug.Log($"[HeartwardGrasp] OnStart - Target position: {targetPosition}");
 
-            // Convert target position to grid
-            if (!manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
+            // Convert target position to grid - this is the activation tile (focal point)
+            if (!manager.MazeGrid.WorldToGrid(targetPosition, out int ax, out int ay))
             {
                 Debug.Log("[HeartwardGrasp] Failed to convert target position to grid");
                 return;
             }
 
-            Vector2Int targetTile = new Vector2Int(tx, ty);
+            activationTile = new Vector2Int(ax, ay);
             Vector2Int heartTile = manager.MazeGrid.HeartGridPos;
-            Debug.Log($"[HeartwardGrasp] Target tile: {targetTile}, Heart tile: {heartTile}");
+            Debug.Log($"[HeartwardGrasp] Activation tile: {activationTile}, Heart tile: {heartTile}");
 
-            // Find nearest visitor at or adjacent to target tile
-            targetVisitor = FindNearestVisitor(targetTile);
+            // Find nearest visitor within range of activation tile
+            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
+            targetVisitor = FindNearestVisitor(activationTile, pullRange);
 
             if (targetVisitor == null)
             {
-                Debug.Log("[HeartwardGrasp] No visitor found near target tile");
+                Debug.Log($"[HeartwardGrasp] No visitor found within {pullRange} tiles of activation point");
                 return;
             }
 
@@ -1324,51 +1324,19 @@ namespace FaeMaze.HeartPowers
             visitorStartTile = new Vector2Int(vx, vy);
             Debug.Log($"[HeartwardGrasp] Visitor start tile: {visitorStartTile}");
 
-            // Check if there's a wall between visitor and Heart
-            if (!IsWallBetween(visitorStartTile, heartTile))
-            {
-                Debug.Log("[HeartwardGrasp] No wall between visitor and Heart");
-                return;
-            }
-
-            Debug.Log("[HeartwardGrasp] Wall found between visitor and Heart");
-
-            // Find destination along vector toward Heart within pullRange
-            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
-            pullDestination = FindPullDestination(visitorStartTile, heartTile, pullRange);
+            // Find destination: first walkable tile along activation→heart vector
+            pullDestination = FindFirstWalkableAlongVector(activationTile, heartTile);
 
             if (pullDestination == Vector2Int.zero)
             {
-                Debug.Log("[HeartwardGrasp] No walkable destination tile found along pull path");
+                Debug.Log("[HeartwardGrasp] No walkable destination tile found along activation→heart vector");
                 return;
             }
 
-            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} (distance: {Vector2Int.Distance(visitorStartTile, pullDestination)} tiles)");
+            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} along activation→heart vector");
 
-            // Find wall tile adjacent to visitor along visitor->heart vector
-            graspTile = FindAdjacentWallTile(visitorStartTile, heartTile);
-
-            if (graspTile == Vector2Int.zero)
-            {
-                Debug.Log("[HeartwardGrasp] No adjacent wall tile found");
-                return;
-            }
-
-            Debug.Log($"[HeartwardGrasp] Grasp tile (adjacent wall): {graspTile}");
-
-            // Find first wall tile along visitor->heart vector for repositioning
-            wallTile = FindFirstWallTile(visitorStartTile, heartTile);
-
-            if (wallTile == Vector2Int.zero)
-            {
-                Debug.Log("[HeartwardGrasp] No wall tile found along vector");
-                return;
-            }
-
-            Debug.Log($"[HeartwardGrasp] Wall tile for repositioning: {wallTile}");
-
-            // Spawn grasp prefab at adjacent wall tile, pointing toward visitor
-            SpawnGraspPrefab(graspTile, visitorStartTile);
+            // Spawn grasp prefab at activation tile, pointing toward visitor
+            SpawnGraspPrefab(activationTile, visitorStartTile);
 
             // Stop visitor movement
             StopVisitor();
@@ -1397,30 +1365,35 @@ namespace FaeMaze.HeartPowers
                     // Wait 0.75 seconds
                     if (phaseElapsed >= 0.75f)
                     {
-                        // Start pull to wall
-                        currentPhase = AnimationPhase.PullToWall;
+                        // Start pull toward activation tile
+                        currentPhase = AnimationPhase.PullToActivation;
                         phaseStartTime = elapsedTime;
                         lerpStartPosition = targetVisitor.transform.position;
-                        lerpEndPosition = manager.MazeGrid.GridToWorld(graspTile.x, graspTile.y);
-                        Debug.Log($"[HeartwardGrasp] Phase: PullToWall from {lerpStartPosition} to {lerpEndPosition}");
+                        lerpEndPosition = manager.MazeGrid.GridToWorld(activationTile.x, activationTile.y);
+                        Debug.Log($"[HeartwardGrasp] Phase: PullToActivation from {lerpStartPosition} to {lerpEndPosition}");
                     }
                     break;
 
-                case AnimationPhase.PullToWall:
-                    // Translate visitor to grasp tile over 0.25 seconds
+                case AnimationPhase.PullToActivation:
+                    // Translate visitor toward activation tile over 0.25 seconds
                     float pullT = Mathf.Clamp01(phaseElapsed / 0.25f);
                     targetVisitor.transform.position = Vector3.Lerp(lerpStartPosition, lerpEndPosition, pullT);
 
                     if (phaseElapsed >= 0.25f)
                     {
-                        // Instantly move to wall tile and reorient grasp
+                        // Instantly reposition visitor to activation tile
                         currentPhase = AnimationPhase.Repositioning;
-                        RepositionToWallTile();
+                        Vector3 activationPosition = manager.MazeGrid.GridToWorld(activationTile.x, activationTile.y);
+                        targetVisitor.transform.position = activationPosition;
+                        Debug.Log($"[HeartwardGrasp] Repositioned visitor to activation tile {activationTile}");
+
+                        // Reorient grasp toward destination
+                        UpdateGraspDirection(activationTile, pullDestination);
 
                         // Immediately start push to destination
                         currentPhase = AnimationPhase.PushToDestination;
                         phaseStartTime = elapsedTime;
-                        lerpStartPosition = targetVisitor.transform.position;
+                        lerpStartPosition = activationPosition;
                         lerpEndPosition = manager.MazeGrid.GridToWorld(pullDestination.x, pullDestination.y);
                         Debug.Log($"[HeartwardGrasp] Phase: PushToDestination from {lerpStartPosition} to {lerpEndPosition}");
                     }
@@ -1521,7 +1494,7 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            graspVisual.transform.position = graspOriginalPosition + offset;
+            graspVisual.transform.position = graspBasePosition + offset;
         }
 
         public override void OnEnd()
@@ -1611,46 +1584,69 @@ namespace FaeMaze.HeartPowers
             graspVisual = Object.Instantiate(graspPrefab, graspPosition, rotation);
             graspVisual.name = "GraspEffect";
 
-            // Store original position and animation direction for grasp visual animation
-            graspOriginalPosition = graspPosition;
+            // Store base position (grasp stays at activation tile) and animation direction
+            graspBasePosition = graspPosition;
             graspAnimationDirection = direction;
 
             Debug.Log($"[HeartwardGrasp] Spawned grasp prefab at {graspPosition} pointing toward {pointTowardPosition}");
         }
 
-        private void RepositionToWallTile()
+        private void UpdateGraspDirection(Vector2Int from, Vector2Int to)
         {
-            if (targetVisitor == null || graspVisual == null)
+            if (graspVisual == null)
             {
                 return;
             }
 
-            Vector2Int heartTile = manager.MazeGrid.HeartGridPos;
+            // Calculate new direction
+            Vector3 fromPosition = manager.MazeGrid.GridToWorld(from.x, from.y);
+            Vector3 toPosition = manager.MazeGrid.GridToWorld(to.x, to.y);
+            Vector3 direction = toPosition - fromPosition;
+            direction.z = 0f;
 
-            // Move visitor and grasp to wall tile
-            Vector3 wallPosition = manager.MazeGrid.GridToWorld(wallTile.x, wallTile.y);
-            wallPosition.z = 0f;
-            targetVisitor.transform.position = wallPosition;
-
-            graspVisual.transform.position = wallPosition;
-
-            // Reorient grasp Y-axis toward heart
-            Vector3 heartPosition = manager.MazeGrid.GridToWorld(heartTile.x, heartTile.y);
-            Vector3 directionToHeart = heartPosition - wallPosition;
-            directionToHeart.z = 0f;
-
-            if (directionToHeart.sqrMagnitude > 0.0001f)
+            if (direction.sqrMagnitude > 0.0001f)
             {
-                directionToHeart.Normalize();
-                Quaternion rotation = Quaternion.LookRotation(Vector3.forward, directionToHeart);
+                direction.Normalize();
+                Quaternion rotation = Quaternion.LookRotation(Vector3.forward, direction);
                 graspVisual.transform.rotation = rotation;
 
-                // Update animation tracking for second half
-                graspOriginalPosition = wallPosition;
-                graspAnimationDirection = directionToHeart;
+                // Update animation direction for second half
+                graspAnimationDirection = direction;
+
+                Debug.Log($"[HeartwardGrasp] Reoriented grasp toward destination");
+            }
+        }
+
+        private Vector2Int FindFirstWalkableAlongVector(Vector2Int from, Vector2Int to)
+        {
+            // Calculate direction vector
+            Vector2 direction = new Vector2(to.x - from.x, to.y - from.y);
+            float magnitude = direction.magnitude;
+
+            if (magnitude < 0.01f)
+            {
+                return Vector2Int.zero;
             }
 
-            Debug.Log($"[HeartwardGrasp] Repositioned to wall tile {wallTile}, grasp pointing toward heart");
+            direction /= magnitude;
+
+            // Step along the direction vector to find first walkable tile
+            int maxSteps = Mathf.CeilToInt(magnitude);
+
+            for (int step = 1; step <= maxSteps; step++)
+            {
+                Vector2 position = new Vector2(from.x, from.y) + direction * step;
+                Vector2Int candidateTile = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
+
+                var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
+
+                if (node != null && node.walkable)
+                {
+                    return candidateTile;
+                }
+            }
+
+            return Vector2Int.zero;
         }
 
         private void ApplyTierEffects()
@@ -1669,91 +1665,8 @@ namespace FaeMaze.HeartPowers
             }
         }
 
-        private Vector2Int FindAdjacentWallTile(Vector2Int start, Vector2Int end)
+        private VisitorControllerBase FindNearestVisitor(Vector2Int targetTile, int range)
         {
-            // Calculate direction vector
-            Vector2 direction = new Vector2(end.x - start.x, end.y - start.y);
-            if (direction.sqrMagnitude < 0.01f)
-            {
-                return Vector2Int.zero;
-            }
-
-            direction.Normalize();
-
-            // Check all 8 adjacent tiles for walls, prioritizing those along the direction
-            Vector2Int[] adjacentOffsets = new Vector2Int[]
-            {
-                // Cardinal directions
-                new Vector2Int(0, 1),   // up
-                new Vector2Int(0, -1),  // down
-                new Vector2Int(-1, 0),  // left
-                new Vector2Int(1, 0),   // right
-                // Diagonal directions
-                new Vector2Int(-1, 1),  // up-left
-                new Vector2Int(1, 1),   // up-right
-                new Vector2Int(-1, -1), // down-left
-                new Vector2Int(1, -1)   // down-right
-            };
-
-            Vector2Int bestWall = Vector2Int.zero;
-            float bestAlignment = -2f; // Start with impossible value
-
-            foreach (var offset in adjacentOffsets)
-            {
-                Vector2Int candidate = start + offset;
-                var node = manager.MazeGrid.Grid.GetNode(candidate.x, candidate.y);
-
-                if (node != null && !node.walkable)
-                {
-                    // Calculate how well this wall aligns with the direction to heart
-                    Vector2 offsetNormalized = new Vector2(offset.x, offset.y).normalized;
-                    float alignment = Vector2.Dot(offsetNormalized, direction);
-
-                    if (alignment > bestAlignment)
-                    {
-                        bestAlignment = alignment;
-                        bestWall = candidate;
-                    }
-                }
-            }
-
-            return bestWall;
-        }
-
-        private Vector2Int FindFirstWallTile(Vector2Int start, Vector2Int end)
-        {
-            // Calculate direction vector
-            Vector2 direction = new Vector2(end.x - start.x, end.y - start.y);
-            float magnitude = direction.magnitude;
-
-            if (magnitude < 0.01f)
-            {
-                return Vector2Int.zero;
-            }
-
-            direction /= magnitude;
-
-            // Step along the direction to find first wall
-            for (int step = 1; step <= Mathf.CeilToInt(magnitude); step++)
-            {
-                Vector2 position = new Vector2(start.x, start.y) + direction * step;
-                Vector2Int tile = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
-
-                var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
-                if (node != null && !node.walkable)
-                {
-                    return tile;
-                }
-            }
-
-            return Vector2Int.zero;
-        }
-
-        private VisitorControllerBase FindNearestVisitor(Vector2Int targetTile)
-        {
-            // Get pull range from definition (param1 = pull range, default 3)
-            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
-
             // Use visitor registry instead of FindObjectsByType
             var visitors = VisitorRegistry.All;
             VisitorControllerBase nearest = null;
@@ -1779,7 +1692,7 @@ namespace FaeMaze.HeartPowers
                 // Check if within range (Manhattan distance)
                 int distance = Mathf.Abs(visitorTile.x - targetTile.x) + Mathf.Abs(visitorTile.y - targetTile.y);
 
-                if (distance <= pullRange && distance < minDistance)
+                if (distance <= range && distance < minDistance)
                 {
                     nearest = visitor;
                     minDistance = distance;
@@ -1787,85 +1700,6 @@ namespace FaeMaze.HeartPowers
             }
 
             return nearest;
-        }
-
-        private bool IsWallBetween(Vector2Int from, Vector2Int to)
-        {
-            // Simple wall detection: check if there's at least one non-walkable tile
-            // between the visitor and the Heart
-            Vector2Int direction = to - from;
-            int steps = Mathf.Max(Mathf.Abs(direction.x), Mathf.Abs(direction.y));
-
-            if (steps == 0) return false;
-
-            // Check tiles along the line
-            for (int i = 1; i < steps; i++)
-            {
-                float t = (float)i / steps;
-                int checkX = Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t));
-                int checkY = Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t));
-
-                var node = manager.MazeGrid.Grid.GetNode(checkX, checkY);
-                if (node != null && !node.walkable)
-                {
-                    return true; // Found a wall
-                }
-            }
-
-            return false;
-        }
-
-        private Vector2Int FindPullDestination(Vector2Int visitorTile, Vector2Int heartTile, int pullRange)
-        {
-            // Calculate direction vector from visitor to Heart
-            Vector2 direction = new Vector2(heartTile.x - visitorTile.x, heartTile.y - visitorTile.y);
-            float magnitude = direction.magnitude;
-
-            if (magnitude < 0.01f)
-            {
-                // Visitor is already at Heart position
-                return Vector2Int.zero;
-            }
-
-            // Normalize direction
-            direction /= magnitude;
-
-            // Step along the direction vector to find first walkable tile PAST a wall
-            bool foundWall = false;
-            Vector2Int lastWalkableBeforeWall = Vector2Int.zero;
-
-            for (int step = 1; step <= pullRange; step++)
-            {
-                // Calculate position along the vector
-                Vector2 newPos = new Vector2(visitorTile.x, visitorTile.y) + direction * step;
-                Vector2Int candidateTile = new Vector2Int(Mathf.RoundToInt(newPos.x), Mathf.RoundToInt(newPos.y));
-
-                // Check if this tile is walkable
-                var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
-
-                if (node != null && node.walkable)
-                {
-                    if (foundWall)
-                    {
-                        // This is the first walkable tile PAST the wall - this is our destination
-                        return candidateTile;
-                    }
-                    else
-                    {
-                        // Still before the wall, remember this tile
-                        lastWalkableBeforeWall = candidateTile;
-                    }
-                }
-                else
-                {
-                    // Hit a wall
-                    foundWall = true;
-                }
-            }
-
-            // If we never found a walkable tile past the wall, return the last walkable before it
-            // (This handles cases where the wall extends beyond pullRange)
-            return lastWalkableBeforeWall;
         }
 
         private void ApplyHeartwardBias()
