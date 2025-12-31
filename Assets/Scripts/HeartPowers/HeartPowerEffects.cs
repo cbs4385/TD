@@ -1333,9 +1333,17 @@ namespace FaeMaze.HeartPowers
 
             Debug.Log("[HeartwardGrasp] Wall found between visitor and Heart");
 
-            // Destination is the heart tile itself
-            pullDestination = heartTile;
-            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} (heart tile)");
+            // Find destination along vector toward Heart within pullRange
+            int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
+            pullDestination = FindPullDestination(visitorStartTile, heartTile, pullRange);
+
+            if (pullDestination == Vector2Int.zero)
+            {
+                Debug.Log("[HeartwardGrasp] No walkable destination tile found along pull path");
+                return;
+            }
+
+            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} (distance: {Vector2Int.Distance(visitorStartTile, pullDestination)} tiles)");
 
             // Find wall tile adjacent to visitor along visitor->heart vector
             graspTile = FindAdjacentWallTile(visitorStartTile, heartTile);
@@ -1439,24 +1447,9 @@ namespace FaeMaze.HeartPowers
                     // Wait 0.75 seconds for grasp animation to finish
                     if (phaseElapsed >= 0.75f)
                     {
-                        // Check if visitor ended up at heart tile and consume if so
-                        if (targetVisitor != null && pullDestination == manager.MazeGrid.HeartGridPos)
-                        {
-                            var heart = Object.FindObjectOfType<FaeMaze.Maze.HeartOfTheMaze>();
-                            if (heart != null)
-                            {
-                                Debug.Log($"[HeartwardGrasp] Visitor reached heart tile, triggering consumption");
-                                heart.OnVisitorConsumed(targetVisitor);
-                                targetVisitor = null; // Visitor is now destroyed
-                            }
-                        }
-
                         // Cleanup and complete
                         currentPhase = AnimationPhase.Complete;
-                        if (targetVisitor != null)
-                        {
-                            ResumeVisitor();
-                        }
+                        ResumeVisitor();
 
                         if (graspVisual != null)
                         {
