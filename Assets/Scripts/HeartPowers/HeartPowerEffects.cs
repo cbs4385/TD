@@ -1281,6 +1281,10 @@ namespace FaeMaze.HeartPowers
         private Vector3 lerpEndPosition;
         private bool visitorMovementStopped = false;
 
+        // Grasp visual animation tracking
+        private Vector3 graspOriginalPosition;
+        private Vector3 graspAnimationDirection;
+
         public HeartwardGraspEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
 
@@ -1464,6 +1468,67 @@ namespace FaeMaze.HeartPowers
                     }
                     break;
             }
+
+            // Animate grasp visual if it exists
+            if (graspVisual != null)
+            {
+                UpdateGraspVisualAnimation();
+            }
+        }
+
+        private void UpdateGraspVisualAnimation()
+        {
+            // First half animation (0.0 - 1.0s): extend, hold, retract
+            // Second half animation (1.0 - 2.0s): extend, hold, retract
+            float animTime = elapsedTime;
+            Vector3 offset = Vector3.zero;
+
+            if (animTime < 1.0f)
+            {
+                // First half: 0.0-0.25s extend, 0.25-0.75s hold, 0.75-1.0s retract
+                if (animTime < 0.25f)
+                {
+                    // Extend toward visitor
+                    float t = animTime / 0.25f;
+                    offset = graspAnimationDirection * t;
+                }
+                else if (animTime < 0.75f)
+                {
+                    // Hold extended
+                    offset = graspAnimationDirection;
+                }
+                else
+                {
+                    // Retract back
+                    float t = (1.0f - animTime) / 0.25f;
+                    offset = graspAnimationDirection * t;
+                }
+            }
+            else if (animTime < 2.0f)
+            {
+                // Second half: 1.0-1.25s extend, 1.25-1.75s hold, 1.75-2.0s retract
+                float secondHalfTime = animTime - 1.0f;
+
+                if (secondHalfTime < 0.25f)
+                {
+                    // Extend toward destination
+                    float t = secondHalfTime / 0.25f;
+                    offset = graspAnimationDirection * t;
+                }
+                else if (secondHalfTime < 0.75f)
+                {
+                    // Hold extended
+                    offset = graspAnimationDirection;
+                }
+                else
+                {
+                    // Retract back
+                    float t = (1.0f - secondHalfTime) / 0.25f;
+                    offset = graspAnimationDirection * t;
+                }
+            }
+
+            graspVisual.transform.position = graspOriginalPosition + offset;
         }
 
         public override void OnEnd()
@@ -1553,6 +1618,10 @@ namespace FaeMaze.HeartPowers
             graspVisual = Object.Instantiate(graspPrefab, graspPosition, rotation);
             graspVisual.name = "GraspEffect";
 
+            // Store original position and animation direction for grasp visual animation
+            graspOriginalPosition = graspPosition;
+            graspAnimationDirection = direction;
+
             Debug.Log($"[HeartwardGrasp] Spawned grasp prefab at {graspPosition} pointing toward {pointTowardPosition}");
         }
 
@@ -1571,7 +1640,6 @@ namespace FaeMaze.HeartPowers
             targetVisitor.transform.position = wallPosition;
 
             graspVisual.transform.position = wallPosition;
-            graspVisual.transform.position += new Vector3(0, 0, -0.5f);
 
             // Reorient grasp Y-axis toward heart
             Vector3 heartPosition = manager.MazeGrid.GridToWorld(heartTile.x, heartTile.y);
@@ -1583,6 +1651,10 @@ namespace FaeMaze.HeartPowers
                 directionToHeart.Normalize();
                 Quaternion rotation = Quaternion.LookRotation(Vector3.forward, directionToHeart);
                 graspVisual.transform.rotation = rotation;
+
+                // Update animation tracking for second half
+                graspOriginalPosition = wallPosition;
+                graspAnimationDirection = directionToHeart;
             }
 
             Debug.Log($"[HeartwardGrasp] Repositioned to wall tile {wallTile}, grasp pointing toward heart");
