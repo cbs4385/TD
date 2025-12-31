@@ -1608,13 +1608,23 @@ namespace FaeMaze.HeartPowers
 
             direction.Normalize();
 
-            // Check tiles adjacent to start along the direction
+            // Check all 8 adjacent tiles for walls, prioritizing those along the direction
             Vector2Int[] adjacentOffsets = new Vector2Int[]
             {
-                new Vector2Int(Mathf.RoundToInt(direction.x), Mathf.RoundToInt(direction.y)),
-                new Vector2Int(Mathf.RoundToInt(direction.x), 0),
-                new Vector2Int(0, Mathf.RoundToInt(direction.y))
+                // Cardinal directions
+                new Vector2Int(0, 1),   // up
+                new Vector2Int(0, -1),  // down
+                new Vector2Int(-1, 0),  // left
+                new Vector2Int(1, 0),   // right
+                // Diagonal directions
+                new Vector2Int(-1, 1),  // up-left
+                new Vector2Int(1, 1),   // up-right
+                new Vector2Int(-1, -1), // down-left
+                new Vector2Int(1, -1)   // down-right
             };
+
+            Vector2Int bestWall = Vector2Int.zero;
+            float bestAlignment = -2f; // Start with impossible value
 
             foreach (var offset in adjacentOffsets)
             {
@@ -1623,11 +1633,19 @@ namespace FaeMaze.HeartPowers
 
                 if (node != null && !node.walkable)
                 {
-                    return candidate;
+                    // Calculate how well this wall aligns with the direction to heart
+                    Vector2 offsetNormalized = new Vector2(offset.x, offset.y).normalized;
+                    float alignment = Vector2.Dot(offsetNormalized, direction);
+
+                    if (alignment > bestAlignment)
+                    {
+                        bestAlignment = alignment;
+                        bestWall = candidate;
+                    }
                 }
             }
 
-            return Vector2Int.zero;
+            return bestWall;
         }
 
         private Vector2Int FindFirstWallTile(Vector2Int start, Vector2Int end)
