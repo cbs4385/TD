@@ -37,8 +37,8 @@ namespace FaeMaze.Cameras
         private float focalHeightOffset = 2f;
 
         [SerializeField]
-        [Tooltip("Camera viewing angle in degrees (0 = level, 90 = top-down)")]
-        [Range(0f, 90f)]
+        [Tooltip("Camera viewing angle in degrees (0 = level, 89 = near top-down)")]
+        [Range(0f, 89f)]
         private float focalViewAngle = 45f;
 
         [SerializeField]
@@ -511,7 +511,7 @@ namespace FaeMaze.Cameras
                 // Positive scroll = increase angle (move toward top-down)
                 // Negative scroll = decrease angle (move toward level)
                 focalViewAngle += scroll * angleChangeSpeed;
-                focalViewAngle = Mathf.Clamp(focalViewAngle, 0f, 90f);
+                focalViewAngle = Mathf.Clamp(focalViewAngle, 0f, 89f);
                 Debug.Log($"[CameraController3D] Angle changed: {oldAngle:F2}° -> {focalViewAngle:F2}° (scroll: {scroll}, speed: {angleChangeSpeed})");
                 return;
             }
@@ -762,7 +762,7 @@ namespace FaeMaze.Cameras
 
             // Calculate camera position based on viewing angle
             // 0 degrees = level with focal point (horizontal view)
-            // 90 degrees = directly above focal point (top-down view)
+            // 89 degrees = nearly above focal point (near top-down view)
             float angleRad = focalViewAngle * Mathf.Deg2Rad;
             float cameraDistance = 7f; // Fixed distance from focal point
             float horizontalDistance = cameraDistance * Mathf.Cos(angleRad);
