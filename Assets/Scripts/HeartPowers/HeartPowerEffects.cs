@@ -1513,11 +1513,11 @@ namespace FaeMaze.HeartPowers
         private void SpawnGraspPrefab(Vector2Int tile, Vector2Int pointToward)
         {
             // Load grasp prefab
-            GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
+            GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/Grasp/grasp");
 
             if (graspPrefab == null)
             {
-                Debug.LogWarning("[HeartwardGrasp] Could not load grasp prefab from Resources/Prefabs/Props/grasp");
+                Debug.LogWarning("[HeartwardGrasp] Could not load grasp prefab from Resources/Prefabs/Props/Grasp/grasp");
                 return;
             }
 
