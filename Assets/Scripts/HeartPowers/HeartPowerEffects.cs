@@ -1491,8 +1491,8 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Freeze visitor in place by setting speed to 0
-            targetVisitor.SetFrozen(true);
+            // Stop visitor in place
+            targetVisitor.Stop();
             visitorMovementStopped = true;
             Debug.Log("[HeartwardGrasp] Visitor movement stopped");
         }
@@ -1504,8 +1504,8 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Unfreeze visitor
-            targetVisitor.SetFrozen(false);
+            // Resume visitor movement
+            targetVisitor.Resume();
             visitorMovementStopped = false;
             Debug.Log("[HeartwardGrasp] Visitor movement resumed");
         }
