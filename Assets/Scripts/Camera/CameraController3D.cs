@@ -255,6 +255,7 @@ namespace FaeMaze.Cameras
                 TryConfigureInitialFocalCameraPose();
 
                 HandleFocalPointInput();
+                HandleScrollZoom();
                 UpdateFocalPointCameraPosition();
                 return;
             }
