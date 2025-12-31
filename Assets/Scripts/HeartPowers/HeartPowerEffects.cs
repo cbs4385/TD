@@ -1830,9 +1830,9 @@ namespace FaeMaze.HeartPowers
             // Normalize direction
             direction /= magnitude;
 
-            // Step along the direction vector for up to pullRange tiles
-            // Find the first walkable tile encountered
-            Vector2Int lastWalkable = Vector2Int.zero;
+            // Step along the direction vector to find first walkable tile PAST a wall
+            bool foundWall = false;
+            Vector2Int lastWalkableBeforeWall = Vector2Int.zero;
 
             for (int step = 1; step <= pullRange; step++)
             {
@@ -1845,20 +1845,27 @@ namespace FaeMaze.HeartPowers
 
                 if (node != null && node.walkable)
                 {
-                    lastWalkable = candidateTile;
+                    if (foundWall)
+                    {
+                        // This is the first walkable tile PAST the wall - this is our destination
+                        return candidateTile;
+                    }
+                    else
+                    {
+                        // Still before the wall, remember this tile
+                        lastWalkableBeforeWall = candidateTile;
+                    }
                 }
                 else
                 {
-                    // Hit a wall, return the last walkable tile we found
-                    if (lastWalkable != Vector2Int.zero)
-                    {
-                        return lastWalkable;
-                    }
+                    // Hit a wall
+                    foundWall = true;
                 }
             }
 
-            // Return the last walkable tile we found within range
-            return lastWalkable;
+            // If we never found a walkable tile past the wall, return the last walkable before it
+            // (This handles cases where the wall extends beyond pullRange)
+            return lastWalkableBeforeWall;
         }
 
         private void ApplyHeartwardBias()
