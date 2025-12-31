@@ -1257,11 +1257,29 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public class HeartwardGraspEffect : ActivePowerEffect
     {
+        private enum AnimationPhase
+        {
+            InitialPause,    // 0.0 - 0.75s: Visitor stopped at start tile
+            PullToWall,      // 0.75 - 1.0s: Pull visitor into wall (to grasp tile)
+            Repositioning,   // 1.0s: Move to wall tile along vector, instant
+            PushToDestination, // 1.0 - 1.25s: Push visitor to destination
+            FinalPause,      // 1.25 - 2.0s: Wait for grasp animation to finish
+            Complete         // 2.0s+: Cleanup
+        }
+
         private GameObject graspVisual;
         private VisitorControllerBase targetVisitor;
+        private Vector2Int visitorStartTile;
+        private Vector2Int graspTile;
+        private Vector2Int wallTile;
         private Vector2Int pullDestination;
         private const string ModifierSourceId = "HeartwardGrasp";
-        private bool pullExecuted = false;
+
+        private AnimationPhase currentPhase = AnimationPhase.InitialPause;
+        private float phaseStartTime = 0f;
+        private Vector3 lerpStartPosition;
+        private Vector3 lerpEndPosition;
+        private bool visitorMovementStopped = false;
 
         public HeartwardGraspEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
@@ -1299,11 +1317,11 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            Vector2Int visitorTile = new Vector2Int(vx, vy);
-            Debug.Log($"[HeartwardGrasp] Visitor tile: {visitorTile}");
+            visitorStartTile = new Vector2Int(vx, vy);
+            Debug.Log($"[HeartwardGrasp] Visitor start tile: {visitorStartTile}");
 
             // Check if there's a wall between visitor and Heart
-            if (!IsWallBetween(visitorTile, heartTile))
+            if (!IsWallBetween(visitorStartTile, heartTile))
             {
                 Debug.Log("[HeartwardGrasp] No wall between visitor and Heart");
                 return;
@@ -1313,7 +1331,7 @@ namespace FaeMaze.HeartPowers
 
             // Find destination along vector toward Heart
             int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
-            pullDestination = FindPullDestination(visitorTile, heartTile, pullRange);
+            pullDestination = FindPullDestination(visitorStartTile, heartTile, pullRange);
 
             if (pullDestination == Vector2Int.zero)
             {
@@ -1321,32 +1339,134 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} (distance: {Vector2Int.Distance(visitorTile, pullDestination)} tiles)");
+            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} (distance: {Vector2Int.Distance(visitorStartTile, pullDestination)} tiles)");
 
-            // Instantiate grasp prefab for animation
-            InstantiateGraspVisual(visitorTile, pullDestination);
+            // Find wall tile adjacent to visitor along visitor->heart vector
+            graspTile = FindAdjacentWallTile(visitorStartTile, heartTile);
 
-            // Execute the pull (teleport visitor)
-            ExecutePull();
+            if (graspTile == Vector2Int.zero)
+            {
+                Debug.Log("[HeartwardGrasp] No adjacent wall tile found");
+                return;
+            }
 
-            // Apply Heart-ward path bias
-            ApplyHeartwardBias();
+            Debug.Log($"[HeartwardGrasp] Grasp tile (adjacent wall): {graspTile}");
+
+            // Find first wall tile along visitor->heart vector for repositioning
+            wallTile = FindFirstWallTile(visitorStartTile, heartTile);
+
+            if (wallTile == Vector2Int.zero)
+            {
+                Debug.Log("[HeartwardGrasp] No wall tile found along vector");
+                return;
+            }
+
+            Debug.Log($"[HeartwardGrasp] Wall tile for repositioning: {wallTile}");
+
+            // Spawn grasp prefab at adjacent wall tile, pointing toward visitor
+            SpawnGraspPrefab(graspTile, visitorStartTile);
+
+            // Stop visitor movement
+            StopVisitor();
+
+            // Start animation sequence
+            currentPhase = AnimationPhase.InitialPause;
+            phaseStartTime = elapsedTime;
+
+            Debug.Log("[HeartwardGrasp] Animation sequence started");
         }
 
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
 
-            // Clean up grasp visual after animation
-            if (graspVisual != null && elapsedTime > 1.0f)
+            if (targetVisitor == null || currentPhase == AnimationPhase.Complete)
             {
-                Object.Destroy(graspVisual);
-                graspVisual = null;
+                return;
+            }
+
+            float phaseElapsed = elapsedTime - phaseStartTime;
+
+            switch (currentPhase)
+            {
+                case AnimationPhase.InitialPause:
+                    // Wait 0.75 seconds
+                    if (phaseElapsed >= 0.75f)
+                    {
+                        // Start pull to wall
+                        currentPhase = AnimationPhase.PullToWall;
+                        phaseStartTime = elapsedTime;
+                        lerpStartPosition = targetVisitor.transform.position;
+                        lerpEndPosition = manager.MazeGrid.GridToWorld(graspTile.x, graspTile.y);
+                        Debug.Log($"[HeartwardGrasp] Phase: PullToWall from {lerpStartPosition} to {lerpEndPosition}");
+                    }
+                    break;
+
+                case AnimationPhase.PullToWall:
+                    // Translate visitor to grasp tile over 0.25 seconds
+                    float pullT = Mathf.Clamp01(phaseElapsed / 0.25f);
+                    targetVisitor.transform.position = Vector3.Lerp(lerpStartPosition, lerpEndPosition, pullT);
+
+                    if (phaseElapsed >= 0.25f)
+                    {
+                        // Instantly move to wall tile and reorient grasp
+                        currentPhase = AnimationPhase.Repositioning;
+                        RepositionToWallTile();
+
+                        // Immediately start push to destination
+                        currentPhase = AnimationPhase.PushToDestination;
+                        phaseStartTime = elapsedTime;
+                        lerpStartPosition = targetVisitor.transform.position;
+                        lerpEndPosition = manager.MazeGrid.GridToWorld(pullDestination.x, pullDestination.y);
+                        Debug.Log($"[HeartwardGrasp] Phase: PushToDestination from {lerpStartPosition} to {lerpEndPosition}");
+                    }
+                    break;
+
+                case AnimationPhase.PushToDestination:
+                    // Translate visitor to destination over 0.25 seconds
+                    float pushT = Mathf.Clamp01(phaseElapsed / 0.25f);
+                    targetVisitor.transform.position = Vector3.Lerp(lerpStartPosition, lerpEndPosition, pushT);
+
+                    if (phaseElapsed >= 0.25f)
+                    {
+                        // Start final pause
+                        currentPhase = AnimationPhase.FinalPause;
+                        phaseStartTime = elapsedTime;
+                        targetVisitor.RecalculatePath();
+                        ApplyHeartwardBias();
+                        ApplyTierEffects();
+                        Debug.Log("[HeartwardGrasp] Phase: FinalPause");
+                    }
+                    break;
+
+                case AnimationPhase.FinalPause:
+                    // Wait 0.75 seconds for grasp animation to finish
+                    if (phaseElapsed >= 0.75f)
+                    {
+                        // Cleanup and complete
+                        currentPhase = AnimationPhase.Complete;
+                        ResumeVisitor();
+
+                        if (graspVisual != null)
+                        {
+                            Object.Destroy(graspVisual);
+                            graspVisual = null;
+                        }
+
+                        Debug.Log("[HeartwardGrasp] Animation complete");
+                    }
+                    break;
             }
         }
 
         public override void OnEnd()
         {
+            // Resume visitor if still paused
+            if (targetVisitor != null && visitorMovementStopped)
+            {
+                ResumeVisitor();
+            }
+
             // Clean up path modifiers
             manager.PathModifier.ClearBySource(ModifierSourceId);
 
@@ -1362,6 +1482,181 @@ namespace FaeMaze.HeartPowers
             {
                 manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.HeartwardGrasp);
             }
+        }
+
+        private void StopVisitor()
+        {
+            if (targetVisitor == null || visitorMovementStopped)
+            {
+                return;
+            }
+
+            // Freeze visitor in place by setting speed to 0
+            targetVisitor.SetFrozen(true);
+            visitorMovementStopped = true;
+            Debug.Log("[HeartwardGrasp] Visitor movement stopped");
+        }
+
+        private void ResumeVisitor()
+        {
+            if (targetVisitor == null || !visitorMovementStopped)
+            {
+                return;
+            }
+
+            // Unfreeze visitor
+            targetVisitor.SetFrozen(false);
+            visitorMovementStopped = false;
+            Debug.Log("[HeartwardGrasp] Visitor movement resumed");
+        }
+
+        private void SpawnGraspPrefab(Vector2Int tile, Vector2Int pointToward)
+        {
+            // Load grasp prefab
+            GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
+
+            if (graspPrefab == null)
+            {
+                Debug.LogWarning("[HeartwardGrasp] Could not load grasp prefab from Resources/Prefabs/Props/grasp");
+                return;
+            }
+
+            // Get world position for grasp tile
+            Vector3 graspPosition = manager.MazeGrid.GridToWorld(tile.x, tile.y);
+            graspPosition.z = -0.5f; // Slightly above floor
+
+            // Calculate direction from grasp to point toward (visitor)
+            Vector3 pointTowardPosition = manager.MazeGrid.GridToWorld(pointToward.x, pointToward.y);
+            Vector3 direction = pointTowardPosition - graspPosition;
+            direction.z = 0f;
+
+            if (direction.sqrMagnitude < 0.0001f)
+            {
+                direction = Vector3.up;
+            }
+            else
+            {
+                direction.Normalize();
+            }
+
+            // Create rotation with Y-axis pointing toward visitor
+            Quaternion rotation = Quaternion.LookRotation(Vector3.forward, direction);
+
+            // Instantiate grasp prefab
+            graspVisual = Object.Instantiate(graspPrefab, graspPosition, rotation);
+            graspVisual.name = "GraspEffect";
+
+            Debug.Log($"[HeartwardGrasp] Spawned grasp prefab at {graspPosition} pointing toward {pointTowardPosition}");
+        }
+
+        private void RepositionToWallTile()
+        {
+            if (targetVisitor == null || graspVisual == null)
+            {
+                return;
+            }
+
+            Vector2Int heartTile = manager.MazeGrid.HeartGridPos;
+
+            // Move visitor and grasp to wall tile
+            Vector3 wallPosition = manager.MazeGrid.GridToWorld(wallTile.x, wallTile.y);
+            wallPosition.z = 0f;
+            targetVisitor.transform.position = wallPosition;
+
+            graspVisual.transform.position = wallPosition;
+            graspVisual.transform.position += new Vector3(0, 0, -0.5f);
+
+            // Reorient grasp Y-axis toward heart
+            Vector3 heartPosition = manager.MazeGrid.GridToWorld(heartTile.x, heartTile.y);
+            Vector3 directionToHeart = heartPosition - wallPosition;
+            directionToHeart.z = 0f;
+
+            if (directionToHeart.sqrMagnitude > 0.0001f)
+            {
+                directionToHeart.Normalize();
+                Quaternion rotation = Quaternion.LookRotation(Vector3.forward, directionToHeart);
+                graspVisual.transform.rotation = rotation;
+            }
+
+            Debug.Log($"[HeartwardGrasp] Repositioned to wall tile {wallTile}, grasp pointing toward heart");
+        }
+
+        private void ApplyTierEffects()
+        {
+            if (targetVisitor == null)
+            {
+                return;
+            }
+
+            // Tier III: Apply Mesmerized state
+            if (definition.tier >= 3 && definition.flag1)
+            {
+                float mesmerizeDuration = definition.param3 > 0 ? definition.param3 : 3f;
+                targetVisitor.SetMesmerized(mesmerizeDuration);
+                Debug.Log($"[HeartwardGrasp] Applied Mesmerized for {mesmerizeDuration}s (Tier III)");
+            }
+        }
+
+        private Vector2Int FindAdjacentWallTile(Vector2Int start, Vector2Int end)
+        {
+            // Calculate direction vector
+            Vector2 direction = new Vector2(end.x - start.x, end.y - start.y);
+            if (direction.sqrMagnitude < 0.01f)
+            {
+                return Vector2Int.zero;
+            }
+
+            direction.Normalize();
+
+            // Check tiles adjacent to start along the direction
+            Vector2Int[] adjacentOffsets = new Vector2Int[]
+            {
+                new Vector2Int(Mathf.RoundToInt(direction.x), Mathf.RoundToInt(direction.y)),
+                new Vector2Int(Mathf.RoundToInt(direction.x), 0),
+                new Vector2Int(0, Mathf.RoundToInt(direction.y))
+            };
+
+            foreach (var offset in adjacentOffsets)
+            {
+                Vector2Int candidate = start + offset;
+                var node = manager.MazeGrid.Grid.GetNode(candidate.x, candidate.y);
+
+                if (node != null && !node.walkable)
+                {
+                    return candidate;
+                }
+            }
+
+            return Vector2Int.zero;
+        }
+
+        private Vector2Int FindFirstWallTile(Vector2Int start, Vector2Int end)
+        {
+            // Calculate direction vector
+            Vector2 direction = new Vector2(end.x - start.x, end.y - start.y);
+            float magnitude = direction.magnitude;
+
+            if (magnitude < 0.01f)
+            {
+                return Vector2Int.zero;
+            }
+
+            direction /= magnitude;
+
+            // Step along the direction to find first wall
+            for (int step = 1; step <= Mathf.CeilToInt(magnitude); step++)
+            {
+                Vector2 position = new Vector2(start.x, start.y) + direction * step;
+                Vector2Int tile = new Vector2Int(Mathf.RoundToInt(position.x), Mathf.RoundToInt(position.y));
+
+                var node = manager.MazeGrid.Grid.GetNode(tile.x, tile.y);
+                if (node != null && !node.walkable)
+                {
+                    return tile;
+                }
+            }
+
+            return Vector2Int.zero;
         }
 
         private VisitorControllerBase FindNearestVisitor(Vector2Int targetTile)
@@ -1474,76 +1769,6 @@ namespace FaeMaze.HeartPowers
 
             // Return the last walkable tile we found within range
             return lastWalkable;
-        }
-
-        private void InstantiateGraspVisual(Vector2Int from, Vector2Int to)
-        {
-            // Load grasp prefab
-            GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
-
-            if (graspPrefab == null)
-            {
-                // Try alternative path
-                graspPrefab = Resources.Load<GameObject>("grasp");
-            }
-
-            if (graspPrefab == null)
-            {
-                return;
-            }
-
-            // Instantiate at midpoint between visitor and destination
-            Vector3 fromWorld = manager.MazeGrid.GridToWorld(from.x, from.y);
-            Vector3 toWorld = manager.MazeGrid.GridToWorld(to.x, to.y);
-            Vector3 midpoint = (fromWorld + toWorld) / 2f;
-            midpoint.z = -0.5f; // Above floor
-
-            graspVisual = Object.Instantiate(graspPrefab, midpoint, Quaternion.identity);
-
-            // Add tile visualizer effects along pull path
-            if (manager.TileVisualizer != null)
-            {
-                // Create a line of tiles from visitor to destination
-                int steps = Mathf.Max(Mathf.Abs(to.x - from.x), Mathf.Abs(to.y - from.y));
-
-                for (int i = 0; i <= steps; i++)
-                {
-                    float t = steps > 0 ? (float)i / steps : 0;
-                    int tileX = Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t));
-                    int tileY = Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t));
-
-                    Vector2Int tile = new Vector2Int(tileX, tileY);
-                    float intensity = 1.0f - (i / (float)steps) * 0.5f; // Fade along path
-
-                    manager.TileVisualizer.AddTileEffect(tile, HeartPowerType.HeartwardGrasp, intensity, 2.0f);
-                }
-            }
-        }
-
-        private void ExecutePull()
-        {
-            if (targetVisitor == null || pullDestination == Vector2Int.zero)
-            {
-                return;
-            }
-
-            // Convert destination to world position
-            Vector3 destinationWorld = manager.MazeGrid.GridToWorld(pullDestination.x, pullDestination.y);
-
-            // Teleport visitor
-            targetVisitor.transform.position = destinationWorld;
-
-            // Force path recalculation
-            targetVisitor.RecalculatePath();
-
-            // Tier III: Apply Mesmerized state
-            if (definition.tier >= 3 && definition.flag1)
-            {
-                float mesmerizeDuration = definition.param3 > 0 ? definition.param3 : 3f;
-                targetVisitor.SetMesmerized(mesmerizeDuration);
-            }
-
-            pullExecuted = true;
         }
 
         private void ApplyHeartwardBias()
