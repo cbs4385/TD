@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 8000000004}
   - component: {fileID: 8000000005}
   - component: {fileID: 8000000006}
+  - component: {fileID: -5846067536000109831}
   m_Layer: 0
   m_Name: WillowTheWisp
   m_TagString: Untagged
@@ -131,7 +132,7 @@ MonoBehaviour:
   wispController: {fileID: 9100000, guid: 85468a3d9dd2b2c41a578d258b624f4e, type: 2}
   enableGlow: 1
   glowColor: {r: 0.7, g: 0.85, b: 1, a: 1}
-  glowRadius: 3
+  glowRange: 3
   glowFrequency: 1.5
   glowMinIntensity: 0.5
   glowMaxIntensity: 1
@@ -143,9 +144,8 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8000000000}
   m_Enabled: 1
-  serializedVersion: 10
+  serializedVersion: 11
   m_Type: 2
-  m_Shape: 0
   m_Color: {r: 0.7, g: 0.85, b: 1, a: 1}
   m_Intensity: 1
   m_Range: 3
@@ -195,8 +195,41 @@ Light:
   m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
+  m_ForceVisible: 0
   m_ShadowRadius: 0
   m_ShadowAngle: 0
+  m_LightUnit: 1
+  m_LuxAtDistance: 1
+  m_EnableSpotReflector: 1
+--- !u!114 &-5846067536000109831
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1001 &7234567890123456788
 PrefabInstance:
   m_ObjectHideFlags: 0
