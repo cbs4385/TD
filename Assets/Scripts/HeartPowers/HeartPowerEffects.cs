@@ -1633,7 +1633,7 @@ namespace FaeMaze.HeartPowers
             // Calculate perpendicular vector for margin checking (±1 tile)
             Vector2 perpendicular = new Vector2(-direction.y, direction.x);
 
-            // Collect all eligible walkable tiles, preferring ones past a wall
+            // Search for first walkable tiles past a wall (stop as soon as found)
             int maxSearchDistance = 10;
             bool foundWall = false;
             List<Vector2Int> walkableTiles = new List<Vector2Int>();
@@ -1678,9 +1678,15 @@ namespace FaeMaze.HeartPowers
                 {
                     foundWall = true;
                 }
+
+                // Stop immediately once we've found walkable tiles past a wall
+                if (walkableTilesPastWall.Count > 0)
+                {
+                    break;
+                }
             }
 
-            // Prefer tiles past a wall, otherwise use any walkable tile
+            // Prefer tiles past a wall, otherwise use any walkable tile found
             List<Vector2Int> eligibleTiles = walkableTilesPastWall.Count > 0 ? walkableTilesPastWall : walkableTiles;
 
             if (eligibleTiles.Count == 0)
