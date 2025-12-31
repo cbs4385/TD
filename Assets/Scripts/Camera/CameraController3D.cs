@@ -487,10 +487,17 @@ namespace FaeMaze.Cameras
             Mouse mouse = Mouse.current;
             if (mouse == null)
             {
+                Debug.Log("[CameraController3D] HandleScrollZoom: Mouse is null");
                 return;
             }
 
             float scroll = mouse.scroll.ReadValue().y;
+
+            if (!Mathf.Approximately(scroll, 0f))
+            {
+                Debug.Log($"[CameraController3D] Scroll detected: {scroll}, useFocalPointMode: {useFocalPointMode}");
+            }
+
             if (Mathf.Approximately(scroll, 0f))
             {
                 return;
@@ -499,14 +506,17 @@ namespace FaeMaze.Cameras
             // In focal point mode, scroll changes viewing angle instead of radius
             if (useFocalPointMode)
             {
+                float oldAngle = focalViewAngle;
                 // Positive scroll = increase angle (move toward top-down)
                 // Negative scroll = decrease angle (move toward level)
                 focalViewAngle += scroll * angleChangeSpeed;
                 focalViewAngle = Mathf.Clamp(focalViewAngle, 0f, 90f);
+                Debug.Log($"[CameraController3D] Angle changed: {oldAngle:F2}° -> {focalViewAngle:F2}° (scroll: {scroll}, speed: {angleChangeSpeed})");
                 return;
             }
 
             // Dolly in/out
+            Debug.Log($"[CameraController3D] Dolly mode: scroll {scroll}, radius: {_radius}");
             float zoomFactor = Mathf.Exp(-scroll * dollySpeed * Time.deltaTime);
             _radius = _radius * zoomFactor;
 
