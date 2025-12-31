@@ -37,6 +37,15 @@ namespace FaeMaze.Cameras
         private float focalHeightOffset = 2f;
 
         [SerializeField]
+        [Tooltip("Camera viewing angle in degrees (0 = level, 90 = top-down)")]
+        [Range(0f, 90f)]
+        private float focalViewAngle = 45f;
+
+        [SerializeField]
+        [Tooltip("Speed at which scroll wheel changes viewing angle")]
+        private float angleChangeSpeed = 5f;
+
+        [SerializeField]
         [Tooltip("Optional transform to use as the focal point (otherwise created at runtime)")]
         private Transform focalPointTransform;
 
@@ -487,6 +496,16 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            // In focal point mode, scroll changes viewing angle instead of radius
+            if (useFocalPointMode)
+            {
+                // Positive scroll = increase angle (move toward top-down)
+                // Negative scroll = decrease angle (move toward level)
+                focalViewAngle += scroll * angleChangeSpeed;
+                focalViewAngle = Mathf.Clamp(focalViewAngle, 0f, 90f);
+                return;
+            }
+
             // Dolly in/out
             float zoomFactor = Mathf.Exp(-scroll * dollySpeed * Time.deltaTime);
             _radius = _radius * zoomFactor;
@@ -729,10 +748,16 @@ namespace FaeMaze.Cameras
             }
 
             Vector3 worldUp = Vector3.forward;
-            Vector3 offset = -forward * focalFollowDistance + worldUp * focalHeightOffset;
 
-            // Ensure camera is exactly 7 units away from focal point
-            offset = offset.normalized * 7f;
+            // Calculate camera position based on viewing angle
+            // 0 degrees = level with focal point (horizontal view)
+            // 90 degrees = directly above focal point (top-down view)
+            float angleRad = focalViewAngle * Mathf.Deg2Rad;
+            float cameraDistance = 7f; // Fixed distance from focal point
+            float horizontalDistance = cameraDistance * Mathf.Cos(angleRad);
+            float verticalOffset = cameraDistance * Mathf.Sin(angleRad);
+
+            Vector3 offset = -forward * horizontalDistance + worldUp * verticalOffset;
 
             // Ensure camera is on the negative Z side (behind the XY plane)
             if (offset.z > 0)
