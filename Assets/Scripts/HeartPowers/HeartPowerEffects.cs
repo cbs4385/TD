@@ -1633,8 +1633,9 @@ namespace FaeMaze.HeartPowers
             // Calculate perpendicular vector for margin checking (±1 tile)
             Vector2 perpendicular = new Vector2(-direction.y, direction.x);
 
-            // Search only a short distance (e.g., 5 tiles) for the first walkable tile
-            int maxSearchDistance = 5;
+            // Search for first walkable tile PAST a wall
+            int maxSearchDistance = 10;
+            bool foundWall = false;
 
             for (int step = 1; step <= maxSearchDistance; step++)
             {
@@ -1648,19 +1649,39 @@ namespace FaeMaze.HeartPowers
                     new Vector2Int(Mathf.RoundToInt(centerPos.x - perpendicular.x), Mathf.RoundToInt(centerPos.y - perpendicular.y))  // -1 perpendicular
                 };
 
+                // Check if any candidate is a wall
+                bool stepHasWall = false;
                 foreach (var candidateTile in candidates)
                 {
                     var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
-
-                    if (node != null && node.walkable)
+                    if (node != null && !node.walkable)
                     {
-                        Debug.Log($"[HeartwardGrasp] Found destination at {candidateTile}, step {step} from activation");
-                        return candidateTile;
+                        stepHasWall = true;
+                        break;
+                    }
+                }
+
+                if (stepHasWall)
+                {
+                    foundWall = true;
+                }
+                else if (foundWall)
+                {
+                    // We've passed through a wall and now found walkable tiles
+                    // Return the first walkable one
+                    foreach (var candidateTile in candidates)
+                    {
+                        var node = manager.MazeGrid.Grid.GetNode(candidateTile.x, candidateTile.y);
+                        if (node != null && node.walkable)
+                        {
+                            Debug.Log($"[HeartwardGrasp] Found destination at {candidateTile}, step {step} from activation (past wall)");
+                            return candidateTile;
+                        }
                     }
                 }
             }
 
-            Debug.LogWarning($"[HeartwardGrasp] No walkable tile found within {maxSearchDistance} tiles toward heart");
+            Debug.LogWarning($"[HeartwardGrasp] No walkable tile found past a wall within {maxSearchDistance} tiles toward heart");
             return Vector2Int.zero;
         }
 
