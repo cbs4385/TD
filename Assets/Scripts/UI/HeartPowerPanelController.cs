@@ -33,6 +33,10 @@ namespace FaeMaze.UI
         [Tooltip("Reference to the CameraController3D")]
         private CameraController3D cameraController;
 
+        [SerializeField]
+        [Tooltip("Reference to the WaveSpawner")]
+        private Systems.WaveSpawner waveSpawner;
+
         [Header("Settings")]
         [SerializeField]
         [Tooltip("Toggle panel visibility with F2 key")]
@@ -46,8 +50,11 @@ namespace FaeMaze.UI
         private Image[] buttonImages = new Image[9];
         private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[9];
         private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[9];
-        private TextMeshProUGUI chargesText;
-        private TextMeshProUGUI essenceText;
+
+        // Right panel UI elements
+        private TextMeshProUGUI waveText;
+        private TextMeshProUGUI essenceValueText;
+        private Slider essenceBar;
 
         private readonly string[] powerNames = new string[]
         {
@@ -142,6 +149,12 @@ namespace FaeMaze.UI
                 cameraController = FindFirstObjectByType<CameraController3D>();
             }
 
+            // Auto-find WaveSpawner if not assigned
+            if (waveSpawner == null)
+            {
+                waveSpawner = FindFirstObjectByType<Systems.WaveSpawner>();
+            }
+
             // Auto-create panel if not assigned
             if (heartPowersPanel == null)
             {
@@ -175,11 +188,14 @@ namespace FaeMaze.UI
             // Update ROYGBIV glow effects
             UpdateGlowEffects();
 
-            // Handle keyboard shortcuts (1-7 keys)
+            // Handle keyboard shortcuts (1-9 keys)
             HandleKeyboardInput();
 
             // Handle targeting mode for targeted powers
             HandleTargetingMode();
+
+            // Update wave and essence displays
+            UpdateWaveAndEssenceDisplays();
         }
 
         private void OnEnable()
@@ -301,6 +317,9 @@ namespace FaeMaze.UI
 
         /// <summary>
         /// Automatically creates the Heart Powers panel UI hierarchy.
+        /// Creates a unified HUD bar spanning the bottom of the screen with:
+        /// - Left half: 9 heart power buttons
+        /// - Right half: wave count and essence display with slider
         /// </summary>
         private void CreateHeartPowersPanelUI()
         {
@@ -312,7 +331,6 @@ namespace FaeMaze.UI
             }
             else
             {
-
                 // Ensure the existing canvas has a GraphicRaycaster for button clicks
                 GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
                 if (raycaster == null)
@@ -320,28 +338,30 @@ namespace FaeMaze.UI
                     raycaster = canvas.gameObject.AddComponent<GraphicRaycaster>();
                     raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
                 }
-                else
-                {
-                }
             }
 
-            // Create the panel at the bottom-right
+            // Create the panel spanning the bottom
             heartPowersPanel = CreatePanel(canvas.transform);
+            float panelHeight = Mathf.Max(200f, 1080f * 0.05f);
 
-            // Create power buttons in a compact horizontal row
-            float panelSize = Mathf.Max(200f, 1920f * 0.05f);
-            float padding = 5f;
-            float spacing = 2f;
-            float buttonWidth = (panelSize - (padding * 2) - (spacing * 8)) / 9f; // 9 buttons
-            float buttonHeight = panelSize - (padding * 2);
-            float startX = -panelSize + padding + buttonWidth / 2f;
-            float buttonYPos = -(panelSize / 2f);
+            // Left half: Create power buttons in a compact horizontal row
+            float leftPadding = 10f;
+            float buttonSpacing = 4f;
+            float buttonHeight = panelHeight - 20f; // Leave 10px padding top/bottom
+            // Calculate button width to fit 9 buttons in left half (assume half screen = 960px)
+            float leftHalfWidth = 960f; // Half of 1920 reference resolution
+            float buttonWidth = (leftHalfWidth - leftPadding * 2 - buttonSpacing * 8) / 9f;
+            float buttonsStartX = -960f + leftPadding; // Start from left edge of screen
+            float buttonYPos = panelHeight / 2f;
 
             for (int i = 0; i < 9; i++)
             {
-                float xPos = startX + (i * (buttonWidth + spacing));
+                float xPos = buttonsStartX + (i * (buttonWidth + buttonSpacing)) + buttonWidth / 2f;
                 powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, buttonYPos, buttonWidth, buttonHeight);
             }
+
+            // Right half: Create wave and essence display
+            CreateRightPanelUI(heartPowersPanel.transform, panelHeight);
         }
 
         /// <summary>
@@ -368,8 +388,8 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Creates the main panel background at the bottom-right of the screen.
-        /// Size is the larger of 5% of viewport or 200px.
+        /// Creates the main panel background spanning the entire bottom of the screen.
+        /// Height is the larger of 5% of viewport or 200px.
         /// </summary>
         private GameObject CreatePanel(Transform parent)
         {
@@ -377,20 +397,146 @@ namespace FaeMaze.UI
             panel.transform.SetParent(parent, false);
 
             RectTransform rect = panel.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(1f, 0f); // Bottom right
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(1f, 0f);
-            rect.anchoredPosition = new Vector2(-10f, 10f); // 10px from edges
+            rect.anchorMin = new Vector2(0f, 0f); // Bottom left
+            rect.anchorMax = new Vector2(1f, 0f); // Bottom right (spans full width)
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = new Vector2(0f, 0f); // Aligned to bottom
 
-            // Use larger of 5% viewport or 200px (with reference resolution 1920x1080, 5% = 96px, so use 200px)
-            float panelSize = Mathf.Max(200f, 1920f * 0.05f);
-            rect.sizeDelta = new Vector2(panelSize, panelSize);
+            // Use larger of 5% viewport or 200px for height (with reference resolution 1920x1080, 5% of height = 54px, so use 200px)
+            float panelHeight = Mathf.Max(200f, 1080f * 0.05f);
+            rect.sizeDelta = new Vector2(0f, panelHeight); // Width 0 means it uses anchors (full width)
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.15f, 0.05f, 0.2f, 0.9f); // Dark purple/magenta tint
 
 
             return panel;
+        }
+
+        /// <summary>
+        /// Creates the right half of the bottom panel with wave and essence displays.
+        /// </summary>
+        private void CreateRightPanelUI(Transform parent, float panelHeight)
+        {
+            float rightHalfStartX = 0f; // Right half starts at center
+            float padding = 20f;
+            float elementSpacing = 10f;
+
+            // Create container for right panel elements
+            GameObject rightContainer = new GameObject("RightPanelContainer");
+            rightContainer.transform.SetParent(parent, false);
+
+            RectTransform containerRect = rightContainer.AddComponent<RectTransform>();
+            containerRect.anchorMin = new Vector2(0.5f, 0f); // Center bottom
+            containerRect.anchorMax = new Vector2(1f, 1f); // Right top (right half of panel)
+            containerRect.offsetMin = new Vector2(padding, padding);
+            containerRect.offsetMax = new Vector2(-padding, -padding);
+
+            // Create Wave display (top of right panel)
+            GameObject waveObj = new GameObject("WaveDisplay");
+            waveObj.transform.SetParent(rightContainer.transform, false);
+
+            RectTransform waveRect = waveObj.AddComponent<RectTransform>();
+            waveRect.anchorMin = new Vector2(0f, 0.65f);
+            waveRect.anchorMax = new Vector2(1f, 1f);
+            waveRect.offsetMin = Vector2.zero;
+            waveRect.offsetMax = Vector2.zero;
+
+            waveText = waveObj.AddComponent<TextMeshProUGUI>();
+            waveText.text = "Wave 0";
+            waveText.fontSize = 24;
+            waveText.fontStyle = FontStyles.Bold;
+            waveText.alignment = TextAlignmentOptions.Center;
+            waveText.color = new Color(1f, 0.85f, 0.3f, 1f); // Gold
+
+            // Create Essence Label
+            GameObject essenceLabelObj = new GameObject("EssenceLabel");
+            essenceLabelObj.transform.SetParent(rightContainer.transform, false);
+
+            RectTransform essenceLabelRect = essenceLabelObj.AddComponent<RectTransform>();
+            essenceLabelRect.anchorMin = new Vector2(0f, 0.35f);
+            essenceLabelRect.anchorMax = new Vector2(1f, 0.6f);
+            essenceLabelRect.offsetMin = Vector2.zero;
+            essenceLabelRect.offsetMax = Vector2.zero;
+
+            TextMeshProUGUI essenceLabelText = essenceLabelObj.AddComponent<TextMeshProUGUI>();
+            essenceLabelText.text = "Essence";
+            essenceLabelText.fontSize = 16;
+            essenceLabelText.fontStyle = FontStyles.Bold;
+            essenceLabelText.alignment = TextAlignmentOptions.Center;
+            essenceLabelText.color = new Color(0.6f, 0.8f, 1f, 1f); // Light blue
+
+            // Create Essence Value Text
+            GameObject essenceValueObj = new GameObject("EssenceValue");
+            essenceValueObj.transform.SetParent(rightContainer.transform, false);
+
+            RectTransform essenceValueRect = essenceValueObj.AddComponent<RectTransform>();
+            essenceValueRect.anchorMin = new Vector2(0f, 0.15f);
+            essenceValueRect.anchorMax = new Vector2(1f, 0.35f);
+            essenceValueRect.offsetMin = Vector2.zero;
+            essenceValueRect.offsetMax = Vector2.zero;
+
+            essenceValueText = essenceValueObj.AddComponent<TextMeshProUGUI>();
+            essenceValueText.text = "0 / 400";
+            essenceValueText.fontSize = 20;
+            essenceValueText.fontStyle = FontStyles.Bold;
+            essenceValueText.alignment = TextAlignmentOptions.Center;
+            essenceValueText.color = new Color(1f, 0.84f, 0f, 1f); // Gold
+
+            // Create Essence Bar (slider)
+            GameObject essenceBarObj = new GameObject("EssenceBar");
+            essenceBarObj.transform.SetParent(rightContainer.transform, false);
+
+            RectTransform essenceBarRect = essenceBarObj.AddComponent<RectTransform>();
+            essenceBarRect.anchorMin = new Vector2(0f, 0f);
+            essenceBarRect.anchorMax = new Vector2(1f, 0.12f);
+            essenceBarRect.offsetMin = Vector2.zero;
+            essenceBarRect.offsetMax = Vector2.zero;
+
+            essenceBar = essenceBarObj.AddComponent<Slider>();
+            essenceBar.minValue = 0f;
+            essenceBar.maxValue = 400f;
+            essenceBar.value = 0f;
+            essenceBar.interactable = false;
+
+            // Create slider background
+            GameObject bgObj = new GameObject("Background");
+            bgObj.transform.SetParent(essenceBarObj.transform, false);
+
+            RectTransform bgRect = bgObj.AddComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+
+            Image bgImage = bgObj.AddComponent<Image>();
+            bgImage.color = new Color(0.2f, 0.2f, 0.2f, 1f);
+
+            // Create slider fill area
+            GameObject fillAreaObj = new GameObject("Fill Area");
+            fillAreaObj.transform.SetParent(essenceBarObj.transform, false);
+
+            RectTransform fillAreaRect = fillAreaObj.AddComponent<RectTransform>();
+            fillAreaRect.anchorMin = Vector2.zero;
+            fillAreaRect.anchorMax = Vector2.one;
+            fillAreaRect.offsetMin = Vector2.zero;
+            fillAreaRect.offsetMax = Vector2.zero;
+
+            // Create slider fill
+            GameObject fillObj = new GameObject("Fill");
+            fillObj.transform.SetParent(fillAreaObj.transform, false);
+
+            RectTransform fillRect = fillObj.AddComponent<RectTransform>();
+            fillRect.anchorMin = Vector2.zero;
+            fillRect.anchorMax = Vector2.one;
+            fillRect.offsetMin = Vector2.zero;
+            fillRect.offsetMax = Vector2.zero;
+
+            Image fillImage = fillObj.AddComponent<Image>();
+            fillImage.color = new Color(0.3f, 0.7f, 1f, 1f); // Blue fill
+
+            essenceBar.fillRect = fillRect;
+            essenceBar.targetGraphic = fillImage;
         }
 
         /// <summary>
@@ -659,49 +805,63 @@ namespace FaeMaze.UI
         #region Display Updates
 
         /// <summary>
-        /// Updates all resource displays.
+        /// Updates wave and essence displays in the right panel.
+        /// </summary>
+        private void UpdateWaveAndEssenceDisplays()
+        {
+            // Update wave display
+            if (waveText != null && waveSpawner != null)
+            {
+                int currentWave = waveSpawner.CurrentWaveNumber;
+                if (waveSpawner.IsWaveActive)
+                {
+                    waveText.text = $"Wave {currentWave}";
+                }
+                else
+                {
+                    waveText.text = currentWave > 0 ? $"Wave {currentWave} Complete" : "No Active Wave";
+                }
+            }
+
+            // Update essence display
+            if (GameController.Instance != null)
+            {
+                int essence = GameController.Instance.CurrentEssence;
+
+                if (essenceValueText != null)
+                {
+                    essenceValueText.text = $"{essence} / 400";
+                }
+
+                if (essenceBar != null)
+                {
+                    essenceBar.value = essence;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates all resource displays (called from events).
         /// </summary>
         private void UpdateResourceDisplays()
         {
-            if (heartPowerManager != null)
-            {
-                UpdateChargesDisplay(heartPowerManager.CurrentCharges);
-
-                // Get essence from GameController directly as source of truth
-                int essence = 0;
-                if (GameController.Instance != null)
-                {
-                    essence = GameController.Instance.CurrentEssence;
-                }
-                else if (heartPowerManager.GameController != null)
-                {
-                    essence = heartPowerManager.GameController.CurrentEssence;
-                }
-
-                UpdateEssenceDisplay(essence);
-            }
+            UpdateWaveAndEssenceDisplays();
         }
 
         /// <summary>
-        /// Updates the charges display.
+        /// Updates the charges display (event handler, no UI element for charges anymore).
         /// </summary>
         private void UpdateChargesDisplay(int charges)
         {
-            if (chargesText != null)
-            {
-                chargesText.text = $"Heart Charges: {charges}";
-            }
+            // Charges are no longer displayed in the UI
         }
 
         /// <summary>
-        /// Updates the essence display.
+        /// Updates the essence display (event handler).
         /// </summary>
         private void UpdateEssenceDisplay(int essence)
         {
-            if (essenceText != null)
-            {
-                essenceText.text = $"Essence: {essence}";
-            }
+            UpdateWaveAndEssenceDisplays();
         }
 
         /// <summary>

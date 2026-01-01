@@ -76,6 +76,10 @@ namespace FaeMaze.Systems
 
         [Header("UI Configuration")]
         [SerializeField]
+        [Tooltip("Enable WaveSpawner UI creation (deprecated - use HeartPowerPanelController instead)")]
+        private bool enableWaveSpawnerUI = false;
+
+        [SerializeField]
         [Tooltip("Canvas for UI display (will auto-create if null)")]
         private Canvas uiCanvas;
 
@@ -165,8 +169,8 @@ namespace FaeMaze.Systems
 
         private void OnEnable()
         {
-            // Subscribe to GameController essence changes
-            if (GameController.Instance != null)
+            // Subscribe to GameController essence changes (only if WaveSpawner UI is enabled)
+            if (enableWaveSpawnerUI && GameController.Instance != null)
             {
                 GameController.Instance.OnEssenceChanged -= OnEssenceChanged;
                 GameController.Instance.OnEssenceChanged += OnEssenceChanged;
@@ -175,8 +179,8 @@ namespace FaeMaze.Systems
 
         private void OnDisable()
         {
-            // Unsubscribe from GameController
-            if (GameController.Instance != null)
+            // Unsubscribe from GameController (only if WaveSpawner UI is enabled)
+            if (enableWaveSpawnerUI && GameController.Instance != null)
             {
                 GameController.Instance.OnEssenceChanged -= OnEssenceChanged;
             }
@@ -199,20 +203,20 @@ namespace FaeMaze.Systems
             // Load settings from GameSettings
             LoadSettings();
 
-            // Create UI if needed
-            if (visitorCountText == null || waveStatusText == null)
+            // Create UI if needed (deprecated - HeartPowerPanelController now handles all HUD)
+            if (enableWaveSpawnerUI && (visitorCountText == null || waveStatusText == null))
             {
                 CreateUI();
-            }
 
-            // Subscribe to GameController events after UI is created
-            if (GameController.Instance != null)
-            {
-                GameController.Instance.OnEssenceChanged -= OnEssenceChanged;
-                GameController.Instance.OnEssenceChanged += OnEssenceChanged;
+                // Subscribe to GameController events after UI is created
+                if (GameController.Instance != null)
+                {
+                    GameController.Instance.OnEssenceChanged -= OnEssenceChanged;
+                    GameController.Instance.OnEssenceChanged += OnEssenceChanged;
 
-                // Initialize essence display with current value
-                OnEssenceChanged(GameController.Instance.CurrentEssence);
+                    // Initialize essence display with current value
+                    OnEssenceChanged(GameController.Instance.CurrentEssence);
+                }
             }
 
             // Auto-start first wave if enabled
@@ -781,10 +785,13 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Updates the UI display with current wave status.
+        /// Updates the UI display with current wave status (deprecated - only used if enableWaveSpawnerUI is true).
         /// </summary>
         private void UpdateUI()
         {
+            if (!enableWaveSpawnerUI)
+                return;
+
             if (waveStatusText != null)
             {
                 if (isWaveSuccessful)
