@@ -373,8 +373,12 @@ namespace FaeMaze.HeartPowers
             {
             }
 
-            // Consume charges and start cooldown
+            // Consume charges and essence, then start cooldown
             ConsumeCharges(definition.chargeCost);
+            if (definition.essenceCost > 0)
+            {
+                SpendEssence(definition.essenceCost);
+            }
             cooldownTimers[powerType] = definition.cooldown;
 
             // Activate the power
@@ -430,6 +434,12 @@ namespace FaeMaze.HeartPowers
             if (currentCharges < definition.chargeCost)
             {
                 reason = $"Not enough charges (need {definition.chargeCost}, have {currentCharges})";
+                return false;
+            }
+
+            if (definition.essenceCost > 0 && CurrentEssence < definition.essenceCost)
+            {
+                reason = $"Not enough essence (need {definition.essenceCost}, have {CurrentEssence})";
                 return false;
             }
 
