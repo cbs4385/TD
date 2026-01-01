@@ -52,6 +52,11 @@ namespace FaeMaze.UI
         [Tooltip("Reference to the wave spawner")]
         private WaveSpawner waveSpawner;
 
+        [Header("Enable/Disable")]
+        [SerializeField]
+        [Tooltip("Enable DebugPanel UI creation and display")]
+        private bool enableDebugPanel = false;
+
         #endregion
 
         #region Private Fields
@@ -64,6 +69,12 @@ namespace FaeMaze.UI
 
         private void Start()
         {
+            if (!enableDebugPanel)
+            {
+                // DebugPanel is disabled
+                return;
+            }
+
             // Auto-find system references if not assigned
             if (mazeGridBehaviour == null)
             {
@@ -87,6 +98,9 @@ namespace FaeMaze.UI
 
         private void Update()
         {
+            if (!enableDebugPanel)
+                return;
+
             // Toggle debug panel with F1 key using new Input System
             if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame)
             {

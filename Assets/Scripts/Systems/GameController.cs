@@ -147,8 +147,7 @@ namespace FaeMaze.Systems
         {
             ValidateReferences();
 
-            EnsurePlacementUI();
-
+            // EnsurePlacementUI(); // Disabled - BuildPanel no longer needed in new HUD
             // EnsureResourcesUI(); // Disabled - HeartPowerPanelController now displays essence
 
             // Invoke event for initial essence value

@@ -73,6 +73,11 @@ namespace FaeMaze.UI
         [Tooltip("Color for unselected button")]
         private Color deselectedColor = new Color(1f, 1f, 1f, 0.6f);
 
+        [Header("Enable/Disable")]
+        [SerializeField]
+        [Tooltip("Enable BuildPanel UI creation and display")]
+        private bool enableBuildPanel = false;
+
         #endregion
 
         #region Private Fields
@@ -85,6 +90,12 @@ namespace FaeMaze.UI
 
         private void Start()
         {
+            if (!enableBuildPanel)
+            {
+                // BuildPanel is disabled
+                return;
+            }
+
             // Auto-find PropPlacementController if not assigned
             if (propPlacementController == null)
             {
@@ -107,6 +118,9 @@ namespace FaeMaze.UI
 
         private void Update()
         {
+            if (!enableBuildPanel)
+                return;
+
             // Poll essence and update button states every frame
             UpdateButtonStates();
         }
