@@ -680,7 +680,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual int GetEssenceReward()
         {
-            return config != null ? config.EssenceReward : 1;
+            return config != null ? config.EssenceReward : 100;
         }
 
         #endregion
