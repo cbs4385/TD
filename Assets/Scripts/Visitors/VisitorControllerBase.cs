@@ -1265,7 +1265,7 @@ namespace FaeMaze.Visitors
                 SetAnimatorDirection(IdleDirection);
 
                 // Award essence for visitor reaching destination
-                if (gameController != null && gameController.Heart != null)
+                if (gameController != null)
                 {
                     int essence = GetEssenceReward();
                     gameController.AddEssence(essence);
