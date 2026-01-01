@@ -1853,12 +1853,14 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
+            Debug.Log($"[DevouringMaw] ========== OnStart CALLED ==========");
             Debug.Log($"[DevouringMaw] OnStart - Target position: {targetPosition}");
+            Debug.Log($"[DevouringMaw] Manager: {manager != null}, MazeGrid: {manager?.MazeGrid != null}");
 
             // Convert target position to grid
             if (!manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
             {
-                Debug.Log("[DevouringMaw] Failed to convert target position to grid");
+                Debug.LogError("[DevouringMaw] Failed to convert target position to grid");
                 return;
             }
 
@@ -1870,48 +1872,66 @@ namespace FaeMaze.HeartPowers
 
             if (targetVisitor == null)
             {
-                Debug.Log("[DevouringMaw] No visitor found on target tile");
+                Debug.LogWarning("[DevouringMaw] No visitor found on target tile - ABORTING");
                 return;
             }
 
-            Debug.Log($"[DevouringMaw] Found visitor on tile: {targetVisitor.name}");
+            Debug.Log($"[DevouringMaw] Found visitor on tile: {targetVisitor.name}, State: {targetVisitor.State}");
             consumedVisitor = targetVisitor;
 
             // Stop the visitor movement
+            Debug.Log($"[DevouringMaw] Stopping visitor movement");
             consumedVisitor.Stop();
             visitorStartPosition = consumedVisitor.transform.position;
+            Debug.Log($"[DevouringMaw] Visitor start position: {visitorStartPosition}");
 
             // Initialize animation state
             currentPhase = AnimationPhase.Pause;
             phaseStartTime = 0f;
             hasConsumedVisitor = false;
+            Debug.Log($"[DevouringMaw] Animation initialized - Phase: {currentPhase}, phaseStartTime: {phaseStartTime}");
 
             // Add tile visualizer effect
             if (manager.TileVisualizer != null)
             {
                 manager.TileVisualizer.AddTileEffect(targetTile, HeartPowerType.DevouringMaw, 1.0f, 2.0f);
+                Debug.Log($"[DevouringMaw] Tile visualizer effect added");
+            }
+            else
+            {
+                Debug.LogWarning($"[DevouringMaw] TileVisualizer is null");
             }
 
             // Tier I: Apply fear to nearby visitors
             if (definition.tier >= 1 && definition.flag1)
             {
+                Debug.Log($"[DevouringMaw] Applying Echoing Terror (Tier {definition.tier})");
                 ApplyEchoingTerror(targetTile);
             }
 
             // Tier II: Slow nearby visitors
             if (definition.tier >= 2 && definition.flag2)
             {
+                Debug.Log($"[DevouringMaw] Applying Draining Embrace (Tier {definition.tier})");
                 ApplyDrainingEmbrace(targetTile);
             }
+
+            Debug.Log($"[DevouringMaw] ========== OnStart COMPLETE ==========");
         }
 
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
 
+            // Log every 10 frames to see if Update is being called
+            if (Time.frameCount % 10 == 0)
+            {
+                Debug.Log($"[DevouringMaw] Update called - elapsedTime: {elapsedTime:F2}s, deltaTime: {deltaTime:F3}s, Phase: {currentPhase}");
+            }
+
             if (consumedVisitor == null)
             {
-                Debug.Log($"[DevouringMaw] Update called but consumedVisitor is null at {elapsedTime}s");
+                Debug.LogWarning($"[DevouringMaw] Update called but consumedVisitor is null at {elapsedTime}s");
                 return;
             }
 
@@ -1921,13 +1941,18 @@ namespace FaeMaze.HeartPowers
             {
                 case AnimationPhase.Pause:
                     // Visitor is paused for 0.75 seconds
+                    if (Time.frameCount % 30 == 0) // Log every 30 frames during pause
+                    {
+                        Debug.Log($"[DevouringMaw] Pause phase - elapsed: {phaseElapsed:F2}s / 0.75s");
+                    }
+
                     if (phaseElapsed >= 0.75f)
                     {
                         // Transition to sink and devour phase
                         currentPhase = AnimationPhase.SinkAndDevour;
                         phaseStartTime = elapsedTime;
 
-                        Debug.Log($"[DevouringMaw] Transitioning to SinkAndDevour phase at {elapsedTime}s");
+                        Debug.Log($"[DevouringMaw] ========== TRANSITIONING to SinkAndDevour at {elapsedTime}s ==========");
 
                         // Spawn devour prefab at target tile
                         InstantiateDevourVisual(targetTile);
@@ -1987,49 +2012,73 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
+            Debug.Log($"[DevouringMaw] ========== OnEnd CALLED at {elapsedTime}s ==========");
+            Debug.Log($"[DevouringMaw] Final phase: {currentPhase}, hasConsumedVisitor: {hasConsumedVisitor}");
+
             // Clean up visual
             if (devourVisual != null)
             {
                 Object.Destroy(devourVisual);
                 devourVisual = null;
+                Debug.Log($"[DevouringMaw] Destroyed devour visual");
             }
 
             // Remove tile visuals
             if (manager.TileVisualizer != null)
             {
                 manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.DevouringMaw);
+                Debug.Log($"[DevouringMaw] Removed tile visualizer effects");
             }
+
+            Debug.Log($"[DevouringMaw] ========== OnEnd COMPLETE ==========");
         }
 
         private VisitorControllerBase FindVisitorOnTile(Vector2Int tile)
         {
             // Use visitor registry
             var visitors = VisitorRegistry.All;
+            Debug.Log($"[DevouringMaw] FindVisitorOnTile - Searching for visitor on tile {tile}");
+            Debug.Log($"[DevouringMaw] Total visitors in registry: {visitors.Count}");
 
+            int checkedCount = 0;
             foreach (var visitor in visitors)
             {
-                if (visitor == null ||
-                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                if (visitor == null)
+                {
+                    Debug.Log($"[DevouringMaw] Visitor {checkedCount} is null");
+                    checkedCount++;
+                    continue;
+                }
+
+                if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
                     visitor.State == VisitorControllerBase.VisitorState.Escaping)
                 {
+                    Debug.Log($"[DevouringMaw] Visitor {visitor.name} has state {visitor.State}, skipping");
+                    checkedCount++;
                     continue;
                 }
 
                 // Get visitor grid position
                 if (!manager.MazeGrid.WorldToGrid(visitor.transform.position, out int vx, out int vy))
                 {
+                    Debug.Log($"[DevouringMaw] Failed to convert visitor {visitor.name} world position to grid");
+                    checkedCount++;
                     continue;
                 }
 
                 Vector2Int visitorTile = new Vector2Int(vx, vy);
+                Debug.Log($"[DevouringMaw] Visitor {visitor.name} at tile {visitorTile}, target {tile}, match: {visitorTile == tile}");
 
                 // Check if visitor is on target tile
                 if (visitorTile == tile)
                 {
+                    Debug.Log($"[DevouringMaw] FOUND visitor {visitor.name} on target tile {tile}!");
                     return visitor;
                 }
+                checkedCount++;
             }
 
+            Debug.LogWarning($"[DevouringMaw] No visitor found on tile {tile} after checking {checkedCount} visitors");
             return null;
         }
 
