@@ -20,7 +20,7 @@ MonoBehaviour:
   tier: 2
   chargeCost: 2
   cooldown: 18
-  duration: 0
+  duration: 2
   radius: 0
   param1: 3
   param2: 3
