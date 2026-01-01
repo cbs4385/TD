@@ -274,6 +274,8 @@ MonoBehaviour:
   focalTurnSpeed: 90
   focalFollowDistance: 3
   focalHeightOffset: 2
+  focalViewAngle: 45
+  angleChangeSpeed: 5
   focalPointTransform: {fileID: 0}
   panSpeed: 10
   orbitSpeed: 100
@@ -367,7 +369,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &814000386
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -408,7 +410,7 @@ Light:
   serializedVersion: 11
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 1
+  m_Intensity: 0.25
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -831,14 +833,11 @@ MonoBehaviour:
   heart: {fileID: 0}
   visitorsPerWave: 10
   spawnInterval: 3
-  waveDuration: 300
   enableRedCap: 1
   redCapSpawnDelay: 60
   uiCanvas: {fileID: 0}
   fontSize: 20
   uiTextColor: {r: 1, g: 1, b: 1, a: 1}
-  warningColor: {r: 1, g: 0, b: 0, a: 1}
-  warningThreshold: 10
   autoStartFirstWave: 1
 --- !u!114 &1408523525
 MonoBehaviour:
