@@ -227,13 +227,18 @@ namespace FaeMaze.Systems
         /// <param name="amount">Amount of essence to add</param>
         public void AddEssence(int amount)
         {
+            int before = currentEssence;
             currentEssence += amount;
+
+            Debug.Log($"[GameController] AddEssence called: adding {amount}, before={before}, after={currentEssence}");
 
             // Update persistent essence
             persistentEssence = currentEssence;
+            Debug.Log($"[GameController] Updated persistentEssence to {persistentEssence}");
 
             // Invoke event for essence change
             OnEssenceChanged?.Invoke(currentEssence);
+            Debug.Log($"[GameController] OnEssenceChanged event invoked with {currentEssence}");
         }
 
         /// <summary>

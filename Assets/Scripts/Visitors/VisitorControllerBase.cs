@@ -1264,11 +1264,21 @@ namespace FaeMaze.Visitors
                 state = VisitorState.Escaping;
                 SetAnimatorDirection(IdleDirection);
 
+                Debug.Log($"[VisitorControllerBase] Visitor reached destination (spawn marker mode)");
+
                 // Award essence for visitor reaching destination
                 if (gameController != null)
                 {
                     int essence = GetEssenceReward();
+                    int essenceBefore = gameController.CurrentEssence;
+                    Debug.Log($"[VisitorControllerBase] Awarding {essence} essence (current: {essenceBefore})");
                     gameController.AddEssence(essence);
+                    int essenceAfter = gameController.CurrentEssence;
+                    Debug.Log($"[VisitorControllerBase] Essence after award: {essenceAfter} (expected: {essenceBefore + essence})");
+                }
+                else
+                {
+                    Debug.LogWarning($"[VisitorControllerBase] Cannot award essence - gameController is null!");
                 }
 
                 // Track stats
