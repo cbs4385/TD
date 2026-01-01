@@ -1966,8 +1966,8 @@ namespace FaeMaze.HeartPowers
                     break;
 
                 case AnimationPhase.SinkAndDevour:
-                    // Sink the visitor 1 unit into the ground over a brief duration
-                    float sinkDuration = 0.5f;
+                    // Sink the visitor 1 unit into the ground (0.25s to complete by 1.0s)
+                    float sinkDuration = 0.25f;
                     float sinkT = Mathf.Clamp01(phaseElapsed / sinkDuration);
 
                     // Lerp Z position from start to -1
