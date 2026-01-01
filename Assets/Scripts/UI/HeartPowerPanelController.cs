@@ -325,25 +325,17 @@ namespace FaeMaze.UI
                 }
             }
 
-            // Create the panel at the bottom
+            // Create the panel at the bottom-right
             heartPowersPanel = CreatePanel(canvas.transform);
 
-            // Create title
-            CreateTitle(heartPowersPanel.transform);
-
-            // Create resource displays (top of panel)
-            float yPos = -10f;
-            chargesText = CreateResourceLabel(heartPowersPanel.transform, "Heart Charges: 3", yPos, -250f);
-            essenceText = CreateResourceLabel(heartPowersPanel.transform, "Essence: 10", yPos, 250f);
-
-            // Create power buttons in a horizontal row (centered in panel)
-            float buttonWidth = 125f;  // Smaller to fit 9 buttons
-            float buttonHeight = 100f;
-            float spacing = 4f;
-            float totalWidth = (buttonWidth * 9) + (spacing * 8);
-            float startX = -totalWidth / 2f + buttonWidth / 2f;
-            float buttonYPos = -75f; // Center buttons vertically in panel
-
+            // Create power buttons in a compact horizontal row
+            float panelSize = Mathf.Max(200f, 1920f * 0.05f);
+            float padding = 5f;
+            float spacing = 2f;
+            float buttonWidth = (panelSize - (padding * 2) - (spacing * 8)) / 9f; // 9 buttons
+            float buttonHeight = panelSize - (padding * 2);
+            float startX = -panelSize + padding + buttonWidth / 2f;
+            float buttonYPos = -(panelSize / 2f);
 
             for (int i = 0; i < 9; i++)
             {
@@ -376,7 +368,8 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Creates the main panel background at the bottom of the screen.
+        /// Creates the main panel background at the bottom-right of the screen.
+        /// Size is the larger of 5% of viewport or 200px.
         /// </summary>
         private GameObject CreatePanel(Transform parent)
         {
@@ -384,11 +377,14 @@ namespace FaeMaze.UI
             panel.transform.SetParent(parent, false);
 
             RectTransform rect = panel.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 0f); // Bottom center
-            rect.anchorMax = new Vector2(0.5f, 0f);
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = new Vector2(0f, 10f);
-            rect.sizeDelta = new Vector2(1200f, 150f); // Taller for larger buttons
+            rect.anchorMin = new Vector2(1f, 0f); // Bottom right
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(1f, 0f);
+            rect.anchoredPosition = new Vector2(-10f, 10f); // 10px from edges
+
+            // Use larger of 5% viewport or 200px (with reference resolution 1920x1080, 5% = 96px, so use 200px)
+            float panelSize = Mathf.Max(200f, 1920f * 0.05f);
+            rect.sizeDelta = new Vector2(panelSize, panelSize);
 
             Image image = panel.AddComponent<Image>();
             image.color = new Color(0.15f, 0.05f, 0.2f, 0.9f); // Dark purple/magenta tint
@@ -476,23 +472,22 @@ namespace FaeMaze.UI
             navigation.mode = Navigation.Mode.None;
             button.navigation = navigation;
 
-            // Create button text
+            // Create button text (compact label showing just the number)
             GameObject textObj = new GameObject("Text");
             textObj.transform.SetParent(buttonObj.transform, false);
 
             RectTransform textRect = textObj.AddComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(5f, 25f);
-            textRect.offsetMax = new Vector2(-5f, -5f);
+            textRect.offsetMin = new Vector2(1f, 1f);
+            textRect.offsetMax = new Vector2(-1f, -1f);
 
             TextMeshProUGUI text = textObj.AddComponent<TextMeshProUGUI>();
-            text.text = powerNames[index];
-            text.fontSize = 12;
+            text.text = (index + 1).ToString(); // Just show the number 1-9
+            text.fontSize = Mathf.Max(8, width * 0.4f); // Scale font with button size
             text.alignment = TextAlignmentOptions.Center;
             text.color = Color.white;
-            text.textWrappingMode = TMPro.TextWrappingModes.Normal;
-            text.fontStyle = FontStyles.Normal;
+            text.fontStyle = FontStyles.Bold;
             text.raycastTarget = false; // Don't block button clicks
 
             buttonLabels[index] = text;
@@ -509,7 +504,7 @@ namespace FaeMaze.UI
 
             TextMeshProUGUI cooldownText = cooldownObj.AddComponent<TextMeshProUGUI>();
             cooldownText.text = "";
-            cooldownText.fontSize = 32;
+            cooldownText.fontSize = Mathf.Max(6, width * 0.3f); // Scale with button size
             cooldownText.fontStyle = FontStyles.Bold;
             cooldownText.alignment = TextAlignmentOptions.Center;
             cooldownText.color = new Color(1f, 0.3f, 0.3f, 1f);

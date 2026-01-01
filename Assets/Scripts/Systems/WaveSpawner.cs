@@ -114,6 +114,8 @@ namespace FaeMaze.Systems
         // UI References
         private TextMeshProUGUI visitorCountText;
         private TextMeshProUGUI waveStatusText;
+        private TextMeshProUGUI essenceValueText;
+        private Slider essenceBar;
         private GameObject uiPanel;
 
         #endregion
@@ -161,6 +163,25 @@ namespace FaeMaze.Systems
 
         #region Unity Lifecycle
 
+        private void OnEnable()
+        {
+            // Subscribe to GameController essence changes
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged -= OnEssenceChanged;
+                GameController.Instance.OnEssenceChanged += OnEssenceChanged;
+            }
+        }
+
+        private void OnDisable()
+        {
+            // Unsubscribe from GameController
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged -= OnEssenceChanged;
+            }
+        }
+
         private void Start()
         {
             // Find the MazeGridBehaviour in the scene
@@ -182,6 +203,16 @@ namespace FaeMaze.Systems
             if (visitorCountText == null || waveStatusText == null)
             {
                 CreateUI();
+            }
+
+            // Subscribe to GameController events after UI is created
+            if (GameController.Instance != null)
+            {
+                GameController.Instance.OnEssenceChanged -= OnEssenceChanged;
+                GameController.Instance.OnEssenceChanged += OnEssenceChanged;
+
+                // Initialize essence display with current value
+                OnEssenceChanged(GameController.Instance.CurrentEssence);
             }
 
             // Auto-start first wave if enabled
@@ -634,6 +665,119 @@ namespace FaeMaze.Systems
             visitorCountText.color = new Color(uiTextColor.r, uiTextColor.g, uiTextColor.b, 0.9f);
             visitorCountText.alignment = TextAlignmentOptions.Center;
             visitorCountText.text = "Visitors: 0/0 (Active: 0)";
+
+            // Create essence display panel (positioned to the left of wave info)
+            GameObject essencePanel = new GameObject("EssencePanelContainer");
+            essencePanel.transform.SetParent(uiCanvas.transform, false);
+
+            RectTransform essencePanelRect = essencePanel.AddComponent<RectTransform>();
+            essencePanelRect.anchorMin = new Vector2(0.5f, 1f);  // Top-middle anchor
+            essencePanelRect.anchorMax = new Vector2(0.5f, 1f);
+            essencePanelRect.pivot = new Vector2(1f, 1f);  // Pivot at top-right
+            essencePanelRect.anchoredPosition = new Vector2(-185f, -10f);  // To the left of wave panel
+            essencePanelRect.sizeDelta = new Vector2(200f, 80f);
+
+            Image essencePanelImage = essencePanel.AddComponent<Image>();
+            essencePanelImage.color = new Color(0.1f, 0.1f, 0.1f, 0.85f);
+
+            Outline essencePanelOutline = essencePanel.AddComponent<Outline>();
+            essencePanelOutline.effectColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+            essencePanelOutline.effectDistance = new Vector2(2f, -2f);
+
+            // Create essence label (top)
+            GameObject essenceLabelObj = new GameObject("EssenceLabel");
+            essenceLabelObj.transform.SetParent(essencePanel.transform, false);
+
+            RectTransform essenceLabelRect = essenceLabelObj.AddComponent<RectTransform>();
+            essenceLabelRect.anchorMin = new Vector2(0f, 1f);
+            essenceLabelRect.anchorMax = new Vector2(1f, 1f);
+            essenceLabelRect.pivot = new Vector2(0.5f, 1f);
+            essenceLabelRect.anchoredPosition = new Vector2(0f, -5f);
+            essenceLabelRect.sizeDelta = new Vector2(-10f, 20f);
+
+            TextMeshProUGUI essenceLabelText = essenceLabelObj.AddComponent<TextMeshProUGUI>();
+            essenceLabelText.fontSize = fontSize - 2;
+            essenceLabelText.color = new Color(0.6f, 0.8f, 1f, 1f);  // Light blue
+            essenceLabelText.alignment = TextAlignmentOptions.Center;
+            essenceLabelText.fontStyle = FontStyles.Bold;
+            essenceLabelText.text = "Essence";
+
+            // Create essence value text
+            GameObject essenceValueObj = new GameObject("EssenceValue");
+            essenceValueObj.transform.SetParent(essencePanel.transform, false);
+
+            RectTransform essenceValueRect = essenceValueObj.AddComponent<RectTransform>();
+            essenceValueRect.anchorMin = new Vector2(0f, 1f);
+            essenceValueRect.anchorMax = new Vector2(1f, 1f);
+            essenceValueRect.pivot = new Vector2(0.5f, 1f);
+            essenceValueRect.anchoredPosition = new Vector2(0f, -25f);
+            essenceValueRect.sizeDelta = new Vector2(-10f, 20f);
+
+            essenceValueText = essenceValueObj.AddComponent<TextMeshProUGUI>();
+            essenceValueText.fontSize = fontSize;
+            essenceValueText.color = new Color(1f, 0.84f, 0f, 1f);  // Gold
+            essenceValueText.alignment = TextAlignmentOptions.Center;
+            essenceValueText.fontStyle = FontStyles.Bold;
+            essenceValueText.text = "0 / 400";
+
+            // Create essence bar (slider)
+            GameObject essenceBarObj = new GameObject("EssenceBar");
+            essenceBarObj.transform.SetParent(essencePanel.transform, false);
+
+            RectTransform essenceBarRect = essenceBarObj.AddComponent<RectTransform>();
+            essenceBarRect.anchorMin = new Vector2(0f, 0f);
+            essenceBarRect.anchorMax = new Vector2(1f, 0f);
+            essenceBarRect.pivot = new Vector2(0.5f, 0f);
+            essenceBarRect.anchoredPosition = new Vector2(0f, 5f);
+            essenceBarRect.sizeDelta = new Vector2(-20f, 20f);
+
+            essenceBar = essenceBarObj.AddComponent<Slider>();
+            essenceBar.minValue = 0f;
+            essenceBar.maxValue = 400f;
+            essenceBar.value = 0f;
+            essenceBar.interactable = false;
+
+            // Create slider background
+            GameObject bgObj = new GameObject("Background");
+            bgObj.transform.SetParent(essenceBarObj.transform, false);
+
+            RectTransform bgRect = bgObj.AddComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+
+            Image bgImage = bgObj.AddComponent<Image>();
+            bgImage.color = new Color(0.2f, 0.2f, 0.2f, 1f);
+
+            // Create slider fill area
+            GameObject fillAreaObj = new GameObject("Fill Area");
+            fillAreaObj.transform.SetParent(essenceBarObj.transform, false);
+
+            RectTransform fillAreaRect = fillAreaObj.AddComponent<RectTransform>();
+            fillAreaRect.anchorMin = Vector2.zero;
+            fillAreaRect.anchorMax = Vector2.one;
+            fillAreaRect.offsetMin = Vector2.zero;
+            fillAreaRect.offsetMax = Vector2.zero;
+
+            // Create slider fill
+            GameObject fillObj = new GameObject("Fill");
+            fillObj.transform.SetParent(fillAreaObj.transform, false);
+
+            RectTransform fillRect = fillObj.AddComponent<RectTransform>();
+            fillRect.anchorMin = Vector2.zero;
+            fillRect.anchorMax = Vector2.one;
+            fillRect.offsetMin = Vector2.zero;
+            fillRect.offsetMax = Vector2.zero;
+
+            Image fillImage = fillObj.AddComponent<Image>();
+            fillImage.color = new Color(0.3f, 0.7f, 1f, 1f);  // Blue fill
+
+            essenceBar.fillRect = fillRect;
+            essenceBar.targetGraphic = fillImage;
+
+            // Initialize essence display
+            UpdateEssenceDisplay();
         }
 
         /// <summary>
@@ -664,6 +808,35 @@ namespace FaeMaze.Systems
             {
                 int totalForWave = visitorsPerWave;
                 visitorCountText.text = $"Visitors: {visitorsSpawnedThisWave}/{totalForWave} (Active: {activeVisitors.Count})";
+            }
+        }
+
+        /// <summary>
+        /// Called when essence changes in GameController.
+        /// </summary>
+        private void OnEssenceChanged(int newEssence)
+        {
+            UpdateEssenceDisplay();
+        }
+
+        /// <summary>
+        /// Updates the essence display with current value from GameController.
+        /// </summary>
+        private void UpdateEssenceDisplay()
+        {
+            if (GameController.Instance == null)
+                return;
+
+            int currentEssence = GameController.Instance.CurrentEssence;
+
+            if (essenceValueText != null)
+            {
+                essenceValueText.text = $"{currentEssence} / 400";
+            }
+
+            if (essenceBar != null)
+            {
+                essenceBar.value = currentEssence;
             }
         }
 
