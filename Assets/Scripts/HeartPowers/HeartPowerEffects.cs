@@ -1847,6 +1847,7 @@ namespace FaeMaze.HeartPowers
         private float phaseStartTime;
         private Vector3 visitorStartPosition;
         private bool hasConsumedVisitor;
+        private Vector3 devourBasePosition; // Base position of devour prefab (at Z=+0.5)
 
         public DevouringMawEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
@@ -1922,6 +1923,12 @@ namespace FaeMaze.HeartPowers
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
+
+            // Animate devour visual (if it exists)
+            if (devourVisual != null)
+            {
+                UpdateDevourVisualAnimation();
+            }
 
             // Clean up devour visual after 1 second (even if no visitor was consumed)
             if (devourVisual != null && elapsedTime >= 1.0f)
@@ -2089,12 +2096,54 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Instantiate at tile position
+            // Instantiate at tile position, 0.5 units under focal tile (+Z is down/into screen)
             Vector3 worldPos = manager.MazeGrid.GridToWorld(tile.x, tile.y);
-            worldPos.z = 0f; // At floor level
+            worldPos.z = 0.5f; // Start 0.5 units under the focal tile
 
             devourVisual = Object.Instantiate(devourPrefab, worldPos, Quaternion.identity);
+            devourBasePosition = worldPos; // Store base position for animation
             Debug.Log($"[DevouringMaw] Spawned devour prefab at {worldPos}");
+        }
+
+        private void UpdateDevourVisualAnimation()
+        {
+            if (devourVisual == null)
+            {
+                return;
+            }
+
+            float animTime = elapsedTime;
+            Vector3 offset = Vector3.zero;
+
+            // Animation timeline:
+            // 0.0-0.25s: Extend forward (translate -1 unit in -Z direction, from Z=+0.5 to Z=-0.5)
+            // 0.25-0.75s: Hold still at Z=-0.5
+            // 0.75-1.0s: Retract back (translate +1 unit in +Z direction, from Z=-0.5 to Z=+0.5)
+
+            if (animTime < 0.25f)
+            {
+                // Extend forward: lerp from 0 to -1 in Z
+                float t = animTime / 0.25f;
+                offset.z = Mathf.Lerp(0f, -1f, t);
+            }
+            else if (animTime < 0.75f)
+            {
+                // Hold extended at -1
+                offset.z = -1f;
+            }
+            else if (animTime < 1.0f)
+            {
+                // Retract back: lerp from -1 to 0 in Z
+                float t = (animTime - 0.75f) / 0.25f;
+                offset.z = Mathf.Lerp(-1f, 0f, t);
+            }
+            else
+            {
+                // After 1.0s, back at base position
+                offset.z = 0f;
+            }
+
+            devourVisual.transform.position = devourBasePosition + offset;
         }
 
         private void ConsumeVisitor(VisitorControllerBase visitor)
