@@ -1847,7 +1847,7 @@ namespace FaeMaze.HeartPowers
         private float phaseStartTime;
         private Vector3 visitorStartPosition;
         private bool hasConsumedVisitor;
-        private Vector3 devourBasePosition; // Base position of devour prefab (at Z=+0.5)
+        private Vector3 devourBasePosition; // Base position of devour prefab (at Z=+0.75)
 
         public DevouringMawEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
@@ -1977,9 +1977,9 @@ namespace FaeMaze.HeartPowers
                     float sinkDuration = 0.25f;
                     float sinkT = Mathf.Clamp01(phaseElapsed / sinkDuration);
 
-                    // Lerp Z position from start to -1
+                    // Lerp Z position from start to +1 (moving downward with the devour prefab)
                     Vector3 sinkPosition = visitorStartPosition;
-                    sinkPosition.z = Mathf.Lerp(visitorStartPosition.z, visitorStartPosition.z - 1f, sinkT);
+                    sinkPosition.z = Mathf.Lerp(visitorStartPosition.z, visitorStartPosition.z + 1f, sinkT);
                     consumedVisitor.transform.position = sinkPosition;
 
                     if (phaseElapsed < 0.1f) // Log once at the start
@@ -2096,9 +2096,9 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Instantiate at tile position, 0.5 units under focal tile (+Z is down/into screen)
+            // Instantiate at tile position, 0.75 units under focal tile (+Z is down/into screen)
             Vector3 worldPos = manager.MazeGrid.GridToWorld(tile.x, tile.y);
-            worldPos.z = 0.5f; // Start 0.5 units under the focal tile
+            worldPos.z = 0.75f; // Start 0.75 units under the focal tile
 
             devourVisual = Object.Instantiate(devourPrefab, worldPos, Quaternion.identity);
             devourBasePosition = worldPos; // Store base position for animation
@@ -2116,24 +2116,24 @@ namespace FaeMaze.HeartPowers
             Vector3 offset = Vector3.zero;
 
             // Animation timeline:
-            // 0.0-0.25s: Extend forward (translate -1 unit in -Z direction, from Z=+0.5 to Z=-0.5)
-            // 0.25-0.75s: Hold still at Z=-0.5
-            // 0.75-1.0s: Retract back (translate +1 unit in +Z direction, from Z=-0.5 to Z=+0.5)
+            // 0.0-0.25s: Extend upward (translate -1 unit in -Z direction, from Z=+0.75 to Z=-0.25)
+            // 0.25-0.75s: Hold at the extended position
+            // 0.75-1.0s: Return to base (translate +1 unit in +Z direction, from Z=-0.25 to Z=+0.75)
 
             if (animTime < 0.25f)
             {
-                // Extend forward: lerp from 0 to -1 in Z
+                // Extend upward over the first 0.25s
                 float t = animTime / 0.25f;
                 offset.z = Mathf.Lerp(0f, -1f, t);
             }
             else if (animTime < 0.75f)
             {
-                // Hold extended at -1
+                // Hold at the extended position for 0.5s
                 offset.z = -1f;
             }
             else if (animTime < 1.0f)
             {
-                // Retract back: lerp from -1 to 0 in Z
+                // Return to the starting point during the final 0.25s
                 float t = (animTime - 0.75f) / 0.25f;
                 offset.z = Mathf.Lerp(-1f, 0f, t);
             }
