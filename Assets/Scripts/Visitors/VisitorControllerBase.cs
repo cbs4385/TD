@@ -1264,6 +1264,19 @@ namespace FaeMaze.Visitors
                 state = VisitorState.Escaping;
                 SetAnimatorDirection(IdleDirection);
 
+                // Award essence for visitor reaching destination
+                if (gameController != null && gameController.Heart != null)
+                {
+                    int essence = GetEssenceReward();
+                    gameController.AddEssence(essence);
+                }
+
+                // Track stats
+                if (GameStatsTracker.Instance != null)
+                {
+                    GameStatsTracker.Instance.RecordVisitorConsumed();
+                }
+
                 // Visual feedback: fade to transparent
                 if (spriteRenderer != null)
                 {
