@@ -16,20 +16,14 @@ namespace FaeMaze.Systems
     /// <summary>
     /// Manages wave-based spawning of visitors from entrance spawn points toward exit targets (or the heart as a fallback).
     /// Spawns visitors in waves with configurable count and interval.
-    /// Includes per-wave timer with pass/fail conditions.
+    /// Waves complete when all visitors are despawned.
     /// </summary>
     public class WaveSpawner : MonoBehaviour
     {
         #region Events
 
-        /// <summary>Invoked when a wave is successfully completed (all visitors cleared in time)</summary>
+        /// <summary>Invoked when a wave is successfully completed (all visitors cleared)</summary>
         public event System.Action OnWaveSuccess;
-
-        /// <summary>Invoked when a wave fails (timer expires before all visitors cleared)</summary>
-        public event System.Action OnWaveFailed;
-
-        /// <summary>Invoked when the wave timer updates (passes remaining time)</summary>
-        public event System.Action<float> OnWaveTimerUpdate;
 
         #endregion
 
@@ -71,10 +65,6 @@ namespace FaeMaze.Systems
         [Tooltip("Time interval between spawns (in seconds)")]
         private float spawnInterval = 1.0f;
 
-        [SerializeField]
-        [Tooltip("Time budget for each wave (in seconds). Wave fails if not cleared in time.")]
-        private float waveDuration = 60f;
-
         [Header("Red Cap Settings")]
         [SerializeField]
         [Tooltip("Enable Red Cap spawning during waves")]
@@ -97,14 +87,6 @@ namespace FaeMaze.Systems
         [Tooltip("Color for UI text")]
         private Color uiTextColor = Color.white;
 
-        [SerializeField]
-        [Tooltip("Color for timer text when running low")]
-        private Color warningColor = Color.red;
-
-        [SerializeField]
-        [Tooltip("Time threshold (seconds) to show warning color")]
-        private float warningThreshold = 10f;
-
         [Header("Auto-Start")]
         [SerializeField]
         [Tooltip("Automatically start first wave on scene start")]
@@ -118,12 +100,10 @@ namespace FaeMaze.Systems
         private HeartPowerManager heartPowerManager;
         private bool isSpawning;
         private bool isWaveActive;
-        private bool isWaveFailed;
         private bool isWaveSuccessful;
         private int currentWaveNumber;
         private int visitorsSpawnedThisWave;
         private int totalVisitorsSpawned;
-        private float waveTimeRemaining;
         private List<GameObject> activeVisitors = new List<GameObject>();
 
         // Red Cap tracking
@@ -132,7 +112,6 @@ namespace FaeMaze.Systems
         private RedCapController currentRedCap;
 
         // UI References
-        private TextMeshProUGUI timerText;
         private TextMeshProUGUI visitorCountText;
         private TextMeshProUGUI waveStatusText;
         private GameObject uiPanel;
@@ -147,9 +126,6 @@ namespace FaeMaze.Systems
         /// <summary>Gets whether a wave is currently active (including after spawning completes)</summary>
         public bool IsWaveActive => isWaveActive;
 
-        /// <summary>Gets whether the current wave has failed</summary>
-        public bool IsWaveFailed => isWaveFailed;
-
         /// <summary>Gets the current wave number</summary>
         public int CurrentWaveNumber => currentWaveNumber;
 
@@ -158,12 +134,6 @@ namespace FaeMaze.Systems
 
         /// <summary>Gets the number of active visitors currently in the maze</summary>
         public int ActiveVisitorCount => activeVisitors.Count;
-
-        /// <summary>Gets the time remaining in the current wave (in seconds)</summary>
-        public float WaveTimeRemaining => waveTimeRemaining;
-
-        /// <summary>Gets the configured wave duration (in seconds)</summary>
-        public float WaveDuration => waveDuration;
 
         /// <summary>Gets the time remaining until Red Cap spawns (in seconds). Returns 0 if already spawned.</summary>
         public float RedCapSpawnTimeRemaining => hasSpawnedRedCap ? 0f : Mathf.Max(0f, redCapSpawnTimer);
@@ -209,7 +179,7 @@ namespace FaeMaze.Systems
             LoadSettings();
 
             // Create UI if needed
-            if (timerText == null || visitorCountText == null || waveStatusText == null)
+            if (visitorCountText == null || waveStatusText == null)
             {
                 CreateUI();
             }
@@ -228,25 +198,14 @@ namespace FaeMaze.Systems
         {
             visitorsPerWave = GameSettings.VisitorsPerWave;
             spawnInterval = GameSettings.SpawnInterval;
-            waveDuration = GameSettings.WaveDuration;
             enableRedCap = GameSettings.EnableRedCap;
             redCapSpawnDelay = GameSettings.RedCapSpawnDelay;
         }
 
         private void Update()
         {
-            if (!isWaveActive || isWaveFailed)
+            if (!isWaveActive)
                 return;
-
-            // Update timer
-            waveTimeRemaining -= Time.deltaTime;
-
-            // Check for timeout
-            if (waveTimeRemaining <= 0f)
-            {
-                waveTimeRemaining = 0f;
-                HandleWaveFailure();
-            }
 
             // Update Red Cap spawn timer
             if (enableRedCap && !hasSpawnedRedCap)
@@ -270,9 +229,6 @@ namespace FaeMaze.Systems
 
             // Update UI
             UpdateUI();
-
-            // Invoke timer update event
-            OnWaveTimerUpdate?.Invoke(waveTimeRemaining);
         }
 
         #endregion
@@ -281,7 +237,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Starts spawning a new wave of visitors.
-        /// Returns false if wave cannot start (already active or failed state).
+        /// Returns false if wave cannot start (already active).
         /// </summary>
         public bool StartWave()
         {
@@ -293,12 +249,6 @@ namespace FaeMaze.Systems
 
             // Prevent starting if wave is already active
             if (isWaveActive)
-            {
-                return false;
-            }
-
-            // Prevent starting if in failed state
-            if (isWaveFailed)
             {
                 return false;
             }
@@ -320,7 +270,6 @@ namespace FaeMaze.Systems
             activeVisitors.Clear();
             isWaveActive = true;
             isWaveSuccessful = false;
-            waveTimeRemaining = waveDuration;
 
             // Notify Heart Power Manager that wave has started
             if (heartPowerManager != null)
@@ -346,12 +295,10 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Resets the failed state to allow starting a new wave.
-        /// Call this to retry after failure.
+        /// Resets the wave state to allow starting a new wave.
         /// </summary>
-        public void ResetFailedState()
+        public void ResetWaveState()
         {
-            isWaveFailed = false;
             isWaveSuccessful = false;
             isWaveActive = false;
 
@@ -362,29 +309,6 @@ namespace FaeMaze.Systems
                 currentRedCap = null;
             }
             hasSpawnedRedCap = false;
-
-        }
-
-        /// <summary>
-        /// Retries the current wave without incrementing the wave number.
-        /// Resets failed state and starts the wave again.
-        /// </summary>
-        public bool RetryCurrentWave()
-        {
-            if (!isWaveFailed)
-            {
-                return false;
-            }
-
-
-            // Reset failed state
-            ResetFailedState();
-
-            // Decrement wave number since StartWave() will increment it
-            currentWaveNumber--;
-
-            // Start the wave (which will re-increment to current wave number)
-            return StartWave();
         }
 
         /// <summary>
@@ -610,11 +534,11 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Handles wave success when all visitors are cleared in time.
+        /// Handles wave success when all visitors are cleared.
         /// </summary>
         private void HandleWaveSuccess()
         {
-            if (!isWaveActive || isWaveFailed)
+            if (!isWaveActive)
                 return;
 
             isWaveActive = false;
@@ -627,37 +551,7 @@ namespace FaeMaze.Systems
                 currentRedCap = null;
             }
 
-
             OnWaveSuccess?.Invoke();
-        }
-
-        /// <summary>
-        /// Handles wave failure when timer expires.
-        /// </summary>
-        private void HandleWaveFailure()
-        {
-            if (isWaveFailed)
-                return;
-
-            isWaveFailed = true;
-            isWaveActive = false;
-
-            // Stop spawning if still active
-            if (isSpawning)
-            {
-                StopAllCoroutines();
-                isSpawning = false;
-            }
-
-            // Clean up Red Cap
-            if (currentRedCap != null)
-            {
-                Destroy(currentRedCap.gameObject);
-                currentRedCap = null;
-            }
-
-
-            OnWaveFailed?.Invoke();
         }
 
         #endregion
@@ -696,7 +590,7 @@ namespace FaeMaze.Systems
             panelRect.anchorMax = new Vector2(0.5f, 1f);
             panelRect.pivot = new Vector2(0.5f, 1f);
             panelRect.anchoredPosition = new Vector2(0f, -10f);  // 10px from top
-            panelRect.sizeDelta = new Vector2(350f, 120f);
+            panelRect.sizeDelta = new Vector2(350f, 80f);  // Reduced height without timer
 
             Image panelImage = uiPanel.AddComponent<Image>();
             panelImage.color = new Color(0.1f, 0.1f, 0.1f, 0.85f);
@@ -724,24 +618,6 @@ namespace FaeMaze.Systems
             waveStatusText.fontStyle = FontStyles.Bold;
             waveStatusText.text = "Wave 0";
 
-            // Create timer text (middle)
-            GameObject timerTextObj = new GameObject("TimerText");
-            timerTextObj.transform.SetParent(uiPanel.transform, false);
-
-            RectTransform timerRect = timerTextObj.AddComponent<RectTransform>();
-            timerRect.anchorMin = new Vector2(0f, 0.5f);
-            timerRect.anchorMax = new Vector2(1f, 0.5f);
-            timerRect.pivot = new Vector2(0.5f, 0.5f);
-            timerRect.anchoredPosition = new Vector2(0f, 0f);
-            timerRect.sizeDelta = new Vector2(-20f, 35f);
-
-            timerText = timerTextObj.AddComponent<TextMeshProUGUI>();
-            timerText.fontSize = fontSize + 6;
-            timerText.color = uiTextColor;
-            timerText.alignment = TextAlignmentOptions.Center;
-            timerText.fontStyle = FontStyles.Bold;
-            timerText.text = "--:--";
-
             // Create visitor count text (bottom)
             GameObject countTextObj = new GameObject("VisitorCountText");
             countTextObj.transform.SetParent(uiPanel.transform, false);
@@ -751,14 +627,13 @@ namespace FaeMaze.Systems
             countRect.anchorMax = new Vector2(1f, 0f);
             countRect.pivot = new Vector2(0.5f, 0f);
             countRect.anchoredPosition = new Vector2(0f, 10f);
-            countRect.sizeDelta = new Vector2(-20f, 25f);
+            countRect.sizeDelta = new Vector2(-20f, 30f);
 
             visitorCountText = countTextObj.AddComponent<TextMeshProUGUI>();
             visitorCountText.fontSize = fontSize;
             visitorCountText.color = new Color(uiTextColor.r, uiTextColor.g, uiTextColor.b, 0.9f);
             visitorCountText.alignment = TextAlignmentOptions.Center;
             visitorCountText.text = "Visitors: 0/0 (Active: 0)";
-
         }
 
         /// <summary>
@@ -768,14 +643,9 @@ namespace FaeMaze.Systems
         {
             if (waveStatusText != null)
             {
-                if (isWaveFailed)
+                if (isWaveSuccessful)
                 {
-                    waveStatusText.text = $"Wave {currentWaveNumber} - FAILED";
-                    waveStatusText.color = warningColor;
-                }
-                else if (isWaveSuccessful)
-                {
-                    waveStatusText.text = $"Wave {currentWaveNumber} - SUCCESS!";
+                    waveStatusText.text = $"Wave {currentWaveNumber} Complete!";
                     waveStatusText.color = new Color(0.3f, 1f, 0.3f, 1f);  // Green color
                 }
                 else if (!isWaveActive)
@@ -787,31 +657,6 @@ namespace FaeMaze.Systems
                 {
                     waveStatusText.text = $"Wave {currentWaveNumber}";
                     waveStatusText.color = new Color(1f, 0.85f, 0.3f, 1f);
-                }
-            }
-
-            if (timerText != null)
-            {
-                if (!isWaveActive)
-                {
-                    timerText.text = "--:--";
-                    timerText.color = uiTextColor;
-                }
-                else
-                {
-                    int minutes = Mathf.FloorToInt(waveTimeRemaining / 60f);
-                    int seconds = Mathf.FloorToInt(waveTimeRemaining % 60f);
-                    timerText.text = $"{minutes:00}:{seconds:00}";
-
-                    // Change color to warning if time is low
-                    if (waveTimeRemaining <= warningThreshold)
-                    {
-                        timerText.color = warningColor;
-                    }
-                    else
-                    {
-                        timerText.color = uiTextColor;
-                    }
                 }
             }
 

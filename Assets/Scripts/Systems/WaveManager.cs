@@ -8,8 +8,9 @@ using FaeMaze.HeartPowers;
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// Manages wave progression, retry logic, and game-over scenarios.
-    /// Subscribes to WaveSpawner events and drives the game flow.
+    /// Manages wave progression and game-over scenarios based on essence depletion.
+    /// Subscribes to WaveSpawner and GameController events to drive the game flow.
+    /// Game ends when essence reaches 0; waves continue indefinitely until then.
     /// </summary>
     public class WaveManager : MonoBehaviour
     {
@@ -30,68 +31,31 @@ namespace FaeMaze.Systems
 
         [Header("UI References")]
         [SerializeField]
-        [Tooltip("Panel shown when wave is successful")]
-        private GameObject waveSuccessPanel;
+        [Tooltip("Panel shown when wave is completed")]
+        private GameObject waveCompletePanel;
 
         [SerializeField]
-        [Tooltip("Panel shown when wave fails")]
-        private GameObject waveFailedPanel;
-
-        [SerializeField]
-        [Tooltip("Panel shown when game is over")]
-        private GameObject gameOverPanel;
-
-        [SerializeField]
-        [Tooltip("Text displaying wave success message")]
-        private TextMeshProUGUI waveSuccessText;
-
-        [SerializeField]
-        [Tooltip("Text displaying wave failed message")]
-        private TextMeshProUGUI waveFailedText;
-
-        [SerializeField]
-        [Tooltip("Text displaying game over message")]
-        private TextMeshProUGUI gameOverText;
+        [Tooltip("Text displaying wave complete message")]
+        private TextMeshProUGUI waveCompleteText;
 
         [Header("Buttons")]
         [SerializeField]
         [Tooltip("Button to start next wave")]
         private Button nextWaveButton;
 
-        [SerializeField]
-        [Tooltip("Button to retry current wave")]
-        private Button retryWaveButton;
-
-        [SerializeField]
-        [Tooltip("Button to restart game from wave 1")]
-        private Button restartGameButton;
-
-        [SerializeField]
-        [Tooltip("Button to return to main menu")]
-        private Button mainMenuButton;
-
         [Header("Wave Progression Settings")]
         [SerializeField]
-        [Tooltip("Auto-start next wave after success (if false, player must click button)")]
+        [Tooltip("Auto-start next wave after completion (if false, player must click button)")]
         private bool autoStartNextWave = false;
 
         [SerializeField]
         [Tooltip("Delay before auto-starting next wave (in seconds)")]
         private float autoStartDelay = 2f;
 
-        [SerializeField]
-        [Tooltip("Maximum number of retries allowed per wave (-1 for unlimited)")]
-        private int maxRetriesPerWave = 0;
-
-        [SerializeField]
-        [Tooltip("Minimum essence required to continue game")]
-        private int minimumEssenceToContinue = 1;
-
         #endregion
 
         #region Private Fields
 
-        private int currentRetryCount = 0;
         private int lastCompletedWave = 0;
         private bool isGameOver = false;
         private float autoStartTimer = 0f;
@@ -99,7 +63,7 @@ namespace FaeMaze.Systems
 
         // Persistent wave tracking across scenes
         private static int persistentLastCompletedWave = 0;
-        
+
         #endregion
 
         #region Events
@@ -201,7 +165,11 @@ namespace FaeMaze.Systems
             if (waveSpawner != null)
             {
                 waveSpawner.OnWaveSuccess += HandleWaveSuccess;
-                waveSpawner.OnWaveFailed += HandleWaveFailed;
+            }
+
+            if (gameController != null)
+            {
+                gameController.OnEssenceChanged += HandleEssenceChanged;
             }
         }
 
@@ -210,7 +178,11 @@ namespace FaeMaze.Systems
             if (waveSpawner != null)
             {
                 waveSpawner.OnWaveSuccess -= HandleWaveSuccess;
-                waveSpawner.OnWaveFailed -= HandleWaveFailed;
+            }
+
+            if (gameController != null)
+            {
+                gameController.OnEssenceChanged -= HandleEssenceChanged;
             }
         }
 
@@ -224,21 +196,6 @@ namespace FaeMaze.Systems
             {
                 nextWaveButton.onClick.AddListener(OnNextWaveClicked);
             }
-
-            if (retryWaveButton != null)
-            {
-                retryWaveButton.onClick.AddListener(OnRetryWaveClicked);
-            }
-
-            if (restartGameButton != null)
-            {
-                restartGameButton.onClick.AddListener(OnRestartGameClicked);
-            }
-
-            if (mainMenuButton != null)
-            {
-                mainMenuButton.onClick.AddListener(OnMainMenuClicked);
-            }
         }
 
         #endregion
@@ -247,6 +204,12 @@ namespace FaeMaze.Systems
 
         private void HandleWaveSuccess()
         {
+            // Check if game is already over (essence depleted during wave)
+            if (isGameOver)
+            {
+                return;
+            }
+
             // Update last completed wave
             lastCompletedWave = waveSpawner.CurrentWaveNumber;
 
@@ -261,9 +224,6 @@ namespace FaeMaze.Systems
             {
                 GameStatsTracker.Instance.RecordWaveReached(waveSpawner.CurrentWaveNumber);
             }
-
-            // Reset retry count on success
-            currentRetryCount = 0;
 
             // Invoke event
             OnWaveCompleted?.Invoke(lastCompletedWave);
@@ -280,8 +240,8 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Show success UI
-            ShowWaveSuccessPanel();
+            // Show wave complete UI
+            ShowWaveCompletePanel();
 
             // Handle auto-start
             if (autoStartNextWave)
@@ -291,120 +251,82 @@ namespace FaeMaze.Systems
             }
         }
 
-        private void HandleWaveFailed()
+        private void HandleEssenceChanged(int newEssence)
         {
+            // Check if essence has reached 0 or below
+            if (newEssence <= 0 && !isGameOver)
+            {
+                HandleGameOver();
+            }
+        }
+
+        private void HandleGameOver()
+        {
+            // Mark game as over
+            isGameOver = true;
+
+            // Stop auto-start timer
+            waitingForAutoStart = false;
+            autoStartTimer = 0f;
+
             // Notify Heart Power Manager
             if (heartPowerManager != null)
             {
                 heartPowerManager.OnWaveFail();
             }
 
-            // Check if game over conditions are met
-            bool shouldGameOver = ShouldGameOver();
+            // Invoke event
+            OnGameOver?.Invoke();
 
-            if (shouldGameOver)
+            // Record final wave reached
+            if (GameStatsTracker.Instance != null && waveSpawner != null)
             {
-                LoadGameOverScene();
-                isGameOver = true;
-                OnGameOver?.Invoke();
-                return;
+                GameStatsTracker.Instance.RecordWaveReached(waveSpawner.CurrentWaveNumber);
             }
 
-            ShowWaveFailedPanel();
+            // Load the GameOver scene
+            LoadGameOverScene();
         }
 
         #endregion
 
         #region Game Flow Logic
 
-        private bool ShouldGameOver()
-        {
-            // Game over if player doesn't have minimum essence
-            if (gameController != null && gameController.CurrentEssence < minimumEssenceToContinue)
-            {
-                return true;
-            }
-
-            // Game over if max retries exceeded
-            if (maxRetriesPerWave >= 0 && currentRetryCount >= maxRetriesPerWave)
-            {
-                return true;
-            }
-
-            return false;
-        }
+        // Game flow logic is now primarily driven by essence depletion (HandleEssenceChanged)
+        // and wave completion (HandleWaveSuccess)
 
         #endregion
 
         #region UI Display Methods
 
-        private void ShowWaveSuccessPanel()
+        private void ShowWaveCompletePanel()
         {
             HideAllPanels();
 
-            if (waveSuccessPanel != null)
+            if (waveCompletePanel != null)
             {
-                waveSuccessPanel.SetActive(true);
+                waveCompletePanel.SetActive(true);
             }
 
-            if (waveSuccessText != null)
+            if (waveCompleteText != null)
             {
-                waveSuccessText.text = $"Wave {lastCompletedWave} Complete!";
-            }
-        }
-
-        private void ShowWaveFailedPanel()
-        {
-            HideAllPanels();
-
-            if (waveFailedPanel != null)
-            {
-                waveFailedPanel.SetActive(true);
-            }
-
-            if (waveFailedText != null)
-            {
-                int retriesRemaining = maxRetriesPerWave >= 0 ? maxRetriesPerWave - currentRetryCount : -1;
-                string retriesText = retriesRemaining >= 0 ? $"\nRetries Remaining: {retriesRemaining}" : "";
-                waveFailedText.text = $"Wave {waveSpawner.CurrentWaveNumber} Failed!{retriesText}";
-            }
-        }
-
-        private void ShowGameOverPanel()
-        {
-            HideAllPanels();
-
-            if (gameOverPanel != null)
-            {
-                gameOverPanel.SetActive(true);
-            }
-
-            if (gameOverText != null)
-            {
-                gameOverText.text = $"Game Over!\nCompleted Waves: {lastCompletedWave}";
+                waveCompleteText.text = $"Wave {lastCompletedWave} Complete!";
             }
         }
 
         private void HideAllPanels()
         {
-            if (waveSuccessPanel != null)
+            if (waveCompletePanel != null)
             {
-                waveSuccessPanel.SetActive(false);
+                waveCompletePanel.SetActive(false);
             }
 
-            if (waveFailedPanel != null)
+            // Cancel auto-start timer if hiding panels
+            if (!isGameOver)
             {
-                waveFailedPanel.SetActive(false);
+                waitingForAutoStart = false;
+                autoStartTimer = 0f;
             }
-
-            if (gameOverPanel != null)
-            {
-                gameOverPanel.SetActive(false);
-            }
-
-            // Cancel auto-start timer
-            waitingForAutoStart = false;
-            autoStartTimer = 0f;
         }
 
         #endregion
@@ -416,21 +338,6 @@ namespace FaeMaze.Systems
             StartNextWave();
         }
 
-        private void OnRetryWaveClicked()
-        {
-            RetryCurrentWave();
-        }
-
-        private void OnRestartGameClicked()
-        {
-            RestartGame();
-        }
-
-        private void OnMainMenuClicked()
-        {
-            LoadMainMenu();
-        }
-
         #endregion
 
         #region Public Methods
@@ -440,11 +347,9 @@ namespace FaeMaze.Systems
         /// </summary>
         public void StartGame()
         {
-
             // Reset game state
             isGameOver = false;
             lastCompletedWave = 0;
-            currentRetryCount = 0;
             ResetPersistentWaveProgress();
 
             // Hide all panels
@@ -488,69 +393,6 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Retries the current wave.
-        /// </summary>
-        public void RetryCurrentWave()
-        {
-            if (isGameOver)
-            {
-                return;
-            }
-
-            currentRetryCount++;
-
-
-            HideAllPanels();
-
-            // Notify Heart Power Manager
-            if (heartPowerManager != null)
-            {
-                heartPowerManager.OnWaveStart();
-            }
-
-            if (waveSpawner != null)
-            {
-                waveSpawner.RetryCurrentWave();
-            }
-        }
-
-        /// <summary>
-        /// Restarts the game from wave 1.
-        /// </summary>
-        public void RestartGame()
-        {
-            ResetPersistentWaveProgress();
-
-            // Invoke restart event
-            OnGameRestart?.Invoke();
-
-            // Reload the current scene
-            UnityEngine.SceneManagement.SceneManager.LoadScene(
-                UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
-            );
-        }
-
-        /// <summary>
-        /// Loads the main menu scene.
-        /// </summary>
-        public void LoadMainMenu()
-        {
-            ResetPersistentWaveProgress();
-
-            // Try to load "MainMenu" scene, fall back to current scene reload if not found
-            try
-            {
-                UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
-            }
-            catch
-            {
-                UnityEngine.SceneManagement.SceneManager.LoadScene(
-                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
-                );
-            }
-        }
-
-        /// <summary>
         /// Loads the Game Over scene with statistics.
         /// </summary>
         private void LoadGameOverScene()
@@ -578,10 +420,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public void ResetState()
         {
-
             isGameOver = false;
             lastCompletedWave = persistentLastCompletedWave;
-            currentRetryCount = 0;
             waitingForAutoStart = false;
             autoStartTimer = 0f;
 
@@ -658,11 +498,6 @@ namespace FaeMaze.Systems
         /// Gets the last completed wave number.
         /// </summary>
         public int LastCompletedWave => lastCompletedWave;
-
-        /// <summary>
-        /// Gets the current retry count.
-        /// </summary>
-        public int CurrentRetryCount => currentRetryCount;
 
         #endregion
     }
