@@ -1911,6 +1911,7 @@ namespace FaeMaze.HeartPowers
 
             if (consumedVisitor == null)
             {
+                Debug.Log($"[DevouringMaw] Update called but consumedVisitor is null at {elapsedTime}s");
                 return;
             }
 
@@ -1925,6 +1926,8 @@ namespace FaeMaze.HeartPowers
                         // Transition to sink and devour phase
                         currentPhase = AnimationPhase.SinkAndDevour;
                         phaseStartTime = elapsedTime;
+
+                        Debug.Log($"[DevouringMaw] Transitioning to SinkAndDevour phase at {elapsedTime}s");
 
                         // Spawn devour prefab at target tile
                         InstantiateDevourVisual(targetTile);
@@ -1943,6 +1946,11 @@ namespace FaeMaze.HeartPowers
                     sinkPosition.z = Mathf.Lerp(visitorStartPosition.z, visitorStartPosition.z - 1f, sinkT);
                     consumedVisitor.transform.position = sinkPosition;
 
+                    if (phaseElapsed < 0.1f) // Log once at the start
+                    {
+                        Debug.Log($"[DevouringMaw] SinkAndDevour - sinkT: {sinkT:F2}, position: {sinkPosition}, startZ: {visitorStartPosition.z}");
+                    }
+
                     // Clean up devour visual after 1 second (at 1.75s total time)
                     if (devourVisual != null && elapsedTime >= 1.75f)
                     {
@@ -1957,7 +1965,7 @@ namespace FaeMaze.HeartPowers
                         hasConsumedVisitor = true;
 
                         // Consume the visitor (grant essence and destroy)
-                        Debug.Log($"[DevouringMaw] Consuming visitor at {elapsedTime}s");
+                        Debug.Log($"[DevouringMaw] Consuming visitor at {elapsedTime}s, final position: {consumedVisitor.transform.position}");
                         ConsumeVisitor(consumedVisitor);
 
                         // Tier III: Extra essence and charge bonus
@@ -1967,6 +1975,7 @@ namespace FaeMaze.HeartPowers
                         }
 
                         currentPhase = AnimationPhase.Complete;
+                        Debug.Log($"[DevouringMaw] Transitioning to Complete phase at {elapsedTime}s");
                     }
                     break;
 
@@ -2026,25 +2035,21 @@ namespace FaeMaze.HeartPowers
 
         private void InstantiateDevourVisual(Vector2Int tile)
         {
-            // Load devour prefab
+            // Load devour prefab from Resources folder
             GameObject devourPrefab = Resources.Load<GameObject>("Prefabs/Props/devour");
 
             if (devourPrefab == null)
             {
-                // Try alternative path
-                devourPrefab = Resources.Load<GameObject>("devour");
-            }
-
-            if (devourPrefab == null)
-            {
+                Debug.LogError("[DevouringMaw] Failed to load devour prefab from Resources/Prefabs/Props/devour");
                 return;
             }
 
             // Instantiate at tile position
             Vector3 worldPos = manager.MazeGrid.GridToWorld(tile.x, tile.y);
-            worldPos.z = -0.5f; // Above floor
+            worldPos.z = 0f; // At floor level
 
             devourVisual = Object.Instantiate(devourPrefab, worldPos, Quaternion.identity);
+            Debug.Log($"[DevouringMaw] Spawned devour prefab at {worldPos}");
         }
 
         private void ConsumeVisitor(VisitorControllerBase visitor)
