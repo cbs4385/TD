@@ -1879,6 +1879,18 @@ namespace FaeMaze.HeartPowers
             Debug.Log($"[DevouringMaw] Found visitor on tile: {targetVisitor.name}, State: {targetVisitor.State}");
             consumedVisitor = targetVisitor;
 
+            // Get visitor's actual tile position
+            if (!manager.MazeGrid.WorldToGrid(consumedVisitor.transform.position, out int vx, out int vy))
+            {
+                Debug.LogError("[DevouringMaw] Failed to convert visitor position to grid");
+                return;
+            }
+            Vector2Int visitorTile = new Vector2Int(vx, vy);
+            Debug.Log($"[DevouringMaw] Visitor actual tile: {visitorTile}");
+
+            // Update targetTile to be the visitor's actual tile (for spawning effects at visitor location)
+            targetTile = visitorTile;
+
             // Stop the visitor movement
             Debug.Log($"[DevouringMaw] Stopping visitor movement");
             consumedVisitor.Stop();
@@ -1891,28 +1903,28 @@ namespace FaeMaze.HeartPowers
             hasConsumedVisitor = false;
             Debug.Log($"[DevouringMaw] Animation initialized - Phase: {currentPhase}, phaseStartTime: {phaseStartTime}");
 
-            // Add tile visualizer effect
+            // Add tile visualizer effect at visitor's location
             if (manager.TileVisualizer != null)
             {
                 manager.TileVisualizer.AddTileEffect(targetTile, HeartPowerType.DevouringMaw, 1.0f, 2.0f);
-                Debug.Log($"[DevouringMaw] Tile visualizer effect added");
+                Debug.Log($"[DevouringMaw] Tile visualizer effect added at {targetTile}");
             }
             else
             {
                 Debug.LogWarning($"[DevouringMaw] TileVisualizer is null");
             }
 
-            // Tier I: Apply fear to nearby visitors
+            // Tier I: Apply fear to nearby visitors (centered on visitor's tile)
             if (definition.tier >= 1 && definition.flag1)
             {
-                Debug.Log($"[DevouringMaw] Applying Echoing Terror (Tier {definition.tier})");
+                Debug.Log($"[DevouringMaw] Applying Echoing Terror at {targetTile} (Tier {definition.tier})");
                 ApplyEchoingTerror(targetTile);
             }
 
-            // Tier II: Slow nearby visitors
+            // Tier II: Slow nearby visitors (centered on visitor's tile)
             if (definition.tier >= 2 && definition.flag2)
             {
-                Debug.Log($"[DevouringMaw] Applying Draining Embrace (Tier {definition.tier})");
+                Debug.Log($"[DevouringMaw] Applying Draining Embrace at {targetTile} (Tier {definition.tier})");
                 ApplyDrainingEmbrace(targetTile);
             }
 
@@ -2035,10 +2047,14 @@ namespace FaeMaze.HeartPowers
 
         private VisitorControllerBase FindVisitorOnTile(Vector2Int tile)
         {
-            // Use visitor registry
+            // Search for nearest visitor within a small range (2 tiles)
+            int searchRange = 2;
             var visitors = VisitorRegistry.All;
-            Debug.Log($"[DevouringMaw] FindVisitorOnTile - Searching for visitor on tile {tile}");
+            Debug.Log($"[DevouringMaw] FindVisitorOnTile - Searching for visitor near tile {tile} (range: {searchRange})");
             Debug.Log($"[DevouringMaw] Total visitors in registry: {visitors.Count}");
+
+            VisitorControllerBase nearestVisitor = null;
+            float nearestDistance = float.MaxValue;
 
             int checkedCount = 0;
             foreach (var visitor in visitors)
@@ -2067,19 +2083,33 @@ namespace FaeMaze.HeartPowers
                 }
 
                 Vector2Int visitorTile = new Vector2Int(vx, vy);
-                Debug.Log($"[DevouringMaw] Visitor {visitor.name} at tile {visitorTile}, target {tile}, match: {visitorTile == tile}");
+                int distance = Mathf.Abs(visitorTile.x - tile.x) + Mathf.Abs(visitorTile.y - tile.y);
 
-                // Check if visitor is on target tile
-                if (visitorTile == tile)
+                Debug.Log($"[DevouringMaw] Visitor {visitor.name} at tile {visitorTile}, distance from target {tile}: {distance}");
+
+                // Check if visitor is within search range
+                if (distance <= searchRange)
                 {
-                    Debug.Log($"[DevouringMaw] FOUND visitor {visitor.name} on target tile {tile}!");
-                    return visitor;
+                    if (distance < nearestDistance)
+                    {
+                        nearestDistance = distance;
+                        nearestVisitor = visitor;
+                        Debug.Log($"[DevouringMaw] New nearest visitor: {visitor.name} at distance {distance}");
+                    }
                 }
                 checkedCount++;
             }
 
-            Debug.LogWarning($"[DevouringMaw] No visitor found on tile {tile} after checking {checkedCount} visitors");
-            return null;
+            if (nearestVisitor != null)
+            {
+                Debug.Log($"[DevouringMaw] FOUND nearest visitor {nearestVisitor.name} at distance {nearestDistance} from {tile}");
+            }
+            else
+            {
+                Debug.LogWarning($"[DevouringMaw] No visitor found within {searchRange} tiles of {tile} after checking {checkedCount} visitors");
+            }
+
+            return nearestVisitor;
         }
 
         private void InstantiateDevourVisual(Vector2Int tile)
