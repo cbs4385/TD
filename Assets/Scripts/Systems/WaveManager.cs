@@ -505,6 +505,15 @@ namespace FaeMaze.Systems
         /// </summary>
         public int LastCompletedWave => lastCompletedWave;
 
+        /// <summary>
+        /// Resets all persistent wave state (static fields).
+        /// Call this before loading a new game from the main menu.
+        /// </summary>
+        public static void ResetPersistentWaveState()
+        {
+            persistentLastCompletedWave = 0;
+        }
+
         #endregion
     }
 }

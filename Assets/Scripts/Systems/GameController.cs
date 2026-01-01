@@ -286,6 +286,16 @@ namespace FaeMaze.Systems
             OnEssenceChanged?.Invoke(currentEssence);
         }
 
+        /// <summary>
+        /// Resets all persistent game state (static fields).
+        /// Call this before loading a new game from the main menu.
+        /// </summary>
+        public static void ResetPersistentGameState()
+        {
+            persistentEssence = null;
+            hasInitializedEssence = false;
+        }
+
         #endregion
 
         #region Private Methods

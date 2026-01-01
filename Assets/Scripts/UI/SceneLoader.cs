@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -17,6 +18,10 @@ namespace FaeMaze.UI
 
         public void LoadGameScene()
         {
+            // Reset all persistent game state before starting a new game
+            GameController.ResetPersistentGameState();
+            WaveManager.ResetPersistentWaveState();
+
             SceneManager.LoadScene("FaeMazeScene");
         }
 
