@@ -352,6 +352,12 @@ namespace FaeMaze.Systems
             lastCompletedWave = 0;
             ResetPersistentWaveProgress();
 
+            // Reset essence to starting value for new game
+            if (gameController != null)
+            {
+                gameController.ResetEssenceToStart();
+            }
+
             // Hide all panels
             HideAllPanels();
 

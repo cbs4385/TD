@@ -60,6 +60,10 @@ namespace FaeMaze.Systems
         private int currentEssence;
         private VisitorController lastSpawnedVisitor;
 
+        // Persistent essence tracking across scenes
+        private static int? persistentEssence = null;
+        private static bool hasInitializedEssence = false;
+
         #endregion
 
         #region Events
@@ -114,7 +118,17 @@ namespace FaeMaze.Systems
 
             _instance = this;
 
-            currentEssence = Mathf.Max(0, startingEssence);
+            // Initialize essence: use persistent value if available, otherwise use starting essence
+            if (hasInitializedEssence && persistentEssence.HasValue)
+            {
+                currentEssence = persistentEssence.Value;
+            }
+            else
+            {
+                currentEssence = Mathf.Max(0, startingEssence);
+                hasInitializedEssence = true;
+                persistentEssence = currentEssence;
+            }
 
             // Ensure particle system spawner component exists
             EnsureParticleSystemSpawner();
@@ -213,12 +227,10 @@ namespace FaeMaze.Systems
         /// <param name="amount">Amount of essence to add</param>
         public void AddEssence(int amount)
         {
-            if (amount < 0)
-            {
-                return;
-            }
-
             currentEssence += amount;
+
+            // Update persistent essence
+            persistentEssence = currentEssence;
 
             // Invoke event for essence change
             OnEssenceChanged?.Invoke(currentEssence);
@@ -240,6 +252,9 @@ namespace FaeMaze.Systems
             {
                 currentEssence -= cost;
 
+                // Update persistent essence
+                persistentEssence = currentEssence;
+
                 // Invoke event for essence change
                 OnEssenceChanged?.Invoke(currentEssence);
 
@@ -255,6 +270,20 @@ namespace FaeMaze.Systems
         public void SetLastSpawnedVisitor(VisitorController visitor)
         {
             lastSpawnedVisitor = visitor;
+        }
+
+        /// <summary>
+        /// Resets essence to the starting value.
+        /// Call this when starting a new game from the beginning.
+        /// </summary>
+        public void ResetEssenceToStart()
+        {
+            currentEssence = Mathf.Max(0, startingEssence);
+            persistentEssence = currentEssence;
+            hasInitializedEssence = true;
+
+            // Invoke event for essence change
+            OnEssenceChanged?.Invoke(currentEssence);
         }
 
         #endregion
