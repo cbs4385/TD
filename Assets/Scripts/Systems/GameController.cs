@@ -149,7 +149,7 @@ namespace FaeMaze.Systems
 
             EnsurePlacementUI();
 
-            EnsureResourcesUI();
+            // EnsureResourcesUI(); // Disabled - HeartPowerPanelController now displays essence
 
             // Invoke event for initial essence value
             OnEssenceChanged?.Invoke(currentEssence);

@@ -342,17 +342,17 @@ namespace FaeMaze.UI
 
             // Create the panel spanning the bottom
             heartPowersPanel = CreatePanel(canvas.transform);
-            float panelHeight = Mathf.Max(200f, 1080f * 0.05f);
+            float panelHeight = 60f; // Single line height
 
             // Left half: Create power buttons in a compact horizontal row
             float leftPadding = 10f;
-            float buttonSpacing = 4f;
-            float buttonHeight = panelHeight - 20f; // Leave 10px padding top/bottom
+            float buttonSpacing = 3f;
+            float buttonHeight = panelHeight - 10f; // Leave 5px padding top/bottom
             // Calculate button width to fit 9 buttons in left half (assume half screen = 960px)
             float leftHalfWidth = 960f; // Half of 1920 reference resolution
             float buttonWidth = (leftHalfWidth - leftPadding * 2 - buttonSpacing * 8) / 9f;
             float buttonsStartX = -960f + leftPadding; // Start from left edge of screen
-            float buttonYPos = panelHeight / 2f;
+            float buttonYPos = 0f; // Vertically centered (0 is center when pivot is at center)
 
             for (int i = 0; i < 9; i++)
             {
@@ -402,8 +402,8 @@ namespace FaeMaze.UI
             rect.pivot = new Vector2(0.5f, 0f);
             rect.anchoredPosition = new Vector2(0f, 0f); // Aligned to bottom
 
-            // Use larger of 5% viewport or 200px for height (with reference resolution 1920x1080, 5% of height = 54px, so use 200px)
-            float panelHeight = Mathf.Max(200f, 1080f * 0.05f);
+            // Single line height
+            float panelHeight = 60f;
             rect.sizeDelta = new Vector2(0f, panelHeight); // Width 0 means it uses anchors (full width)
 
             Image image = panel.AddComponent<Image>();
@@ -414,13 +414,12 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Creates the right half of the bottom panel with wave and essence displays.
+        /// Creates the right half of the bottom panel with wave and essence displays on one horizontal line.
+        /// Layout: [Wave Text] [Essence Value] [Essence Slider]
         /// </summary>
         private void CreateRightPanelUI(Transform parent, float panelHeight)
         {
-            float rightHalfStartX = 0f; // Right half starts at center
-            float padding = 20f;
-            float elementSpacing = 10f;
+            float padding = 10f;
 
             // Create container for right panel elements
             GameObject rightContainer = new GameObject("RightPanelContainer");
@@ -429,75 +428,65 @@ namespace FaeMaze.UI
             RectTransform containerRect = rightContainer.AddComponent<RectTransform>();
             containerRect.anchorMin = new Vector2(0.5f, 0f); // Center bottom
             containerRect.anchorMax = new Vector2(1f, 1f); // Right top (right half of panel)
-            containerRect.offsetMin = new Vector2(padding, padding);
-            containerRect.offsetMax = new Vector2(-padding, -padding);
+            containerRect.offsetMin = new Vector2(padding, 0f);
+            containerRect.offsetMax = new Vector2(-padding, 0f);
 
-            // Create Wave display (top of right panel)
+            // Add horizontal layout group for single-line layout
+            HorizontalLayoutGroup layoutGroup = rightContainer.AddComponent<HorizontalLayoutGroup>();
+            layoutGroup.childAlignment = TextAnchor.MiddleCenter;
+            layoutGroup.spacing = 10f;
+            layoutGroup.childForceExpandWidth = false;
+            layoutGroup.childForceExpandHeight = true;
+            layoutGroup.childControlWidth = false;
+            layoutGroup.childControlHeight = false;
+
+            // Create Wave display (left in right panel)
             GameObject waveObj = new GameObject("WaveDisplay");
             waveObj.transform.SetParent(rightContainer.transform, false);
 
-            RectTransform waveRect = waveObj.AddComponent<RectTransform>();
-            waveRect.anchorMin = new Vector2(0f, 0.65f);
-            waveRect.anchorMax = new Vector2(1f, 1f);
-            waveRect.offsetMin = Vector2.zero;
-            waveRect.offsetMax = Vector2.zero;
-
             waveText = waveObj.AddComponent<TextMeshProUGUI>();
             waveText.text = "Wave 0";
-            waveText.fontSize = 24;
+            waveText.fontSize = 18;
             waveText.fontStyle = FontStyles.Bold;
             waveText.alignment = TextAlignmentOptions.Center;
             waveText.color = new Color(1f, 0.85f, 0.3f, 1f); // Gold
 
-            // Create Essence Label
-            GameObject essenceLabelObj = new GameObject("EssenceLabel");
-            essenceLabelObj.transform.SetParent(rightContainer.transform, false);
+            LayoutElement waveLayout = waveObj.AddComponent<LayoutElement>();
+            waveLayout.preferredWidth = 120f;
+            waveLayout.flexibleWidth = 0f;
 
-            RectTransform essenceLabelRect = essenceLabelObj.AddComponent<RectTransform>();
-            essenceLabelRect.anchorMin = new Vector2(0f, 0.35f);
-            essenceLabelRect.anchorMax = new Vector2(1f, 0.6f);
-            essenceLabelRect.offsetMin = Vector2.zero;
-            essenceLabelRect.offsetMax = Vector2.zero;
-
-            TextMeshProUGUI essenceLabelText = essenceLabelObj.AddComponent<TextMeshProUGUI>();
-            essenceLabelText.text = "Essence";
-            essenceLabelText.fontSize = 16;
-            essenceLabelText.fontStyle = FontStyles.Bold;
-            essenceLabelText.alignment = TextAlignmentOptions.Center;
-            essenceLabelText.color = new Color(0.6f, 0.8f, 1f, 1f); // Light blue
-
-            // Create Essence Value Text
+            // Create Essence Value Text (middle in right panel)
             GameObject essenceValueObj = new GameObject("EssenceValue");
             essenceValueObj.transform.SetParent(rightContainer.transform, false);
 
-            RectTransform essenceValueRect = essenceValueObj.AddComponent<RectTransform>();
-            essenceValueRect.anchorMin = new Vector2(0f, 0.15f);
-            essenceValueRect.anchorMax = new Vector2(1f, 0.35f);
-            essenceValueRect.offsetMin = Vector2.zero;
-            essenceValueRect.offsetMax = Vector2.zero;
-
             essenceValueText = essenceValueObj.AddComponent<TextMeshProUGUI>();
-            essenceValueText.text = "0 / 400";
-            essenceValueText.fontSize = 20;
+            essenceValueText.text = "Essence: 0/400";
+            essenceValueText.fontSize = 16;
             essenceValueText.fontStyle = FontStyles.Bold;
             essenceValueText.alignment = TextAlignmentOptions.Center;
             essenceValueText.color = new Color(1f, 0.84f, 0f, 1f); // Gold
 
-            // Create Essence Bar (slider)
+            LayoutElement essenceValueLayout = essenceValueObj.AddComponent<LayoutElement>();
+            essenceValueLayout.preferredWidth = 160f;
+            essenceValueLayout.flexibleWidth = 0f;
+
+            // Create Essence Bar (slider) (right in right panel)
             GameObject essenceBarObj = new GameObject("EssenceBar");
             essenceBarObj.transform.SetParent(rightContainer.transform, false);
 
             RectTransform essenceBarRect = essenceBarObj.AddComponent<RectTransform>();
-            essenceBarRect.anchorMin = new Vector2(0f, 0f);
-            essenceBarRect.anchorMax = new Vector2(1f, 0.12f);
-            essenceBarRect.offsetMin = Vector2.zero;
-            essenceBarRect.offsetMax = Vector2.zero;
+            essenceBarRect.sizeDelta = new Vector2(200f, 20f);
 
             essenceBar = essenceBarObj.AddComponent<Slider>();
             essenceBar.minValue = 0f;
             essenceBar.maxValue = 400f;
             essenceBar.value = 0f;
             essenceBar.interactable = false;
+
+            LayoutElement barLayout = essenceBarObj.AddComponent<LayoutElement>();
+            barLayout.preferredWidth = 250f;
+            barLayout.preferredHeight = 20f;
+            barLayout.flexibleWidth = 1f;
 
             // Create slider background
             GameObject bgObj = new GameObject("Background");
@@ -830,7 +819,7 @@ namespace FaeMaze.UI
 
                 if (essenceValueText != null)
                 {
-                    essenceValueText.text = $"{essence} / 400";
+                    essenceValueText.text = $"Essence: {essence}/400";
                 }
 
                 if (essenceBar != null)
