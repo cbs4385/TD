@@ -1833,9 +1833,20 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public class DevouringMawEffect : ActivePowerEffect
     {
+        private enum AnimationPhase
+        {
+            Pause,              // 0.0 - 0.75s: Visitor paused
+            SinkAndDevour,      // 0.75s+: Visitor sinks into ground, devour prefab spawns
+            Complete            // Visitor consumed and destroyed
+        }
+
         private GameObject devourVisual;
         private VisitorControllerBase consumedVisitor;
         private Vector2Int targetTile;
+        private AnimationPhase currentPhase;
+        private float phaseStartTime;
+        private Vector3 visitorStartPosition;
+        private bool hasConsumedVisitor;
 
         public DevouringMawEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
@@ -1866,18 +1877,20 @@ namespace FaeMaze.HeartPowers
             Debug.Log($"[DevouringMaw] Found visitor on tile: {targetVisitor.name}");
             consumedVisitor = targetVisitor;
 
-            // Instantiate devour prefab for visual
-            InstantiateDevourVisual(targetTile);
+            // Stop the visitor movement
+            consumedVisitor.Stop();
+            visitorStartPosition = consumedVisitor.transform.position;
+
+            // Initialize animation state
+            currentPhase = AnimationPhase.Pause;
+            phaseStartTime = 0f;
+            hasConsumedVisitor = false;
 
             // Add tile visualizer effect
             if (manager.TileVisualizer != null)
             {
                 manager.TileVisualizer.AddTileEffect(targetTile, HeartPowerType.DevouringMaw, 1.0f, 2.0f);
             }
-
-            // Consume the visitor (grant essence and destroy)
-            Debug.Log($"[DevouringMaw] Consuming visitor: {targetVisitor.name}");
-            ConsumeVisitor(targetVisitor);
 
             // Tier I: Apply fear to nearby visitors
             if (definition.tier >= 1 && definition.flag1)
@@ -1890,23 +1903,76 @@ namespace FaeMaze.HeartPowers
             {
                 ApplyDrainingEmbrace(targetTile);
             }
-
-            // Tier III: Extra essence and charge bonus
-            if (definition.tier >= 3)
-            {
-                ApplySoulHarvest();
-            }
         }
 
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
 
-            // Clean up devour visual after animation
-            if (devourVisual != null && elapsedTime > 1.5f)
+            if (consumedVisitor == null)
             {
-                Object.Destroy(devourVisual);
-                devourVisual = null;
+                return;
+            }
+
+            float phaseElapsed = elapsedTime - phaseStartTime;
+
+            switch (currentPhase)
+            {
+                case AnimationPhase.Pause:
+                    // Visitor is paused for 0.75 seconds
+                    if (phaseElapsed >= 0.75f)
+                    {
+                        // Transition to sink and devour phase
+                        currentPhase = AnimationPhase.SinkAndDevour;
+                        phaseStartTime = elapsedTime;
+
+                        // Spawn devour prefab at target tile
+                        InstantiateDevourVisual(targetTile);
+
+                        Debug.Log($"[DevouringMaw] Starting sink animation at {elapsedTime}s");
+                    }
+                    break;
+
+                case AnimationPhase.SinkAndDevour:
+                    // Sink the visitor 1 unit into the ground over a brief duration
+                    float sinkDuration = 0.5f;
+                    float sinkT = Mathf.Clamp01(phaseElapsed / sinkDuration);
+
+                    // Lerp Z position from start to -1
+                    Vector3 sinkPosition = visitorStartPosition;
+                    sinkPosition.z = Mathf.Lerp(visitorStartPosition.z, visitorStartPosition.z - 1f, sinkT);
+                    consumedVisitor.transform.position = sinkPosition;
+
+                    // Clean up devour visual after 1 second (at 1.75s total time)
+                    if (devourVisual != null && elapsedTime >= 1.75f)
+                    {
+                        Object.Destroy(devourVisual);
+                        devourVisual = null;
+                        Debug.Log($"[DevouringMaw] Despawning devour prefab at {elapsedTime}s");
+                    }
+
+                    // After sink animation completes, consume the visitor
+                    if (sinkT >= 1f && !hasConsumedVisitor)
+                    {
+                        hasConsumedVisitor = true;
+
+                        // Consume the visitor (grant essence and destroy)
+                        Debug.Log($"[DevouringMaw] Consuming visitor at {elapsedTime}s");
+                        ConsumeVisitor(consumedVisitor);
+
+                        // Tier III: Extra essence and charge bonus
+                        if (definition.tier >= 3)
+                        {
+                            ApplySoulHarvest();
+                        }
+
+                        currentPhase = AnimationPhase.Complete;
+                    }
+                    break;
+
+                case AnimationPhase.Complete:
+                    // Animation complete, nothing to do
+                    break;
             }
         }
 
