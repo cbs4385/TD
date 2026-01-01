@@ -130,8 +130,8 @@ namespace FaeMaze.Systems
                 persistentEssence = currentEssence;
             }
 
-            // Ensure particle system spawner component exists
-            EnsureParticleSystemSpawner();
+            // Particle system spawner disabled - using URP Volume Fog instead
+            // EnsureParticleSystemSpawner();
         }
 
         private void EnsureParticleSystemSpawner()
