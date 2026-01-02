@@ -438,7 +438,7 @@ namespace FaeMaze.Systems
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(startPos.x, startPos.y);
 
             // Choose which visitor type to spawn from enabled types
-            VisitorController spawnedVisitor = SelectAndSpawnRandomVisitorType(spawnWorldPos);
+            VisitorControllerBase spawnedVisitor = SelectAndSpawnRandomVisitorType(spawnWorldPos);
 
             if (spawnedVisitor == null)
             {
@@ -452,11 +452,9 @@ namespace FaeMaze.Systems
             spawnedVisitor.SetPath(pathNodes);
 
             // Only basic visitors are tracked by GameController (legacy behavior)
-            if (spawnedVisitor is VisitorController && !(spawnedVisitor is MistakingVisitorController) &&
-                !(spawnedVisitor is LanternDrunkVisitorController) && !(spawnedVisitor is WaryWayfarerVisitorController) &&
-                !(spawnedVisitor is SleepwalkingDevoteeController))
+            if (spawnedVisitor is VisitorController)
             {
-                GameController.Instance.SetLastSpawnedVisitor(spawnedVisitor);
+                GameController.Instance.SetLastSpawnedVisitor((VisitorController)spawnedVisitor);
             }
 
             // Name includes spawn IDs if using spawn marker system
@@ -483,11 +481,11 @@ namespace FaeMaze.Systems
         /// Selects a random visitor type from enabled visitor types and spawns it
         /// </summary>
         /// <param name="spawnPosition">World position to spawn the visitor</param>
-        /// <returns>The spawned VisitorController, or null if no types are enabled</returns>
-        private VisitorController SelectAndSpawnRandomVisitorType(Vector3 spawnPosition)
+        /// <returns>The spawned VisitorControllerBase, or null if no types are enabled</returns>
+        private VisitorControllerBase SelectAndSpawnRandomVisitorType(Vector3 spawnPosition)
         {
             // Build list of enabled visitor types
-            List<VisitorController> enabledVisitorPrefabs = new List<VisitorController>();
+            List<VisitorControllerBase> enabledVisitorPrefabs = new List<VisitorControllerBase>();
 
             if (GameSettings.EnableVisitorType_Basic && basicVisitorPrefab != null)
             {
@@ -519,10 +517,10 @@ namespace FaeMaze.Systems
 
             // Randomly select one enabled visitor type
             int randomIndex = Random.Range(0, enabledVisitorPrefabs.Count);
-            VisitorController selectedPrefab = enabledVisitorPrefabs[randomIndex];
+            VisitorControllerBase selectedPrefab = enabledVisitorPrefabs[randomIndex];
 
             // Spawn the selected visitor type (rotated 180 degrees on z-axis)
-            VisitorController spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.Euler(0, 0, 180));
+            VisitorControllerBase spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.Euler(0, 0, 180));
 
             return spawnedVisitor;
         }
@@ -892,8 +890,10 @@ namespace FaeMaze.Systems
         {
             bool isValid = true;
 
-            // Need at least one visitor prefab (regular or mistaking)
-            if (visitorPrefab == null && mistakingVisitorPrefab == null)
+            // Need at least one visitor prefab assigned
+            if (basicVisitorPrefab == null && mistakingVisitorPrefab == null &&
+                lanternDrunkVisitorPrefab == null && waryWayfarerVisitorPrefab == null &&
+                sleepwalkingVisitorPrefab == null)
             {
                 isValid = false;
             }
