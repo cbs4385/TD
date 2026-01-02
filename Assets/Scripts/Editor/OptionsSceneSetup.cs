@@ -133,6 +133,14 @@ namespace FaeMaze.Editor
             var (confMinSlider, confMinText) = SceneSetupUtilities.CreateSliderWithLabel(visitorContent, "Confusion Distance Min", 1f, 50f, 15f);
             var (confMaxSlider, confMaxText) = SceneSetupUtilities.CreateSliderWithLabel(visitorContent, "Confusion Distance Max", 1f, 50f, 20f);
 
+            // Visitor Type Settings Section
+            var (visitorTypeSection, visitorTypeContent) = CreateCollapsibleSection("VisitorTypeSection", contentObj.transform, "VISITOR TYPES");
+            Toggle enableBasicVisitorToggle = SceneSetupUtilities.CreateToggle(visitorTypeContent, "Enable Basic Visitor", true);
+            Toggle enableMistakingVisitorToggle = SceneSetupUtilities.CreateToggle(visitorTypeContent, "Enable Mistaking Visitor", true);
+            Toggle enableLanternDrunkVisitorToggle = SceneSetupUtilities.CreateToggle(visitorTypeContent, "Enable Lantern Drunk Visitor", true);
+            Toggle enableWaryWayfarerVisitorToggle = SceneSetupUtilities.CreateToggle(visitorTypeContent, "Enable Wary Wayfarer Visitor", true);
+            Toggle enableSleepwalkingVisitorToggle = SceneSetupUtilities.CreateToggle(visitorTypeContent, "Enable Sleepwalking Visitor", true);
+
             // Wave/Difficulty Section
             var (waveSection, waveContent) = CreateCollapsibleSection("WaveSection", contentObj.transform, "WAVE & DIFFICULTY");
             var (visPerWaveSlider, visPerWaveText) = SceneSetupUtilities.CreateSliderWithLabel(waveContent, "Visitors Per Wave", 1f, 50f, 10f);
@@ -181,6 +189,13 @@ namespace FaeMaze.Editor
             optionsManagerSO.FindProperty("confusionDistanceMinText").objectReferenceValue = confMinText;
             optionsManagerSO.FindProperty("confusionDistanceMaxSlider").objectReferenceValue = confMaxSlider;
             optionsManagerSO.FindProperty("confusionDistanceMaxText").objectReferenceValue = confMaxText;
+
+            // Visitor Types
+            optionsManagerSO.FindProperty("enableBasicVisitorToggle").objectReferenceValue = enableBasicVisitorToggle;
+            optionsManagerSO.FindProperty("enableMistakingVisitorToggle").objectReferenceValue = enableMistakingVisitorToggle;
+            optionsManagerSO.FindProperty("enableLanternDrunkVisitorToggle").objectReferenceValue = enableLanternDrunkVisitorToggle;
+            optionsManagerSO.FindProperty("enableWaryWayfarerVisitorToggle").objectReferenceValue = enableWaryWayfarerVisitorToggle;
+            optionsManagerSO.FindProperty("enableSleepwalkingVisitorToggle").objectReferenceValue = enableSleepwalkingVisitorToggle;
 
             // Wave
             optionsManagerSO.FindProperty("visitorsPerWaveSlider").objectReferenceValue = visPerWaveSlider;
