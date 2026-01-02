@@ -283,7 +283,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public bool StartWave()
         {
-            Debug.Log($"WaveSpawner.StartWave called. isSpawning={isSpawning}, isWaveActive={isWaveActive}, autoStartFirstWave={autoStartFirstWave}, currentWaveNumber={currentWaveNumber}, visitorsPerWave={visitorsPerWave}, spawnInterval={spawnInterval}");
+            Debug.Log($"WaveSpawner.StartWave called on '{name}'. isSpawning={isSpawning}, isWaveActive={isWaveActive}, autoStartFirstWave={autoStartFirstWave}, currentWaveNumber={currentWaveNumber}, visitorsPerWave={visitorsPerWave}, spawnInterval={spawnInterval}");
 
             // Prevent starting if already spawning
             if (isSpawning)
@@ -894,7 +894,7 @@ namespace FaeMaze.Systems
             bool isValid = true;
             StringBuilder logBuilder = new StringBuilder();
 
-            logBuilder.AppendLine("WaveSpawner.ValidateReferences");
+            logBuilder.AppendLine($"WaveSpawner.ValidateReferences for '{name}'");
 
             bool hasBasic = basicVisitorPrefab != null;
             bool hasMistaking = mistakingVisitorPrefab != null;
@@ -902,7 +902,12 @@ namespace FaeMaze.Systems
             bool hasWary = waryWayfarerVisitorPrefab != null;
             bool hasSleepwalking = sleepwalkingVisitorPrefab != null;
 
-            logBuilder.AppendLine($"Visitor prefabs: basic={hasBasic}, mistaking={hasMistaking}, lanternDrunk={hasLanternDrunk}, wary={hasWary}, sleepwalking={hasSleepwalking}");
+            logBuilder.AppendLine("Visitor prefab assignments:");
+            logBuilder.AppendLine($"  basic: {(basicVisitorPrefab != null ? basicVisitorPrefab.name : "null")}");
+            logBuilder.AppendLine($"  mistaking: {(mistakingVisitorPrefab != null ? mistakingVisitorPrefab.name : "null")}");
+            logBuilder.AppendLine($"  lantern drunk: {(lanternDrunkVisitorPrefab != null ? lanternDrunkVisitorPrefab.name : "null")}");
+            logBuilder.AppendLine($"  wary wayfarer: {(waryWayfarerVisitorPrefab != null ? waryWayfarerVisitorPrefab.name : "null")}");
+            logBuilder.AppendLine($"  sleepwalking devotee: {(sleepwalkingVisitorPrefab != null ? sleepwalkingVisitorPrefab.name : "null")}");
 
             // Need at least one visitor prefab assigned
             if (basicVisitorPrefab == null && mistakingVisitorPrefab == null &&
@@ -927,6 +932,20 @@ namespace FaeMaze.Systems
                 bool hasLegacySystem = entrance != null && heart != null;
 
                 logBuilder.AppendLine($"Spawn markers count={spawnPointCount} (requires >=2), entrance assigned={entrance != null}, heart assigned={heart != null}");
+
+                if (hasSpawnMarkers)
+                {
+                    logBuilder.AppendLine("Spawn marker ids -> grid positions:");
+                    foreach (var kvp in mazeGridBehaviour.GetAllSpawnPoints())
+                    {
+                        logBuilder.AppendLine($"  {kvp.Key}: {kvp.Value}");
+                    }
+                }
+
+                if (hasLegacySystem)
+                {
+                    logBuilder.AppendLine($"Legacy entrance: {entrance.name}, heart: {heart.name}");
+                }
 
                 if (!hasSpawnMarkers && !hasLegacySystem)
                 {
