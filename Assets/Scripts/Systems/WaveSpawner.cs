@@ -283,6 +283,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public bool StartWave()
         {
+            Debug.Log($"WaveSpawner.StartWave called. isSpawning={isSpawning}, isWaveActive={isWaveActive}, autoStartFirstWave={autoStartFirstWave}, currentWaveNumber={currentWaveNumber}, visitorsPerWave={visitorsPerWave}, spawnInterval={spawnInterval}");
+
             // Prevent starting if already spawning
             if (isSpawning)
             {
@@ -297,6 +299,7 @@ namespace FaeMaze.Systems
 
             if (!ValidateReferences())
             {
+                Debug.LogWarning("WaveSpawner.StartWave aborted: ValidateReferences returned false.");
                 return false;
             }
 
@@ -889,6 +892,17 @@ namespace FaeMaze.Systems
         private bool ValidateReferences()
         {
             bool isValid = true;
+            StringBuilder logBuilder = new StringBuilder();
+
+            logBuilder.AppendLine("WaveSpawner.ValidateReferences");
+
+            bool hasBasic = basicVisitorPrefab != null;
+            bool hasMistaking = mistakingVisitorPrefab != null;
+            bool hasLanternDrunk = lanternDrunkVisitorPrefab != null;
+            bool hasWary = waryWayfarerVisitorPrefab != null;
+            bool hasSleepwalking = sleepwalkingVisitorPrefab != null;
+
+            logBuilder.AppendLine($"Visitor prefabs: basic={hasBasic}, mistaking={hasMistaking}, lanternDrunk={hasLanternDrunk}, wary={hasWary}, sleepwalking={hasSleepwalking}");
 
             // Need at least one visitor prefab assigned
             if (basicVisitorPrefab == null && mistakingVisitorPrefab == null &&
@@ -896,24 +910,33 @@ namespace FaeMaze.Systems
                 sleepwalkingVisitorPrefab == null)
             {
                 isValid = false;
+                logBuilder.AppendLine("No visitor prefabs assigned.");
             }
 
             if (mazeGridBehaviour == null)
             {
                 isValid = false;
+                logBuilder.AppendLine("MazeGridBehaviour not found.");
             }
 
             // Check if we have either spawn markers or legacy entrance/heart
             if (mazeGridBehaviour != null)
             {
-                bool hasSpawnMarkers = mazeGridBehaviour.GetSpawnPointCount() >= 2;
+                int spawnPointCount = mazeGridBehaviour.GetSpawnPointCount();
+                bool hasSpawnMarkers = spawnPointCount >= 2;
                 bool hasLegacySystem = entrance != null && heart != null;
+
+                logBuilder.AppendLine($"Spawn markers count={spawnPointCount} (requires >=2), entrance assigned={entrance != null}, heart assigned={heart != null}");
 
                 if (!hasSpawnMarkers && !hasLegacySystem)
                 {
                     isValid = false;
+                    logBuilder.AppendLine("Neither spawn marker pair nor legacy entrance/heart assigned.");
                 }
             }
+
+            logBuilder.AppendLine($"ValidateReferences result: {isValid}");
+            Debug.Log(logBuilder.ToString());
 
             return isValid;
         }
