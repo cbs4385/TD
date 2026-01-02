@@ -146,6 +146,37 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetInt("StartingEssence", Mathf.Max(0, value));
         }
 
+        // Visitor Type Settings (Enable/Disable specific visitor types)
+        public static bool EnableVisitorType_Basic
+        {
+            get => PlayerPrefs.GetInt("EnableVisitorType_Basic", 1) == 1;
+            set => PlayerPrefs.SetInt("EnableVisitorType_Basic", value ? 1 : 0);
+        }
+
+        public static bool EnableVisitorType_Mistaking
+        {
+            get => PlayerPrefs.GetInt("EnableVisitorType_Mistaking", 1) == 1;
+            set => PlayerPrefs.SetInt("EnableVisitorType_Mistaking", value ? 1 : 0);
+        }
+
+        public static bool EnableVisitorType_LanternDrunk
+        {
+            get => PlayerPrefs.GetInt("EnableVisitorType_LanternDrunk", 1) == 1;
+            set => PlayerPrefs.SetInt("EnableVisitorType_LanternDrunk", value ? 1 : 0);
+        }
+
+        public static bool EnableVisitorType_WaryWayfarer
+        {
+            get => PlayerPrefs.GetInt("EnableVisitorType_WaryWayfarer", 1) == 1;
+            set => PlayerPrefs.SetInt("EnableVisitorType_WaryWayfarer", value ? 1 : 0);
+        }
+
+        public static bool EnableVisitorType_Sleepwalking
+        {
+            get => PlayerPrefs.GetInt("EnableVisitorType_Sleepwalking", 1) == 1;
+            set => PlayerPrefs.SetInt("EnableVisitorType_Sleepwalking", value ? 1 : 0);
+        }
+
         /// <summary>
         /// Reset all settings to default values
         /// </summary>

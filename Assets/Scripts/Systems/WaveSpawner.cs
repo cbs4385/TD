@@ -31,17 +31,24 @@ namespace FaeMaze.Systems
 
         [Header("Prefab References")]
         [SerializeField]
-        [Tooltip("The visitor prefab to spawn (base visitor type, used as fallback)")]
-        private VisitorController visitorPrefab;
+        [Tooltip("The basic visitor prefab")]
+        private VisitorController basicVisitorPrefab;
 
         [SerializeField]
         [Tooltip("The mistaking visitor prefab (takes wrong turns at branches)")]
         private MistakingVisitorController mistakingVisitorPrefab;
 
         [SerializeField]
-        [Range(0f, 1f)]
-        [Tooltip("Chance (0-1) to spawn mistaking visitor when available (default 0.8 = 80%)")]
-        private float mistakingVisitorChance = 0.8f;
+        [Tooltip("The lantern drunk visitor prefab")]
+        private LanternDrunkVisitorController lanternDrunkVisitorPrefab;
+
+        [SerializeField]
+        [Tooltip("The wary wayfarer visitor prefab")]
+        private WaryWayfarerVisitorController waryWayfarerVisitorPrefab;
+
+        [SerializeField]
+        [Tooltip("The sleepwalking devotee visitor prefab")]
+        private SleepwalkingDevoteeController sleepwalkingVisitorPrefab;
 
         [SerializeField]
         [Tooltip("The Red Cap prefab (hostile actor that hunts visitors)")]
@@ -430,48 +437,30 @@ namespace FaeMaze.Systems
             // Get world position for spawn
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(startPos.x, startPos.y);
 
-            // Choose which visitor type to spawn
-            GameObject visitorObject = null;
-            bool isMistakingVisitor = false;
+            // Choose which visitor type to spawn from enabled types
+            VisitorController spawnedVisitor = SelectAndSpawnRandomVisitorType(spawnWorldPos);
 
-            // If mistaking visitor prefab is assigned, roll for it
-            if (mistakingVisitorPrefab != null)
-            {
-                float roll = Random.value;
-                if (roll < mistakingVisitorChance)
-                {
-                    // Spawn mistaking visitor (rotated 180 degrees on z-axis)
-                    MistakingVisitorController mistakingVisitor = Instantiate(mistakingVisitorPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
-                    visitorObject = mistakingVisitor.gameObject;
-                    isMistakingVisitor = true;
-
-                    // Initialize mistaking visitor
-                    mistakingVisitor.Initialize(GameController.Instance);
-                    mistakingVisitor.SetPath(pathNodes);
-                }
-            }
-
-            // Fall back to regular visitor if mistaking visitor wasn't spawned
-            if (visitorObject == null && visitorPrefab != null)
-            {
-                VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
-                visitorObject = visitor.gameObject;
-
-                // Initialize regular visitor
-                visitor.Initialize(GameController.Instance);
-                visitor.SetPath(pathNodes);
-
-                // Only regular visitors are tracked by GameController
-                GameController.Instance.SetLastSpawnedVisitor(visitor);
-            }
-
-            if (visitorObject == null)
+            if (spawnedVisitor == null)
             {
                 return;
             }
 
+            GameObject visitorObject = spawnedVisitor.gameObject;
+
+            // Initialize visitor
+            spawnedVisitor.Initialize(GameController.Instance);
+            spawnedVisitor.SetPath(pathNodes);
+
+            // Only basic visitors are tracked by GameController (legacy behavior)
+            if (spawnedVisitor is VisitorController && !(spawnedVisitor is MistakingVisitorController) &&
+                !(spawnedVisitor is LanternDrunkVisitorController) && !(spawnedVisitor is WaryWayfarerVisitorController) &&
+                !(spawnedVisitor is SleepwalkingDevoteeController))
+            {
+                GameController.Instance.SetLastSpawnedVisitor(spawnedVisitor);
+            }
+
             // Name includes spawn IDs if using spawn marker system
-            string visitorType = isMistakingVisitor ? "MistakingVisitor" : "Visitor";
+            string visitorType = spawnedVisitor.GetType().Name.Replace("Controller", "");
             if (startId != '\0')
             {
                 string destinationSuffix = destId != '\0' ? destId.ToString() : "H";
@@ -488,6 +477,54 @@ namespace FaeMaze.Systems
             activeVisitors.Add(visitorObject);
 
             totalVisitorsSpawned++;
+        }
+
+        /// <summary>
+        /// Selects a random visitor type from enabled visitor types and spawns it
+        /// </summary>
+        /// <param name="spawnPosition">World position to spawn the visitor</param>
+        /// <returns>The spawned VisitorController, or null if no types are enabled</returns>
+        private VisitorController SelectAndSpawnRandomVisitorType(Vector3 spawnPosition)
+        {
+            // Build list of enabled visitor types
+            List<VisitorController> enabledVisitorPrefabs = new List<VisitorController>();
+
+            if (GameSettings.EnableVisitorType_Basic && basicVisitorPrefab != null)
+            {
+                enabledVisitorPrefabs.Add(basicVisitorPrefab);
+            }
+            if (GameSettings.EnableVisitorType_Mistaking && mistakingVisitorPrefab != null)
+            {
+                enabledVisitorPrefabs.Add(mistakingVisitorPrefab);
+            }
+            if (GameSettings.EnableVisitorType_LanternDrunk && lanternDrunkVisitorPrefab != null)
+            {
+                enabledVisitorPrefabs.Add(lanternDrunkVisitorPrefab);
+            }
+            if (GameSettings.EnableVisitorType_WaryWayfarer && waryWayfarerVisitorPrefab != null)
+            {
+                enabledVisitorPrefabs.Add(waryWayfarerVisitorPrefab);
+            }
+            if (GameSettings.EnableVisitorType_Sleepwalking && sleepwalkingVisitorPrefab != null)
+            {
+                enabledVisitorPrefabs.Add(sleepwalkingVisitorPrefab);
+            }
+
+            // If no visitor types are enabled, return null
+            if (enabledVisitorPrefabs.Count == 0)
+            {
+                Debug.LogWarning("No visitor types are enabled in settings! Cannot spawn visitor.");
+                return null;
+            }
+
+            // Randomly select one enabled visitor type
+            int randomIndex = Random.Range(0, enabledVisitorPrefabs.Count);
+            VisitorController selectedPrefab = enabledVisitorPrefabs[randomIndex];
+
+            // Spawn the selected visitor type (rotated 180 degrees on z-axis)
+            VisitorController spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.Euler(0, 0, 180));
+
+            return spawnedVisitor;
         }
 
         private string FormatPath(List<MazeGrid.MazeNode> pathNodes)
