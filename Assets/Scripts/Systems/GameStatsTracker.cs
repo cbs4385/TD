@@ -46,16 +46,19 @@ namespace FaeMaze.Systems
         private void Awake()
         {
             // Singleton setup
-            if (instance != null && instance != this)
+            // Note: Unity's null check returns false for destroyed objects, so this handles scene reloads
+            if (instance == null)
             {
+                instance = this;
+                DontDestroyOnLoad(gameObject);
+                ResetStats();
+            }
+            else if (instance != this)
+            {
+                // Another instance exists and is still valid, destroy this duplicate
                 Destroy(gameObject);
                 return;
             }
-
-            instance = this;
-            DontDestroyOnLoad(gameObject);
-
-            ResetStats();
         }
 
         private void Update()

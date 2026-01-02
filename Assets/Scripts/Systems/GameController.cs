@@ -110,13 +110,17 @@ namespace FaeMaze.Systems
         private void Awake()
         {
             // Singleton pattern enforcement
-            if (_instance != null && _instance != this)
+            // Note: Unity's null check returns false for destroyed objects, so this handles scene reloads
+            if (_instance == null)
             {
+                _instance = this;
+            }
+            else if (_instance != this)
+            {
+                // Another instance exists and is still valid, destroy this duplicate
                 Destroy(gameObject);
                 return;
             }
-
-            _instance = this;
 
             // Initialize essence: use persistent value if available, otherwise use starting essence
             if (hasInitializedEssence && persistentEssence.HasValue)

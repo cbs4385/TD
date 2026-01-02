@@ -116,13 +116,18 @@ namespace FaeMaze.HeartPowers
 
         private void Awake()
         {
-            if (_instance != null && _instance != this)
+            // Singleton pattern enforcement
+            // Note: Unity's null check returns false for destroyed objects, so this handles scene reloads
+            if (_instance == null)
             {
+                _instance = this;
+            }
+            else if (_instance != this)
+            {
+                // Another instance exists and is still valid, destroy this duplicate
                 Destroy(gameObject);
                 return;
             }
-
-            _instance = this;
 
             // Load power definitions from Resources if not set
             LoadPowerDefinitionsFromResources();

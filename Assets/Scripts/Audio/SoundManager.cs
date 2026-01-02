@@ -49,13 +49,18 @@ namespace FaeMaze.Audio
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
+            // Singleton pattern enforcement
+            // Note: Unity's null check returns false for destroyed objects, so this handles scene reloads
+            if (Instance == null)
             {
+                Instance = this;
+            }
+            else if (Instance != this)
+            {
+                // Another instance exists and is still valid, destroy this duplicate
                 Destroy(gameObject);
                 return;
             }
-
-            Instance = this;
 
             if (sfxSource == null)
             {
