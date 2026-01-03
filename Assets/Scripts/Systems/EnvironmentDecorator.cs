@@ -5,8 +5,9 @@ using System.Collections.Generic;
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// Spawns environment decoration (trees, walls) on non-walkable tiles.
-    /// Makes decorations near focal point transparent for better visibility.
+    /// Spawns environment decoration (trees, walls) to fill the entire background plane,
+    /// except for the area occupied by maze tiles. Makes decorations near focal point
+    /// transparent for better visibility.
     /// </summary>
     public class EnvironmentDecorator : MonoBehaviour
     {
@@ -31,6 +32,10 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Random rotation on Y axis")]
         private bool randomYRotation = true;
+
+        [SerializeField]
+        [Tooltip("Padding around maze to fill with trees (in tiles)")]
+        private int backgroundPadding = 20;
 
         [SerializeField]
         [Tooltip("Parent transform for spawned decorations")]
@@ -113,25 +118,33 @@ namespace FaeMaze.Systems
             }
 
             int decorationCount = 0;
-            int width = mazeGridBehaviour.Grid.Width;
-            int height = mazeGridBehaviour.Grid.Height;
+            int mazeWidth = mazeGridBehaviour.Grid.Width;
+            int mazeHeight = mazeGridBehaviour.Grid.Height;
 
-            for (int y = 0; y < height; y++)
+            // Define background area: maze bounds + padding on all sides
+            int startX = -backgroundPadding;
+            int endX = mazeWidth + backgroundPadding;
+            int startY = -backgroundPadding;
+            int endY = mazeHeight + backgroundPadding;
+
+            // Fill entire background area with trees, EXCEPT for maze tiles
+            for (int y = startY; y < endY; y++)
             {
-                for (int x = 0; x < width; x++)
+                for (int x = startX; x < endX; x++)
                 {
-                    var node = mazeGridBehaviour.Grid.GetNode(x, y);
+                    // Check if this position is inside the maze grid bounds
+                    bool isInsideMaze = (x >= 0 && x < mazeWidth && y >= 0 && y < mazeHeight);
 
-                    // Only spawn on non-walkable tiles
-                    if (node != null && !node.walkable)
+                    // Only spawn trees OUTSIDE the maze area
+                    if (!isInsideMaze)
                     {
                         Vector3 worldPos = mazeGridBehaviour.GridToWorld(x, y);
                         worldPos.z = zPosition;
 
-                        // Rotate -90 on X axis so model up faces world -Z
+                        // Rotate +90 on X axis so model up faces world -Z
                         // Optionally add random Y rotation
                         float yRotation = randomYRotation ? Random.Range(0f, 360f) : 0f;
-                        Quaternion rotation = Quaternion.Euler(-90f, yRotation, 0f);
+                        Quaternion rotation = Quaternion.Euler(90f, yRotation, 0f);
 
                         GameObject decoration = Instantiate(treePrefab, worldPos, rotation, decorationParent);
                         decoration.name = $"Tree_{x}_{y}";

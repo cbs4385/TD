@@ -52,6 +52,7 @@ namespace FaeMaze.Editor
             decoratorSO.FindProperty("treePrefab").objectReferenceValue = treePrefab;
             decoratorSO.FindProperty("zPosition").floatValue = 0f;
             decoratorSO.FindProperty("randomYRotation").boolValue = true;
+            decoratorSO.FindProperty("backgroundPadding").intValue = 20;
             decoratorSO.FindProperty("transparencyRadius").floatValue = 3f;
             decoratorSO.FindProperty("transparentAlpha").floatValue = 0.25f;
             decoratorSO.FindProperty("opaqueAlpha").floatValue = 1f;
@@ -64,6 +65,7 @@ namespace FaeMaze.Editor
             Debug.Log("Environment Decorator setup complete!");
             Debug.Log($"- MazeGridBehaviour: {mazeGrid.name}");
             Debug.Log($"- Tree Prefab: {treePrefab.name}");
+            Debug.Log($"- Background Padding: 20 tiles");
             Debug.Log($"- Transparency Radius: 3 tiles");
             Debug.Log($"- Transparent Alpha: 0.25 (75% transparent)");
 
