@@ -128,11 +128,10 @@ namespace FaeMaze.Systems
                         Vector3 worldPos = mazeGridBehaviour.GridToWorld(x, y);
                         worldPos.z = zPosition;
 
-                        Quaternion rotation = Quaternion.identity;
-                        if (randomYRotation)
-                        {
-                            rotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
-                        }
+                        // Rotate -90 on X axis so model up faces world -Z
+                        // Optionally add random Y rotation
+                        float yRotation = randomYRotation ? Random.Range(0f, 360f) : 0f;
+                        Quaternion rotation = Quaternion.Euler(-90f, yRotation, 0f);
 
                         GameObject decoration = Instantiate(treePrefab, worldPos, rotation, decorationParent);
                         decoration.name = $"Tree_{x}_{y}";
