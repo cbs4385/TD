@@ -43,12 +43,12 @@ namespace FaeMaze.Systems
 
         [Header("Background")]
         [SerializeField]
-        [Tooltip("Create black backdrop plane at z > 0")]
+        [Tooltip("Create black backdrop plane below the game")]
         private bool createBlackBackdrop = true;
 
         [SerializeField]
-        [Tooltip("Z position for black backdrop plane")]
-        private float backdropZPosition = 1f;
+        [Tooltip("Z position for black backdrop plane (negative = behind/below game)")]
+        private float backdropZPosition = -1000f;
 
         [Header("Transparency Settings")]
         [SerializeField]

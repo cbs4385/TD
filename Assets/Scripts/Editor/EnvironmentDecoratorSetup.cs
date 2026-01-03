@@ -54,7 +54,7 @@ namespace FaeMaze.Editor
             decoratorSO.FindProperty("zRotationVariance").floatValue = 5f;
             decoratorSO.FindProperty("backgroundPadding").intValue = 20;
             decoratorSO.FindProperty("createBlackBackdrop").boolValue = true;
-            decoratorSO.FindProperty("backdropZPosition").floatValue = 1f;
+            decoratorSO.FindProperty("backdropZPosition").floatValue = -1000f;
             decoratorSO.FindProperty("transparencyRadius").floatValue = 3f;
             decoratorSO.FindProperty("transparentAlpha").floatValue = 0.25f;
             decoratorSO.FindProperty("opaqueAlpha").floatValue = 1f;
@@ -69,7 +69,7 @@ namespace FaeMaze.Editor
             Debug.Log($"- Tree Prefab: {treePrefab.name}");
             Debug.Log($"- Background Padding: 20 tiles");
             Debug.Log($"- Z Rotation Variance: ±5 degrees");
-            Debug.Log($"- Black Backdrop: Enabled at z=1");
+            Debug.Log($"- Black Backdrop: Enabled at z=-1000 (below game)");
             Debug.Log($"- Transparency Radius: 3 tiles");
             Debug.Log($"- Transparent Alpha: 0.25 (75% transparent)");
 
