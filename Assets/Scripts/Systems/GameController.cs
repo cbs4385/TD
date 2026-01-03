@@ -230,18 +230,13 @@ namespace FaeMaze.Systems
         /// <param name="amount">Amount of essence to add</param>
         public void AddEssence(int amount)
         {
-            int before = currentEssence;
             currentEssence += amount;
-
-            Debug.Log($"[GameController] AddEssence called: adding {amount}, before={before}, after={currentEssence}");
 
             // Update persistent essence
             persistentEssence = currentEssence;
-            Debug.Log($"[GameController] Updated persistentEssence to {persistentEssence}");
 
             // Invoke event for essence change
             OnEssenceChanged?.Invoke(currentEssence);
-            Debug.Log($"[GameController] OnEssenceChanged event invoked with {currentEssence}");
         }
 
         /// <summary>
@@ -253,19 +248,15 @@ namespace FaeMaze.Systems
         {
             if (cost < 0)
             {
-                Debug.LogWarning($"[GameController] TrySpendEssence: negative cost {cost}, rejecting");
                 return false;
             }
 
             if (currentEssence >= cost)
             {
-                int before = currentEssence;
                 currentEssence -= cost;
 
                 // Update persistent essence
                 persistentEssence = currentEssence;
-
-                Debug.Log($"[GameController] TrySpendEssence: spent {cost}, before={before}, after={currentEssence}");
 
                 // Invoke event for essence change
                 OnEssenceChanged?.Invoke(currentEssence);
@@ -273,7 +264,6 @@ namespace FaeMaze.Systems
                 return true;
             }
 
-            Debug.Log($"[GameController] TrySpendEssence: insufficient essence (have {currentEssence}, need {cost}), rejecting");
             return false;
         }
 

@@ -127,12 +127,9 @@ namespace FaeMaze.Visitors
             // Get all unwalked adjacent tiles
             List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
 
-            Debug.Log($"[WaryWayfarer:{gameObject.name}] At waypoint {currentPos}, unwalked neighbors: {unwalkedNeighbors.Count}, isOnMisstep: {isOnMisstepPath}, pathIndex: {currentPathIndex}/{path.Count}");
-
             // Check for dead end (no unwalked neighbors) - always recalculate
             if (unwalkedNeighbors.Count == 0)
             {
-                Debug.Log($"[WaryWayfarer:{gameObject.name}] Dead end detected at {currentPos}, recalculating path");
                 isOnMisstepPath = false;
                 RecalculatePath();
                 return;
@@ -143,7 +140,6 @@ namespace FaeMaze.Visitors
             {
                 if (unwalkedNeighbors.Count >= 2)
                 {
-                    Debug.Log($"[WaryWayfarer:{gameObject.name}] Branch detected while on misstep at {currentPos}, exiting misstep path");
                     // Reached a new branch - exit misstep path
                     isOnMisstepPath = false;
                     RecalculatePath();
@@ -154,7 +150,6 @@ namespace FaeMaze.Visitors
                     currentPathIndex++;
                     if (currentPathIndex >= path.Count)
                     {
-                        Debug.Log($"[WaryWayfarer:{gameObject.name}] Reached end of misstep path unexpectedly, recalculating");
                         // Reached end of misstep path unexpectedly - recalculate
                         isOnMisstepPath = false;
                         RecalculatePath();
