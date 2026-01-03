@@ -199,7 +199,12 @@ namespace FaeMaze.Systems
             }
 
             // Convert focal point to grid position
-            Vector2Int focalGridPos = mazeGridBehaviour.WorldToGrid(focalWorldPos);
+            int focalX, focalY;
+            if (!mazeGridBehaviour.WorldToGrid(focalWorldPos, out focalX, out focalY))
+            {
+                return; // Invalid focal point position
+            }
+            Vector2Int focalGridPos = new Vector2Int(focalX, focalY);
 
             // Update each decoration's transparency
             foreach (var decoration in decorations)
@@ -211,7 +216,12 @@ namespace FaeMaze.Systems
 
                 // Get decoration grid position
                 Vector3 decorationWorldPos = decoration.gameObject.transform.position;
-                Vector2Int decorationGridPos = mazeGridBehaviour.WorldToGrid(decorationWorldPos);
+                int decorationX, decorationY;
+                if (!mazeGridBehaviour.WorldToGrid(decorationWorldPos, out decorationX, out decorationY))
+                {
+                    continue; // Skip invalid positions
+                }
+                Vector2Int decorationGridPos = new Vector2Int(decorationX, decorationY);
 
                 // Calculate distance in tiles (Manhattan distance)
                 float distanceInTiles = Mathf.Abs(focalGridPos.x - decorationGridPos.x) +
