@@ -18,7 +18,6 @@ MonoBehaviour:
   - {fileID: 8374859102938475629}
   - {fileID: 3829475610284756291}
   - {fileID: 4829475610284756292}
-  - {fileID: 0}
 --- !u!114 &1847958393766218974
 MonoBehaviour:
   m_ObjectHideFlags: 3
