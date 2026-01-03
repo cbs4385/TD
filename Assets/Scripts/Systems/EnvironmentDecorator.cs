@@ -189,6 +189,9 @@ namespace FaeMaze.Systems
                         GameObject decoration = Instantiate(treePrefab, worldPos, rotation, decorationParent);
                         decoration.name = $"Tree_{x}_{y}";
 
+                        // Scale to 0.75 on world Z axis (model's local Y after rotation)
+                        decoration.transform.localScale = new Vector3(1f, 0.75f, 1f);
+
                         // Store decoration data for transparency management
                         DecorationData data = new DecorationData();
                         data.gameObject = decoration;
