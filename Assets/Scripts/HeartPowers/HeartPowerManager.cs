@@ -649,7 +649,7 @@ namespace FaeMaze.HeartPowers
             pathCostModifier?.ClearAll();
 
             // Clear all Lured states when all effects are cleaned up
-            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
+            var activeVisitors = FaeMaze.Visitors.VisitorRegistry.All;
             if (activeVisitors != null)
             {
                 foreach (var visitor in activeVisitors)
@@ -690,7 +690,7 @@ namespace FaeMaze.HeartPowers
         private void TriggerVisitorPathRecalculation(HeartPowerType powerType)
         {
             // Get all active visitors using the static registry
-            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
+            var activeVisitors = FaeMaze.Visitors.VisitorRegistry.All;
 
             if (activeVisitors == null || activeVisitors.Count == 0)
             {

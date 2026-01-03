@@ -321,7 +321,7 @@ namespace FaeMaze.HeartPowers
             }
 
             // Clear Lured state from all visitors
-            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
+            var activeVisitors = FaeMaze.Visitors.VisitorRegistry.All;
             if (activeVisitors != null)
             {
                 foreach (var visitor in activeVisitors)
@@ -348,7 +348,7 @@ namespace FaeMaze.HeartPowers
             }
 
             // Find all active visitors and check if they're on Murmuring Path tiles
-            var activeVisitors = FaeMaze.Visitors.VisitorController.All;
+            var activeVisitors = FaeMaze.Visitors.VisitorRegistry.All;
             if (activeVisitors == null || pathSegment == null || pathSegment.Count == 0)
                 return;
 
