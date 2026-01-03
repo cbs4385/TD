@@ -96,10 +96,18 @@ namespace FaeMaze.Visitors
             // Get all unwalked adjacent tiles
             List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
 
-            // Not a branch if fewer than 2 unwalked neighbors
-            if (unwalkedNeighbors.Count < 2)
+            // Check for dead end (no unwalked neighbors) - always recalculate
+            if (unwalkedNeighbors.Count == 0)
             {
-                // If on misstep, continue until branch
+                isOnMisstepPath = false;
+                RecalculatePath();
+                return;
+            }
+
+            // Not a branch if only 1 unwalked neighbor
+            if (unwalkedNeighbors.Count == 1)
+            {
+                // If on misstep, continue until branch or dead end
                 if (isOnMisstepPath)
                 {
                     // Just advance to next waypoint

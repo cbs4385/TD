@@ -65,6 +65,13 @@ namespace FaeMaze.Systems
                 {
                     gameController = FindFirstObjectByType<GameController>();
                 }
+
+                if (gameController == null)
+                {
+                    Debug.LogError("[EssenceBlurController] Failed to find GameController! Essence decay will not work.");
+                    enabled = false;
+                    return;
+                }
             }
 
             // Find global volume if not assigned
@@ -75,6 +82,7 @@ namespace FaeMaze.Systems
 
             if (globalVolume == null)
             {
+                Debug.LogWarning("[EssenceBlurController] Failed to find global Volume! Blur effects will not work.");
                 enabled = false;
                 return;
             }
