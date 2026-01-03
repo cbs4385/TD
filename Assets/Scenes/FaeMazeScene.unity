@@ -812,8 +812,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   basicVisitorPrefab: {fileID: 8000000003, guid: 86328c3da86d64c4eaf5c60e62be62a6, type: 3}
   mistakingVisitorPrefab: {fileID: 9000000003, guid: 38c7e2a69ba274a45a490b1cbd9b8916, type: 3}
   lanternDrunkVisitorPrefab: {fileID: 7000000003, guid: ca0fe09d5bade5c4e9aee7f753fb9cb0, type: 3}
@@ -824,14 +824,12 @@ MonoBehaviour:
   heart: {fileID: 0}
   visitorsPerWave: 10
   spawnInterval: 3
-  waveDuration: 300
   enableRedCap: 1
   redCapSpawnDelay: 60
+  enableWaveSpawnerUI: 0
   uiCanvas: {fileID: 0}
   fontSize: 20
   uiTextColor: {r: 1, g: 1, b: 1, a: 1}
-  warningColor: {r: 1, g: 0, b: 0, a: 1}
-  warningThreshold: 10
   autoStartFirstWave: 1
 --- !u!114 &1408523525
 MonoBehaviour:
@@ -899,6 +897,7 @@ GameObject:
   - component: {fileID: 1534669903}
   - component: {fileID: 1534669904}
   - component: {fileID: 1534669905}
+  - component: {fileID: 1534669906}
   m_Layer: 0
   m_Name: GameRoot
   m_TagString: Untagged
@@ -969,6 +968,29 @@ MonoBehaviour:
   maximizeBlurIntensity: 1
   maximizeBlurSamples: 1
   debugLog: 0
+--- !u!114 &1534669906
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1534669902}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc64d9bed749e8c4bb3bc98463c72ca5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EnvironmentDecorator
+  mazeGridBehaviour: {fileID: 330585547}
+  treePrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
+  focalPoint: {fileID: 0}
+  zPosition: 0
+  randomYRotation: 1
+  backgroundPadding: 20
+  decorationParent: {fileID: 0}
+  transparencyRadius: 3
+  transparentAlpha: 0.25
+  opaqueAlpha: 1
+  transitionSmoothness: 0.5
 --- !u!1 &1800000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -1286,6 +1308,7 @@ MonoBehaviour:
   sfxVolumeSlider: {fileID: 0}
   mazeGridBehaviour: {fileID: 0}
   waveSpawner: {fileID: 0}
+  enableDebugPanel: 0
 --- !u!1 &4000000000
 GameObject:
   m_ObjectHideFlags: 0

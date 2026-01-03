@@ -294,64 +294,6 @@ MonoBehaviour:
   defaultFocusPoint: {x: 0, y: 0, z: 0}
   defaultFocusTransform: {fileID: 0}
   mazeGridBehaviour: {fileID: 0}
---- !u!1 &623669385
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 623669387}
-  - component: {fileID: 623669386}
-  m_Layer: 0
-  m_Name: HeartPowerManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &623669386
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 623669385}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 20228909174bcc04a9b1c83dcfb4ece7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.HeartPowers.HeartPowerManager
-  mazeGridBehaviour: {fileID: 0}
-  gameController: {fileID: 0}
-  powerDefinitions:
-  - {fileID: 11400000, guid: 1d585204f22490f43a7912f1087c456c, type: 2}
-  - {fileID: 11400000, guid: f25e9cbb19ce1824ba236ad8ca79b322, type: 2}
-  - {fileID: 11400000, guid: 8bd7c70ddd6d89046bc4975ca2689a77, type: 2}
-  - {fileID: 11400000, guid: 088276d55636eed41909cc7683ddf0e8, type: 2}
-  - {fileID: 11400000, guid: 6713eb53ba147d14f9f5e1061fdaa548, type: 2}
-  - {fileID: 11400000, guid: 9d5d5ee231cb86d4e9f26e833d9f0a57, type: 2}
-  - {fileID: 11400000, guid: 7f3197d983b0117488a0595829ad5b98, type: 2}
-  - {fileID: 11400000, guid: 903e134c3576fa74c87c73f381e568db, type: 2}
-  initialChargesPerWave: 3
-  debugLog: 1
-  autoCreateUI: 1
---- !u!4 &623669387
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 623669385}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &814000385
 GameObject:
   m_ObjectHideFlags: 0
@@ -823,8 +765,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   basicVisitorPrefab: {fileID: 8000000003, guid: 86328c3da86d64c4eaf5c60e62be62a6, type: 3}
   mistakingVisitorPrefab: {fileID: 9000000003, guid: 38c7e2a69ba274a45a490b1cbd9b8916, type: 3}
   lanternDrunkVisitorPrefab: {fileID: 7000000003, guid: ca0fe09d5bade5c4e9aee7f753fb9cb0, type: 3}
@@ -837,6 +779,7 @@ MonoBehaviour:
   spawnInterval: 3
   enableRedCap: 1
   redCapSpawnDelay: 60
+  enableWaveSpawnerUI: 0
   uiCanvas: {fileID: 0}
   fontSize: 20
   uiTextColor: {r: 1, g: 1, b: 1, a: 1}
@@ -905,8 +848,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1534669903}
-  - component: {fileID: 1534669904}
   - component: {fileID: 1534669905}
+  - component: {fileID: 1534669907}
+  - component: {fileID: 1534669908}
   m_Layer: 0
   m_Name: GameRoot
   m_TagString: Untagged
@@ -932,25 +876,6 @@ Transform:
   - {fileID: 2096385508}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1534669904
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1534669902}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ccf7bafc4acf9a64d91d201f9e0c0f31, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EssenceBlurController
-  globalVolume: {fileID: 0}
-  gameController: {fileID: 0}
-  essenceDecayRate: 1
-  enableEssenceDecay: 1
-  maximizeBlurIntensity: 1
-  maximizeBlurSamples: 1
-  debugLog: 0
 --- !u!114 &1534669905
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -970,6 +895,55 @@ MonoBehaviour:
   maximizeBlurIntensity: 1
   maximizeBlurSamples: 1
   debugLog: 0
+--- !u!114 &1534669907
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1534669902}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20228909174bcc04a9b1c83dcfb4ece7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.HeartPowers.HeartPowerManager
+  mazeGridBehaviour: {fileID: 0}
+  gameController: {fileID: 0}
+  powerDefinitions:
+  - {fileID: 11400000, guid: 1d585204f22490f43a7912f1087c456c, type: 2}
+  - {fileID: 11400000, guid: f25e9cbb19ce1824ba236ad8ca79b322, type: 2}
+  - {fileID: 11400000, guid: 8bd7c70ddd6d89046bc4975ca2689a77, type: 2}
+  - {fileID: 11400000, guid: 088276d55636eed41909cc7683ddf0e8, type: 2}
+  - {fileID: 11400000, guid: 6713eb53ba147d14f9f5e1061fdaa548, type: 2}
+  - {fileID: 11400000, guid: 9d5d5ee231cb86d4e9f26e833d9f0a57, type: 2}
+  - {fileID: 11400000, guid: 7f3197d983b0117488a0595829ad5b98, type: 2}
+  - {fileID: 11400000, guid: 903e134c3576fa74c87c73f381e568db, type: 2}
+  initialChargesPerWave: 3
+  debugLog: 1
+  autoCreateUI: 1
+--- !u!114 &1534669908
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1534669902}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc64d9bed749e8c4bb3bc98463c72ca5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EnvironmentDecorator
+  mazeGridBehaviour: {fileID: 963194231}
+  treePrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
+  focalPoint: {fileID: 0}
+  zPosition: 0
+  randomYRotation: 1
+  backgroundPadding: 20
+  decorationParent: {fileID: 0}
+  transparencyRadius: 3
+  transparentAlpha: 0.25
+  opaqueAlpha: 1
+  transitionSmoothness: 0.5
 --- !u!1 &1800000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -1287,6 +1261,7 @@ MonoBehaviour:
   sfxVolumeSlider: {fileID: 0}
   mazeGridBehaviour: {fileID: 0}
   waveSpawner: {fileID: 0}
+  enableDebugPanel: 0
 --- !u!1 &4000000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -1448,6 +1423,5 @@ SceneRoots:
   - {fileID: 1534669903}
   - {fileID: 4000000001}
   - {fileID: 9000000001}
-  - {fileID: 623669387}
   - {fileID: 881836310}
   - {fileID: 814000388}
