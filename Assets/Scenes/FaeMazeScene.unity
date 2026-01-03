@@ -812,11 +812,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
-  mistakingVisitorPrefab: {fileID: 0}
-  mistakingVisitorChance: 0.8
+  m_Name:
+  m_EditorClassIdentifier:
+  basicVisitorPrefab: {fileID: 2737794919904158208, guid: 86328c3da86d64c4eaf5c60e62be62a6, type: 3}
+  mistakingVisitorPrefab: {fileID: 8972932426425081571, guid: 38c7e2a69ba274a45a490b1cbd9b8916, type: 3}
+  lanternDrunkVisitorPrefab: {fileID: 4593663263958689696, guid: ca0fe09d5bade5c4e9aee7f753fb9cb0, type: 3}
+  waryWayfarerVisitorPrefab: {fileID: 2467180731589602358, guid: 2ad749bec494848408ae087122a2a286, type: 3}
+  sleepwalkingVisitorPrefab: {fileID: 6279203058618931052, guid: fcf1ccc101e3d2f4da955bc0eea16b81, type: 3}
   redCapPrefab: {fileID: 5000000003, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
   entrance: {fileID: 0}
   heart: {fileID: 0}
