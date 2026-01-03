@@ -30,8 +30,8 @@ namespace FaeMaze.Systems
         private float zPosition = 0f;
 
         [SerializeField]
-        [Tooltip("Random rotation on Y axis")]
-        private bool randomYRotation = true;
+        [Tooltip("Z rotation variance in degrees (+/-)")]
+        private float zRotationVariance = 5f;
 
         [SerializeField]
         [Tooltip("Padding around maze to fill with trees (in tiles)")]
@@ -40,6 +40,15 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Parent transform for spawned decorations")]
         private Transform decorationParent;
+
+        [Header("Background")]
+        [SerializeField]
+        [Tooltip("Create black backdrop plane at z > 0")]
+        private bool createBlackBackdrop = true;
+
+        [SerializeField]
+        [Tooltip("Z position for black backdrop plane")]
+        private float backdropZPosition = 1f;
 
         [Header("Transparency Settings")]
         [SerializeField]
@@ -98,8 +107,38 @@ namespace FaeMaze.Systems
                 decorationParent = parentObj.transform;
             }
 
+            // Create black backdrop plane
+            if (createBlackBackdrop)
+            {
+                CreateBlackBackdrop();
+            }
+
             // Wait one frame for maze to be generated
             StartCoroutine(SpawnDecorationsNextFrame());
+        }
+
+        private void CreateBlackBackdrop()
+        {
+            GameObject backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            backdrop.name = "Black Backdrop";
+            backdrop.transform.SetParent(decorationParent);
+
+            // Position at backdropZPosition
+            backdrop.transform.position = new Vector3(0, 0, backdropZPosition);
+
+            // Make it huge to cover everything
+            backdrop.transform.localScale = new Vector3(10000f, 10000f, 1f);
+
+            // Rotate to face camera (pointing along -Z)
+            backdrop.transform.rotation = Quaternion.identity;
+
+            // Create black material
+            Material blackMat = new Material(Shader.Find("Unlit/Color"));
+            blackMat.color = Color.black;
+            backdrop.GetComponent<Renderer>().material = blackMat;
+
+            // Remove collider
+            Destroy(backdrop.GetComponent<Collider>());
         }
 
         private System.Collections.IEnumerator SpawnDecorationsNextFrame()
@@ -142,9 +181,9 @@ namespace FaeMaze.Systems
                         worldPos.z = zPosition;
 
                         // Rotate +90 on X axis so model up faces world -Z
-                        // Optionally add random Y rotation
-                        float yRotation = randomYRotation ? Random.Range(0f, 360f) : 0f;
-                        Quaternion rotation = Quaternion.Euler(90f, yRotation, 0f);
+                        // Add small Z rotation variance (+/- degrees)
+                        float zRotation = Random.Range(-zRotationVariance, zRotationVariance);
+                        Quaternion rotation = Quaternion.Euler(90f, 0f, zRotation);
 
                         GameObject decoration = Instantiate(treePrefab, worldPos, rotation, decorationParent);
                         decoration.name = $"Tree_{x}_{y}";

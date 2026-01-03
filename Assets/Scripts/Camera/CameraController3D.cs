@@ -62,7 +62,7 @@ namespace FaeMaze.Cameras
         [Header("Orbit Constraints")]
         [SerializeField]
         [Tooltip("Minimum pitch angle in degrees (looking down)")]
-        private float minPitch = 10f;
+        private float minPitch = 5f;
 
         [SerializeField]
         [Tooltip("Maximum pitch angle in degrees (looking up)")]
