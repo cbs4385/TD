@@ -386,6 +386,9 @@ namespace FaeMaze.Cameras
                 Vector3 planarPosition = focalPointTransform.position;
                 planarPosition.z = 0f;
                 focalPointTransform.position = planarPosition;
+
+                // Constrain focal point to within 1 tile of maze bounds
+                ConstrainFocalPointToMazeBounds();
             }
 
             if (Mathf.Abs(turnInput) > 0.001f)
@@ -815,6 +818,32 @@ namespace FaeMaze.Cameras
             }
 
             return mazeUp.normalized;
+        }
+
+        private void ConstrainFocalPointToMazeBounds()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null || focalPointTransform == null)
+            {
+                return;
+            }
+
+            Vector3 currentPos = focalPointTransform.position;
+            int mazeWidth = mazeGridBehaviour.Grid.Width;
+            int mazeHeight = mazeGridBehaviour.Grid.Height;
+            float tileSize = mazeGridBehaviour.TileSize;
+
+            // Define bounds: maze extends from (0,0) to (width*tileSize, height*tileSize)
+            // Allow 1 tile padding on each side
+            float minX = -tileSize;
+            float maxX = (mazeWidth + 1) * tileSize;
+            float minY = -tileSize;
+            float maxY = (mazeHeight + 1) * tileSize;
+
+            // Clamp position to bounds
+            currentPos.x = Mathf.Clamp(currentPos.x, minX, maxX);
+            currentPos.y = Mathf.Clamp(currentPos.y, minY, maxY);
+
+            focalPointTransform.position = currentPos;
         }
 
         #endregion
