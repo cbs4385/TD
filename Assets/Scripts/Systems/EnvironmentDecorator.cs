@@ -181,9 +181,10 @@ namespace FaeMaze.Systems
                         worldPos.z = zPosition;
 
                         // Rotate +90 on X axis so model up faces world -Z
+                        // Add 180 degree Y rotation to flip direction
                         // Add small Z rotation variance (+/- degrees)
                         float zRotation = Random.Range(-zRotationVariance, zRotationVariance);
-                        Quaternion rotation = Quaternion.Euler(90f, 0f, zRotation);
+                        Quaternion rotation = Quaternion.Euler(90f, 180f, zRotation);
 
                         GameObject decoration = Instantiate(treePrefab, worldPos, rotation, decorationParent);
                         decoration.name = $"Tree_{x}_{y}";
