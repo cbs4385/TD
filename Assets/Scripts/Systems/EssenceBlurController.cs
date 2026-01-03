@@ -57,9 +57,12 @@ namespace FaeMaze.Systems
 
         private void Start()
         {
+            Debug.Log("[EssenceBlur] Start() called, initializing...");
+
             // Find GameController if not assigned
             if (gameController == null)
             {
+                Debug.Log("[EssenceBlur] GameController not assigned, searching for instance...");
                 gameController = GameController.Instance;
                 if (gameController == null)
                 {
@@ -68,11 +71,22 @@ namespace FaeMaze.Systems
 
                 if (gameController == null)
                 {
-                    Debug.LogError("[EssenceBlurController] Failed to find GameController! Essence decay will not work.");
+                    Debug.LogError("[EssenceBlur] FAILED to find GameController! Essence decay will NOT work.");
                     enabled = false;
                     return;
                 }
+                else
+                {
+                    Debug.Log($"[EssenceBlur] Found GameController: {gameController.name}");
+                }
             }
+            else
+            {
+                Debug.Log($"[EssenceBlur] GameController already assigned: {gameController.name}");
+            }
+
+            Debug.Log($"[EssenceBlur] Initial essence: {gameController.CurrentEssence}");
+            Debug.Log($"[EssenceBlur] Essence decay enabled: {enableEssenceDecay}, decay rate: {essenceDecayRate}/sec");
 
             // Find global volume if not assigned
             if (globalVolume == null)
@@ -82,7 +96,7 @@ namespace FaeMaze.Systems
 
             if (globalVolume == null)
             {
-                Debug.LogWarning("[EssenceBlurController] Failed to find global Volume! Blur effects will not work.");
+                Debug.LogWarning("[EssenceBlur] Failed to find global Volume! Blur effects will not work.");
                 enabled = false;
                 return;
             }
@@ -90,6 +104,7 @@ namespace FaeMaze.Systems
             // Get RadialBlur component from volume
             if (!globalVolume.profile.TryGet(out radialBlur))
             {
+                Debug.LogWarning("[EssenceBlur] Failed to get RadialBlur from volume profile!");
                 enabled = false;
                 return;
             }
@@ -98,17 +113,11 @@ namespace FaeMaze.Systems
             if (maximizeBlurIntensity)
             {
                 radialBlur.blurIntensity.value = 1.0f;
-                if (debugLog)
-                {
-                }
             }
 
             if (maximizeBlurSamples)
             {
                 radialBlur.blurSamples.value = 16;
-                if (debugLog)
-                {
-                }
             }
 
             // Enable the blur effect
@@ -117,9 +126,7 @@ namespace FaeMaze.Systems
             // Initial update
             UpdateBlurFromEssence();
 
-            if (debugLog)
-            {
-            }
+            Debug.Log("[EssenceBlur] Initialization complete");
         }
 
         private void Update()
@@ -156,11 +163,13 @@ namespace FaeMaze.Systems
                 if (currentEssence > 0)
                 {
                     int decayAmount = Mathf.RoundToInt(essenceDecayRate);
-                    gameController.TrySpendEssence(decayAmount);
+                    bool success = gameController.TrySpendEssence(decayAmount);
 
-                    if (debugLog)
-                    {
-                    }
+                    Debug.Log($"[EssenceBlur] Decay tick: tried to spend {decayAmount} essence, success={success}, before={currentEssence}, after={gameController.CurrentEssence}");
+                }
+                else
+                {
+                    Debug.Log($"[EssenceBlur] Decay tick: essence already at 0, no decay applied");
                 }
             }
         }

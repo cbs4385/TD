@@ -253,15 +253,19 @@ namespace FaeMaze.Systems
         {
             if (cost < 0)
             {
+                Debug.LogWarning($"[GameController] TrySpendEssence: negative cost {cost}, rejecting");
                 return false;
             }
 
             if (currentEssence >= cost)
             {
+                int before = currentEssence;
                 currentEssence -= cost;
 
                 // Update persistent essence
                 persistentEssence = currentEssence;
+
+                Debug.Log($"[GameController] TrySpendEssence: spent {cost}, before={before}, after={currentEssence}");
 
                 // Invoke event for essence change
                 OnEssenceChanged?.Invoke(currentEssence);
@@ -269,6 +273,7 @@ namespace FaeMaze.Systems
                 return true;
             }
 
+            Debug.Log($"[GameController] TrySpendEssence: insufficient essence (have {currentEssence}, need {cost}), rejecting");
             return false;
         }
 

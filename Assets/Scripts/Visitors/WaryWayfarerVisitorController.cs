@@ -124,25 +124,50 @@ namespace FaeMaze.Visitors
             // Track as walked for misstep system
             walkedTiles.Add(currentPos);
 
+            // Get all unwalked adjacent tiles
+            List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
+
+            Debug.Log($"[WaryWayfarer:{gameObject.name}] At waypoint {currentPos}, unwalked neighbors: {unwalkedNeighbors.Count}, isOnMisstep: {isOnMisstepPath}, pathIndex: {currentPathIndex}/{path.Count}");
+
+            // Check for dead end (no unwalked neighbors) - always recalculate
+            if (unwalkedNeighbors.Count == 0)
+            {
+                Debug.Log($"[WaryWayfarer:{gameObject.name}] Dead end detected at {currentPos}, recalculating path");
+                isOnMisstepPath = false;
+                RecalculatePath();
+                return;
+            }
+
             // If on misstep path and reached a branch, recalculate to destination
             if (isOnMisstepPath)
             {
-                List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
                 if (unwalkedNeighbors.Count >= 2)
                 {
+                    Debug.Log($"[WaryWayfarer:{gameObject.name}] Branch detected while on misstep at {currentPos}, exiting misstep path");
                     // Reached a new branch - exit misstep path
                     isOnMisstepPath = false;
                     RecalculatePath();
                 }
+                else
+                {
+                    // Continue on misstep path (corridor)
+                    currentPathIndex++;
+                    if (currentPathIndex >= path.Count)
+                    {
+                        Debug.Log($"[WaryWayfarer:{gameObject.name}] Reached end of misstep path unexpectedly, recalculating");
+                        // Reached end of misstep path unexpectedly - recalculate
+                        isOnMisstepPath = false;
+                        RecalculatePath();
+                    }
+                }
                 return;
             }
 
-            // Check if at branching point (2+ unwalked neighbors)
-            List<Vector2Int> branchNeighbors = GetUnwalkedNeighbors(currentPos);
-
-            if (branchNeighbors.Count < 2)
+            // Not a branch if only 1 unwalked neighbor
+            if (unwalkedNeighbors.Count == 1)
             {
-                // Not at a branch
+                // Not on misstep and not a branch - normal recalculate
+                RecalculatePath();
                 return;
             }
 
