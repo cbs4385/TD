@@ -190,7 +190,7 @@ namespace FaeMaze.Visitors
             }
 
             // Take a misstep - choose a non-optimal branch
-            List<Vector2Int> misstepCandidates = new List<Vector2Int>(branchNeighbors);
+            List<Vector2Int> misstepCandidates = new List<Vector2Int>(unwalkedNeighbors);
             misstepCandidates.Remove(optimalNext.Value);
 
             if (misstepCandidates.Count == 0)
