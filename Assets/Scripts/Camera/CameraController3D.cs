@@ -830,18 +830,15 @@ namespace FaeMaze.Cameras
             Vector3 currentPos = focalPointTransform.position;
             int mazeWidth = mazeGridBehaviour.Grid.Width;
             int mazeHeight = mazeGridBehaviour.Grid.Height;
-            float tileSize = mazeGridBehaviour.TileSize;
 
-            // Define bounds: maze extends from (0,0) to (width*tileSize, height*tileSize)
-            // Allow 1 tile padding on each side
-            float minX = -tileSize;
-            float maxX = (mazeWidth + 1) * tileSize;
-            float minY = -tileSize;
-            float maxY = (mazeHeight + 1) * tileSize;
+            // Constrain to grid positions (-1,-1) to (mazeWidth+1, mazeHeight+1)
+            // Convert grid positions to world positions
+            Vector3 minWorldPos = mazeGridBehaviour.GridToWorld(-1, -1);
+            Vector3 maxWorldPos = mazeGridBehaviour.GridToWorld(mazeWidth + 1, mazeHeight + 1);
 
             // Clamp position to bounds
-            currentPos.x = Mathf.Clamp(currentPos.x, minX, maxX);
-            currentPos.y = Mathf.Clamp(currentPos.y, minY, maxY);
+            currentPos.x = Mathf.Clamp(currentPos.x, minWorldPos.x, maxWorldPos.x);
+            currentPos.y = Mathf.Clamp(currentPos.y, minWorldPos.y, maxWorldPos.y);
 
             focalPointTransform.position = currentPos;
         }
