@@ -43,12 +43,12 @@ namespace FaeMaze.Systems
 
         [Header("Background")]
         [SerializeField]
-        [Tooltip("Create black backdrop plane below the game")]
+        [Tooltip("Create black backdrop plane above the game")]
         private bool createBlackBackdrop = true;
 
         [SerializeField]
-        [Tooltip("Z position for black backdrop plane (negative = behind/below game)")]
-        private float backdropZPosition = -1000f;
+        [Tooltip("Z position for black backdrop plane (positive = above game)")]
+        private float backdropZPosition = 1000f;
 
         [Header("Transparency Settings")]
         [SerializeField]
@@ -123,14 +123,14 @@ namespace FaeMaze.Systems
             backdrop.name = "Black Backdrop";
             backdrop.transform.SetParent(decorationParent);
 
-            // Position at backdropZPosition
+            // Position at backdropZPosition (above game)
             backdrop.transform.position = new Vector3(0, 0, backdropZPosition);
 
             // Make it huge to cover everything
             backdrop.transform.localScale = new Vector3(10000f, 10000f, 1f);
 
-            // Rotate to face camera (pointing along -Z)
-            backdrop.transform.rotation = Quaternion.identity;
+            // Rotate 180° around Y to face down toward -Z (toward camera/game)
+            backdrop.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
             // Create black material
             Material blackMat = new Material(Shader.Find("Unlit/Color"));
