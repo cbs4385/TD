@@ -24,13 +24,13 @@ namespace FaeMaze.UI
 
         [Header("Settings")]
         [SerializeField]
-        [Tooltip("Size as percentage of smaller screen dimension (0.1 = 10%)")]
+        [Tooltip("Size as percentage of smaller screen dimension (0.2 = 20%)")]
         [Range(0.05f, 0.3f)]
-        private float sizePercent = 0.1f;
+        private float sizePercent = 0.2f;
 
         [SerializeField]
         [Tooltip("View radius in tiles")]
-        private float viewRadiusTiles = 10f;
+        private float viewRadiusTiles = 20f;
 
         [SerializeField]
         [Tooltip("Corner to place minimap in")]
@@ -61,6 +61,10 @@ namespace FaeMaze.UI
         [Tooltip("Visitor dot color")]
         private Color visitorColor = new Color(0.3f, 1f, 0.3f, 1f);
 
+        [SerializeField]
+        [Tooltip("Path tile color")]
+        private Color pathColor = new Color(0.4f, 0.4f, 0.4f, 0.5f);
+
         [Header("Dot Sizes")]
         [SerializeField]
         [Tooltip("Heart dot size in pixels")]
@@ -86,10 +90,12 @@ namespace FaeMaze.UI
         private RectTransform minimapPanel;
         private RawImage backgroundImage;
         private RectTransform dotsContainer;
+        private RectTransform pathTilesContainer;
         private Camera mainCamera;
         private HeartOfTheMaze heart;
 
         private List<Image> visitorDots = new List<Image>();
+        private List<Image> pathTileDots = new List<Image>();
         private Image heartDot;
         private RectTransform crosshair;
 
@@ -156,6 +162,15 @@ namespace FaeMaze.UI
             Outline outline = panelObj.AddComponent<Outline>();
             outline.effectColor = borderColor;
             outline.effectDistance = new Vector2(2, 2);
+
+            // Create path tiles container (render first, below other elements)
+            GameObject pathTilesObj = new GameObject("PathTilesContainer");
+            pathTilesObj.transform.SetParent(panelObj.transform, false);
+            pathTilesContainer = pathTilesObj.AddComponent<RectTransform>();
+            pathTilesContainer.anchorMin = Vector2.zero;
+            pathTilesContainer.anchorMax = Vector2.one;
+            pathTilesContainer.sizeDelta = Vector2.zero;
+            pathTilesContainer.anchoredPosition = Vector2.zero;
 
             // Create dots container
             GameObject dotsObj = new GameObject("DotsContainer");
@@ -228,6 +243,20 @@ namespace FaeMaze.UI
             return dot;
         }
 
+        private Image CreatePathTileDot()
+        {
+            GameObject dotObj = new GameObject("PathTileDot");
+            dotObj.transform.SetParent(pathTilesContainer, false);
+            RectTransform dotRect = dotObj.AddComponent<RectTransform>();
+            dotRect.sizeDelta = new Vector2(4f, 4f);
+
+            Image dot = dotObj.AddComponent<Image>();
+            dot.color = pathColor;
+            dot.sprite = CreateCircleSprite();
+
+            return dot;
+        }
+
         private Sprite CreateCircleSprite()
         {
             // Create a simple circle texture
@@ -261,6 +290,7 @@ namespace FaeMaze.UI
             }
 
             UpdateMinimapSize();
+            UpdatePathTileDots();
             UpdateHeartDot();
             UpdateVisitorDots();
             UpdateCrosshair();
@@ -375,6 +405,81 @@ namespace FaeMaze.UI
             for (int i = visitorIndex; i < visitorDots.Count; i++)
             {
                 visitorDots[i].gameObject.SetActive(false);
+            }
+        }
+
+        private void UpdatePathTileDots()
+        {
+            if (mazeGridBehaviour.Grid == null)
+            {
+                return;
+            }
+
+            // Get focal point grid position
+            Vector3 focalWorldPos = focalPoint.position;
+            int focalX, focalY;
+            if (!mazeGridBehaviour.WorldToGrid(focalWorldPos, out focalX, out focalY))
+            {
+                return;
+            }
+
+            // Calculate tile range to check (based on view radius)
+            int radiusInt = Mathf.CeilToInt(viewRadiusTiles);
+            int minX = focalX - radiusInt;
+            int maxX = focalX + radiusInt;
+            int minY = focalY - radiusInt;
+            int maxY = focalY + radiusInt;
+
+            // Collect all walkable tiles within view radius
+            List<Vector2Int> visiblePathTiles = new List<Vector2Int>();
+
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    // Check if in grid bounds
+                    if (x < 0 || x >= mazeGridBehaviour.Grid.Width ||
+                        y < 0 || y >= mazeGridBehaviour.Grid.Height)
+                    {
+                        continue;
+                    }
+
+                    // Check if tile is walkable
+                    if (mazeGridBehaviour.Grid.IsWalkable(x, y))
+                    {
+                        Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(x, y);
+
+                        // Check if within view radius
+                        if (IsInViewRadius(tileWorldPos))
+                        {
+                            visiblePathTiles.Add(new Vector2Int(x, y));
+                        }
+                    }
+                }
+            }
+
+            // Ensure we have enough dots
+            while (pathTileDots.Count < visiblePathTiles.Count)
+            {
+                pathTileDots.Add(CreatePathTileDot());
+            }
+
+            // Update each dot
+            for (int i = 0; i < visiblePathTiles.Count; i++)
+            {
+                Vector2Int gridPos = visiblePathTiles[i];
+                Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
+                Vector2 minimapPos = WorldToMinimapPosition(tileWorldPos);
+
+                Image dot = pathTileDots[i];
+                dot.gameObject.SetActive(true);
+                dot.rectTransform.anchoredPosition = minimapPos;
+            }
+
+            // Hide unused dots
+            for (int i = visiblePathTiles.Count; i < pathTileDots.Count; i++)
+            {
+                pathTileDots[i].gameObject.SetActive(false);
             }
         }
 

@@ -48,8 +48,8 @@ namespace FaeMaze.Editor
             SerializedObject minimapSO = new SerializedObject(minimap);
             minimapSO.FindProperty("focalPoint").objectReferenceValue = focalPointObj != null ? focalPointObj.transform : null;
             minimapSO.FindProperty("mazeGridBehaviour").objectReferenceValue = mazeGrid;
-            minimapSO.FindProperty("sizePercent").floatValue = 0.1f;
-            minimapSO.FindProperty("viewRadiusTiles").floatValue = 10f;
+            minimapSO.FindProperty("sizePercent").floatValue = 0.2f;
+            minimapSO.FindProperty("viewRadiusTiles").floatValue = 20f;
             minimapSO.FindProperty("mapCorner").enumValueIndex = 1; // TopRight
             minimapSO.FindProperty("edgePadding").floatValue = 20f;
 
@@ -59,6 +59,7 @@ namespace FaeMaze.Editor
             minimapSO.FindProperty("crosshairColor").colorValue = Color.white;
             minimapSO.FindProperty("heartColor").colorValue = new Color(1f, 0.2f, 0.2f, 1f);
             minimapSO.FindProperty("visitorColor").colorValue = new Color(0.3f, 1f, 0.3f, 1f);
+            minimapSO.FindProperty("pathColor").colorValue = new Color(0.4f, 0.4f, 0.4f, 0.5f);
 
             // Dot sizes
             minimapSO.FindProperty("heartDotSize").floatValue = 8f;
@@ -73,8 +74,8 @@ namespace FaeMaze.Editor
             Debug.Log("Minimap setup complete!");
             Debug.Log($"- MazeGridBehaviour: {(mazeGrid != null ? mazeGrid.name : "Not found")}");
             Debug.Log($"- Focal Point: {(focalPointObj != null ? focalPointObj.name : "Will search at runtime")}");
-            Debug.Log($"- Size: 10% of screen");
-            Debug.Log($"- View Radius: 10 tiles");
+            Debug.Log($"- Size: 20% of screen");
+            Debug.Log($"- View Radius: 20 tiles");
             Debug.Log($"- Corner: Top Right");
 
             Selection.activeGameObject = minimapObj;

@@ -34,7 +34,7 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Pulse speed in Hz")]
-        private float pulseSpeed = 2.0f;
+        private float pulseSpeed = 1.0f;
 
         [SerializeField]
         [Tooltip("Minimum glow intensity")]
@@ -46,7 +46,7 @@ namespace FaeMaze.Cameras
 
         [SerializeField]
         [Tooltip("Z offset for light position to illuminate tile surface")]
-        private float lightZOffset = -0.5f;
+        private float lightZOffset = -1.0f;
 
         #endregion
 
