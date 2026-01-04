@@ -13,6 +13,8 @@ public class LocalZClipApplier : MonoBehaviour
     [SerializeField] private bool applyToChildren = true;
 
     private Renderer[] _renderers;
+    private Material _sharedClipMaterial;
+    private readonly MaterialPropertyBlock _propertyBlock = new MaterialPropertyBlock();
 
     private void Awake()
     {
@@ -26,11 +28,13 @@ public class LocalZClipApplier : MonoBehaviour
             return;
         }
 
+        _sharedClipMaterial = new Material(clipShader) { enableInstancing = true };
+
         _renderers = applyToChildren
             ? GetComponentsInChildren<Renderer>(true)
             : GetComponents<Renderer>();
 
-        ApplyUniqueMaterials();
+        ApplySharedMaterials();
         PushClipValue();
     }
 
@@ -40,40 +44,54 @@ public class LocalZClipApplier : MonoBehaviour
         PushClipValue();
     }
 
-    private void ApplyUniqueMaterials()
+    private void OnDestroy()
+    {
+        if (_sharedClipMaterial == null) return;
+
+        if (Application.isPlaying)
+            Destroy(_sharedClipMaterial);
+        else
+            DestroyImmediate(_sharedClipMaterial);
+    }
+
+    private void ApplySharedMaterials()
     {
         foreach (var r in _renderers)
         {
             if (r == null) continue;
 
-            // IMPORTANT:
-            // r.materials instantiates materials per-renderer (so we don't mutate shared/imported materials).
-            var mats = r.materials;
+            var originalMats = r.sharedMaterials;
+            var sharedClipMats = new Material[originalMats.Length];
 
-            for (int i = 0; i < mats.Length; i++)
+            for (int i = 0; i < originalMats.Length; i++)
             {
-                var src = mats[i];
-                if (src == null) continue;
+                sharedClipMats[i] = _sharedClipMaterial;
 
-                var dst = new Material(clipShader);
+                var src = originalMats[i];
 
-                // Copy over common base texture + color from whatever shader the importer used.
                 Texture baseTex = null;
-                if (src.HasProperty("_BaseMap")) baseTex = src.GetTexture("_BaseMap");
-                else if (src.HasProperty("_MainTex")) baseTex = src.GetTexture("_MainTex");
+                if (src != null)
+                {
+                    if (src.HasProperty("_BaseMap")) baseTex = src.GetTexture("_BaseMap");
+                    else if (src.HasProperty("_MainTex")) baseTex = src.GetTexture("_MainTex");
+                }
 
                 Color baseCol = Color.white;
-                if (src.HasProperty("_BaseColor")) baseCol = src.GetColor("_BaseColor");
-                else if (src.HasProperty("_Color")) baseCol = src.GetColor("_Color");
+                if (src != null)
+                {
+                    if (src.HasProperty("_BaseColor")) baseCol = src.GetColor("_BaseColor");
+                    else if (src.HasProperty("_Color")) baseCol = src.GetColor("_Color");
+                }
 
-                dst.SetTexture("_BaseMap", baseTex);
-                dst.SetColor("_BaseColor", baseCol);
-                dst.SetFloat("_ClipZ", clipZ);
+                _propertyBlock.Clear();
+                _propertyBlock.SetFloat("_ClipZ", clipZ);
+                _propertyBlock.SetTexture("_BaseMap", baseTex);
+                _propertyBlock.SetColor("_BaseColor", baseCol);
 
-                mats[i] = dst;
+                r.SetPropertyBlock(_propertyBlock, i);
             }
 
-            r.materials = mats;
+            r.sharedMaterials = sharedClipMats;
         }
     }
 
@@ -84,10 +102,13 @@ public class LocalZClipApplier : MonoBehaviour
         foreach (var r in _renderers)
         {
             if (r == null) continue;
-            foreach (var m in r.materials)
+            var materials = r.sharedMaterials;
+            for (int i = 0; i < materials.Length; i++)
             {
-                if (m != null && m.HasProperty("_ClipZ"))
-                    m.SetFloat("_ClipZ", clipZ);
+                _propertyBlock.Clear();
+                r.GetPropertyBlock(_propertyBlock, i);
+                _propertyBlock.SetFloat("_ClipZ", clipZ);
+                r.SetPropertyBlock(_propertyBlock, i);
             }
         }
     }
