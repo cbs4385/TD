@@ -24,9 +24,6 @@ namespace FaeMaze.HeartPowers
         public int tier = 1;
 
         [Header("Costs and Cooldown")]
-        [Tooltip("Heart charges consumed when activating")]
-        public int chargeCost = 1;
-
         [Tooltip("Essence cost to activate this power")]
         public int essenceCost = 0;
 

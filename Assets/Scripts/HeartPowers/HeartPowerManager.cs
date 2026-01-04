@@ -7,7 +7,7 @@ namespace FaeMaze.HeartPowers
 {
     /// <summary>
     /// Central manager for Heart powers.
-    /// Manages essence, charges, cooldowns, and power activation.
+    /// Manages essence, cooldowns, and power activation.
     /// </summary>
     public class HeartPowerManager : MonoBehaviour
     {
@@ -46,11 +46,6 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Array of power definitions for each power type")]
         private HeartPowerDefinition[] powerDefinitions;
 
-        [Header("Resource Settings")]
-        [SerializeField]
-        [Tooltip("Initial Heart charges at start of each wave")]
-        private int initialChargesPerWave = 3;
-
         [Header("Debug")]
         [SerializeField]
         [Tooltip("Enable debug logging")]
@@ -65,7 +60,6 @@ namespace FaeMaze.HeartPowers
 
         #region Private Fields
 
-        private int currentCharges;
         private Dictionary<HeartPowerType, float> cooldownTimers = new Dictionary<HeartPowerType, float>();
         private Dictionary<HeartPowerType, int> powerTiers = new Dictionary<HeartPowerType, int>();
         private Dictionary<HeartPowerType, bool> unlockedPowers = new Dictionary<HeartPowerType, bool>();
@@ -83,9 +77,6 @@ namespace FaeMaze.HeartPowers
         #endregion
 
         #region Properties
-
-        /// <summary>Gets the current number of Heart charges</summary>
-        public int CurrentCharges => currentCharges;
 
         /// <summary>Gets the current essence from GameController</summary>
         public int CurrentEssence => gameController != null ? gameController.CurrentEssence : 0;
@@ -107,7 +98,6 @@ namespace FaeMaze.HeartPowers
         #region Events
 
         public event Action<HeartPowerType> OnPowerActivated;
-        public event Action<int> OnChargesChanged;
         public event Action<int> OnEssenceChanged;
 
         #endregion
@@ -307,26 +297,12 @@ namespace FaeMaze.HeartPowers
         #region Public Methods - Wave Integration
 
         /// <summary>
-        /// Called at the start of each wave to reset/refill Heart charges.
+        /// Called at the start of each wave.
         /// </summary>
         public void OnWaveStart()
         {
-            currentCharges = initialChargesPerWave;
             isGameActive = true;
 
-            if (debugLog)
-            {
-            }
-
-            OnChargesChanged?.Invoke(currentCharges);
-        }
-
-        /// <summary>
-        /// Called when a wave ends successfully.
-        /// </summary>
-        public void OnWaveSuccess()
-        {
-            // Optionally grant bonus charges or essence
             if (debugLog)
             {
             }
@@ -378,8 +354,7 @@ namespace FaeMaze.HeartPowers
             {
             }
 
-            // Consume charges and essence, then start cooldown
-            ConsumeCharges(definition.chargeCost);
+            // Consume essence and start cooldown
             if (definition.essenceCost > 0)
             {
                 SpendEssence(definition.essenceCost);
@@ -433,12 +408,6 @@ namespace FaeMaze.HeartPowers
             if (definition == null)
             {
                 reason = "No definition found";
-                return false;
-            }
-
-            if (currentCharges < definition.chargeCost)
-            {
-                reason = $"Not enough charges (need {definition.chargeCost}, have {currentCharges})";
                 return false;
             }
 
@@ -530,34 +499,9 @@ namespace FaeMaze.HeartPowers
             return false;
         }
 
-        /// <summary>
-        /// Adds Heart charges (temporary for current wave).
-        /// </summary>
-        public void AddCharges(int amount)
-        {
-            currentCharges += amount;
-            OnChargesChanged?.Invoke(currentCharges);
-
-            if (debugLog)
-            {
-            }
-        }
-
         #endregion
 
         #region Private Methods
-
-        private void ConsumeCharges(int amount)
-        {
-            int previousCharges = currentCharges;
-            currentCharges -= amount;
-
-            if (debugLog)
-            {
-            }
-
-            OnChargesChanged?.Invoke(currentCharges);
-        }
 
         private void ActivatePower(HeartPowerType powerType, HeartPowerDefinition definition, Vector3 worldPosition)
         {

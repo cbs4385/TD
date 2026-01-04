@@ -203,7 +203,6 @@ namespace FaeMaze.UI
             // Subscribe to HeartPowerManager events
             if (heartPowerManager != null)
             {
-                heartPowerManager.OnChargesChanged += UpdateChargesDisplay;
                 heartPowerManager.OnEssenceChanged += UpdateEssenceDisplay;
                 heartPowerManager.OnPowerActivated += OnPowerActivated;
             }
@@ -228,7 +227,6 @@ namespace FaeMaze.UI
         {
             if (heartPowerManager != null)
             {
-                heartPowerManager.OnChargesChanged -= UpdateChargesDisplay;
                 heartPowerManager.OnEssenceChanged -= UpdateEssenceDisplay;
                 heartPowerManager.OnPowerActivated -= OnPowerActivated;
             }
@@ -835,14 +833,6 @@ namespace FaeMaze.UI
         private void UpdateResourceDisplays()
         {
             UpdateWaveAndEssenceDisplays();
-        }
-
-        /// <summary>
-        /// Updates the charges display (event handler, no UI element for charges anymore).
-        /// </summary>
-        private void UpdateChargesDisplay(int charges)
-        {
-            // Charges are no longer displayed in the UI
         }
 
         /// <summary>

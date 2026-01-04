@@ -445,7 +445,8 @@ namespace FaeMaze.UI
                     }
 
                     // Check if tile is walkable
-                    if (mazeGridBehaviour.Grid.IsWalkable(x, y))
+                    var node = mazeGridBehaviour.Grid.GetNode(x, y);
+                    if (node != null && node.walkable)
                     {
                         Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(x, y);
 
