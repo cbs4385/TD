@@ -831,10 +831,11 @@ namespace FaeMaze.Cameras
             int mazeWidth = mazeGridBehaviour.Grid.Width;
             int mazeHeight = mazeGridBehaviour.Grid.Height;
 
-            // Constrain to grid positions (-1,-1) to (mazeWidth+1, mazeHeight+1)
+            // Constrain to grid positions (-1,-1) to (mazeWidth, mazeHeight)
+            // Maze tiles occupy positions 0 to (mazeWidth-1), so position mazeWidth is 1 tile outside
             // Convert grid positions to world positions
             Vector3 minWorldPos = mazeGridBehaviour.GridToWorld(-1, -1);
-            Vector3 maxWorldPos = mazeGridBehaviour.GridToWorld(mazeWidth + 1, mazeHeight + 1);
+            Vector3 maxWorldPos = mazeGridBehaviour.GridToWorld(mazeWidth, mazeHeight);
 
             // Clamp position to bounds
             currentPos.x = Mathf.Clamp(currentPos.x, minWorldPos.x, maxWorldPos.x);

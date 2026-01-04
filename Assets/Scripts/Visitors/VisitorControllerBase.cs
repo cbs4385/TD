@@ -1260,20 +1260,7 @@ namespace FaeMaze.Visitors
 
                 Debug.Log($"[VisitorControllerBase] Visitor reached destination (spawn marker mode)");
 
-                // Award essence for visitor reaching destination
-                if (gameController != null)
-                {
-                    int essence = GetEssenceReward();
-                    int essenceBefore = gameController.CurrentEssence;
-                    Debug.Log($"[VisitorControllerBase] Awarding {essence} essence (current: {essenceBefore})");
-                    gameController.AddEssence(essence);
-                    int essenceAfter = gameController.CurrentEssence;
-                    Debug.Log($"[VisitorControllerBase] Essence after award: {essenceAfter} (expected: {essenceBefore + essence})");
-                }
-                else
-                {
-                    Debug.LogWarning($"[VisitorControllerBase] Cannot award essence - gameController is null!");
-                }
+                // No essence awarded for escaping visitors - essence only from heart or devour power
 
                 // Track stats
                 if (GameStatsTracker.Instance != null)
