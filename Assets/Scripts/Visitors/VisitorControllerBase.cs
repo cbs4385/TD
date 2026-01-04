@@ -305,6 +305,9 @@ namespace FaeMaze.Visitors
                 minLostDistance = Mathf.RoundToInt(config.LostDetourMin);
                 maxLostDistance = Mathf.RoundToInt(config.LostDetourMax);
             }
+
+            // Apply player's speed setting (as multiplier, default 3f = 1x speed)
+            moveSpeed *= (GameSettings.VisitorSpeed / 3f);
         }
 
         protected virtual void OnEnable()
