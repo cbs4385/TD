@@ -423,7 +423,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   config: {fileID: 0}
-  moveSpeed: 3
+  moveSpeed: 1.5
   waypointReachedDistance: 0.05
   use3DModel: 0
   modelPrefab: {fileID: 0}

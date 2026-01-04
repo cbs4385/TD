@@ -68,7 +68,7 @@ namespace FaeMaze.Visitors
         [Header("Movement Settings")]
         [SerializeField]
         [Tooltip("Movement speed in units per second")]
-        protected float moveSpeed = 3f;
+        protected float moveSpeed = 1.5f;
 
         [Header("Path Following")]
         [SerializeField]

@@ -15,7 +15,7 @@ namespace FaeMaze.Visitors
 
         [Header("Movement")]
         [SerializeField] [Tooltip("Base movement speed in units per second")]
-        private float baseSpeed = 1.0f;
+        private float baseSpeed = 0.5f;
 
         [Header("Fascination (FaeLantern)")]
         [SerializeField] [Range(0f, 1f)] [Tooltip("Base probability of becoming fascinated on entering lantern influence")]
