@@ -849,10 +849,6 @@ namespace FaeMaze.HeartPowers
             // Tier III: Hunger Crescendo - extend duration
             float extensionTime = definition.param3 > 0 ? definition.param3 : 1f;
             elapsedTime -= extensionTime; // Subtract from elapsed to extend duration
-
-            // Optionally refund charge (would need HeartPowerManager API)
-            manager.AddCharges(1);
-
         }
 
         private Vector2Int GetVisitorGridPosition(VisitorControllerBase visitor)
@@ -2260,9 +2256,6 @@ namespace FaeMaze.HeartPowers
             {
                 manager.GameController.AddEssence(bonusEssence);
             }
-
-            // Temporary charge bonus
-            manager.AddCharges(1);
         }
     }
 

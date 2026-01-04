@@ -213,12 +213,6 @@ namespace FaeMaze.Systems
             // Update last completed wave
             lastCompletedWave = waveSpawner.CurrentWaveNumber;
 
-            // Notify Heart Power Manager
-            if (heartPowerManager != null)
-            {
-                heartPowerManager.OnWaveSuccess();
-            }
-
             // Track stats
             if (GameStatsTracker.Instance != null)
             {

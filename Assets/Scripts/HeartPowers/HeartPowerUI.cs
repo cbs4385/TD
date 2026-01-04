@@ -25,10 +25,6 @@ namespace FaeMaze.HeartPowers
 
         [Header("Resource Display")]
         [SerializeField]
-        [Tooltip("Text displaying current Heart charges")]
-        private TextMeshProUGUI chargesText;
-
-        [SerializeField]
         [Tooltip("Text displaying current essence")]
         private TextMeshProUGUI essenceText;
 
@@ -148,7 +144,6 @@ namespace FaeMaze.HeartPowers
         {
             if (heartPowerManager != null)
             {
-                heartPowerManager.OnChargesChanged += UpdateChargesDisplay;
                 heartPowerManager.OnEssenceChanged += UpdateEssenceDisplay;
             }
         }
@@ -157,7 +152,6 @@ namespace FaeMaze.HeartPowers
         {
             if (heartPowerManager != null)
             {
-                heartPowerManager.OnChargesChanged -= UpdateChargesDisplay;
                 heartPowerManager.OnEssenceChanged -= UpdateEssenceDisplay;
             }
         }
@@ -316,16 +310,7 @@ namespace FaeMaze.HeartPowers
         {
             if (heartPowerManager != null)
             {
-                UpdateChargesDisplay(heartPowerManager.CurrentCharges);
                 UpdateEssenceDisplay(heartPowerManager.CurrentEssence);
-            }
-        }
-
-        private void UpdateChargesDisplay(int charges)
-        {
-            if (chargesText != null)
-            {
-                chargesText.text = $"Heart Charges: {charges}";
             }
         }
 
