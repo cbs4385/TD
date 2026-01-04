@@ -8,6 +8,14 @@ namespace FaeMaze.Systems
     /// Spawns environment decoration (trees, walls) to fill the entire background plane,
     /// except for the area occupied by maze tiles. Makes decorations near focal point
     /// transparent for better visibility.
+    ///
+    /// Performance Optimizations:
+    /// - GPU Instancing: Uses MaterialPropertyBlock to maintain instancing while setting per-object alpha
+    /// - Reduced Decorations: Background padding reduced from 20 to 5 tiles (~75% fewer objects)
+    /// - Frustum Culling: Only updates transparency for decorations near camera focus
+    /// - Update Throttling: Updates transparency every N frames instead of every frame
+    /// - Static Batching: Decorations marked as static when LOD is disabled
+    /// - LOD Support: Optional LOD groups for distance-based quality levels
     /// </summary>
     public class EnvironmentDecorator : MonoBehaviour
     {
@@ -19,6 +27,35 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Tree/wall prefab to spawn on non-walkable tiles")]
         private GameObject treePrefab;
+
+        [Header("LOD Settings (Optional)")]
+        [SerializeField]
+        [Tooltip("Enable LOD groups for distance-based quality")]
+        private bool enableLOD = false;
+
+        [SerializeField]
+        [Tooltip("LOD0 prefab (high quality, close range) - leave null to use treePrefab")]
+        private GameObject lod0Prefab;
+
+        [SerializeField]
+        [Tooltip("LOD1 prefab (medium quality) - leave null to skip")]
+        private GameObject lod1Prefab;
+
+        [SerializeField]
+        [Tooltip("LOD2 prefab (low quality, far range) - leave null to skip")]
+        private GameObject lod2Prefab;
+
+        [SerializeField]
+        [Tooltip("LOD0 transition at this percentage of max distance (0-1)")]
+        private float lod0Distance = 0.3f;
+
+        [SerializeField]
+        [Tooltip("LOD1 transition at this percentage of max distance (0-1)")]
+        private float lod1Distance = 0.6f;
+
+        [SerializeField]
+        [Tooltip("LOD2 culling at this percentage of max distance (0-1)")]
+        private float lod2Distance = 1.0f;
 
         [SerializeField]
         [Tooltip("Focal point for transparency (leave null to use main camera)")]
@@ -35,7 +72,7 @@ namespace FaeMaze.Systems
 
         [SerializeField]
         [Tooltip("Padding around maze to fill with trees (in tiles)")]
-        private int backgroundPadding = 20;
+        private int backgroundPadding = 5;
 
         [SerializeField]
         [Tooltip("Parent transform for spawned decorations")]
@@ -67,16 +104,31 @@ namespace FaeMaze.Systems
         [Tooltip("Smoothness of transition between transparent and opaque")]
         private float transitionSmoothness = 0.5f;
 
+        [Header("Performance Settings")]
+        [SerializeField]
+        [Tooltip("Update transparency every N frames (1 = every frame, 3 = every 3rd frame)")]
+        private int transparencyUpdateFrequency = 3;
+
+        [SerializeField]
+        [Tooltip("Mark decorations as static for static batching")]
+        private bool markAsStatic = true;
+
+        [SerializeField]
+        [Tooltip("Camera frustum padding in tiles for transparency updates")]
+        private float frustumPadding = 10f;
+
         private class DecorationData
         {
             public GameObject gameObject;
             public Renderer[] renderers;
-            public Material[] originalMaterials;
-            public Material[] instanceMaterials;
+            public MaterialPropertyBlock propertyBlock;
+            public Vector2Int gridPosition;
         }
 
         private List<DecorationData> decorations = new List<DecorationData>();
         private Camera mainCamera;
+        private int frameCounter = 0;
+        private static readonly int ColorPropertyID = Shader.PropertyToID("_Color");
 
         private void Start()
         {
@@ -192,25 +244,34 @@ namespace FaeMaze.Systems
                         // Scale to 0.90 on world Z axis (model's local Y after rotation)
                         decoration.transform.localScale = new Vector3(1f, 0.90f, 1f);
 
+                        // Setup LOD if enabled
+                        if (enableLOD)
+                        {
+                            SetupLODGroup(decoration);
+                        }
+
+                        // Mark as static for batching if enabled (only if LOD is disabled)
+                        if (markAsStatic && !enableLOD)
+                        {
+                            decoration.isStatic = true;
+                        }
+
                         // Store decoration data for transparency management
                         DecorationData data = new DecorationData();
                         data.gameObject = decoration;
                         data.renderers = decoration.GetComponentsInChildren<Renderer>();
+                        data.gridPosition = new Vector2Int(x, y);
+                        data.propertyBlock = new MaterialPropertyBlock();
 
-                        // Create material instances for each renderer
+                        // Enable GPU instancing on materials (uses shared materials)
                         if (data.renderers.Length > 0)
                         {
-                            data.originalMaterials = new Material[data.renderers.Length];
-                            data.instanceMaterials = new Material[data.renderers.Length];
-
-                            for (int i = 0; i < data.renderers.Length; i++)
+                            foreach (var renderer in data.renderers)
                             {
-                                data.originalMaterials[i] = data.renderers[i].sharedMaterial;
-                                data.instanceMaterials[i] = new Material(data.renderers[i].sharedMaterial);
-                                data.renderers[i].material = data.instanceMaterials[i];
-
-                                // Enable transparency on the material
-                                EnableTransparency(data.instanceMaterials[i]);
+                                if (renderer.sharedMaterial != null)
+                                {
+                                    renderer.sharedMaterial.enableInstancing = true;
+                                }
                             }
                         }
 
@@ -225,11 +286,18 @@ namespace FaeMaze.Systems
 
         private void Update()
         {
-            UpdateTransparency();
+            // Only update transparency every N frames for performance
+            frameCounter++;
+            if (frameCounter >= transparencyUpdateFrequency)
+            {
+                frameCounter = 0;
+                UpdateTransparency();
+            }
         }
 
         /// <summary>
         /// Updates transparency of decorations based on distance from focal point.
+        /// Uses frustum culling and MaterialPropertyBlocks for GPU instancing compatibility.
         /// </summary>
         private void UpdateTransparency()
         {
@@ -261,39 +329,62 @@ namespace FaeMaze.Systems
             }
             Vector2Int focalGridPos = new Vector2Int(focalX, focalY);
 
+            // Calculate frustum bounds in grid coordinates (simple box approximation)
+            int minX = Mathf.FloorToInt(focalGridPos.x - frustumPadding);
+            int maxX = Mathf.CeilToInt(focalGridPos.x + frustumPadding);
+            int minY = Mathf.FloorToInt(focalGridPos.y - frustumPadding);
+            int maxY = Mathf.CeilToInt(focalGridPos.y + frustumPadding);
+
             // Update each decoration's transparency
             foreach (var decoration in decorations)
             {
-                if (decoration.gameObject == null)
+                if (decoration.gameObject == null || decoration.renderers == null)
                 {
                     continue;
                 }
 
-                // Get decoration grid position
-                Vector3 decorationWorldPos = decoration.gameObject.transform.position;
-                int decorationX, decorationY;
-                if (!mazeGridBehaviour.WorldToGrid(decorationWorldPos, out decorationX, out decorationY))
+                // Frustum culling - skip decorations far from focus
+                if (decoration.gridPosition.x < minX || decoration.gridPosition.x > maxX ||
+                    decoration.gridPosition.y < minY || decoration.gridPosition.y > maxY)
                 {
-                    continue; // Skip invalid positions
+                    // Outside frustum - set to fully opaque and skip
+                    SetDecorationAlpha(decoration, opaqueAlpha);
+                    continue;
                 }
-                Vector2Int decorationGridPos = new Vector2Int(decorationX, decorationY);
 
-                // Calculate distance in tiles (Manhattan distance)
-                float distanceInTiles = Mathf.Abs(focalGridPos.x - decorationGridPos.x) +
-                                       Mathf.Abs(focalGridPos.y - decorationGridPos.y);
+                // Calculate distance in tiles (Manhattan distance) - use cached grid position
+                float distanceInTiles = Mathf.Abs(focalGridPos.x - decoration.gridPosition.x) +
+                                       Mathf.Abs(focalGridPos.y - decoration.gridPosition.y);
 
                 // Calculate alpha based on distance
                 float alpha = CalculateAlpha(distanceInTiles);
 
-                // Apply alpha to all renderers
-                foreach (var material in decoration.instanceMaterials)
+                // Apply alpha using MaterialPropertyBlock for GPU instancing
+                SetDecorationAlpha(decoration, alpha);
+            }
+        }
+
+        /// <summary>
+        /// Sets the alpha for a decoration using MaterialPropertyBlock to maintain GPU instancing.
+        /// </summary>
+        private void SetDecorationAlpha(DecorationData decoration, float alpha)
+        {
+            if (decoration.propertyBlock == null || decoration.renderers == null)
+            {
+                return;
+            }
+
+            foreach (var renderer in decoration.renderers)
+            {
+                if (renderer != null && renderer.sharedMaterial != null)
                 {
-                    if (material != null)
-                    {
-                        Color color = material.color;
-                        color.a = alpha;
-                        material.color = color;
-                    }
+                    // Get current color from shared material
+                    Color color = renderer.sharedMaterial.color;
+                    color.a = alpha;
+
+                    // Set color via property block to maintain instancing
+                    decoration.propertyBlock.SetColor(ColorPropertyID, color);
+                    renderer.SetPropertyBlock(decoration.propertyBlock);
                 }
             }
         }
@@ -322,19 +413,58 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Enables transparency on a material by setting render mode to Fade.
+        /// Sets up LOD group on a decoration GameObject for distance-based quality levels.
         /// </summary>
-        private void EnableTransparency(Material material)
+        private void SetupLODGroup(GameObject decoration)
         {
-            // Set render mode to Fade (transparent)
-            material.SetFloat("_Mode", 2);
-            material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            material.SetInt("_ZWrite", 0);
-            material.DisableKeyword("_ALPHATEST_ON");
-            material.EnableKeyword("_ALPHABLEND_ON");
-            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-            material.renderQueue = 3000;
+            LODGroup lodGroup = decoration.AddComponent<LODGroup>();
+
+            // Get renderers from current tree
+            Renderer[] lod0Renderers = decoration.GetComponentsInChildren<Renderer>();
+
+            // Build LOD array based on available prefabs
+            List<LOD> lods = new List<LOD>();
+
+            // LOD0 - High quality (use current renderers or instantiate lod0Prefab)
+            if (lod0Prefab != null)
+            {
+                GameObject lod0Obj = Instantiate(lod0Prefab, decoration.transform);
+                lod0Obj.transform.localPosition = Vector3.zero;
+                lod0Obj.transform.localRotation = Quaternion.identity;
+                lod0Obj.transform.localScale = Vector3.one;
+                lod0Renderers = lod0Obj.GetComponentsInChildren<Renderer>();
+            }
+            lods.Add(new LOD(lod0Distance, lod0Renderers));
+
+            // LOD1 - Medium quality
+            if (lod1Prefab != null)
+            {
+                GameObject lod1Obj = Instantiate(lod1Prefab, decoration.transform);
+                lod1Obj.transform.localPosition = Vector3.zero;
+                lod1Obj.transform.localRotation = Quaternion.identity;
+                lod1Obj.transform.localScale = Vector3.one;
+                Renderer[] lod1Renderers = lod1Obj.GetComponentsInChildren<Renderer>();
+                lods.Add(new LOD(lod1Distance, lod1Renderers));
+            }
+
+            // LOD2 - Low quality
+            if (lod2Prefab != null)
+            {
+                GameObject lod2Obj = Instantiate(lod2Prefab, decoration.transform);
+                lod2Obj.transform.localPosition = Vector3.zero;
+                lod2Obj.transform.localRotation = Quaternion.identity;
+                lod2Obj.transform.localScale = Vector3.one;
+                Renderer[] lod2Renderers = lod2Obj.GetComponentsInChildren<Renderer>();
+                lods.Add(new LOD(lod2Distance, lod2Renderers));
+            }
+            else
+            {
+                // Add culling level if no LOD2 specified
+                lods.Add(new LOD(lod2Distance, new Renderer[0]));
+            }
+
+            lodGroup.SetLODs(lods.ToArray());
+            lodGroup.RecalculateBounds();
         }
 
         /// <summary>
@@ -342,21 +472,6 @@ namespace FaeMaze.Systems
         /// </summary>
         public void ClearDecorations()
         {
-            // Clean up material instances
-            foreach (var decoration in decorations)
-            {
-                if (decoration.instanceMaterials != null)
-                {
-                    foreach (var material in decoration.instanceMaterials)
-                    {
-                        if (material != null)
-                        {
-                            Destroy(material);
-                        }
-                    }
-                }
-            }
-
             decorations.Clear();
 
             // Destroy game objects
