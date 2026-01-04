@@ -337,7 +337,7 @@ namespace FaeMaze.UI
         private void UpdateVisitorDots()
         {
             // Get all active visitors
-            List<VisitorControllerBase> activeVisitors = VisitorRegistry.All;
+            IReadOnlyList<VisitorControllerBase> activeVisitors = VisitorRegistry.All;
 
             // Ensure we have enough dots
             while (visitorDots.Count < activeVisitors.Count)
