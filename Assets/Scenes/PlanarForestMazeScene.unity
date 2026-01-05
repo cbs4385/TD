@@ -716,10 +716,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeGridBehaviour
-  useRuntimeGeneration: 0
-  mazeFile: {fileID: 4900000, guid: 9f5e8c3a7d2b6e4f1a9c8d5b3e7a2f6c, type: 3}
+  useRuntimeGeneration: 1
+  mazeFile: {fileID: 0}
+  usePlanarGenerator: 1
   generatorConfig:
     width: 30
     height: 30
@@ -727,6 +728,11 @@ MonoBehaviour:
     minPathWidth: 1
     maxPathWidth: 1
     waterCoverage: 0.15
+    randomSeed: 0
+  planarGeneratorConfig:
+    gridWidth: 60
+    gridHeight: 60
+    growthTurns: 25
     randomSeed: 0
   mazeOrigin: {fileID: 330585546}
   tileSize: 1
