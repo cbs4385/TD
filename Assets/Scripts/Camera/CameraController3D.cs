@@ -399,7 +399,12 @@ namespace FaeMaze.Cameras
             if (Mathf.Abs(turnInput) > 0.001f)
             {
                 Vector3 up = GetMazeUpDirection();
-                focalPointTransform.Rotate(up, turnInput * focalTurnSpeed * Time.deltaTime, Space.World);
+                float yawDelta = turnInput * focalTurnSpeed * Time.deltaTime;
+                focalPointTransform.Rotate(up, yawDelta, Space.World);
+
+                Debug.Log(
+                    $"Focal mode map rotation input ({(turnInput > 0 ? "D/right" : "A/left")}) " +
+                    $"adjusted yaw by {yawDelta:F2} degrees to {focalPointTransform.eulerAngles.y:F2} degrees.");
             }
         }
 
