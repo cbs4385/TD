@@ -33,8 +33,16 @@ namespace FaeMaze.Systems
 
         [Header("Runtime Generation")]
         [SerializeField]
-        [Tooltip("Configuration for runtime maze generation (used when useRuntimeGeneration is true)")]
+        [Tooltip("Use planar organic generator instead of Kruskal-based generator")]
+        private bool usePlanarGenerator = false;
+
+        [SerializeField]
+        [Tooltip("Configuration for runtime maze generation (used when useRuntimeGeneration is true and usePlanarGenerator is false)")]
         private ForestMazeConfig generatorConfig = ForestMazeConfig.Default();
+
+        [SerializeField]
+        [Tooltip("Configuration for planar organic maze generation (used when useRuntimeGeneration is true and usePlanarGenerator is true)")]
+        private PlanarForestMazeConfig planarGeneratorConfig = PlanarForestMazeConfig.Default();
 
         [Header("References")]
         [SerializeField]
@@ -522,31 +530,61 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Initializes the maze grid using ForestMazeGenerator for runtime procedural generation.
+        /// Initializes the maze grid using ForestMazeGenerator or PlanarForestMazeGenerator for runtime procedural generation.
         /// </summary>
         private void InitializeFromGenerator()
         {
 
             spawnPoints.Clear();
 
-            if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
+            string mazeString;
+
+            if (usePlanarGenerator)
             {
-                string mazeString = MazeStringGenerator.GenerateMaze(
-                    generatorConfig.width,
-                    generatorConfig.height,
-                    generatorConfig.numEntrances,
-                    generatorConfig.randomSeed);
-
-                cachedGeneratedTiles = ConvertMazeStringToTiles(mazeString, out cachedGeneratedSymbols, out cachedEntranceEdges);
-                cachedConfig = generatorConfig;
-                cachedMazeString = mazeString;
-                hasCachedGeneration = true;
-
-                
+                // Use planar organic generator
+                mazeString = ForestMaze.PlanarForestMazeGenerator.GenerateMaze(
+                    planarGeneratorConfig.gridWidth,
+                    planarGeneratorConfig.gridHeight,
+                    planarGeneratorConfig.growthTurns,
+                    planarGeneratorConfig.randomSeed);
             }
             else
             {
+                // Use traditional Kruskal-based generator
+                if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
+                {
+                    mazeString = MazeStringGenerator.GenerateMaze(
+                        generatorConfig.width,
+                        generatorConfig.height,
+                        generatorConfig.numEntrances,
+                        generatorConfig.randomSeed);
+
+                    cachedGeneratedTiles = ConvertMazeStringToTiles(mazeString, out cachedGeneratedSymbols, out cachedEntranceEdges);
+                    cachedConfig = generatorConfig;
+                    cachedMazeString = mazeString;
+                    hasCachedGeneration = true;
+
+
+                }
+                else
+                {
+                }
+
+                TileType[,] tiles = cachedGeneratedTiles;
+                char[,] symbols = cachedGeneratedSymbols;
+
+                // Get dimensions from generated maze
+                width = tiles.GetLength(0);
+                height = tiles.GetLength(1);
+
+                // Continue with existing logic below...
+                goto SkipPlanarPath;
             }
+
+            // Planar generator path: convert string to tiles
+            cachedGeneratedTiles = ConvertMazeStringToTiles(mazeString, out cachedGeneratedSymbols, out cachedEntranceEdges);
+            cachedMazeString = mazeString;
+            hasCachedGeneration = true;
 
             TileType[,] tiles = cachedGeneratedTiles;
             char[,] symbols = cachedGeneratedSymbols;
@@ -554,6 +592,8 @@ namespace FaeMaze.Systems
             // Get dimensions from generated maze
             width = tiles.GetLength(0);
             height = tiles.GetLength(1);
+
+            SkipPlanarPath:
 
 
             // Create the grid
