@@ -155,6 +155,12 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            Transform mazeOrigin = mazeGridBehaviour != null ? mazeGridBehaviour.MazeOrigin : null;
+            if (mazeOrigin == null)
+            {
+                mazeOrigin = transform;
+            }
+
             // Log prefab status for debugging
             if (wallPrefab == null)
             {
@@ -175,7 +181,7 @@ namespace FaeMaze.Systems
             if (tilesParent == null)
             {
                 tilesContainer = new GameObject("MazeTiles");
-                tilesContainer.transform.SetParent(transform, worldPositionStays: false);
+                tilesContainer.transform.SetParent(mazeOrigin, worldPositionStays: false);
                 tilesContainer.transform.localPosition = Vector3.zero;
                 tilesContainer.transform.localRotation = Quaternion.identity;
                 tilesContainer.transform.localScale = Vector3.one;

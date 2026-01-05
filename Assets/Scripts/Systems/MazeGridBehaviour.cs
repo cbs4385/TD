@@ -131,6 +131,9 @@ namespace FaeMaze.Systems
             }
         }
 
+        /// <summary>Gets the transform acting as the maze origin for world-space conversions.</summary>
+        public Transform MazeOrigin => mazeOrigin;
+
         #endregion
 
         #region Unity Lifecycle
