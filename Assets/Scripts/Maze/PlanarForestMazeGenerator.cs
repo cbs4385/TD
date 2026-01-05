@@ -644,7 +644,7 @@ namespace ForestMaze
                 }
             }
 
-            // Ensure border is always forest
+            // Ensure border is always forest where there's no path
             for (int x = 0; x < gridWidth; x++)
             {
                 if (grid[0, x] != '.') grid[0, x] = '#';
@@ -656,6 +656,9 @@ namespace ForestMaze
                 if (grid[y, 0] != '.') grid[y, 0] = '#';
                 if (grid[y, gridWidth - 1] != '.') grid[y, gridWidth - 1] = '#';
             }
+
+            // Ensure all edge walkable tiles have at least one adjacent walkable tile
+            EnsureEdgeTilesAreWalkable(grid, gridWidth, gridHeight);
 
             // Add entrances
             AddEntrance(grid, gridWidth, gridHeight, state.Random);
@@ -678,11 +681,14 @@ namespace ForestMaze
 
             while (true)
             {
-                if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height)
-                {
-                    if (grid[y0, x0] != 'H') // Don't overwrite heart
-                        grid[y0, x0] = ch;
-                }
+                // Draw center pixel and adjacent pixels for wider path
+                SetGridCell(grid, x0, y0, ch, width, height);
+
+                // Draw orthogonal neighbors to ensure path is always walkable
+                SetGridCell(grid, x0 + 1, y0, ch, width, height);
+                SetGridCell(grid, x0 - 1, y0, ch, width, height);
+                SetGridCell(grid, x0, y0 + 1, ch, width, height);
+                SetGridCell(grid, x0, y0 - 1, ch, width, height);
 
                 if (x0 == x1 && y0 == y1)
                     break;
@@ -699,6 +705,91 @@ namespace ForestMaze
                     y0 += sy;
                 }
             }
+        }
+
+        private static void SetGridCell(char[,] grid, int x, int y, char ch, int width, int height)
+        {
+            if (x >= 0 && x < width && y >= 0 && y < height)
+            {
+                if (grid[y, x] != 'H') // Don't overwrite heart
+                    grid[y, x] = ch;
+            }
+        }
+
+        private static void EnsureEdgeTilesAreWalkable(char[,] grid, int width, int height)
+        {
+            // For each walkable edge tile, ensure it has at least one orthogonally adjacent walkable tile
+
+            // Top and bottom edges
+            for (int x = 0; x < width; x++)
+            {
+                // Top edge
+                if (grid[0, x] == '.')
+                {
+                    if (!HasAdjacentWalkableTile(grid, x, 0, width, height))
+                    {
+                        // Make tile below walkable
+                        if (grid[1, x] != 'H') grid[1, x] = '.';
+                    }
+                }
+
+                // Bottom edge
+                if (grid[height - 1, x] == '.')
+                {
+                    if (!HasAdjacentWalkableTile(grid, x, height - 1, width, height))
+                    {
+                        // Make tile above walkable
+                        if (grid[height - 2, x] != 'H') grid[height - 2, x] = '.';
+                    }
+                }
+            }
+
+            // Left and right edges
+            for (int y = 0; y < height; y++)
+            {
+                // Left edge
+                if (grid[y, 0] == '.')
+                {
+                    if (!HasAdjacentWalkableTile(grid, 0, y, width, height))
+                    {
+                        // Make tile to the right walkable
+                        if (grid[y, 1] != 'H') grid[y, 1] = '.';
+                    }
+                }
+
+                // Right edge
+                if (grid[y, width - 1] == '.')
+                {
+                    if (!HasAdjacentWalkableTile(grid, width - 1, y, width, height))
+                    {
+                        // Make tile to the left walkable
+                        if (grid[y, width - 2] != 'H') grid[y, width - 2] = '.';
+                    }
+                }
+            }
+        }
+
+        private static bool HasAdjacentWalkableTile(char[,] grid, int x, int y, int width, int height)
+        {
+            // Check all 4 orthogonal neighbors
+            int[] dx = { 0, 0, 1, -1 };
+            int[] dy = { 1, -1, 0, 0 };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+                {
+                    if (grid[ny, nx] == '.' || grid[ny, nx] == 'H')
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static void DrawCircleOnGrid(char[,] grid, Vector2 center, float radius, char ch, int width, int height)
