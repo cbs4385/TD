@@ -384,16 +384,11 @@ namespace FaeMaze.Cameras
 
             if (Mathf.Abs(moveInput) > 0.001f)
             {
-                Vector3 forward = focalPointTransform.forward;
-                forward.z = 0f;
-                if (forward.sqrMagnitude > 0.0001f)
-                {
-                    forward.Normalize();
-                }
-                else
-                {
-                    forward = Vector3.right;
-                }
+                // Calculate forward direction from focal point's yaw angle (rotation around Z axis)
+                // This ensures movement is always in the direction the focal point is "facing"
+                float yawAngle = focalPointTransform.eulerAngles.z;
+                float yawRad = yawAngle * Mathf.Deg2Rad;
+                Vector3 forward = new Vector3(Mathf.Cos(yawRad), Mathf.Sin(yawRad), 0f);
 
                 focalPointTransform.position += forward * moveInput * focalMoveSpeed * Time.deltaTime;
                 Vector3 planarPosition = focalPointTransform.position;
