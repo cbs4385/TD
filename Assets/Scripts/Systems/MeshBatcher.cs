@@ -61,12 +61,15 @@ namespace FaeMaze.Systems
             }
 
             // Build CombineInstance array
+            // Transform vertices to parent's local space so batched mesh can be at localPosition (0,0,0)
+            Matrix4x4 parentWorldToLocal = parent != null ? parent.worldToLocalMatrix : Matrix4x4.identity;
             CombineInstance[] combines = new CombineInstance[meshFilters.Count];
 
             for (int i = 0; i < meshFilters.Count; i++)
             {
                 combines[i].mesh = meshFilters[i].sharedMesh;
-                combines[i].transform = meshFilters[i].transform.localToWorldMatrix;
+                // Transform from tile's local space to parent's local space (via world space)
+                combines[i].transform = parentWorldToLocal * meshFilters[i].transform.localToWorldMatrix;
             }
 
             // Create combined mesh
