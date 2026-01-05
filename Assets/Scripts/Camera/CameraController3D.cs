@@ -602,30 +602,56 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            if (mazeGridBehaviour == null)
+            {
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            }
+
             if (focalPointTransform == null)
             {
                 GameObject focalPointObj = new GameObject("Focal Point");
                 focalPointTransform = focalPointObj.transform;
             }
 
-            if (GameController.Instance == null || GameController.Instance.Heart == null)
+            Vector3 startPosition;
+            Quaternion startRotation;
+
+            bool heartReady = GameController.Instance != null && GameController.Instance.Heart != null;
+
+            if (heartReady)
             {
-                // Wait until the heart exists so we can place the focal point correctly.
+                startPosition = GameController.Instance.Heart.transform.position;
+                startPosition.z = 0f;
+
+                Vector3 facingDirection = GetPathDirectionToHeart();
+                if (facingDirection.sqrMagnitude < 0.0001f)
+                {
+                    facingDirection = Vector3.up;
+                }
+
+                startRotation = Quaternion.LookRotation(facingDirection, GetMazeUpDirection());
+            }
+            else if (mazeGridBehaviour != null && mazeGridBehaviour.Grid != null)
+            {
+                Vector2Int heartGrid = mazeGridBehaviour.HeartGridPos;
+                startPosition = mazeGridBehaviour.GridToWorld(heartGrid.x, heartGrid.y);
+                startPosition.z = 0f;
+
+                Vector3 mazeForward = mazeGridBehaviour.MazeUpDirection;
+                if (mazeForward.sqrMagnitude < 0.0001f)
+                {
+                    mazeForward = Vector3.up;
+                }
+
+                startRotation = Quaternion.LookRotation(mazeForward, GetMazeUpDirection());
+            }
+            else
+            {
+                // Wait until the maze is generated or the heart exists so we can place the focal point correctly.
                 return;
             }
 
-            Vector3 startPosition = GameController.Instance.Heart.transform.position;
-            startPosition.z = 0f;
-
-            Vector3 facingDirection = GetPathDirectionToHeart();
-            if (facingDirection.sqrMagnitude < 0.0001f)
-            {
-                facingDirection = Vector3.up;
-            }
-
-            focalPointTransform.SetPositionAndRotation(
-                startPosition,
-                Quaternion.LookRotation(facingDirection, GetMazeUpDirection()));
+            focalPointTransform.SetPositionAndRotation(startPosition, startRotation);
 
 
             // Add pulsing lime green glow to the focal point
