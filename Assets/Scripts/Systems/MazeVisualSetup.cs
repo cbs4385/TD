@@ -83,13 +83,12 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Center camera on maze
-            float centerX = mazeGrid.Grid.Width / 2f;
-            float centerY = mazeGrid.Grid.Height / 2f;
+            // Center camera on the heart of the maze
+            Vector3 heartWorldPos = mazeGrid.GridToWorld(mazeGrid.HeartGridPos.x, mazeGrid.HeartGridPos.y);
 
             Vector3 cameraPos = mainCamera.transform.position;
-            cameraPos.x = centerX;
-            cameraPos.y = centerY;
+            cameraPos.x = heartWorldPos.x;
+            cameraPos.y = heartWorldPos.y;
             mainCamera.transform.position = cameraPos;
 
             // Set orthographic size to show entire maze
