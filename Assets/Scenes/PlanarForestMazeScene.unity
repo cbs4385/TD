@@ -128,7 +128,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 330585546}
-  - component: {fileID: 330585547}
   m_Layer: 0
   m_Name: MazeOrigin
   m_TagString: Untagged
@@ -151,33 +150,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 963194228}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &330585547
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585545}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  useRuntimeGeneration: 0
-  mazeFile: {fileID: 4900000, guid: 9f5e8c3a7d2b6e4f1a9c8d5b3e7a2f6c, type: 3}
-  generatorConfig:
-    width: 30
-    height: 30
-    numEntrances: 4
-    minPathWidth: 1
-    maxPathWidth: 1
-    waterCoverage: 0.15
-    randomSeed: 0
-  mazeOrigin: {fileID: 330585546}
-  tileSize: 1
-  reflectThroughXYPlane: 1
-  drawGridGizmos: 1
-  drawAttractionHeatmap: 1
 --- !u!1 &396929188
 GameObject:
   m_ObjectHideFlags: 0
@@ -454,7 +426,7 @@ MonoBehaviour:
   collisionRadius: 0.5
   defaultFocusPoint: {x: 0, y: 0, z: 0}
   defaultFocusTransform: {fileID: 0}
-  mazeGridBehaviour: {fileID: 330585547}
+  mazeGridBehaviour: {fileID: 963194231}
 --- !u!1 &820251993
 GameObject:
   m_ObjectHideFlags: 0
@@ -849,7 +821,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mazeGridBehaviour: {fileID: 330585547}
+  mazeGridBehaviour: {fileID: 963194231}
   heartPowerPanel: {fileID: 0}
   heartPowerUI: {fileID: 0}
   placeableItems:
@@ -985,7 +957,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc64d9bed749e8c4bb3bc98463c72ca5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EnvironmentDecorator
-  mazeGridBehaviour: {fileID: 330585547}
+  mazeGridBehaviour: {fileID: 963194231}
   treePrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
   focalPoint: {fileID: 0}
   zPosition: 0
@@ -1028,7 +1000,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.UI.Minimap
   focalPoint: {fileID: 0}
-  mazeGridBehaviour: {fileID: 330585547}
+  mazeGridBehaviour: {fileID: 963194231}
   sizePercent: 0.2
   viewRadiusTiles: 15
   mapCorner: 1
