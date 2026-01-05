@@ -192,6 +192,13 @@ namespace FaeMaze.Systems
                         // Scale to 0.90 on world Z axis (model's local Y after rotation)
                         decoration.transform.localScale = new Vector3(1f, 0.90f, 1f);
 
+                        bool isBorder = (x == -1 || x == mazeWidth || y == -1 || y == mazeHeight);
+                        LODGroup lodGroup = decoration.GetComponentInChildren<LODGroup>();
+                        if (isBorder && lodGroup != null)
+                        {
+                            lodGroup.ForceLOD(0);
+                        }
+
                         // Store decoration data for transparency management
                         DecorationData data = new DecorationData();
                         data.gameObject = decoration;
