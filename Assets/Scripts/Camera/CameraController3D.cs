@@ -347,6 +347,13 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            // Don't allow user input until focal point is fully initialized
+            // This prevents user rotation from being overwritten by late initialization
+            if (!focalPointInitialized)
+            {
+                return;
+            }
+
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null)
             {
