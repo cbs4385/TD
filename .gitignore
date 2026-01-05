@@ -97,3 +97,14 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Forest Map Generator demo outputs
+forest_turn_*.png
+forest_turn_*.json
+forest_comparison.png
