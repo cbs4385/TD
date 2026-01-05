@@ -154,6 +154,12 @@ namespace FaeMaze.Systems
             // Enforce canonical runtime configuration so generation runs once with a single, shared setup
             generatorConfig = canonicalConfig;
 
+            // Planar generation should always run procedurally even if a maze file was previously assigned in the scene
+            if (usePlanarGenerator)
+            {
+                useRuntimeGeneration = true;
+            }
+
             // Initialize based on mode
             if (useRuntimeGeneration)
             {
