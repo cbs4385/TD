@@ -534,10 +534,11 @@ namespace FaeMaze.Systems
         /// </summary>
         private void InitializeFromGenerator()
         {
-
             spawnPoints.Clear();
 
             string mazeString;
+            TileType[,] tiles;
+            char[,] symbols;
 
             if (usePlanarGenerator)
             {
@@ -547,6 +548,13 @@ namespace FaeMaze.Systems
                     planarGeneratorConfig.gridHeight,
                     planarGeneratorConfig.growthTurns,
                     planarGeneratorConfig.randomSeed);
+
+                // Convert string to tiles
+                tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
+                cachedGeneratedTiles = tiles;
+                cachedGeneratedSymbols = symbols;
+                cachedMazeString = mazeString;
+                hasCachedGeneration = true;
             }
             else
             {
@@ -559,41 +567,23 @@ namespace FaeMaze.Systems
                         generatorConfig.numEntrances,
                         generatorConfig.randomSeed);
 
-                    cachedGeneratedTiles = ConvertMazeStringToTiles(mazeString, out cachedGeneratedSymbols, out cachedEntranceEdges);
+                    tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
+                    cachedGeneratedTiles = tiles;
+                    cachedGeneratedSymbols = symbols;
                     cachedConfig = generatorConfig;
                     cachedMazeString = mazeString;
                     hasCachedGeneration = true;
-
-
                 }
                 else
                 {
+                    tiles = cachedGeneratedTiles;
+                    symbols = cachedGeneratedSymbols;
                 }
-
-                TileType[,] tiles = cachedGeneratedTiles;
-                char[,] symbols = cachedGeneratedSymbols;
-
-                // Get dimensions from generated maze
-                width = tiles.GetLength(0);
-                height = tiles.GetLength(1);
-
-                // Continue with existing logic below...
-                goto SkipPlanarPath;
             }
-
-            // Planar generator path: convert string to tiles
-            cachedGeneratedTiles = ConvertMazeStringToTiles(mazeString, out cachedGeneratedSymbols, out cachedEntranceEdges);
-            cachedMazeString = mazeString;
-            hasCachedGeneration = true;
-
-            TileType[,] tiles = cachedGeneratedTiles;
-            char[,] symbols = cachedGeneratedSymbols;
 
             // Get dimensions from generated maze
             width = tiles.GetLength(0);
             height = tiles.GetLength(1);
-
-            SkipPlanarPath:
 
 
             // Create the grid
