@@ -649,12 +649,19 @@ namespace FaeMaze.Cameras
                 startPosition.z = 0f;
 
                 Vector3 facingDirection = GetPathDirectionToHeart();
+                Debug.Log($"GetPathDirectionToHeart() returned {facingDirection}");
+
                 if (facingDirection.sqrMagnitude < 0.0001f)
                 {
+                    Debug.Log("facingDirection was zero, using Vector3.up fallback");
                     facingDirection = Vector3.up;
                 }
 
-                startRotation = Quaternion.LookRotation(facingDirection, GetMazeUpDirection());
+                Vector3 mazeUp = GetMazeUpDirection();
+                Debug.Log($"Creating LookRotation with facingDirection={facingDirection}, mazeUp={mazeUp}");
+
+                startRotation = Quaternion.LookRotation(facingDirection, mazeUp);
+                Debug.Log($"LookRotation result: {startRotation}, eulerAngles: {startRotation.eulerAngles}");
             }
             else if (mazeGridBehaviour != null && mazeGridBehaviour.Grid != null)
             {
@@ -795,16 +802,17 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            Vector3 forward = focalPointTransform.forward;
-            forward.z = 0f;
-            if (forward.sqrMagnitude > 0.0001f)
-            {
-                forward.Normalize();
-            }
-            else
-            {
-                forward = Vector3.right;
-            }
+            // Get the focal point's rotation around the Z axis (maze up axis)
+            // This represents which direction the focal point is "facing" in the XY plane
+            float yawAngle = focalPointTransform.eulerAngles.z;
+
+            // Convert yaw angle to a direction vector in the XY plane
+            // In Unity, positive Z rotation goes counter-clockwise when viewed from above
+            // We want the direction the focal point is facing
+            float yawRad = yawAngle * Mathf.Deg2Rad;
+            Vector3 forward = new Vector3(Mathf.Cos(yawRad), Mathf.Sin(yawRad), 0f);
+
+            Debug.Log($"Focal point yaw: {yawAngle:F2}°, forward direction in XY: {forward}");
 
             // Use the actual maze up direction instead of hardcoded Vector3.forward
             Vector3 worldUp = GetMazeUpDirection();
