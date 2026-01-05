@@ -667,7 +667,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21a41d6b956888d49bd606d9620f27e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
-  wallPrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
+  wallPrefab: {fileID: 8684429058332283790, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   waterPrefab: {fileID: 5797252247512694294, guid: f64cb6f8073e23b47a16e281c928211e, type: 3}
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
@@ -688,7 +688,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeGridBehaviour
   useRuntimeGeneration: 1
   mazeFile: {fileID: 0}
