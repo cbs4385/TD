@@ -249,6 +249,7 @@ namespace FaeMaze.Cameras
             {
                 if (!focalPointInitialized)
                 {
+                    Debug.Log("Update() - focal point NOT initialized, calling InitializeFocalPoint()");
                     InitializeFocalPoint();
                 }
 
@@ -400,11 +401,15 @@ namespace FaeMaze.Cameras
             {
                 Vector3 up = GetMazeUpDirection();
                 float yawDelta = turnInput * focalTurnSpeed * Time.deltaTime;
+
+                Debug.Log($"BEFORE rotation: eulerAngles = {focalPointTransform.eulerAngles}, rotation = {focalPointTransform.rotation}");
+
                 focalPointTransform.Rotate(up, yawDelta, Space.World);
 
                 Debug.Log(
-                    $"Focal mode map rotation input ({(turnInput > 0 ? "D/right" : "A/left")}) " +
-                    $"adjusted yaw by {yawDelta:F2} degrees to {focalPointTransform.eulerAngles.y:F2} degrees.");
+                    $"AFTER rotation by {yawDelta:F2} deg around {up}: " +
+                    $"eulerAngles = {focalPointTransform.eulerAngles}, " +
+                    $"rotation = {focalPointTransform.rotation}");
             }
         }
 
@@ -612,6 +617,8 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            Debug.Log($"InitializeFocalPoint() called, focalPointInitialized = {focalPointInitialized}");
+
             if (mazeGridBehaviour == null)
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
@@ -621,6 +628,7 @@ namespace FaeMaze.Cameras
             {
                 GameObject focalPointObj = new GameObject("Focal Point");
                 focalPointTransform = focalPointObj.transform;
+                Debug.Log("Created new Focal Point GameObject");
             }
 
             Vector3 startPosition;
@@ -658,17 +666,20 @@ namespace FaeMaze.Cameras
             else
             {
                 // Wait until the maze is generated or the heart exists so we can place the focal point correctly.
+                Debug.Log("InitializeFocalPoint() returning early - maze not ready");
                 return;
             }
 
+            Debug.Log($"InitializeFocalPoint() setting rotation to {startRotation.eulerAngles}");
             focalPointTransform.SetPositionAndRotation(startPosition, startRotation);
-
+            Debug.Log($"InitializeFocalPoint() AFTER SetPositionAndRotation: eulerAngles = {focalPointTransform.eulerAngles}");
 
             // Add pulsing lime green glow to the focal point
             AddFocalPointGlow();
 
             _focusPoint = startPosition;
             focalPointInitialized = true;
+            Debug.Log($"InitializeFocalPoint() completed, focalPointInitialized = {focalPointInitialized}");
         }
 
         private void AddFocalPointGlow()
