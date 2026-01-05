@@ -709,7 +709,7 @@ namespace FaeMaze.Cameras
             Vector3 offset = -facingDirection.normalized * 3f + Vector3.back * 3f;
 
             Vector3 desiredPosition = focalPointTransform.position + offset;
-            Vector3 worldUp = Vector3.forward;
+            Vector3 worldUp = GetMazeUpDirection();
             transform.position = desiredPosition;
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
 
