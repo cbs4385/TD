@@ -330,7 +330,12 @@ namespace FaeMaze.Cameras
 
             if (Mathf.Abs(yawInput) > 0.001f)
             {
-                _yawDeg += yawInput * orbitSpeed * Time.deltaTime;
+                float yawDelta = yawInput * orbitSpeed * Time.deltaTime;
+                _yawDeg += yawDelta;
+
+                Debug.Log(
+                    $"Keyboard map rotation input ({(yawInput > 0 ? "D/right" : "A/left")}) " +
+                    $"adjusted yaw by {yawDelta:F2} degrees to {_yawDeg:F2} degrees.");
             }
         }
 
