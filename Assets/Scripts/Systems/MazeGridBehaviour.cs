@@ -77,17 +77,6 @@ namespace FaeMaze.Systems
         private Vector2Int heartGridPos;
         private Dictionary<char, Vector2Int> spawnPoints = new Dictionary<char, Vector2Int>();
 
-        private static readonly ForestMazeConfig canonicalConfig = new ForestMazeConfig
-        {
-            width = 30,
-            height = 30,
-            numEntrances = 4,
-            minPathWidth = 1,
-            maxPathWidth = 1,
-            waterCoverage = 0.15f,
-            randomSeed = 0
-        };
-
         private static TileType[,] cachedGeneratedTiles;
         private static char[,] cachedGeneratedSymbols;
         private static string cachedMazeString;
@@ -148,12 +137,6 @@ namespace FaeMaze.Systems
 
             ApplyXYPlaneReflection();
 
-            // Clear static cache to force fresh generation with updated heart placement logic
-            ClearGenerationCache();
-
-            // Enforce canonical runtime configuration so generation runs once with a single, shared setup
-            generatorConfig = canonicalConfig;
-
             // Planar generation should always run procedurally even if a maze file was previously assigned in the scene
             if (usePlanarGenerator)
             {
@@ -206,8 +189,6 @@ namespace FaeMaze.Systems
 
         private void OnValidate()
         {
-            // Keep runtime generation aligned with the single canonical setup
-            generatorConfig = canonicalConfig;
         }
 
         private void InitializeFromFile()
