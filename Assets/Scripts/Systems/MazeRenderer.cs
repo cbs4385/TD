@@ -233,11 +233,6 @@ namespace FaeMaze.Systems
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
             float tileSize = mazeGridBehaviour.TileSize;
 
-            // Center tiles at grid position (GridToWorld gives corner position)
-            // Add half tile size to X and Y to center the tile
-            Vector3 centerOffset = new Vector3(tileSize * 0.5f, tileSize * 0.5f, 0f);
-            worldPos += centerOffset;
-
             // Determine if we should use prefabs
             bool useWallPrefab = symbol == '#' && wallPrefab != null;
             bool useUndergrowthPrefab = symbol == ';' && undergrowthPrefab != null;
@@ -254,9 +249,10 @@ namespace FaeMaze.Systems
             GameObject tileObj = null;
 
             // Calculate rotation for prefabs to match maze coordinate system
-            // Prefabs are designed for Y-up (XZ ground), but maze uses XY ground with Z depth
-            // Rotate 90 degrees around X axis to align Y-up prefabs with XY plane
-            Quaternion prefabRotation = Quaternion.Euler(90f, 0f, 0f);
+            // This game uses -Z as up (not +Y standard)
+            // Prefabs are designed for Y-up, need to rotate so prefab's Y-axis → world's -Z-axis
+            // Rotate -90 degrees around X axis: Y→-Z, Z→+Y
+            Quaternion prefabRotation = Quaternion.Euler(-90f, 0f, 0f);
 
             // Use prefabs if available
             if (useWallPrefab)
