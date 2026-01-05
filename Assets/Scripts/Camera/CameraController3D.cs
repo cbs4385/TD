@@ -788,7 +788,8 @@ namespace FaeMaze.Cameras
                 forward = Vector3.right;
             }
 
-            Vector3 worldUp = Vector3.forward;
+            // Use the actual maze up direction instead of hardcoded Vector3.forward
+            Vector3 worldUp = GetMazeUpDirection();
 
             // Calculate camera position based on viewing angle
             // 0 degrees = level with focal point (horizontal view)
