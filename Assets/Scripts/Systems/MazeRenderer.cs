@@ -246,7 +246,7 @@ namespace FaeMaze.Systems
                 tileObj = Instantiate(wallPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_Wall";
                 tileObj.transform.position = worldPos;
-                tileObj.transform.localScale = Vector3.one * tileSize;
+                tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize, tileSize * 0.65f);
             }
             else if (useUndergrowthPrefab)
             {

@@ -165,6 +165,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   useRuntimeGeneration: 0
   mazeFile: {fileID: 4900000, guid: 9f5e8c3a7d2b6e4f1a9c8d5b3e7a2f6c, type: 3}
+  usePlanarGenerator: 0
   generatorConfig:
     width: 30
     height: 30
@@ -172,6 +173,11 @@ MonoBehaviour:
     minPathWidth: 1
     maxPathWidth: 1
     waterCoverage: 0.15
+    randomSeed: 0
+  planarGeneratorConfig:
+    gridWidth: 60
+    gridHeight: 60
+    growthTurns: 25
     randomSeed: 0
   mazeOrigin: {fileID: 330585546}
   tileSize: 1
@@ -695,7 +701,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21a41d6b956888d49bd606d9620f27e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
-  wallPrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
+  wallPrefab: {fileID: 8684429058332283790, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   waterPrefab: {fileID: 5797252247512694294, guid: f64cb6f8073e23b47a16e281c928211e, type: 3}
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
@@ -720,6 +726,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeGridBehaviour
   useRuntimeGeneration: 0
   mazeFile: {fileID: 4900000, guid: 9f5e8c3a7d2b6e4f1a9c8d5b3e7a2f6c, type: 3}
+  usePlanarGenerator: 0
   generatorConfig:
     width: 30
     height: 30
@@ -727,6 +734,11 @@ MonoBehaviour:
     minPathWidth: 1
     maxPathWidth: 1
     waterCoverage: 0.15
+    randomSeed: 0
+  planarGeneratorConfig:
+    gridWidth: 60
+    gridHeight: 60
+    growthTurns: 25
     randomSeed: 0
   mazeOrigin: {fileID: 330585546}
   tileSize: 1
@@ -980,14 +992,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EnvironmentDecorator
   mazeGridBehaviour: {fileID: 330585547}
-  treePrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
+  treePrefab: {fileID: 8684429058332283790, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
   focalPoint: {fileID: 0}
   zPosition: 0
   zRotationVariance: 5
   backgroundPadding: 20
   decorationParent: {fileID: 0}
   createBlackBackdrop: 1
-  backdropZPosition: 1000
+  backdropZPosition: 0
   transparencyRadius: 3
   transparentAlpha: 0.25
   opaqueAlpha: 1
