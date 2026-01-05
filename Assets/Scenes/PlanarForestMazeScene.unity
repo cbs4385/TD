@@ -454,7 +454,7 @@ MonoBehaviour:
   collisionRadius: 0.5
   defaultFocusPoint: {x: 0, y: 0, z: 0}
   defaultFocusTransform: {fileID: 0}
-  mazeGridBehaviour: {fileID: 0}
+  mazeGridBehaviour: {fileID: 330585547}
 --- !u!1 &820251993
 GameObject:
   m_ObjectHideFlags: 0
