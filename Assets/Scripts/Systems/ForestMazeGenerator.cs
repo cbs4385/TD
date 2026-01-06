@@ -119,6 +119,39 @@ namespace FaeMaze.Systems
     }
 
     /// <summary>
+    /// Configuration for planar organic forest maze generation.
+    /// </summary>
+    [System.Serializable]
+    public struct PlanarForestMazeConfig
+    {
+        [Tooltip("Grid width in tiles")]
+        public int gridWidth;
+
+        [Tooltip("Grid height in tiles")]
+        public int gridHeight;
+
+        [Tooltip("Number of growth turns (more turns = more nodes/clearings)")]
+        public int growthTurns;
+
+        [Tooltip("Random seed for generation")]
+        public int randomSeed;
+
+        /// <summary>
+        /// Creates a default configuration.
+        /// </summary>
+        public static PlanarForestMazeConfig Default()
+        {
+            return new PlanarForestMazeConfig
+            {
+                gridWidth = 60,
+                gridHeight = 60,
+                growthTurns = 25,
+                randomSeed = 0
+            };
+        }
+    }
+
+    /// <summary>
     /// Represents a cell in the coarse maze grid.
     /// </summary>
     internal class MazeCell

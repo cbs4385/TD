@@ -83,19 +83,20 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Center camera on maze
-            float centerX = mazeGrid.Grid.Width / 2f;
-            float centerY = mazeGrid.Grid.Height / 2f;
+            // Center camera on the heart of the maze (for orthographic cameras)
+            // For perspective cameras with CameraController3D, the controller handles positioning
+            if (mainCamera.orthographic)
+            {
+                Vector3 heartWorldPos = mazeGrid.GridToWorld(mazeGrid.HeartGridPos.x, mazeGrid.HeartGridPos.y);
+                Vector3 cameraPos = mainCamera.transform.position;
+                cameraPos.x = heartWorldPos.x;
+                cameraPos.y = heartWorldPos.y;
+                mainCamera.transform.position = cameraPos;
 
-            Vector3 cameraPos = mainCamera.transform.position;
-            cameraPos.x = centerX;
-            cameraPos.y = centerY;
-            mainCamera.transform.position = cameraPos;
-
-            // Set orthographic size to show entire maze
-            float maxDimension = Mathf.Max(mazeGrid.Grid.Width, mazeGrid.Grid.Height);
-            mainCamera.orthographicSize = maxDimension * 0.6f; // 0.6 gives some padding
-
+                // Set orthographic size to show entire maze
+                float maxDimension = Mathf.Max(mazeGrid.Grid.Width, mazeGrid.Grid.Height);
+                mainCamera.orthographicSize = maxDimension * 0.6f; // 0.6 gives some padding
+            }
         }
 
         private void Start()

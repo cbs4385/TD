@@ -22,7 +22,7 @@ namespace FaeMaze.UI
             GameController.ResetPersistentGameState();
             WaveManager.ResetPersistentWaveState();
 
-            SceneManager.LoadScene("FaeMazeScene");
+            SceneManager.LoadScene("PlanarForestMazeScene");
         }
 
         public void LoadOptionsScene()

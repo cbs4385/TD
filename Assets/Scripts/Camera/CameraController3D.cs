@@ -249,6 +249,7 @@ namespace FaeMaze.Cameras
             {
                 if (!focalPointInitialized)
                 {
+                    Debug.Log("Update() - focal point NOT initialized, calling InitializeFocalPoint()");
                     InitializeFocalPoint();
                 }
 
@@ -330,13 +331,25 @@ namespace FaeMaze.Cameras
 
             if (Mathf.Abs(yawInput) > 0.001f)
             {
-                _yawDeg += yawInput * orbitSpeed * Time.deltaTime;
+                float yawDelta = yawInput * orbitSpeed * Time.deltaTime;
+                _yawDeg += yawDelta;
+
+                Debug.Log(
+                    $"Keyboard map rotation input ({(yawInput > 0 ? "D/right" : "A/left")}) " +
+                    $"adjusted yaw by {yawDelta:F2} degrees to {_yawDeg:F2} degrees.");
             }
         }
 
         private void HandleFocalPointInput()
         {
             if (!useFocalPointMode || focalPointTransform == null)
+            {
+                return;
+            }
+
+            // Don't allow user input until focal point is fully initialized
+            // This prevents user rotation from being overwritten by late initialization
+            if (!focalPointInitialized)
             {
                 return;
             }
@@ -371,16 +384,11 @@ namespace FaeMaze.Cameras
 
             if (Mathf.Abs(moveInput) > 0.001f)
             {
-                Vector3 forward = focalPointTransform.forward;
-                forward.z = 0f;
-                if (forward.sqrMagnitude > 0.0001f)
-                {
-                    forward.Normalize();
-                }
-                else
-                {
-                    forward = Vector3.right;
-                }
+                // Calculate forward direction from focal point's yaw angle (rotation around Z axis)
+                // This ensures movement is always in the direction the focal point is "facing"
+                float yawAngle = focalPointTransform.eulerAngles.z;
+                float yawRad = yawAngle * Mathf.Deg2Rad;
+                Vector3 forward = new Vector3(Mathf.Cos(yawRad), Mathf.Sin(yawRad), 0f);
 
                 focalPointTransform.position += forward * moveInput * focalMoveSpeed * Time.deltaTime;
                 Vector3 planarPosition = focalPointTransform.position;
@@ -394,7 +402,16 @@ namespace FaeMaze.Cameras
             if (Mathf.Abs(turnInput) > 0.001f)
             {
                 Vector3 up = GetMazeUpDirection();
-                focalPointTransform.Rotate(up, turnInput * focalTurnSpeed * Time.deltaTime, Space.World);
+                float yawDelta = turnInput * focalTurnSpeed * Time.deltaTime;
+
+                Debug.Log($"BEFORE rotation: eulerAngles = {focalPointTransform.eulerAngles}, rotation = {focalPointTransform.rotation}");
+
+                focalPointTransform.Rotate(up, yawDelta, Space.World);
+
+                Debug.Log(
+                    $"AFTER rotation by {yawDelta:F2} deg around {up}: " +
+                    $"eulerAngles = {focalPointTransform.eulerAngles}, " +
+                    $"rotation = {focalPointTransform.rotation}");
             }
         }
 
@@ -602,37 +619,76 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            Debug.Log($"InitializeFocalPoint() called, focalPointInitialized = {focalPointInitialized}");
+
+            if (mazeGridBehaviour == null)
+            {
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            }
+
             if (focalPointTransform == null)
             {
                 GameObject focalPointObj = new GameObject("Focal Point");
                 focalPointTransform = focalPointObj.transform;
+                Debug.Log("Created new Focal Point GameObject");
             }
 
-            if (GameController.Instance == null || GameController.Instance.Heart == null)
+            Vector3 startPosition;
+            Quaternion startRotation;
+
+            bool heartReady = GameController.Instance != null && GameController.Instance.Heart != null;
+
+            if (heartReady)
             {
-                // Wait until the heart exists so we can place the focal point correctly.
+                startPosition = GameController.Instance.Heart.transform.position;
+                startPosition.z = 0f;
+
+                Vector3 facingDirection = GetPathDirectionToHeart();
+                Debug.Log($"GetPathDirectionToHeart() returned {facingDirection}");
+
+                if (facingDirection.sqrMagnitude < 0.0001f)
+                {
+                    Debug.Log("facingDirection was zero, using Vector3.up fallback");
+                    facingDirection = Vector3.up;
+                }
+
+                Vector3 mazeUp = GetMazeUpDirection();
+                Debug.Log($"Creating LookRotation with facingDirection={facingDirection}, mazeUp={mazeUp}");
+
+                startRotation = Quaternion.LookRotation(facingDirection, mazeUp);
+                Debug.Log($"LookRotation result: {startRotation}, eulerAngles: {startRotation.eulerAngles}");
+            }
+            else if (mazeGridBehaviour != null && mazeGridBehaviour.Grid != null)
+            {
+                Vector2Int heartGrid = mazeGridBehaviour.HeartGridPos;
+                startPosition = mazeGridBehaviour.GridToWorld(heartGrid.x, heartGrid.y);
+                startPosition.z = 0f;
+
+                Vector3 mazeForward = mazeGridBehaviour.MazeUpDirection;
+                if (mazeForward.sqrMagnitude < 0.0001f)
+                {
+                    mazeForward = Vector3.up;
+                }
+
+                startRotation = Quaternion.LookRotation(mazeForward, GetMazeUpDirection());
+            }
+            else
+            {
+                // Wait until the maze is generated or the heart exists so we can place the focal point correctly.
+                Debug.Log("InitializeFocalPoint() returning early - maze not ready");
                 return;
             }
 
-            Vector3 startPosition = GameController.Instance.Heart.transform.position;
-            startPosition.z = 0f;
-
-            Vector3 facingDirection = GetPathDirectionToHeart();
-            if (facingDirection.sqrMagnitude < 0.0001f)
-            {
-                facingDirection = Vector3.up;
-            }
-
-            focalPointTransform.SetPositionAndRotation(
-                startPosition,
-                Quaternion.LookRotation(facingDirection, GetMazeUpDirection()));
-
+            Debug.Log($"InitializeFocalPoint() setting rotation to {startRotation.eulerAngles}");
+            focalPointTransform.SetPositionAndRotation(startPosition, startRotation);
+            Debug.Log($"InitializeFocalPoint() AFTER SetPositionAndRotation: eulerAngles = {focalPointTransform.eulerAngles}");
 
             // Add pulsing lime green glow to the focal point
             AddFocalPointGlow();
 
             _focusPoint = startPosition;
             focalPointInitialized = true;
+            Debug.Log($"InitializeFocalPoint() completed, focalPointInitialized = {focalPointInitialized}");
         }
 
         private void AddFocalPointGlow()
@@ -673,7 +729,7 @@ namespace FaeMaze.Cameras
             Vector3 offset = -facingDirection.normalized * 3f + Vector3.back * 3f;
 
             Vector3 desiredPosition = focalPointTransform.position + offset;
-            Vector3 worldUp = Vector3.forward;
+            Vector3 worldUp = GetMazeUpDirection();
             transform.position = desiredPosition;
             transform.rotation = Quaternion.LookRotation(focalPointTransform.position - desiredPosition, worldUp);
 
@@ -741,18 +797,20 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            Vector3 forward = focalPointTransform.forward;
-            forward.z = 0f;
-            if (forward.sqrMagnitude > 0.0001f)
-            {
-                forward.Normalize();
-            }
-            else
-            {
-                forward = Vector3.right;
-            }
+            // Get the focal point's rotation around the Z axis (maze up axis)
+            // This represents which direction the focal point is "facing" in the XY plane
+            float yawAngle = focalPointTransform.eulerAngles.z;
 
-            Vector3 worldUp = Vector3.forward;
+            // Convert yaw angle to a direction vector in the XY plane
+            // In Unity, positive Z rotation goes counter-clockwise when viewed from above
+            // We want the direction the focal point is facing
+            float yawRad = yawAngle * Mathf.Deg2Rad;
+            Vector3 forward = new Vector3(Mathf.Cos(yawRad), Mathf.Sin(yawRad), 0f);
+
+            Debug.Log($"Focal point yaw: {yawAngle:F2}°, forward direction in XY: {forward}");
+
+            // Use the actual maze up direction instead of hardcoded Vector3.forward
+            Vector3 worldUp = GetMazeUpDirection();
 
             // Calculate camera position based on viewing angle
             // 0 degrees = level with focal point (horizontal view)
@@ -806,17 +864,8 @@ namespace FaeMaze.Cameras
                 return Vector3.forward;
             }
 
-            // Always prefer the positive Z-facing up direction so the camera isn't rolled 180°
-            // when the maze is mirrored through the XY plane.
-            if (Vector3.Dot(mazeUp, Vector3.forward) < 0f)
-            {
-                mazeUp = -mazeUp;
-                if (!loggedMazeUpFlip)
-                {
-                    loggedMazeUpFlip = true;
-                }
-            }
-
+            // Return the maze up direction as-is for this game's -Z up coordinate system
+            // Don't flip it - trust what MazeGridBehaviour tells us
             return mazeUp.normalized;
         }
 

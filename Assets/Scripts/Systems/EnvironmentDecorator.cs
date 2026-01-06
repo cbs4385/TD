@@ -230,19 +230,33 @@ namespace FaeMaze.Systems
                     if (!isInsideMaze)
                     {
                         Vector3 worldPos = mazeGridBehaviour.GridToWorld(x, y);
+
+                        // Add random jitter to match MazeRenderer wall prefabs
+                        float jitterX = Random.Range(-0.02f, 0.02f);
+                        float jitterY = Random.Range(-0.02f, 0.02f);
+                        worldPos += new Vector3(jitterX, jitterY, 0f);
+
                         worldPos.z = zPosition;
 
-                        // Rotate +90 on X axis so model up faces world -Z
-                        // Add 180 degree Y rotation to flip direction
-                        // Add small Z rotation variance (+/- degrees)
-                        float zRotation = Random.Range(-zRotationVariance, zRotationVariance);
-                        Quaternion rotation = Quaternion.Euler(90f, 180f, zRotation);
+                        // Use same rotation as MazeRenderer for consistency
+                        // This game uses -Z as up (not +Y standard)
+                        // Prefabs are designed for Y-up, need to rotate so prefab's Y-axis → world's -Z-axis
+                        // Rotate -90 degrees around X axis: Y→-Z, Z→+Y
+                        Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
 
                         GameObject decoration = Instantiate(treePrefab, worldPos, rotation, decorationParent);
                         decoration.name = $"Tree_{x}_{y}";
 
-                        // Scale to 0.90 on world Z axis (model's local Y after rotation)
-                        decoration.transform.localScale = new Vector3(1f, 0.90f, 1f);
+                        // Use same scale as MazeRenderer for consistency
+                        float tileSize = mazeGridBehaviour.TileSize;
+                        decoration.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
+
+                        bool isBorder = (x == -1 || x == mazeWidth || y == -1 || y == mazeHeight);
+                        LODGroup lodGroup = decoration.GetComponentInChildren<LODGroup>();
+                        if (isBorder && lodGroup != null)
+                        {
+                            lodGroup.ForceLOD(0);
+                        }
 
                         // Setup LOD if enabled
                         if (enableLOD)

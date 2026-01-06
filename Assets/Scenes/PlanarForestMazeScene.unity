@@ -119,6 +119,139 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &330585545
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 330585546}
+  m_Layer: 0
+  m_Name: MazeOrigin
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &330585546
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 330585545}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 963194228}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &396929188
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 396929189}
+  - component: {fileID: 396929192}
+  - component: {fileID: 396929191}
+  - component: {fileID: 396929190}
+  m_Layer: 5
+  m_Name: Canvas
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &396929189
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 396929188}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0, y: 0, z: 0}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 963194228}
+  m_Father: {fileID: 1534669903}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0, y: 0}
+--- !u!114 &396929190
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 396929188}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GraphicRaycaster
+  m_IgnoreReversedGraphics: 1
+  m_BlockingObjects: 0
+  m_BlockingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+--- !u!114 &396929191
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 396929188}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
+  m_UiScaleMode: 0
+  m_ReferencePixelsPerUnit: 100
+  m_ScaleFactor: 1
+  m_ReferenceResolution: {x: 800, y: 600}
+  m_ScreenMatchMode: 0
+  m_MatchWidthOrHeight: 0
+  m_PhysicalUnit: 3
+  m_FallbackScreenDPI: 96
+  m_DefaultSpriteDPI: 96
+  m_DynamicPixelsPerUnit: 1
+  m_PresetInfoIsWorld: 0
+--- !u!223 &396929192
+Canvas:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 396929188}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_RenderMode: 0
+  m_Camera: {fileID: 0}
+  m_PlaneDistance: 100
+  m_PixelPerfect: 0
+  m_ReceivesEvents: 1
+  m_OverrideSorting: 0
+  m_OverridePixelPerfect: 0
+  m_SortingBucketNormalizedSize: 0
+  m_VertexColorAlwaysGammaSpace: 0
+  m_AdditionalShaderChannelsFlag: 0
+  m_UpdateRectTransformForStandalone: 0
+  m_SortingLayerID: 0
+  m_SortingOrder: 0
+  m_TargetDisplay: 0
 --- !u!1 &534669902
 GameObject:
   m_ObjectHideFlags: 0
@@ -293,8 +426,8 @@ MonoBehaviour:
   collisionRadius: 0.5
   defaultFocusPoint: {x: 0, y: 0, z: 0}
   defaultFocusTransform: {fileID: 0}
-  mazeGridBehaviour: {fileID: 0}
---- !u!1 &814000385
+  mazeGridBehaviour: {fileID: 963194231}
+--- !u!1 &820251993
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -302,9 +435,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 814000388}
-  - component: {fileID: 814000387}
-  - component: {fileID: 814000386}
+  - component: {fileID: 820251996}
+  - component: {fileID: 820251995}
+  - component: {fileID: 820251994}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -312,13 +445,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &814000386
+--- !u!114 &820251994
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 814000385}
+  m_GameObject: {fileID: 820251993}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
@@ -341,17 +474,17 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
---- !u!108 &814000387
+--- !u!108 &820251995
 Light:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 814000385}
+  m_GameObject: {fileID: 820251993}
   m_Enabled: 1
   serializedVersion: 11
   m_Type: 1
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.8, g: 0.8, b: 0.8, a: 1}
   m_Intensity: 0.25
   m_Range: 10
   m_SpotAngle: 30
@@ -406,22 +539,22 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
---- !u!4 &814000388
+--- !u!4 &820251996
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 814000385}
+  m_GameObject: {fileID: 820251993}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 15, y: 15, z: -10}
+  m_LocalPosition: {x: 0, y: 0, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &881836307
+--- !u!1 &879032712
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -429,9 +562,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 881836310}
-  - component: {fileID: 881836309}
-  - component: {fileID: 881836308}
+  - component: {fileID: 879032714}
+  - component: {fileID: 879032713}
   m_Layer: 0
   m_Name: PostProcessVolume
   m_TagString: Untagged
@@ -439,25 +571,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &881836308
+--- !u!114 &879032713
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 881836307}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dcf6d5de360269546a2a94e58c226ae7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Cameras.CameraDepthOfFieldController
---- !u!114 &881836309
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 881836307}
+  m_GameObject: {fileID: 879032712}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
@@ -468,75 +588,16 @@ MonoBehaviour:
   blendDistance: 0
   weight: 1
   sharedProfile: {fileID: 11400000, guid: 4747d4426edf0ca4c88a72ca861ec499, type: 2}
---- !u!4 &881836310
+--- !u!4 &879032714
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 881836307}
+  m_GameObject: {fileID: 879032712}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 482.1652, y: 303.70502, z: -383.6443}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &930738918
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 930738920}
-  - component: {fileID: 930738919}
-  m_Layer: 0
-  m_Name: Minimap
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &930738919
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 930738918}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8e2cb2eac205b0443a94ee7410ee0f4a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.UI.Minimap
-  focalPoint: {fileID: 0}
-  mazeGridBehaviour: {fileID: 963194231}
-  sizePercent: 0.2
-  viewRadiusTiles: 15
-  mapCorner: 1
-  edgePadding: 20
-  backgroundColor: {r: 0.1, g: 0.1, b: 0.1, a: 0.8}
-  borderColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
-  crosshairColor: {r: 1, g: 1, b: 1, a: 1}
-  heartColor: {r: 1, g: 0.2, b: 0.2, a: 1}
-  visitorColor: {r: 0.3, g: 1, b: 0.3, a: 1}
-  pathColor: {r: 0.4, g: 0.4, b: 0.4, a: 0.5}
-  heartDotSize: 8
-  visitorDotSize: 4
-  crosshairSize: 10
---- !u!4 &930738920
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 930738918}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -573,8 +634,9 @@ Transform:
   m_LocalPosition: {x: -547.5, y: -283, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1173594352}
+  m_Children:
+  - {fileID: 330585546}
+  m_Father: {fileID: 396929189}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &963194229
 MonoBehaviour:
@@ -608,10 +670,11 @@ MonoBehaviour:
   wallPrefab: {fileID: 8684429058332283790, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   waterPrefab: {fileID: 5797252247512694294, guid: f64cb6f8073e23b47a16e281c928211e, type: 3}
+  nodeHazardPrefab: {fileID: 6000000001, guid: f9e8d7c6b5a4e3d2c1b0a9f8e7d6c5b4, type: 3}
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
-  wallColor: {r: 0, g: 0, b: 0, a: 1}
-  undergrowthColor: {r: 0.65, g: 0.75, b: 0.65, a: 1}
-  waterColor: {r: 0.35, g: 0.55, b: 0.75, a: 1}
+  wallColor: {r: 1, g: 1, b: 1, a: 1}
+  undergrowthColor: {r: 0.5, g: 0, b: 0.5, a: 1}
+  waterColor: {r: 1, g: 0, b: 1, a: 1}
   heartColor: {r: 0.9, g: 0.35, b: 0.35, a: 1}
   tilesParent: {fileID: 0}
   enableMeshBatching: 1
@@ -630,7 +693,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeGridBehaviour
   useRuntimeGeneration: 1
   mazeFile: {fileID: 0}
-  usePlanarGenerator: 0
+  usePlanarGenerator: 1
   generatorConfig:
     width: 30
     height: 30
@@ -644,113 +707,11 @@ MonoBehaviour:
     gridHeight: 60
     growthTurns: 25
     randomSeed: 0
-  mazeOrigin: {fileID: 963194228}
+  mazeOrigin: {fileID: 330585546}
   tileSize: 1
   reflectThroughXYPlane: 1
   drawGridGizmos: 1
   drawAttractionHeatmap: 1
---- !u!1 &1173594351
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1173594352}
-  - component: {fileID: 1173594355}
-  - component: {fileID: 1173594354}
-  - component: {fileID: 1173594353}
-  m_Layer: 0
-  m_Name: Canvas
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &1173594352
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1173594351}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0, y: 0, z: 0}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 963194228}
-  m_Father: {fileID: 1534669903}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
-  m_Pivot: {x: 0, y: 0}
---- !u!114 &1173594353
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1173594351}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GraphicRaycaster
-  m_IgnoreReversedGraphics: 1
-  m_BlockingObjects: 0
-  m_BlockingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
---- !u!114 &1173594354
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1173594351}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
-  m_UiScaleMode: 0
-  m_ReferencePixelsPerUnit: 100
-  m_ScaleFactor: 1
-  m_ReferenceResolution: {x: 800, y: 600}
-  m_ScreenMatchMode: 0
-  m_MatchWidthOrHeight: 0
-  m_PhysicalUnit: 3
-  m_FallbackScreenDPI: 96
-  m_DefaultSpriteDPI: 96
-  m_DynamicPixelsPerUnit: 1
-  m_PresetInfoIsWorld: 0
---- !u!223 &1173594355
-Canvas:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1173594351}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_RenderMode: 0
-  m_Camera: {fileID: 0}
-  m_PlaneDistance: 100
-  m_PixelPerfect: 0
-  m_ReceivesEvents: 1
-  m_OverrideSorting: 0
-  m_OverridePixelPerfect: 0
-  m_SortingBucketNormalizedSize: 0
-  m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
-  m_UpdateRectTransformForStandalone: 0
-  m_SortingLayerID: 0
-  m_SortingOrder: 0
-  m_TargetDisplay: 0
 --- !u!1 &1408523520
 GameObject:
   m_ObjectHideFlags: 0
@@ -799,7 +760,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a9d3f1e2b4c8d5e9a1f6c3b7e2d5a8b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mazeOrigin: {fileID: 963194228}
+  mazeOrigin: {fileID: 330585546}
   entrance: {fileID: 0}
   heart: {fileID: 0}
   uiController: {fileID: 2096385509}
@@ -816,7 +777,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3f8c2e9a7d1b5e4a6c8f2d9b5e7a3c6d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  visitorPrefab: {fileID: 0}
+  visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
   entrance: {fileID: 0}
   heart: {fileID: 0}
   spawnOffset: {x: 0, y: 0, z: 0}
@@ -861,7 +822,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mazeGridBehaviour: {fileID: 0}
+  mazeGridBehaviour: {fileID: 963194231}
   heartPowerPanel: {fileID: 0}
   heartPowerUI: {fileID: 0}
   placeableItems:
@@ -913,9 +874,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1534669903}
+  - component: {fileID: 1534669904}
   - component: {fileID: 1534669905}
-  - component: {fileID: 1534669907}
-  - component: {fileID: 1534669908}
+  - component: {fileID: 1534669906}
   m_Layer: 0
   m_Name: GameRoot
   m_TagString: Untagged
@@ -936,31 +897,12 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1173594352}
+  - {fileID: 396929189}
   - {fileID: 1408523521}
   - {fileID: 2096385508}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1534669905
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1534669902}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ccf7bafc4acf9a64d91d201f9e0c0f31, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EssenceBlurController
-  globalVolume: {fileID: 0}
-  gameController: {fileID: 0}
-  essenceDecayRate: 1
-  enableEssenceDecay: 1
-  maximizeBlurIntensity: 1
-  maximizeBlurSamples: 1
-  debugLog: 0
---- !u!114 &1534669907
+--- !u!114 &1534669904
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -985,7 +927,26 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 903e134c3576fa74c87c73f381e568db, type: 2}
   debugLog: 1
   autoCreateUI: 1
---- !u!114 &1534669908
+--- !u!114 &1534669905
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1534669902}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccf7bafc4acf9a64d91d201f9e0c0f31, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EssenceBlurController
+  globalVolume: {fileID: 0}
+  gameController: {fileID: 0}
+  essenceDecayRate: 1
+  enableEssenceDecay: 1
+  maximizeBlurIntensity: 1
+  maximizeBlurSamples: 1
+  debugLog: 0
+--- !u!114 &1534669906
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -998,7 +959,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EnvironmentDecorator
   mazeGridBehaviour: {fileID: 963194231}
-  treePrefab: {fileID: 8684429058332283790, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
+  treePrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
   focalPoint: {fileID: 0}
   zPosition: 0
   zRotationVariance: 5
@@ -1010,6 +971,65 @@ MonoBehaviour:
   transparentAlpha: 0.25
   opaqueAlpha: 1
   transitionSmoothness: 0.5
+--- !u!1 &1644971208
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1644971210}
+  - component: {fileID: 1644971209}
+  m_Layer: 0
+  m_Name: Minimap
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1644971209
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1644971208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e2cb2eac205b0443a94ee7410ee0f4a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.UI.Minimap
+  focalPoint: {fileID: 0}
+  mazeGridBehaviour: {fileID: 963194231}
+  sizePercent: 0.2
+  viewRadiusTiles: 15
+  mapCorner: 1
+  edgePadding: 20
+  backgroundColor: {r: 0.1, g: 0.1, b: 0.1, a: 0.8}
+  borderColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  crosshairColor: {r: 1, g: 1, b: 1, a: 1}
+  heartColor: {r: 1, g: 0.2, b: 0.2, a: 1}
+  visitorColor: {r: 0.3, g: 1, b: 0.3, a: 1}
+  pathColor: {r: 0.4, g: 0.4, b: 0.4, a: 0.5}
+  heartDotSize: 8
+  visitorDotSize: 4
+  crosshairSize: 10
+--- !u!4 &1644971210
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1644971208}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1800000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -1406,80 +1426,6 @@ MonoBehaviour:
   m_PointerBehavior: 0
   m_CursorLockBehavior: 0
   m_ScrollDeltaPerTick: 6
---- !u!1 &9000000000
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 9000000001}
-  - component: {fileID: 9000000002}
-  m_Layer: 0
-  m_Name: HazardCoordinator
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &9000000001
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9000000000}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &9000000002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ccaf4e48914dc7043b290e1a2ce2d292, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  faeLanternConfig:
-    prefab: {fileID: 6000000000, guid: 8f6d3e9a2c1b5d7e4a9f8c2b6e3a7d5c, type: 3}
-    baseCount: 2
-    scalingPerWave: 0.3
-    maxCount: 8
-    minDistanceFromEntrance: 6
-    minDistanceFromHeart: 6
-    preferWaterProximity: 0
-    enabled: 1
-  fairyRingConfig:
-    prefab: {fileID: 7000000000, guid: fbfd5fe94e907804aa601e448f10229e, type: 3}
-    baseCount: 1
-    scalingPerWave: 0.4
-    maxCount: 6
-    minDistanceFromEntrance: 5
-    minDistanceFromHeart: 5
-    preferWaterProximity: 0
-    enabled: 1
-  pukaHazardConfig:
-    prefab: {fileID: 6000000001, guid: f9e8d7c6b5a4e3d2c1b0a9f8e7d6c5b4, type: 3}
-    baseCount: 1
-    scalingPerWave: 0.2
-    maxCount: 4
-    minDistanceFromEntrance: 7
-    minDistanceFromHeart: 7
-    preferWaterProximity: 1
-    enabled: 1
-  autoPlaceOnStart: 1
-  minHazardSpacing: 2
-  randomSeed: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1487,7 +1433,6 @@ SceneRoots:
   - {fileID: 534669905}
   - {fileID: 1534669903}
   - {fileID: 4000000001}
-  - {fileID: 9000000001}
-  - {fileID: 881836310}
-  - {fileID: 814000388}
-  - {fileID: 930738920}
+  - {fileID: 879032714}
+  - {fileID: 820251996}
+  - {fileID: 1644971210}

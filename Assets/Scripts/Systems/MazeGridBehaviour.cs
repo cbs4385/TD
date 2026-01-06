@@ -33,8 +33,16 @@ namespace FaeMaze.Systems
 
         [Header("Runtime Generation")]
         [SerializeField]
-        [Tooltip("Configuration for runtime maze generation (used when useRuntimeGeneration is true)")]
+        [Tooltip("Use planar organic generator instead of Kruskal-based generator")]
+        private bool usePlanarGenerator = false;
+
+        [SerializeField]
+        [Tooltip("Configuration for runtime maze generation (used when useRuntimeGeneration is true and usePlanarGenerator is false)")]
         private ForestMazeConfig generatorConfig = ForestMazeConfig.Default();
+
+        [SerializeField]
+        [Tooltip("Configuration for planar organic maze generation (used when useRuntimeGeneration is true and usePlanarGenerator is true)")]
+        private PlanarForestMazeConfig planarGeneratorConfig = PlanarForestMazeConfig.Default();
 
         [Header("References")]
         [SerializeField]
@@ -68,17 +76,6 @@ namespace FaeMaze.Systems
         private Vector2Int entranceGridPos;
         private Vector2Int heartGridPos;
         private Dictionary<char, Vector2Int> spawnPoints = new Dictionary<char, Vector2Int>();
-
-        private static readonly ForestMazeConfig canonicalConfig = new ForestMazeConfig
-        {
-            width = 30,
-            height = 30,
-            numEntrances = 4,
-            minPathWidth = 1,
-            maxPathWidth = 1,
-            waterCoverage = 0.15f,
-            randomSeed = 0
-        };
 
         private static TileType[,] cachedGeneratedTiles;
         private static char[,] cachedGeneratedSymbols;
@@ -123,6 +120,9 @@ namespace FaeMaze.Systems
             }
         }
 
+        /// <summary>Gets the transform acting as the maze origin for world-space conversions.</summary>
+        public Transform MazeOrigin => mazeOrigin;
+
         #endregion
 
         #region Unity Lifecycle
@@ -137,11 +137,11 @@ namespace FaeMaze.Systems
 
             ApplyXYPlaneReflection();
 
-            // Clear static cache to force fresh generation with updated heart placement logic
-            ClearGenerationCache();
-
-            // Enforce canonical runtime configuration so generation runs once with a single, shared setup
-            generatorConfig = canonicalConfig;
+            // Planar generation should always run procedurally even if a maze file was previously assigned in the scene
+            if (usePlanarGenerator)
+            {
+                useRuntimeGeneration = true;
+            }
 
             // Initialize based on mode
             if (useRuntimeGeneration)
@@ -189,8 +189,6 @@ namespace FaeMaze.Systems
 
         private void OnValidate()
         {
-            // Keep runtime generation aligned with the single canonical setup
-            generatorConfig = canonicalConfig;
         }
 
         private void InitializeFromFile()
@@ -244,14 +242,9 @@ namespace FaeMaze.Systems
                             ApplyTileFromChar(x, y, c);
                             break;
 
-                        case 'E':
-                            // Entrance - walkable and mark position (backwards compatibility)
-                            ApplyTileFromChar(x, y, '.');
-                            if (!foundEntrance)
-                            {
-                                entranceGridPos = new Vector2Int(x, y);
-                                foundEntrance = true;
-                            }
+                        case 'N':
+                            // Node hazard - walkable clearing center with hazard prop
+                            ApplyTileFromChar(x, y, c);
                             break;
 
                         case 'H':
@@ -261,21 +254,29 @@ namespace FaeMaze.Systems
                             foundHeart = true;
                             break;
 
-                        case 'A':
-                        case 'B':
-                        case 'C':
-                        case 'D':
-                            // Spawn markers - walkable and store position
-                            ApplyTileFromChar(x, y, '.');
-                            if (!spawnPoints.ContainsKey(c))
-                            {
-                                spawnPoints[c] = new Vector2Int(x, y);
-                            }
-                            break;
-
                         default:
-                            // Unknown character - treat as wall and log warning
-                            ApplyTileFromChar(x, y, '#');
+                            // Check if it's a spawn point marker (uppercase letter, excluding H and N)
+                            if (char.IsUpper(c) && c != 'H' && c != 'N')
+                            {
+                                // Spawn marker - walkable and store position
+                                ApplyTileFromChar(x, y, '.');
+                                if (!spawnPoints.ContainsKey(c))
+                                {
+                                    spawnPoints[c] = new Vector2Int(x, y);
+
+                                    // First spawn point also becomes the entrance
+                                    if (!foundEntrance)
+                                    {
+                                        entranceGridPos = new Vector2Int(x, y);
+                                        foundEntrance = true;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Unknown character - treat as wall
+                                ApplyTileFromChar(x, y, '#');
+                            }
                             break;
                     }
                 }
@@ -500,8 +501,12 @@ namespace FaeMaze.Systems
                     return TileType.Water;
                 case '.':
                 case 'H':
+                case 'N': // Node hazard - walkable clearing center
                     return TileType.Path;
                 default:
+                    // Spawn points (uppercase letters except H and N) are walkable
+                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
+                        return TileType.Path;
                     return TileType.TreeBramble;
             }
         }
@@ -522,34 +527,56 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Initializes the maze grid using ForestMazeGenerator for runtime procedural generation.
+        /// Initializes the maze grid using ForestMazeGenerator or PlanarForestMazeGenerator for runtime procedural generation.
         /// </summary>
         private void InitializeFromGenerator()
         {
-
             spawnPoints.Clear();
 
-            if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
-            {
-                string mazeString = MazeStringGenerator.GenerateMaze(
-                    generatorConfig.width,
-                    generatorConfig.height,
-                    generatorConfig.numEntrances,
-                    generatorConfig.randomSeed);
+            string mazeString;
+            TileType[,] tiles;
+            char[,] symbols;
 
-                cachedGeneratedTiles = ConvertMazeStringToTiles(mazeString, out cachedGeneratedSymbols, out cachedEntranceEdges);
-                cachedConfig = generatorConfig;
+            if (usePlanarGenerator)
+            {
+                // Use planar organic generator
+                mazeString = ForestMaze.PlanarForestMazeGenerator.GenerateMaze(
+                    planarGeneratorConfig.gridWidth,
+                    planarGeneratorConfig.gridHeight,
+                    planarGeneratorConfig.growthTurns,
+                    planarGeneratorConfig.randomSeed);
+
+                // Convert string to tiles
+                tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
+                cachedGeneratedTiles = tiles;
+                cachedGeneratedSymbols = symbols;
                 cachedMazeString = mazeString;
                 hasCachedGeneration = true;
-
-                
             }
             else
             {
-            }
+                // Use traditional Kruskal-based generator
+                if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
+                {
+                    mazeString = MazeStringGenerator.GenerateMaze(
+                        generatorConfig.width,
+                        generatorConfig.height,
+                        generatorConfig.numEntrances,
+                        generatorConfig.randomSeed);
 
-            TileType[,] tiles = cachedGeneratedTiles;
-            char[,] symbols = cachedGeneratedSymbols;
+                    tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
+                    cachedGeneratedTiles = tiles;
+                    cachedGeneratedSymbols = symbols;
+                    cachedConfig = generatorConfig;
+                    cachedMazeString = mazeString;
+                    hasCachedGeneration = true;
+                }
+                else
+                {
+                    tiles = cachedGeneratedTiles;
+                    symbols = cachedGeneratedSymbols;
+                }
+            }
 
             // Get dimensions from generated maze
             width = tiles.GetLength(0);

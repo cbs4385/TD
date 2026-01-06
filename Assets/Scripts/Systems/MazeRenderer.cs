@@ -25,6 +25,10 @@ namespace FaeMaze.Systems
         [Tooltip("Prefab/model for water tiles")]
         private GameObject waterPrefab;
 
+        [SerializeField]
+        [Tooltip("Prefab/model for node hazards (placed at clearing centers)")]
+        private GameObject nodeHazardPrefab;
+
         [Header("Color Settings")]
         [SerializeField]
         [Tooltip("Color for walkable path tiles")]
@@ -155,6 +159,12 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            Transform mazeOrigin = mazeGridBehaviour != null ? mazeGridBehaviour.MazeOrigin : null;
+            if (mazeOrigin == null)
+            {
+                mazeOrigin = transform;
+            }
+
             // Log prefab status for debugging
             if (wallPrefab == null)
             {
@@ -175,8 +185,10 @@ namespace FaeMaze.Systems
             if (tilesParent == null)
             {
                 tilesContainer = new GameObject("MazeTiles");
-                tilesContainer.transform.SetParent(transform.parent); // Set parent to same level as MazeOrigin
-                tilesContainer.transform.position = Vector3.zero; // Keep at origin - GridToWorld handles offset
+                tilesContainer.transform.SetParent(mazeOrigin, worldPositionStays: false);
+                tilesContainer.transform.localPosition = Vector3.zero;
+                tilesContainer.transform.localRotation = Quaternion.identity;
+                tilesContainer.transform.localScale = Vector3.one;
                 tilesParent = tilesContainer.transform;
             }
 
@@ -229,6 +241,7 @@ namespace FaeMaze.Systems
             bool useWallPrefab = symbol == '#' && wallPrefab != null;
             bool useUndergrowthPrefab = symbol == ';' && undergrowthPrefab != null;
             bool useWaterPrefab = symbol == '~' && waterPrefab != null;
+            bool useNodeHazardPrefab = symbol == 'N' && nodeHazardPrefab != null;
 
             // Add random jitter for wall, undergrowth, and water tiles
             if (symbol == '#' || symbol == ';' || symbol == '~')
@@ -240,19 +253,37 @@ namespace FaeMaze.Systems
 
             GameObject tileObj = null;
 
+            // Calculate rotation for prefabs to match maze coordinate system
+            // This game uses -Z as up (not +Y standard)
+            // Prefabs are designed for Y-up, need to rotate so prefab's Y-axis → world's -Z-axis
+            // Rotate -90 degrees around X axis: Y→-Z, Z→+Y
+            Quaternion prefabRotation = Quaternion.Euler(-90f, 0f, 0f);
+
             // Use prefabs if available
             if (useWallPrefab)
             {
                 tileObj = Instantiate(wallPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_Wall";
                 tileObj.transform.position = worldPos;
-                tileObj.transform.localScale = Vector3.one * tileSize;
+                tileObj.transform.rotation = prefabRotation;
+                tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
+
+                // Force LOD0 if this wall tile borders a walkable path
+                if (IsAdjacentToWalkableTile(gridX, gridY))
+                {
+                    LODGroup lodGroup = tileObj.GetComponentInChildren<LODGroup>();
+                    if (lodGroup != null)
+                    {
+                        lodGroup.ForceLOD(0);
+                    }
+                }
             }
             else if (useUndergrowthPrefab)
             {
                 tileObj = Instantiate(undergrowthPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_Undergrowth";
                 tileObj.transform.position = worldPos;
+                tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = Vector3.one * tileSize;
             }
             else if (useWaterPrefab)
@@ -260,6 +291,15 @@ namespace FaeMaze.Systems
                 tileObj = Instantiate(waterPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_Water";
                 tileObj.transform.position = worldPos;
+                tileObj.transform.rotation = prefabRotation;
+                tileObj.transform.localScale = Vector3.one * tileSize;
+            }
+            else if (useNodeHazardPrefab)
+            {
+                tileObj = Instantiate(nodeHazardPrefab, tilesParent);
+                tileObj.name = $"Tile_{gridX}_{gridY}_NodeHazard";
+                tileObj.transform.position = worldPos;
+                tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = Vector3.one * tileSize;
             }
             else
@@ -440,9 +480,45 @@ namespace FaeMaze.Systems
                     return heartColor;
                 case '.':
                     return pathColor;
+                case 'N':
+                    return pathColor; // Node hazard sits on walkable path
                 default:
+                    // Spawn points (uppercase letters except H and N) are walkable paths
+                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
+                        return pathColor;
                     return walkable ? pathColor : wallColor;
             }
+        }
+
+        /// <summary>
+        /// Checks if a grid tile is orthogonally adjacent to any walkable tile.
+        /// </summary>
+        private bool IsAdjacentToWalkableTile(int gridX, int gridY)
+        {
+            MazeGrid grid = mazeGridBehaviour.Grid;
+            if (grid == null) return false;
+
+            // Check all 4 orthogonal neighbors
+            int[] dx = { 0, 0, 1, -1 };
+            int[] dy = { 1, -1, 0, 0 };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int nx = gridX + dx[i];
+                int ny = gridY + dy[i];
+
+                // Check bounds
+                if (nx >= 0 && nx < grid.Width && ny >= 0 && ny < grid.Height)
+                {
+                    var node = grid.GetNode(nx, ny);
+                    if (node != null && node.walkable)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         #endregion
