@@ -262,6 +262,16 @@ namespace FaeMaze.Systems
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
+
+                // Force LOD0 if this wall tile borders a walkable path
+                if (IsAdjacentToWalkableTile(gridX, gridY))
+                {
+                    LODGroup lodGroup = tileObj.GetComponentInChildren<LODGroup>();
+                    if (lodGroup != null)
+                    {
+                        lodGroup.ForceLOD(0);
+                    }
+                }
             }
             else if (useUndergrowthPrefab)
             {
@@ -460,6 +470,37 @@ namespace FaeMaze.Systems
                 default:
                     return walkable ? pathColor : wallColor;
             }
+        }
+
+        /// <summary>
+        /// Checks if a grid tile is orthogonally adjacent to any walkable tile.
+        /// </summary>
+        private bool IsAdjacentToWalkableTile(int gridX, int gridY)
+        {
+            MazeGrid grid = mazeGridBehaviour.Grid;
+            if (grid == null) return false;
+
+            // Check all 4 orthogonal neighbors
+            int[] dx = { 0, 0, 1, -1 };
+            int[] dy = { 1, -1, 0, 0 };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int nx = gridX + dx[i];
+                int ny = gridY + dy[i];
+
+                // Check bounds
+                if (nx >= 0 && nx < grid.Width && ny >= 0 && ny < grid.Height)
+                {
+                    var node = grid.GetNode(nx, ny);
+                    if (node != null && node.walkable)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         #endregion
