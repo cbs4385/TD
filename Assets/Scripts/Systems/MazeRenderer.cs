@@ -296,6 +296,12 @@ namespace FaeMaze.Systems
             }
             else if (useNodeHazardPrefab)
             {
+                // Place a walkable path tile under the node hazard so the area remains traversable
+                GameObject pathBase = CreateProceduralTile(gridX, gridY, '.', pathColor, tileSize);
+                pathBase.transform.SetParent(tilesParent);
+                pathBase.transform.position = worldPos;
+                AddTileToBatchList('.', pathBase);
+
                 tileObj = Instantiate(nodeHazardPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_NodeHazard";
                 tileObj.transform.position = worldPos;
