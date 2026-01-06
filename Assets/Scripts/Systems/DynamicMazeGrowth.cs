@@ -73,6 +73,23 @@ namespace FaeMaze.Systems
                 portalsParent = portalsObj.transform;
             }
 
+            // Log maze grid info
+            if (mazeGridBehaviour != null && mazeGridBehaviour.Grid != null)
+            {
+                int spawnCount = mazeGridBehaviour.GetSpawnPointCount();
+                Debug.Log($"[DynamicMazeGrowth] Maze initialized with {mazeGridBehaviour.Grid.Width}x{mazeGridBehaviour.Grid.Height} grid, {spawnCount} spawn points");
+
+                var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
+                foreach (var kvp in spawnPoints)
+                {
+                    Debug.Log($"[DynamicMazeGrowth] Spawn point '{kvp.Key}' at grid ({kvp.Value.x}, {kvp.Value.y})");
+                }
+            }
+            else
+            {
+                Debug.LogError("[DynamicMazeGrowth] MazeGridBehaviour or Grid is null!");
+            }
+
             // Initialize portals at existing spawn points
             InitializeSpawnPointPortals();
 
@@ -80,6 +97,7 @@ namespace FaeMaze.Systems
             if (autoGrowth)
             {
                 nextGrowthTime = Time.time + growthInterval;
+                Debug.Log($"[DynamicMazeGrowth] Auto-growth enabled. Next growth in {growthInterval} seconds");
             }
         }
 
