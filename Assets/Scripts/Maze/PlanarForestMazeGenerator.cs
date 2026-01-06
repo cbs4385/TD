@@ -679,10 +679,12 @@ namespace ForestMaze
 
             Debug.Log($"[PlanarForestMaze] Placed {nodeHazardCount} node hazard markers ('N')");
 
-            // Mark unconnected edge endpoints with unique spawn IDs (A, B, C, D, E, F, G, H, ...)
+            // Mark unconnected edge endpoints with unique spawn IDs (A-Z excluding H/N, then a-z, then digits)
             int entranceExitCount = 0;
-            char[] spawnIds = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' };
-            // Note: Skipping 'H' (heart) and 'N' (node hazard) from spawn IDs
+            int partialEndpointCount = state.Edges.Count(e => e.Partial && e.PolylinePoints.Count > 0);
+            var spawnIdQueue = new Queue<char>(GenerateSpawnIds());
+            int availableSpawnIdCount = spawnIdQueue.Count;
+            bool spawnIdsExhausted = false;
 
             foreach (var edge in state.Edges.Where(e => e.Partial && e.PolylinePoints.Count > 0))
             {
@@ -695,8 +697,13 @@ namespace ForestMaze
                 {
                     if (grid[ey, ex] == '.')
                     {
-                        // Assign unique spawn ID (cycle through available IDs)
-                        char spawnId = spawnIds[entranceExitCount % spawnIds.Length];
+                        if (spawnIdQueue.Count == 0)
+                        {
+                            spawnIdsExhausted = true;
+                            break;
+                        }
+
+                        char spawnId = spawnIdQueue.Dequeue();
                         grid[ey, ex] = spawnId;
                         entranceExitCount++;
                     }
@@ -704,6 +711,15 @@ namespace ForestMaze
             }
 
             Debug.Log($"[PlanarForestMaze] Placed {entranceExitCount} entrance/exit markers with unique spawn IDs");
+
+            if (spawnIdsExhausted)
+            {
+                Debug.LogWarning($"[PlanarForestMaze] Ran out of unique spawn IDs after placing {entranceExitCount} markers for {partialEndpointCount} open endpoints (available pool: {availableSpawnIdCount})");
+            }
+            else
+            {
+                Debug.Log($"[PlanarForestMaze] Placed {entranceExitCount} entrance/exit markers with unique spawn IDs for {partialEndpointCount} open endpoints");
+            }
 
             // Ensure border is always forest where there's no walkable tile
             for (int x = 0; x < gridWidth; x++)
@@ -778,7 +794,7 @@ namespace ForestMaze
         {
             if (x >= 0 && x < width && y >= 0 && y < height)
             {
-                // Don't overwrite heart, node hazards, or spawn point markers (any uppercase letter)
+                // Don't overwrite heart, node hazards, or spawn point markers (letters/digits)
                 char existing = grid[y, x];
                 if (existing != 'H' && existing != 'N' && !IsSpawnPointChar(existing))
                     grid[y, x] = ch;
@@ -787,8 +803,31 @@ namespace ForestMaze
 
         private static bool IsSpawnPointChar(char c)
         {
-            // Spawn points are uppercase letters (except H for heart and N for node hazard)
-            return char.IsUpper(c) && c != 'H' && c != 'N' && c != '#' && c != '.';
+            // Spawn points are letters or digits (excluding heart/node hazard markers and non-walkable symbols)
+            return (char.IsLetterOrDigit(c)) && c != 'H' && c != 'N' && c != '#' && c != '.';
+        }
+
+        private static IEnumerable<char> GenerateSpawnIds()
+        {
+            // Uppercase letters excluding heart/node hazards
+            for (char c = 'A'; c <= 'Z'; c++)
+            {
+                if (c != 'H' && c != 'N')
+                    yield return c;
+            }
+
+            // Lowercase letters excluding heart/node hazards
+            for (char c = 'a'; c <= 'z'; c++)
+            {
+                if (c != 'h' && c != 'n')
+                    yield return c;
+            }
+
+            // Digits
+            for (char c = '0'; c <= '9'; c++)
+            {
+                yield return c;
+            }
         }
 
         private static void EnsureEdgeTilesAreWalkable(char[,] grid, int width, int height)
