@@ -678,17 +678,27 @@ namespace ForestMaze
                 }
             }
 
-            // Ensure border is always forest where there's no path
+            // Ensure border is always forest where there's no walkable tile
             for (int x = 0; x < gridWidth; x++)
             {
-                if (grid[0, x] != '.') grid[0, x] = '#';
-                if (grid[gridHeight - 1, x] != '.') grid[gridHeight - 1, x] = '#';
+                char topTile = grid[0, x];
+                if (topTile != '.' && topTile != 'H' && topTile != 'N' && topTile != 'E')
+                    grid[0, x] = '#';
+
+                char bottomTile = grid[gridHeight - 1, x];
+                if (bottomTile != '.' && bottomTile != 'H' && bottomTile != 'N' && bottomTile != 'E')
+                    grid[gridHeight - 1, x] = '#';
             }
 
             for (int y = 0; y < gridHeight; y++)
             {
-                if (grid[y, 0] != '.') grid[y, 0] = '#';
-                if (grid[y, gridWidth - 1] != '.') grid[y, gridWidth - 1] = '#';
+                char leftTile = grid[y, 0];
+                if (leftTile != '.' && leftTile != 'H' && leftTile != 'N' && leftTile != 'E')
+                    grid[y, 0] = '#';
+
+                char rightTile = grid[y, gridWidth - 1];
+                if (rightTile != '.' && rightTile != 'H' && rightTile != 'N' && rightTile != 'E')
+                    grid[y, gridWidth - 1] = '#';
             }
 
             // Ensure all edge walkable tiles have at least one adjacent walkable tile
@@ -745,7 +755,8 @@ namespace ForestMaze
         {
             if (x >= 0 && x < width && y >= 0 && y < height)
             {
-                if (grid[y, x] != 'H') // Don't overwrite heart
+                // Don't overwrite heart, node hazards, or entrance/exit markers
+                if (grid[y, x] != 'H' && grid[y, x] != 'N' && grid[y, x] != 'E')
                     grid[y, x] = ch;
             }
         }
@@ -758,22 +769,26 @@ namespace ForestMaze
             for (int x = 0; x < width; x++)
             {
                 // Top edge
-                if (grid[0, x] == '.')
+                char topTile = grid[0, x];
+                if (topTile == '.' || topTile == 'E' || topTile == 'N')
                 {
                     if (!HasAdjacentWalkableTile(grid, x, 0, width, height))
                     {
-                        // Make tile below walkable
-                        if (grid[1, x] != 'H') grid[1, x] = '.';
+                        // Make tile below walkable (don't overwrite special tiles)
+                        if (grid[1, x] != 'H' && grid[1, x] != 'N' && grid[1, x] != 'E')
+                            grid[1, x] = '.';
                     }
                 }
 
                 // Bottom edge
-                if (grid[height - 1, x] == '.')
+                char bottomTile = grid[height - 1, x];
+                if (bottomTile == '.' || bottomTile == 'E' || bottomTile == 'N')
                 {
                     if (!HasAdjacentWalkableTile(grid, x, height - 1, width, height))
                     {
-                        // Make tile above walkable
-                        if (grid[height - 2, x] != 'H') grid[height - 2, x] = '.';
+                        // Make tile above walkable (don't overwrite special tiles)
+                        if (grid[height - 2, x] != 'H' && grid[height - 2, x] != 'N' && grid[height - 2, x] != 'E')
+                            grid[height - 2, x] = '.';
                     }
                 }
             }
@@ -782,22 +797,26 @@ namespace ForestMaze
             for (int y = 0; y < height; y++)
             {
                 // Left edge
-                if (grid[y, 0] == '.')
+                char leftTile = grid[y, 0];
+                if (leftTile == '.' || leftTile == 'E' || leftTile == 'N')
                 {
                     if (!HasAdjacentWalkableTile(grid, 0, y, width, height))
                     {
-                        // Make tile to the right walkable
-                        if (grid[y, 1] != 'H') grid[y, 1] = '.';
+                        // Make tile to the right walkable (don't overwrite special tiles)
+                        if (grid[y, 1] != 'H' && grid[y, 1] != 'N' && grid[y, 1] != 'E')
+                            grid[y, 1] = '.';
                     }
                 }
 
                 // Right edge
-                if (grid[y, width - 1] == '.')
+                char rightTile = grid[y, width - 1];
+                if (rightTile == '.' || rightTile == 'E' || rightTile == 'N')
                 {
                     if (!HasAdjacentWalkableTile(grid, width - 1, y, width, height))
                     {
-                        // Make tile to the left walkable
-                        if (grid[y, width - 2] != 'H') grid[y, width - 2] = '.';
+                        // Make tile to the left walkable (don't overwrite special tiles)
+                        if (grid[y, width - 2] != 'H' && grid[y, width - 2] != 'N' && grid[y, width - 2] != 'E')
+                            grid[y, width - 2] = '.';
                     }
                 }
             }
@@ -816,7 +835,8 @@ namespace ForestMaze
 
                 if (nx >= 0 && nx < width && ny >= 0 && ny < height)
                 {
-                    if (grid[ny, nx] == '.' || grid[ny, nx] == 'H')
+                    char tile = grid[ny, nx];
+                    if (tile == '.' || tile == 'H' || tile == 'N' || tile == 'E')
                     {
                         return true;
                     }
@@ -851,29 +871,36 @@ namespace ForestMaze
 
         private static void AddEntrance(char[,] grid, int width, int height, System.Random random)
         {
-            // Find path tiles near edges
+            // Find walkable tiles near edges (check for all walkable tile types)
             var topCandidates = new List<(int x, int y)>();
             var bottomCandidates = new List<(int x, int y)>();
 
             for (int x = 1; x < width - 1; x++)
             {
-                if (grid[1, x] == '.')
+                char topInner = grid[1, x];
+                if (topInner == '.' || topInner == 'E' || topInner == 'N')
                     topCandidates.Add((x, 0));
-                if (grid[height - 2, x] == '.')
+
+                char bottomInner = grid[height - 2, x];
+                if (bottomInner == '.' || bottomInner == 'E' || bottomInner == 'N')
                     bottomCandidates.Add((x, height - 1));
             }
 
-            // Add at least one entrance
+            // Add at least one entrance (only if not already walkable)
             if (topCandidates.Count > 0)
             {
                 var entrance = topCandidates[random.Next(topCandidates.Count)];
-                grid[entrance.y, entrance.x] = '.';
+                char currentTile = grid[entrance.y, entrance.x];
+                if (currentTile == '#')
+                    grid[entrance.y, entrance.x] = '.';
             }
 
             if (bottomCandidates.Count > 0)
             {
                 var entrance = bottomCandidates[random.Next(bottomCandidates.Count)];
-                grid[entrance.y, entrance.x] = '.';
+                char currentTile = grid[entrance.y, entrance.x];
+                if (currentTile == '#')
+                    grid[entrance.y, entrance.x] = '.';
             }
         }
 
