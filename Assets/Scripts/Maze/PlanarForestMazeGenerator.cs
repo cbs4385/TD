@@ -625,7 +625,7 @@ namespace ForestMaze
             }
 
             // Draw paths (edges)
-            foreach (var edge in state.Edges.Where(e => e.IsComplete()))
+            foreach (var edge in state.Edges.Where(e => e.PolylinePoints.Count > 1))
             {
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
