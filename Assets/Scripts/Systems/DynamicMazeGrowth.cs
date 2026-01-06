@@ -536,11 +536,15 @@ namespace FaeMaze.Systems
             // Calculate world position
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y, -portalHeightOffset);
 
-            // Calculate rotation to face the center of the node
-            Vector3 toCenter = CalculateDirectionToNearestNode(gridPos);
-            Quaternion rotation = Quaternion.LookRotation(toCenter, mazeGridBehaviour.MazeUpDirection);
+            // Calculate rotation to face inward (toward nearest walkable tile)
+            Vector3 toCenter = CalculateDirectionToNearestWalkableTile(gridPos);
 
-            // Apply -90 degree rotation around X axis to match maze coordinate system
+            // Create rotation with Y-axis pointing toward the connected node
+            // The portal prefab should have its "forward" as the direction visitors walk through
+            // We want Y-axis to point toward the maze, so we use toCenter as "up"
+            Quaternion rotation = Quaternion.LookRotation(Vector3.forward, toCenter);
+
+            // Apply additional rotation to match maze coordinate system (-90 around X)
             rotation = rotation * Quaternion.Euler(-90f, 0f, 0f);
 
             // Instantiate portal
@@ -550,7 +554,7 @@ namespace FaeMaze.Systems
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
-            Debug.Log($"[DynamicMazeGrowth] Created portal at spawn point '{spawnId}' at world position {worldPos}");
+            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at ({gridPos.x}, {gridPos.y}) facing direction {toCenter}");
         }
 
         /// <summary>
@@ -571,19 +575,42 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Calculates the direction from a grid position to the nearest node center.
-        /// For simplicity, points toward the heart of the maze.
+        /// Calculates the direction from a spawn point toward the nearest connected walkable tile.
+        /// This is used to orient portals so they face inward toward the maze.
         /// </summary>
-        private Vector3 CalculateDirectionToNearestNode(Vector2Int gridPos)
+        private Vector3 CalculateDirectionToNearestWalkableTile(Vector2Int gridPos)
         {
-            // Find nearest walkable tile that could be a node center
-            // For now, just point toward the heart
-            Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
-            Vector2Int direction = new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y);
+            // Check all 4 orthogonal directions for walkable tiles
+            Vector2Int[] directions = new Vector2Int[]
+            {
+                new Vector2Int(1, 0),   // Right
+                new Vector2Int(-1, 0),  // Left
+                new Vector2Int(0, 1),   // Up
+                new Vector2Int(0, -1)   // Down
+            };
 
-            // Convert to world direction
-            Vector3 worldDir = new Vector3(direction.x, direction.y, 0f).normalized;
-            return worldDir;
+            foreach (var dir in directions)
+            {
+                Vector2Int checkPos = gridPos + dir;
+                if (mazeGridBehaviour.Grid.InBounds(checkPos.x, checkPos.y))
+                {
+                    var node = mazeGridBehaviour.Grid.GetNode(checkPos.x, checkPos.y);
+                    if (node != null && node.walkable)
+                    {
+                        // Found adjacent walkable tile - face toward it
+                        Vector3 worldDir = new Vector3(dir.x, dir.y, 0f).normalized;
+                        return worldDir;
+                    }
+                }
+            }
+
+            // Fallback: face toward the heart of the maze
+            Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
+            Vector2Int fallbackDir = new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y);
+            Vector3 fallbackWorldDir = new Vector3(fallbackDir.x, fallbackDir.y, 0f).normalized;
+
+            Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile found for spawn point at ({gridPos.x}, {gridPos.y}), facing toward heart");
+            return fallbackWorldDir;
         }
 
         /// <summary>

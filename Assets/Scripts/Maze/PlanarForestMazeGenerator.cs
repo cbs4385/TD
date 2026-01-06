@@ -92,19 +92,25 @@ namespace ForestMaze
             // Initialize with root and first node
             Initialize(state);
 
-            // Grow for specified turns, but preserve at least 4 open endpoints
-            int minOpenEndpoints = 4;
+            // Grow to ensure minimum node count, then preserve open endpoints
+            int minNodeCount = 6; // Root + at least 5 normal nodes
+            int minOpenEndpoints = 4; // Preserve at least 4 open endpoints for spawn points
+
+            // Phase 1: Grow until we have minimum nodes
+            for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
+            {
+                if (state.Frontier.Count == 0 || !Step(state))
+                    break;
+            }
+
+            // Phase 2: Continue growing but preserve minimum open endpoints
             for (int i = 0; i < turns && state.Frontier.Count > minOpenEndpoints; i++)
             {
                 if (!Step(state))
                     break;
             }
 
-            // Ensure we have at least some open endpoints for spawn points
-            if (state.Frontier.Count < minOpenEndpoints)
-            {
-                Debug.Log($"[PlanarForestMaze] Only {state.Frontier.Count} open endpoints after growth. This is normal - spawn points will be created at maze edges.");
-            }
+            Debug.Log($"[PlanarForestMaze] Generated {state.Nodes.Count} nodes with {state.Frontier.Count} open endpoints");
 
             // Rasterize the graph to a grid
             return RasterizeToGrid(state, gridWidth, gridHeight);
