@@ -127,12 +127,6 @@ namespace FaeMaze.Systems
 
         #region Unity Lifecycle
 
-        private static int GenerateRandomSeed()
-        {
-            int seed = System.Environment.TickCount;
-            return seed != 0 ? seed : (int)System.DateTime.Now.Ticks;
-        }
-
         private void Awake()
         {
             // Validate references
@@ -545,10 +539,6 @@ namespace FaeMaze.Systems
 
             if (usePlanarGenerator)
             {
-                planarGeneratorConfig.randomSeed = planarGeneratorConfig.randomSeed == 0
-                    ? GenerateRandomSeed()
-                    : planarGeneratorConfig.randomSeed;
-
                 // Use planar organic generator
                 mazeString = ForestMaze.PlanarForestMazeGenerator.GenerateMaze(
                     planarGeneratorConfig.gridWidth,
@@ -565,10 +555,6 @@ namespace FaeMaze.Systems
             }
             else
             {
-                generatorConfig.randomSeed = generatorConfig.randomSeed == 0
-                    ? GenerateRandomSeed()
-                    : generatorConfig.randomSeed;
-
                 // Use traditional Kruskal-based generator
                 if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
                 {
@@ -960,14 +946,8 @@ namespace FaeMaze.Systems
             cachedMazeString = null;
             cachedEntranceEdges.Clear();
 
-            if (usePlanarGenerator)
-            {
-                planarGeneratorConfig.randomSeed = GenerateRandomSeed();
-            }
-            else
-            {
-                generatorConfig.randomSeed = GenerateRandomSeed();
-            }
+            // Use current time as random seed for variety
+            generatorConfig.randomSeed = System.DateTime.Now.Millisecond + (System.DateTime.Now.Second * 1000);
 
             // Regenerate maze
             InitializeFromGenerator();
