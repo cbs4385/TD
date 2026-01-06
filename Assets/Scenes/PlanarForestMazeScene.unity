@@ -669,8 +669,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
   wallPrefab: {fileID: 8684429058332283790, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
-  waterPrefab: {fileID: 5797252247512694294, guid: f64cb6f8073e23b47a16e281c928211e, type: 3}
-  nodeHazardPrefab: {fileID: 6000000001, guid: f9e8d7c6b5a4e3d2c1b0a9f8e7d6c5b4, type: 3}
+  waterPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
+  nodeHazardPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
   wallColor: {r: 1, g: 1, b: 1, a: 1}
   undergrowthColor: {r: 0.5, g: 0, b: 0.5, a: 1}
@@ -960,6 +960,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EnvironmentDecorator
   mazeGridBehaviour: {fileID: 963194231}
   treePrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
+  enableLOD: 0
+  lod0Prefab: {fileID: 0}
+  lod1Prefab: {fileID: 0}
+  lod2Prefab: {fileID: 0}
+  lod0Distance: 0.3
+  lod1Distance: 0.6
+  lod2Distance: 1
   focalPoint: {fileID: 0}
   zPosition: 0
   zRotationVariance: 5
@@ -971,6 +978,9 @@ MonoBehaviour:
   transparentAlpha: 0.25
   opaqueAlpha: 1
   transitionSmoothness: 0.5
+  transparencyUpdateFrequency: 3
+  markAsStatic: 1
+  frustumPadding: 10
 --- !u!1 &1644971208
 GameObject:
   m_ObjectHideFlags: 0
