@@ -67,11 +67,28 @@ namespace FaeMaze.Editor
                 mazeRootObj.AddComponent<MazeVisualSetup>();
             }
 
+            // Add DynamicMazeGrowth if not present
+            if (mazeRootObj.GetComponent<DynamicMazeGrowth>() == null)
+            {
+                DynamicMazeGrowth dynamicGrowth = mazeRootObj.AddComponent<DynamicMazeGrowth>();
+
+                // Try to load portal prefab
+                GameObject portalPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/portal.prefab");
+                if (portalPrefab != null)
+                {
+                    SerializedObject growthSO = new SerializedObject(dynamicGrowth);
+                    growthSO.FindProperty("portalPrefab").objectReferenceValue = portalPrefab;
+                    growthSO.FindProperty("growthInterval").floatValue = 30f;
+                    growthSO.FindProperty("autoGrowth").boolValue = true;
+                    growthSO.ApplyModifiedProperties();
+                }
+            }
+
             // Mark scene as dirty and save
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
 
-            Debug.Log("PlanarForest Maze Scene setup complete!");
+            Debug.Log("PlanarForest Maze Scene setup complete with dynamic growth!");
         }
     }
 }
