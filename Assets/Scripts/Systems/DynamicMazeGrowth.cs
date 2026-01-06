@@ -120,12 +120,20 @@ namespace FaeMaze.Systems
         /// </summary>
         private void InitializeSpawnPointPortals()
         {
-            if (mazeGridBehaviour == null || portalPrefab == null)
+            if (mazeGridBehaviour == null)
             {
+                Debug.LogError("[DynamicMazeGrowth] MazeGridBehaviour is null! Cannot initialize portals.");
+                return;
+            }
+
+            if (portalPrefab == null)
+            {
+                Debug.LogError("[DynamicMazeGrowth] Portal prefab is null! Portals will not be created. Please assign portal prefab in inspector.");
                 return;
             }
 
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
+            Debug.Log($"[DynamicMazeGrowth] Found {spawnPoints.Count} spawn points in maze grid");
 
             // If no spawn points exist, create them from edge walkable tiles
             if (spawnPoints.Count == 0)

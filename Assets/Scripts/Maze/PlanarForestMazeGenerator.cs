@@ -94,7 +94,7 @@ namespace ForestMaze
 
             // Grow to ensure minimum node count, then preserve open endpoints
             int minNodeCount = 6; // Root + at least 5 normal nodes
-            int minOpenEndpoints = 4; // Preserve at least 4 open endpoints for spawn points
+            int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
 
             // Phase 1: Grow until we have minimum nodes
             for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
@@ -695,7 +695,9 @@ namespace ForestMaze
 
                 if (ex >= 0 && ex < gridWidth && ey >= 0 && ey < gridHeight)
                 {
-                    if (grid[ey, ex] == '.')
+                    // Mark ANY walkable tile (not just '.') as spawn point
+                    char currentTile = grid[ey, ex];
+                    if (IsWalkableTile(currentTile) && currentTile != 'H' && currentTile != 'N')
                     {
                         if (spawnIdQueue.Count == 0)
                         {
@@ -709,8 +711,6 @@ namespace ForestMaze
                     }
                 }
             }
-
-            Debug.Log($"[PlanarForestMaze] Placed {entranceExitCount} entrance/exit markers with unique spawn IDs");
 
             if (spawnIdsExhausted)
             {
