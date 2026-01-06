@@ -88,7 +88,6 @@ namespace FaeMaze.Editor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
 
-            Debug.Log("PlanarForest Maze Scene setup complete with dynamic growth!");
         }
     }
 }

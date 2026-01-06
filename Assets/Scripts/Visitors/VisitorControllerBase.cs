@@ -1261,7 +1261,6 @@ namespace FaeMaze.Visitors
                 state = VisitorState.Escaping;
                 SetAnimatorDirection(IdleDirection);
 
-                Debug.Log($"[VisitorControllerBase] Visitor reached destination (spawn marker mode)");
 
                 // No essence awarded for escaping visitors - essence only from heart or devour power
 

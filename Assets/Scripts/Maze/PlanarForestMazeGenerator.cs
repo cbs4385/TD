@@ -110,6 +110,7 @@ namespace ForestMaze
                     break;
             }
 
+
             Debug.Log($"[PlanarForestMaze] Generated {state.Nodes.Count} nodes with {state.Frontier.Count} open endpoints");
 
             // Rasterize the graph to a grid
@@ -675,6 +676,7 @@ namespace ForestMaze
                     }
                 }
             }
+
             Debug.Log($"[PlanarForestMaze] Placed {nodeHazardCount} node hazard markers ('N')");
 
             // Mark unconnected edge endpoints with unique spawn IDs (A, B, C, D, E, F, G, H, ...)
@@ -700,6 +702,7 @@ namespace ForestMaze
                     }
                 }
             }
+
             Debug.Log($"[PlanarForestMaze] Placed {entranceExitCount} entrance/exit markers with unique spawn IDs");
 
             // Ensure border is always forest where there's no walkable tile

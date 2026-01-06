@@ -662,7 +662,6 @@ namespace FaeMaze.UI
         {
             if (heartPowerManager == null)
             {
-                Debug.LogWarning("[HeartPowerPanelController] OnPowerButtonClicked: HeartPowerManager is null");
                 return;
             }
 
@@ -670,7 +669,6 @@ namespace FaeMaze.UI
 
             if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
             {
-                Debug.Log($"[HeartPowerPanelController] Button clicked for {powerType} (index {index})");
             }
 
             // Get the focal point position from the camera controller
@@ -678,7 +676,6 @@ namespace FaeMaze.UI
 
             if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
             {
-                Debug.Log($"[HeartPowerPanelController] Focal point position: {targetPosition}");
             }
 
             // All powers now activate at the focal point
@@ -764,12 +761,10 @@ namespace FaeMaze.UI
             }
             else if (Keyboard.current.digit8Key.wasPressedThisFrame || Keyboard.current.numpad8Key.wasPressedThisFrame)
             {
-                Debug.Log("[HeartPowerPanelController] Keyboard 8 pressed - HeartwardGrasp");
                 OnPowerButtonClicked(7);
             }
             else if (Keyboard.current.digit9Key.wasPressedThisFrame || Keyboard.current.numpad9Key.wasPressedThisFrame)
             {
-                Debug.Log("[HeartPowerPanelController] Keyboard 9 pressed - DevouringMaw");
                 OnPowerButtonClicked(8);
             }
         }

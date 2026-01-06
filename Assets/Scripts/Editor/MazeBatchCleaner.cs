@@ -76,7 +76,6 @@ namespace FaeMaze.Editor
                 }
             }
 
-            Debug.Log($"[MazeBatchCleaner] Deleted {deletedCount} batch chunks");
 
             EditorUtility.DisplayDialog("Maze Batch Cleaner",
                 $"Deleted {deletedCount} batch chunks.\n\nEnter Play mode to regenerate the maze.",
@@ -99,14 +98,12 @@ namespace FaeMaze.Editor
             // Delete the entire MazeTiles container
             DestroyImmediate(mazeTiles);
 
-            Debug.Log("[MazeBatchCleaner] Deleted MazeTiles container");
 
             // Find MazeRenderer to trigger regeneration
             MazeRenderer renderer = Object.FindFirstObjectByType<MazeRenderer>();
 
             if (renderer != null)
             {
-                Debug.Log("[MazeBatchCleaner] MazeRenderer found - maze will regenerate on Play");
 
                 EditorUtility.DisplayDialog("Maze Batch Cleaner",
                     "Deleted MazeTiles container.\n\nEnter Play mode to regenerate the maze with correct positioning.",

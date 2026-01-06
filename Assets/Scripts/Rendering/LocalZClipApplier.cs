@@ -21,7 +21,6 @@ public class LocalZClipApplier : MonoBehaviour
 
         if (clipShader == null)
         {
-            Debug.LogError("LocalZClipApplier: Could not find shader 'Custom/LocalZClipURPUnlitCutout'. Did you create it?");
             enabled = false;
             return;
         }

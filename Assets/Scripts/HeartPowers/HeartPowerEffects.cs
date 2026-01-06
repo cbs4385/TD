@@ -1285,18 +1285,15 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            Debug.Log($"[HeartwardGrasp] OnStart - Target position: {targetPosition}");
 
             // Convert target position to grid - this is the activation tile (focal point)
             if (!manager.MazeGrid.WorldToGrid(targetPosition, out int ax, out int ay))
             {
-                Debug.Log("[HeartwardGrasp] Failed to convert target position to grid");
                 return;
             }
 
             activationTile = new Vector2Int(ax, ay);
             Vector2Int heartTile = manager.MazeGrid.HeartGridPos;
-            Debug.Log($"[HeartwardGrasp] Activation tile: {activationTile}, Heart tile: {heartTile}");
 
             // Find nearest visitor within range of activation tile
             int pullRange = definition.param1 > 0 ? (int)definition.param1 : 3;
@@ -1304,32 +1301,26 @@ namespace FaeMaze.HeartPowers
 
             if (targetVisitor == null)
             {
-                Debug.Log($"[HeartwardGrasp] No visitor found within {pullRange} tiles of activation point");
                 return;
             }
 
-            Debug.Log($"[HeartwardGrasp] Found visitor: {targetVisitor.name}");
 
             // Get visitor's current position
             if (!manager.MazeGrid.WorldToGrid(targetVisitor.transform.position, out int vx, out int vy))
             {
-                Debug.Log("[HeartwardGrasp] Failed to convert visitor position to grid");
                 return;
             }
 
             visitorStartTile = new Vector2Int(vx, vy);
-            Debug.Log($"[HeartwardGrasp] Visitor start tile: {visitorStartTile}");
 
             // Find destination: first walkable tile along activation→heart vector
             pullDestination = FindFirstWalkableAlongVector(activationTile, heartTile);
 
             if (pullDestination == Vector2Int.zero)
             {
-                Debug.Log("[HeartwardGrasp] No walkable destination tile found along activation→heart vector");
                 return;
             }
 
-            Debug.Log($"[HeartwardGrasp] Pull destination: {pullDestination} along activation→heart vector");
 
             // Spawn grasp prefab at activation tile, pointing toward visitor
             SpawnGraspPrefab(activationTile, visitorStartTile);
@@ -1341,7 +1332,6 @@ namespace FaeMaze.HeartPowers
             currentPhase = AnimationPhase.InitialPause;
             phaseStartTime = elapsedTime;
 
-            Debug.Log("[HeartwardGrasp] Animation sequence started");
         }
 
         public override void Update(float deltaTime)
@@ -1366,7 +1356,6 @@ namespace FaeMaze.HeartPowers
                         phaseStartTime = elapsedTime;
                         lerpStartPosition = targetVisitor.transform.position;
                         lerpEndPosition = manager.MazeGrid.GridToWorld(activationTile.x, activationTile.y);
-                        Debug.Log($"[HeartwardGrasp] Phase: PullToActivation from {lerpStartPosition} to {lerpEndPosition}");
                     }
                     break;
 
@@ -1381,7 +1370,6 @@ namespace FaeMaze.HeartPowers
                         currentPhase = AnimationPhase.Repositioning;
                         Vector3 activationPosition = manager.MazeGrid.GridToWorld(activationTile.x, activationTile.y);
                         targetVisitor.transform.position = activationPosition;
-                        Debug.Log($"[HeartwardGrasp] Repositioned visitor to activation tile {activationTile}");
 
                         // Reorient grasp toward destination
                         UpdateGraspDirection(activationTile, pullDestination);
@@ -1391,7 +1379,6 @@ namespace FaeMaze.HeartPowers
                         phaseStartTime = elapsedTime;
                         lerpStartPosition = activationPosition;
                         lerpEndPosition = manager.MazeGrid.GridToWorld(pullDestination.x, pullDestination.y);
-                        Debug.Log($"[HeartwardGrasp] Phase: PushToDestination from {lerpStartPosition} to {lerpEndPosition}");
                     }
                     break;
 
@@ -1408,7 +1395,6 @@ namespace FaeMaze.HeartPowers
                         targetVisitor.RecalculatePath();
                         ApplyHeartwardBias();
                         ApplyTierEffects();
-                        Debug.Log("[HeartwardGrasp] Phase: FinalPause");
                     }
                     break;
 
@@ -1426,7 +1412,6 @@ namespace FaeMaze.HeartPowers
                             graspVisual = null;
                         }
 
-                        Debug.Log("[HeartwardGrasp] Animation complete");
                     }
                     break;
             }
@@ -1528,7 +1513,6 @@ namespace FaeMaze.HeartPowers
             // Stop visitor in place
             targetVisitor.Stop();
             visitorMovementStopped = true;
-            Debug.Log("[HeartwardGrasp] Visitor movement stopped");
         }
 
         private void ResumeVisitor()
@@ -1541,7 +1525,6 @@ namespace FaeMaze.HeartPowers
             // Resume visitor movement
             targetVisitor.Resume();
             visitorMovementStopped = false;
-            Debug.Log("[HeartwardGrasp] Visitor movement resumed");
         }
 
         private void SpawnGraspPrefab(Vector2Int tile, Vector2Int pointToward)
@@ -1551,7 +1534,6 @@ namespace FaeMaze.HeartPowers
 
             if (graspPrefab == null)
             {
-                Debug.LogWarning("[HeartwardGrasp] Could not load grasp prefab from Resources/Prefabs/Props/Grasp/grasp");
                 return;
             }
 
@@ -1584,7 +1566,6 @@ namespace FaeMaze.HeartPowers
             graspBasePosition = graspPosition;
             graspAnimationDirection = direction;
 
-            Debug.Log($"[HeartwardGrasp] Spawned grasp prefab at {graspPosition} pointing toward {pointTowardPosition}");
         }
 
         private void UpdateGraspDirection(Vector2Int from, Vector2Int to)
@@ -1609,7 +1590,6 @@ namespace FaeMaze.HeartPowers
                 // Update animation direction for second half
                 graspAnimationDirection = direction;
 
-                Debug.Log($"[HeartwardGrasp] Reoriented grasp toward destination");
             }
         }
 
@@ -1687,7 +1667,6 @@ namespace FaeMaze.HeartPowers
 
             if (eligibleTiles.Count == 0)
             {
-                Debug.LogWarning($"[HeartwardGrasp] No walkable tiles found within {maxSearchDistance} tiles toward heart");
                 return Vector2Int.zero;
             }
 
@@ -1706,7 +1685,6 @@ namespace FaeMaze.HeartPowers
             }
 
             string context = walkableTilesPastWall.Count > 0 ? "past wall" : "no wall found";
-            Debug.Log($"[HeartwardGrasp] Found destination at {closestTile} ({context}, closest to heart from {eligibleTiles.Count} options)");
             return closestTile;
         }
 
@@ -1722,7 +1700,6 @@ namespace FaeMaze.HeartPowers
             {
                 float mesmerizeDuration = definition.param3 > 0 ? definition.param3 : 3f;
                 targetVisitor.SetMesmerized(mesmerizeDuration);
-                Debug.Log($"[HeartwardGrasp] Applied Mesmerized for {mesmerizeDuration}s (Tier III)");
             }
         }
 
@@ -1850,19 +1827,14 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            Debug.Log($"[DevouringMaw] ========== OnStart CALLED ==========");
-            Debug.Log($"[DevouringMaw] OnStart - Target position: {targetPosition}");
-            Debug.Log($"[DevouringMaw] Manager: {manager != null}, MazeGrid: {manager?.MazeGrid != null}");
 
             // Convert target position to grid
             if (!manager.MazeGrid.WorldToGrid(targetPosition, out int tx, out int ty))
             {
-                Debug.LogError("[DevouringMaw] Failed to convert target position to grid");
                 return;
             }
 
             targetTile = new Vector2Int(tx, ty);
-            Debug.Log($"[DevouringMaw] Target tile: {targetTile}");
 
             // Always spawn devour prefab at target tile (even if no visitor)
             InstantiateDevourVisual(targetTile);
@@ -1871,7 +1843,6 @@ namespace FaeMaze.HeartPowers
             if (manager.TileVisualizer != null)
             {
                 manager.TileVisualizer.AddTileEffect(targetTile, HeartPowerType.DevouringMaw, 1.0f, 2.0f);
-                Debug.Log($"[DevouringMaw] Tile visualizer effect added at {targetTile}");
             }
 
             // Find visitor on the exact targeted tile
@@ -1879,41 +1850,33 @@ namespace FaeMaze.HeartPowers
 
             if (targetVisitor == null)
             {
-                Debug.LogWarning("[DevouringMaw] No visitor found on target tile - prefab will spawn but no visitor consumed");
                 // Don't return - let the power complete with just visual effects
                 return;
             }
 
-            Debug.Log($"[DevouringMaw] Found visitor on tile: {targetVisitor.name}, State: {targetVisitor.State}");
             consumedVisitor = targetVisitor;
 
             // Stop the visitor movement
-            Debug.Log($"[DevouringMaw] Stopping visitor movement");
             consumedVisitor.Stop();
             visitorStartPosition = consumedVisitor.transform.position;
-            Debug.Log($"[DevouringMaw] Visitor start position: {visitorStartPosition}");
 
             // Initialize animation state
             currentPhase = AnimationPhase.Pause;
             phaseStartTime = 0f;
             hasConsumedVisitor = false;
-            Debug.Log($"[DevouringMaw] Animation initialized - Phase: {currentPhase}, phaseStartTime: {phaseStartTime}");
 
             // Tier I: Apply fear to nearby visitors
             if (definition.tier >= 1 && definition.flag1)
             {
-                Debug.Log($"[DevouringMaw] Applying Echoing Terror at {targetTile} (Tier {definition.tier})");
                 ApplyEchoingTerror(targetTile);
             }
 
             // Tier II: Slow nearby visitors
             if (definition.tier >= 2 && definition.flag2)
             {
-                Debug.Log($"[DevouringMaw] Applying Draining Embrace at {targetTile} (Tier {definition.tier})");
                 ApplyDrainingEmbrace(targetTile);
             }
 
-            Debug.Log($"[DevouringMaw] ========== OnStart COMPLETE ==========");
         }
 
         public override void Update(float deltaTime)
@@ -1931,7 +1894,6 @@ namespace FaeMaze.HeartPowers
             {
                 Object.Destroy(devourVisual);
                 devourVisual = null;
-                Debug.Log($"[DevouringMaw] Despawning devour prefab at {elapsedTime}s");
             }
 
             // If no visitor was found, nothing else to do
@@ -1943,7 +1905,6 @@ namespace FaeMaze.HeartPowers
             // Log every 10 frames to see if Update is being called
             if (Time.frameCount % 10 == 0)
             {
-                Debug.Log($"[DevouringMaw] Update called - elapsedTime: {elapsedTime:F2}s, deltaTime: {deltaTime:F3}s, Phase: {currentPhase}");
             }
 
             float phaseElapsed = elapsedTime - phaseStartTime;
@@ -1954,7 +1915,6 @@ namespace FaeMaze.HeartPowers
                     // Visitor is paused for 0.75 seconds
                     if (Time.frameCount % 30 == 0) // Log every 30 frames during pause
                     {
-                        Debug.Log($"[DevouringMaw] Pause phase - elapsed: {phaseElapsed:F2}s / 0.75s");
                     }
 
                     if (phaseElapsed >= 0.75f)
@@ -1963,8 +1923,6 @@ namespace FaeMaze.HeartPowers
                         currentPhase = AnimationPhase.SinkAndDevour;
                         phaseStartTime = elapsedTime;
 
-                        Debug.Log($"[DevouringMaw] ========== TRANSITIONING to SinkAndDevour at {elapsedTime}s ==========");
-                        Debug.Log($"[DevouringMaw] Starting sink animation at {elapsedTime}s");
                     }
                     break;
 
@@ -1980,7 +1938,6 @@ namespace FaeMaze.HeartPowers
 
                     if (phaseElapsed < 0.1f) // Log once at the start
                     {
-                        Debug.Log($"[DevouringMaw] SinkAndDevour - sinkT: {sinkT:F2}, position: {sinkPosition}, startZ: {visitorStartPosition.z}");
                     }
 
                     // After sink animation completes, consume the visitor
@@ -1989,7 +1946,6 @@ namespace FaeMaze.HeartPowers
                         hasConsumedVisitor = true;
 
                         // Consume the visitor (grant essence and destroy)
-                        Debug.Log($"[DevouringMaw] Consuming visitor at {elapsedTime}s, final position: {consumedVisitor.transform.position}");
                         ConsumeVisitor(consumedVisitor);
 
                         // Tier III: Extra essence and charge bonus
@@ -1999,7 +1955,6 @@ namespace FaeMaze.HeartPowers
                         }
 
                         currentPhase = AnimationPhase.Complete;
-                        Debug.Log($"[DevouringMaw] Transitioning to Complete phase at {elapsedTime}s");
                     }
                     break;
 
@@ -2011,40 +1966,32 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
-            Debug.Log($"[DevouringMaw] ========== OnEnd CALLED at {elapsedTime}s ==========");
-            Debug.Log($"[DevouringMaw] Final phase: {currentPhase}, hasConsumedVisitor: {hasConsumedVisitor}");
 
             // Clean up visual
             if (devourVisual != null)
             {
                 Object.Destroy(devourVisual);
                 devourVisual = null;
-                Debug.Log($"[DevouringMaw] Destroyed devour visual");
             }
 
             // Remove tile visuals
             if (manager.TileVisualizer != null)
             {
                 manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.DevouringMaw);
-                Debug.Log($"[DevouringMaw] Removed tile visualizer effects");
             }
 
-            Debug.Log($"[DevouringMaw] ========== OnEnd COMPLETE ==========");
         }
 
         private VisitorControllerBase FindVisitorOnTile(Vector2Int tile)
         {
             // Use visitor registry - exact tile matching only
             var visitors = VisitorRegistry.All;
-            Debug.Log($"[DevouringMaw] FindVisitorOnTile - Searching for visitor on exact tile {tile}");
-            Debug.Log($"[DevouringMaw] Total visitors in registry: {visitors.Count}");
 
             int checkedCount = 0;
             foreach (var visitor in visitors)
             {
                 if (visitor == null)
                 {
-                    Debug.Log($"[DevouringMaw] Visitor {checkedCount} is null");
                     checkedCount++;
                     continue;
                 }
@@ -2052,7 +1999,6 @@ namespace FaeMaze.HeartPowers
                 if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
                     visitor.State == VisitorControllerBase.VisitorState.Escaping)
                 {
-                    Debug.Log($"[DevouringMaw] Visitor {visitor.name} has state {visitor.State}, skipping");
                     checkedCount++;
                     continue;
                 }
@@ -2060,24 +2006,20 @@ namespace FaeMaze.HeartPowers
                 // Get visitor grid position
                 if (!manager.MazeGrid.WorldToGrid(visitor.transform.position, out int vx, out int vy))
                 {
-                    Debug.Log($"[DevouringMaw] Failed to convert visitor {visitor.name} world position to grid");
                     checkedCount++;
                     continue;
                 }
 
                 Vector2Int visitorTile = new Vector2Int(vx, vy);
-                Debug.Log($"[DevouringMaw] Visitor {visitor.name} at tile {visitorTile}, target {tile}, match: {visitorTile == tile}");
 
                 // Check if visitor is on exact target tile
                 if (visitorTile == tile)
                 {
-                    Debug.Log($"[DevouringMaw] FOUND visitor {visitor.name} on target tile {tile}!");
                     return visitor;
                 }
                 checkedCount++;
             }
 
-            Debug.LogWarning($"[DevouringMaw] No visitor found on exact tile {tile} after checking {checkedCount} visitors");
             return null;
         }
 
@@ -2088,7 +2030,6 @@ namespace FaeMaze.HeartPowers
 
             if (devourPrefab == null)
             {
-                Debug.LogError("[DevouringMaw] Failed to load devour prefab from Resources/Prefabs/Props/devour");
                 return;
             }
 
@@ -2098,7 +2039,6 @@ namespace FaeMaze.HeartPowers
 
             devourVisual = Object.Instantiate(devourPrefab, worldPos, Quaternion.identity);
             devourBasePosition = worldPos; // Store base position for animation
-            Debug.Log($"[DevouringMaw] Spawned devour prefab at {worldPos}");
         }
 
         private void UpdateDevourVisualAnimation()

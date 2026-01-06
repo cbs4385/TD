@@ -140,14 +140,12 @@ namespace FaeMaze.Systems
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("[EnvironmentDecorator] MazeGridBehaviour not found!");
                 enabled = false;
                 return;
             }
 
             if (treePrefab == null)
             {
-                Debug.LogError("[EnvironmentDecorator] Tree prefab not assigned!");
                 enabled = false;
                 return;
             }
@@ -204,7 +202,6 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour.Grid == null)
             {
-                Debug.LogError("[EnvironmentDecorator] Maze grid is null!");
                 return;
             }
 
@@ -295,7 +292,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[EnvironmentDecorator] Spawned {decorationCount} decorations");
         }
 
         private void Update()

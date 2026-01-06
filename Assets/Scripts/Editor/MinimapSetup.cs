@@ -19,7 +19,6 @@ namespace FaeMaze.Editor
             if (minimapObj == null)
             {
                 minimapObj = new GameObject("Minimap");
-                Debug.Log("Created new Minimap GameObject");
             }
 
             // Check if component already exists
@@ -27,22 +26,13 @@ namespace FaeMaze.Editor
             if (minimap == null)
             {
                 minimap = minimapObj.AddComponent<Minimap>();
-                Debug.Log("Added Minimap component");
             }
 
             // Find MazeGridBehaviour
             MazeGridBehaviour mazeGrid = Object.FindFirstObjectByType<MazeGridBehaviour>();
-            if (mazeGrid == null)
-            {
-                Debug.LogWarning("MazeGridBehaviour not found in scene!");
-            }
 
             // Find focal point
             GameObject focalPointObj = GameObject.Find("Focal Point");
-            if (focalPointObj == null)
-            {
-                Debug.LogWarning("Focal Point not found! Minimap will search for it at runtime.");
-            }
 
             // Configure Minimap
             SerializedObject minimapSO = new SerializedObject(minimap);
@@ -71,12 +61,6 @@ namespace FaeMaze.Editor
             // Mark scene as dirty
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 
-            Debug.Log("Minimap setup complete!");
-            Debug.Log($"- MazeGridBehaviour: {(mazeGrid != null ? mazeGrid.name : "Not found")}");
-            Debug.Log($"- Focal Point: {(focalPointObj != null ? focalPointObj.name : "Will search at runtime")}");
-            Debug.Log($"- Size: 20% of screen");
-            Debug.Log($"- View Radius: 20 tiles");
-            Debug.Log($"- Corner: Top Right");
 
             Selection.activeGameObject = minimapObj;
         }

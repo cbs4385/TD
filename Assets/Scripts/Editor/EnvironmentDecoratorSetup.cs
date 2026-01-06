@@ -17,7 +17,6 @@ namespace FaeMaze.Editor
             GameObject decoratorObj = GameObject.Find("GameRoot");
             if (decoratorObj == null)
             {
-                Debug.LogError("GameRoot not found in scene! Please open FaeMazeScene or ProceduralMazeScene.");
                 return;
             }
 
@@ -26,14 +25,12 @@ namespace FaeMaze.Editor
             if (decorator == null)
             {
                 decorator = decoratorObj.AddComponent<EnvironmentDecorator>();
-                Debug.Log("Added EnvironmentDecorator component to GameRoot");
             }
 
             // Find MazeGridBehaviour
             MazeGridBehaviour mazeGrid = Object.FindFirstObjectByType<MazeGridBehaviour>();
             if (mazeGrid == null)
             {
-                Debug.LogError("MazeGridBehaviour not found in scene!");
                 return;
             }
 
@@ -42,7 +39,6 @@ namespace FaeMaze.Editor
             GameObject treePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(treePrefabPath);
             if (treePrefab == null)
             {
-                Debug.LogError($"Tree prefab not found at {treePrefabPath}");
                 return;
             }
 
@@ -64,14 +60,6 @@ namespace FaeMaze.Editor
             // Mark scene as dirty
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 
-            Debug.Log("Environment Decorator setup complete!");
-            Debug.Log($"- MazeGridBehaviour: {mazeGrid.name}");
-            Debug.Log($"- Tree Prefab: {treePrefab.name}");
-            Debug.Log($"- Background Padding: 20 tiles");
-            Debug.Log($"- Z Rotation Variance: ±5 degrees");
-            Debug.Log($"- Black Backdrop: Enabled at z=+1000 (above game)");
-            Debug.Log($"- Transparency Radius: 3 tiles");
-            Debug.Log($"- Transparent Alpha: 0.25 (75% transparent)");
 
             Selection.activeGameObject = decoratorObj;
         }

@@ -51,21 +51,17 @@ namespace FaeMaze.UI
 
         private void OnEnable()
         {
-            Debug.Log($"[PlayerResourcesUIController] OnEnable called");
 
             // Subscribe to essence change events
             if (GameController.Instance != null)
             {
-                Debug.Log($"[PlayerResourcesUIController] Subscribing to OnEssenceChanged event");
                 GameController.Instance.OnEssenceChanged += HandleEssenceChanged;
 
                 // Initialize display with current value
-                Debug.Log($"[PlayerResourcesUIController] Initializing with current essence: {GameController.Instance.CurrentEssence}");
                 HandleEssenceChanged(GameController.Instance.CurrentEssence);
             }
             else
             {
-                Debug.LogWarning($"[PlayerResourcesUIController] GameController.Instance is null! Cannot subscribe to events.");
             }
         }
 
@@ -88,17 +84,13 @@ namespace FaeMaze.UI
         /// <param name="newValue">The new essence value</param>
         private void HandleEssenceChanged(int newValue)
         {
-            Debug.Log($"[PlayerResourcesUIController] HandleEssenceChanged called with {newValue}");
 
             if (essenceValueText != null)
             {
-                Debug.Log($"[PlayerResourcesUIController] Updating essenceValueText to {newValue}");
                 essenceValueText.text = newValue.ToString();
-                Debug.Log($"[PlayerResourcesUIController] Text updated, now reads: {essenceValueText.text}");
             }
             else
             {
-                Debug.LogWarning($"[PlayerResourcesUIController] essenceValueText is null! Cannot update UI.");
             }
         }
 
