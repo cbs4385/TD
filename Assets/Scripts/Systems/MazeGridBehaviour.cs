@@ -606,6 +606,15 @@ namespace FaeMaze.Systems
                         foundHeart = true;
                         heartCount++;
                     }
+
+                    // Extract spawn points (uppercase letters except H and N)
+                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
+                    {
+                        if (!spawnPoints.ContainsKey(symbol))
+                        {
+                            spawnPoints[symbol] = new Vector2Int(x, y);
+                        }
+                    }
                 }
             }
 
@@ -618,69 +627,70 @@ namespace FaeMaze.Systems
             {
             }
 
-            // Collect entrance positions (prefer carved entrances from the generator)
-            HashSet<Vector2Int> borderWalkableTiles = new HashSet<Vector2Int>();
-
-            foreach (var entrance in cachedEntranceEdges)
+            // Only create border-based spawn points if none were found in the maze symbols
+            if (spawnPoints.Count == 0)
             {
-                if (grid.InBounds(entrance.x, entrance.y) && grid.GetNode(entrance.x, entrance.y)?.walkable == true)
+                // Collect entrance positions (prefer carved entrances from the generator)
+                HashSet<Vector2Int> borderWalkableTiles = new HashSet<Vector2Int>();
+
+                foreach (var entrance in cachedEntranceEdges)
                 {
-                    borderWalkableTiles.Add(entrance);
+                    if (grid.InBounds(entrance.x, entrance.y) && grid.GetNode(entrance.x, entrance.y)?.walkable == true)
+                    {
+                        borderWalkableTiles.Add(entrance);
+                    }
+                }
+
+                // If generator didn't yield any (or for redundancy), check all border tiles
+                if (borderWalkableTiles.Count == 0)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        // Top and bottom borders
+                        if (grid.GetNode(x, 0)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(x, 0));
+                        if (grid.GetNode(x, height - 1)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(x, height - 1));
+                    }
+
+                    for (int y = 0; y < height; y++)
+                    {
+                        // Left and right borders
+                        if (grid.GetNode(0, y)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(0, y));
+                        if (grid.GetNode(width - 1, y)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(width - 1, y));
+                    }
+                }
+
+                // Set up spawn points from border entrances
+                // Use up to 4 evenly distributed entrances as spawn points
+                char[] spawnIds = new char[] { 'A', 'B', 'C', 'D' };
+                List<Vector2Int> borderWalkableList = borderWalkableTiles.ToList();
+                // Sort for deterministic ordering so indexing stays stable between runs
+                borderWalkableList.Sort((a, b) =>
+                {
+                    int cmp = a.x.CompareTo(b.x);
+                    return cmp != 0 ? cmp : a.y.CompareTo(b.y);
+                });
+
+                int borderCount = borderWalkableList.Count;
+                int numSpawns = Mathf.Min(borderCount, spawnIds.Length);
+
+                for (int i = 0; i < numSpawns; i++)
+                {
+                    int index = (i * borderCount) / numSpawns;
+                    Vector2Int pos = borderWalkableList[index];
+                    spawnPoints[spawnIds[i]] = pos;
                 }
             }
 
-            // If generator didn't yield any (or for redundancy), check all border tiles
-            if (borderWalkableTiles.Count == 0)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    // Top and bottom borders
-                    if (grid.GetNode(x, 0)?.walkable == true)
-                        borderWalkableTiles.Add(new Vector2Int(x, 0));
-                    if (grid.GetNode(x, height - 1)?.walkable == true)
-                        borderWalkableTiles.Add(new Vector2Int(x, height - 1));
-                }
-
-                for (int y = 0; y < height; y++)
-                {
-                    // Left and right borders
-                    if (grid.GetNode(0, y)?.walkable == true)
-                        borderWalkableTiles.Add(new Vector2Int(0, y));
-                    if (grid.GetNode(width - 1, y)?.walkable == true)
-                        borderWalkableTiles.Add(new Vector2Int(width - 1, y));
-                }
-            }
-
-
-            // Set up spawn points from border entrances
-            // Use up to 4 evenly distributed entrances as spawn points
-            char[] spawnIds = new char[] { 'A', 'B', 'C', 'D' };
-            List<Vector2Int> borderWalkableList = borderWalkableTiles.ToList();
-            // Sort for deterministic ordering so indexing stays stable between runs
-            borderWalkableList.Sort((a, b) =>
-            {
-                int cmp = a.x.CompareTo(b.x);
-                return cmp != 0 ? cmp : a.y.CompareTo(b.y);
-            });
-
-            int borderCount = borderWalkableList.Count;
-            int numSpawns = Mathf.Min(borderCount, spawnIds.Length);
-
-            for (int i = 0; i < numSpawns; i++)
-            {
-                int index = (i * borderCount) / numSpawns;
-                Vector2Int pos = borderWalkableList[index];
-                spawnPoints[spawnIds[i]] = pos;
-            }
-
-            // Set entrance to first spawn point (or first border tile if no spawns)
+            // Set entrance to first spawn point (or fallback to 0,0)
             if (spawnPoints.Count > 0)
             {
-                entranceGridPos = spawnPoints['A'];
-            }
-            else if (borderWalkableList.Count > 0)
-            {
-                entranceGridPos = borderWalkableList[0];
+                // Use the first spawn point alphabetically
+                var firstSpawnId = spawnPoints.Keys.OrderBy(c => c).First();
+                entranceGridPos = spawnPoints[firstSpawnId];
             }
             else
             {

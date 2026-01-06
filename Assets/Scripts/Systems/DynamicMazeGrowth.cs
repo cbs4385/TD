@@ -98,6 +98,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Creates portals at all existing spawn points.
+        /// If no spawn points exist, creates them from edge walkable tiles.
         /// </summary>
         private void InitializeSpawnPointPortals()
         {
@@ -107,6 +108,15 @@ namespace FaeMaze.Systems
             }
 
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
+
+            // If no spawn points exist, create them from edge walkable tiles
+            if (spawnPoints.Count == 0)
+            {
+                Debug.LogWarning("[DynamicMazeGrowth] No spawn points found! Creating spawn points from edge walkable tiles.");
+                CreateInitialSpawnPoints();
+                spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
+            }
+
             foreach (var kvp in spawnPoints)
             {
                 char spawnId = kvp.Key;
@@ -119,6 +129,82 @@ namespace FaeMaze.Systems
             nextSpawnIdIndex = spawnPoints.Count;
 
             Debug.Log($"[DynamicMazeGrowth] Initialized {spawnPointPortals.Count} portals at spawn points");
+        }
+
+        /// <summary>
+        /// Creates initial spawn points from edge walkable tiles if none exist.
+        /// </summary>
+        private void CreateInitialSpawnPoints()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return;
+            }
+
+            List<Vector2Int> edgeWalkableTiles = new List<Vector2Int>();
+
+            int width = mazeGridBehaviour.Grid.Width;
+            int height = mazeGridBehaviour.Grid.Height;
+
+            // Find all walkable tiles on the edges
+            for (int x = 0; x < width; x++)
+            {
+                // Top edge
+                var topNode = mazeGridBehaviour.Grid.GetNode(x, 0);
+                if (topNode != null && topNode.walkable)
+                {
+                    edgeWalkableTiles.Add(new Vector2Int(x, 0));
+                }
+
+                // Bottom edge
+                var bottomNode = mazeGridBehaviour.Grid.GetNode(x, height - 1);
+                if (bottomNode != null && bottomNode.walkable)
+                {
+                    edgeWalkableTiles.Add(new Vector2Int(x, height - 1));
+                }
+            }
+
+            for (int y = 1; y < height - 1; y++)
+            {
+                // Left edge
+                var leftNode = mazeGridBehaviour.Grid.GetNode(0, y);
+                if (leftNode != null && leftNode.walkable)
+                {
+                    edgeWalkableTiles.Add(new Vector2Int(0, y));
+                }
+
+                // Right edge
+                var rightNode = mazeGridBehaviour.Grid.GetNode(width - 1, y);
+                if (rightNode != null && rightNode.walkable)
+                {
+                    edgeWalkableTiles.Add(new Vector2Int(width - 1, y));
+                }
+            }
+
+            if (edgeWalkableTiles.Count == 0)
+            {
+                Debug.LogError("[DynamicMazeGrowth] No edge walkable tiles found! Cannot create spawn points.");
+                return;
+            }
+
+            // Select up to 4 evenly distributed edge tiles as spawn points
+            int numSpawnPoints = Mathf.Min(4, edgeWalkableTiles.Count);
+            for (int i = 0; i < numSpawnPoints; i++)
+            {
+                int index = (i * edgeWalkableTiles.Count) / numSpawnPoints;
+                Vector2Int pos = edgeWalkableTiles[index];
+                char spawnId = availableSpawnIds[i];
+
+                // Update the tile symbol
+                UpdateTileSymbol(pos, spawnId);
+
+                Debug.Log($"[DynamicMazeGrowth] Created initial spawn point '{spawnId}' at ({pos.x}, {pos.y})");
+            }
+
+            // Rebuild spawn points dictionary
+            RebuildSpawnPointsDictionary();
+
+            Debug.Log($"[DynamicMazeGrowth] Created {numSpawnPoints} initial spawn points from edge tiles");
         }
 
         #endregion
