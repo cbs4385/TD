@@ -242,21 +242,6 @@ namespace FaeMaze.Systems
                             ApplyTileFromChar(x, y, c);
                             break;
 
-                        case 'E':
-                            // Entrance/Exit - walkable and mark position
-                            ApplyTileFromChar(x, y, c);
-                            if (!foundEntrance)
-                            {
-                                entranceGridPos = new Vector2Int(x, y);
-                                foundEntrance = true;
-                            }
-                            // Also store as spawn point for visitor entry
-                            if (!spawnPoints.ContainsKey(c))
-                            {
-                                spawnPoints[c] = new Vector2Int(x, y);
-                            }
-                            break;
-
                         case 'N':
                             // Node hazard - walkable clearing center with hazard prop
                             ApplyTileFromChar(x, y, c);
@@ -269,21 +254,29 @@ namespace FaeMaze.Systems
                             foundHeart = true;
                             break;
 
-                        case 'A':
-                        case 'B':
-                        case 'C':
-                        case 'D':
-                            // Spawn markers - walkable and store position
-                            ApplyTileFromChar(x, y, '.');
-                            if (!spawnPoints.ContainsKey(c))
-                            {
-                                spawnPoints[c] = new Vector2Int(x, y);
-                            }
-                            break;
-
                         default:
-                            // Unknown character - treat as wall and log warning
-                            ApplyTileFromChar(x, y, '#');
+                            // Check if it's a spawn point marker (uppercase letter, excluding H and N)
+                            if (char.IsUpper(c) && c != 'H' && c != 'N')
+                            {
+                                // Spawn marker - walkable and store position
+                                ApplyTileFromChar(x, y, '.');
+                                if (!spawnPoints.ContainsKey(c))
+                                {
+                                    spawnPoints[c] = new Vector2Int(x, y);
+
+                                    // First spawn point also becomes the entrance
+                                    if (!foundEntrance)
+                                    {
+                                        entranceGridPos = new Vector2Int(x, y);
+                                        foundEntrance = true;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Unknown character - treat as wall
+                                ApplyTileFromChar(x, y, '#');
+                            }
                             break;
                     }
                 }
@@ -509,9 +502,11 @@ namespace FaeMaze.Systems
                 case '.':
                 case 'H':
                 case 'N': // Node hazard - walkable clearing center
-                case 'E': // Entrance/exit - walkable
                     return TileType.Path;
                 default:
+                    // Spawn points (uppercase letters except H and N) are walkable
+                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
+                        return TileType.Path;
                     return TileType.TreeBramble;
             }
         }

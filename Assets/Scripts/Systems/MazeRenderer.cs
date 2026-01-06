@@ -482,9 +482,10 @@ namespace FaeMaze.Systems
                     return pathColor;
                 case 'N':
                     return pathColor; // Node hazard sits on walkable path
-                case 'E':
-                    return pathColor; // Entrance/exit is walkable
                 default:
+                    // Spawn points (uppercase letters except H and N) are walkable paths
+                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
+                        return pathColor;
                     return walkable ? pathColor : wallColor;
             }
         }
