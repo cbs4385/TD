@@ -644,6 +644,40 @@ namespace ForestMaze
                 }
             }
 
+            // Mark non-root node centers with 'N' (node hazard)
+            for (int i = 1; i < state.Nodes.Count; i++)
+            {
+                var node = state.Nodes[i];
+                Vector2 nodeCenter = node.Position * scale + offset;
+                int cx = Mathf.RoundToInt(nodeCenter.x);
+                int cy = Mathf.RoundToInt(nodeCenter.y);
+
+                if (cx >= 0 && cx < gridWidth && cy >= 0 && cy < gridHeight)
+                {
+                    if (grid[cy, cx] == '.')
+                    {
+                        grid[cy, cx] = 'N';
+                    }
+                }
+            }
+
+            // Mark unconnected edge endpoints with 'E' (entrance/exit)
+            foreach (var edge in state.Edges.Where(e => e.Partial && e.PolylinePoints.Count > 0))
+            {
+                // Get the endpoint (last point in polyline - the ghost end)
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                int ex = Mathf.RoundToInt(endpoint.x);
+                int ey = Mathf.RoundToInt(endpoint.y);
+
+                if (ex >= 0 && ex < gridWidth && ey >= 0 && ey < gridHeight)
+                {
+                    if (grid[ey, ex] == '.')
+                    {
+                        grid[ey, ex] = 'E';
+                    }
+                }
+            }
+
             // Ensure border is always forest where there's no path
             for (int x = 0; x < gridWidth; x++)
             {

@@ -243,13 +243,23 @@ namespace FaeMaze.Systems
                             break;
 
                         case 'E':
-                            // Entrance - walkable and mark position (backwards compatibility)
-                            ApplyTileFromChar(x, y, '.');
+                            // Entrance/Exit - walkable and mark position
+                            ApplyTileFromChar(x, y, c);
                             if (!foundEntrance)
                             {
                                 entranceGridPos = new Vector2Int(x, y);
                                 foundEntrance = true;
                             }
+                            // Also store as spawn point for visitor entry
+                            if (!spawnPoints.ContainsKey(c))
+                            {
+                                spawnPoints[c] = new Vector2Int(x, y);
+                            }
+                            break;
+
+                        case 'N':
+                            // Node hazard - walkable clearing center with hazard prop
+                            ApplyTileFromChar(x, y, c);
                             break;
 
                         case 'H':
@@ -498,6 +508,8 @@ namespace FaeMaze.Systems
                     return TileType.Water;
                 case '.':
                 case 'H':
+                case 'N': // Node hazard - walkable clearing center
+                case 'E': // Entrance/exit - walkable
                     return TileType.Path;
                 default:
                     return TileType.TreeBramble;

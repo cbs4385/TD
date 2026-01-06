@@ -25,6 +25,10 @@ namespace FaeMaze.Systems
         [Tooltip("Prefab/model for water tiles")]
         private GameObject waterPrefab;
 
+        [SerializeField]
+        [Tooltip("Prefab/model for node hazards (placed at clearing centers)")]
+        private GameObject nodeHazardPrefab;
+
         [Header("Color Settings")]
         [SerializeField]
         [Tooltip("Color for walkable path tiles")]
@@ -237,6 +241,7 @@ namespace FaeMaze.Systems
             bool useWallPrefab = symbol == '#' && wallPrefab != null;
             bool useUndergrowthPrefab = symbol == ';' && undergrowthPrefab != null;
             bool useWaterPrefab = symbol == '~' && waterPrefab != null;
+            bool useNodeHazardPrefab = symbol == 'N' && nodeHazardPrefab != null;
 
             // Add random jitter for wall, undergrowth, and water tiles
             if (symbol == '#' || symbol == ';' || symbol == '~')
@@ -285,6 +290,14 @@ namespace FaeMaze.Systems
             {
                 tileObj = Instantiate(waterPrefab, tilesParent);
                 tileObj.name = $"Tile_{gridX}_{gridY}_Water";
+                tileObj.transform.position = worldPos;
+                tileObj.transform.rotation = prefabRotation;
+                tileObj.transform.localScale = Vector3.one * tileSize;
+            }
+            else if (useNodeHazardPrefab)
+            {
+                tileObj = Instantiate(nodeHazardPrefab, tilesParent);
+                tileObj.name = $"Tile_{gridX}_{gridY}_NodeHazard";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = Vector3.one * tileSize;
@@ -467,6 +480,10 @@ namespace FaeMaze.Systems
                     return heartColor;
                 case '.':
                     return pathColor;
+                case 'N':
+                    return pathColor; // Node hazard sits on walkable path
+                case 'E':
+                    return pathColor; // Entrance/exit is walkable
                 default:
                     return walkable ? pathColor : wallColor;
             }
