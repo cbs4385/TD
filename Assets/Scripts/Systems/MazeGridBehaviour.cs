@@ -505,7 +505,7 @@ namespace FaeMaze.Systems
                     return TileType.Path;
                 default:
                     // Spawn points (uppercase letters except H and N) are walkable
-                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
+                    if (char.IsUpper(c) && c != 'H' && c != 'N')
                         return TileType.Path;
                     return TileType.TreeBramble;
             }
