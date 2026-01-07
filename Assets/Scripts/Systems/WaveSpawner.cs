@@ -394,19 +394,14 @@ namespace FaeMaze.Systems
             Vector2Int startPos;
             Vector2Int destPos;
             char startId = '\0';
-            char destId = '\0';
 
             // Try to use spawn marker system first
             if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 1)
             {
-                // Prefer two different spawn points (entry -> exit)
-                if (mazeGridBehaviour.TryGetRandomSpawnPair(out startId, out startPos, out destId, out destPos))
+                // Get random spawn point as entrance
+                if (mazeGridBehaviour.TryGetRandomSpawnPoint(out startId, out startPos))
                 {
-                    // Both start and destination are valid spawn markers
-                }
-                // If only one spawn marker exists, fall back to heart as destination
-                else if (mazeGridBehaviour.TryGetRandomSpawnPoint(out startId, out startPos))
-                {
+                    // Always path to the heart (not to another spawn point)
                     destPos = mazeGridBehaviour.HeartGridPos;
                 }
                 else
@@ -461,8 +456,8 @@ namespace FaeMaze.Systems
             string visitorType = spawnedVisitor.GetType().Name.Replace("Controller", "");
             if (startId != '\0')
             {
-                string destinationSuffix = destId != '\0' ? destId.ToString() : "H";
-                visitorObject.name = $"{visitorType}_W{currentWaveNumber}_{visitorsSpawnedThisWave}_{startId}to{destinationSuffix}";
+                // All visitors now path to heart (H)
+                visitorObject.name = $"{visitorType}_W{currentWaveNumber}_{visitorsSpawnedThisWave}_{startId}toH";
             }
             else
             {
