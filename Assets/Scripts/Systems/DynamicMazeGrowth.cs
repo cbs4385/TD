@@ -559,28 +559,60 @@ namespace FaeMaze.Systems
                 RemovePortalAtSpawnPoint(spawnId);
             }
 
-            // Calculate world position
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y, -portalHeightOffset);
+            // Calculate direction to nearest walkable tile (toward maze interior)
+            Vector2Int directionToMaze = GetDirectionToNearestWalkableTile(gridPos);
+            Vector3 directionToMaze3D = new Vector3(directionToMaze.x, directionToMaze.y, 0f).normalized;
 
-            // Calculate rotation to face inward (toward nearest walkable tile)
-            Vector3 toCenter = CalculateDirectionToNearestWalkableTile(gridPos);
+            // Base world position at grid center
+            Vector3 baseWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y, -portalHeightOffset);
 
-            // Create rotation with Y-axis pointing toward the connected node
-            // The portal prefab should have its "forward" as the direction visitors walk through
-            // We want Y-axis to point toward the maze, so we use toCenter as "up"
-            Quaternion rotation = Quaternion.LookRotation(Vector3.forward, toCenter);
+            // Create rotation: +X axis points toward maze center, Y is up, Z is forward (into screen)
+            // We want the portal's +X to point toward the maze
+            Quaternion rotation;
+            if (directionToMaze3D != Vector3.zero)
+            {
+                // Use directionToMaze as the "right" (+X) direction
+                // Forward is into screen (0, 0, 1), Up is world up (0, 1, 0) in maze coords
+                Vector3 forward = Vector3.forward;
+                Vector3 up = Vector3.Cross(forward, directionToMaze3D).normalized;
+                if (up == Vector3.zero)
+                {
+                    // directionToMaze is parallel to forward, use default up
+                    up = Vector3.up;
+                }
 
-            // Apply additional rotation to match maze coordinate system (-90 around X)
+                // Create rotation from basis vectors
+                rotation = Quaternion.LookRotation(forward, up);
+
+                // Now rotate so +X points toward maze (rotate around Z axis)
+                float angle = Mathf.Atan2(directionToMaze3D.y, directionToMaze3D.x) * Mathf.Rad2Deg;
+                rotation = Quaternion.Euler(0, 0, angle - 90f) * rotation;
+            }
+            else
+            {
+                rotation = Quaternion.identity;
+            }
+
+            // Apply maze coordinate system rotation (-90 around X to match 2D plane)
             rotation = rotation * Quaternion.Euler(-90f, 0f, 0f);
 
+            // Calculate offset to position portal's -X side against the wall
+            // The wall is in the opposite direction from the maze interior
+            Vector3 wallDirection = -directionToMaze3D;
+
+            // Offset by half tile size in the direction away from maze (toward wall)
+            float tileSize = mazeGridBehaviour.TileSize;
+            float portalOffset = tileSize * 0.4f; // Position near edge of tile
+            Vector3 finalWorldPos = baseWorldPos + wallDirection * portalOffset;
+
             // Instantiate portal
-            GameObject portal = Instantiate(portalPrefab, worldPos, rotation, portalsParent);
+            GameObject portal = Instantiate(portalPrefab, finalWorldPos, rotation, portalsParent);
             portal.name = $"Portal_{spawnId}";
 
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
-            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at ({gridPos.x}, {gridPos.y}) facing direction {toCenter}");
+            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at ({gridPos.x}, {gridPos.y}) with +X facing {directionToMaze3D}, offset {portalOffset} toward wall");
         }
 
         /// <summary>
@@ -603,8 +635,9 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Calculates the direction from a spawn point toward the nearest connected walkable tile.
         /// This is used to orient portals so they face inward toward the maze.
+        /// Returns a unit direction vector (normalized grid coordinates).
         /// </summary>
-        private Vector3 CalculateDirectionToNearestWalkableTile(Vector2Int gridPos)
+        private Vector2Int GetDirectionToNearestWalkableTile(Vector2Int gridPos)
         {
             // Check all 4 orthogonal directions for walkable tiles
             Vector2Int[] directions = new Vector2Int[]
@@ -623,9 +656,8 @@ namespace FaeMaze.Systems
                     var node = mazeGridBehaviour.Grid.GetNode(checkPos.x, checkPos.y);
                     if (node != null && node.walkable)
                     {
-                        // Found adjacent walkable tile - face toward it
-                        Vector3 worldDir = new Vector3(dir.x, dir.y, 0f).normalized;
-                        return worldDir;
+                        // Found adjacent walkable tile - return direction toward it
+                        return dir;
                     }
                 }
             }
@@ -633,10 +665,23 @@ namespace FaeMaze.Systems
             // Fallback: face toward the heart of the maze
             Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
             Vector2Int fallbackDir = new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y);
-            Vector3 fallbackWorldDir = new Vector3(fallbackDir.x, fallbackDir.y, 0f).normalized;
+
+            // Normalize to primary direction (prefer cardinal over diagonal)
+            if (Mathf.Abs(fallbackDir.x) > Mathf.Abs(fallbackDir.y))
+            {
+                fallbackDir = new Vector2Int(fallbackDir.x > 0 ? 1 : -1, 0);
+            }
+            else if (fallbackDir.y != 0)
+            {
+                fallbackDir = new Vector2Int(0, fallbackDir.y > 0 ? 1 : -1);
+            }
+            else
+            {
+                fallbackDir = new Vector2Int(1, 0); // Default to right if at heart position
+            }
 
             Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile found for spawn point at ({gridPos.x}, {gridPos.y}), facing toward heart");
-            return fallbackWorldDir;
+            return fallbackDir;
         }
 
         /// <summary>
