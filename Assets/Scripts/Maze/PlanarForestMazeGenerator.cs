@@ -595,6 +595,8 @@ namespace ForestMaze
 
         private static string RasterizeToGrid(ForestMapState state, int gridWidth, int gridHeight)
         {
+            const int OUTER_PADDING = 4;
+
             // Find bounds of the generated graph
             float minX = state.Nodes.Min(n => n.Position.x) - R_KEEP;
             float maxX = state.Nodes.Max(n => n.Position.x) + R_KEEP;
@@ -604,14 +606,22 @@ namespace ForestMaze
             float graphWidth = maxX - minX;
             float graphHeight = maxY - minY;
 
+            int innerMinX = OUTER_PADDING;
+            int innerMaxX = gridWidth - 1 - OUTER_PADDING;
+            int innerMinY = OUTER_PADDING;
+            int innerMaxY = gridHeight - 1 - OUTER_PADDING;
+
+            int drawableWidth = gridWidth - 2 * OUTER_PADDING;
+            int drawableHeight = gridHeight - 2 * OUTER_PADDING;
+
             // Scale to fit grid
-            float scaleX = (gridWidth - 4) / graphWidth;
-            float scaleY = (gridHeight - 4) / graphHeight;
+            float scaleX = drawableWidth / graphWidth;
+            float scaleY = drawableHeight / graphHeight;
             float scale = Mathf.Min(scaleX, scaleY);
 
             Vector2 offset = new Vector2(
-                (gridWidth - graphWidth * scale) / 2 - minX * scale,
-                (gridHeight - graphHeight * scale) / 2 - minY * scale
+                innerMinX + (drawableWidth - graphWidth * scale) / 2 - minX * scale,
+                innerMinY + (drawableHeight - graphHeight * scale) / 2 - minY * scale
             );
 
             // Initialize grid with forest
@@ -721,27 +731,27 @@ namespace ForestMaze
                 Debug.Log($"[PlanarForestMaze] Placed {entranceExitCount} entrance/exit markers with unique spawn IDs for {partialEndpointCount} open endpoints");
             }
 
-            // Ensure border is always forest where there's no walkable tile
-            for (int x = 0; x < gridWidth; x++)
+            // Ensure inner border is always forest where there's no walkable tile
+            for (int x = innerMinX; x <= innerMaxX; x++)
             {
-                if (!IsWalkableTile(grid[0, x]))
-                    grid[0, x] = '#';
+                if (!IsWalkableTile(grid[innerMinY, x]))
+                    grid[innerMinY, x] = '#';
 
-                if (!IsWalkableTile(grid[gridHeight - 1, x]))
-                    grid[gridHeight - 1, x] = '#';
+                if (!IsWalkableTile(grid[innerMaxY, x]))
+                    grid[innerMaxY, x] = '#';
             }
 
-            for (int y = 0; y < gridHeight; y++)
+            for (int y = innerMinY; y <= innerMaxY; y++)
             {
-                if (!IsWalkableTile(grid[y, 0]))
-                    grid[y, 0] = '#';
+                if (!IsWalkableTile(grid[y, innerMinX]))
+                    grid[y, innerMinX] = '#';
 
-                if (!IsWalkableTile(grid[y, gridWidth - 1]))
-                    grid[y, gridWidth - 1] = '#';
+                if (!IsWalkableTile(grid[y, innerMaxX]))
+                    grid[y, innerMaxX] = '#';
             }
 
             // Ensure all edge walkable tiles have at least one adjacent walkable tile
-            EnsureEdgeTilesAreWalkable(grid, gridWidth, gridHeight);
+            EnsureEdgeTilesAreWalkable(grid, gridWidth, gridHeight, innerMinX, innerMaxX, innerMinY, innerMaxY);
 
             // Add entrances
             AddEntrance(grid, gridWidth, gridHeight, state.Random);
@@ -830,58 +840,58 @@ namespace ForestMaze
             }
         }
 
-        private static void EnsureEdgeTilesAreWalkable(char[,] grid, int width, int height)
+        private static void EnsureEdgeTilesAreWalkable(char[,] grid, int width, int height, int innerMinX, int innerMaxX, int innerMinY, int innerMaxY)
         {
             // For each walkable edge tile, ensure it has at least one orthogonally adjacent walkable tile
 
             // Top and bottom edges
-            for (int x = 0; x < width; x++)
+            for (int x = innerMinX; x <= innerMaxX; x++)
             {
                 // Top edge
-                if (IsWalkableTile(grid[0, x]))
+                if (IsWalkableTile(grid[innerMinY, x]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, x, 0, width, height))
+                    if (!HasAdjacentWalkableTile(grid, x, innerMinY, width, height))
                     {
                         // Make tile below walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[1, x]))
-                            grid[1, x] = '.';
+                        if (!IsWalkableTile(grid[innerMinY + 1, x]))
+                            grid[innerMinY + 1, x] = '.';
                     }
                 }
 
                 // Bottom edge
-                if (IsWalkableTile(grid[height - 1, x]))
+                if (IsWalkableTile(grid[innerMaxY, x]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, x, height - 1, width, height))
+                    if (!HasAdjacentWalkableTile(grid, x, innerMaxY, width, height))
                     {
                         // Make tile above walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[height - 2, x]))
-                            grid[height - 2, x] = '.';
+                        if (!IsWalkableTile(grid[innerMaxY - 1, x]))
+                            grid[innerMaxY - 1, x] = '.';
                     }
                 }
             }
 
             // Left and right edges
-            for (int y = 0; y < height; y++)
+            for (int y = innerMinY; y <= innerMaxY; y++)
             {
                 // Left edge
-                if (IsWalkableTile(grid[y, 0]))
+                if (IsWalkableTile(grid[y, innerMinX]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, 0, y, width, height))
+                    if (!HasAdjacentWalkableTile(grid, innerMinX, y, width, height))
                     {
                         // Make tile to the right walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[y, 1]))
-                            grid[y, 1] = '.';
+                        if (!IsWalkableTile(grid[y, innerMinX + 1]))
+                            grid[y, innerMinX + 1] = '.';
                     }
                 }
 
                 // Right edge
-                if (IsWalkableTile(grid[y, width - 1]))
+                if (IsWalkableTile(grid[y, innerMaxX]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, width - 1, y, width, height))
+                    if (!HasAdjacentWalkableTile(grid, innerMaxX, y, width, height))
                     {
                         // Make tile to the left walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[y, width - 2]))
-                            grid[y, width - 2] = '.';
+                        if (!IsWalkableTile(grid[y, innerMaxX - 1]))
+                            grid[y, innerMaxX - 1] = '.';
                     }
                 }
             }
