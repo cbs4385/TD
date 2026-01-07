@@ -299,6 +299,10 @@ namespace FaeMaze.Systems
                 mazeRenderer.RefreshMaze();
             }
 
+            // Trigger all active visitors to recalculate their paths
+            // This is necessary because spawn points have changed - old destinations may no longer be valid spawn points
+            TriggerVisitorPathRecalculation();
+
             Debug.Log($"[DynamicMazeGrowth] Growth complete. Added node with {newEndpoints.Count} new endpoints.");
         }
 
@@ -870,6 +874,31 @@ namespace FaeMaze.Systems
 
             // Update the maze grid behaviour's spawn points
             spawnPointsField.SetValue(mazeGridBehaviour, spawnPoints);
+        }
+
+        /// <summary>
+        /// Triggers all active visitors to recalculate their paths after maze growth.
+        /// This prevents visitors from getting stuck trying to reach spawn points that no longer exist.
+        /// </summary>
+        private void TriggerVisitorPathRecalculation()
+        {
+            var allVisitors = FaeMaze.Visitors.VisitorRegistry.All;
+            if (allVisitors == null)
+            {
+                return;
+            }
+
+            int recalculatedCount = 0;
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor != null)
+                {
+                    visitor.RecalculatePath();
+                    recalculatedCount++;
+                }
+            }
+
+            Debug.Log($"[DynamicMazeGrowth] Triggered path recalculation for {recalculatedCount} active visitors after maze growth");
         }
 
         #endregion
