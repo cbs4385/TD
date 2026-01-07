@@ -14,7 +14,7 @@ namespace FaeMaze.Systems
     public class DynamicMazeGrowth : MonoBehaviour
     {
         private const int NodeRadiusTiles = 3;
-        private const int EndpointClearanceRadius = 1;
+        private const int EndpointClearanceRadius = 2;
 
         #region Serialized Fields
 
@@ -236,18 +236,36 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Select a random spawn point to expand from
+            // Select a random spawn point to expand from, retrying if a chosen endpoint is blocked.
             var spawnPointsList = new List<KeyValuePair<char, Vector2Int>>(spawnPoints);
-            int randomIndex = Random.Range(0, spawnPointsList.Count);
-            var selectedSpawnPoint = spawnPointsList[randomIndex];
-            char selectedSpawnId = selectedSpawnPoint.Key;
-            Vector2Int selectedGridPos = selectedSpawnPoint.Value;
+            int startIndex = Random.Range(0, spawnPointsList.Count);
+            Vector2Int nodeCenter = Vector2Int.zero;
+            List<Vector2Int> newEndpoints = null;
+            char selectedSpawnId = '\0';
+            Vector2Int selectedGridPos = Vector2Int.zero;
+            bool grewSuccessfully = false;
 
-            Debug.Log($"[DynamicMazeGrowth] Growing maze from endpoint '{selectedSpawnId}' at ({selectedGridPos.x}, {selectedGridPos.y})");
-
-            if (!TryGenerateNewNodeFromEndpoint(selectedGridPos, out Vector2Int nodeCenter, out List<Vector2Int> newEndpoints))
+            for (int attempt = 0; attempt < spawnPointsList.Count; attempt++)
             {
-                Debug.Log($"[DynamicMazeGrowth] Growth aborted. Unable to place node from endpoint '{selectedSpawnId}'.");
+                int index = (startIndex + attempt) % spawnPointsList.Count;
+                var selectedSpawnPoint = spawnPointsList[index];
+                selectedSpawnId = selectedSpawnPoint.Key;
+                selectedGridPos = selectedSpawnPoint.Value;
+
+                Debug.Log($"[DynamicMazeGrowth] Growing maze from endpoint '{selectedSpawnId}' at ({selectedGridPos.x}, {selectedGridPos.y})");
+
+                if (TryGenerateNewNodeFromEndpoint(selectedGridPos, out nodeCenter, out newEndpoints))
+                {
+                    grewSuccessfully = true;
+                    break;
+                }
+
+                Debug.Log($"[DynamicMazeGrowth] Growth blocked at endpoint '{selectedSpawnId}'. Trying another.");
+            }
+
+            if (!grewSuccessfully)
+            {
+                Debug.Log("[DynamicMazeGrowth] Growth aborted. No valid endpoints available.");
                 return;
             }
 
