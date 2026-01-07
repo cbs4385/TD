@@ -566,9 +566,8 @@ namespace FaeMaze.Systems
             // Base world position at grid center
             Vector3 baseWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y, -portalHeightOffset);
 
-            // Calculate portal position: center at wall edge
-            // Wall is opposite direction from maze interior
-            Vector3 wallDirection = -directionToMaze3D;
+            // Calculate portal position: center at wall edge toward maze interior
+            Vector3 wallDirection = directionToMaze3D;
             float tileSize = mazeGridBehaviour.TileSize;
 
             // Position portal center at the wall edge of the tile
