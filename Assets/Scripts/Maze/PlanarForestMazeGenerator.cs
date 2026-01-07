@@ -993,14 +993,16 @@ namespace ForestMaze
                 // Only draw at the end if includeEndPoint is true.
                 if (!atEnd || includeEndPoint)
                 {
-                    // Draw center pixel and adjacent pixels for wider path
+                    // Draw center pixel and a single orthogonal neighbor for a thinner path
                     Set(x0, y0);
-
-                    // Draw orthogonal neighbors to ensure path is always walkable
-                    Set(x0 + 1, y0);
-                    Set(x0 - 1, y0);
-                    Set(x0, y0 + 1);
-                    Set(x0, y0 - 1);
+                    if (dx >= dy)
+                    {
+                        Set(x0, y0 + 1);
+                    }
+                    else
+                    {
+                        Set(x0 + 1, y0);
+                    }
                 }
 
                 if (atEnd)
