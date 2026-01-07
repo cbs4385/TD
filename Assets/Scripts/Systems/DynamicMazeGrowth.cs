@@ -327,7 +327,7 @@ namespace FaeMaze.Systems
                     continue;
                 }
 
-                if (!IsPathClear(fromGridPos, candidateCenter, fromGridPos))
+                if (!IsPathClear(fromGridPos, candidateCenter, fromGridPos, null, 0))
                 {
                     continue;
                 }
@@ -377,7 +377,7 @@ namespace FaeMaze.Systems
                         continue;
                     }
 
-                    if (!IsPathClear(nodeGridPos, candidateEndpoint, nodeGridPos))
+                    if (!IsPathClear(nodeGridPos, candidateEndpoint, nodeGridPos, nodeGridPos, NodeRadiusTiles))
                     {
                         continue;
                     }
@@ -489,7 +489,12 @@ namespace FaeMaze.Systems
                    endpoint.y <= mazeGridBehaviour.Grid.Height - 2;
         }
 
-        private bool IsPathClear(Vector2Int from, Vector2Int to, Vector2Int allowedWalkable)
+        private bool IsPathClear(
+            Vector2Int from,
+            Vector2Int to,
+            Vector2Int allowedWalkable,
+            Vector2Int? allowedCenter,
+            int allowedRadius)
         {
             int x0 = from.x;
             int y0 = from.y;
@@ -504,7 +509,7 @@ namespace FaeMaze.Systems
 
             while (true)
             {
-                if (!IsPathCellClear(x0, y0, allowedWalkable, dx > dy))
+                if (!IsPathCellClear(x0, y0, allowedWalkable, allowedCenter, allowedRadius, dx > dy))
                 {
                     return false;
                 }
@@ -530,23 +535,31 @@ namespace FaeMaze.Systems
             return true;
         }
 
-        private bool IsPathCellClear(int x, int y, Vector2Int allowedWalkable, bool horizontalBias)
+        private bool IsPathCellClear(
+            int x,
+            int y,
+            Vector2Int allowedWalkable,
+            Vector2Int? allowedCenter,
+            int allowedRadius,
+            bool horizontalBias)
         {
-            if (!IsCellClear(x, y, allowedWalkable))
+            if (!IsCellClear(x, y, allowedWalkable, allowedCenter, allowedRadius))
             {
                 return false;
             }
 
             if (horizontalBias)
             {
-                if (!IsCellClear(x, y + 1, allowedWalkable) || !IsCellClear(x, y - 1, allowedWalkable))
+                if (!IsCellClear(x, y + 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x, y - 1, allowedWalkable, allowedCenter, allowedRadius))
                 {
                     return false;
                 }
             }
             else
             {
-                if (!IsCellClear(x + 1, y, allowedWalkable) || !IsCellClear(x - 1, y, allowedWalkable))
+                if (!IsCellClear(x + 1, y, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x - 1, y, allowedWalkable, allowedCenter, allowedRadius))
                 {
                     return false;
                 }
@@ -569,7 +582,7 @@ namespace FaeMaze.Systems
 
                     int x = center.x + dx;
                     int y = center.y + dy;
-                    if (!IsCellClear(x, y, allowedWalkable))
+                    if (!IsCellClear(x, y, allowedWalkable, null, 0))
                     {
                         return false;
                     }
@@ -579,7 +592,12 @@ namespace FaeMaze.Systems
             return true;
         }
 
-        private bool IsCellClear(int x, int y, Vector2Int allowedWalkable)
+        private bool IsCellClear(
+            int x,
+            int y,
+            Vector2Int allowedWalkable,
+            Vector2Int? allowedCenter,
+            int allowedRadius)
         {
             if (!mazeGridBehaviour.Grid.InBounds(x, y))
             {
@@ -589,6 +607,16 @@ namespace FaeMaze.Systems
             if (x == allowedWalkable.x && y == allowedWalkable.y)
             {
                 return true;
+            }
+
+            if (allowedCenter.HasValue)
+            {
+                int dx = x - allowedCenter.Value.x;
+                int dy = y - allowedCenter.Value.y;
+                if (dx * dx + dy * dy <= allowedRadius * allowedRadius)
+                {
+                    return true;
+                }
             }
 
             var node = mazeGridBehaviour.Grid.GetNode(x, y);
