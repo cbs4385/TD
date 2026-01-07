@@ -12,6 +12,8 @@ namespace FaeMaze.Systems
     [RequireComponent(typeof(MazeGridBehaviour))]
     public class DynamicMazeGrowth : MonoBehaviour
     {
+        private const int NodeRadiusTiles = 3;
+
         #region Serialized Fields
 
         [Header("Growth Settings")]
@@ -73,21 +75,9 @@ namespace FaeMaze.Systems
                 portalsParent = portalsObj.transform;
             }
 
-            // Log maze grid info
-            if (mazeGridBehaviour != null && mazeGridBehaviour.Grid != null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
             {
-                int spawnCount = mazeGridBehaviour.GetSpawnPointCount();
-                Debug.Log($"[DynamicMazeGrowth] Maze initialized with {mazeGridBehaviour.Grid.Width}x{mazeGridBehaviour.Grid.Height} grid, {spawnCount} spawn points");
-
-                var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
-                foreach (var kvp in spawnPoints)
-                {
-                    Debug.Log($"[DynamicMazeGrowth] Spawn point '{kvp.Key}' at grid ({kvp.Value.x}, {kvp.Value.y})");
-                }
-            }
-            else
-            {
-                Debug.LogError("[DynamicMazeGrowth] MazeGridBehaviour or Grid is null!");
+                return;
             }
 
             // Initialize portals at existing spawn points
@@ -97,7 +87,6 @@ namespace FaeMaze.Systems
             if (autoGrowth)
             {
                 nextGrowthTime = Time.time + growthInterval;
-                Debug.Log($"[DynamicMazeGrowth] Auto-growth enabled. Next growth in {growthInterval} seconds");
             }
         }
 
@@ -122,23 +111,19 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("[DynamicMazeGrowth] MazeGridBehaviour is null! Cannot initialize portals.");
                 return;
             }
 
             if (portalPrefab == null)
             {
-                Debug.LogError("[DynamicMazeGrowth] Portal prefab is null! Portals will not be created. Please assign portal prefab in inspector.");
                 return;
             }
 
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
-            Debug.Log($"[DynamicMazeGrowth] Found {spawnPoints.Count} spawn points in maze grid");
 
             // If no spawn points exist, create them from edge walkable tiles
             if (spawnPoints.Count == 0)
             {
-                Debug.LogWarning("[DynamicMazeGrowth] No spawn points found! Creating spawn points from edge walkable tiles.");
                 CreateInitialSpawnPoints();
                 spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
             }
@@ -154,7 +139,6 @@ namespace FaeMaze.Systems
             // Track which spawn ID to use next
             nextSpawnIdIndex = spawnPoints.Count;
 
-            Debug.Log($"[DynamicMazeGrowth] Initialized {spawnPointPortals.Count} portals at spawn points");
         }
 
         /// <summary>
@@ -209,7 +193,6 @@ namespace FaeMaze.Systems
 
             if (edgeWalkableTiles.Count == 0)
             {
-                Debug.LogError("[DynamicMazeGrowth] No edge walkable tiles found! Cannot create spawn points.");
                 return;
             }
 
@@ -224,13 +207,10 @@ namespace FaeMaze.Systems
                 // Update the tile symbol
                 UpdateTileSymbol(pos, spawnId);
 
-                Debug.Log($"[DynamicMazeGrowth] Created initial spawn point '{spawnId}' at ({pos.x}, {pos.y})");
             }
 
             // Rebuild spawn points dictionary
             RebuildSpawnPointsDictionary();
-
-            Debug.Log($"[DynamicMazeGrowth] Created {numSpawnPoints} initial spawn points from edge tiles");
         }
 
         #endregion
@@ -244,7 +224,6 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
             {
-                Debug.LogWarning("[DynamicMazeGrowth] Cannot grow maze - grid not initialized");
                 return;
             }
 
@@ -252,7 +231,6 @@ namespace FaeMaze.Systems
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
             if (spawnPoints.Count == 0)
             {
-                Debug.LogWarning("[DynamicMazeGrowth] Cannot grow maze - no spawn points available");
                 return;
             }
 
@@ -263,7 +241,7 @@ namespace FaeMaze.Systems
             char selectedSpawnId = selectedSpawnPoint.Key;
             Vector2Int selectedGridPos = selectedSpawnPoint.Value;
 
-            Debug.Log($"[DynamicMazeGrowth] Growing maze from spawn point '{selectedSpawnId}' at grid position ({selectedGridPos.x}, {selectedGridPos.y})");
+            Debug.Log($"[DynamicMazeGrowth] Growing maze from endpoint '{selectedSpawnId}' at ({selectedGridPos.x}, {selectedGridPos.y})");
 
             // Remove portal from the selected spawn point
             RemovePortalAtSpawnPoint(selectedSpawnId);
@@ -286,7 +264,6 @@ namespace FaeMaze.Systems
                     // Create portal at new endpoint
                     CreatePortalAtSpawnPoint(newSpawnId, endpoint);
 
-                    Debug.Log($"[DynamicMazeGrowth] Created new spawn point '{newSpawnId}' at ({endpoint.x}, {endpoint.y})");
                 }
             }
 
@@ -299,7 +276,7 @@ namespace FaeMaze.Systems
                 mazeRenderer.RefreshMaze();
             }
 
-            Debug.Log($"[DynamicMazeGrowth] Maze growth complete. Added {newEndpoints.Count} new endpoints.");
+            Debug.Log($"[DynamicMazeGrowth] Growth complete. Added node with {newEndpoints.Count} new endpoints.");
         }
 
         /// <summary>
@@ -310,36 +287,16 @@ namespace FaeMaze.Systems
         {
             List<Vector2Int> newEndpoints = new List<Vector2Int>();
 
-            // Determine direction to expand (away from maze center)
-            Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
-            Vector2Int direction = new Vector2Int(
-                fromGridPos.x - heartPos.x,
-                fromGridPos.y - heartPos.y
-            );
+            Vector2Int direction = GetOutwardDirectionFromEndpoint(fromGridPos);
+            Vector2Int nodeGridPos = fromGridPos + direction * NodeRadiusTiles;
 
-            // Normalize to one of 4 cardinal directions
-            if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
-            {
-                direction = new Vector2Int(direction.x > 0 ? 1 : -1, 0);
-            }
-            else
-            {
-                direction = new Vector2Int(0, direction.y > 0 ? 1 : -1);
-            }
+            nodeGridPos.x = Mathf.Clamp(nodeGridPos.x, NodeRadiusTiles, mazeGridBehaviour.Grid.Width - 1 - NodeRadiusTiles);
+            nodeGridPos.y = Mathf.Clamp(nodeGridPos.y, NodeRadiusTiles, mazeGridBehaviour.Grid.Height - 1 - NodeRadiusTiles);
 
-            // Calculate node position (3-5 tiles away from endpoint)
-            int pathLength = Random.Range(3, 6);
-            Vector2Int nodeGridPos = fromGridPos + direction * pathLength;
-
-            // Ensure node position is within grid bounds
-            nodeGridPos.x = Mathf.Clamp(nodeGridPos.x, 2, mazeGridBehaviour.Grid.Width - 3);
-            nodeGridPos.y = Mathf.Clamp(nodeGridPos.y, 2, mazeGridBehaviour.Grid.Height - 3);
-
-            // Carve path from endpoint to node
+            SetTileWalkable(fromGridPos.x, fromGridPos.y, '.');
             CarvePath(fromGridPos, nodeGridPos);
-
-            // Carve node clearing (3x3 area)
             CarveNodeClearing(nodeGridPos);
+            SetTileWalkable(nodeGridPos.x, nodeGridPos.y, 'N');
 
             // Create 1-3 new branches from this node
             int numBranches = Random.Range(1, 4);
@@ -355,8 +312,8 @@ namespace FaeMaze.Systems
                 usedDirections.Add(branchDir);
 
                 // Create branch path
-                int branchLength = Random.Range(3, 6);
-                Vector2Int branchEndpoint = nodeGridPos + branchDir * branchLength;
+                int branchLength = Random.Range(3, 11);
+                Vector2Int branchEndpoint = nodeGridPos + branchDir * (NodeRadiusTiles + branchLength);
 
                 // Ensure endpoint is within bounds
                 branchEndpoint.x = Mathf.Clamp(branchEndpoint.x, 1, mazeGridBehaviour.Grid.Width - 2);
@@ -369,6 +326,42 @@ namespace FaeMaze.Systems
             }
 
             return newEndpoints;
+        }
+
+        private Vector2Int GetOutwardDirectionFromEndpoint(Vector2Int endpoint)
+        {
+            Vector2Int[] directions =
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(-1, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, -1)
+            };
+
+            foreach (var direction in directions)
+            {
+                Vector2Int neighbor = endpoint + direction;
+                if (!mazeGridBehaviour.Grid.InBounds(neighbor.x, neighbor.y))
+                {
+                    continue;
+                }
+
+                var node = mazeGridBehaviour.Grid.GetNode(neighbor.x, neighbor.y);
+                if (node != null && node.walkable)
+                {
+                    return endpoint - neighbor;
+                }
+            }
+
+            Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
+            Vector2Int fallback = new Vector2Int(endpoint.x - heartPos.x, endpoint.y - heartPos.y);
+
+            if (Mathf.Abs(fallback.x) > Mathf.Abs(fallback.y))
+            {
+                return new Vector2Int(fallback.x > 0 ? 1 : -1, 0);
+            }
+
+            return new Vector2Int(0, fallback.y > 0 ? 1 : -1);
         }
 
         /// <summary>
@@ -429,7 +422,7 @@ namespace FaeMaze.Systems
         /// </summary>
         private void CarveNodeClearing(Vector2Int center)
         {
-            int radius = 2;
+            int radius = NodeRadiusTiles;
             for (int dy = -radius; dy <= radius; dy++)
             {
                 for (int dx = -radius; dx <= radius; dx++)
@@ -508,7 +501,6 @@ namespace FaeMaze.Systems
 
             if (spawnPointsField == null)
             {
-                Debug.LogError("[DynamicMazeGrowth] Could not access spawnPoints field");
                 return;
             }
 
@@ -534,8 +526,6 @@ namespace FaeMaze.Systems
 
             // Update the maze grid behaviour's spawn points
             spawnPointsField.SetValue(mazeGridBehaviour, spawnPoints);
-
-            Debug.Log($"[DynamicMazeGrowth] Rebuilt spawn points dictionary with {spawnPoints.Count} entries");
         }
 
         #endregion
@@ -549,7 +539,6 @@ namespace FaeMaze.Systems
         {
             if (portalPrefab == null)
             {
-                Debug.LogWarning("[DynamicMazeGrowth] Cannot create portal - prefab not assigned");
                 return;
             }
 
@@ -606,7 +595,6 @@ namespace FaeMaze.Systems
             CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
                 Color.red, $"Portal_{spawnId}_XAxis");
 
-            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at grid ({gridPos.x}, {gridPos.y}), world pos {finalWorldPos}, +X facing {rotationVector} (toward node center)");
         }
 
         private void CreateDebugColumn(Vector3 start, Vector3 end, Color color, string name)
@@ -684,8 +672,6 @@ namespace FaeMaze.Systems
                     Destroy(portal);
                 }
                 spawnPointPortals.Remove(spawnId);
-
-                Debug.Log($"[DynamicMazeGrowth] Removed portal at spawn point '{spawnId}'");
             }
         }
 
@@ -806,7 +792,6 @@ namespace FaeMaze.Systems
                 Vector2Int offset = nearestWalkable.Value - gridPos;
                 Vector2Int direction = NormalizeToCardinal(offset);
                 facingVector = (mazeGridBehaviour.GridToWorld(nearestWalkable.Value.x, nearestWalkable.Value.y) - spawnWorldPos).normalized;
-                Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile for spawn point at ({gridPos.x}, {gridPos.y}); using nearest walkable tile at ({nearestWalkable.Value.x}, {nearestWalkable.Value.y})");
                 return direction;
             }
 
@@ -814,7 +799,6 @@ namespace FaeMaze.Systems
             Vector2Int fallbackDir = NormalizeToCardinal(new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y));
             facingVector = (targetWorldPos - spawnWorldPos).normalized;
 
-            Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile found for spawn point at ({gridPos.x}, {gridPos.y}), facing toward heart");
             return fallbackDir;
         }
 
@@ -902,7 +886,6 @@ namespace FaeMaze.Systems
         {
             if (nextSpawnIdIndex >= availableSpawnIds.Length)
             {
-                Debug.LogWarning("[DynamicMazeGrowth] Ran out of available spawn IDs");
                 return '\0';
             }
 
