@@ -250,7 +250,7 @@ namespace FaeMaze.Systems
             UpdateTileSymbol(selectedGridPos, '.');
 
             // Generate new node and paths
-            List<Vector2Int> newEndpoints = GenerateNewNodeFromEndpoint(selectedGridPos);
+            List<Vector2Int> newEndpoints = GenerateNewNodeFromEndpoint(selectedGridPos, out Vector2Int nodeCenter);
 
             // Assign spawn IDs to new endpoints and create portals
             foreach (var endpoint in newEndpoints)
@@ -262,7 +262,7 @@ namespace FaeMaze.Systems
                     UpdateTileSymbol(endpoint, newSpawnId);
 
                     // Create portal at new endpoint
-                    CreatePortalAtSpawnPoint(newSpawnId, endpoint);
+                    CreatePortalAtSpawnPoint(newSpawnId, endpoint, nodeCenter);
 
                 }
             }
@@ -283,12 +283,12 @@ namespace FaeMaze.Systems
         /// Generates a new node with paths branching from the given endpoint.
         /// Returns list of new open endpoints created.
         /// </summary>
-        private List<Vector2Int> GenerateNewNodeFromEndpoint(Vector2Int fromGridPos)
+        private List<Vector2Int> GenerateNewNodeFromEndpoint(Vector2Int fromGridPos, out Vector2Int nodeGridPos)
         {
             List<Vector2Int> newEndpoints = new List<Vector2Int>();
 
             Vector2Int direction = GetOutwardDirectionFromEndpoint(fromGridPos);
-            Vector2Int nodeGridPos = fromGridPos + direction * NodeRadiusTiles;
+            nodeGridPos = fromGridPos + direction * NodeRadiusTiles;
 
             nodeGridPos.x = Mathf.Clamp(nodeGridPos.x, NodeRadiusTiles, mazeGridBehaviour.Grid.Width - 1 - NodeRadiusTiles);
             nodeGridPos.y = Mathf.Clamp(nodeGridPos.y, NodeRadiusTiles, mazeGridBehaviour.Grid.Height - 1 - NodeRadiusTiles);
@@ -296,7 +296,6 @@ namespace FaeMaze.Systems
             SetTileWalkable(fromGridPos.x, fromGridPos.y, '.');
             CarvePath(fromGridPos, nodeGridPos);
             CarveNodeClearing(nodeGridPos);
-            SetTileWalkable(nodeGridPos.x, nodeGridPos.y, 'N');
 
             // Create 1-3 new branches from this node
             int numBranches = Random.Range(1, 4);
@@ -325,6 +324,7 @@ namespace FaeMaze.Systems
                 newEndpoints.Add(branchEndpoint);
             }
 
+            SetTileWalkable(nodeGridPos.x, nodeGridPos.y, 'N');
             return newEndpoints;
         }
 
@@ -537,6 +537,11 @@ namespace FaeMaze.Systems
         /// </summary>
         private void CreatePortalAtSpawnPoint(char spawnId, Vector2Int gridPos)
         {
+            CreatePortalAtSpawnPoint(spawnId, gridPos, null);
+        }
+
+        private void CreatePortalAtSpawnPoint(char spawnId, Vector2Int gridPos, Vector2Int? targetNodeCenter)
+        {
             if (portalPrefab == null)
             {
                 return;
@@ -549,7 +554,17 @@ namespace FaeMaze.Systems
             }
 
             // Calculate direction to nearest walkable tile (toward maze interior)
-            Vector2Int directionToMaze = GetDirectionToNearestWalkableTile(gridPos, out Vector3 facingVector, out Vector3 targetWorldPos);
+            Vector3? targetOverride = null;
+            if (targetNodeCenter.HasValue)
+            {
+                targetOverride = mazeGridBehaviour.GridToWorld(targetNodeCenter.Value.x, targetNodeCenter.Value.y);
+            }
+
+            Vector2Int directionToMaze = GetDirectionToNearestWalkableTile(
+                gridPos,
+                out Vector3 facingVector,
+                out Vector3 targetWorldPos,
+                targetOverride);
             Vector3 directionToMaze3D = new Vector3(directionToMaze.x, directionToMaze.y, 0f).normalized;
 
             // Base world position at grid center
@@ -680,7 +695,11 @@ namespace FaeMaze.Systems
         /// This is used to orient portals so they face inward toward the maze.
         /// Returns a unit direction vector (normalized grid coordinates).
         /// </summary>
-        private Vector2Int GetDirectionToNearestWalkableTile(Vector2Int gridPos, out Vector3 facingVector, out Vector3 targetWorldPos)
+        private Vector2Int GetDirectionToNearestWalkableTile(
+            Vector2Int gridPos,
+            out Vector3 facingVector,
+            out Vector3 targetWorldPos,
+            Vector3? targetOverride = null)
         {
             facingVector = Vector3.zero;
             targetWorldPos = Vector3.zero;
@@ -697,10 +716,10 @@ namespace FaeMaze.Systems
             Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
             Vector3 heartWorldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
-            targetWorldPos = heartWorldPos;
+            targetWorldPos = targetOverride ?? heartWorldPos;
             if (TryGetNearestNodeCenterWorldPos(gridPos, out Vector3 nodeCenterWorldPos))
             {
-                targetWorldPos = nodeCenterWorldPos;
+                targetWorldPos = targetOverride ?? nodeCenterWorldPos;
             }
             Vector2 toHeart = new Vector2(heartWorldPos.x - spawnWorldPos.x, heartWorldPos.y - spawnWorldPos.y);
             float toHeartMagnitude = toHeart.sqrMagnitude > 0f ? toHeart.magnitude : 0f;
