@@ -707,6 +707,10 @@ namespace FaeMaze.Systems
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
             Vector3 heartWorldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
             targetWorldPos = heartWorldPos;
+            if (TryGetNearestNodeCenterWorldPos(gridPos, out Vector3 nodeCenterWorldPos))
+            {
+                targetWorldPos = nodeCenterWorldPos;
+            }
             Vector2 toHeart = new Vector2(heartWorldPos.x - spawnWorldPos.x, heartWorldPos.y - spawnWorldPos.y);
             float toHeartMagnitude = toHeart.sqrMagnitude > 0f ? toHeart.magnitude : 0f;
             float bestDot = float.NegativeInfinity;
@@ -753,8 +757,7 @@ namespace FaeMaze.Systems
             if (foundAdjacent)
             {
                 Vector2Int targetGridPos = gridPos + bestDirection;
-                targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
-                facingVector = (targetWorldPos - spawnWorldPos).normalized;
+                facingVector = (mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y) - spawnWorldPos).normalized;
                 return bestDirection;
             }
 
@@ -797,19 +800,78 @@ namespace FaeMaze.Systems
             {
                 Vector2Int offset = nearestWalkable.Value - gridPos;
                 Vector2Int direction = NormalizeToCardinal(offset);
-                targetWorldPos = mazeGridBehaviour.GridToWorld(nearestWalkable.Value.x, nearestWalkable.Value.y);
-                facingVector = (targetWorldPos - spawnWorldPos).normalized;
+                facingVector = (mazeGridBehaviour.GridToWorld(nearestWalkable.Value.x, nearestWalkable.Value.y) - spawnWorldPos).normalized;
                 Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile for spawn point at ({gridPos.x}, {gridPos.y}); using nearest walkable tile at ({nearestWalkable.Value.x}, {nearestWalkable.Value.y})");
                 return direction;
             }
 
             // Fallback: face toward the heart of the maze
             Vector2Int fallbackDir = NormalizeToCardinal(new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y));
-            targetWorldPos = heartWorldPos;
             facingVector = (targetWorldPos - spawnWorldPos).normalized;
 
             Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile found for spawn point at ({gridPos.x}, {gridPos.y}), facing toward heart");
             return fallbackDir;
+        }
+
+        private bool TryGetNearestNodeCenterWorldPos(Vector2Int gridPos, out Vector3 nodeWorldPos)
+        {
+            nodeWorldPos = Vector3.zero;
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return false;
+            }
+
+            int width = mazeGridBehaviour.Grid.Width;
+            int height = mazeGridBehaviour.Grid.Height;
+            bool[,] visited = new bool[width, height];
+            Queue<Vector2Int> queue = new Queue<Vector2Int>();
+
+            queue.Enqueue(gridPos);
+            visited[gridPos.x, gridPos.y] = true;
+
+            Vector2Int[] directions =
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(-1, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, -1)
+            };
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                var node = mazeGridBehaviour.Grid.GetNode(current.x, current.y);
+                if (node != null && (node.symbol == 'N' || node.symbol == 'H'))
+                {
+                    nodeWorldPos = mazeGridBehaviour.GridToWorld(current.x, current.y);
+                    return true;
+                }
+
+                foreach (var dir in directions)
+                {
+                    Vector2Int next = current + dir;
+                    if (!mazeGridBehaviour.Grid.InBounds(next.x, next.y))
+                    {
+                        continue;
+                    }
+
+                    if (visited[next.x, next.y])
+                    {
+                        continue;
+                    }
+
+                    var nextNode = mazeGridBehaviour.Grid.GetNode(next.x, next.y);
+                    if (nextNode == null || !nextNode.walkable)
+                    {
+                        continue;
+                    }
+
+                    visited[next.x, next.y] = true;
+                    queue.Enqueue(next);
+                }
+            }
+
+            return false;
         }
 
         private Vector2Int NormalizeToCardinal(Vector2Int direction)
