@@ -332,7 +332,7 @@ namespace FaeMaze.Systems
                     continue;
                 }
 
-                if (!IsClearingAreaClear(candidateCenter, fromGridPos))
+                if (!IsClearingAreaClear(candidateCenter, fromGridPos, 1))
                 {
                     continue;
                 }
@@ -551,7 +551,11 @@ namespace FaeMaze.Systems
             if (horizontalBias)
             {
                 if (!IsCellClear(x, y + 1, allowedWalkable, allowedCenter, allowedRadius) ||
-                    !IsCellClear(x, y - 1, allowedWalkable, allowedCenter, allowedRadius))
+                    !IsCellClear(x, y - 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x + 1, y + 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x - 1, y + 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x + 1, y - 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x - 1, y - 1, allowedWalkable, allowedCenter, allowedRadius))
                 {
                     return false;
                 }
@@ -559,7 +563,11 @@ namespace FaeMaze.Systems
             else
             {
                 if (!IsCellClear(x + 1, y, allowedWalkable, allowedCenter, allowedRadius) ||
-                    !IsCellClear(x - 1, y, allowedWalkable, allowedCenter, allowedRadius))
+                    !IsCellClear(x - 1, y, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x + 1, y + 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x - 1, y + 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x + 1, y - 1, allowedWalkable, allowedCenter, allowedRadius) ||
+                    !IsCellClear(x - 1, y - 1, allowedWalkable, allowedCenter, allowedRadius))
                 {
                     return false;
                 }
@@ -568,14 +576,15 @@ namespace FaeMaze.Systems
             return true;
         }
 
-        private bool IsClearingAreaClear(Vector2Int center, Vector2Int allowedWalkable)
+        private bool IsClearingAreaClear(Vector2Int center, Vector2Int allowedWalkable, int buffer)
         {
             int radius = NodeRadiusTiles;
-            for (int dy = -radius; dy <= radius; dy++)
+            int outerRadius = radius + Mathf.Max(0, buffer);
+            for (int dy = -outerRadius; dy <= outerRadius; dy++)
             {
-                for (int dx = -radius; dx <= radius; dx++)
+                for (int dx = -outerRadius; dx <= outerRadius; dx++)
                 {
-                    if (dx * dx + dy * dy > radius * radius)
+                    if (dx * dx + dy * dy > outerRadius * outerRadius)
                     {
                         continue;
                     }
