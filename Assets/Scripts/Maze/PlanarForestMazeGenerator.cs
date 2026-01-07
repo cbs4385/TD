@@ -585,6 +585,9 @@ namespace ForestMaze
 
         private static float SegmentToSegmentDistance(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2)
         {
+            if (SegmentsIntersect(a1, a2, b1, b2))
+                return 0f;
+
             float[] dists = {
                 PointToSegmentDistance(a1, b1, b2),
                 PointToSegmentDistance(a2, b1, b2),
@@ -593,6 +596,41 @@ namespace ForestMaze
             };
 
             return dists.Min();
+        }
+
+        private static bool SegmentsIntersect(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2)
+        {
+            float o1 = Orientation(a1, a2, b1);
+            float o2 = Orientation(a1, a2, b2);
+            float o3 = Orientation(b1, b2, a1);
+            float o4 = Orientation(b1, b2, a2);
+
+            if (o1 == 0f && OnSegment(a1, b1, a2))
+                return true;
+            if (o2 == 0f && OnSegment(a1, b2, a2))
+                return true;
+            if (o3 == 0f && OnSegment(b1, a1, b2))
+                return true;
+            if (o4 == 0f && OnSegment(b1, a2, b2))
+                return true;
+
+            return (o1 > 0f) != (o2 > 0f) && (o3 > 0f) != (o4 > 0f);
+        }
+
+        private static float Orientation(Vector2 a, Vector2 b, Vector2 c)
+        {
+            float value = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+            if (Mathf.Abs(value) < 1e-6f)
+                return 0f;
+            return value > 0f ? 1f : -1f;
+        }
+
+        private static bool OnSegment(Vector2 a, Vector2 b, Vector2 c)
+        {
+            return b.x <= Mathf.Max(a.x, c.x) + 1e-6f &&
+                   b.x >= Mathf.Min(a.x, c.x) - 1e-6f &&
+                   b.y <= Mathf.Max(a.y, c.y) + 1e-6f &&
+                   b.y >= Mathf.Min(a.y, c.y) - 1e-6f;
         }
 
         private static string RasterizeToGrid(ForestMapState state, int gridWidth, int gridHeight)
