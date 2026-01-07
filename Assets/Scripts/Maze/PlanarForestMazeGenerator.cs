@@ -231,6 +231,7 @@ namespace ForestMaze
                 MaxDegree = 1
             };
             state.Nodes.Add(root);
+            LogNodeEdgePlan(root.Id, root.MaxDegree);
 
             // Create first normal node
             float angle = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
@@ -251,6 +252,7 @@ namespace ForestMaze
                 MaxDegree = maxDegree
             };
             state.Nodes.Add(node1);
+            LogNodeEdgePlan(node1.Id, node1.MaxDegree);
 
             // Create edge between root and node1 (straight line for simplicity)
             Vector2 direction = (node1Pos - root.Position).normalized;
@@ -269,8 +271,10 @@ namespace ForestMaze
 
             state.Edges.Add(edge);
             root.AddEdge(edge.Id, angle);
+            LogEdgeOrientation(root.Id, edge.Id, angle);
             float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
             node1.AddEdge(edge.Id, reverseAngle);
+            LogEdgeOrientation(node1.Id, edge.Id, reverseAngle);
 
             // Fill node1's remaining capacity with partial edges
             while (node1.HasCapacity())
@@ -300,6 +304,7 @@ namespace ForestMaze
                 MaxDegree = maxDegree
             };
             state.Nodes.Add(newNode);
+            LogNodeEdgePlan(newNode.Id, newNode.MaxDegree);
 
             // Convert partial edge to complete
             edge.NodeB = newNode.Id;
@@ -312,6 +317,7 @@ namespace ForestMaze
             reverseAngle = (reverseAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
             newNode.AddEdge(edgeId.Value, reverseAngle);
+            LogEdgeOrientation(newNode.Id, edgeId.Value, reverseAngle);
 
             // Remove from frontier and ghost list
             state.Frontier.Remove(edgeId.Value);
@@ -409,6 +415,7 @@ namespace ForestMaze
                             state.Frontier.Add(edge.Id);
                             state.GhostCenters.Add(ghostCenter);
                             node.AddEdge(edge.Id, theta);
+                            LogEdgeOrientation(node.Id, edge.Id, theta);
 
                             return true;
                         }
@@ -473,7 +480,9 @@ namespace ForestMaze
 
                 state.Edges.Add(edge);
                 newNode.AddEdge(edge.Id, angle);
+                LogEdgeOrientation(newNode.Id, edge.Id, angle);
                 candidate.AddEdge(edge.Id, reverseAngle);
+                LogEdgeOrientation(candidate.Id, edge.Id, reverseAngle);
 
                 return true;
             }
@@ -516,6 +525,17 @@ namespace ForestMaze
             }
 
             return null;
+        }
+
+        private static void LogNodeEdgePlan(int nodeId, int maxDegree)
+        {
+            Debug.Log($"[PlanarForestMaze] Node {nodeId} target edges={maxDegree}");
+        }
+
+        private static void LogEdgeOrientation(int nodeId, int edgeId, float angleRadians)
+        {
+            float angleDegrees = angleRadians * Mathf.Rad2Deg;
+            Debug.Log($"[PlanarForestMaze] Node {nodeId} edge {edgeId} orientation={angleDegrees:F1}°");
         }
 
         private static bool IsPolylineValid(ForestMapState state, List<Vector2> polyline,
