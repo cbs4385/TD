@@ -352,7 +352,7 @@ namespace ForestMaze
                 if (!IsAngleValid(candidate, reverseAngle))
                     continue;
 
-                var polyline = BuildCurvedPolyline(newNode.Position, candidate.Position,
+                var polyline = BuildCurvedPolyline(state, newNode.Position, candidate.Position,
                     new List<int> { newNode.Id, candidate.Id });
 
                 if (polyline == null)
@@ -378,7 +378,7 @@ namespace ForestMaze
             return false;
         }
 
-        private static List<Vector2> BuildCurvedPolyline(Vector2 startCenter, Vector2 endCenter,
+        private static List<Vector2> BuildCurvedPolyline(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
             List<int> incidentNodes)
         {
             Vector2 direction = (endCenter - startCenter).normalized;
@@ -406,8 +406,10 @@ namespace ForestMaze
 
                 var polyline = new List<Vector2> { startBoundary, control1, control2, endBoundary };
 
-                // This would need state parameter - simplified for now
-                return polyline;
+                if (IsPolylineValid(state, polyline, incidentNodes))
+                {
+                    return polyline;
+                }
             }
 
             return null;
