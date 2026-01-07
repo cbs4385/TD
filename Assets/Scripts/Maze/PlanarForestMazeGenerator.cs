@@ -91,6 +91,9 @@ namespace ForestMaze
 
             // Initialize with root and first node
             Initialize(state);
+            int lastLoggedNodeCount = 0;
+            LogGenerationSnapshot(state, gridWidth, gridHeight, "Heart Node", 1, ref lastLoggedNodeCount);
+            LogGenerationSnapshot(state, gridWidth, gridHeight, "Heart Node and Node 1", 2, ref lastLoggedNodeCount);
 
             // Grow to ensure minimum node count, then preserve open endpoints
             int minNodeCount = 6; // Root + at least 5 normal nodes
@@ -103,6 +106,7 @@ namespace ForestMaze
             {
                 if (state.Frontier.Count == 0 || !Step(state))
                     break;
+                LogNodeGrowthSnapshotIfNeeded(state, gridWidth, gridHeight, ref lastLoggedNodeCount);
             }
 
             // Phase 2: Continue growing but preserve minimum open endpoints
@@ -110,13 +114,110 @@ namespace ForestMaze
             {
                 if (!Step(state))
                     break;
+                LogNodeGrowthSnapshotIfNeeded(state, gridWidth, gridHeight, ref lastLoggedNodeCount);
             }
             Debug.Log($"[PlanarForestMaze] Growth complete: nodes={state.Nodes.Count}, openEndpoints={state.Frontier.Count}");
 
             // Rasterize the graph to a grid
-            string mazeString = RasterizeToGrid(state, gridWidth, gridHeight);
-            Debug.Log($"[PlanarForestMaze] Generated maze:\n{mazeString}");
-            return mazeString;
+            return RasterizeToGrid(state, gridWidth, gridHeight);
+        }
+
+        private static void LogNodeGrowthSnapshotIfNeeded(
+            ForestMapState state,
+            int gridWidth,
+            int gridHeight,
+            ref int lastLoggedNodeCount)
+        {
+            int nodeCount = state.Nodes.Count;
+            if (nodeCount <= lastLoggedNodeCount)
+            {
+                return;
+            }
+
+            string label = GetGenerationSnapshotLabel(nodeCount);
+            if (string.IsNullOrEmpty(label))
+            {
+                return;
+            }
+
+            LogGenerationSnapshot(state, gridWidth, gridHeight, label, nodeCount, ref lastLoggedNodeCount);
+        }
+
+        private static string GetGenerationSnapshotLabel(int nodeCount)
+        {
+            switch (nodeCount)
+            {
+                case 3:
+                    return "Heart Node and Nodes 1 and 2";
+                case 4:
+                    return "Heart Node and Nodes 1 through 3";
+                case 5:
+                    return "Heart Node and Nodes 1 through 4";
+                case 6:
+                    return "Heart Node and Nodes 1 through 5";
+                default:
+                    return null;
+            }
+        }
+
+        private static void LogGenerationSnapshot(
+            ForestMapState state,
+            int gridWidth,
+            int gridHeight,
+            string label,
+            int nodeCount,
+            ref int lastLoggedNodeCount)
+        {
+            var snapshotState = CreateSnapshotState(state, nodeCount);
+            string snapshot = RasterizeToGrid(snapshotState, gridWidth, gridHeight);
+            Debug.Log($"[PlanarForestMaze] {label}:\n{snapshot}");
+            lastLoggedNodeCount = nodeCount;
+        }
+
+        private static ForestMapState CreateSnapshotState(ForestMapState state, int nodeCount)
+        {
+            var snapshot = new ForestMapState
+            {
+                Random = state.Random
+            };
+
+            foreach (var node in state.Nodes.Where(n => n.Id < nodeCount).OrderBy(n => n.Id))
+            {
+                snapshot.Nodes.Add(new Node
+                {
+                    Id = node.Id,
+                    Position = node.Position,
+                    Kind = node.Kind,
+                    MaxDegree = node.MaxDegree,
+                    IncidentEdges = new List<int>(node.IncidentEdges),
+                    UsedAngles = new List<float>(node.UsedAngles)
+                });
+            }
+
+            foreach (var edge in state.Edges)
+            {
+                if (edge.NodeA >= nodeCount)
+                {
+                    continue;
+                }
+
+                if (edge.NodeB.HasValue && edge.NodeB.Value >= nodeCount)
+                {
+                    continue;
+                }
+
+                snapshot.Edges.Add(new Edge
+                {
+                    Id = edge.Id,
+                    NodeA = edge.NodeA,
+                    NodeB = edge.NodeB,
+                    PolylinePoints = new List<Vector2>(edge.PolylinePoints),
+                    Partial = edge.Partial,
+                    GhostCenter = edge.GhostCenter
+                });
+            }
+
+            return snapshot;
         }
 
         private static void Initialize(ForestMapState state)
