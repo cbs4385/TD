@@ -114,7 +114,9 @@ namespace ForestMaze
             Debug.Log($"[PlanarForestMaze] Growth complete: nodes={state.Nodes.Count}, openEndpoints={state.Frontier.Count}");
 
             // Rasterize the graph to a grid
-            return RasterizeToGrid(state, gridWidth, gridHeight);
+            string mazeString = RasterizeToGrid(state, gridWidth, gridHeight);
+            Debug.Log($"[PlanarForestMaze] Generated maze:\n{mazeString}");
+            return mazeString;
         }
 
         private static void Initialize(ForestMapState state)
