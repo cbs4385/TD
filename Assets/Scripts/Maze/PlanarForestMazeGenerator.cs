@@ -595,8 +595,8 @@ namespace ForestMaze
 
         private static string RasterizeToGrid(ForestMapState state, int gridWidth, int gridHeight)
         {
-            int backingWidth = 1000;
-            int backingHeight = 1000;
+            int backingWidth = 500;
+            int backingHeight = 500;
             int drawWidth = gridWidth;
             int drawHeight = gridHeight;
             int drawOffsetX = (backingWidth - drawWidth) / 2;

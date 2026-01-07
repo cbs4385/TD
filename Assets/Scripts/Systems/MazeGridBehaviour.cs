@@ -536,7 +536,7 @@ namespace FaeMaze.Systems
             string mazeString;
             TileType[,] tiles;
             char[,] symbols;
-            const int planarBackingSize = 1000;
+            const int planarBackingSize = 500;
 
             if (usePlanarGenerator)
             {
