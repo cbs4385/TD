@@ -595,6 +595,13 @@ namespace ForestMaze
 
         private static string RasterizeToGrid(ForestMapState state, int gridWidth, int gridHeight)
         {
+            int backingWidth = 1000;
+            int backingHeight = 1000;
+            int drawWidth = gridWidth;
+            int drawHeight = gridHeight;
+            int drawOffsetX = (backingWidth - drawWidth) / 2;
+            int drawOffsetY = (backingHeight - drawHeight) / 2;
+
             // Find bounds of the generated graph
             float minX = state.Nodes.Min(n => n.Position.x) - R_KEEP;
             float maxX = state.Nodes.Max(n => n.Position.x) + R_KEEP;
@@ -605,20 +612,21 @@ namespace ForestMaze
             float graphHeight = maxY - minY;
 
             // Scale to fit grid
-            float scaleX = (gridWidth - 4) / graphWidth;
-            float scaleY = (gridHeight - 4) / graphHeight;
+            float scaleX = (drawWidth - 4) / graphWidth;
+            float scaleY = (drawHeight - 4) / graphHeight;
             float scale = Mathf.Min(scaleX, scaleY);
 
             Vector2 offset = new Vector2(
-                (gridWidth - graphWidth * scale) / 2 - minX * scale,
-                (gridHeight - graphHeight * scale) / 2 - minY * scale
+                (drawWidth - graphWidth * scale) / 2 - minX * scale,
+                (drawHeight - graphHeight * scale) / 2 - minY * scale
             );
+            Vector2 backingOffset = new Vector2(drawOffsetX, drawOffsetY);
 
             // Initialize grid with forest
-            char[,] grid = new char[gridHeight, gridWidth];
-            for (int y = 0; y < gridHeight; y++)
+            char[,] grid = new char[backingHeight, backingWidth];
+            for (int y = 0; y < backingHeight; y++)
             {
-                for (int x = 0; x < gridWidth; x++)
+                for (int x = 0; x < backingWidth; x++)
                 {
                     grid[y, x] = '#';
                 }
@@ -629,30 +637,30 @@ namespace ForestMaze
             {
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 p1 = edge.PolylinePoints[i] * scale + offset;
-                    Vector2 p2 = edge.PolylinePoints[i + 1] * scale + offset;
+                    Vector2 p1 = edge.PolylinePoints[i] * scale + offset + backingOffset;
+                    Vector2 p2 = edge.PolylinePoints[i + 1] * scale + offset + backingOffset;
 
-                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight);
+                    DrawLineOnGrid(grid, p1, p2, '.', backingWidth, backingHeight);
                 }
             }
 
             // Draw clearings (nodes)
             foreach (var node in state.Nodes)
             {
-                Vector2 center = node.Position * scale + offset;
+                Vector2 center = node.Position * scale + offset + backingOffset;
                 float radius = NODE_RADIUS * scale;
 
-                DrawCircleOnGrid(grid, center, radius, '.', gridWidth, gridHeight);
+                DrawCircleOnGrid(grid, center, radius, '.', backingWidth, backingHeight);
             }
 
             // Mark root node with 'H' (heart)
             if (state.Nodes.Count > 0)
             {
-                Vector2 rootCenter = state.Nodes[0].Position * scale + offset;
+                Vector2 rootCenter = state.Nodes[0].Position * scale + offset + backingOffset;
                 int cx = Mathf.RoundToInt(rootCenter.x);
                 int cy = Mathf.RoundToInt(rootCenter.y);
 
-                if (cx >= 0 && cx < gridWidth && cy >= 0 && cy < gridHeight)
+                if (cx >= 0 && cx < backingWidth && cy >= 0 && cy < backingHeight)
                 {
                     grid[cy, cx] = 'H';
                 }
@@ -663,11 +671,11 @@ namespace ForestMaze
             for (int i = 1; i < state.Nodes.Count; i++)
             {
                 var node = state.Nodes[i];
-                Vector2 nodeCenter = node.Position * scale + offset;
+                Vector2 nodeCenter = node.Position * scale + offset + backingOffset;
                 int cx = Mathf.RoundToInt(nodeCenter.x);
                 int cy = Mathf.RoundToInt(nodeCenter.y);
 
-                if (cx >= 0 && cx < gridWidth && cy >= 0 && cy < gridHeight)
+                if (cx >= 0 && cx < backingWidth && cy >= 0 && cy < backingHeight)
                 {
                     if (grid[cy, cx] == '.')
                     {
@@ -689,11 +697,11 @@ namespace ForestMaze
             foreach (var edge in state.Edges.Where(e => e.Partial && e.PolylinePoints.Count > 0))
             {
                 // Get the endpoint (last point in polyline - the ghost end)
-                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset + backingOffset;
                 int ex = Mathf.RoundToInt(endpoint.x);
                 int ey = Mathf.RoundToInt(endpoint.y);
 
-                if (ex >= 0 && ex < gridWidth && ey >= 0 && ey < gridHeight)
+                if (ex >= 0 && ex < backingWidth && ey >= 0 && ey < backingHeight)
                 {
                     // Mark ANY walkable tile (not just '.') as spawn point
                     char currentTile = grid[ey, ex];
@@ -722,31 +730,34 @@ namespace ForestMaze
             }
 
             // Ensure border is always forest where there's no walkable tile
-            for (int x = 0; x < gridWidth; x++)
-            {
-                if (!IsWalkableTile(grid[0, x]))
-                    grid[0, x] = '#';
+            int innerMaxX = drawOffsetX + drawWidth - 1;
+            int innerMaxY = drawOffsetY + drawHeight - 1;
 
-                if (!IsWalkableTile(grid[gridHeight - 1, x]))
-                    grid[gridHeight - 1, x] = '#';
+            for (int x = drawOffsetX; x <= innerMaxX; x++)
+            {
+                if (!IsWalkableTile(grid[drawOffsetY, x]))
+                    grid[drawOffsetY, x] = '#';
+
+                if (!IsWalkableTile(grid[innerMaxY, x]))
+                    grid[innerMaxY, x] = '#';
             }
 
-            for (int y = 0; y < gridHeight; y++)
+            for (int y = drawOffsetY; y <= innerMaxY; y++)
             {
-                if (!IsWalkableTile(grid[y, 0]))
-                    grid[y, 0] = '#';
+                if (!IsWalkableTile(grid[y, drawOffsetX]))
+                    grid[y, drawOffsetX] = '#';
 
-                if (!IsWalkableTile(grid[y, gridWidth - 1]))
-                    grid[y, gridWidth - 1] = '#';
+                if (!IsWalkableTile(grid[y, innerMaxX]))
+                    grid[y, innerMaxX] = '#';
             }
 
             // Ensure all edge walkable tiles have at least one adjacent walkable tile
-            EnsureEdgeTilesAreWalkable(grid, gridWidth, gridHeight);
+            EnsureEdgeTilesAreWalkable(grid, drawOffsetX, drawOffsetY, drawWidth, drawHeight);
 
             // Add entrances
-            AddEntrance(grid, gridWidth, gridHeight, state.Random);
+            AddEntrance(grid, drawOffsetX, drawOffsetY, drawWidth, drawHeight, state.Random);
 
-            return GridToString(grid, gridWidth, gridHeight);
+            return GridToString(grid, backingWidth, backingHeight);
         }
 
         private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height)
@@ -830,64 +841,66 @@ namespace ForestMaze
             }
         }
 
-        private static void EnsureEdgeTilesAreWalkable(char[,] grid, int width, int height)
+        private static void EnsureEdgeTilesAreWalkable(char[,] grid, int offsetX, int offsetY, int drawWidth, int drawHeight)
         {
             // For each walkable edge tile, ensure it has at least one orthogonally adjacent walkable tile
+            int maxX = offsetX + drawWidth - 1;
+            int maxY = offsetY + drawHeight - 1;
 
             // Top and bottom edges
-            for (int x = 0; x < width; x++)
+            for (int x = offsetX; x <= maxX; x++)
             {
                 // Top edge
-                if (IsWalkableTile(grid[0, x]))
+                if (IsWalkableTile(grid[offsetY, x]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, x, 0, width, height))
+                    if (!HasAdjacentWalkableTile(grid, x, offsetY, offsetX, offsetY, maxX, maxY))
                     {
                         // Make tile below walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[1, x]))
-                            grid[1, x] = '.';
+                        if (!IsWalkableTile(grid[offsetY + 1, x]))
+                            grid[offsetY + 1, x] = '.';
                     }
                 }
 
                 // Bottom edge
-                if (IsWalkableTile(grid[height - 1, x]))
+                if (IsWalkableTile(grid[maxY, x]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, x, height - 1, width, height))
+                    if (!HasAdjacentWalkableTile(grid, x, maxY, offsetX, offsetY, maxX, maxY))
                     {
                         // Make tile above walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[height - 2, x]))
-                            grid[height - 2, x] = '.';
+                        if (!IsWalkableTile(grid[maxY - 1, x]))
+                            grid[maxY - 1, x] = '.';
                     }
                 }
             }
 
             // Left and right edges
-            for (int y = 0; y < height; y++)
+            for (int y = offsetY; y <= maxY; y++)
             {
                 // Left edge
-                if (IsWalkableTile(grid[y, 0]))
+                if (IsWalkableTile(grid[y, offsetX]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, 0, y, width, height))
+                    if (!HasAdjacentWalkableTile(grid, offsetX, y, offsetX, offsetY, maxX, maxY))
                     {
                         // Make tile to the right walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[y, 1]))
-                            grid[y, 1] = '.';
+                        if (!IsWalkableTile(grid[y, offsetX + 1]))
+                            grid[y, offsetX + 1] = '.';
                     }
                 }
 
                 // Right edge
-                if (IsWalkableTile(grid[y, width - 1]))
+                if (IsWalkableTile(grid[y, maxX]))
                 {
-                    if (!HasAdjacentWalkableTile(grid, width - 1, y, width, height))
+                    if (!HasAdjacentWalkableTile(grid, maxX, y, offsetX, offsetY, maxX, maxY))
                     {
                         // Make tile to the left walkable (don't overwrite special tiles)
-                        if (!IsWalkableTile(grid[y, width - 2]))
-                            grid[y, width - 2] = '.';
+                        if (!IsWalkableTile(grid[y, maxX - 1]))
+                            grid[y, maxX - 1] = '.';
                     }
                 }
             }
         }
 
-        private static bool HasAdjacentWalkableTile(char[,] grid, int x, int y, int width, int height)
+        private static bool HasAdjacentWalkableTile(char[,] grid, int x, int y, int minX, int minY, int maxX, int maxY)
         {
             // Check all 4 orthogonal neighbors
             int[] dx = { 0, 0, 1, -1 };
@@ -898,7 +911,7 @@ namespace ForestMaze
                 int nx = x + dx[i];
                 int ny = y + dy[i];
 
-                if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+                if (nx >= minX && nx <= maxX && ny >= minY && ny <= maxY)
                 {
                     char tile = grid[ny, nx];
                     if (IsWalkableTile(tile))
@@ -940,19 +953,21 @@ namespace ForestMaze
             }
         }
 
-        private static void AddEntrance(char[,] grid, int width, int height, System.Random random)
+        private static void AddEntrance(char[,] grid, int offsetX, int offsetY, int drawWidth, int drawHeight, System.Random random)
         {
             // Find walkable tiles near edges (check for all walkable tile types)
             var topCandidates = new List<(int x, int y)>();
             var bottomCandidates = new List<(int x, int y)>();
+            int maxX = offsetX + drawWidth - 1;
+            int maxY = offsetY + drawHeight - 1;
 
-            for (int x = 1; x < width - 1; x++)
+            for (int x = offsetX + 1; x < maxX; x++)
             {
-                if (IsWalkableTile(grid[1, x]))
-                    topCandidates.Add((x, 0));
+                if (IsWalkableTile(grid[offsetY + 1, x]))
+                    topCandidates.Add((x, offsetY));
 
-                if (IsWalkableTile(grid[height - 2, x]))
-                    bottomCandidates.Add((x, height - 1));
+                if (IsWalkableTile(grid[maxY - 1, x]))
+                    bottomCandidates.Add((x, maxY));
             }
 
             // Add at least one entrance (only if not already walkable)

@@ -536,13 +536,16 @@ namespace FaeMaze.Systems
             string mazeString;
             TileType[,] tiles;
             char[,] symbols;
+            const int planarBackingSize = 1000;
 
             if (usePlanarGenerator)
             {
                 // Use planar organic generator
+                int drawWidth = planarGeneratorConfig.gridWidth;
+                int drawHeight = planarGeneratorConfig.gridHeight;
                 mazeString = ForestMaze.PlanarForestMazeGenerator.GenerateMaze(
-                    planarGeneratorConfig.gridWidth,
-                    planarGeneratorConfig.gridHeight,
+                    drawWidth,
+                    drawHeight,
                     planarGeneratorConfig.growthTurns,
                     planarGeneratorConfig.randomSeed);
 
@@ -579,8 +582,16 @@ namespace FaeMaze.Systems
             }
 
             // Get dimensions from generated maze
-            width = tiles.GetLength(0);
-            height = tiles.GetLength(1);
+            if (usePlanarGenerator)
+            {
+                width = planarBackingSize;
+                height = planarBackingSize;
+            }
+            else
+            {
+                width = tiles.GetLength(0);
+                height = tiles.GetLength(1);
+            }
 
 
             // Create the grid
