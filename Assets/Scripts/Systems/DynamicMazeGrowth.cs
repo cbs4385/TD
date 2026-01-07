@@ -578,7 +578,8 @@ namespace FaeMaze.Systems
             Quaternion rotation;
             if (facingVector != Vector3.zero)
             {
-                rotation = Quaternion.FromToRotation(Vector3.right, facingVector.normalized);
+                float angle = Mathf.Atan2(facingVector.y, facingVector.x) * Mathf.Rad2Deg;
+                rotation = Quaternion.Euler(0f, 0f, angle);
             }
             else
             {
@@ -634,11 +635,14 @@ namespace FaeMaze.Systems
             };
 
             Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
-            Vector2 toHeart = new Vector2(heartPos.x - gridPos.x, heartPos.y - gridPos.y);
+            Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
+            Vector3 heartWorldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
+            Vector2 toHeart = new Vector2(heartWorldPos.x - spawnWorldPos.x, heartWorldPos.y - spawnWorldPos.y);
             float toHeartMagnitude = toHeart.sqrMagnitude > 0f ? toHeart.magnitude : 0f;
             float bestDot = float.NegativeInfinity;
             bool foundAdjacent = false;
             Vector2Int bestDirection = Vector2Int.zero;
+            float bestHeartDistance = float.PositiveInfinity;
 
             foreach (var dir in directions)
             {
@@ -654,16 +658,23 @@ namespace FaeMaze.Systems
                     continue;
                 }
 
+                Vector3 candidateWorldPos = mazeGridBehaviour.GridToWorld(checkPos.x, checkPos.y);
+                Vector2 candidateVector = new Vector2(candidateWorldPos.x - spawnWorldPos.x, candidateWorldPos.y - spawnWorldPos.y);
                 float dot = 0f;
-                if (toHeartMagnitude > 0f)
+                if (toHeartMagnitude > 0f && candidateVector.sqrMagnitude > 0f)
                 {
                     Vector2 normalizedToHeart = toHeart / toHeartMagnitude;
-                    dot = Vector2.Dot(new Vector2(dir.x, dir.y), normalizedToHeart);
+                    Vector2 normalizedCandidate = candidateVector.normalized;
+                    dot = Vector2.Dot(normalizedCandidate, normalizedToHeart);
                 }
 
-                if (!foundAdjacent || dot > bestDot)
+                float heartDistance = Vector2.Distance(new Vector2(candidateWorldPos.x, candidateWorldPos.y),
+                    new Vector2(heartWorldPos.x, heartWorldPos.y));
+
+                if (!foundAdjacent || dot > bestDot || (Mathf.Approximately(dot, bestDot) && heartDistance < bestHeartDistance))
                 {
                     bestDot = dot;
+                    bestHeartDistance = heartDistance;
                     bestDirection = dir;
                     foundAdjacent = true;
                 }
@@ -672,8 +683,7 @@ namespace FaeMaze.Systems
             if (foundAdjacent)
             {
                 Vector2Int targetGridPos = gridPos + bestDirection;
-                facingVector = (mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y)
-                    - mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y)).normalized;
+                facingVector = (mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y) - spawnWorldPos).normalized;
                 return bestDirection;
             }
 
