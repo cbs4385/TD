@@ -574,12 +574,17 @@ namespace FaeMaze.Systems
             // Position portal center at the wall edge of the tile
             Vector3 finalWorldPos = baseWorldPos + wallDirection * (tileSize * 0.5f);
 
-            // Create rotation: +X axis points in direction visitors will travel (into maze)
-            // This matches the visitor spawn direction
-            Quaternion rotation;
-            if (facingVector != Vector3.zero)
+            // Create rotation: +X axis points toward the node center vector (spawn -> node).
+            Vector3 rotationVector = (targetWorldPos - spawnWorldPos).normalized;
+            if (rotationVector == Vector3.zero)
             {
-                float angle = Mathf.Atan2(facingVector.y, facingVector.x) * Mathf.Rad2Deg;
+                rotationVector = facingVector;
+            }
+
+            Quaternion rotation;
+            if (rotationVector != Vector3.zero)
+            {
+                float angle = Mathf.Atan2(rotationVector.y, rotationVector.x) * Mathf.Rad2Deg;
                 rotation = Quaternion.Euler(0f, 0f, angle);
             }
             else
@@ -601,7 +606,7 @@ namespace FaeMaze.Systems
             CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
                 Color.red, $"Portal_{spawnId}_XAxis");
 
-            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at grid ({gridPos.x}, {gridPos.y}), world pos {finalWorldPos}, +X facing {facingVector} (toward maze)");
+            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at grid ({gridPos.x}, {gridPos.y}), world pos {finalWorldPos}, +X facing {rotationVector} (toward node center)");
         }
 
         private void CreateDebugColumn(Vector3 start, Vector3 end, Color color, string name)
