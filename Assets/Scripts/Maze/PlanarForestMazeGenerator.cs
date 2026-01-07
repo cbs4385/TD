@@ -96,6 +96,8 @@ namespace ForestMaze
             int minNodeCount = 6; // Root + at least 5 normal nodes
             int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
 
+            Debug.Log($"[PlanarForestMaze] Starting growth: turns={turns}, minNodes={minNodeCount}, minOpenEndpoints={minOpenEndpoints}");
+
             // Phase 1: Grow until we have minimum nodes
             for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
             {
@@ -109,9 +111,7 @@ namespace ForestMaze
                 if (!Step(state))
                     break;
             }
-
-
-            Debug.Log($"[PlanarForestMaze] Generated {state.Nodes.Count} nodes with {state.Frontier.Count} open endpoints");
+            Debug.Log($"[PlanarForestMaze] Growth complete: nodes={state.Nodes.Count}, openEndpoints={state.Frontier.Count}");
 
             // Rasterize the graph to a grid
             return RasterizeToGrid(state, gridWidth, gridHeight);
@@ -686,8 +686,6 @@ namespace ForestMaze
                 }
             }
 
-            Debug.Log($"[PlanarForestMaze] Placed {nodeHazardCount} node hazard markers ('N')");
-
             // Mark unconnected edge endpoints with unique spawn IDs (A-Z excluding H/N, then a-z, then digits)
             int entranceExitCount = 0;
             int partialEndpointCount = state.Edges.Count(e => e.Partial && e.PolylinePoints.Count > 0);
@@ -773,15 +771,6 @@ namespace ForestMaze
                     grid[targetY, targetX] = spawnId;
                     entranceExitCount++;
                 }
-            }
-
-            if (spawnIdsExhausted)
-            {
-                Debug.LogWarning($"[PlanarForestMaze] Ran out of unique spawn IDs after placing {entranceExitCount} markers for {partialEndpointCount} open endpoints (available pool: {availableSpawnIdCount})");
-            }
-            else
-            {
-                Debug.Log($"[PlanarForestMaze] Placed {entranceExitCount} entrance/exit markers with unique spawn IDs for {partialEndpointCount} open endpoints");
             }
 
             // Ensure border is always forest where there's no walkable tile
