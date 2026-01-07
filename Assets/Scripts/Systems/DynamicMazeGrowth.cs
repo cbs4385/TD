@@ -342,31 +342,35 @@ namespace FaeMaze.Systems
         {
             nodeGridPos = Vector2Int.zero;
             List<Vector2Int> candidateDirections = BuildRotatedDirections(outwardDirection);
+            const int extraPlacementDistance = 4;
 
             foreach (var direction in candidateDirections)
             {
-                Vector2Int candidateCenter = fromGridPos + direction * NodeRadiusTiles;
-
-                if (!IsNodeCenterInBounds(candidateCenter))
+                for (int distance = NodeRadiusTiles; distance <= NodeRadiusTiles + extraPlacementDistance; distance++)
                 {
-                    continue;
-                }
+                    Vector2Int candidateCenter = fromGridPos + direction * distance;
 
-                if (!IsPathClear(fromGridPos, candidateCenter, fromGridPos, fromGridPos, EndpointClearanceRadius))
-                {
-                    continue;
-                }
+                    if (!IsNodeCenterInBounds(candidateCenter))
+                    {
+                        continue;
+                    }
 
-                if (!IsClearingAreaClear(candidateCenter, fromGridPos, 1))
-                {
-                    continue;
-                }
+                    if (!IsPathClear(fromGridPos, candidateCenter, fromGridPos, fromGridPos, EndpointClearanceRadius))
+                    {
+                        continue;
+                    }
 
-                nodeGridPos = candidateCenter;
-                SetTileWalkable(fromGridPos.x, fromGridPos.y, '.');
-                CarvePath(fromGridPos, nodeGridPos);
-                CarveNodeClearing(nodeGridPos);
-                return true;
+                    if (!IsClearingAreaClear(candidateCenter, fromGridPos, 1))
+                    {
+                        continue;
+                    }
+
+                    nodeGridPos = candidateCenter;
+                    SetTileWalkable(fromGridPos.x, fromGridPos.y, '.');
+                    CarvePath(fromGridPos, nodeGridPos);
+                    CarveNodeClearing(nodeGridPos);
+                    return true;
+                }
             }
 
             return false;
@@ -426,6 +430,53 @@ namespace FaeMaze.Systems
                 new Vector2Int(0, 1),
                 new Vector2Int(0, -1)
             };
+
+            Vector2Int bestDirection = Vector2Int.zero;
+            int bestClearance = -1;
+
+            foreach (var direction in directions)
+            {
+                Vector2Int neighbor = endpoint + direction;
+                if (!mazeGridBehaviour.Grid.InBounds(neighbor.x, neighbor.y))
+                {
+                    continue;
+                }
+
+                var neighborNode = mazeGridBehaviour.Grid.GetNode(neighbor.x, neighbor.y);
+                if (neighborNode != null && neighborNode.walkable)
+                {
+                    continue;
+                }
+
+                int clearance = 0;
+                for (int step = 1; step <= NodeRadiusTiles + 2; step++)
+                {
+                    Vector2Int check = endpoint + direction * step;
+                    if (!mazeGridBehaviour.Grid.InBounds(check.x, check.y))
+                    {
+                        break;
+                    }
+
+                    var node = mazeGridBehaviour.Grid.GetNode(check.x, check.y);
+                    if (node != null && node.walkable)
+                    {
+                        break;
+                    }
+
+                    clearance = step;
+                }
+
+                if (clearance > bestClearance)
+                {
+                    bestClearance = clearance;
+                    bestDirection = direction;
+                }
+            }
+
+            if (bestClearance >= 0)
+            {
+                return bestDirection;
+            }
 
             foreach (var direction in directions)
             {
