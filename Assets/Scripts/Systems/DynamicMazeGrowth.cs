@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using FaeMaze.Maze;
 
@@ -288,14 +289,10 @@ namespace FaeMaze.Systems
             List<Vector2Int> newEndpoints = new List<Vector2Int>();
 
             Vector2Int direction = GetOutwardDirectionFromEndpoint(fromGridPos);
-            nodeGridPos = fromGridPos + direction * NodeRadiusTiles;
-
-            nodeGridPos.x = Mathf.Clamp(nodeGridPos.x, NodeRadiusTiles, mazeGridBehaviour.Grid.Width - 1 - NodeRadiusTiles);
-            nodeGridPos.y = Mathf.Clamp(nodeGridPos.y, NodeRadiusTiles, mazeGridBehaviour.Grid.Height - 1 - NodeRadiusTiles);
-
-            SetTileWalkable(fromGridPos.x, fromGridPos.y, '.');
-            CarvePath(fromGridPos, nodeGridPos);
-            CarveNodeClearing(nodeGridPos);
+            if (!TryPlaceNodeFromEndpoint(fromGridPos, direction, out nodeGridPos))
+            {
+                return newEndpoints;
+            }
 
             // Create 1-3 new branches from this node
             int numBranches = Random.Range(1, 4);
@@ -303,29 +300,96 @@ namespace FaeMaze.Systems
 
             for (int i = 0; i < numBranches; i++)
             {
-                // Get random direction that hasn't been used
-                Vector2Int branchDir = GetRandomUnusedDirection(usedDirections);
-                if (branchDir == Vector2Int.zero)
-                    break;
+                if (!TryCreateBranch(nodeGridPos, usedDirections, out Vector2Int branchEndpoint, out Vector2Int branchDir))
+                {
+                    continue;
+                }
 
                 usedDirections.Add(branchDir);
-
-                // Create branch path
-                int branchLength = Random.Range(3, 11);
-                Vector2Int branchEndpoint = nodeGridPos + branchDir * (NodeRadiusTiles + branchLength);
-
-                // Ensure endpoint is within bounds
-                branchEndpoint.x = Mathf.Clamp(branchEndpoint.x, 1, mazeGridBehaviour.Grid.Width - 2);
-                branchEndpoint.y = Mathf.Clamp(branchEndpoint.y, 1, mazeGridBehaviour.Grid.Height - 2);
-
-                // Carve branch
-                CarvePath(nodeGridPos, branchEndpoint);
-
                 newEndpoints.Add(branchEndpoint);
             }
 
             SetTileWalkable(nodeGridPos.x, nodeGridPos.y, 'N');
             return newEndpoints;
+        }
+
+        private bool TryPlaceNodeFromEndpoint(Vector2Int fromGridPos, Vector2Int outwardDirection, out Vector2Int nodeGridPos)
+        {
+            nodeGridPos = Vector2Int.zero;
+            List<Vector2Int> candidateDirections = BuildRotatedDirections(outwardDirection);
+
+            foreach (var direction in candidateDirections)
+            {
+                Vector2Int candidateCenter = fromGridPos + direction * NodeRadiusTiles;
+
+                if (!IsNodeCenterInBounds(candidateCenter))
+                {
+                    continue;
+                }
+
+                if (!IsPathClear(fromGridPos, candidateCenter, fromGridPos))
+                {
+                    continue;
+                }
+
+                if (!IsClearingAreaClear(candidateCenter, fromGridPos))
+                {
+                    continue;
+                }
+
+                nodeGridPos = candidateCenter;
+                SetTileWalkable(fromGridPos.x, fromGridPos.y, '.');
+                CarvePath(fromGridPos, nodeGridPos);
+                CarveNodeClearing(nodeGridPos);
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryCreateBranch(
+            Vector2Int nodeGridPos,
+            List<Vector2Int> usedDirections,
+            out Vector2Int branchEndpoint,
+            out Vector2Int branchDir)
+        {
+            branchEndpoint = Vector2Int.zero;
+            branchDir = Vector2Int.zero;
+
+            List<Vector2Int> candidateDirections = GetUnusedDirections(usedDirections);
+            if (candidateDirections.Count == 0)
+            {
+                return false;
+            }
+
+            for (int attempt = 0; attempt < candidateDirections.Count; attempt++)
+            {
+                Vector2Int direction = candidateDirections[Random.Range(0, candidateDirections.Count)];
+                candidateDirections.Remove(direction);
+
+                for (int lengthAttempt = 0; lengthAttempt < 4; lengthAttempt++)
+                {
+                    int branchLength = Random.Range(3, 11);
+                    Vector2Int candidateEndpoint = nodeGridPos + direction * (NodeRadiusTiles + branchLength);
+
+                    if (!IsEndpointInBounds(candidateEndpoint))
+                    {
+                        continue;
+                    }
+
+                    if (!IsPathClear(nodeGridPos, candidateEndpoint, nodeGridPos))
+                    {
+                        continue;
+                    }
+
+                    CarvePath(nodeGridPos, candidateEndpoint);
+                    branchEndpoint = candidateEndpoint;
+                    branchDir = direction;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private Vector2Int GetOutwardDirectionFromEndpoint(Vector2Int endpoint)
@@ -362,6 +426,173 @@ namespace FaeMaze.Systems
             }
 
             return new Vector2Int(0, fallback.y > 0 ? 1 : -1);
+        }
+
+        private List<Vector2Int> BuildRotatedDirections(Vector2Int startDirection)
+        {
+            Vector2Int normalizedStart = NormalizeToCardinal(startDirection);
+            List<Vector2Int> directions = new List<Vector2Int> { normalizedStart };
+
+            Vector2Int right = RotateRight(normalizedStart);
+            Vector2Int left = RotateLeft(normalizedStart);
+            Vector2Int back = -normalizedStart;
+
+            directions.Add(right);
+            directions.Add(left);
+            if (!directions.Contains(back))
+            {
+                directions.Add(back);
+            }
+
+            return directions.Distinct().ToList();
+        }
+
+        private List<Vector2Int> GetUnusedDirections(List<Vector2Int> usedDirections)
+        {
+            List<Vector2Int> directions = new List<Vector2Int>
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(-1, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, -1)
+            };
+
+            directions.RemoveAll(dir => usedDirections.Contains(dir));
+            return directions;
+        }
+
+        private Vector2Int RotateRight(Vector2Int direction)
+        {
+            return new Vector2Int(direction.y, -direction.x);
+        }
+
+        private Vector2Int RotateLeft(Vector2Int direction)
+        {
+            return new Vector2Int(-direction.y, direction.x);
+        }
+
+        private bool IsNodeCenterInBounds(Vector2Int center)
+        {
+            int minX = NodeRadiusTiles;
+            int minY = NodeRadiusTiles;
+            int maxX = mazeGridBehaviour.Grid.Width - 1 - NodeRadiusTiles;
+            int maxY = mazeGridBehaviour.Grid.Height - 1 - NodeRadiusTiles;
+
+            return center.x >= minX && center.x <= maxX && center.y >= minY && center.y <= maxY;
+        }
+
+        private bool IsEndpointInBounds(Vector2Int endpoint)
+        {
+            return endpoint.x >= 1 &&
+                   endpoint.x <= mazeGridBehaviour.Grid.Width - 2 &&
+                   endpoint.y >= 1 &&
+                   endpoint.y <= mazeGridBehaviour.Grid.Height - 2;
+        }
+
+        private bool IsPathClear(Vector2Int from, Vector2Int to, Vector2Int allowedWalkable)
+        {
+            int x0 = from.x;
+            int y0 = from.y;
+            int x1 = to.x;
+            int y1 = to.y;
+
+            int dx = Mathf.Abs(x1 - x0);
+            int dy = Mathf.Abs(y1 - y0);
+            int sx = x0 < x1 ? 1 : -1;
+            int sy = y0 < y1 ? 1 : -1;
+            int err = dx - dy;
+
+            while (true)
+            {
+                if (!IsPathCellClear(x0, y0, allowedWalkable, dx > dy))
+                {
+                    return false;
+                }
+
+                if (x0 == x1 && y0 == y1)
+                {
+                    break;
+                }
+
+                int e2 = 2 * err;
+                if (e2 > -dy)
+                {
+                    err -= dy;
+                    x0 += sx;
+                }
+                if (e2 < dx)
+                {
+                    err += dx;
+                    y0 += sy;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsPathCellClear(int x, int y, Vector2Int allowedWalkable, bool horizontalBias)
+        {
+            if (!IsCellClear(x, y, allowedWalkable))
+            {
+                return false;
+            }
+
+            if (horizontalBias)
+            {
+                if (!IsCellClear(x, y + 1, allowedWalkable) || !IsCellClear(x, y - 1, allowedWalkable))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                if (!IsCellClear(x + 1, y, allowedWalkable) || !IsCellClear(x - 1, y, allowedWalkable))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsClearingAreaClear(Vector2Int center, Vector2Int allowedWalkable)
+        {
+            int radius = NodeRadiusTiles;
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (dx * dx + dy * dy > radius * radius)
+                    {
+                        continue;
+                    }
+
+                    int x = center.x + dx;
+                    int y = center.y + dy;
+                    if (!IsCellClear(x, y, allowedWalkable))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsCellClear(int x, int y, Vector2Int allowedWalkable)
+        {
+            if (!mazeGridBehaviour.Grid.InBounds(x, y))
+            {
+                return false;
+            }
+
+            if (x == allowedWalkable.x && y == allowedWalkable.y)
+            {
+                return true;
+            }
+
+            var node = mazeGridBehaviour.Grid.GetNode(x, y);
+            return node == null || !node.walkable;
         }
 
         /// <summary>
