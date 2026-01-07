@@ -604,10 +604,15 @@ namespace ForestMaze
             float graphWidth = maxX - minX;
             float graphHeight = maxY - minY;
 
-            // Scale to fit grid
+            // Scale derived from a fixed node size in tiles to keep clearings consistent across grid sizes.
+            const float targetNodeDiameterTiles = 3f;
+            float targetScale = (targetNodeDiameterTiles / 2f) / NODE_RADIUS;
+
+            // Clamp to fit-to-grid scale to avoid clipping if the fixed scale would exceed the grid.
             float scaleX = (gridWidth - 4) / graphWidth;
             float scaleY = (gridHeight - 4) / graphHeight;
-            float scale = Mathf.Min(scaleX, scaleY);
+            float fitToGridScale = Mathf.Min(scaleX, scaleY);
+            float scale = Mathf.Min(targetScale, fitToGridScale);
 
             Vector2 offset = new Vector2(
                 (gridWidth - graphWidth * scale) / 2 - minX * scale,
