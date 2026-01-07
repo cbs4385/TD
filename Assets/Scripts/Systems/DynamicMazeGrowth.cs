@@ -566,27 +566,24 @@ namespace FaeMaze.Systems
             // Base world position at grid center
             Vector3 baseWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y, -portalHeightOffset);
 
-            // Create rotation: +X axis points toward maze center, Y is up, Z is forward (into screen)
-            // We want the portal's +X to point toward the maze
+            // Calculate portal position: center at wall edge
+            // Wall is opposite direction from maze interior
+            Vector3 wallDirection = -directionToMaze3D;
+            float tileSize = mazeGridBehaviour.TileSize;
+
+            // Position portal center at the wall edge of the tile
+            Vector3 finalWorldPos = baseWorldPos + wallDirection * (tileSize * 0.5f);
+
+            // Create rotation: +X axis points in direction visitors will travel (into maze)
+            // This matches the visitor spawn direction
             Quaternion rotation;
             if (directionToMaze3D != Vector3.zero)
             {
-                // Use directionToMaze as the "right" (+X) direction
-                // Forward is into screen (0, 0, 1), Up is world up (0, 1, 0) in maze coords
-                Vector3 forward = Vector3.forward;
-                Vector3 up = Vector3.Cross(forward, directionToMaze3D).normalized;
-                if (up == Vector3.zero)
-                {
-                    // directionToMaze is parallel to forward, use default up
-                    up = Vector3.up;
-                }
-
-                // Create rotation from basis vectors
-                rotation = Quaternion.LookRotation(forward, up);
-
-                // Now rotate so +X points toward maze (rotate around Z axis)
+                // Calculate angle for +X axis to point toward maze
                 float angle = Mathf.Atan2(directionToMaze3D.y, directionToMaze3D.x) * Mathf.Rad2Deg;
-                rotation = Quaternion.Euler(0, 0, angle - 90f) * rotation;
+
+                // Create rotation around Z axis (2D plane rotation)
+                rotation = Quaternion.Euler(0, 0, angle);
             }
             else
             {
@@ -596,15 +593,6 @@ namespace FaeMaze.Systems
             // Apply maze coordinate system rotation (-90 around X to match 2D plane)
             rotation = rotation * Quaternion.Euler(-90f, 0f, 0f);
 
-            // Calculate offset to position portal's -X side against the wall
-            // The wall is in the opposite direction from the maze interior
-            Vector3 wallDirection = -directionToMaze3D;
-
-            // Offset by half tile size in the direction away from maze (toward wall)
-            float tileSize = mazeGridBehaviour.TileSize;
-            float portalOffset = tileSize * 0.4f; // Position near edge of tile
-            Vector3 finalWorldPos = baseWorldPos + wallDirection * portalOffset;
-
             // Instantiate portal
             GameObject portal = Instantiate(portalPrefab, finalWorldPos, rotation, portalsParent);
             portal.name = $"Portal_{spawnId}";
@@ -612,7 +600,7 @@ namespace FaeMaze.Systems
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
-            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at ({gridPos.x}, {gridPos.y}) with +X facing {directionToMaze3D}, offset {portalOffset} toward wall");
+            Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at grid ({gridPos.x}, {gridPos.y}), world pos {finalWorldPos}, +X facing {directionToMaze3D} (toward maze)");
         }
 
         /// <summary>
