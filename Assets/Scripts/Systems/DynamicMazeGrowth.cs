@@ -560,7 +560,7 @@ namespace FaeMaze.Systems
             }
 
             // Calculate direction to nearest walkable tile (toward maze interior)
-            Vector2Int directionToMaze = GetDirectionToNearestWalkableTile(gridPos, out Vector3 facingVector);
+            Vector2Int directionToMaze = GetDirectionToNearestWalkableTile(gridPos, out Vector3 facingVector, out Vector3 targetWorldPos);
             Vector3 directionToMaze3D = new Vector3(directionToMaze.x, directionToMaze.y, 0f).normalized;
 
             // Base world position at grid center
@@ -597,8 +597,7 @@ namespace FaeMaze.Systems
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
-            CreateDebugColumn(spawnWorldPos, mazeGridBehaviour.GridToWorld(gridPos.x + directionToMaze.x, gridPos.y + directionToMaze.y),
-                Color.blue, $"Portal_{spawnId}_SpawnToNode");
+            CreateDebugColumn(spawnWorldPos, targetWorldPos, Color.blue, $"Portal_{spawnId}_SpawnToNode");
             CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
                 Color.red, $"Portal_{spawnId}_XAxis");
 
@@ -690,9 +689,10 @@ namespace FaeMaze.Systems
         /// This is used to orient portals so they face inward toward the maze.
         /// Returns a unit direction vector (normalized grid coordinates).
         /// </summary>
-        private Vector2Int GetDirectionToNearestWalkableTile(Vector2Int gridPos, out Vector3 facingVector)
+        private Vector2Int GetDirectionToNearestWalkableTile(Vector2Int gridPos, out Vector3 facingVector, out Vector3 targetWorldPos)
         {
             facingVector = Vector3.zero;
+            targetWorldPos = Vector3.zero;
 
             // Check all 4 orthogonal directions for walkable tiles
             Vector2Int[] directions = new Vector2Int[]
@@ -706,6 +706,7 @@ namespace FaeMaze.Systems
             Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
             Vector3 heartWorldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
+            targetWorldPos = heartWorldPos;
             Vector2 toHeart = new Vector2(heartWorldPos.x - spawnWorldPos.x, heartWorldPos.y - spawnWorldPos.y);
             float toHeartMagnitude = toHeart.sqrMagnitude > 0f ? toHeart.magnitude : 0f;
             float bestDot = float.NegativeInfinity;
@@ -752,7 +753,8 @@ namespace FaeMaze.Systems
             if (foundAdjacent)
             {
                 Vector2Int targetGridPos = gridPos + bestDirection;
-                facingVector = (mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y) - spawnWorldPos).normalized;
+                targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
+                facingVector = (targetWorldPos - spawnWorldPos).normalized;
                 return bestDirection;
             }
 
@@ -795,16 +797,16 @@ namespace FaeMaze.Systems
             {
                 Vector2Int offset = nearestWalkable.Value - gridPos;
                 Vector2Int direction = NormalizeToCardinal(offset);
-                facingVector = (mazeGridBehaviour.GridToWorld(nearestWalkable.Value.x, nearestWalkable.Value.y)
-                    - mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y)).normalized;
+                targetWorldPos = mazeGridBehaviour.GridToWorld(nearestWalkable.Value.x, nearestWalkable.Value.y);
+                facingVector = (targetWorldPos - spawnWorldPos).normalized;
                 Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile for spawn point at ({gridPos.x}, {gridPos.y}); using nearest walkable tile at ({nearestWalkable.Value.x}, {nearestWalkable.Value.y})");
                 return direction;
             }
 
             // Fallback: face toward the heart of the maze
             Vector2Int fallbackDir = NormalizeToCardinal(new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y));
-            facingVector = (mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y)
-                - mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y)).normalized;
+            targetWorldPos = heartWorldPos;
+            facingVector = (targetWorldPos - spawnWorldPos).normalized;
 
             Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile found for spawn point at ({gridPos.x}, {gridPos.y}), facing toward heart");
             return fallbackDir;
