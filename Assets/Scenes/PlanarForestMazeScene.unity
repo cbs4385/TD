@@ -615,6 +615,7 @@ GameObject:
   - component: {fileID: 963194231}
   - component: {fileID: 963194230}
   - component: {fileID: 963194229}
+  - component: {fileID: 963194232}
   m_Layer: 0
   m_Name: MazeRoot
   m_TagString: Untagged
@@ -712,6 +713,23 @@ MonoBehaviour:
   reflectThroughXYPlane: 1
   drawGridGizmos: 1
   drawAttractionHeatmap: 1
+--- !u!114 &963194232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 963194227}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d015064260be3f4f83e6a7d68c66848, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.DynamicMazeGrowth
+  growthInterval: 30
+  autoGrowth: 1
+  portalPrefab: {fileID: 6106434122546371744, guid: ae38ee219c15783488800e816bdf68db, type: 3}
+  portalHeightOffset: 0
+  portalsParent: {fileID: 0}
 --- !u!1 &1408523520
 GameObject:
   m_ObjectHideFlags: 0
