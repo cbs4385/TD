@@ -131,7 +131,7 @@ namespace ForestMaze
 
             // Create first normal node
             float angle = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
-            float length = (float)(state.Random.NextDouble() * 4.0 + 1.0);
+            float length = (float)(state.Random.NextDouble() * 7.0 + 3.0);
             float distance = 2 * NODE_RADIUS + length;
 
             Vector2 node1Pos = new Vector2(
@@ -240,7 +240,7 @@ namespace ForestMaze
                 return false;
 
             float theta0 = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
-            float length0 = (float)(state.Random.NextDouble() * 4.0 + 1.0);
+            float length0 = (float)(state.Random.NextDouble() * 7.0 + 3.0);
 
             int maxRotations = (int)(180 / ROTATE_STEP);
 
@@ -605,7 +605,7 @@ namespace ForestMaze
             float graphHeight = maxY - minY;
 
             // Scale derived from a fixed node size in tiles to keep clearings consistent across grid sizes.
-            const float targetNodeDiameterTiles = 3f;
+            const float targetNodeDiameterTiles = 7f;
             float targetScale = (targetNodeDiameterTiles / 2f) / NODE_RADIUS;
 
             // Clamp to fit-to-grid scale to avoid clipping if the fixed scale would exceed the grid.
