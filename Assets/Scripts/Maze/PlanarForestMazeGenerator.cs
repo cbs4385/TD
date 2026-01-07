@@ -330,7 +330,7 @@ namespace ForestMaze
                 // Try to connect to existing node
                 if (state.Random.NextDouble() < CONNECT_PROB)
                 {
-                    if (TryConnectToExisting(state, newNode))
+                    if (TryConnectToExisting(state, newNode, edge.NodeA))
                         continue;
                 }
 
@@ -428,10 +428,11 @@ namespace ForestMaze
             return false;
         }
 
-        private static bool TryConnectToExisting(ForestMapState state, Node newNode)
+        private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null)
         {
             var candidates = state.Nodes
                 .Where(n => n.Id != newNode.Id && n.HasCapacity())
+                .Where(n => !prohibitedNodeId.HasValue || n.Id != prohibitedNodeId.Value)
                 .Where(n => !state.Edges.Any(e =>
                     (e.NodeA == newNode.Id && e.NodeB == n.Id) ||
                     (e.NodeA == n.Id && e.NodeB == newNode.Id)))
@@ -451,6 +452,11 @@ namespace ForestMaze
 
             foreach (var candidate in candidates)
             {
+                if (HasDirectConnection(state, newNode.Id, candidate.Id))
+                {
+                    continue;
+                }
+
                 Vector2 direction = (candidate.Position - newNode.Position).normalized;
                 float angle = Mathf.Atan2(direction.y, direction.x);
                 angle = (angle + 2 * Mathf.PI) % (2 * Mathf.PI);
@@ -488,6 +494,14 @@ namespace ForestMaze
             }
 
             return false;
+        }
+
+        private static bool HasDirectConnection(ForestMapState state, int nodeAId, int nodeBId)
+        {
+            return state.Edges.Any(e =>
+                e.NodeB.HasValue &&
+                ((e.NodeA == nodeAId && e.NodeB.Value == nodeBId) ||
+                 (e.NodeA == nodeBId && e.NodeB.Value == nodeAId)));
         }
 
         private static List<Vector2> BuildCurvedPolyline(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
