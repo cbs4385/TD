@@ -632,10 +632,14 @@ namespace ForestMaze
                     Vector2 p1 = edge.PolylinePoints[i] * scale + offset;
                     Vector2 p2 = edge.PolylinePoints[i + 1] * scale + offset;
 
-                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight);
+                    // For partial (open) edges, do not rasterize the very final endpoint cell.
+                    // Adjacency is guaranteed by the previously rasterized step(s).
+                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
+                    bool includeEndPoint = !(edge.Partial && isLastSegment);
+
+                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint);
                 }
             }
-
             // Draw clearings (nodes)
             foreach (var node in state.Nodes)
             {
@@ -692,6 +696,34 @@ namespace ForestMaze
                 Vector2 nodeCenter = connectedNode.Position * scale + offset;
                 int nx = Mathf.RoundToInt(nodeCenter.x);
                 int ny = Mathf.RoundToInt(nodeCenter.y);
+
+                // Prefer the true endpoint (last polyline point) for spawn placement.
+                // This endpoint cell is intentionally NOT rasterized for partial edges; it is only "placed" as a spawn marker.
+                Vector2 endPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                int ex = Mathf.RoundToInt(endPoint.x);
+                int ey = Mathf.RoundToInt(endPoint.y);
+
+                bool endpointUsable =
+                    ex >= 0 && ex < gridWidth &&
+                    ey >= 0 && ey < gridHeight &&
+                    grid[ey, ex] != 'H' &&
+                    grid[ey, ex] != 'N' &&
+                    !IsSpawnPointChar(grid[ey, ex]) &&
+                    HasAdjacentWalkableTile(grid, ex, ey, gridWidth, gridHeight);
+
+                if (endpointUsable)
+                {
+                    if (spawnIdQueue.Count == 0)
+                    {
+                        spawnIdsExhausted = true;
+                        break;
+                    }
+
+                    char spawnId = spawnIdQueue.Dequeue();
+                    grid[ey, ex] = spawnId;
+                    entranceExitCount++;
+                    continue; // Done with this edge.
+                }
 
                 int targetX = -1;
                 int targetY = -1;
@@ -775,7 +807,7 @@ namespace ForestMaze
             return GridToString(grid, gridWidth, gridHeight);
         }
 
-        private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height)
+        private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height, bool includeEndPoint = true)
         {
             int x0 = Mathf.RoundToInt(p1.x);
             int y0 = Mathf.RoundToInt(p1.y);
@@ -788,18 +820,33 @@ namespace ForestMaze
             int sy = y0 < y1 ? 1 : -1;
             int err = dx - dy;
 
+            // Local helper that also prevents neighbor "spill" into the end cell when endpoint rasterization is disabled.
+            void Set(int x, int y)
+            {
+                if (!includeEndPoint && x == x1 && y == y1)
+                    return;
+
+                SetGridCell(grid, x, y, ch, width, height);
+            }
+
             while (true)
             {
-                // Draw center pixel and adjacent pixels for wider path
-                SetGridCell(grid, x0, y0, ch, width, height);
+                bool atEnd = (x0 == x1 && y0 == y1);
 
-                // Draw orthogonal neighbors to ensure path is always walkable
-                SetGridCell(grid, x0 + 1, y0, ch, width, height);
-                SetGridCell(grid, x0 - 1, y0, ch, width, height);
-                SetGridCell(grid, x0, y0 + 1, ch, width, height);
-                SetGridCell(grid, x0, y0 - 1, ch, width, height);
+                // Only draw at the end if includeEndPoint is true.
+                if (!atEnd || includeEndPoint)
+                {
+                    // Draw center pixel and adjacent pixels for wider path
+                    Set(x0, y0);
 
-                if (x0 == x1 && y0 == y1)
+                    // Draw orthogonal neighbors to ensure path is always walkable
+                    Set(x0 + 1, y0);
+                    Set(x0 - 1, y0);
+                    Set(x0, y0 + 1);
+                    Set(x0, y0 - 1);
+                }
+
+                if (atEnd)
                     break;
 
                 int e2 = 2 * err;

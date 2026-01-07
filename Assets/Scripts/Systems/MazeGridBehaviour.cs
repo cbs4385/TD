@@ -175,7 +175,7 @@ namespace FaeMaze.Systems
             }
 
             Vector3 scale = mazeOrigin.localScale;
-            scale.z = -Mathf.Abs(scale.z);
+//            scale.z = -Mathf.Abs(scale.z);
             mazeOrigin.localScale = scale;
 
             Vector3 originPosition = mazeOrigin.position;
