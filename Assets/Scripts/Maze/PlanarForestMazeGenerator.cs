@@ -595,23 +595,36 @@ namespace ForestMaze
 
         private static string RasterizeToGrid(ForestMapState state, int gridWidth, int gridHeight)
         {
-            // Find bounds of the generated graph
-            float minX = state.Nodes.Min(n => n.Position.x) - R_KEEP;
-            float maxX = state.Nodes.Max(n => n.Position.x) + R_KEEP;
-            float minY = state.Nodes.Min(n => n.Position.y) - R_KEEP;
-            float maxY = state.Nodes.Max(n => n.Position.y) + R_KEEP;
+            // Find bounds of the generated graph (nodes + all edge polyline points)
+            var allPoints = state.Nodes.Select(n => n.Position)
+                .Concat(state.Edges.SelectMany(e => e.PolylinePoints));
+
+            float minX = allPoints.Min(p => p.x);
+            float maxX = allPoints.Max(p => p.x);
+            float minY = allPoints.Min(p => p.y);
+            float maxY = allPoints.Max(p => p.y);
+
+            // Apply keep-out padding plus extra margin for path thickness
+            float extraWorldPadding = PATH_RADIUS;
+            minX -= R_KEEP + extraWorldPadding;
+            maxX += R_KEEP + extraWorldPadding;
+            minY -= R_KEEP + extraWorldPadding;
+            maxY += R_KEEP + extraWorldPadding;
 
             float graphWidth = maxX - minX;
             float graphHeight = maxY - minY;
 
-            // Scale to fit grid
-            float scaleX = (gridWidth - 4) / graphWidth;
-            float scaleY = (gridHeight - 4) / graphHeight;
+            // Scale to fit grid, leaving a safe ring of forest tiles
+            const int gridPaddingTiles = 2;
+            float availableWidth = gridWidth - 2 * gridPaddingTiles;
+            float availableHeight = gridHeight - 2 * gridPaddingTiles;
+            float scaleX = availableWidth / graphWidth;
+            float scaleY = availableHeight / graphHeight;
             float scale = Mathf.Min(scaleX, scaleY);
 
             Vector2 offset = new Vector2(
-                (gridWidth - graphWidth * scale) / 2 - minX * scale,
-                (gridHeight - graphHeight * scale) / 2 - minY * scale
+                gridPaddingTiles + (availableWidth - graphWidth * scale) / 2 - minX * scale,
+                gridPaddingTiles + (availableHeight - graphHeight * scale) / 2 - minY * scale
             );
 
             // Initialize grid with forest
