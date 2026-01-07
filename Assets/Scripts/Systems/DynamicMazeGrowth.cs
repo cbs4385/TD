@@ -627,13 +627,45 @@ namespace FaeMaze.Systems
             Renderer renderer = column.GetComponent<Renderer>();
             if (renderer != null)
             {
-                Shader shader = Shader.Find("Standard");
-                if (shader != null)
+                Material material = CreateDebugMaterial(color);
+                if (material != null)
                 {
-                    renderer.material = new Material(shader);
+                    renderer.material = material;
                 }
-                renderer.material.color = color;
             }
+        }
+
+        private Material CreateDebugMaterial(Color color)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Unlit/Color");
+            }
+            if (shader == null)
+            {
+                shader = Shader.Find("Standard");
+            }
+            if (shader == null)
+            {
+                return null;
+            }
+
+            Material material = new Material(shader);
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+            else if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", color);
+            }
+            else
+            {
+                material.color = color;
+            }
+
+            return material;
         }
 
         /// <summary>
