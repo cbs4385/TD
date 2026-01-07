@@ -289,11 +289,12 @@ namespace FaeMaze.Systems
                 return neighbors;
             }
 
-            // 4-directional neighbors (up, down, left, right)
-            int[] dx = { 0, 0, -1, 1 };
-            int[] dy = { -1, 1, 0, 0 };
+            // 8-directional neighbors (cardinal + diagonal)
+            // Order: N, S, W, E, NW, NE, SW, SE
+            int[] dx = { 0, 0, -1, 1, -1, 1, -1, 1 };
+            int[] dy = { -1, 1, 0, 0, -1, -1, 1, 1 };
 
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 8; i++)
             {
                 int neighborX = node.x + dx[i];
                 int neighborY = node.y + dy[i];
@@ -303,6 +304,29 @@ namespace FaeMaze.Systems
                     MazeNode neighbor = GetNode(neighborX, neighborY);
                     if (neighbor != null && neighbor.walkable)
                     {
+                        // For diagonal movement (i >= 4), check that at least one of the
+                        // adjacent cardinal tiles is also walkable to avoid cutting corners
+                        bool isDiagonal = i >= 4;
+                        if (isDiagonal)
+                        {
+                            // Check the two cardinal neighbors that form this diagonal
+                            int cardinalX1 = node.x + dx[i];
+                            int cardinalY1 = node.y;
+                            int cardinalX2 = node.x;
+                            int cardinalY2 = node.y + dy[i];
+
+                            bool cardinal1Walkable = InBounds(cardinalX1, cardinalY1) &&
+                                                    GetNode(cardinalX1, cardinalY1)?.walkable == true;
+                            bool cardinal2Walkable = InBounds(cardinalX2, cardinalY2) &&
+                                                    GetNode(cardinalX2, cardinalY2)?.walkable == true;
+
+                            // Only allow diagonal if at least one cardinal path is clear
+                            if (!cardinal1Walkable && !cardinal2Walkable)
+                            {
+                                continue;
+                            }
+                        }
+
                         neighbors.Add(neighbor);
                     }
                 }

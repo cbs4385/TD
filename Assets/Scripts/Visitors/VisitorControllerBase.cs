@@ -1594,22 +1594,48 @@ namespace FaeMaze.Visitors
                 return neighbors;
             }
 
-            // Check 4 cardinal directions
+            // Check 8 directions (cardinal + diagonal)
             Vector2Int[] directions = new Vector2Int[]
             {
                 new Vector2Int(0, 1),   // Up
                 new Vector2Int(0, -1),  // Down
                 new Vector2Int(1, 0),   // Right
-                new Vector2Int(-1, 0)   // Left
+                new Vector2Int(-1, 0),  // Left
+                new Vector2Int(-1, -1), // Diagonal: Down-Left
+                new Vector2Int(1, -1),  // Diagonal: Down-Right
+                new Vector2Int(-1, 1),  // Diagonal: Up-Left
+                new Vector2Int(1, 1)    // Diagonal: Up-Right
             };
 
-            foreach (var dir in directions)
+            for (int i = 0; i < directions.Length; i++)
             {
+                Vector2Int dir = directions[i];
                 Vector2Int neighborPos = gridPos + dir;
                 var node = mazeGridBehaviour.Grid.GetNode(neighborPos.x, neighborPos.y);
 
                 if (node != null && node.walkable)
                 {
+                    // For diagonal movement (i >= 4), check corner-cutting prevention
+                    bool isDiagonal = i >= 4;
+                    if (isDiagonal)
+                    {
+                        // Check the two cardinal neighbors that form this diagonal
+                        Vector2Int cardinal1 = gridPos + new Vector2Int(dir.x, 0);
+                        Vector2Int cardinal2 = gridPos + new Vector2Int(0, dir.y);
+
+                        var cardinalNode1 = mazeGridBehaviour.Grid.GetNode(cardinal1.x, cardinal1.y);
+                        var cardinalNode2 = mazeGridBehaviour.Grid.GetNode(cardinal2.x, cardinal2.y);
+
+                        bool cardinal1Walkable = cardinalNode1 != null && cardinalNode1.walkable;
+                        bool cardinal2Walkable = cardinalNode2 != null && cardinalNode2.walkable;
+
+                        // Only allow diagonal if at least one cardinal path is clear
+                        if (!cardinal1Walkable && !cardinal2Walkable)
+                        {
+                            continue;
+                        }
+                    }
+
                     neighbors.Add(neighborPos);
                 }
             }
@@ -2764,11 +2790,15 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Validate confusion path adjacency
+            // Validate confusion path adjacency (allow both cardinal and diagonal movement)
             for (int i = 1; i < confusionPath.Count; i++)
             {
-                int dist = Mathf.Abs(confusionPath[i].x - confusionPath[i - 1].x) + Mathf.Abs(confusionPath[i].y - confusionPath[i - 1].y);
-                if (dist != 1)
+                int dx = Mathf.Abs(confusionPath[i].x - confusionPath[i - 1].x);
+                int dy = Mathf.Abs(confusionPath[i].y - confusionPath[i - 1].y);
+                int manhattanDist = dx + dy;
+
+                // Valid moves: Manhattan distance 1 (cardinal) or 2 (diagonal)
+                if (manhattanDist < 1 || manhattanDist > 2 || (manhattanDist == 2 && dx == 0) || (manhattanDist == 2 && dy == 0))
                 {
                     RecalculatePath();
                     return;
@@ -2787,11 +2817,15 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Validate recovery path adjacency
+            // Validate recovery path adjacency (allow both cardinal and diagonal movement)
             for (int i = 1; i < recoveryPath.Count; i++)
             {
-                int dist = Mathf.Abs(recoveryPath[i].x - recoveryPath[i - 1].x) + Mathf.Abs(recoveryPath[i].y - recoveryPath[i - 1].y);
-                if (dist != 1)
+                int dx = Mathf.Abs(recoveryPath[i].x - recoveryPath[i - 1].x);
+                int dy = Mathf.Abs(recoveryPath[i].y - recoveryPath[i - 1].y);
+                int manhattanDist = dx + dy;
+
+                // Valid moves: Manhattan distance 1 (cardinal) or 2 (diagonal)
+                if (manhattanDist < 1 || manhattanDist > 2 || (manhattanDist == 2 && dx == 0) || (manhattanDist == 2 && dy == 0))
                 {
                     RecalculatePath();
                     return;

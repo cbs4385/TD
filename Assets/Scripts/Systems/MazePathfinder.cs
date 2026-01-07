@@ -218,6 +218,17 @@ namespace FaeMaze.Systems
                 // Calculate costs with attraction multiplier based on visitor state
                 float movementCost = grid.GetMoveCost(neighborMazeNode.x, neighborMazeNode.y, attractionMultiplier);
 
+                // Check if this is a diagonal movement (Manhattan distance > 1)
+                int dx = Mathf.Abs(neighborMazeNode.x - currentNode.x);
+                int dy = Mathf.Abs(neighborMazeNode.y - currentNode.y);
+                bool isDiagonalMove = (dx + dy) == 2;
+
+                if (isDiagonalMove)
+                {
+                    // Diagonal movement is √2 ≈ 1.414 times longer
+                    movementCost *= 1.414f;
+                }
+
                 // Add extra cost for vertical movement (stairs/ramps)
                 float heightDifference = Mathf.Abs(neighborMazeNode.height - currentNode.mazeNode.height);
                 if (heightDifference > 0.01f)
