@@ -117,6 +117,49 @@ namespace ForestMaze
             return RasterizeToGrid(state, gridWidth, gridHeight);
         }
 
+        /// <summary>
+        /// Compute the axis-aligned bounds for a generated maze state, expanded by the keep radius.
+        /// </summary>
+        /// <param name="turns">Number of growth turns</param>
+        /// <param name="seed">Random seed</param>
+        /// <param name="nodeCount">Target node count (including root)</param>
+        /// <returns>Min/max bounds expanded by the keep radius</returns>
+        public static (float minX, float maxX, float minY, float maxY) ComputeBoundsForSeed(
+            int turns,
+            int seed,
+            int nodeCount)
+        {
+            var state = GenerateStateForDiagnostics(turns, seed, nodeCount);
+            if (state.Nodes.Count == 0)
+                return (0f, 0f, 0f, 0f);
+
+            float minX = state.Nodes.Min(n => n.Position.x) - R_KEEP;
+            float maxX = state.Nodes.Max(n => n.Position.x) + R_KEEP;
+            float minY = state.Nodes.Min(n => n.Position.y) - R_KEEP;
+            float maxY = state.Nodes.Max(n => n.Position.y) + R_KEEP;
+
+            return (minX, maxX, minY, maxY);
+        }
+
+        private static ForestMapState GenerateStateForDiagnostics(int turns, int seed, int nodeCount)
+        {
+            var state = new ForestMapState
+            {
+                Random = new System.Random(seed)
+            };
+
+            Initialize(state);
+
+            int targetNodeCount = Mathf.Max(nodeCount, 1);
+            for (int i = 0; i < turns && state.Nodes.Count < targetNodeCount; i++)
+            {
+                if (state.Frontier.Count == 0 || !Step(state))
+                    break;
+            }
+
+            return state;
+        }
+
         private static void Initialize(ForestMapState state)
         {
             // Create root node at origin
