@@ -688,27 +688,53 @@ namespace ForestMaze
 
             foreach (var edge in state.Edges.Where(e => e.Partial && e.PolylinePoints.Count > 0))
             {
-                // Get the endpoint (last point in polyline - the ghost end)
-                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
-                int ex = Mathf.RoundToInt(endpoint.x);
-                int ey = Mathf.RoundToInt(endpoint.y);
+                var connectedNode = state.Nodes.First(n => n.Id == edge.NodeA);
+                Vector2 nodeCenter = connectedNode.Position * scale + offset;
+                int nx = Mathf.RoundToInt(nodeCenter.x);
+                int ny = Mathf.RoundToInt(nodeCenter.y);
 
-                if (ex >= 0 && ex < gridWidth && ey >= 0 && ey < gridHeight)
+                int targetX = -1;
+                int targetY = -1;
+                float maxDistance = -1f;
+
+                // Bias the spawn point toward the farthest walkable cell from the connected node center.
+                for (int i = edge.PolylinePoints.Count - 1; i >= 0; i--)
                 {
-                    // Mark ANY walkable tile (not just '.') as spawn point
-                    char currentTile = grid[ey, ex];
-                    if (IsWalkableTile(currentTile) && currentTile != 'H' && currentTile != 'N')
-                    {
-                        if (spawnIdQueue.Count == 0)
-                        {
-                            spawnIdsExhausted = true;
-                            break;
-                        }
+                    Vector2 point = edge.PolylinePoints[i] * scale + offset;
+                    int px = Mathf.RoundToInt(point.x);
+                    int py = Mathf.RoundToInt(point.y);
 
-                        char spawnId = spawnIdQueue.Dequeue();
-                        grid[ey, ex] = spawnId;
-                        entranceExitCount++;
+                    if (px < 0 || px >= gridWidth || py < 0 || py >= gridHeight)
+                    {
+                        continue;
                     }
+
+                    char candidateTile = grid[py, px];
+                    if (!IsWalkableTile(candidateTile) || candidateTile == 'H' || candidateTile == 'N')
+                    {
+                        continue;
+                    }
+
+                    float distance = (px - nx) * (px - nx) + (py - ny) * (py - ny);
+                    if (distance > maxDistance)
+                    {
+                        maxDistance = distance;
+                        targetX = px;
+                        targetY = py;
+                    }
+                }
+
+                if (targetX >= 0)
+                {
+                    if (spawnIdQueue.Count == 0)
+                    {
+                        spawnIdsExhausted = true;
+                        break;
+                    }
+
+                    char spawnId = spawnIdQueue.Dequeue();
+                    grid[targetY, targetX] = spawnId;
+                    entranceExitCount++;
                 }
             }
 

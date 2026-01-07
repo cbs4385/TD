@@ -650,26 +650,71 @@ namespace FaeMaze.Systems
                 }
             }
 
+            Vector2Int? nearestWalkable = null;
+            int nearestDistance = int.MaxValue;
+            int maxSearchRadius = 3;
+
+            for (int radius = 2; radius <= maxSearchRadius; radius++)
+            {
+                for (int dy = -radius; dy <= radius; dy++)
+                {
+                    for (int dx = -radius; dx <= radius; dx++)
+                    {
+                        if (dx == 0 && dy == 0)
+                        {
+                            continue;
+                        }
+
+                        Vector2Int checkPos = new Vector2Int(gridPos.x + dx, gridPos.y + dy);
+                        if (!mazeGridBehaviour.Grid.InBounds(checkPos.x, checkPos.y))
+                        {
+                            continue;
+                        }
+
+                        var node = mazeGridBehaviour.Grid.GetNode(checkPos.x, checkPos.y);
+                        if (node != null && node.walkable)
+                        {
+                            int distance = dx * dx + dy * dy;
+                            if (distance < nearestDistance)
+                            {
+                                nearestDistance = distance;
+                                nearestWalkable = checkPos;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (nearestWalkable.HasValue)
+            {
+                Vector2Int offset = nearestWalkable.Value - gridPos;
+                Vector2Int direction = NormalizeToCardinal(offset);
+                Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile for spawn point at ({gridPos.x}, {gridPos.y}); using nearest walkable tile at ({nearestWalkable.Value.x}, {nearestWalkable.Value.y})");
+                return direction;
+            }
+
             // Fallback: face toward the heart of the maze
             Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
-            Vector2Int fallbackDir = new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y);
-
-            // Normalize to primary direction (prefer cardinal over diagonal)
-            if (Mathf.Abs(fallbackDir.x) > Mathf.Abs(fallbackDir.y))
-            {
-                fallbackDir = new Vector2Int(fallbackDir.x > 0 ? 1 : -1, 0);
-            }
-            else if (fallbackDir.y != 0)
-            {
-                fallbackDir = new Vector2Int(0, fallbackDir.y > 0 ? 1 : -1);
-            }
-            else
-            {
-                fallbackDir = new Vector2Int(1, 0); // Default to right if at heart position
-            }
+            Vector2Int fallbackDir = NormalizeToCardinal(new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y));
 
             Debug.LogWarning($"[DynamicMazeGrowth] No adjacent walkable tile found for spawn point at ({gridPos.x}, {gridPos.y}), facing toward heart");
             return fallbackDir;
+        }
+
+        private Vector2Int NormalizeToCardinal(Vector2Int direction)
+        {
+            // Normalize to primary direction (prefer cardinal over diagonal)
+            if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+            {
+                return new Vector2Int(direction.x > 0 ? 1 : -1, 0);
+            }
+
+            if (direction.y != 0)
+            {
+                return new Vector2Int(0, direction.y > 0 ? 1 : -1);
+            }
+
+            return new Vector2Int(1, 0); // Default to right if no direction
         }
 
         /// <summary>
