@@ -68,25 +68,27 @@ namespace FaeMaze.Editor
             }
 
             // Add DynamicMazeGrowth if not present
-            if (mazeRootObj.GetComponent<DynamicMazeGrowth>() == null)
+            DynamicMazeGrowth dynamicGrowth = mazeRootObj.GetComponent<DynamicMazeGrowth>();
+            if (dynamicGrowth == null)
             {
-                DynamicMazeGrowth dynamicGrowth = mazeRootObj.AddComponent<DynamicMazeGrowth>();
+                dynamicGrowth = mazeRootObj.AddComponent<DynamicMazeGrowth>();
+                Debug.Log("[PlanarForestMazeSceneSetup] Added DynamicMazeGrowth component to MazeRoot");
+            }
 
-                // Try to load portal prefab
-                GameObject portalPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/portal.prefab");
-                if (portalPrefab != null)
-                {
-                    SerializedObject growthSO = new SerializedObject(dynamicGrowth);
-                    growthSO.FindProperty("portalPrefab").objectReferenceValue = portalPrefab;
-                    growthSO.FindProperty("growthInterval").floatValue = 30f;
-                    growthSO.FindProperty("autoGrowth").boolValue = true;
-                    growthSO.ApplyModifiedProperties();
-                    Debug.Log("[PlanarForestMazeSceneSetup] Assigned portal prefab to DynamicMazeGrowth");
-                }
-                else
-                {
-                    Debug.LogError("[PlanarForestMazeSceneSetup] Failed to load portal prefab from Assets/Prefabs/Tile/portal.prefab");
-                }
+            // Always configure portal prefab (in case it was previously missing)
+            GameObject portalPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/portal.prefab");
+            if (portalPrefab != null)
+            {
+                SerializedObject growthSO = new SerializedObject(dynamicGrowth);
+                growthSO.FindProperty("portalPrefab").objectReferenceValue = portalPrefab;
+                growthSO.FindProperty("growthInterval").floatValue = 30f;
+                growthSO.FindProperty("autoGrowth").boolValue = true;
+                growthSO.ApplyModifiedProperties();
+                Debug.Log("[PlanarForestMazeSceneSetup] Assigned portal prefab to DynamicMazeGrowth");
+            }
+            else
+            {
+                Debug.LogError("[PlanarForestMazeSceneSetup] Failed to load portal prefab from Assets/Prefabs/Tile/portal.prefab");
             }
 
             // Mark scene as dirty and save
