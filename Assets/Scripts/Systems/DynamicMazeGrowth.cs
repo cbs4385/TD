@@ -565,6 +565,7 @@ namespace FaeMaze.Systems
 
             // Base world position at grid center
             Vector3 baseWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y, -portalHeightOffset);
+            Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
 
             // Calculate portal position: center at wall edge toward maze interior
             Vector3 wallDirection = directionToMaze3D;
@@ -596,7 +597,43 @@ namespace FaeMaze.Systems
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
+            CreateDebugColumn(spawnWorldPos, mazeGridBehaviour.GridToWorld(gridPos.x + directionToMaze.x, gridPos.y + directionToMaze.y),
+                Color.blue, $"Portal_{spawnId}_SpawnToNode");
+            CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
+                Color.red, $"Portal_{spawnId}_XAxis");
+
             Debug.Log($"[DynamicMazeGrowth] Created portal '{spawnId}' at grid ({gridPos.x}, {gridPos.y}), world pos {finalWorldPos}, +X facing {facingVector} (toward maze)");
+        }
+
+        private void CreateDebugColumn(Vector3 start, Vector3 end, Color color, string name)
+        {
+            Vector3 flatStart = new Vector3(start.x, start.y, -0.5f);
+            Vector3 flatEnd = new Vector3(end.x, end.y, -0.5f);
+            Vector3 direction = flatEnd - flatStart;
+            float length = direction.magnitude;
+
+            if (length <= Mathf.Epsilon)
+            {
+                return;
+            }
+
+            GameObject column = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            column.name = name;
+            column.transform.SetParent(portalsParent, true);
+            column.transform.position = flatStart + direction * 0.5f;
+            column.transform.rotation = Quaternion.FromToRotation(Vector3.up, direction.normalized);
+            column.transform.localScale = new Vector3(0.05f, length * 0.5f, 0.05f);
+
+            Renderer renderer = column.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Shader shader = Shader.Find("Standard");
+                if (shader != null)
+                {
+                    renderer.material = new Material(shader);
+                }
+                renderer.material.color = color;
+            }
         }
 
         /// <summary>
