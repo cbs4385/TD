@@ -430,12 +430,11 @@ namespace ForestMaze
 
         private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null)
         {
+            var connectedNodeIds = GetConnectedNodeIds(state, newNode.Id);
             var candidates = state.Nodes
                 .Where(n => n.Id != newNode.Id && n.HasCapacity())
                 .Where(n => !prohibitedNodeId.HasValue || n.Id != prohibitedNodeId.Value)
-                .Where(n => !state.Edges.Any(e =>
-                    (e.NodeA == newNode.Id && e.NodeB == n.Id) ||
-                    (e.NodeA == n.Id && e.NodeB == newNode.Id)))
+                .Where(n => !connectedNodeIds.Contains(n.Id))
                 .ToList();
 
             if (candidates.Count == 0)
@@ -452,7 +451,7 @@ namespace ForestMaze
 
             foreach (var candidate in candidates)
             {
-                if (HasDirectConnection(state, newNode.Id, candidate.Id))
+                if (connectedNodeIds.Contains(candidate.Id))
                 {
                     continue;
                 }
@@ -496,12 +495,27 @@ namespace ForestMaze
             return false;
         }
 
-        private static bool HasDirectConnection(ForestMapState state, int nodeAId, int nodeBId)
+        private static HashSet<int> GetConnectedNodeIds(ForestMapState state, int nodeId)
         {
-            return state.Edges.Any(e =>
-                e.NodeB.HasValue &&
-                ((e.NodeA == nodeAId && e.NodeB.Value == nodeBId) ||
-                 (e.NodeA == nodeBId && e.NodeB.Value == nodeAId)));
+            var connected = new HashSet<int>();
+            foreach (var edge in state.Edges)
+            {
+                if (!edge.NodeB.HasValue)
+                {
+                    continue;
+                }
+
+                if (edge.NodeA == nodeId)
+                {
+                    connected.Add(edge.NodeB.Value);
+                }
+                else if (edge.NodeB.Value == nodeId)
+                {
+                    connected.Add(edge.NodeA);
+                }
+            }
+
+            return connected;
         }
 
         private static List<Vector2> BuildCurvedPolyline(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
