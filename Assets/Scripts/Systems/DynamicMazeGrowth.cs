@@ -14,6 +14,7 @@ namespace FaeMaze.Systems
     public class DynamicMazeGrowth : MonoBehaviour
     {
         private const int NodeRadiusTiles = 3;
+        private const int EndpointClearanceRadius = 1;
 
         #region Serialized Fields
 
@@ -244,14 +245,17 @@ namespace FaeMaze.Systems
 
             Debug.Log($"[DynamicMazeGrowth] Growing maze from endpoint '{selectedSpawnId}' at ({selectedGridPos.x}, {selectedGridPos.y})");
 
+            if (!TryGenerateNewNodeFromEndpoint(selectedGridPos, out Vector2Int nodeCenter, out List<Vector2Int> newEndpoints))
+            {
+                Debug.Log($"[DynamicMazeGrowth] Growth aborted. Unable to place node from endpoint '{selectedSpawnId}'.");
+                return;
+            }
+
             // Remove portal from the selected spawn point
             RemovePortalAtSpawnPoint(selectedSpawnId);
 
             // Mark the tile as no longer a visitor entrance/exit
             UpdateTileSymbol(selectedGridPos, '.');
-
-            // Generate new node and paths
-            List<Vector2Int> newEndpoints = GenerateNewNodeFromEndpoint(selectedGridPos, out Vector2Int nodeCenter);
 
             // Assign spawn IDs to new endpoints and create portals
             foreach (var endpoint in newEndpoints)
@@ -284,14 +288,17 @@ namespace FaeMaze.Systems
         /// Generates a new node with paths branching from the given endpoint.
         /// Returns list of new open endpoints created.
         /// </summary>
-        private List<Vector2Int> GenerateNewNodeFromEndpoint(Vector2Int fromGridPos, out Vector2Int nodeGridPos)
+        private bool TryGenerateNewNodeFromEndpoint(
+            Vector2Int fromGridPos,
+            out Vector2Int nodeGridPos,
+            out List<Vector2Int> newEndpoints)
         {
-            List<Vector2Int> newEndpoints = new List<Vector2Int>();
+            newEndpoints = new List<Vector2Int>();
 
             Vector2Int direction = GetOutwardDirectionFromEndpoint(fromGridPos);
             if (!TryPlaceNodeFromEndpoint(fromGridPos, direction, out nodeGridPos))
             {
-                return newEndpoints;
+                return false;
             }
 
             // Create 1-3 new branches from this node
@@ -310,7 +317,7 @@ namespace FaeMaze.Systems
             }
 
             SetTileWalkable(nodeGridPos.x, nodeGridPos.y, 'N');
-            return newEndpoints;
+            return true;
         }
 
         private bool TryPlaceNodeFromEndpoint(Vector2Int fromGridPos, Vector2Int outwardDirection, out Vector2Int nodeGridPos)
@@ -327,7 +334,7 @@ namespace FaeMaze.Systems
                     continue;
                 }
 
-                if (!IsPathClear(fromGridPos, candidateCenter, fromGridPos, null, 0))
+                if (!IsPathClear(fromGridPos, candidateCenter, fromGridPos, fromGridPos, EndpointClearanceRadius))
                 {
                     continue;
                 }
