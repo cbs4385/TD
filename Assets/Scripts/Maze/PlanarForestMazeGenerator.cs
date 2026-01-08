@@ -96,6 +96,8 @@ namespace ForestMaze
         public static string GenerateMaze(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
         {
             const int maxRetries = 5;
+            const int minNodeCount = 6; // Root + at least 5 normal nodes
+            const int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
             int baseSeed = seed.HasValue ? seed.Value : System.Environment.TickCount;
 
             for (int retry = 0; retry < maxRetries; retry++)
@@ -110,9 +112,6 @@ namespace ForestMaze
 
                 // Initialize with root and first node
                 Initialize(state);
-                // Grow to ensure minimum node count, then preserve open endpoints
-                int minNodeCount = 6; // Root + at least 5 normal nodes
-                int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
 
                 // Phase 1: Grow until we have minimum nodes
                 for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
@@ -155,8 +154,6 @@ namespace ForestMaze
 
             // Initialize with root and first node
             Initialize(finalState);
-            int minNodeCount = 6;
-            int minOpenEndpoints = 5;
 
             // Phase 1: Grow until we have minimum nodes
             for (int i = 0; i < turns && finalState.Nodes.Count < minNodeCount; i++)
