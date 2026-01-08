@@ -201,6 +201,9 @@ namespace FaeMaze.Visitors
         protected bool hasMovedSignificantly;
         protected bool isCurrentlyStalled;
 
+        // State tracking for path recalculation
+        protected VisitorState previousState = VisitorState.Idle;
+
         // State duration tracking (for timed states like Mesmerized, Lost, Frightened, etc.)
         protected VisitorState currentTimedState = VisitorState.Idle;
         protected float currentStateDuration;
@@ -745,6 +748,9 @@ namespace FaeMaze.Visitors
             hasMovedSignificantly = false;
             isCurrentlyStalled = false;
 
+            // Initialize previous state for change detection
+            previousState = state;
+
             RecalculatePath();
         }
 
@@ -782,6 +788,9 @@ namespace FaeMaze.Visitors
             hasLoggedCurrentStall = false;
             isCurrentlyStalled = false;
 
+            // Initialize previous state for change detection
+            previousState = state;
+
             RecalculatePath();
         }
 
@@ -801,8 +810,12 @@ namespace FaeMaze.Visitors
 
             // Verify starting step from the visitor's resolved grid position
             Vector2Int firstWaypoint = candidatePath[0];
-            int distanceFromCurrent = Mathf.Abs(currentPos.x - firstWaypoint.x) + Mathf.Abs(currentPos.y - firstWaypoint.y);
-            if (distanceFromCurrent > 1)
+            int dx = Mathf.Abs(currentPos.x - firstWaypoint.x);
+            int dy = Mathf.Abs(currentPos.y - firstWaypoint.y);
+            int manhattanFromCurrent = dx + dy;
+            // Valid start: cardinal (manhattan=1) or diagonal (manhattan=2, but not straight line)
+            bool validStart = manhattanFromCurrent == 1 || (manhattanFromCurrent == 2 && dx > 0 && dy > 0);
+            if (!validStart)
             {
                 issues.Add($"start {firstWaypoint} is not adjacent to current grid position {currentPos}");
             }
@@ -817,14 +830,19 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // Validate each subsequent hop for adjacency and walkability
+            // Validate each subsequent hop for adjacency and walkability (supports diagonal movement)
             for (int i = 1; i < candidatePath.Count; i++)
             {
                 Vector2Int previous = candidatePath[i - 1];
                 Vector2Int waypoint = candidatePath[i];
-                int manhattan = Mathf.Abs(previous.x - waypoint.x) + Mathf.Abs(previous.y - waypoint.y);
+                int deltaX = Mathf.Abs(previous.x - waypoint.x);
+                int deltaY = Mathf.Abs(previous.y - waypoint.y);
+                int manhattan = deltaX + deltaY;
 
-                if (manhattan != 1)
+                // Valid moves: cardinal (manhattan=1) or diagonal (manhattan=2 with both dx and dy > 0)
+                bool isValidMove = manhattan == 1 || (manhattan == 2 && deltaX > 0 && deltaY > 0);
+
+                if (!isValidMove)
                 {
                     issues.Add($"non-adjacent step between {previous} (index {i - 1}) and {waypoint} (index {i})");
                 }
@@ -2393,6 +2411,27 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Checks if current position is a node (marked with 'N' for generated nodes or 'H' for heart).
+        /// Nodes are decision points where path recalculation should occur.
+        /// </summary>
+        protected bool IsAtNode(Vector2Int position)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return false;
+            }
+
+            var node = mazeGridBehaviour.Grid.GetNode(position.x, position.y);
+            if (node == null)
+            {
+                return false;
+            }
+
+            // Node centers are marked 'N', heart is marked 'H'
+            return node.symbol == 'N' || node.symbol == 'H';
+        }
+
+        /// <summary>
         /// Checks if current position is an intersection (2+ walkable neighbors).
         /// </summary>
         protected bool IsAtIntersection(Vector2Int position)
@@ -2412,6 +2451,13 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Called when visitor reaches a waypoint. Handles state-aware routing and detour logic.
         /// Derived classes can override to add custom detour behaviors.
+        ///
+        /// Path recalculation occurs when:
+        /// - Visitor is at a node (N or H tiles)
+        /// - Visitor state has changed since last waypoint
+        /// - Visitor needs a detour (Lost/Confused states)
+        /// - Map changes (handled externally via TriggerVisitorPathRecalculation)
+        /// - Heart powers activate (handled externally by HeartPowerManager)
         /// </summary>
         protected virtual void HandleDetourAtWaypoint()
         {
@@ -2429,6 +2475,16 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = path[currentPathIndex];
 
+            // Check if state has changed since last waypoint
+            bool stateChanged = (state != previousState);
+            if (stateChanged)
+            {
+                previousState = state;
+                LogVisitorPath($"state changed to {state}, recalculating path");
+                RecalculatePath();
+                return;
+            }
+
             // Check if current state wants to attempt a detour
             if (ShouldAttemptDetour(currentPos))
             {
@@ -2437,12 +2493,21 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                // No detour - continue following the current path
-                // Only recalculate if we've reached the end of the path
-                currentPathIndex++;
-                if (currentPathIndex >= path.Count)
+                // Check if at a node (decision point) - recalculate to ensure optimal path
+                bool atNode = IsAtNode(currentPos);
+                if (atNode)
                 {
-                    OnPathCompleted();
+                    LogVisitorPath($"at node {currentPos}, recalculating path");
+                    RecalculatePath();
+                }
+                else
+                {
+                    // Regular waypoint - continue following the current path
+                    currentPathIndex++;
+                    if (currentPathIndex >= path.Count)
+                    {
+                        OnPathCompleted();
+                    }
                 }
             }
         }
