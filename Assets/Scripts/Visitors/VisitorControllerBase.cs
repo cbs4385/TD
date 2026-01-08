@@ -75,6 +75,10 @@ namespace FaeMaze.Visitors
         [Tooltip("Distance threshold to consider a waypoint reached")]
         protected float waypointReachedDistance = 0.05f;
 
+        [SerializeField]
+        [Tooltip("Enable verbose logging for visitor pathfinding diagnostics")]
+        protected bool logVisitorPathfinding = false;
+
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("Use 3D model instead of sprite-based rendering")]
@@ -415,7 +419,7 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
-            return false;
+            return logVisitorPathfinding;
         }
 
         /// <summary>
@@ -500,12 +504,13 @@ namespace FaeMaze.Visitors
 
         private void LogVisitorPath(string message)
         {
-            // Logging disabled
+            Debug.Log($"[VisitorPath] {name}: {message}");
         }
 
         private bool LogVisitorPathWarning(string message)
         {
-            return false;
+            Debug.LogWarning($"[VisitorPath] {name}: {message}");
+            return true;
         }
 
         private void UpdatePathLoggingOnMovement(Vector3 previousPosition, Vector3 currentPosition)
