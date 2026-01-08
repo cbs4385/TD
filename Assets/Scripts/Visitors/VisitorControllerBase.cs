@@ -505,12 +505,12 @@ namespace FaeMaze.Visitors
             }
         }
 
-        private void LogVisitorPath(string message)
+        protected void LogVisitorPath(string message)
         {
             Debug.Log($"[VisitorPath] {name}: {message}");
         }
 
-        private bool LogVisitorPathWarning(string message)
+        protected bool LogVisitorPathWarning(string message)
         {
             Debug.LogWarning($"[VisitorPath] {name}: {message}");
             return true;
