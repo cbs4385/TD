@@ -46,10 +46,12 @@ namespace FaeMaze.Systems
         private readonly HashSet<long> openSetLookup;
         private readonly HashSet<long> closedSet;
         private readonly bool logTileSelection;
+        private Vector3 goalPosition;
 
         // Heuristic scaling factor used for fCost tie-breaking toward the goal.
         // Keep this small and positive so equal-cost nodes prefer direct progress,
         // otherwise A* will pick arbitrary directions and can create zig-zag paths.
+        // Direction-alignment tie-breaks are also used later to reduce zig-zagging.
         private const float HEURISTIC_SCALE = 1.0f;
 
         #endregion
@@ -163,6 +165,13 @@ namespace FaeMaze.Systems
             {
                 return null;
             }
+            MazeGrid.MazeNode endMazeNode = grid.GetNode(endX, endY);
+            if (endMazeNode == null)
+            {
+                return null;
+            }
+
+            goalPosition = new Vector3(endX, endY, endMazeNode.z);
 
             // Create start node
             PathNode startPathNode = GetOrCreatePathNode(startMazeNode);
@@ -318,14 +327,39 @@ namespace FaeMaze.Systems
         {
             PathNode lowestNode = openSet[0];
             float lowestFCost = lowestNode.fCost;
+            const float costEpsilon = 0.0001f;
 
             for (int i = 1; i < openSet.Count; i++)
             {
-                float fCost = openSet[i].fCost;
-                if (fCost < lowestFCost || (fCost == lowestFCost && openSet[i].hCost < lowestNode.hCost))
+                PathNode candidateNode = openSet[i];
+                float fCost = candidateNode.fCost;
+                if (fCost < lowestFCost - costEpsilon)
                 {
-                    lowestNode = openSet[i];
+                    lowestNode = candidateNode;
                     lowestFCost = fCost;
+                    continue;
+                }
+
+                if (Mathf.Abs(fCost - lowestFCost) <= costEpsilon)
+                {
+                    float hCostDelta = candidateNode.hCost - lowestNode.hCost;
+                    if (hCostDelta < -costEpsilon)
+                    {
+                        lowestNode = candidateNode;
+                        lowestFCost = fCost;
+                        continue;
+                    }
+
+                    if (Mathf.Abs(hCostDelta) <= costEpsilon)
+                    {
+                        float candidateDot = GetGoalAlignmentDot(candidateNode);
+                        float lowestDot = GetGoalAlignmentDot(lowestNode);
+                        if (candidateDot > lowestDot + costEpsilon)
+                        {
+                            lowestNode = candidateNode;
+                            lowestFCost = fCost;
+                        }
+                    }
                 }
             }
 
@@ -342,6 +376,26 @@ namespace FaeMaze.Systems
             // when fCost ties occur, keeping paths straighter and avoiding zig-zagging.
             float manhattanDistance = Mathf.Abs(x1 - x2) + Mathf.Abs(y1 - y2);
             return manhattanDistance * HEURISTIC_SCALE;
+        }
+
+        private float GetGoalAlignmentDot(PathNode node)
+        {
+            if (node == null || node.parent == null)
+            {
+                return float.NegativeInfinity;
+            }
+
+            Vector3 nodePosition = new Vector3(node.x, node.y, node.z);
+            Vector3 parentPosition = new Vector3(node.parent.x, node.parent.y, node.parent.z);
+            Vector3 direction = nodePosition - parentPosition;
+            Vector3 toGoal = goalPosition - nodePosition;
+
+            if (direction.sqrMagnitude <= Mathf.Epsilon || toGoal.sqrMagnitude <= Mathf.Epsilon)
+            {
+                return float.NegativeInfinity;
+            }
+
+            return Vector3.Dot(direction.normalized, toGoal.normalized);
         }
 
         private long GetNodeKey(MazeGrid.MazeNode node)
