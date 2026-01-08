@@ -30,21 +30,19 @@ namespace FaeMaze.Editor
                     return;
 
                 // Check if DynamicMazeGrowth is missing
-                if (mazeRoot.GetComponent<DynamicMazeGrowth>() == null)
+                var dynamicGrowth = mazeRoot.GetComponent<DynamicMazeGrowth>();
+                if (dynamicGrowth == null)
                 {
-                    Debug.LogWarning("[EnsureDynamicMazeGrowth] DynamicMazeGrowth component is missing from MazeRoot. Run 'FaeMaze/Setup PlanarForest Maze Scene' to add it.");
+                    return;
                 }
-                else
-                {
-                    // Check if portal prefab is assigned
-                    var dynamicGrowth = mazeRoot.GetComponent<DynamicMazeGrowth>();
-                    var serializedObject = new SerializedObject(dynamicGrowth);
-                    var portalPrefabProp = serializedObject.FindProperty("portalPrefab");
 
-                    if (portalPrefabProp.objectReferenceValue == null)
-                    {
-                        Debug.LogWarning("[EnsureDynamicMazeGrowth] Portal prefab is not assigned to DynamicMazeGrowth. Run 'FaeMaze/Setup PlanarForest Maze Scene' to configure it.");
-                    }
+                // Check if portal prefab is assigned
+                var serializedObject = new SerializedObject(dynamicGrowth);
+                var portalPrefabProp = serializedObject.FindProperty("portalPrefab");
+
+                if (portalPrefabProp.objectReferenceValue == null)
+                {
+                    return;
                 }
             }
         }

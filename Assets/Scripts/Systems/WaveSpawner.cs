@@ -511,7 +511,6 @@ namespace FaeMaze.Systems
             // If no visitor types are enabled, return null
             if (enabledVisitorPrefabs.Count == 0)
             {
-                Debug.LogWarning("No visitor types are enabled in settings! Cannot spawn visitor.");
                 return null;
             }
 

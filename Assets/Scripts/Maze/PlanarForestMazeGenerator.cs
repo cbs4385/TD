@@ -91,22 +91,15 @@ namespace ForestMaze
 
             // Initialize with root and first node
             Initialize(state);
-            int lastLoggedNodeCount = 0;
-            LogGenerationSnapshot(state, gridWidth, gridHeight, "Heart Node", 1, ref lastLoggedNodeCount);
-            LogGenerationSnapshot(state, gridWidth, gridHeight, "Heart Node and Node 1", 2, ref lastLoggedNodeCount);
-
             // Grow to ensure minimum node count, then preserve open endpoints
             int minNodeCount = 6; // Root + at least 5 normal nodes
             int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
-
-            Debug.Log($"[PlanarForestMaze] Starting growth: turns={turns}, minNodes={minNodeCount}, minOpenEndpoints={minOpenEndpoints}");
 
             // Phase 1: Grow until we have minimum nodes
             for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
             {
                 if (state.Frontier.Count == 0 || !Step(state))
                     break;
-                LogNodeGrowthSnapshotIfNeeded(state, gridWidth, gridHeight, ref lastLoggedNodeCount);
             }
 
             // Phase 2: Continue growing but preserve minimum open endpoints
@@ -114,110 +107,10 @@ namespace ForestMaze
             {
                 if (!Step(state))
                     break;
-                LogNodeGrowthSnapshotIfNeeded(state, gridWidth, gridHeight, ref lastLoggedNodeCount);
             }
-            Debug.Log($"[PlanarForestMaze] Growth complete: nodes={state.Nodes.Count}, openEndpoints={state.Frontier.Count}");
 
             // Rasterize the graph to a grid
             return RasterizeToGrid(state, gridWidth, gridHeight);
-        }
-
-        private static void LogNodeGrowthSnapshotIfNeeded(
-            ForestMapState state,
-            int gridWidth,
-            int gridHeight,
-            ref int lastLoggedNodeCount)
-        {
-            int nodeCount = state.Nodes.Count;
-            if (nodeCount <= lastLoggedNodeCount)
-            {
-                return;
-            }
-
-            string label = GetGenerationSnapshotLabel(nodeCount);
-            if (string.IsNullOrEmpty(label))
-            {
-                return;
-            }
-
-            LogGenerationSnapshot(state, gridWidth, gridHeight, label, nodeCount, ref lastLoggedNodeCount);
-        }
-
-        private static string GetGenerationSnapshotLabel(int nodeCount)
-        {
-            switch (nodeCount)
-            {
-                case 3:
-                    return "Heart Node and Nodes 1 and 2";
-                case 4:
-                    return "Heart Node and Nodes 1 through 3";
-                case 5:
-                    return "Heart Node and Nodes 1 through 4";
-                case 6:
-                    return "Heart Node and Nodes 1 through 5";
-                default:
-                    return null;
-            }
-        }
-
-        private static void LogGenerationSnapshot(
-            ForestMapState state,
-            int gridWidth,
-            int gridHeight,
-            string label,
-            int nodeCount,
-            ref int lastLoggedNodeCount)
-        {
-            var snapshotState = CreateSnapshotState(state, nodeCount);
-            string snapshot = RasterizeToGrid(snapshotState, gridWidth, gridHeight);
-            Debug.Log($"[PlanarForestMaze] {label}:\n{snapshot}");
-            lastLoggedNodeCount = nodeCount;
-        }
-
-        private static ForestMapState CreateSnapshotState(ForestMapState state, int nodeCount)
-        {
-            var snapshot = new ForestMapState
-            {
-                Random = state.Random
-            };
-
-            foreach (var node in state.Nodes.Where(n => n.Id < nodeCount).OrderBy(n => n.Id))
-            {
-                snapshot.Nodes.Add(new Node
-                {
-                    Id = node.Id,
-                    Position = node.Position,
-                    Kind = node.Kind,
-                    MaxDegree = node.MaxDegree,
-                    IncidentEdges = new List<int>(node.IncidentEdges),
-                    UsedAngles = new List<float>(node.UsedAngles)
-                });
-            }
-
-            foreach (var edge in state.Edges)
-            {
-                if (edge.NodeA >= nodeCount)
-                {
-                    continue;
-                }
-
-                if (edge.NodeB.HasValue && edge.NodeB.Value >= nodeCount)
-                {
-                    continue;
-                }
-
-                snapshot.Edges.Add(new Edge
-                {
-                    Id = edge.Id,
-                    NodeA = edge.NodeA,
-                    NodeB = edge.NodeB,
-                    PolylinePoints = new List<Vector2>(edge.PolylinePoints),
-                    Partial = edge.Partial,
-                    GhostCenter = edge.GhostCenter
-                });
-            }
-
-            return snapshot;
         }
 
         private static void Initialize(ForestMapState state)
@@ -231,7 +124,6 @@ namespace ForestMaze
                 MaxDegree = 1
             };
             state.Nodes.Add(root);
-            LogNodeEdgePlan(root.Id, root.MaxDegree);
 
             // Create first normal node
             float angle = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
@@ -252,7 +144,6 @@ namespace ForestMaze
                 MaxDegree = maxDegree
             };
             state.Nodes.Add(node1);
-            LogNodeEdgePlan(node1.Id, node1.MaxDegree);
 
             // Create edge between root and node1 (straight line for simplicity)
             Vector2 direction = (node1Pos - root.Position).normalized;
@@ -271,10 +162,8 @@ namespace ForestMaze
 
             state.Edges.Add(edge);
             root.AddEdge(edge.Id, angle);
-            LogEdgeOrientation(root.Id, edge.Id, angle);
             float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
             node1.AddEdge(edge.Id, reverseAngle);
-            LogEdgeOrientation(node1.Id, edge.Id, reverseAngle);
 
             // Fill node1's remaining capacity with partial edges
             while (node1.HasCapacity())
@@ -304,7 +193,6 @@ namespace ForestMaze
                 MaxDegree = maxDegree
             };
             state.Nodes.Add(newNode);
-            LogNodeEdgePlan(newNode.Id, newNode.MaxDegree);
 
             // Convert partial edge to complete
             edge.NodeB = newNode.Id;
@@ -317,7 +205,6 @@ namespace ForestMaze
             reverseAngle = (reverseAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
             newNode.AddEdge(edgeId.Value, reverseAngle);
-            LogEdgeOrientation(newNode.Id, edgeId.Value, reverseAngle);
 
             // Remove from frontier and ghost list
             state.Frontier.Remove(edgeId.Value);
@@ -415,7 +302,6 @@ namespace ForestMaze
                             state.Frontier.Add(edge.Id);
                             state.GhostCenters.Add(ghostCenter);
                             node.AddEdge(edge.Id, theta);
-                            LogEdgeOrientation(node.Id, edge.Id, theta);
 
                             return true;
                         }
@@ -485,9 +371,7 @@ namespace ForestMaze
 
                 state.Edges.Add(edge);
                 newNode.AddEdge(edge.Id, angle);
-                LogEdgeOrientation(newNode.Id, edge.Id, angle);
                 candidate.AddEdge(edge.Id, reverseAngle);
-                LogEdgeOrientation(candidate.Id, edge.Id, reverseAngle);
 
                 return true;
             }
@@ -553,17 +437,6 @@ namespace ForestMaze
             }
 
             return null;
-        }
-
-        private static void LogNodeEdgePlan(int nodeId, int maxDegree)
-        {
-            Debug.Log($"[PlanarForestMaze] Node {nodeId} target edges={maxDegree}");
-        }
-
-        private static void LogEdgeOrientation(int nodeId, int edgeId, float angleRadians)
-        {
-            float angleDegrees = angleRadians * Mathf.Rad2Deg;
-            Debug.Log($"[PlanarForestMaze] Node {nodeId} edge {edgeId} orientation={angleDegrees:F1}°");
         }
 
         private static bool IsPolylineValid(ForestMapState state, List<Vector2> polyline,

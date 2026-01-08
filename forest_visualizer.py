@@ -79,7 +79,6 @@ class ForestVisualizer:
 
         if filename:
             plt.savefig(filename, dpi=150, bbox_inches='tight')
-            print(f"Saved visualization to {filename}")
 
         if show:
             plt.show()
@@ -170,7 +169,6 @@ class ForestVisualizer:
             # Generate up to target turn
             while self.generator.turn_count < target_turn:
                 if not self.generator.step():
-                    print(f"Warning: Generation stopped at turn {self.generator.turn_count}")
                     break
 
             # Save snapshot
@@ -221,7 +219,6 @@ def create_comparison_visualization(seed: int, turns: int, output_file: str = "c
 
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    print(f"Saved comparison to {output_file}")
     plt.close(fig)
 
 

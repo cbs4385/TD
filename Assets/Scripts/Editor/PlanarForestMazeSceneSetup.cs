@@ -72,7 +72,6 @@ namespace FaeMaze.Editor
             if (dynamicGrowth == null)
             {
                 dynamicGrowth = mazeRootObj.AddComponent<DynamicMazeGrowth>();
-                Debug.Log("[PlanarForestMazeSceneSetup] Added DynamicMazeGrowth component to MazeRoot");
             }
 
             // Always configure portal prefab (in case it was previously missing)
@@ -84,11 +83,6 @@ namespace FaeMaze.Editor
                 growthSO.FindProperty("growthInterval").floatValue = 30f;
                 growthSO.FindProperty("autoGrowth").boolValue = true;
                 growthSO.ApplyModifiedProperties();
-                Debug.Log("[PlanarForestMazeSceneSetup] Assigned portal prefab to DynamicMazeGrowth");
-            }
-            else
-            {
-                Debug.LogError("[PlanarForestMazeSceneSetup] Failed to load portal prefab from Assets/Prefabs/Tile/portal.prefab");
             }
 
             // Mark scene as dirty and save

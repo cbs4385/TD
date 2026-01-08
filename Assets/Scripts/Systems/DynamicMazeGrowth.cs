@@ -252,20 +252,15 @@ namespace FaeMaze.Systems
                 selectedSpawnId = selectedSpawnPoint.Key;
                 selectedGridPos = selectedSpawnPoint.Value;
 
-                Debug.Log($"[DynamicMazeGrowth] Growing maze from endpoint '{selectedSpawnId}' at ({selectedGridPos.x}, {selectedGridPos.y})");
-
                 if (TryGenerateNewNodeFromEndpoint(selectedGridPos, out nodeCenter, out newEndpoints))
                 {
                     grewSuccessfully = true;
                     break;
                 }
-
-                Debug.Log($"[DynamicMazeGrowth] Growth blocked at endpoint '{selectedSpawnId}'. Trying another.");
             }
 
             if (!grewSuccessfully)
             {
-                Debug.Log("[DynamicMazeGrowth] Growth aborted. No valid endpoints available.");
                 return;
             }
 
@@ -303,7 +298,6 @@ namespace FaeMaze.Systems
             // This is necessary because spawn points have changed - old destinations may no longer be valid spawn points
             TriggerVisitorPathRecalculation();
 
-            Debug.Log($"[DynamicMazeGrowth] Growth complete. Added node with {newEndpoints.Count} new endpoints.");
         }
 
         /// <summary>
@@ -898,7 +892,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[DynamicMazeGrowth] Triggered path recalculation for {recalculatedCount} active visitors after maze growth");
         }
 
         #endregion
