@@ -708,59 +708,67 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Carves a path between two grid positions.
+        /// Creates a wide rectangular corridor to enable true diagonal pathfinding.
         /// </summary>
         private void CarvePath(Vector2Int from, Vector2Int to)
         {
-            // Use Bresenham's line algorithm to carve a straight path
-            int x0 = from.x;
-            int y0 = from.y;
-            int x1 = to.x;
-            int y1 = to.y;
+            int dx = Mathf.Abs(to.x - from.x);
+            int dy = Mathf.Abs(to.y - from.y);
+            const int corridorHalfWidth = 1; // Creates ~3-tile wide corridor
 
-            int dx = Mathf.Abs(x1 - x0);
-            int dy = Mathf.Abs(y1 - y0);
-            int sx = x0 < x1 ? 1 : -1;
-            int sy = y0 < y1 ? 1 : -1;
-            int err = dx - dy;
-
-            // Collect all tiles along the Bresenham line first
-            List<Vector2Int> bresenhamTiles = new List<Vector2Int>();
-
-            int bx = x0;
-            int by = y0;
-            int berr = err;
-
-            while (true)
+            // For diagonal or near-diagonal paths, carve the full rectangular area
+            // This enables true diagonal movement instead of zigzag
+            if (dx > 0 && dy > 0)
             {
-                bresenhamTiles.Add(new Vector2Int(bx, by));
+                int minX = Mathf.Min(from.x, to.x) - corridorHalfWidth;
+                int maxX = Mathf.Max(from.x, to.x) + corridorHalfWidth;
+                int minY = Mathf.Min(from.y, to.y) - corridorHalfWidth;
+                int maxY = Mathf.Max(from.y, to.y) + corridorHalfWidth;
 
-                if (bx == x1 && by == y1)
-                    break;
-
-                int e2 = 2 * berr;
-                if (e2 > -dy)
+                // Carve the full rectangular area
+                for (int x = minX; x <= maxX; x++)
                 {
-                    berr -= dy;
-                    bx += sx;
-                }
-                if (e2 < dx)
-                {
-                    berr += dx;
-                    by += sy;
+                    for (int y = minY; y <= maxY; y++)
+                    {
+                        SetTileWalkable(x, y, '.');
+                    }
                 }
             }
-
-            // Now carve a wider area around each Bresenham tile to fill the corridor
-            // This ensures diagonal movement is possible throughout the corridor
-            const int corridorRadius = 1; // Creates ~3-tile wide corridor
-            foreach (var tile in bresenhamTiles)
+            else if (dx > dy)
             {
-                // Carve a square area around each tile
-                for (int dy_offset = -corridorRadius; dy_offset <= corridorRadius; dy_offset++)
+                // Primarily horizontal corridor
+                int minX = Mathf.Min(from.x, to.x);
+                int maxX = Mathf.Max(from.x, to.x);
+
+                for (int x = minX; x <= maxX; x++)
                 {
-                    for (int dx_offset = -corridorRadius; dx_offset <= corridorRadius; dx_offset++)
+                    // Linear interpolation of y based on x position
+                    float t = (x - minX) / (float)Mathf.Max(1, dx);
+                    int centerY = Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t));
+
+                    // Carve corridor width around this center
+                    for (int yOffset = -corridorHalfWidth; yOffset <= corridorHalfWidth; yOffset++)
                     {
-                        SetTileWalkable(tile.x + dx_offset, tile.y + dy_offset, '.');
+                        SetTileWalkable(x, centerY + yOffset, '.');
+                    }
+                }
+            }
+            else
+            {
+                // Primarily vertical corridor
+                int minY = Mathf.Min(from.y, to.y);
+                int maxY = Mathf.Max(from.y, to.y);
+
+                for (int y = minY; y <= maxY; y++)
+                {
+                    // Linear interpolation of x based on y position
+                    float t = (y - minY) / (float)Mathf.Max(1, dy);
+                    int centerX = Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t));
+
+                    // Carve corridor width around this center
+                    for (int xOffset = -corridorHalfWidth; xOffset <= corridorHalfWidth; xOffset++)
+                    {
+                        SetTileWalkable(centerX + xOffset, y, '.');
                     }
                 }
             }
