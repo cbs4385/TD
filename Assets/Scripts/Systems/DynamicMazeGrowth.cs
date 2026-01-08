@@ -15,6 +15,7 @@ namespace FaeMaze.Systems
     {
         private const int NodeRadiusTiles = 3;
         private const int EndpointClearanceRadius = 2;
+        private const int DefaultCorridorWidth = 2;
 
         #region Serialized Fields
 
@@ -714,16 +715,17 @@ namespace FaeMaze.Systems
         {
             int dx = Mathf.Abs(to.x - from.x);
             int dy = Mathf.Abs(to.y - from.y);
-            const int corridorHalfWidth = 1; // Creates ~3-tile wide corridor
+            Vector2Int direction = NormalizeToCardinal(to - from);
+            GetCorridorOffsets(from, direction, out int offsetMin, out int offsetMax);
 
             // For diagonal or near-diagonal paths, carve the full rectangular area
             // This enables true diagonal movement instead of zigzag
             if (dx > 0 && dy > 0)
             {
-                int minX = Mathf.Min(from.x, to.x) - corridorHalfWidth;
-                int maxX = Mathf.Max(from.x, to.x) + corridorHalfWidth;
-                int minY = Mathf.Min(from.y, to.y) - corridorHalfWidth;
-                int maxY = Mathf.Max(from.y, to.y) + corridorHalfWidth;
+                int minX = Mathf.Min(from.x, to.x) + offsetMin;
+                int maxX = Mathf.Max(from.x, to.x) + offsetMax;
+                int minY = Mathf.Min(from.y, to.y) + offsetMin;
+                int maxY = Mathf.Max(from.y, to.y) + offsetMax;
 
                 // Carve the full rectangular area
                 for (int x = minX; x <= maxX; x++)
@@ -747,7 +749,7 @@ namespace FaeMaze.Systems
                     int centerY = Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t));
 
                     // Carve corridor width around this center
-                    for (int yOffset = -corridorHalfWidth; yOffset <= corridorHalfWidth; yOffset++)
+                    for (int yOffset = offsetMin; yOffset <= offsetMax; yOffset++)
                     {
                         SetTileWalkable(x, centerY + yOffset, '.');
                     }
@@ -766,12 +768,78 @@ namespace FaeMaze.Systems
                     int centerX = Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t));
 
                     // Carve corridor width around this center
-                    for (int xOffset = -corridorHalfWidth; xOffset <= corridorHalfWidth; xOffset++)
+                    for (int xOffset = offsetMin; xOffset <= offsetMax; xOffset++)
                     {
                         SetTileWalkable(centerX + xOffset, y, '.');
                     }
                 }
             }
+        }
+
+        private void GetCorridorOffsets(Vector2Int origin, Vector2Int direction, out int offsetMin, out int offsetMax)
+        {
+            Vector2Int normalizedDirection = NormalizeToCardinal(direction);
+            Vector2Int perpendicular = normalizedDirection.x != 0 ? new Vector2Int(0, 1) : new Vector2Int(1, 0);
+
+            bool hasPositive = IsWalkablePathTile(origin + perpendicular) ||
+                               IsWalkablePathTile(origin + normalizedDirection + perpendicular);
+            bool hasNegative = IsWalkablePathTile(origin - perpendicular) ||
+                               IsWalkablePathTile(origin + normalizedDirection - perpendicular);
+
+            if (hasPositive && hasNegative)
+            {
+                offsetMin = -1;
+                offsetMax = 1;
+                return;
+            }
+
+            if (hasPositive)
+            {
+                offsetMin = 0;
+                offsetMax = 1;
+                return;
+            }
+
+            if (hasNegative)
+            {
+                offsetMin = -1;
+                offsetMax = 0;
+                return;
+            }
+
+            GetDefaultCorridorOffsets(out offsetMin, out offsetMax);
+        }
+
+        private void GetDefaultCorridorOffsets(out int offsetMin, out int offsetMax)
+        {
+            if (DefaultCorridorWidth <= 1)
+            {
+                offsetMin = 0;
+                offsetMax = 0;
+                return;
+            }
+
+            if (DefaultCorridorWidth % 2 == 1)
+            {
+                int half = DefaultCorridorWidth / 2;
+                offsetMin = -half;
+                offsetMax = half;
+                return;
+            }
+
+            offsetMin = 0;
+            offsetMax = DefaultCorridorWidth - 1;
+        }
+
+        private bool IsWalkablePathTile(Vector2Int gridPos)
+        {
+            if (!mazeGridBehaviour.Grid.InBounds(gridPos.x, gridPos.y))
+            {
+                return false;
+            }
+
+            var node = mazeGridBehaviour.Grid.GetNode(gridPos.x, gridPos.y);
+            return node != null && node.walkable;
         }
 
         /// <summary>
