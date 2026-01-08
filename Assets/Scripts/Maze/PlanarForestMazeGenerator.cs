@@ -660,7 +660,8 @@ namespace ForestMaze
             // Validate node clearance against edges after grid quantization.
             float nodeRadius = NODE_RADIUS * scale;
             float pathRadius = PATH_RADIUS * scale;
-            float minClearance = nodeRadius + pathRadius;
+            const float minWallTilesBetween = 1f;
+            float minClearance = nodeRadius + pathRadius + minWallTilesBetween;
 
             foreach (var edge in state.Edges.Where(e => e.IsComplete()))
             {
