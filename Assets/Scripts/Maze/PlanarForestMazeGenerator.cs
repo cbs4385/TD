@@ -657,6 +657,48 @@ namespace ForestMaze
                 result.DetectedConnections.Add(nodeA < nodeB ? (nodeA, nodeB) : (nodeB, nodeA));
             }
 
+            // Validate node clearance against edges after grid quantization.
+            float nodeRadius = NODE_RADIUS * scale;
+            float pathRadius = PATH_RADIUS * scale;
+            float minClearance = nodeRadius + pathRadius;
+
+            foreach (var edge in state.Edges.Where(e => e.IsComplete()))
+            {
+                int nodeA = edge.NodeA;
+                int nodeB = edge.NodeB.Value;
+
+                if (!result.ActualNodePositions.ContainsKey(nodeA) ||
+                    !result.ActualNodePositions.ContainsKey(nodeB))
+                {
+                    continue;
+                }
+
+                Vector2 posA = result.ActualNodePositions[nodeA];
+                Vector2 posB = result.ActualNodePositions[nodeB];
+                Vector2 direction = (posB - posA).normalized;
+                Vector2 startBoundary = posA + direction * nodeRadius;
+                Vector2 endBoundary = posB - direction * nodeRadius;
+                var edgePolyline = new List<Vector2> { startBoundary, endBoundary };
+
+                foreach (var node in state.Nodes)
+                {
+                    if (node.Id == nodeA || node.Id == nodeB)
+                        continue;
+
+                    if (!result.ActualNodePositions.TryGetValue(node.Id, out Vector2 nodePos))
+                        continue;
+
+                    float dist = PolylineToNodeDistance(edgePolyline, nodePos, false);
+                    if (dist < minClearance - 1e-6f)
+                    {
+                        result.IsValid = false;
+                        result.ErrorMessage =
+                            $"Node {node.Id} overlaps edge {edge.Id} after grid quantization";
+                        return result;
+                    }
+                }
+            }
+
             // Verify all nodes are reachable from root
             var reachable = new HashSet<int>();
             var queue = new Queue<int>();
