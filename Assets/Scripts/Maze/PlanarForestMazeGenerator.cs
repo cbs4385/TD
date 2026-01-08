@@ -31,6 +31,7 @@ namespace ForestMaze
         private const float ROTATE_STEP = 6.0f; // degrees
         private const float SHORTEN_STEP = 0.3f;
         private const float MIN_CORRIDOR_LENGTH = 0.3f;
+        private const float WALL_BUFFER = 1.0f; // Minimum wall buffer (in world units) between elements
 
         private class Node
         {
@@ -478,7 +479,9 @@ namespace ForestMaze
             {
                 bool isIncident = incidentNodes.Contains(node.Id);
                 float dist = PolylineToNodeDistance(polyline, node.Position, isIncident);
-                float minRequired = isIncident ? NODE_RADIUS + PATH_RADIUS : R_KEEP + PATH_RADIUS - 0.4f;
+                float minRequired = isIncident
+                    ? NODE_RADIUS + PATH_RADIUS
+                    : R_KEEP + PATH_RADIUS - 0.4f + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
                     return false;
@@ -491,7 +494,7 @@ namespace ForestMaze
                     continue;
 
                 float dist = PolylineToNodeDistance(polyline, ghost, false);
-                float minRequired = R_KEEP + PATH_RADIUS - 0.4f;
+                float minRequired = R_KEEP + PATH_RADIUS - 0.4f + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
                     return false;
@@ -504,7 +507,7 @@ namespace ForestMaze
                     continue;
 
                 float dist = PolylineToPolylineDistance(polyline, edge.PolylinePoints);
-                float minRequired = PATH_WIDTH * 0.8f;
+                float minRequired = PATH_WIDTH * 0.8f + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
                     return false;
@@ -549,7 +552,7 @@ namespace ForestMaze
                     continue;
 
                 float dist = PolylineToNodeDistance(edge.PolylinePoints, ghostPos, false);
-                float minRequired = NODE_RADIUS + PATH_RADIUS;
+                float minRequired = NODE_RADIUS + PATH_RADIUS + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
                     return false;
@@ -655,49 +658,6 @@ namespace ForestMaze
                 }
 
                 result.DetectedConnections.Add(nodeA < nodeB ? (nodeA, nodeB) : (nodeB, nodeA));
-            }
-
-            // Validate node clearance against edges after grid quantization.
-            float nodeRadius = NODE_RADIUS * scale;
-            float pathRadius = PATH_RADIUS * scale;
-            const float minWallTilesBetween = 1f;
-            float minClearance = nodeRadius + pathRadius + minWallTilesBetween;
-
-            foreach (var edge in state.Edges.Where(e => e.IsComplete()))
-            {
-                int nodeA = edge.NodeA;
-                int nodeB = edge.NodeB.Value;
-
-                if (!result.ActualNodePositions.ContainsKey(nodeA) ||
-                    !result.ActualNodePositions.ContainsKey(nodeB))
-                {
-                    continue;
-                }
-
-                Vector2 posA = result.ActualNodePositions[nodeA];
-                Vector2 posB = result.ActualNodePositions[nodeB];
-                Vector2 direction = (posB - posA).normalized;
-                Vector2 startBoundary = posA + direction * nodeRadius;
-                Vector2 endBoundary = posB - direction * nodeRadius;
-                var edgePolyline = new List<Vector2> { startBoundary, endBoundary };
-
-                foreach (var node in state.Nodes)
-                {
-                    if (node.Id == nodeA || node.Id == nodeB)
-                        continue;
-
-                    if (!result.ActualNodePositions.TryGetValue(node.Id, out Vector2 nodePos))
-                        continue;
-
-                    float dist = PolylineToNodeDistance(edgePolyline, nodePos, false);
-                    if (dist < minClearance - 1e-6f)
-                    {
-                        result.IsValid = false;
-                        result.ErrorMessage =
-                            $"Node {node.Id} overlaps edge {edge.Id} after grid quantization";
-                        return result;
-                    }
-                }
             }
 
             // Verify all nodes are reachable from root
