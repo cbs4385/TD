@@ -320,7 +320,7 @@ namespace ForestMaze
                     Vector2 direction = new Vector2(Mathf.Cos(theta), Mathf.Sin(theta));
                     Vector2 ghostCenter = node.Position + direction * (2 * NODE_RADIUS + length);
 
-                    if (!IsGhostPositionValid(state, ghostCenter))
+                    if (!IsGhostPositionValid(state, ghostCenter, node.Id))
                     {
                         length -= SHORTEN_STEP;
                         continue;
@@ -526,7 +526,7 @@ namespace ForestMaze
             return true;
         }
 
-        private static bool IsGhostPositionValid(ForestMapState state, Vector2 ghostPos)
+        private static bool IsGhostPositionValid(ForestMapState state, Vector2 ghostPos, int sourceNodeId)
         {
             foreach (var node in state.Nodes)
             {
@@ -537,6 +537,21 @@ namespace ForestMaze
             foreach (var ghost in state.GhostCenters)
             {
                 if (Vector2.Distance(ghost, ghostPos) < 2 * R_KEEP - 1e-6f)
+                    return false;
+            }
+
+            foreach (var edge in state.Edges)
+            {
+                if (edge.PolylinePoints.Count < 2)
+                    continue;
+
+                if (edge.NodeA == sourceNodeId || (edge.NodeB.HasValue && edge.NodeB.Value == sourceNodeId))
+                    continue;
+
+                float dist = PolylineToNodeDistance(edge.PolylinePoints, ghostPos, false);
+                float minRequired = NODE_RADIUS + PATH_RADIUS;
+
+                if (dist < minRequired - 1e-6f)
                     return false;
             }
 
