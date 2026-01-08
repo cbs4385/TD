@@ -887,38 +887,72 @@ namespace ForestMaze
                 SetGridCell(grid, x, y, ch, width, height);
             }
 
-            while (true)
+            // For diagonal paths (both dx and dy > 0), carve a wider rectangular corridor
+            // to enable true diagonal pathfinding instead of zigzag movement
+            bool isDiagonal = (dx > 0 && dy > 0 && Mathf.Abs(dx - dy) < Mathf.Max(dx, dy) * 0.5f);
+
+            if (isDiagonal)
             {
-                bool atEnd = (x0 == x1 && y0 == y1);
+                // Carve rectangular area with 1-tile border on each side
+                int minX = Mathf.Min(x0, x1);
+                int maxX = Mathf.Max(x0, x1);
+                int minY = Mathf.Min(y0, y1);
+                int maxY = Mathf.Max(y0, y1);
 
-                // Only draw at the end if includeEndPoint is true.
-                if (!atEnd || includeEndPoint)
+                // Extend by 1 tile on each side for corridor width
+                minX = Mathf.Max(0, minX - 1);
+                maxX = Mathf.Min(width - 1, maxX + 1);
+                minY = Mathf.Max(0, minY - 1);
+                maxY = Mathf.Min(height - 1, maxY + 1);
+
+                for (int x = minX; x <= maxX; x++)
                 {
-                    // Draw center pixel and a single orthogonal neighbor for a thinner path
-                    Set(x0, y0);
-                    if (dx >= dy)
+                    for (int y = minY; y <= maxY; y++)
                     {
-                        Set(x0, y0 + 1);
-                    }
-                    else
-                    {
-                        Set(x0 + 1, y0);
+                        // Respect includeEndPoint flag for endpoint cell
+                        if (!includeEndPoint && x == x1 && y == y1)
+                            continue;
+
+                        SetGridCell(grid, x, y, ch, width, height);
                     }
                 }
-
-                if (atEnd)
-                    break;
-
-                int e2 = 2 * err;
-                if (e2 > -dy)
+            }
+            else
+            {
+                // Original Bresenham algorithm for primarily horizontal/vertical paths
+                while (true)
                 {
-                    err -= dy;
-                    x0 += sx;
-                }
-                if (e2 < dx)
-                {
-                    err += dx;
-                    y0 += sy;
+                    bool atEnd = (x0 == x1 && y0 == y1);
+
+                    // Only draw at the end if includeEndPoint is true.
+                    if (!atEnd || includeEndPoint)
+                    {
+                        // Draw center pixel and a single orthogonal neighbor for a thinner path
+                        Set(x0, y0);
+                        if (dx >= dy)
+                        {
+                            Set(x0, y0 + 1);
+                        }
+                        else
+                        {
+                            Set(x0 + 1, y0);
+                        }
+                    }
+
+                    if (atEnd)
+                        break;
+
+                    int e2 = 2 * err;
+                    if (e2 > -dy)
+                    {
+                        err -= dy;
+                        x0 += sx;
+                    }
+                    if (e2 < dx)
+                    {
+                        err += dx;
+                        y0 += sy;
+                    }
                 }
             }
         }
