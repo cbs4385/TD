@@ -887,9 +887,6 @@ namespace ForestMaze
                 SetGridCell(grid, x, y, ch, width, height);
             }
 
-            // Track all carved tiles to enable diagonal gap-filling
-            List<(int x, int y)> carvedTiles = new List<(int x, int y)>();
-
             while (true)
             {
                 bool atEnd = (x0 == x1 && y0 == y1);
@@ -897,20 +894,37 @@ namespace ForestMaze
                 // Only draw at the end if includeEndPoint is true.
                 if (!atEnd || includeEndPoint)
                 {
-                    // Draw center pixel and track it
+                    // Draw center pixel
                     Set(x0, y0);
-                    carvedTiles.Add((x0, y0));
 
-                    // Add width based on path orientation
-                    if (dx >= dy)
+                    // For diagonal paths, add both perpendicular AND diagonal neighbors to enable diagonal movement
+                    if (dx > 0 && dy > 0)
                     {
-                        // Horizontal-ish path: add vertical width
-                        Set(x0, y0 + 1);
+                        // Diagonal path - add width in both perpendicular AND diagonal directions
+                        if (dx >= dy)
+                        {
+                            Set(x0, y0 + 1);      // Perpendicular width
+                            Set(x0 + sx, y0);     // Diagonal neighbor in x direction
+                            Set(x0 + sx, y0 + sy); // True diagonal neighbor
+                        }
+                        else
+                        {
+                            Set(x0 + 1, y0);      // Perpendicular width
+                            Set(x0, y0 + sy);     // Diagonal neighbor in y direction
+                            Set(x0 + sx, y0 + sy); // True diagonal neighbor
+                        }
                     }
                     else
                     {
-                        // Vertical-ish path: add horizontal width
-                        Set(x0 + 1, y0);
+                        // Horizontal or vertical path - add perpendicular width only
+                        if (dx >= dy)
+                        {
+                            Set(x0, y0 + 1);
+                        }
+                        else
+                        {
+                            Set(x0 + 1, y0);
+                        }
                     }
                 }
 
@@ -927,61 +941,6 @@ namespace ForestMaze
                 {
                     err += dx;
                     y0 += sy;
-                }
-            }
-
-            // Post-process: fill diagonal gaps between adjacent carved tiles
-            // This enables diagonal pathfinding through Bresenham zigzags
-            if (dx > 0 && dy > 0)
-            {
-                for (int i = 0; i < carvedTiles.Count - 1; i++)
-                {
-                    var current = carvedTiles[i];
-                    var next = carvedTiles[i + 1];
-
-                    int tdx = next.x - current.x;
-                    int tdy = next.y - current.y;
-
-                    // If tiles form a 90-degree corner (one moved horizontally, next moved vertically or vice versa)
-                    // Fill the diagonal corner to enable diagonal movement
-                    if (Mathf.Abs(tdx) == 1 && Mathf.Abs(tdy) == 1)
-                    {
-                        // Already diagonal, no gap to fill
-                        continue;
-                    }
-
-                    if (tdx != 0 && tdy == 0)
-                    {
-                        // Horizontal step - check if previous step was vertical
-                        if (i > 0)
-                        {
-                            var prev = carvedTiles[i - 1];
-                            int pdx = current.x - prev.x;
-                            int pdy = current.y - prev.y;
-
-                            if (pdx == 0 && pdy != 0)
-                            {
-                                // Previous was vertical, current is horizontal - fill diagonal
-                                Set(next.x, current.y);
-                            }
-                        }
-                    }
-                    else if (tdx == 0 && tdy != 0)
-                    {
-                        // Vertical step - check if previous step was horizontal
-                        if (i > 0)
-                        {
-                            var prev = carvedTiles[i - 1];
-                            int pdx = current.x - prev.x;
-                            int pdy = current.y - prev.y;
-
-                            if (pdx != 0 && pdy == 0)
-                            {
-                                // Previous was horizontal, current is vertical - fill diagonal
-                                Set(current.x, next.y);
-                            }
-                        }
-                    }
                 }
             }
         }
