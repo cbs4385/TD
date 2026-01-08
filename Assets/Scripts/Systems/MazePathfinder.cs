@@ -45,6 +45,7 @@ namespace FaeMaze.Systems
         private readonly List<PathNode> openSet;
         private readonly HashSet<long> openSetLookup;
         private readonly HashSet<long> closedSet;
+        private readonly bool logTileSelection;
 
         // Heuristic scaling factor to account for attractive tiles
         // Set to 0.0 to disable heuristic, making A* equivalent to Dijkstra's algorithm
@@ -59,7 +60,7 @@ namespace FaeMaze.Systems
         /// Creates a new pathfinder for the given maze grid.
         /// </summary>
         /// <param name="grid">The maze grid to pathfind over</param>
-        public MazePathfinder(MazeGrid grid)
+        public MazePathfinder(MazeGrid grid, bool logTileSelection = false)
         {
             if (grid == null)
             {
@@ -71,6 +72,7 @@ namespace FaeMaze.Systems
             this.openSet = new List<PathNode>();
             this.openSetLookup = new HashSet<long>();
             this.closedSet = new HashSet<long>();
+            this.logTileSelection = logTileSelection;
         }
 
         #endregion
@@ -177,6 +179,13 @@ namespace FaeMaze.Systems
             {
                 // Get node with lowest fCost
                 PathNode currentNode = GetLowestFCostNode();
+                if (logTileSelection)
+                {
+                    Debug.Log(
+                        $"Pathfinding select node ({currentNode.x}, {currentNode.y}, {currentNode.z}) " +
+                        $"g={currentNode.gCost:F2} h={currentNode.hCost:F2} f={currentNode.fCost:F2} " +
+                        $"open={openSet.Count} closed={closedSet.Count}");
+                }
 
                 // Check if we reached the end
                 if (currentNode.x == endX && currentNode.y == endY)
@@ -209,14 +218,31 @@ namespace FaeMaze.Systems
 
                 // Skip if already in closed set
                 if (closedSet.Contains(neighborKey))
+                {
+                    if (logTileSelection)
+                    {
+                        Debug.Log(
+                            $"Pathfinding skip neighbor ({neighborMazeNode.x}, {neighborMazeNode.y}, {neighborMazeNode.z}) " +
+                            $"from ({currentNode.x}, {currentNode.y}, {currentNode.z}): closed set");
+                    }
                     continue;
+                }
 
                 // Check if neighbor is walkable (should already be filtered by GetNeighbors, but double-check)
                 if (!neighborMazeNode.walkable)
+                {
+                    if (logTileSelection)
+                    {
+                        Debug.Log(
+                            $"Pathfinding skip neighbor ({neighborMazeNode.x}, {neighborMazeNode.y}, {neighborMazeNode.z}) " +
+                            $"from ({currentNode.x}, {currentNode.y}, {currentNode.z}): not walkable");
+                    }
                     continue;
+                }
 
                 // Calculate costs with attraction multiplier based on visitor state
                 float movementCost = grid.GetMoveCost(neighborMazeNode.x, neighborMazeNode.y, attractionMultiplier);
+                float rawCost = neighborMazeNode.baseCost - (neighborMazeNode.attraction * attractionMultiplier);
 
                 // Check if this is a diagonal movement (Manhattan distance > 1)
                 int dx = Mathf.Abs(neighborMazeNode.x - currentNode.x);
@@ -245,6 +271,17 @@ namespace FaeMaze.Systems
                 // Check if this path is better
                 bool isInOpenSet = openSetLookup.Contains(neighborKey);
 
+                if (logTileSelection)
+                {
+                    Debug.Log(
+                        $"Pathfinding evaluate neighbor ({neighborMazeNode.x}, {neighborMazeNode.y}, {neighborMazeNode.z}) " +
+                        $"from ({currentNode.x}, {currentNode.y}, {currentNode.z}) " +
+                        $"base={neighborMazeNode.baseCost:F2} attraction={neighborMazeNode.attraction:F2} " +
+                        $"multiplier={attractionMultiplier:F2} rawCost={rawCost:F2} " +
+                        $"moveCost={movementCost:F2} diagonal={isDiagonalMove} heightDiff={heightDifference:F2} " +
+                        $"tentativeG={tentativeGCost:F2} prevG={neighborPathNode.gCost:F2} inOpen={isInOpenSet}");
+                }
+
                 if (!isInOpenSet || tentativeGCost < neighborPathNode.gCost)
                 {
                     // Update neighbor
@@ -258,6 +295,21 @@ namespace FaeMaze.Systems
                         openSet.Add(neighborPathNode);
                         openSetLookup.Add(neighborKey);
                     }
+
+                    if (logTileSelection)
+                    {
+                        string updateReason = isInOpenSet ? "improved" : "added";
+                        Debug.Log(
+                            $"Pathfinding {updateReason} node ({neighborMazeNode.x}, {neighborMazeNode.y}, {neighborMazeNode.z}) " +
+                            $"g={neighborPathNode.gCost:F2} h={neighborPathNode.hCost:F2} f={neighborPathNode.fCost:F2} " +
+                            $"parent=({currentNode.x}, {currentNode.y}, {currentNode.z})");
+                    }
+                }
+                else if (logTileSelection)
+                {
+                    Debug.Log(
+                        $"Pathfinding keep existing node ({neighborMazeNode.x}, {neighborMazeNode.y}, {neighborMazeNode.z}) " +
+                        $"g={neighborPathNode.gCost:F2} <= tentativeG={tentativeGCost:F2}");
                 }
             }
         }

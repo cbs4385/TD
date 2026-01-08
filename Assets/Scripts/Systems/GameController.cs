@@ -46,6 +46,11 @@ namespace FaeMaze.Systems
         [Tooltip("Reference to the UI controller")]
         private UIController uiController;
 
+        [Header("Pathfinding Debug")]
+        [SerializeField]
+        [Tooltip("Enable detailed pathfinding logs for tile selection and cost evaluation")]
+        private bool logPathfindingTileChoices;
+
         [Header("Essence Settings")]
         [SerializeField]
         [Tooltip("Essence amount the player starts with when the game begins")]
@@ -176,7 +181,7 @@ namespace FaeMaze.Systems
             mazeGrid = grid;
 
             // Create pathfinder once grid is registered
-            pathfinder = new MazePathfinder(mazeGrid);
+            pathfinder = new MazePathfinder(mazeGrid, logPathfindingTileChoices);
         }
 
         /// <summary>
