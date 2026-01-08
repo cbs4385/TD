@@ -1159,7 +1159,6 @@ namespace ForestMaze
             int dy = Mathf.Abs(y1 - y0);
             int sx = x0 < x1 ? 1 : -1;
             int sy = y0 < y1 ? 1 : -1;
-            int err = dx - dy;
 
             // Local helper that also prevents neighbor "spill" into the end cell when endpoint rasterization is disabled.
             void Set(int x, int y)
@@ -1170,36 +1169,46 @@ namespace ForestMaze
                 SetGridCell(grid, x, y, ch, width, height);
             }
 
-            while (true)
+            // For diagonal paths, use true diagonal interpolation instead of Bresenham
+            if (dx > 0 && dy > 0)
             {
-                bool atEnd = (x0 == x1 && y0 == y1);
+                // Calculate the number of steps (use the larger dimension)
+                int steps = Mathf.Max(dx, dy);
 
-                // Only draw at the end if includeEndPoint is true.
-                if (!atEnd || includeEndPoint)
+                for (int i = 0; i <= steps; i++)
                 {
-                    // Draw center pixel
-                    Set(x0, y0);
+                    // Linear interpolation for true diagonal
+                    float t = steps > 0 ? (float)i / steps : 0;
+                    int x = Mathf.RoundToInt(x0 + t * (x1 - x0));
+                    int y = Mathf.RoundToInt(y0 + t * (y1 - y0));
 
-                    // For diagonal paths, add both perpendicular AND diagonal neighbors to enable diagonal movement
-                    if (dx > 0 && dy > 0)
+                    bool atEnd = (i == steps);
+                    if (!atEnd || includeEndPoint)
                     {
-                        // Diagonal path - add width in both perpendicular AND diagonal directions
-                        if (dx >= dy)
-                        {
-                            Set(x0, y0 + 1);      // Perpendicular width
-                            Set(x0 + sx, y0);     // Diagonal neighbor in x direction
-                            Set(x0 + sx, y0 + sy); // True diagonal neighbor
-                        }
-                        else
-                        {
-                            Set(x0 + 1, y0);      // Perpendicular width
-                            Set(x0, y0 + sy);     // Diagonal neighbor in y direction
-                            Set(x0 + sx, y0 + sy); // True diagonal neighbor
-                        }
+                        // Draw a 3-tile wide diagonal corridor for each point
+                        Set(x, y);           // Center
+                        Set(x + 1, y);       // Right
+                        Set(x, y + 1);       // Up
+                        Set(x + 1, y + 1);   // Diagonal
+                        Set(x - 1, y);       // Left (for extra width)
+                        Set(x, y - 1);       // Down (for extra width)
                     }
-                    else
+                }
+            }
+            else
+            {
+                // Horizontal or vertical path - use simple line drawing
+                int err = dx - dy;
+
+                while (true)
+                {
+                    bool atEnd = (x0 == x1 && y0 == y1);
+
+                    if (!atEnd || includeEndPoint)
                     {
-                        // Horizontal or vertical path - add perpendicular width only
+                        Set(x0, y0);
+
+                        // Add perpendicular width
                         if (dx >= dy)
                         {
                             Set(x0, y0 + 1);
@@ -1209,21 +1218,21 @@ namespace ForestMaze
                             Set(x0 + 1, y0);
                         }
                     }
-                }
 
-                if (atEnd)
-                    break;
+                    if (atEnd)
+                        break;
 
-                int e2 = 2 * err;
-                if (e2 > -dy)
-                {
-                    err -= dy;
-                    x0 += sx;
-                }
-                if (e2 < dx)
-                {
-                    err += dx;
-                    y0 += sy;
+                    int e2 = 2 * err;
+                    if (e2 > -dy)
+                    {
+                        err -= dy;
+                        x0 += sx;
+                    }
+                    if (e2 < dx)
+                    {
+                        err += dx;
+                        y0 += sy;
+                    }
                 }
             }
         }
