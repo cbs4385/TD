@@ -788,8 +788,18 @@ namespace FaeMaze.Systems
 
             if (hasPositive && hasNegative)
             {
-                offsetMin = -1;
-                offsetMax = 1;
+                int positiveCount = CountWalkablePathTiles(origin, normalizedDirection, perpendicular);
+                int negativeCount = CountWalkablePathTiles(origin, normalizedDirection, -perpendicular);
+                if (positiveCount >= negativeCount)
+                {
+                    offsetMin = 0;
+                    offsetMax = 1;
+                }
+                else
+                {
+                    offsetMin = -1;
+                    offsetMax = 0;
+                }
                 return;
             }
 
@@ -840,6 +850,22 @@ namespace FaeMaze.Systems
 
             var node = mazeGridBehaviour.Grid.GetNode(gridPos.x, gridPos.y);
             return node != null && node.walkable;
+        }
+
+        private int CountWalkablePathTiles(Vector2Int origin, Vector2Int direction, Vector2Int offset)
+        {
+            int count = 0;
+            if (IsWalkablePathTile(origin + offset))
+            {
+                count++;
+            }
+
+            if (IsWalkablePathTile(origin + direction + offset))
+            {
+                count++;
+            }
+
+            return count;
         }
 
         /// <summary>
