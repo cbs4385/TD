@@ -1192,6 +1192,8 @@ namespace ForestMaze
             {
                 // Calculate the number of steps (use the larger dimension)
                 int steps = Mathf.Max(dx, dy);
+                int offsetX = Math.Sign(y1 - y0);
+                int offsetY = -Math.Sign(x1 - x0);
 
                 for (int i = 0; i <= steps; i++)
                 {
@@ -1203,13 +1205,9 @@ namespace ForestMaze
                     bool atEnd = (i == steps);
                     if (!atEnd || includeEndPoint)
                     {
-                        // Draw a 3-tile wide diagonal corridor for each point
-                        Set(x, y);           // Center
-                        Set(x + 1, y);       // Right
-                        Set(x, y + 1);       // Up
-                        Set(x + 1, y + 1);   // Diagonal
-                        Set(x - 1, y);       // Left (for extra width)
-                        Set(x, y - 1);       // Down (for extra width)
+                        // Draw a 2-tile wide diagonal corridor for each point
+                        Set(x, y); // Center
+                        Set(x + offsetX, y + offsetY); // Perpendicular offset
                     }
                 }
             }
@@ -1226,7 +1224,7 @@ namespace ForestMaze
                     {
                         Set(x0, y0);
 
-                        // Add perpendicular width
+                        // Add perpendicular width (2 tiles total)
                         if (dx >= dy)
                         {
                             Set(x0, y0 + 1);
