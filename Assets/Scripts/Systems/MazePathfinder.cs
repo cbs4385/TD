@@ -47,10 +47,10 @@ namespace FaeMaze.Systems
         private readonly HashSet<long> closedSet;
         private readonly bool logTileSelection;
 
-        // Heuristic scaling factor to account for attractive tiles
-        // Set to 0.0 to disable heuristic, making A* equivalent to Dijkstra's algorithm
-        // This ensures the lowest-cost path is found regardless of detours
-        private const float HEURISTIC_SCALE = 0.0f;
+        // Heuristic scaling factor used for fCost tie-breaking toward the goal.
+        // Keep this small and positive so equal-cost nodes prefer direct progress,
+        // otherwise A* will pick arbitrary directions and can create zig-zag paths.
+        private const float HEURISTIC_SCALE = 1.0f;
 
         #endregion
 
@@ -338,9 +338,8 @@ namespace FaeMaze.Systems
 
         private float CalculateHeuristic(int x1, int y1, int x2, int y2)
         {
-            // Manhattan distance scaled to account for potential attractive tiles
-            // Without scaling, heuristic overestimates cost when attractions exist,
-            // preventing A* from exploring cheaper but longer paths with attractions
+            // Manhattan distance scaled to gently bias node selection toward the goal
+            // when fCost ties occur, keeping paths straighter and avoiding zig-zagging.
             float manhattanDistance = Mathf.Abs(x1 - x2) + Mathf.Abs(y1 - y2);
             return manhattanDistance * HEURISTIC_SCALE;
         }
