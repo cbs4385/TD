@@ -72,6 +72,17 @@ namespace ForestMaze
             public int NextEdgeId = 0;
             public int TurnCount = 0;
             public System.Random Random;
+            public bool ValidationPassed = false; // Set during rasterization
+            public string ValidationError = null;
+        }
+
+        private class ValidationResult
+        {
+            public bool IsValid;
+            public string ErrorMessage;
+            public Dictionary<int, Vector2> ActualNodePositions = new Dictionary<int, Vector2>();
+            public Dictionary<int, List<Vector2>> ActualEdgePaths = new Dictionary<int, List<Vector2>>();
+            public HashSet<(int, int)> DetectedConnections = new HashSet<(int, int)>();
         }
 
         /// <summary>
@@ -84,33 +95,84 @@ namespace ForestMaze
         /// <returns>Character grid representing the maze</returns>
         public static string GenerateMaze(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
         {
-            var state = new ForestMapState
+            const int maxRetries = 5;
+            int baseSeed = seed.HasValue ? seed.Value : System.Environment.TickCount;
+
+            for (int retry = 0; retry < maxRetries; retry++)
             {
-                Random = seed.HasValue ? new System.Random(seed.Value) : new System.Random()
+                // Use different seed for each retry
+                int currentSeed = baseSeed + retry;
+
+                var state = new ForestMapState
+                {
+                    Random = new System.Random(currentSeed)
+                };
+
+                // Initialize with root and first node
+                Initialize(state);
+                // Grow to ensure minimum node count, then preserve open endpoints
+                int minNodeCount = 6; // Root + at least 5 normal nodes
+                int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
+
+                // Phase 1: Grow until we have minimum nodes
+                for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
+                {
+                    if (state.Frontier.Count == 0 || !Step(state))
+                        break;
+                }
+
+                // Phase 2: Continue growing but preserve minimum open endpoints
+                for (int i = 0; i < turns && state.Frontier.Count > minOpenEndpoints; i++)
+                {
+                    if (!Step(state))
+                        break;
+                }
+
+                // Rasterize the graph to a grid (includes validation)
+                string result = RasterizeToGrid(state, gridWidth, gridHeight);
+
+                // Check if validation passed
+                if (state.ValidationPassed)
+                {
+                    // Success!
+                    if (retry > 0)
+                    {
+                        Debug.Log($"Maze generation succeeded on retry {retry + 1} with seed {currentSeed}");
+                    }
+                    return result;
+                }
+
+                // Validation failed, log and retry
+                Debug.LogWarning($"Attempt {retry + 1}/{maxRetries} failed validation: {state.ValidationError}");
+            }
+
+            // If all retries failed, return the last attempt anyway
+            Debug.LogError($"Maze generation failed validation after {maxRetries} attempts, returning last attempt");
+            var finalState = new ForestMapState
+            {
+                Random = new System.Random(baseSeed + maxRetries)
             };
 
             // Initialize with root and first node
-            Initialize(state);
-            // Grow to ensure minimum node count, then preserve open endpoints
-            int minNodeCount = 6; // Root + at least 5 normal nodes
-            int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
+            Initialize(finalState);
+            int minNodeCount = 6;
+            int minOpenEndpoints = 5;
 
             // Phase 1: Grow until we have minimum nodes
-            for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
+            for (int i = 0; i < turns && finalState.Nodes.Count < minNodeCount; i++)
             {
-                if (state.Frontier.Count == 0 || !Step(state))
+                if (finalState.Frontier.Count == 0 || !Step(finalState))
                     break;
             }
 
             // Phase 2: Continue growing but preserve minimum open endpoints
-            for (int i = 0; i < turns && state.Frontier.Count > minOpenEndpoints; i++)
+            for (int i = 0; i < turns && finalState.Frontier.Count > minOpenEndpoints; i++)
             {
-                if (!Step(state))
+                if (!Step(finalState))
                     break;
             }
 
-            // Rasterize the graph to a grid
-            return RasterizeToGrid(state, gridWidth, gridHeight);
+            return RasterizeToGrid(finalState, gridWidth, gridHeight);
         }
 
         private static void Initialize(ForestMapState state)
@@ -484,6 +546,243 @@ namespace ForestMaze
             return true;
         }
 
+        private static ValidationResult ValidateMaze(ForestMapState state, char[,] grid, int gridWidth, int gridHeight,
+            float scale, Vector2 offset)
+        {
+            var result = new ValidationResult { IsValid = true };
+
+            // Track actual node positions from grid markers ('H' and 'N')
+            for (int y = 0; y < gridHeight; y++)
+            {
+                for (int x = 0; x < gridWidth; x++)
+                {
+                    if (grid[y, x] == 'H')
+                    {
+                        // Root node (ID 0)
+                        result.ActualNodePositions[0] = new Vector2(x, y);
+                    }
+                    else if (grid[y, x] == 'N')
+                    {
+                        // Find which node this corresponds to
+                        Vector2 gridPos = new Vector2(x, y);
+                        float minDist = float.MaxValue;
+                        int closestNodeId = -1;
+
+                        for (int i = 1; i < state.Nodes.Count; i++)
+                        {
+                            Vector2 expectedPos = state.Nodes[i].Position * scale + offset;
+                            float dist = Vector2.Distance(gridPos, expectedPos);
+                            if (dist < minDist)
+                            {
+                                minDist = dist;
+                                closestNodeId = i;
+                            }
+                        }
+
+                        if (closestNodeId >= 0)
+                        {
+                            result.ActualNodePositions[closestNodeId] = gridPos;
+                        }
+                    }
+                }
+            }
+
+            // Verify all nodes were found
+            if (result.ActualNodePositions.Count != state.Nodes.Count)
+            {
+                result.IsValid = false;
+                result.ErrorMessage = $"Expected {state.Nodes.Count} nodes, found {result.ActualNodePositions.Count} markers";
+                return result;
+            }
+
+            // Analyze connectivity using BFS from each node
+            var connections = new Dictionary<int, HashSet<int>>();
+            foreach (var node in state.Nodes)
+            {
+                connections[node.Id] = FindConnectedNodes(grid, gridWidth, gridHeight,
+                    result.ActualNodePositions[node.Id], result.ActualNodePositions);
+            }
+
+            // Check for duplicate edges (multiple paths between same node pair)
+            var edgeCounts = new Dictionary<(int, int), int>();
+            foreach (var edge in state.Edges.Where(e => e.IsComplete()))
+            {
+                int nodeA = edge.NodeA;
+                int nodeB = edge.NodeB.Value;
+                var key = nodeA < nodeB ? (nodeA, nodeB) : (nodeB, nodeA);
+
+                if (!edgeCounts.ContainsKey(key))
+                    edgeCounts[key] = 0;
+                edgeCounts[key]++;
+            }
+
+            // Report duplicate edges
+            var duplicates = edgeCounts.Where(kvp => kvp.Value > 1).ToList();
+            if (duplicates.Count > 0)
+            {
+                result.IsValid = false;
+                result.ErrorMessage = $"Found {duplicates.Count} duplicate edge(s): " +
+                    string.Join(", ", duplicates.Select(d => $"nodes {d.Key.Item1}-{d.Key.Item2} ({d.Value} edges)"));
+                return result;
+            }
+
+            // Verify all complete edges have actual walkable connections
+            foreach (var edge in state.Edges.Where(e => e.IsComplete()))
+            {
+                int nodeA = edge.NodeA;
+                int nodeB = edge.NodeB.Value;
+
+                bool aConnectsToB = connections[nodeA].Contains(nodeB);
+                bool bConnectsToA = connections[nodeB].Contains(nodeA);
+
+                if (!aConnectsToB || !bConnectsToA)
+                {
+                    result.IsValid = false;
+                    result.ErrorMessage = $"Edge {edge.Id} (nodes {nodeA}-{nodeB}) has no walkable path in grid";
+                    return result;
+                }
+
+                result.DetectedConnections.Add(nodeA < nodeB ? (nodeA, nodeB) : (nodeB, nodeA));
+            }
+
+            // Verify all nodes are reachable from root
+            var reachable = new HashSet<int>();
+            var queue = new Queue<int>();
+            queue.Enqueue(0); // Start from root
+            reachable.Add(0);
+
+            while (queue.Count > 0)
+            {
+                int current = queue.Dequeue();
+                foreach (int neighbor in connections[current])
+                {
+                    if (!reachable.Contains(neighbor))
+                    {
+                        reachable.Add(neighbor);
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            if (reachable.Count != state.Nodes.Count)
+            {
+                var unreachable = state.Nodes.Where(n => !reachable.Contains(n.Id)).Select(n => n.Id).ToList();
+                result.IsValid = false;
+                result.ErrorMessage = $"Found {unreachable.Count} unreachable node(s): {string.Join(", ", unreachable)}";
+                return result;
+            }
+
+            return result;
+        }
+
+        private static HashSet<int> FindConnectedNodes(char[,] grid, int width, int height,
+            Vector2 startPos, Dictionary<int, Vector2> allNodePositions)
+        {
+            var connected = new HashSet<int>();
+            var visited = new HashSet<(int, int)>();
+            var queue = new Queue<(int x, int y)>();
+
+            int startX = Mathf.RoundToInt(startPos.x);
+            int startY = Mathf.RoundToInt(startPos.y);
+
+            queue.Enqueue((startX, startY));
+            visited.Add((startX, startY));
+
+            // BFS to find all walkable tiles reachable from start
+            int[] dx = { 0, 0, 1, -1, 1, 1, -1, -1 }; // 8-directional
+            int[] dy = { 1, -1, 0, 0, 1, -1, 1, -1 };
+
+            while (queue.Count > 0)
+            {
+                var (x, y) = queue.Dequeue();
+
+                // Check if this position is a node marker
+                foreach (var kvp in allNodePositions)
+                {
+                    int nodeId = kvp.Key;
+                    Vector2 nodePos = kvp.Value;
+
+                    if (Mathf.Abs(x - nodePos.x) < 0.5f && Mathf.Abs(y - nodePos.y) < 0.5f)
+                    {
+                        connected.Add(nodeId);
+                        break;
+                    }
+                }
+
+                // Explore neighbors
+                for (int i = 0; i < 8; i++)
+                {
+                    int nx = x + dx[i];
+                    int ny = y + dy[i];
+
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height)
+                        continue;
+
+                    if (visited.Contains((nx, ny)))
+                        continue;
+
+                    if (!IsWalkableTile(grid[ny, nx]))
+                        continue;
+
+                    visited.Add((nx, ny));
+                    queue.Enqueue((nx, ny));
+                }
+            }
+
+            return connected;
+        }
+
+        private static void BackfillStateFromGrid(ForestMapState state, ValidationResult validation,
+            float scale, Vector2 offset)
+        {
+            // Update node positions to match actual grid positions
+            foreach (var kvp in validation.ActualNodePositions)
+            {
+                int nodeId = kvp.Key;
+                Vector2 gridPos = kvp.Value;
+
+                // Convert grid position back to world space
+                Vector2 worldPos = (gridPos - offset) / scale;
+
+                if (nodeId < state.Nodes.Count)
+                {
+                    var node = state.Nodes[nodeId];
+                    if (Vector2.Distance(node.Position, worldPos) > 0.1f)
+                    {
+                        Debug.Log($"Backfill: Node {nodeId} position adjusted from {node.Position} to {worldPos}");
+                        node.Position = worldPos;
+                    }
+                }
+            }
+
+            // Update edge polylines to be direct paths between actual node positions
+            foreach (var edge in state.Edges.Where(e => e.IsComplete()))
+            {
+                int nodeA = edge.NodeA;
+                int nodeB = edge.NodeB.Value;
+
+                if (validation.ActualNodePositions.ContainsKey(nodeA) &&
+                    validation.ActualNodePositions.ContainsKey(nodeB))
+                {
+                    Vector2 posA = (validation.ActualNodePositions[nodeA] - offset) / scale;
+                    Vector2 posB = (validation.ActualNodePositions[nodeB] - offset) / scale;
+
+                    // Calculate boundary points
+                    Vector2 direction = (posB - posA).normalized;
+                    Vector2 startBoundary = posA + direction * NODE_RADIUS;
+                    Vector2 endBoundary = posB - direction * NODE_RADIUS;
+
+                    // Update to straight path
+                    edge.PolylinePoints.Clear();
+                    edge.PolylinePoints.Add(startBoundary);
+                    edge.PolylinePoints.Add(endBoundary);
+                }
+            }
+
+            Debug.Log($"Backfill complete: Updated {validation.ActualNodePositions.Count} nodes and " +
+                     $"{state.Edges.Count(e => e.IsComplete())} edges");
+        }
+
         private static int? SelectFrontierEdgeBiased(ForestMapState state)
         {
             if (state.Frontier.Count == 0)
@@ -830,6 +1129,24 @@ namespace ForestMaze
 
             // Add entrances
             AddEntrance(grid, gridWidth, gridHeight, state.Random);
+
+            // Validate the generated maze
+            var validation = ValidateMaze(state, grid, gridWidth, gridHeight, scale, offset);
+            state.ValidationPassed = validation.IsValid;
+            state.ValidationError = validation.ErrorMessage;
+
+            if (!validation.IsValid)
+            {
+                Debug.LogWarning($"Maze validation failed: {validation.ErrorMessage}");
+                // Return grid anyway, GenerateMaze will handle retry
+            }
+            else
+            {
+                Debug.Log($"Maze validation passed: {state.Nodes.Count} nodes, {validation.DetectedConnections.Count} connections");
+
+                // Backfill state with actual grid positions
+                BackfillStateFromGrid(state, validation, scale, offset);
+            }
 
             return GridToString(grid, gridWidth, gridHeight);
         }
