@@ -178,7 +178,7 @@ namespace FaeMaze.Systems
             while (openSet.Count > 0)
             {
                 // Get node with lowest fCost
-                PathNode currentNode = GetLowestFCostNode();
+                PathNode currentNode = GetLowestFCostNode(endX, endY);
                 if (logTileSelection)
                 {
                     Debug.Log(
@@ -314,22 +314,89 @@ namespace FaeMaze.Systems
             }
         }
 
-        private PathNode GetLowestFCostNode()
+        private PathNode GetLowestFCostNode(int endX, int endY)
         {
             PathNode lowestNode = openSet[0];
             float lowestFCost = lowestNode.fCost;
+            const float tieBreakEpsilon = 0.0001f;
 
             for (int i = 1; i < openSet.Count; i++)
             {
                 float fCost = openSet[i].fCost;
-                if (fCost < lowestFCost || (fCost == lowestFCost && openSet[i].hCost < lowestNode.hCost))
+                if (fCost < lowestFCost)
                 {
                     lowestNode = openSet[i];
                     lowestFCost = fCost;
+                    continue;
+                }
+
+                if (Mathf.Abs(fCost - lowestFCost) > tieBreakEpsilon)
+                {
+                    continue;
+                }
+
+                float candidateHCost = openSet[i].hCost;
+                if (candidateHCost < lowestNode.hCost - tieBreakEpsilon)
+                {
+                    lowestNode = openSet[i];
+                    lowestFCost = fCost;
+                    continue;
+                }
+
+                if (Mathf.Abs(candidateHCost - lowestNode.hCost) <= tieBreakEpsilon)
+                {
+                    // When costs are tied, prefer continuing toward the goal to avoid zig-zagging.
+                    if (IsBetterGoalAligned(openSet[i], lowestNode, endX, endY))
+                    {
+                        lowestNode = openSet[i];
+                        lowestFCost = fCost;
+                    }
                 }
             }
 
             return lowestNode;
+        }
+
+        private bool IsBetterGoalAligned(PathNode candidate, PathNode currentBest, int endX, int endY)
+        {
+            if (candidate.parent == null)
+            {
+                return false;
+            }
+
+            Vector2 candidateDirection = new Vector2(
+                candidate.x - candidate.parent.x,
+                candidate.y - candidate.parent.y);
+            Vector2 candidateToGoal = new Vector2(
+                endX - candidate.x,
+                endY - candidate.y);
+
+            if (candidateDirection.sqrMagnitude <= Mathf.Epsilon || candidateToGoal.sqrMagnitude <= Mathf.Epsilon)
+            {
+                return false;
+            }
+
+            float candidateAlignment = Vector2.Dot(candidateDirection.normalized, candidateToGoal.normalized);
+
+            if (currentBest.parent == null)
+            {
+                return true;
+            }
+
+            Vector2 bestDirection = new Vector2(
+                currentBest.x - currentBest.parent.x,
+                currentBest.y - currentBest.parent.y);
+            Vector2 bestToGoal = new Vector2(
+                endX - currentBest.x,
+                endY - currentBest.y);
+
+            if (bestDirection.sqrMagnitude <= Mathf.Epsilon || bestToGoal.sqrMagnitude <= Mathf.Epsilon)
+            {
+                return true;
+            }
+
+            float bestAlignment = Vector2.Dot(bestDirection.normalized, bestToGoal.normalized);
+            return candidateAlignment > bestAlignment;
         }
 
         #endregion
