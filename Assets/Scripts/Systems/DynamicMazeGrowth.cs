@@ -723,38 +723,45 @@ namespace FaeMaze.Systems
             int sy = y0 < y1 ? 1 : -1;
             int err = dx - dy;
 
+            // Collect all tiles along the Bresenham line first
+            List<Vector2Int> bresenhamTiles = new List<Vector2Int>();
+
+            int bx = x0;
+            int by = y0;
+            int berr = err;
+
             while (true)
             {
-                // Carve 2-tile wide path (current tile + one adjacent)
-                SetTileWalkable(x0, y0, '.');
+                bresenhamTiles.Add(new Vector2Int(bx, by));
 
-                // Add width by carving adjacent tiles
-                if (dx > dy)
-                {
-                    // Horizontal path - add vertical width
-                    SetTileWalkable(x0, y0 + 1, '.');
-                    SetTileWalkable(x0, y0 - 1, '.');
-                }
-                else
-                {
-                    // Vertical path - add horizontal width
-                    SetTileWalkable(x0 + 1, y0, '.');
-                    SetTileWalkable(x0 - 1, y0, '.');
-                }
-
-                if (x0 == x1 && y0 == y1)
+                if (bx == x1 && by == y1)
                     break;
 
-                int e2 = 2 * err;
+                int e2 = 2 * berr;
                 if (e2 > -dy)
                 {
-                    err -= dy;
-                    x0 += sx;
+                    berr -= dy;
+                    bx += sx;
                 }
                 if (e2 < dx)
                 {
-                    err += dx;
-                    y0 += sy;
+                    berr += dx;
+                    by += sy;
+                }
+            }
+
+            // Now carve a wider area around each Bresenham tile to fill the corridor
+            // This ensures diagonal movement is possible throughout the corridor
+            const int corridorRadius = 1; // Creates ~3-tile wide corridor
+            foreach (var tile in bresenhamTiles)
+            {
+                // Carve a square area around each tile
+                for (int dy_offset = -corridorRadius; dy_offset <= corridorRadius; dy_offset++)
+                {
+                    for (int dx_offset = -corridorRadius; dx_offset <= corridorRadius; dx_offset++)
+                    {
+                        SetTileWalkable(tile.x + dx_offset, tile.y + dy_offset, '.');
+                    }
                 }
             }
         }
