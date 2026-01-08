@@ -267,44 +267,32 @@ namespace ForestMaze
                         continue;
                     }
 
-                    // Build polyline
+                    // Build straight polyline (no curves)
                     Vector2 nodeBoundary = node.Position + direction * NODE_RADIUS;
                     Vector2 ghostBoundary = ghostCenter - direction * NODE_RADIUS;
 
-                    float chordLength = Vector2.Distance(nodeBoundary, ghostBoundary);
-                    float kmax = CURVE_STRENGTH * chordLength;
+                    // Create a straight path with just start and end points
+                    var polyline = new List<Vector2> { nodeBoundary, ghostBoundary };
 
-                    Vector2 perp = new Vector2(-direction.y, direction.x);
-
-                    float[] kFactors = { 0.0f, 0.5f, -0.5f, 1.0f, -1.0f };
-                    foreach (float kFactor in kFactors)
+                    if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
                     {
-                        float k = kFactor * kmax;
-                        Vector2 control1 = nodeBoundary + (ghostBoundary - nodeBoundary) * 0.33f + perp * k;
-                        Vector2 control2 = nodeBoundary + (ghostBoundary - nodeBoundary) * 0.66f - perp * (0.7f * k);
-
-                        var polyline = new List<Vector2> { nodeBoundary, control1, control2, ghostBoundary };
-
-                        if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
+                        // Success! Create the partial edge
+                        var edge = new Edge
                         {
-                            // Success! Create the partial edge
-                            var edge = new Edge
-                            {
-                                Id = state.NextEdgeId++,
-                                NodeA = node.Id,
-                                NodeB = null,
-                                PolylinePoints = polyline,
-                                Partial = true,
-                                GhostCenter = ghostCenter
-                            };
+                            Id = state.NextEdgeId++,
+                            NodeA = node.Id,
+                            NodeB = null,
+                            PolylinePoints = polyline,
+                            Partial = true,
+                            GhostCenter = ghostCenter
+                        };
 
-                            state.Edges.Add(edge);
-                            state.Frontier.Add(edge.Id);
-                            state.GhostCenters.Add(ghostCenter);
-                            node.AddEdge(edge.Id, theta);
+                        state.Edges.Add(edge);
+                        state.Frontier.Add(edge.Id);
+                        state.GhostCenters.Add(ghostCenter);
+                        node.AddEdge(edge.Id, theta);
 
-                            return true;
-                        }
+                        return true;
                     }
 
                     length -= SHORTEN_STEP;
@@ -409,31 +397,12 @@ namespace ForestMaze
             Vector2 startBoundary = startCenter + direction * NODE_RADIUS;
             Vector2 endBoundary = endCenter - direction * NODE_RADIUS;
 
-            float chordLength = Vector2.Distance(startBoundary, endBoundary);
-            float kmax = CURVE_STRENGTH * chordLength;
+            // Create a straight path with just start and end points
+            var polyline = new List<Vector2> { startBoundary, endBoundary };
 
-            float[] kValues = {
-                0.0f,
-                0.25f * kmax, -0.25f * kmax,
-                0.45f * kmax, -0.45f * kmax,
-                0.65f * kmax, -0.65f * kmax,
-                0.85f * kmax, -0.85f * kmax,
-                1.0f * kmax, -1.0f * kmax
-            };
-
-            Vector2 perp = new Vector2(-direction.y, direction.x);
-
-            foreach (float k in kValues)
+            if (IsPolylineValid(state, polyline, incidentNodes))
             {
-                Vector2 control1 = startBoundary + (endBoundary - startBoundary) * 0.33f + perp * k;
-                Vector2 control2 = startBoundary + (endBoundary - startBoundary) * 0.66f - perp * (0.7f * k);
-
-                var polyline = new List<Vector2> { startBoundary, control1, control2, endBoundary };
-
-                if (IsPolylineValid(state, polyline, incidentNodes))
-                {
-                    return polyline;
-                }
+                return polyline;
             }
 
             return null;
