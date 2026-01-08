@@ -887,71 +887,100 @@ namespace ForestMaze
                 SetGridCell(grid, x, y, ch, width, height);
             }
 
-            // For diagonal paths (both dx and dy > 0), carve a wider rectangular corridor
-            // to enable true diagonal pathfinding instead of zigzag movement
-            bool isDiagonal = (dx > 0 && dy > 0);
+            // Track all carved tiles to enable diagonal gap-filling
+            List<(int x, int y)> carvedTiles = new List<(int x, int y)>();
 
-            if (isDiagonal)
+            while (true)
             {
-                // Carve rectangular area with 2-tile border on each side for wider diagonal corridors
-                int minX = Mathf.Min(x0, x1);
-                int maxX = Mathf.Max(x0, x1);
-                int minY = Mathf.Min(y0, y1);
-                int maxY = Mathf.Max(y0, y1);
+                bool atEnd = (x0 == x1 && y0 == y1);
 
-                // Extend by 2 tiles on each side for corridor width
-                minX = Mathf.Max(0, minX - 2);
-                maxX = Mathf.Min(width - 1, maxX + 2);
-                minY = Mathf.Max(0, minY - 2);
-                maxY = Mathf.Min(height - 1, maxY + 2);
-
-                for (int x = minX; x <= maxX; x++)
+                // Only draw at the end if includeEndPoint is true.
+                if (!atEnd || includeEndPoint)
                 {
-                    for (int y = minY; y <= maxY; y++)
-                    {
-                        // Respect includeEndPoint flag for endpoint cell
-                        if (!includeEndPoint && x == x1 && y == y1)
-                            continue;
+                    // Draw center pixel and track it
+                    Set(x0, y0);
+                    carvedTiles.Add((x0, y0));
 
-                        SetGridCell(grid, x, y, ch, width, height);
+                    // Add width based on path orientation
+                    if (dx >= dy)
+                    {
+                        // Horizontal-ish path: add vertical width
+                        Set(x0, y0 + 1);
+                    }
+                    else
+                    {
+                        // Vertical-ish path: add horizontal width
+                        Set(x0 + 1, y0);
                     }
                 }
-            }
-            else
-            {
-                // Original Bresenham algorithm for primarily horizontal/vertical paths
-                while (true)
+
+                if (atEnd)
+                    break;
+
+                int e2 = 2 * err;
+                if (e2 > -dy)
                 {
-                    bool atEnd = (x0 == x1 && y0 == y1);
+                    err -= dy;
+                    x0 += sx;
+                }
+                if (e2 < dx)
+                {
+                    err += dx;
+                    y0 += sy;
+                }
+            }
 
-                    // Only draw at the end if includeEndPoint is true.
-                    if (!atEnd || includeEndPoint)
+            // Post-process: fill diagonal gaps between adjacent carved tiles
+            // This enables diagonal pathfinding through Bresenham zigzags
+            if (dx > 0 && dy > 0)
+            {
+                for (int i = 0; i < carvedTiles.Count - 1; i++)
+                {
+                    var current = carvedTiles[i];
+                    var next = carvedTiles[i + 1];
+
+                    int tdx = next.x - current.x;
+                    int tdy = next.y - current.y;
+
+                    // If tiles form a 90-degree corner (one moved horizontally, next moved vertically or vice versa)
+                    // Fill the diagonal corner to enable diagonal movement
+                    if (Mathf.Abs(tdx) == 1 && Mathf.Abs(tdy) == 1)
                     {
-                        // Draw center pixel and a single orthogonal neighbor for a thinner path
-                        Set(x0, y0);
-                        if (dx >= dy)
-                        {
-                            Set(x0, y0 + 1);
-                        }
-                        else
-                        {
-                            Set(x0 + 1, y0);
-                        }
+                        // Already diagonal, no gap to fill
+                        continue;
                     }
 
-                    if (atEnd)
-                        break;
+                    if (tdx != 0 && tdy == 0)
+                    {
+                        // Horizontal step - check if previous step was vertical
+                        if (i > 0)
+                        {
+                            var prev = carvedTiles[i - 1];
+                            int pdx = current.x - prev.x;
+                            int pdy = current.y - prev.y;
 
-                    int e2 = 2 * err;
-                    if (e2 > -dy)
-                    {
-                        err -= dy;
-                        x0 += sx;
+                            if (pdx == 0 && pdy != 0)
+                            {
+                                // Previous was vertical, current is horizontal - fill diagonal
+                                Set(next.x, current.y);
+                            }
+                        }
                     }
-                    if (e2 < dx)
+                    else if (tdx == 0 && tdy != 0)
                     {
-                        err += dx;
-                        y0 += sy;
+                        // Vertical step - check if previous step was horizontal
+                        if (i > 0)
+                        {
+                            var prev = carvedTiles[i - 1];
+                            int pdx = current.x - prev.x;
+                            int pdy = current.y - prev.y;
+
+                            if (pdx != 0 && pdy == 0)
+                            {
+                                // Previous was horizontal, current is vertical - fill diagonal
+                                Set(current.x, next.y);
+                            }
+                        }
                     }
                 }
             }
