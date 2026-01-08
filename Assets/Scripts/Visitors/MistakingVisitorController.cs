@@ -79,10 +79,14 @@ namespace FaeMaze.Visitors
         /// Handles misstep decision at waypoint.
         /// Detects branching points (tiles with 2+ unwalked neighbors) and rolls for misstep.
         /// If on misstep path and reached branch, recalculates A* to destination.
+        /// Only recalculates when state changes or at decision points (nodes).
         /// </summary>
         protected override void HandleDetourAtWaypoint()
         {
-            if (!misstepEnabled || mazeGridBehaviour == null || gameController == null)
+            if (mazeGridBehaviour == null || gameController == null)
+                return;
+
+            if (path == null || currentPathIndex >= path.Count)
             {
                 RecalculatePath();
                 return;
@@ -90,21 +94,51 @@ namespace FaeMaze.Visitors
 
             Vector2Int currentPos = path[currentPathIndex];
 
-            // Track as walked for misstep system
+            // Check if state has changed since last waypoint
+            bool stateChanged = (state != previousState);
+            if (stateChanged)
+            {
+                previousState = state;
+                LogVisitorPath($"state changed to {state}, recalculating path");
+                RecalculatePath();
+                return;
+            }
+
+            // Check if we should attempt a state-specific detour
+            if (ShouldAttemptDetour(currentPos))
+            {
+                HandleStateSpecificDetour(currentPos);
+                return;
+            }
+
+            // Check if at a node (decision point marked 'N' or 'H')
+            bool atNode = IsAtNode(currentPos);
+
+            // If misstep is disabled or we're not at a node, just continue following the path
+            if (!misstepEnabled || !atNode)
+            {
+                currentPathIndex++;
+                if (currentPathIndex >= path.Count)
+                    OnPathCompleted();
+                return;
+            }
+
+            // At a node - track as walked and check for misstep behavior
             walkedTiles.Add(currentPos);
 
             // Get all unwalked adjacent tiles
             List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
 
-            // Check for dead end (no unwalked neighbors) - always recalculate
+            // Check for dead end (no unwalked neighbors) - recalculate
             if (unwalkedNeighbors.Count == 0)
             {
                 isOnMisstepPath = false;
+                LogVisitorPath($"at node {currentPos} with dead end, recalculating path");
                 RecalculatePath();
                 return;
             }
 
-            // Not a branch if only 1 unwalked neighbor
+            // Not a branch if only 1 unwalked neighbor - just continue
             if (unwalkedNeighbors.Count == 1)
             {
                 // If on misstep, continue until branch or dead end
@@ -121,8 +155,10 @@ namespace FaeMaze.Visitors
                     return;
                 }
 
-                // Not on misstep and not a branch - normal recalculate
-                RecalculatePath();
+                // Not on misstep and not a branch - just continue
+                currentPathIndex++;
+                if (currentPathIndex >= path.Count)
+                    OnPathCompleted();
                 return;
             }
 
@@ -131,6 +167,7 @@ namespace FaeMaze.Visitors
             {
                 // End misstep - recalculate A* to destination
                 isOnMisstepPath = false;
+                LogVisitorPath($"at node {currentPos}, exiting misstep path, recalculating");
                 RecalculatePath();
                 // Don't return - check for new misstep below
             }
@@ -147,15 +184,14 @@ namespace FaeMaze.Visitors
             float roll = Random.value;
             if (roll > misstepChance)
             {
-                // No misstep - path already recalculated above or will be recalculated
-                if (!isOnMisstepPath)
-                {
-                    RecalculatePath();
-                }
+                // No misstep - recalculate to get fresh optimal path
+                LogVisitorPath($"at node {currentPos}, taking optimal path, recalculating");
+                RecalculatePath();
                 return;
             }
 
             // Misstep triggered!
+            LogVisitorPath($"at node {currentPos}, taking misstep");
             TakeMisstep(currentPos, unwalkedNeighbors);
         }
 
