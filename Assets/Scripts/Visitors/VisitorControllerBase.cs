@@ -2437,8 +2437,13 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                // No detour - recalculate path to current state's destination
-                RecalculatePath();
+                // No detour - continue following the current path
+                // Only recalculate if we've reached the end of the path
+                currentPathIndex++;
+                if (currentPathIndex >= path.Count)
+                {
+                    OnPathCompleted();
+                }
             }
         }
 
