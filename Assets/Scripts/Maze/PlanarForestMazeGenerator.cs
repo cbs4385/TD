@@ -889,21 +889,21 @@ namespace ForestMaze
 
             // For diagonal paths (both dx and dy > 0), carve a wider rectangular corridor
             // to enable true diagonal pathfinding instead of zigzag movement
-            bool isDiagonal = (dx > 0 && dy > 0 && Mathf.Abs(dx - dy) < Mathf.Max(dx, dy) * 0.5f);
+            bool isDiagonal = (dx > 0 && dy > 0);
 
             if (isDiagonal)
             {
-                // Carve rectangular area with 1-tile border on each side
+                // Carve rectangular area with 2-tile border on each side for wider diagonal corridors
                 int minX = Mathf.Min(x0, x1);
                 int maxX = Mathf.Max(x0, x1);
                 int minY = Mathf.Min(y0, y1);
                 int maxY = Mathf.Max(y0, y1);
 
-                // Extend by 1 tile on each side for corridor width
-                minX = Mathf.Max(0, minX - 1);
-                maxX = Mathf.Min(width - 1, maxX + 1);
-                minY = Mathf.Max(0, minY - 1);
-                maxY = Mathf.Min(height - 1, maxY + 1);
+                // Extend by 2 tiles on each side for corridor width
+                minX = Mathf.Max(0, minX - 2);
+                maxX = Mathf.Min(width - 1, maxX + 2);
+                minY = Mathf.Max(0, minY - 2);
+                maxY = Mathf.Min(height - 1, maxY + 2);
 
                 for (int x = minX; x <= maxX; x++)
                 {
