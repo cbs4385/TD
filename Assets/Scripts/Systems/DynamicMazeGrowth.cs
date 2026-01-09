@@ -252,10 +252,20 @@ namespace FaeMaze.Systems
                 selectedSpawnId = selectedSpawnPoint.Key;
                 selectedGridPos = selectedSpawnPoint.Value;
 
+                // Remove portal and tile marker BEFORE generating new node
+                RemovePortalAtSpawnPoint(selectedSpawnId);
+                UpdateTileSymbol(selectedGridPos, '.');
+
                 if (TryGenerateNewNodeFromEndpoint(selectedGridPos, out nodeCenter, out newEndpoints))
                 {
                     grewSuccessfully = true;
                     break;
+                }
+                else
+                {
+                    // If generation failed, restore the spawn point
+                    UpdateTileSymbol(selectedGridPos, selectedSpawnId);
+                    CreatePortalAtSpawnPoint(selectedSpawnId, selectedGridPos, Vector2Int.zero);
                 }
             }
 
@@ -263,12 +273,6 @@ namespace FaeMaze.Systems
             {
                 return;
             }
-
-            // Remove portal from the selected spawn point
-            RemovePortalAtSpawnPoint(selectedSpawnId);
-
-            // Mark the tile as no longer a visitor entrance/exit
-            UpdateTileSymbol(selectedGridPos, '.');
 
             // Assign spawn IDs to new endpoints and create portals
             foreach (var endpoint in newEndpoints)
@@ -364,7 +368,7 @@ namespace FaeMaze.Systems
                     }
 
                     nodeGridPos = candidateCenter;
-                    SetTileWalkable(fromGridPos.x, fromGridPos.y, '.');
+                    // fromGridPos is already converted to '.' before this function is called
                     CarvePath(fromGridPos, nodeGridPos);
                     CarveNodeClearing(nodeGridPos);
                     return true;
