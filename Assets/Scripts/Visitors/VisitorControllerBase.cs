@@ -1479,7 +1479,7 @@ namespace FaeMaze.Visitors
 
                 Debug.Log($"[{name}] Final waypoint: {finalWaypoint}, Is spawn point: {isSpawnPoint}, Original destination: {originalDestination}");
 
-                if (mazeGridBehaviour == null || !isSpawnPoint)
+                if (!isSpawnPoint)
                 {
                     Debug.Log($"[{name}] Exit at {finalWaypoint} no longer valid, retargeting to nearest exit");
 
@@ -1494,6 +1494,13 @@ namespace FaeMaze.Visitors
                         // First, update destination to find the best exit
                         UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
                         Debug.Log($"[{name}] Updated destination to: {originalDestination}");
+
+                        if (!mazeGridBehaviour.IsSpawnPoint(originalDestination))
+                        {
+                            Vector2Int nearestExit = FindNearestExitByTravelDistance(currentPos);
+                            Debug.Log($"[{name}] Updated destination still invalid. Retargeting to nearest exit: {nearestExit}");
+                            originalDestination = nearestExit;
+                        }
 
                         // Check if we can actually path to the new destination from current position
                         bool canPathToDestination = TryFindPathToDestination(currentPos, originalDestination, out _);
