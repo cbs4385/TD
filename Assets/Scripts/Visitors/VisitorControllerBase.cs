@@ -719,6 +719,29 @@ namespace FaeMaze.Visitors
 
             if (issues.Count > 0)
             {
+                string destination = originalDestination.ToString();
+                Vector2Int resolvedDestination = originalDestination;
+                if (mazeGridBehaviour != null)
+                {
+                    resolvedDestination = GetDestinationForCurrentState(currentGrid);
+                    destination = resolvedDestination.ToString();
+                }
+
+                string targetNodeStatus = "unknown";
+                if (grid != null)
+                {
+                    MazeGrid.MazeNode targetNode = grid.GetNode(target.x, target.y);
+                    if (targetNode == null)
+                    {
+                        targetNodeStatus = "missing";
+                    }
+                    else
+                    {
+                        targetNodeStatus = targetNode.walkable ? "walkable" : "blocked";
+                    }
+                }
+
+                Debug.LogWarning($"[{name}] Stall diagnostics at {currentGrid} (state: {state}, currentPathIndex: {currentPathIndex}, destination: {destination}). Next waypoint {target} (index {targetIndex}, node: {targetNodeStatus}). Issues: {string.Join("; ", issues)}.");
                 hasLoggedPathIssue = true;
             }
         }
