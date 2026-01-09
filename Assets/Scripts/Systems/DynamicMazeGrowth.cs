@@ -355,7 +355,15 @@ namespace FaeMaze.Systems
             float scale = forestMapState.Scale;
             Vector2 offset = forestMapState.Offset;
 
-            // Clear all existing spawn points from grid
+            // Clear ALL existing portals (not just spawn point characters in grid)
+            // This ensures we remove portals for edges that have been completed
+            var portalsToRemove = new List<char>(spawnPointPortals.Keys);
+            foreach (char spawnId in portalsToRemove)
+            {
+                RemovePortalAtSpawnPoint(spawnId);
+            }
+
+            // Clear all spawn point characters from grid
             for (int y = 0; y < grid.Height; y++)
             {
                 for (int x = 0; x < grid.Width; x++)
@@ -363,7 +371,6 @@ namespace FaeMaze.Systems
                     var node = grid.GetNode(x, y);
                     if (node != null && IsSpawnPointChar(node.symbol))
                     {
-                        RemovePortalAtSpawnPoint(node.symbol);
                         node.symbol = '.';
                     }
                 }
