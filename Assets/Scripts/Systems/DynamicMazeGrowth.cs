@@ -221,84 +221,89 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Grows the maze by adding a new node at one of the open endpoints.
+        /// Uses the same generation logic as initial maze creation via PlanarForestMazeGenerator.Step().
         /// </summary>
         public void GrowMaze()
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
             {
+                Debug.LogWarning("[DynamicGrowth] MazeGridBehaviour or Grid is null");
                 return;
             }
 
-            // Get all current spawn points (open endpoints)
-            var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
-            if (spawnPoints.Count == 0)
+            var forestMapState = mazeGridBehaviour.ForestMapState;
+            if (forestMapState == null)
             {
-                Debug.Log("[DynamicGrowth] No spawn points found");
+                Debug.LogWarning("[DynamicGrowth] ForestMapState is null - make sure planar generator is being used");
                 return;
             }
 
-            Debug.Log($"[DynamicGrowth] Starting growth cycle with {spawnPoints.Count} available spawn points");
-
-            // Select a random spawn point to expand from, retrying if a chosen endpoint is blocked.
-            var spawnPointsList = new List<KeyValuePair<char, Vector2Int>>(spawnPoints);
-            int startIndex = Random.Range(0, spawnPointsList.Count);
-            Vector2Int nodeCenter = Vector2Int.zero;
-            List<Vector2Int> newEndpoints = null;
-            char selectedSpawnId = '\0';
-            Vector2Int selectedGridPos = Vector2Int.zero;
-            bool grewSuccessfully = false;
-
-            for (int attempt = 0; attempt < spawnPointsList.Count; attempt++)
+            if (forestMapState.Frontier.Count == 0)
             {
-                int index = (startIndex + attempt) % spawnPointsList.Count;
-                var selectedSpawnPoint = spawnPointsList[index];
-                selectedSpawnId = selectedSpawnPoint.Key;
-                selectedGridPos = selectedSpawnPoint.Value;
-
-                Debug.Log($"[DynamicGrowth] Attempt {attempt + 1}: Trying spawn point '{selectedSpawnId}' at {selectedGridPos}");
-
-                // Remove portal and tile marker BEFORE generating new node
-                RemovePortalAtSpawnPoint(selectedSpawnId);
-                UpdateTileSymbol(selectedGridPos, '.');
-
-                if (TryGenerateNewNodeFromEndpoint(selectedGridPos, out nodeCenter, out newEndpoints))
-                {
-                    grewSuccessfully = true;
-                    Debug.Log($"[DynamicGrowth] Successfully created node at {nodeCenter} with {newEndpoints.Count} new endpoints");
-                    break;
-                }
-                else
-                {
-                    // If generation failed, restore the spawn point
-                    Debug.Log($"[DynamicGrowth] Failed to generate node from spawn point '{selectedSpawnId}' at {selectedGridPos}, restoring spawn point");
-                    UpdateTileSymbol(selectedGridPos, selectedSpawnId);
-                    CreatePortalAtSpawnPoint(selectedSpawnId, selectedGridPos, Vector2Int.zero);
-                }
-            }
-
-            if (!grewSuccessfully)
-            {
-                Debug.LogWarning("[DynamicGrowth] Failed to grow maze - all spawn points blocked");
+                Debug.Log("[DynamicGrowth] No frontier edges available for growth");
                 return;
             }
 
-            // Assign spawn IDs to new endpoints and create portals
-            foreach (var endpoint in newEndpoints)
+            int frontierCountBefore = forestMapState.Frontier.Count;
+            Debug.Log($"[DynamicGrowth] Starting growth cycle with {frontierCountBefore} frontier edges");
+
+            // Use the same Step() method as initial generation to add a new node
+            int nodeCountBefore = forestMapState.Nodes.Count;
+            bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
+
+            if (!success)
             {
-                char newSpawnId = GetNextAvailableSpawnId();
-                if (newSpawnId != '\0')
+                Debug.LogWarning("[DynamicGrowth] Step() failed - no valid placement found");
+                return;
+            }
+
+            // Get the newly created node (last node in the list)
+            int newNodeId = nodeCountBefore; // Nodes are added sequentially
+            Debug.Log($"[DynamicGrowth] Successfully created node {newNodeId}, frontier count: {frontierCountBefore} → {forestMapState.Frontier.Count}");
+
+            // Rasterize the new node and its edges to the existing grid
+            var grid = mazeGridBehaviour.Grid;
+            char[,] gridArray = new char[grid.Height, grid.Width];
+
+            // Copy current grid state
+            for (int y = 0; y < grid.Height; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
                 {
-                    // Update tile symbol to spawn ID
-                    UpdateTileSymbol(endpoint, newSpawnId);
-
-                    // Create portal at new endpoint
-                    CreatePortalAtSpawnPoint(newSpawnId, endpoint, nodeCenter);
-
+                    var node = grid.GetNode(x, y);
+                    gridArray[y, x] = node != null ? node.symbol : '#';
                 }
             }
 
-            // Rebuild spawn points dictionary
-            RebuildSpawnPointsDictionary();
+            // Rasterize new node
+            ForestMaze.PlanarForestMazeGenerator.RasterizeNodesToGrid(
+                forestMapState,
+                gridArray,
+                new List<int> { newNodeId },
+                grid.Width,
+                grid.Height
+            );
+
+            // Update the grid with new walkable tiles
+            for (int y = 0; y < grid.Height; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node != null)
+                    {
+                        node.symbol = gridArray[y, x];
+                        if (gridArray[y, x] == '.' || gridArray[y, x] == 'N')
+                        {
+                            node.walkable = true;
+                            node.SetTerrain(TileType.Path);
+                        }
+                    }
+                }
+            }
+
+            // Remove old spawn point portals that are no longer partial edges
+            RebuildSpawnPointsFromFrontier();
 
             // Refresh the maze renderer to show new tiles
             if (mazeRenderer != null)
@@ -307,9 +312,9 @@ namespace FaeMaze.Systems
             }
 
             // Trigger all active visitors to recalculate their paths
-            // This is necessary because spawn points have changed - old destinations may no longer be valid spawn points
             TriggerVisitorPathRecalculation();
 
+            Debug.Log("[DynamicGrowth] Growth cycle complete");
         }
 
         /// <summary>
@@ -934,6 +939,78 @@ namespace FaeMaze.Systems
                 return Vector2Int.zero;
 
             return directions[Random.Range(0, directions.Count)];
+        }
+
+        /// <summary>
+        /// Checks if a character represents a spawn point (uppercase letter except H and N).
+        /// </summary>
+        private bool IsSpawnPointChar(char c)
+        {
+            return char.IsUpper(c) && c != 'H' && c != 'N';
+        }
+
+        /// <summary>
+        /// Rebuilds spawn points from the frontier edges in the ForestMapState.
+        /// Removes portals for completed edges and creates portals for partial edges.
+        /// </summary>
+        private void RebuildSpawnPointsFromFrontier()
+        {
+            var forestMapState = mazeGridBehaviour.ForestMapState;
+            if (forestMapState == null) return;
+
+            var grid = mazeGridBehaviour.Grid;
+            float scale = forestMapState.Scale;
+            Vector2 offset = forestMapState.Offset;
+
+            // Clear all existing spawn points from grid
+            for (int y = 0; y < grid.Height; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node != null && IsSpawnPointChar(node.symbol))
+                    {
+                        RemovePortalAtSpawnPoint(node.symbol);
+                        node.symbol = '.';
+                    }
+                }
+            }
+
+            // Reset spawn ID index
+            nextSpawnIdIndex = 0;
+
+            // Place spawn points at partial edge endpoints
+            int spawnIndex = 0;
+            foreach (int edgeId in forestMapState.Frontier)
+            {
+                var edge = forestMapState.Edges[edgeId];
+                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+
+                // Get the endpoint in grid coordinates
+                Vector2 endPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                int ex = Mathf.RoundToInt(endPoint.x);
+                int ey = Mathf.RoundToInt(endPoint.y);
+
+                if (ex >= 0 && ex < grid.Width && ey >= 0 && ey < grid.Height)
+                {
+                    char spawnId = GetNextAvailableSpawnId();
+                    if (spawnId == '\0') break; // No more spawn IDs available
+
+                    UpdateTileSymbol(new Vector2Int(ex, ey), spawnId);
+
+                    // Get connected node for portal orientation
+                    var connectedNode = forestMapState.Nodes[edge.NodeA];
+                    Vector2 nodeCenter = connectedNode.Position * scale + offset;
+                    Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
+
+                    CreatePortalAtSpawnPoint(spawnId, new Vector2Int(ex, ey), nodeCenterGrid);
+
+                    spawnIndex++;
+                }
+            }
+
+            // Rebuild the spawn points dictionary
+            RebuildSpawnPointsDictionary();
         }
 
         /// <summary>
