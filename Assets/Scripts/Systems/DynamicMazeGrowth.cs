@@ -398,10 +398,17 @@ namespace FaeMaze.Systems
                 Vector2Int direction = candidateDirections[Random.Range(0, candidateDirections.Count)];
                 candidateDirections.Remove(direction);
 
+                // Check if diagonal direction (both components non-zero)
+                bool isDiagonal = direction.x != 0 && direction.y != 0;
+
                 for (int lengthAttempt = 0; lengthAttempt < 4; lengthAttempt++)
                 {
                     int branchLength = Random.Range(3, 11);
-                    Vector2Int candidateEndpoint = nodeGridPos + direction * (NodeRadiusTiles + branchLength);
+
+                    // For diagonal directions, reduce effective length to compensate for sqrt(2) distance
+                    // This ensures diagonal branches have similar actual distances to cardinal branches
+                    int effectiveLength = isDiagonal ? Mathf.RoundToInt(branchLength / 1.414f) : branchLength;
+                    Vector2Int candidateEndpoint = nodeGridPos + direction * (NodeRadiusTiles + effectiveLength);
 
                     if (!IsEndpointInBounds(candidateEndpoint))
                     {
