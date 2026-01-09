@@ -504,7 +504,7 @@ namespace FaeMaze.Systems
 
         private List<Vector2Int> BuildRotatedDirections(Vector2Int startDirection)
         {
-            Vector2Int normalizedStart = NormalizeToCardinal(startDirection);
+            Vector2Int normalizedStart = NormalizeDirection(startDirection);
             List<Vector2Int> directions = new List<Vector2Int> { normalizedStart };
 
             Vector2Int right = RotateRight(normalizedStart);
