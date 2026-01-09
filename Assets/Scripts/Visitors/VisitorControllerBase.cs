@@ -1591,42 +1591,41 @@ namespace FaeMaze.Visitors
             if (isUsingSpawnMarkers)
             {
                 Vector2Int finalWaypoint = path != null && path.Count > 0 ? path[^1] : originalDestination;
-                bool isSpawnPoint = mazeGridBehaviour != null && mazeGridBehaviour.IsSpawnPoint(finalWaypoint);
+                bool isFinalSpawnPoint = mazeGridBehaviour != null && mazeGridBehaviour.IsSpawnPoint(finalWaypoint);
+                bool hasCurrentGridPosition = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(transform.position, out int currentGridX, out int currentGridY);
+                Vector2Int currentGridPosition = hasCurrentGridPosition ? new Vector2Int(currentGridX, currentGridY) : finalWaypoint;
+                bool isCurrentSpawnPoint = mazeGridBehaviour != null && hasCurrentGridPosition && mazeGridBehaviour.IsSpawnPoint(currentGridPosition);
 
-                Debug.Log($"[{name}] Final waypoint: {finalWaypoint}, Is spawn point: {isSpawnPoint}, Original destination: {originalDestination}");
+                Debug.Log($"[{name}] Final waypoint: {finalWaypoint}, Is spawn point: {isFinalSpawnPoint}, Current grid: {(hasCurrentGridPosition ? currentGridPosition.ToString() : "unknown")}, Current is spawn point: {isCurrentSpawnPoint}, Original destination: {originalDestination}");
 
-                if (mazeGridBehaviour == null || !isSpawnPoint)
+                if (mazeGridBehaviour == null || !isFinalSpawnPoint || !isCurrentSpawnPoint)
                 {
                     Debug.Log($"[{name}] Exit at {finalWaypoint} no longer valid, retargeting to nearest exit");
 
                     path = null;
                     currentPathIndex = 0;
 
-                    // Get current position for pathfinding to nearest exit
-                    if (mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+                    Vector2Int currentPos = currentGridPosition;
+
+                    // First, update destination to find the best exit
+                    UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
+                    Debug.Log($"[{name}] Updated destination to: {originalDestination}");
+
+                    // Check if we can actually path to the new destination from current position
+                    bool canPathToDestination = TryFindPathToDestination(currentPos, originalDestination, out _);
+
+                    if (!canPathToDestination)
                     {
-                        Vector2Int currentPos = new Vector2Int(currentX, currentY);
+                        Debug.LogWarning($"[{name}] Cannot path from {currentPos} to destination {originalDestination}! Visitor is on disconnected tile.");
 
-                        // First, update destination to find the best exit
-                        UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
-                        Debug.Log($"[{name}] Updated destination to: {originalDestination}");
-
-                        // Check if we can actually path to the new destination from current position
-                        bool canPathToDestination = TryFindPathToDestination(currentPos, originalDestination, out _);
-
-                        if (!canPathToDestination)
+                        // Find a walkable tile near the destination that IS connected
+                        Vector2Int nearDestination = FindWalkableTileNearPosition(originalDestination, 10);
+                        if (nearDestination != currentPos)
                         {
-                            Debug.LogWarning($"[{name}] Cannot path from {currentPos} to destination {originalDestination}! Visitor is on disconnected tile.");
-
-                            // Find a walkable tile near the destination that IS connected
-                            Vector2Int nearDestination = FindWalkableTileNearPosition(originalDestination, 10);
-                            if (nearDestination != currentPos)
-                            {
-                                Debug.Log($"[{name}] Teleporting from disconnected tile {currentPos} to {nearDestination} near destination");
-                                Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearDestination.x, nearDestination.y);
-                                newWorldPos.z = transform.position.z; // Preserve Z
-                                transform.position = newWorldPos;
-                            }
+                            Debug.Log($"[{name}] Teleporting from disconnected tile {currentPos} to {nearDestination} near destination");
+                            Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearDestination.x, nearDestination.y);
+                            newWorldPos.z = transform.position.z; // Preserve Z
+                            transform.position = newWorldPos;
                         }
                     }
 
