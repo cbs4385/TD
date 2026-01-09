@@ -76,6 +76,7 @@ namespace FaeMaze.Systems
         private Vector2Int entranceGridPos;
         private Vector2Int heartGridPos;
         private Dictionary<char, Vector2Int> spawnPoints = new Dictionary<char, Vector2Int>();
+        private ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState; // For dynamic growth
 
         private static TileType[,] cachedGeneratedTiles;
         private static char[,] cachedGeneratedSymbols;
@@ -99,6 +100,9 @@ namespace FaeMaze.Systems
 
         /// <summary>Gets the world-space size of a single grid tile.</summary>
         public float TileSize => tileSize;
+
+        /// <summary>Gets the forest map state for dynamic maze growth (only available when using planar generator).</summary>
+        public ForestMaze.PlanarForestMazeGenerator.ForestMapState ForestMapState => forestMapState;
 
         /// <summary>Gets the up direction for the maze, accounting for XY-plane reflection.</summary>
         public Vector3 MazeUpDirection
@@ -539,12 +543,15 @@ namespace FaeMaze.Systems
 
             if (usePlanarGenerator)
             {
-                // Use planar organic generator
-                mazeString = ForestMaze.PlanarForestMazeGenerator.GenerateMaze(
+                // Use planar organic generator with state tracking for dynamic growth
+                var result = ForestMaze.PlanarForestMazeGenerator.GenerateMazeWithState(
                     planarGeneratorConfig.gridWidth,
                     planarGeneratorConfig.gridHeight,
                     planarGeneratorConfig.growthTurns,
                     planarGeneratorConfig.randomSeed);
+
+                mazeString = result.maze;
+                forestMapState = result.state; // Store state for dynamic growth
 
                 // Convert string to tiles
                 tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
