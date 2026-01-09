@@ -190,6 +190,7 @@ namespace FaeMaze.Visitors
         protected const int IdleDirection = 0;
         protected const float MovementEpsilonSqr = 0.0001f;
         protected const float StallLoggingDelaySeconds = 0.35f;
+        protected const float StallRouteLogDumpDelaySeconds = 1f;
 
         // Cached direction to prevent animation flickering when movement delta is small
         protected int lastDirection = IdleDirection;
@@ -201,6 +202,7 @@ namespace FaeMaze.Visitors
         protected bool hasLoggedCurrentStall;
         protected bool hasMovedSignificantly;
         protected bool isCurrentlyStalled;
+        protected bool hasDumpedStallRouteLog;
 
         // State tracking for path recalculation
         protected VisitorState previousState = VisitorState.Idle;
@@ -228,6 +230,20 @@ namespace FaeMaze.Visitors
         protected int confusionSegmentEndIndex;
         protected int confusionStepsTarget;
         protected int confusionStepsTaken;
+
+        protected struct VisitorRouteLogEntry
+        {
+            public float Timestamp;
+            public Vector2Int Spawn;
+            public Vector2Int Destination;
+            public string Path;
+            public string Reason;
+            public VisitorState State;
+        }
+
+        protected List<VisitorRouteLogEntry> routeLogEntries;
+        protected Vector2Int spawnGridPosition;
+        protected bool hasSpawnGridPosition;
 
         #endregion
 
@@ -264,6 +280,8 @@ namespace FaeMaze.Visitors
             recentlyReachedTiles = new Queue<Vector2Int>();
             fascinatedPathNodes = new List<FascinatedPathNode>();
             lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
+            routeLogEntries = new List<VisitorRouteLogEntry>();
+            hasSpawnGridPosition = false;
             initialScale = transform.localScale;
 
             // Look for Animator on this GameObject or children (for Blender imports)
@@ -304,6 +322,7 @@ namespace FaeMaze.Visitors
             hasLoggedCurrentStall = false;
             hasMovedSignificantly = false;
             isCurrentlyStalled = false;
+            hasDumpedStallRouteLog = false;
 
             // Apply archetype-specific settings if config is available
             if (config != null)
@@ -528,6 +547,7 @@ namespace FaeMaze.Visitors
 
             Debug.Log($"[{name}] Finding nearest exit from {currentPos}, removed exit: {removedExit}, {spawnPoints.Count} spawn points available");
 
+            Vector2Int previousDestination = originalDestination;
             Vector2Int bestExit = Vector2Int.zero;
             int bestPathLength = int.MaxValue;
             float bestManhattan = float.PositiveInfinity;
@@ -584,6 +604,10 @@ namespace FaeMaze.Visitors
             {
                 Debug.Log($"[{name}] Selected exit: {bestExit} (pathLength: {bestPathLength}, manhattan: {bestManhattan:F1}, foundValidPath: {foundValidPath})");
                 originalDestination = bestExit;
+                if (bestExit != previousDestination)
+                {
+                    RecordRouteLog("Destination updated after exit removal", originalDestination, path);
+                }
             }
             else
             {
@@ -708,6 +732,60 @@ namespace FaeMaze.Visitors
             return false;
         }
 
+        private void EnsureSpawnGridPosition()
+        {
+            if (hasSpawnGridPosition)
+            {
+                return;
+            }
+
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(transform.position, out int spawnX, out int spawnY))
+            {
+                spawnGridPosition = new Vector2Int(spawnX, spawnY);
+                hasSpawnGridPosition = true;
+                return;
+            }
+
+            if (path != null && path.Count > 0)
+            {
+                spawnGridPosition = path[0];
+                hasSpawnGridPosition = true;
+            }
+        }
+
+        private void RecordRouteLog(string reason, Vector2Int destination, List<Vector2Int> plannedPath)
+        {
+            EnsureSpawnGridPosition();
+
+            string pathString = plannedPath != null && plannedPath.Count > 0 ? FormatPath(plannedPath) : "<none>";
+            routeLogEntries.Add(new VisitorRouteLogEntry
+            {
+                Timestamp = Time.time,
+                Spawn = hasSpawnGridPosition ? spawnGridPosition : Vector2Int.zero,
+                Destination = destination,
+                Path = pathString,
+                Reason = reason,
+                State = state
+            });
+        }
+
+        private void DumpRouteLog(string context)
+        {
+            if (routeLogEntries == null || routeLogEntries.Count == 0)
+            {
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine($"[{name}] Visitor route log dump ({context}). Current state: {state}.");
+            foreach (var entry in routeLogEntries)
+            {
+                sb.AppendLine($"  t={entry.Timestamp:F2}s | spawn={entry.Spawn} | destination={entry.Destination} | state={entry.State} | reason={entry.Reason} | path={entry.Path}");
+            }
+
+            Debug.Log(sb.ToString());
+        }
+
         private void UpdatePathLoggingOnMovement(Vector3 previousPosition, Vector3 currentPosition)
         {
             float deltaSqr = (currentPosition - previousPosition).sqrMagnitude;
@@ -746,13 +824,13 @@ namespace FaeMaze.Visitors
                 stalledDuration += Time.deltaTime;
 
                 bool canReportStall = hasMovedSignificantly || stalledDuration >= StallLoggingDelaySeconds;
+                bool shouldDumpRouteLog = IsMovementState(state) && stalledDuration >= StallRouteLogDumpDelaySeconds && !hasDumpedStallRouteLog;
 
-                if (canReportStall && !hasLoggedCurrentStall && stalledDuration >= StallLoggingDelaySeconds)
+                Vector2Int stalledGrid = Vector2Int.zero;
+                bool resolvedGrid = false;
+                if (canReportStall || shouldDumpRouteLog)
                 {
-                    hasLoggedCurrentStall = true;
-
-                    Vector2Int stalledGrid = Vector2Int.zero;
-                    bool resolvedGrid = gridResolved;
+                    resolvedGrid = gridResolved;
                     if (resolvedGrid)
                     {
                         stalledGrid = new Vector2Int(remainedInSameCell ? prevX : curX, remainedInSameCell ? prevY : curY);
@@ -762,12 +840,22 @@ namespace FaeMaze.Visitors
                         resolvedGrid = true;
                         stalledGrid = new Vector2Int(stalledX, stalledY);
                     }
+                }
 
-                    Vector2Int targetWaypoint = (path != null && currentPathIndex < path.Count) ? path[currentPathIndex] : Vector2Int.zero;
+                if (canReportStall && !hasLoggedCurrentStall && stalledDuration >= StallLoggingDelaySeconds)
+                {
+                    hasLoggedCurrentStall = true;
                     if (resolvedGrid)
                     {
                         LogStallPathIssues(stalledGrid);
                     }
+                }
+
+                if (shouldDumpRouteLog)
+                {
+                    string locationInfo = resolvedGrid ? $"grid {stalledGrid}" : $"world {currentPosition}";
+                    DumpRouteLog($"stalled for {stalledDuration:F2}s at {locationInfo}");
+                    hasDumpedStallRouteLog = true;
                 }
             }
             else
@@ -777,6 +865,7 @@ namespace FaeMaze.Visitors
 
                 stalledDuration = 0f;
                 hasLoggedCurrentStall = false;
+                hasDumpedStallRouteLog = false;
             }
         }
 
@@ -939,10 +1028,12 @@ namespace FaeMaze.Visitors
             hasLoggedCurrentStall = false;
             hasMovedSignificantly = false;
             isCurrentlyStalled = false;
+            hasDumpedStallRouteLog = false;
 
             // Initialize previous state for change detection
             previousState = state;
 
+            RecordRouteLog("SetPath(List<Vector2Int>)", originalDestination, gridPath);
             RecalculatePath();
         }
 
@@ -979,10 +1070,12 @@ namespace FaeMaze.Visitors
             stalledDuration = 0f;
             hasLoggedCurrentStall = false;
             isCurrentlyStalled = false;
+            hasDumpedStallRouteLog = false;
 
             // Initialize previous state for change detection
             previousState = state;
 
+            RecordRouteLog("SetPath(List<MazeNode>)", originalDestination, gridPath);
             RecalculatePath();
         }
 
@@ -1700,6 +1793,7 @@ namespace FaeMaze.Visitors
                     }
 
                     RefreshStateFromFlags();
+                    RecordRouteLog("Fascinated: path to lantern", fascinationLanternPosition, path);
                 }
                 else
                 {
@@ -1726,6 +1820,8 @@ namespace FaeMaze.Visitors
             {
                 return; // Still have enough waypoints ahead
             }
+
+            int pathCountBefore = path.Count;
 
             // Get the actual current position
             Vector2Int currentPos;
@@ -1823,6 +1919,11 @@ namespace FaeMaze.Visitors
 
             // Add to movement path
             path.Add(nextPos);
+
+            if (path.Count != pathCountBefore)
+            {
+                RecordRouteLog("Fascinated: extended random walk", path[^1], path);
+            }
         }
 
         /// <summary>
@@ -2035,6 +2136,7 @@ namespace FaeMaze.Visitors
             {
                 LogVisitorPath($"original exit at {originalDestination} no longer exists. Updating to nearest exit at {nearestExit}.");
                 originalDestination = nearestExit;
+                RecordRouteLog("Destination updated after exit removal", originalDestination, path);
             }
         }
 
@@ -2328,10 +2430,12 @@ namespace FaeMaze.Visitors
             currentPathIndex = path.Count > 1 ? 1 : 0;
             hasLoggedPathIssue = false;
             lastLoggedWaypointIndex = -1;
+            hasDumpedStallRouteLog = false;
 
             LogVisitorPath($"set currentPathIndex to {currentPathIndex}. Target waypoint: {(currentPathIndex < path.Count ? path[currentPathIndex].ToString() : "<none>")}.");
 
             LogPathIntegrityIssues(path, currentPos, "recalculated path");
+            RecordRouteLog("RecalculatePath", destination, path);
 
             if (path.Count <= 1)
             {
