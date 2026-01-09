@@ -335,6 +335,7 @@ namespace FaeMaze.Visitors
             if (pendingPathRecalculation)
             {
                 pendingPathRecalculation = false;
+                UpdateDestinationIfExitRemoved();
                 RecalculatePath();
             }
 
@@ -454,6 +455,77 @@ namespace FaeMaze.Visitors
                         }
                     }
                 }
+            }
+        }
+
+        private void UpdateDestinationIfExitRemoved()
+        {
+            if (mazeGridBehaviour == null || gameController == null)
+            {
+                return;
+            }
+
+            if (mazeGridBehaviour.GetSpawnPointCount() < 2)
+            {
+                return;
+            }
+
+            if (mazeGridBehaviour.IsSpawnPoint(originalDestination))
+            {
+                return;
+            }
+
+            var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
+            if (spawnPoints == null || spawnPoints.Count == 0)
+            {
+                return;
+            }
+
+            Vector2Int removedExit = originalDestination;
+            Vector2Int bestExit = Vector2Int.zero;
+            int bestPathLength = int.MaxValue;
+            float bestManhattan = float.PositiveInfinity;
+
+            foreach (var spawn in spawnPoints.Values)
+            {
+                if (spawn == removedExit)
+                {
+                    continue;
+                }
+
+                int pathLength = int.MaxValue;
+                var candidatePath = new List<MazeGrid.MazeNode>();
+                if (gameController.TryFindPath(removedExit, spawn, candidatePath, 1.0f) && candidatePath.Count > 0)
+                {
+                    pathLength = candidatePath.Count;
+                }
+
+                float manhattan = Mathf.Abs(spawn.x - removedExit.x) + Mathf.Abs(spawn.y - removedExit.y);
+
+                if (pathLength < bestPathLength || (pathLength == bestPathLength && manhattan < bestManhattan))
+                {
+                    bestPathLength = pathLength;
+                    bestManhattan = manhattan;
+                    bestExit = spawn;
+                }
+            }
+
+            if (bestExit == Vector2Int.zero)
+            {
+                foreach (var spawn in spawnPoints.Values)
+                {
+                    float manhattan = Mathf.Abs(spawn.x - removedExit.x) + Mathf.Abs(spawn.y - removedExit.y);
+                    if (manhattan < bestManhattan)
+                    {
+                        bestManhattan = manhattan;
+                        bestExit = spawn;
+                    }
+                }
+            }
+
+            if (bestExit != Vector2Int.zero)
+            {
+                originalDestination = bestExit;
             }
         }
 
