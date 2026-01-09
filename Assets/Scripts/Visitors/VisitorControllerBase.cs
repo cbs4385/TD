@@ -489,14 +489,18 @@ namespace FaeMaze.Visitors
         {
             if (mazeGridBehaviour == null || gameController == null)
             {
+                Debug.LogWarning($"[{name}] Cannot update destination: mazeGridBehaviour or gameController is null");
                 return;
             }
 
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
             if (spawnPoints == null || spawnPoints.Count == 0)
             {
+                Debug.LogWarning($"[{name}] Cannot update destination: no spawn points available");
                 return;
             }
+
+            Debug.Log($"[{name}] Finding nearest exit from {currentPos}, removed exit: {removedExit}, {spawnPoints.Count} spawn points available");
 
             Vector2Int bestExit = Vector2Int.zero;
             int bestPathLength = int.MaxValue;
@@ -507,6 +511,7 @@ namespace FaeMaze.Visitors
             {
                 if (spawn == removedExit)
                 {
+                    Debug.Log($"[{name}]   Skipping removed exit at {spawn}");
                     continue;
                 }
 
@@ -521,17 +526,21 @@ namespace FaeMaze.Visitors
                 // Use current position for Manhattan distance fallback
                 float manhattan = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
 
+                Debug.Log($"[{name}]   Exit {spawn}: pathLength={pathLength}, manhattan={manhattan:F1}");
+
                 if (pathLength < bestPathLength || (pathLength == bestPathLength && manhattan < bestManhattan))
                 {
                     bestPathLength = pathLength;
                     bestManhattan = manhattan;
                     bestExit = spawn;
+                    Debug.Log($"[{name}]     -> New best exit");
                 }
             }
 
             // Fallback: if no paths found, use Manhattan distance from current position
             if (bestExit == Vector2Int.zero)
             {
+                Debug.Log($"[{name}] No valid paths found, using Manhattan distance fallback");
                 foreach (var spawn in spawnPoints.Values)
                 {
                     float manhattan = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
@@ -545,7 +554,12 @@ namespace FaeMaze.Visitors
 
             if (bestExit != Vector2Int.zero)
             {
+                Debug.Log($"[{name}] Selected exit: {bestExit} (pathLength: {bestPathLength}, manhattan: {bestManhattan:F1})");
                 originalDestination = bestExit;
+            }
+            else
+            {
+                Debug.LogWarning($"[{name}] Could not find any valid exit!");
             }
         }
 
@@ -1418,6 +1432,8 @@ namespace FaeMaze.Visitors
 
         protected virtual void OnPathCompleted()
         {
+            Debug.Log($"[{name}] Path completed at {transform.position}, grid: {(mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(transform.position, out int gx, out int gy) ? $"({gx},{gy})" : "unknown")}");
+
             LogVisitorPath($"completed path at world {transform.position}. Waypoints traversed: {waypointsTraversedSinceSpawn}. Path length: {path?.Count ?? 0}.");
 
             // Clear fascination state
@@ -1431,8 +1447,14 @@ namespace FaeMaze.Visitors
             if (isUsingSpawnMarkers)
             {
                 Vector2Int finalWaypoint = path != null && path.Count > 0 ? path[^1] : originalDestination;
-                if (mazeGridBehaviour == null || !mazeGridBehaviour.IsSpawnPoint(finalWaypoint))
+                bool isSpawnPoint = mazeGridBehaviour != null && mazeGridBehaviour.IsSpawnPoint(finalWaypoint);
+
+                Debug.Log($"[{name}] Final waypoint: {finalWaypoint}, Is spawn point: {isSpawnPoint}, Original destination: {originalDestination}");
+
+                if (mazeGridBehaviour == null || !isSpawnPoint)
                 {
+                    Debug.Log($"[{name}] Exit at {finalWaypoint} no longer valid, retargeting to nearest exit");
+
                     path = null;
                     currentPathIndex = 0;
 
@@ -1441,6 +1463,7 @@ namespace FaeMaze.Visitors
                     {
                         Vector2Int currentPos = new Vector2Int(currentX, currentY);
                         UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
+                        Debug.Log($"[{name}] Updated destination to: {originalDestination}");
                     }
 
                     RecalculatePath();
@@ -1948,11 +1971,17 @@ namespace FaeMaze.Visitors
                 return;
 
             // Check if originalDestination is still a valid spawn point
-            if (mazeGridBehaviour.IsSpawnPoint(originalDestination))
+            bool isStillValid = mazeGridBehaviour.IsSpawnPoint(originalDestination);
+
+            Debug.Log($"[{name}] Validating destination {originalDestination} from position {currentPos}. Is valid: {isStillValid}");
+
+            if (isStillValid)
                 return; // Still valid, no update needed
 
             // Original exit has been removed - find nearest exit by travel distance
             Vector2Int nearestExit = FindNearestExitByTravelDistance(currentPos);
+
+            Debug.Log($"[{name}] Original exit at {originalDestination} no longer exists. Updating to nearest exit at {nearestExit}");
 
             if (nearestExit != originalDestination)
             {
