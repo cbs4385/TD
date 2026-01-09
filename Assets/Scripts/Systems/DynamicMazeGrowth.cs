@@ -528,7 +528,8 @@ namespace FaeMaze.Systems
                     {
                         visitor.transform.position += worldOffset;
                         visitor.ApplyGridOffset(gridOffset);
-                        visitor.FlagPathRecalculation();
+                        // Don't flag path recalculation here - it will be triggered after
+                        // grid is fully updated and UI is refreshed in GrowMaze()
                     }
                 }
             }
@@ -691,6 +692,10 @@ namespace FaeMaze.Systems
                 }
             }
 
+            if (recalculatedCount > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Flagged {recalculatedCount} visitor(s) for path recalculation after grid update");
+            }
         }
 
         #endregion
