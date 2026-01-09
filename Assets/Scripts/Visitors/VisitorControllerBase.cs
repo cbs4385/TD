@@ -1595,7 +1595,11 @@ namespace FaeMaze.Visitors
                 int currentGridX = 0;
                 int currentGridY = 0;
                 bool hasCurrentGridPosition = mazeGridBehaviour != null && mazeGridBehaviour.WorldToGrid(transform.position, out currentGridX, out currentGridY);
-                Vector2Int currentGridPosition = hasCurrentGridPosition ? new Vector2Int(currentGridX, currentGridY) : finalWaypoint;
+                Vector2Int currentGridPosition = finalWaypoint;
+                if (hasCurrentGridPosition)
+                {
+                    currentGridPosition = new Vector2Int(currentGridX, currentGridY);
+                }
                 bool isCurrentSpawnPoint = mazeGridBehaviour != null && hasCurrentGridPosition && mazeGridBehaviour.IsSpawnPoint(currentGridPosition);
 
                 Debug.Log($"[{name}] Final waypoint: {finalWaypoint}, Is spawn point: {isFinalSpawnPoint}, Current grid: {(hasCurrentGridPosition ? currentGridPosition.ToString() : "unknown")}, Current is spawn point: {isCurrentSpawnPoint}, Original destination: {originalDestination}");
