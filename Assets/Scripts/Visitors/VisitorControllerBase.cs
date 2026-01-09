@@ -486,6 +486,31 @@ namespace FaeMaze.Visitors
             UpdateDestinationForRemovedExit(currentPos, originalDestination);
         }
 
+        /// <summary>
+        /// Retargets visitor if their destination matches the removed exit.
+        /// Called by DynamicMazeGrowth when spawn points are removed.
+        /// Calculates new destination based on walking distance FROM the removed exit position.
+        /// Returns true if retargeting occurred.
+        /// </summary>
+        public bool RetargetFromRemovedExit(Vector2Int removedExit)
+        {
+            // Check if this visitor is targeting the removed exit
+            if (originalDestination != removedExit)
+            {
+                return false;
+            }
+
+            Debug.Log($"[{name}] Retargeting from removed exit {removedExit}");
+
+            // Update destination by calculating from the removed exit position
+            UpdateDestinationForRemovedExit(removedExit, removedExit);
+
+            // Recalculate path to new destination
+            RecalculatePath();
+
+            return true;
+        }
+
         private void UpdateDestinationForRemovedExit(Vector2Int currentPos, Vector2Int removedExit)
         {
             if (mazeGridBehaviour == null || gameController == null)

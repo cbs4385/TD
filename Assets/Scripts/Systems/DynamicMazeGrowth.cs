@@ -350,8 +350,11 @@ namespace FaeMaze.Systems
                     var node = grid.GetNode(x, y);
                     if (node != null)
                     {
+                        // Preserve spawn point tiles as walkable paths, even if rasterization would make them walls
+                        bool wasSpawnPoint = IsSpawnPointChar(node.symbol);
+
                         node.symbol = gridArray[y, x];
-                        if (gridArray[y, x] == '.' || gridArray[y, x] == 'N')
+                        if (gridArray[y, x] == '.' || gridArray[y, x] == 'N' || wasSpawnPoint)
                         {
                             node.walkable = true;
                             node.SetTerrain(TileType.Path);
@@ -361,6 +364,7 @@ namespace FaeMaze.Systems
             }
 
             // Remove old spawn point portals that are no longer partial edges
+            // This also signals visitors to retarget from removed spawn positions
             RebuildSpawnPointsFromFrontier();
 
             // Refresh the maze renderer to show new tiles
@@ -564,6 +568,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Rebuilds spawn points from the frontier edges in the ForestMapState.
         /// Removes portals for completed edges and creates portals for partial edges.
+        /// Signals visitors to retarget from removed spawn point positions.
         /// </summary>
         private void RebuildSpawnPointsFromFrontier()
         {
@@ -573,6 +578,20 @@ namespace FaeMaze.Systems
             var grid = mazeGridBehaviour.Grid;
             float scale = forestMapState.Scale;
             Vector2 offset = forestMapState.Offset;
+
+            // Capture current spawn points before clearing
+            var oldSpawnPoints = new Dictionary<Vector2Int, char>();
+            if (mazeGridBehaviour != null)
+            {
+                var currentSpawns = mazeGridBehaviour.GetAllSpawnPoints();
+                if (currentSpawns != null)
+                {
+                    foreach (var kvp in currentSpawns)
+                    {
+                        oldSpawnPoints[kvp.Value] = kvp.Key;
+                    }
+                }
+            }
 
             // Clear ALL existing portals and debug visualizations
             // This ensures we remove portals for edges that have been completed
@@ -643,6 +662,38 @@ namespace FaeMaze.Systems
 
             // Rebuild the spawn points dictionary
             RebuildSpawnPointsDictionary();
+
+            // Find removed spawn points and signal visitors to retarget
+            var newSpawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
+            var removedSpawnPoints = new List<Vector2Int>();
+
+            foreach (var oldSpawnPos in oldSpawnPoints.Keys)
+            {
+                bool stillExists = false;
+                if (newSpawnPoints != null)
+                {
+                    foreach (var newSpawnPos in newSpawnPoints.Values)
+                    {
+                        if (newSpawnPos == oldSpawnPos)
+                        {
+                            stillExists = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!stillExists)
+                {
+                    removedSpawnPoints.Add(oldSpawnPos);
+                    Debug.Log($"[DynamicGrowth] Spawn point removed at {oldSpawnPos}");
+                }
+            }
+
+            // Signal visitors targeting removed spawn points to retarget FROM those positions
+            if (removedSpawnPoints.Count > 0)
+            {
+                SignalVisitorsToRetargetFromRemovedExits(removedSpawnPoints);
+            }
         }
 
         /// <summary>
@@ -710,6 +761,41 @@ namespace FaeMaze.Systems
             if (recalculatedCount > 0)
             {
                 Debug.Log($"[DynamicGrowth] Recalculated paths for {recalculatedCount} visitor(s) after grid update");
+            }
+        }
+
+        /// <summary>
+        /// Signals visitors targeting removed spawn points to retarget from those positions.
+        /// This allows visitors to select a new destination based on walking distance from the removed exit.
+        /// </summary>
+        private void SignalVisitorsToRetargetFromRemovedExits(List<Vector2Int> removedSpawnPoints)
+        {
+            var allVisitors = FaeMaze.Visitors.VisitorRegistry.All;
+            if (allVisitors == null || removedSpawnPoints == null || removedSpawnPoints.Count == 0)
+            {
+                return;
+            }
+
+            int retargetedCount = 0;
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor != null)
+                {
+                    // Check if visitor's destination matches any removed spawn point
+                    foreach (var removedExit in removedSpawnPoints)
+                    {
+                        if (visitor.RetargetFromRemovedExit(removedExit))
+                        {
+                            retargetedCount++;
+                            break; // Only retarget once per visitor
+                        }
+                    }
+                }
+            }
+
+            if (retargetedCount > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Retargeted {retargetedCount} visitor(s) from removed exit positions");
             }
         }
 
