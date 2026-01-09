@@ -190,7 +190,7 @@ namespace FaeMaze.Visitors
         protected const int IdleDirection = 0;
         protected const float MovementEpsilonSqr = 0.0001f;
         protected const float StallLoggingDelaySeconds = 0.35f;
-        protected const float StallRouteLogDumpDelaySeconds = 5f;
+        protected const float StallRouteLogDumpDelaySeconds = 10f;
 
         // Cached direction to prevent animation flickering when movement delta is small
         protected int lastDirection = IdleDirection;
