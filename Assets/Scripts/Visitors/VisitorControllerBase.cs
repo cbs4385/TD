@@ -422,7 +422,7 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
-            return logVisitorPathfinding;
+            return false;
         }
 
         /// <summary>
@@ -507,13 +507,11 @@ namespace FaeMaze.Visitors
 
         protected void LogVisitorPath(string message)
         {
-            Debug.Log($"[VisitorPath] {name}: {message}");
         }
 
         protected bool LogVisitorPathWarning(string message)
         {
-            Debug.LogWarning($"[VisitorPath] {name}: {message}");
-            return true;
+            return false;
         }
 
         private void UpdatePathLoggingOnMovement(Vector3 previousPosition, Vector3 currentPosition)
