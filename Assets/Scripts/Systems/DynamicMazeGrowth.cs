@@ -46,6 +46,10 @@ namespace FaeMaze.Systems
         private MazeRenderer mazeRenderer;
         private float nextGrowthTime;
 
+        private const float NodeRadius = 3.0f;
+        private const float PathRadius = 0.5f;
+        private const float WallBuffer = 1.0f;
+
         // Track portals at each spawn point
         private Dictionary<char, GameObject> spawnPointPortals = new Dictionary<char, GameObject>();
 
@@ -268,17 +272,43 @@ namespace FaeMaze.Systems
             int minBorderTiles = 5; // Minimum border tiles around maze content
             bool gridExpanded = false;
 
-            // Calculate grid position of new node
-            Vector2 nodeGridPos = newNode.Position * forestMapState.Scale + forestMapState.Offset;
-            int nodeX = Mathf.RoundToInt(nodeGridPos.x);
-            int nodeY = Mathf.RoundToInt(nodeGridPos.y);
-            int nodeRadius = Mathf.CeilToInt(3.0f * forestMapState.Scale); // NODE_RADIUS * scale
+            float scale = forestMapState.Scale;
+            Vector2 offset = forestMapState.Offset;
+            float rasterMargin = (NodeRadius + PathRadius + WallBuffer) * scale;
+
+            // Calculate grid extents of new node and connected edges
+            Vector2 nodeGridPos = newNode.Position * scale + offset;
+            float minX = nodeGridPos.x;
+            float maxX = nodeGridPos.x;
+            float minY = nodeGridPos.y;
+            float maxY = nodeGridPos.y;
+
+            var edgesToRasterize = forestMapState.Edges.Where(e =>
+                e.NodeA == newNodeId || (e.NodeB.HasValue && e.NodeB.Value == newNodeId)
+            );
+
+            foreach (var edge in edgesToRasterize)
+            {
+                foreach (var point in edge.PolylinePoints)
+                {
+                    Vector2 gridPoint = point * scale + offset;
+                    minX = Mathf.Min(minX, gridPoint.x);
+                    maxX = Mathf.Max(maxX, gridPoint.x);
+                    minY = Mathf.Min(minY, gridPoint.y);
+                    maxY = Mathf.Max(maxY, gridPoint.y);
+                }
+            }
+
+            int minGridX = Mathf.FloorToInt(minX - rasterMargin);
+            int maxGridX = Mathf.CeilToInt(maxX + rasterMargin);
+            int minGridY = Mathf.FloorToInt(minY - rasterMargin);
+            int maxGridY = Mathf.CeilToInt(maxY + rasterMargin);
 
             // Check if expansion needed (ensure minBorderTiles on all sides)
-            int expandLeft = Mathf.Max(0, minBorderTiles - (nodeX - nodeRadius));
-            int expandRight = Mathf.Max(0, (nodeX + nodeRadius) + minBorderTiles - (grid.Width - 1));
-            int expandTop = Mathf.Max(0, minBorderTiles - (nodeY - nodeRadius));
-            int expandBottom = Mathf.Max(0, (nodeY + nodeRadius) + minBorderTiles - (grid.Height - 1));
+            int expandLeft = Mathf.Max(0, minBorderTiles - minGridX);
+            int expandRight = Mathf.Max(0, maxGridX + minBorderTiles - (grid.Width - 1));
+            int expandTop = Mathf.Max(0, minBorderTiles - minGridY);
+            int expandBottom = Mathf.Max(0, maxGridY + minBorderTiles - (grid.Height - 1));
 
             if (expandLeft > 0 || expandRight > 0 || expandTop > 0 || expandBottom > 0)
             {
