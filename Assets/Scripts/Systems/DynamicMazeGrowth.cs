@@ -317,8 +317,8 @@ namespace FaeMaze.Systems
                 return false;
             }
 
-            // Create 1-3 new branches from this node
-            int numBranches = Random.Range(1, 4);
+            // Create 1-4 new branches from this node
+            int numBranches = Random.Range(1, 5);
             List<Vector2Int> usedDirections = new List<Vector2Int> { -direction }; // Can't go back
 
             for (int i = 0; i < numBranches; i++)
@@ -1232,13 +1232,13 @@ namespace FaeMaze.Systems
             if (nearestWalkable.HasValue)
             {
                 Vector2Int offset = nearestWalkable.Value - gridPos;
-                Vector2Int direction = NormalizeToCardinal(offset);
+                Vector2Int direction = NormalizeDirection(offset);
                 facingVector = (mazeGridBehaviour.GridToWorld(nearestWalkable.Value.x, nearestWalkable.Value.y) - spawnWorldPos).normalized;
                 return direction;
             }
 
             // Fallback: face toward the heart of the maze
-            Vector2Int fallbackDir = NormalizeToCardinal(new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y));
+            Vector2Int fallbackDir = NormalizeDirection(new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y));
             facingVector = (targetWorldPos - spawnWorldPos).normalized;
 
             return fallbackDir;
@@ -1305,20 +1305,17 @@ namespace FaeMaze.Systems
             return false;
         }
 
-        private Vector2Int NormalizeToCardinal(Vector2Int direction)
+        private Vector2Int NormalizeDirection(Vector2Int direction)
         {
-            // Normalize to primary direction (prefer cardinal over diagonal)
-            if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
-            {
-                return new Vector2Int(direction.x > 0 ? 1 : -1, 0);
-            }
+            // Normalize to unit vector, preserving diagonal directions
+            int dx = direction.x;
+            int dy = direction.y;
 
-            if (direction.y != 0)
-            {
-                return new Vector2Int(0, direction.y > 0 ? 1 : -1);
-            }
+            // Normalize to -1, 0, or 1 for each component
+            int nx = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
+            int ny = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
 
-            return new Vector2Int(1, 0); // Default to right if no direction
+            return new Vector2Int(nx, ny);
         }
 
         /// <summary>
