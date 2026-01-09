@@ -1422,8 +1422,10 @@ namespace FaeMaze.Visitors
                 Vector2Int finalWaypoint = path != null && path.Count > 0 ? path[^1] : originalDestination;
                 if (mazeGridBehaviour == null || !mazeGridBehaviour.IsSpawnPoint(finalWaypoint))
                 {
+                    path = null;
+                    currentPathIndex = 0;
                     UpdateDestinationForRemovedExit(finalWaypoint);
-                    FlagPathRecalculation();
+                    RecalculatePath();
                     return;
                 }
 
