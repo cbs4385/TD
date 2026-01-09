@@ -33,7 +33,7 @@ namespace ForestMaze
         private const float MIN_CORRIDOR_LENGTH = 0.3f;
         private const float WALL_BUFFER = 1.0f; // Minimum wall buffer (in world units) between elements
 
-        private class Node
+        public class Node
         {
             public int Id;
             public Vector2 Position;
@@ -51,7 +51,7 @@ namespace ForestMaze
             }
         }
 
-        private class Edge
+        public class Edge
         {
             public int Id;
             public int NodeA;
@@ -63,7 +63,7 @@ namespace ForestMaze
             public bool IsComplete() => !Partial && NodeB.HasValue;
         }
 
-        private class ForestMapState
+        public class ForestMapState
         {
             public List<Node> Nodes = new List<Node>();
             public List<Edge> Edges = new List<Edge>();
@@ -75,6 +75,8 @@ namespace ForestMaze
             public System.Random Random;
             public bool ValidationPassed = false; // Set during rasterization
             public string ValidationError = null;
+            public float Scale = 1.0f; // Grid scale for rasterization
+            public Vector2 Offset = Vector2.zero; // Grid offset for rasterization
         }
 
         private class ValidationResult
@@ -87,14 +89,14 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Generate a planar organic forest maze.
+        /// Generate a planar organic forest maze and return the state for dynamic growth.
         /// </summary>
         /// <param name="gridWidth">Target grid width (map will be sized to fit)</param>
         /// <param name="gridHeight">Target grid height (map will be sized to fit)</param>
         /// <param name="turns">Number of growth turns (more turns = more nodes)</param>
         /// <param name="seed">Random seed</param>
-        /// <returns>Character grid representing the maze</returns>
-        public static string GenerateMaze(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
+        /// <returns>Tuple of (maze string, generation state)</returns>
+        public static (string maze, ForestMapState state) GenerateMazeWithState(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
         {
             const int maxRetries = 5;
             const int minNodeCount = 6; // Root + at least 5 normal nodes
@@ -139,7 +141,7 @@ namespace ForestMaze
                     {
                         Debug.Log($"Maze generation succeeded on retry {retry + 1} with seed {currentSeed}");
                     }
-                    return result;
+                    return (result, state);
                 }
 
                 // Validation failed, log and retry
@@ -170,7 +172,16 @@ namespace ForestMaze
                     break;
             }
 
-            return RasterizeToGrid(finalState, gridWidth, gridHeight);
+            string finalResult = RasterizeToGrid(finalState, gridWidth, gridHeight);
+            return (finalResult, finalState);
+        }
+
+        /// <summary>
+        /// Generate a planar organic forest maze (backwards compatibility wrapper).
+        /// </summary>
+        public static string GenerateMaze(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
+        {
+            return GenerateMazeWithState(gridWidth, gridHeight, turns, seed).maze;
         }
 
         private static void Initialize(ForestMapState state)
@@ -232,7 +243,11 @@ namespace ForestMaze
             }
         }
 
-        private static bool Step(ForestMapState state)
+        /// <summary>
+        /// Executes one growth step: selects a frontier edge and creates a new node.
+        /// This is used by both initial generation and dynamic growth.
+        /// </summary>
+        public static bool Step(ForestMapState state)
         {
             // Select a frontier edge using center-biased selection
             int? edgeId = SelectFrontierEdgeBiased(state);
@@ -966,6 +981,10 @@ namespace ForestMaze
                 (gridHeight - graphHeight * scale) / 2 - minY * scale
             );
 
+            // Store scale and offset for later dynamic growth
+            state.Scale = scale;
+            state.Offset = offset;
+
             // Initialize grid with forest
             char[,] grid = new char[gridHeight, gridWidth];
             for (int y = 0; y < gridHeight; y++)
@@ -1164,6 +1183,65 @@ namespace ForestMaze
             }
 
             return GridToString(grid, gridWidth, gridHeight);
+        }
+
+        /// <summary>
+        /// Rasterizes specific nodes and their connected edges to an existing grid.
+        /// Used for dynamic maze growth to add newly created nodes without regenerating the entire maze.
+        /// </summary>
+        /// <param name="state">The forest map state containing scale and offset</param>
+        /// <param name="grid">The existing grid to update</param>
+        /// <param name="nodeIds">List of node IDs to rasterize</param>
+        /// <param name="gridWidth">Grid width</param>
+        /// <param name="gridHeight">Grid height</param>
+        public static void RasterizeNodesToGrid(ForestMapState state, char[,] grid, List<int> nodeIds, int gridWidth, int gridHeight)
+        {
+            float scale = state.Scale;
+            Vector2 offset = state.Offset;
+
+            // Rasterize edges connected to these nodes
+            var edgesToRasterize = state.Edges.Where(e =>
+                nodeIds.Contains(e.NodeA) || (e.NodeB.HasValue && nodeIds.Contains(e.NodeB.Value))
+            ).ToList();
+
+            foreach (var edge in edgesToRasterize.Where(e => e.PolylinePoints.Count > 1))
+            {
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 p1 = edge.PolylinePoints[i] * scale + offset;
+                    Vector2 p2 = edge.PolylinePoints[i + 1] * scale + offset;
+
+                    // For partial (open) edges, do not rasterize the very final endpoint cell
+                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
+                    bool includeEndPoint = !(edge.Partial && isLastSegment);
+
+                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint);
+                }
+            }
+
+            // Rasterize node clearings
+            foreach (int nodeId in nodeIds)
+            {
+                var node = state.Nodes.FirstOrDefault(n => n.Id == nodeId);
+                if (node == null) continue;
+
+                Vector2 center = node.Position * scale + offset;
+                float radius = NODE_RADIUS * scale;
+
+                DrawCircleOnGrid(grid, center, radius, '.', gridWidth, gridHeight);
+
+                // Mark node center with 'N' (unless it's the root)
+                if (node.Kind != "root")
+                {
+                    int cx = Mathf.RoundToInt(center.x);
+                    int cy = Mathf.RoundToInt(center.y);
+
+                    if (cx >= 0 && cx < gridWidth && cy >= 0 && cy < gridHeight)
+                    {
+                        grid[cy, cx] = 'N';
+                    }
+                }
+            }
         }
 
         private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height, bool includeEndPoint = true)
