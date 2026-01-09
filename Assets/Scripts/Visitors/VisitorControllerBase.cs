@@ -1719,6 +1719,68 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Validates that the original destination is still a valid spawn point.
+        /// If not, updates it to the nearest spawn point by travel distance (pathfinding).
+        /// Should be called during path recalculation to handle map growth/regeneration.
+        /// </summary>
+        protected virtual void ValidateAndUpdateOriginalDestination(Vector2Int currentPos)
+        {
+            if (mazeGridBehaviour == null)
+                return;
+
+            // Check if we're using the spawn marker system
+            if (mazeGridBehaviour.GetSpawnPointCount() < 2)
+                return;
+
+            // Check if originalDestination is still a valid spawn point
+            if (mazeGridBehaviour.IsSpawnPoint(originalDestination))
+                return; // Still valid, no update needed
+
+            // Original exit has been removed - find nearest exit by travel distance
+            Vector2Int nearestExit = FindNearestExitByTravelDistance(currentPos);
+
+            if (nearestExit != originalDestination)
+            {
+                LogVisitorPath($"original exit at {originalDestination} no longer exists. Updating to nearest exit at {nearestExit}.");
+                originalDestination = nearestExit;
+            }
+        }
+
+        /// <summary>
+        /// Finds the nearest spawn point (exit) from current position using travel distance (pathfinding).
+        /// Returns the current originalDestination if no better exit is found or pathfinding fails.
+        /// </summary>
+        protected virtual Vector2Int FindNearestExitByTravelDistance(Vector2Int currentPos)
+        {
+            if (mazeGridBehaviour == null || gameController == null)
+                return originalDestination;
+
+            var allSpawns = mazeGridBehaviour.GetAllSpawnPoints();
+            if (allSpawns == null || allSpawns.Count == 0)
+                return originalDestination;
+
+            Vector2Int nearestExit = originalDestination;
+            int shortestPathLength = int.MaxValue;
+
+            // Find spawn point with shortest path distance
+            foreach (var spawn in allSpawns.Values)
+            {
+                // Try to find path from current position to this spawn point
+                if (TryFindPathToDestination(currentPos, spawn, out List<Vector2Int> pathToExit))
+                {
+                    int pathLength = pathToExit.Count;
+                    if (pathLength < shortestPathLength)
+                    {
+                        shortestPathLength = pathLength;
+                        nearestExit = spawn;
+                    }
+                }
+            }
+
+            return nearestExit;
+        }
+
+        /// <summary>
         /// Gets the destination for the current visitor state.
         /// Override in derived classes to add state-specific routing logic.
         /// </summary>
@@ -1805,6 +1867,11 @@ namespace FaeMaze.Visitors
             }
 
             Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+            // Validate that the original destination exit still exists
+            // If map growth removed it, update to nearest exit by travel distance
+            ValidateAndUpdateOriginalDestination(currentPos);
+
             Vector2Int destination = GetDestinationForCurrentState(currentPos);
             float attractionMultiplier = GetAttractionMultiplier();
 
