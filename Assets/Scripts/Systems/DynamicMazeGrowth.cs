@@ -263,8 +263,31 @@ namespace FaeMaze.Systems
             Debug.Log($"[DynamicGrowth] Node {newNodeId} has {newNode.IncidentEdges.Count} edges at angles: {string.Join(", ", newNode.UsedAngles.Select(a => $"{a * Mathf.Rad2Deg:F1}°"))}");
             Debug.Log($"[DynamicGrowth] Frontier count: {frontierCountBefore} → {forestMapState.Frontier.Count}");
 
-            // Rasterize the new node and its edges to the existing grid
+            // Check if grid expansion is needed before rasterization
             var grid = mazeGridBehaviour.Grid;
+            int minBorderTiles = 5; // Minimum border tiles around maze content
+            bool gridExpanded = false;
+
+            // Calculate grid position of new node
+            Vector2 nodeGridPos = newNode.Position * forestMapState.Scale + forestMapState.Offset;
+            int nodeX = Mathf.RoundToInt(nodeGridPos.x);
+            int nodeY = Mathf.RoundToInt(nodeGridPos.y);
+            int nodeRadius = Mathf.CeilToInt(3.0f * forestMapState.Scale); // NODE_RADIUS * scale
+
+            // Check if expansion needed (ensure minBorderTiles on all sides)
+            int expandLeft = Mathf.Max(0, minBorderTiles - (nodeX - nodeRadius));
+            int expandRight = Mathf.Max(0, (nodeX + nodeRadius) + minBorderTiles - (grid.Width - 1));
+            int expandTop = Mathf.Max(0, minBorderTiles - (nodeY - nodeRadius));
+            int expandBottom = Mathf.Max(0, (nodeY + nodeRadius) + minBorderTiles - (grid.Height - 1));
+
+            if (expandLeft > 0 || expandRight > 0 || expandTop > 0 || expandBottom > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Grid expansion needed: L={expandLeft}, R={expandRight}, T={expandTop}, B={expandBottom}");
+                ExpandGrid(ref grid, expandLeft, expandRight, expandTop, expandBottom, ref forestMapState);
+                gridExpanded = true;
+            }
+
+            // Rasterize the new node and its edges to the grid
             char[,] gridArray = new char[grid.Height, grid.Width];
 
             // Copy current grid state
@@ -340,6 +363,72 @@ namespace FaeMaze.Systems
         private bool IsSpawnPointChar(char c)
         {
             return char.IsUpper(c) && c != 'H' && c != 'N';
+        }
+
+        /// <summary>
+        /// Expands the grid in the specified directions to accommodate new nodes near boundaries.
+        /// </summary>
+        private void ExpandGrid(ref MazeGrid grid, int expandLeft, int expandRight, int expandTop, int expandBottom, ref ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
+        {
+            int oldWidth = grid.Width;
+            int oldHeight = grid.Height;
+            int newWidth = oldWidth + expandLeft + expandRight;
+            int newHeight = oldHeight + expandTop + expandBottom;
+
+            Debug.Log($"[DynamicGrowth] Expanding grid from {oldWidth}x{oldHeight} to {newWidth}x{newHeight}");
+
+            // Create new larger grid
+            var newGrid = new MazeGrid(newWidth, newHeight);
+
+            // Copy old grid data with offset
+            for (int y = 0; y < oldHeight; y++)
+            {
+                for (int x = 0; x < oldWidth; x++)
+                {
+                    var oldNode = grid.GetNode(x, y);
+                    if (oldNode != null)
+                    {
+                        int newX = x + expandLeft;
+                        int newY = y + expandTop;
+                        var newNode = newGrid.GetNode(newX, newY);
+                        if (newNode != null)
+                        {
+                            newNode.walkable = oldNode.walkable;
+                            newNode.symbol = oldNode.symbol;
+                            newNode.SetTerrain(oldNode.GetTerrain());
+                        }
+                    }
+                }
+            }
+
+            // Update ForestMapState offset to account for grid expansion
+            forestMapState.Offset += new Vector2(expandLeft, expandTop);
+
+            // Replace grid in MazeGridBehaviour using reflection
+            var gridField = typeof(MazeGridBehaviour).GetField("grid",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var widthField = typeof(MazeGridBehaviour).GetField("width",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var heightField = typeof(MazeGridBehaviour).GetField("height",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            if (gridField != null)
+            {
+                gridField.SetValue(mazeGridBehaviour, newGrid);
+            }
+            if (widthField != null)
+            {
+                widthField.SetValue(mazeGridBehaviour, newWidth);
+            }
+            if (heightField != null)
+            {
+                heightField.SetValue(mazeGridBehaviour, newHeight);
+            }
+
+            // Update local reference
+            grid = newGrid;
+
+            Debug.Log($"[DynamicGrowth] Grid expansion complete, offset adjusted by ({expandLeft}, {expandTop})");
         }
 
         /// <summary>
