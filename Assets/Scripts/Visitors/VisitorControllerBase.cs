@@ -475,10 +475,17 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            UpdateDestinationForRemovedExit(originalDestination);
+            // Get current position for pathfinding
+            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            {
+                return;
+            }
+
+            Vector2Int currentPos = new Vector2Int(currentX, currentY);
+            UpdateDestinationForRemovedExit(currentPos, originalDestination);
         }
 
-        private void UpdateDestinationForRemovedExit(Vector2Int removedExit)
+        private void UpdateDestinationForRemovedExit(Vector2Int currentPos, Vector2Int removedExit)
         {
             if (mazeGridBehaviour == null || gameController == null)
             {
@@ -495,6 +502,7 @@ namespace FaeMaze.Visitors
             int bestPathLength = int.MaxValue;
             float bestManhattan = float.PositiveInfinity;
 
+            // Find nearest exit by walking distance from current position
             foreach (var spawn in spawnPoints.Values)
             {
                 if (spawn == removedExit)
@@ -504,12 +512,14 @@ namespace FaeMaze.Visitors
 
                 int pathLength = int.MaxValue;
                 var candidatePath = new List<MazeGrid.MazeNode>();
-                if (gameController.TryFindPath(removedExit, spawn, candidatePath, 1.0f) && candidatePath.Count > 0)
+                // Pathfind from current visitor position to spawn point
+                if (gameController.TryFindPath(currentPos, spawn, candidatePath, 1.0f) && candidatePath.Count > 0)
                 {
                     pathLength = candidatePath.Count;
                 }
 
-                float manhattan = Mathf.Abs(spawn.x - removedExit.x) + Mathf.Abs(spawn.y - removedExit.y);
+                // Use current position for Manhattan distance fallback
+                float manhattan = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
 
                 if (pathLength < bestPathLength || (pathLength == bestPathLength && manhattan < bestManhattan))
                 {
@@ -519,11 +529,12 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            // Fallback: if no paths found, use Manhattan distance from current position
             if (bestExit == Vector2Int.zero)
             {
                 foreach (var spawn in spawnPoints.Values)
                 {
-                    float manhattan = Mathf.Abs(spawn.x - removedExit.x) + Mathf.Abs(spawn.y - removedExit.y);
+                    float manhattan = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
                     if (manhattan < bestManhattan)
                     {
                         bestManhattan = manhattan;
@@ -1424,7 +1435,14 @@ namespace FaeMaze.Visitors
                 {
                     path = null;
                     currentPathIndex = 0;
-                    UpdateDestinationForRemovedExit(finalWaypoint);
+
+                    // Get current position for pathfinding to nearest exit
+                    if (mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+                    {
+                        Vector2Int currentPos = new Vector2Int(currentX, currentY);
+                        UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
+                    }
+
                     RecalculatePath();
                     return;
                 }
