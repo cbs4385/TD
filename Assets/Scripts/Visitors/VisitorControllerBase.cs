@@ -485,7 +485,7 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            if (mazeGridBehaviour.GetSpawnPointCount() < 2)
+            if (mazeGridBehaviour.GetSpawnPointCount() < 1)
             {
                 return;
             }
@@ -1556,7 +1556,7 @@ namespace FaeMaze.Visitors
                 }
 
                 // Check if fascinated visitor wandered onto ANY spawn point (exit)
-                if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2)
+                if (mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 1)
                 {
                     if (mazeGridBehaviour.IsSpawnPoint(currentWaypoint))
                     {
@@ -1585,8 +1585,8 @@ namespace FaeMaze.Visitors
             hasReachedLantern = false;
             ClearLanternInteraction();
 
-            // Check if we're using the new spawn marker system
-            bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 2;
+            // Check if we're using the spawn marker system
+            bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 1;
 
             if (isUsingSpawnMarkers)
             {
@@ -2144,7 +2144,7 @@ namespace FaeMaze.Visitors
                 return;
 
             // Check if we're using the spawn marker system
-            if (mazeGridBehaviour.GetSpawnPointCount() < 2)
+            if (mazeGridBehaviour.GetSpawnPointCount() < 1)
                 return;
 
             // Check if originalDestination is still a valid spawn point
