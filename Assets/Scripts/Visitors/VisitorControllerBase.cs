@@ -505,6 +505,7 @@ namespace FaeMaze.Visitors
             Vector2Int bestExit = Vector2Int.zero;
             int bestPathLength = int.MaxValue;
             float bestManhattan = float.PositiveInfinity;
+            bool foundValidPath = false;
 
             // Find nearest exit by walking distance from current position
             foreach (var spawn in spawnPoints.Values)
@@ -521,6 +522,7 @@ namespace FaeMaze.Visitors
                 if (gameController.TryFindPath(currentPos, spawn, candidatePath, 1.0f) && candidatePath.Count > 0)
                 {
                     pathLength = candidatePath.Count;
+                    foundValidPath = true;
                 }
 
                 // Use current position for Manhattan distance fallback
@@ -528,33 +530,33 @@ namespace FaeMaze.Visitors
 
                 Debug.Log($"[{name}]   Exit {spawn}: pathLength={pathLength}, manhattan={manhattan:F1}");
 
-                if (pathLength < bestPathLength || (pathLength == bestPathLength && manhattan < bestManhattan))
+                // Only update if we found a valid path, OR if no valid paths exist yet and this is closer by Manhattan
+                if (foundValidPath && pathLength < bestPathLength)
                 {
                     bestPathLength = pathLength;
                     bestManhattan = manhattan;
                     bestExit = spawn;
-                    Debug.Log($"[{name}]     -> New best exit");
+                    Debug.Log($"[{name}]     -> New best exit (valid path)");
                 }
-            }
-
-            // Fallback: if no paths found, use Manhattan distance from current position
-            if (bestExit == Vector2Int.zero)
-            {
-                Debug.Log($"[{name}] No valid paths found, using Manhattan distance fallback");
-                foreach (var spawn in spawnPoints.Values)
+                else if (!foundValidPath && bestExit == Vector2Int.zero)
                 {
-                    float manhattan = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
-                    if (manhattan < bestManhattan)
-                    {
-                        bestManhattan = manhattan;
-                        bestExit = spawn;
-                    }
+                    // No valid paths yet, use first exit as default
+                    bestExit = spawn;
+                    bestManhattan = manhattan;
+                    Debug.Log($"[{name}]     -> Set as fallback exit");
+                }
+                else if (!foundValidPath && manhattan < bestManhattan)
+                {
+                    // Still no valid paths, but this is closer by Manhattan
+                    bestExit = spawn;
+                    bestManhattan = manhattan;
+                    Debug.Log($"[{name}]     -> New closest exit by Manhattan distance");
                 }
             }
 
             if (bestExit != Vector2Int.zero)
             {
-                Debug.Log($"[{name}] Selected exit: {bestExit} (pathLength: {bestPathLength}, manhattan: {bestManhattan:F1})");
+                Debug.Log($"[{name}] Selected exit: {bestExit} (pathLength: {bestPathLength}, manhattan: {bestManhattan:F1}, foundValidPath: {foundValidPath})");
                 originalDestination = bestExit;
             }
             else
@@ -1462,6 +1464,25 @@ namespace FaeMaze.Visitors
                     if (mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
                     {
                         Vector2Int currentPos = new Vector2Int(currentX, currentY);
+
+                        // Check if current position is walkable
+                        var currentNode = mazeGridBehaviour.Grid.GetNode(currentX, currentY);
+                        if (currentNode == null || !currentNode.walkable)
+                        {
+                            Debug.LogWarning($"[{name}] Current position {currentPos} is not walkable! Searching for nearest walkable tile...");
+
+                            // Find nearest walkable tile
+                            Vector2Int nearestWalkable = FindNearestWalkableTile(currentPos);
+                            if (nearestWalkable != currentPos)
+                            {
+                                Debug.Log($"[{name}] Moving from {currentPos} to nearest walkable tile {nearestWalkable}");
+                                Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearestWalkable.x, nearestWalkable.y);
+                                newWorldPos.z = transform.position.z; // Preserve Z
+                                transform.position = newWorldPos;
+                                currentPos = nearestWalkable;
+                            }
+                        }
+
                         UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
                         Debug.Log($"[{name}] Updated destination to: {originalDestination}");
                     }
@@ -1992,7 +2013,7 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Finds the nearest spawn point (exit) from current position using travel distance (pathfinding).
-        /// Returns the current originalDestination if no better exit is found or pathfinding fails.
+        /// Falls back to Manhattan distance if pathfinding fails from current position.
         /// </summary>
         protected virtual Vector2Int FindNearestExitByTravelDistance(Vector2Int currentPos)
         {
@@ -2003,8 +2024,9 @@ namespace FaeMaze.Visitors
             if (allSpawns == null || allSpawns.Count == 0)
                 return originalDestination;
 
-            Vector2Int nearestExit = originalDestination;
+            Vector2Int nearestExit = Vector2Int.zero;
             int shortestPathLength = int.MaxValue;
+            float shortestManhattan = float.PositiveInfinity;
 
             // Find spawn point with shortest path distance
             foreach (var spawn in allSpawns.Values)
@@ -2019,9 +2041,72 @@ namespace FaeMaze.Visitors
                         nearestExit = spawn;
                     }
                 }
+
+                // Track Manhattan distance as fallback
+                float manhattan = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
+                if (manhattan < shortestManhattan)
+                {
+                    shortestManhattan = manhattan;
+                    // Only update if we haven't found any pathable exit yet
+                    if (nearestExit == Vector2Int.zero)
+                    {
+                        nearestExit = spawn;
+                    }
+                }
             }
 
+            // If we still haven't found any exit, return any spawn point
+            if (nearestExit == Vector2Int.zero && allSpawns.Count > 0)
+            {
+                nearestExit = allSpawns.Values.First();
+            }
+
+            Debug.Log($"[{name}] FindNearestExitByTravelDistance from {currentPos}: selected {nearestExit} (pathLength: {shortestPathLength}, manhattan: {shortestManhattan:F1})");
+
             return nearestExit;
+        }
+
+        /// <summary>
+        /// Finds the nearest walkable tile from the given position.
+        /// Used when visitor is standing on an invalid/unwalkable tile after map growth.
+        /// </summary>
+        protected virtual Vector2Int FindNearestWalkableTile(Vector2Int fromPos)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+                return fromPos;
+
+            var grid = mazeGridBehaviour.Grid;
+            int maxSearchRadius = 20; // Search up to 20 tiles away
+
+            // Spiral outward from current position
+            for (int radius = 1; radius <= maxSearchRadius; radius++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        // Only check tiles at this radius (not inner tiles already checked)
+                        if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius)
+                            continue;
+
+                        int checkX = fromPos.x + dx;
+                        int checkY = fromPos.y + dy;
+
+                        if (grid.InBounds(checkX, checkY))
+                        {
+                            var node = grid.GetNode(checkX, checkY);
+                            if (node != null && node.walkable)
+                            {
+                                Debug.Log($"[{name}] Found walkable tile at ({checkX}, {checkY}), distance: {radius}");
+                                return new Vector2Int(checkX, checkY);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Debug.LogWarning($"[{name}] Could not find walkable tile within {maxSearchRadius} tiles of {fromPos}");
+            return fromPos; // Return original position as fallback
         }
 
         /// <summary>
