@@ -527,6 +527,8 @@ namespace FaeMaze.Systems
                     if (visitor != null)
                     {
                         visitor.transform.position += worldOffset;
+                        visitor.ApplyGridOffset(gridOffset);
+                        visitor.FlagPathRecalculation();
                     }
                 }
             }
@@ -684,7 +686,7 @@ namespace FaeMaze.Systems
             {
                 if (visitor != null)
                 {
-                    visitor.RecalculatePath();
+                    visitor.FlagPathRecalculation();
                     recalculatedCount++;
                 }
             }

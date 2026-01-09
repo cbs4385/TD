@@ -203,6 +203,7 @@ namespace FaeMaze.Visitors
 
         // State tracking for path recalculation
         protected VisitorState previousState = VisitorState.Idle;
+        protected bool pendingPathRecalculation;
 
         // State duration tracking (for timed states like Mesmerized, Lost, Frightened, etc.)
         protected VisitorState currentTimedState = VisitorState.Idle;
@@ -331,6 +332,12 @@ namespace FaeMaze.Visitors
 
         protected virtual void Update()
         {
+            if (pendingPathRecalculation)
+            {
+                pendingPathRecalculation = false;
+                RecalculatePath();
+            }
+
             // Update state duration timers for timed states
             if (currentTimedState != VisitorState.Idle && currentStateDuration > 0)
             {
@@ -396,6 +403,59 @@ namespace FaeMaze.Visitors
         #endregion
 
         #region Helper Methods
+
+        public void FlagPathRecalculation()
+        {
+            pendingPathRecalculation = true;
+        }
+
+        public void ApplyGridOffset(Vector2Int gridOffset)
+        {
+            if (gridOffset == Vector2Int.zero)
+            {
+                return;
+            }
+
+            originalDestination += gridOffset;
+
+            if (fascinationLanternPosition != Vector2Int.zero)
+            {
+                fascinationLanternPosition += gridOffset;
+            }
+
+            if (path != null)
+            {
+                for (int i = 0; i < path.Count; i++)
+                {
+                    path[i] += gridOffset;
+                }
+            }
+
+            if (recentlyReachedTiles != null && recentlyReachedTiles.Count > 0)
+            {
+                var updatedQueue = new Queue<Vector2Int>(recentlyReachedTiles.Count);
+                foreach (var tile in recentlyReachedTiles)
+                {
+                    updatedQueue.Enqueue(tile + gridOffset);
+                }
+                recentlyReachedTiles = updatedQueue;
+            }
+
+            if (fascinatedPathNodes != null)
+            {
+                foreach (var node in fascinatedPathNodes)
+                {
+                    node.Position += gridOffset;
+                    if (node.UnexploredNeighbors != null)
+                    {
+                        for (int i = 0; i < node.UnexploredNeighbors.Count; i++)
+                        {
+                            node.UnexploredNeighbors[i] += gridOffset;
+                        }
+                    }
+                }
+            }
+        }
 
         private string FormatPath(List<Vector2Int> candidatePath)
         {
