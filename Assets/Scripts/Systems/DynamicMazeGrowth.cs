@@ -395,7 +395,7 @@ namespace FaeMaze.Systems
                         {
                             newNode.walkable = oldNode.walkable;
                             newNode.symbol = oldNode.symbol;
-                            newNode.SetTerrain(oldNode.GetTerrain());
+                            newNode.SetTerrain(oldNode.terrain);
                         }
                     }
                 }
