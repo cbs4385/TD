@@ -574,12 +574,25 @@ namespace FaeMaze.Systems
             float scale = forestMapState.Scale;
             Vector2 offset = forestMapState.Offset;
 
-            // Clear ALL existing portals (not just spawn point characters in grid)
+            // Clear ALL existing portals and debug visualizations
             // This ensures we remove portals for edges that have been completed
             var portalsToRemove = new List<char>(spawnPointPortals.Keys);
             foreach (char spawnId in portalsToRemove)
             {
                 RemovePortalAtSpawnPoint(spawnId);
+            }
+
+            // Also clear any remaining debug columns that might have been orphaned
+            if (portalsParent != null)
+            {
+                foreach (Transform child in portalsParent)
+                {
+                    if (child != null && child.name.StartsWith("Portal_") &&
+                        (child.name.Contains("_SpawnToNode") || child.name.Contains("_XAxis")))
+                    {
+                        DestroyImmediate(child.gameObject);
+                    }
+                }
             }
 
             // Clear all spawn point characters from grid
@@ -687,14 +700,16 @@ namespace FaeMaze.Systems
             {
                 if (visitor != null)
                 {
-                    visitor.FlagPathRecalculation();
+                    // Immediately recalculate paths instead of flagging
+                    // This prevents visitors from trying to move with stale paths
+                    visitor.RecalculatePath();
                     recalculatedCount++;
                 }
             }
 
             if (recalculatedCount > 0)
             {
-                Debug.Log($"[DynamicGrowth] Flagged {recalculatedCount} visitor(s) for path recalculation after grid update");
+                Debug.Log($"[DynamicGrowth] Recalculated paths for {recalculatedCount} visitor(s) after grid update");
             }
         }
 
@@ -854,7 +869,9 @@ namespace FaeMaze.Systems
             {
                 if (portal != null)
                 {
-                    Destroy(portal);
+                    // Use DestroyImmediate to ensure portal is removed before creating new ones
+                    // This prevents duplicate portals when GrowMaze() is called rapidly
+                    DestroyImmediate(portal);
                 }
                 spawnPointPortals.Remove(spawnId);
             }
