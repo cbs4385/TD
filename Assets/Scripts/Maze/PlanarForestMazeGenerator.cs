@@ -1178,7 +1178,7 @@ namespace ForestMaze
             int sx = x0 < x1 ? 1 : -1;
             int sy = y0 < y1 ? 1 : -1;
 
-            // Local helper that also prevents neighbor "spill" into the end cell when endpoint rasterization is disabled.
+            // Local helper for setting grid cells
             void Set(int x, int y)
             {
                 if (!includeEndPoint && x == x1 && y == y1)
@@ -1187,10 +1187,10 @@ namespace ForestMaze
                 SetGridCell(grid, x, y, ch, width, height);
             }
 
-            // For diagonal paths, use true diagonal interpolation instead of Bresenham
+            // For diagonal paths, use linear interpolation with narrow corridor
             if (dx > 0 && dy > 0)
             {
-                // Calculate the number of steps (use the larger dimension)
+                // Calculate number of steps based on the distance
                 int steps = Mathf.Max(dx, dy);
                 int offsetX = 0;
                 int offsetY = 0;
@@ -1205,7 +1205,7 @@ namespace ForestMaze
 
                 for (int i = 0; i <= steps; i++)
                 {
-                    // Linear interpolation for true diagonal
+                    // Linear interpolation
                     float t = steps > 0 ? (float)i / steps : 0;
                     int x = Mathf.RoundToInt(x0 + t * (x1 - x0));
                     int y = Mathf.RoundToInt(y0 + t * (y1 - y0));
@@ -1221,7 +1221,7 @@ namespace ForestMaze
             }
             else
             {
-                // Horizontal or vertical path - use simple line drawing
+                // Horizontal or vertical path - use Bresenham with perpendicular width
                 int err = dx - dy;
 
                 while (true)
