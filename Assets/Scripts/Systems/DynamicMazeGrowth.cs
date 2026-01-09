@@ -525,10 +525,16 @@ namespace FaeMaze.Systems
         {
             List<Vector2Int> directions = new List<Vector2Int>
             {
-                new Vector2Int(1, 0),
-                new Vector2Int(-1, 0),
-                new Vector2Int(0, 1),
-                new Vector2Int(0, -1)
+                // Cardinal directions
+                new Vector2Int(1, 0),   // Right
+                new Vector2Int(-1, 0),  // Left
+                new Vector2Int(0, 1),   // Up
+                new Vector2Int(0, -1),  // Down
+                // Diagonal directions
+                new Vector2Int(1, 1),   // Up-Right
+                new Vector2Int(1, -1),  // Down-Right
+                new Vector2Int(-1, 1),  // Up-Left
+                new Vector2Int(-1, -1)  // Down-Left
             };
 
             directions.RemoveAll(dir => usedDirections.Contains(dir));
@@ -826,16 +832,22 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets a random cardinal direction that hasn't been used yet.
+        /// Gets a random direction (cardinal or diagonal) that hasn't been used yet.
         /// </summary>
         private Vector2Int GetRandomUnusedDirection(List<Vector2Int> usedDirections)
         {
             List<Vector2Int> directions = new List<Vector2Int>
             {
+                // Cardinal directions
                 new Vector2Int(1, 0),   // Right
                 new Vector2Int(-1, 0),  // Left
                 new Vector2Int(0, 1),   // Up
-                new Vector2Int(0, -1)   // Down
+                new Vector2Int(0, -1),  // Down
+                // Diagonal directions
+                new Vector2Int(1, 1),   // Up-Right
+                new Vector2Int(1, -1),  // Down-Right
+                new Vector2Int(-1, 1),  // Up-Left
+                new Vector2Int(-1, -1)  // Down-Left
             };
 
             // Remove used directions
