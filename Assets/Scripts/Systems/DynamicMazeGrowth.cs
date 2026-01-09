@@ -749,13 +749,19 @@ namespace FaeMaze.Systems
             if (nearestWalkable.HasValue)
             {
                 Vector2Int offset = nearestWalkable.Value - gridPos;
-                Vector2Int direction = NormalizeDirection(offset);
+                // Normalize to unit vector
+                int nx = offset.x == 0 ? 0 : (offset.x > 0 ? 1 : -1);
+                int ny = offset.y == 0 ? 0 : (offset.y > 0 ? 1 : -1);
+                Vector2Int direction = new Vector2Int(nx, ny);
                 facingVector = (mazeGridBehaviour.GridToWorld(nearestWalkable.Value.x, nearestWalkable.Value.y) - spawnWorldPos).normalized;
                 return direction;
             }
 
             // Fallback: face toward the heart of the maze
-            Vector2Int fallbackDir = NormalizeDirection(new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y));
+            Vector2Int fallback = new Vector2Int(heartPos.x - gridPos.x, heartPos.y - gridPos.y);
+            int fx = fallback.x == 0 ? 0 : (fallback.x > 0 ? 1 : -1);
+            int fy = fallback.y == 0 ? 0 : (fallback.y > 0 ? 1 : -1);
+            Vector2Int fallbackDir = new Vector2Int(fx, fy);
             facingVector = (targetWorldPos - spawnWorldPos).normalized;
 
             return fallbackDir;
