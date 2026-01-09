@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using FaeMaze.Maze;
+using FaeMaze.Cameras;
 
 namespace FaeMaze.Systems
 {
@@ -314,6 +315,7 @@ namespace FaeMaze.Systems
             {
                 Debug.Log($"[DynamicGrowth] Grid expansion needed: L={expandLeft}, R={expandRight}, T={expandTop}, B={expandBottom}");
                 ExpandGrid(ref grid, expandLeft, expandRight, expandTop, expandBottom, ref forestMapState);
+                ApplyGridExpansionOffset(expandLeft, expandTop);
                 gridExpanded = true;
             }
 
@@ -459,6 +461,41 @@ namespace FaeMaze.Systems
             grid = newGrid;
 
             Debug.Log($"[DynamicGrowth] Grid expansion complete, offset adjusted by ({expandLeft}, {expandTop})");
+        }
+
+        /// <summary>
+        /// Offsets the camera and focal point to keep them stationary relative to the maze when the grid expands.
+        /// </summary>
+        private void ApplyGridExpansionOffset(int expandLeft, int expandTop)
+        {
+            if (expandLeft == 0 && expandTop == 0)
+            {
+                return;
+            }
+
+            float tileSize = mazeGridBehaviour != null ? mazeGridBehaviour.TileSize : 1f;
+            Vector3 worldOffset = new Vector3(expandLeft * tileSize, expandTop * tileSize, 0f);
+
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                return;
+            }
+
+            CameraController3D cameraController = mainCamera.GetComponent<CameraController3D>();
+            if (cameraController != null)
+            {
+                cameraController.ApplyWorldOffset(worldOffset);
+                return;
+            }
+
+            mainCamera.transform.position += worldOffset;
+
+            GameObject focalPointObject = GameObject.Find("Focal Point");
+            if (focalPointObject != null)
+            {
+                focalPointObject.transform.position += worldOffset;
+            }
         }
 
         /// <summary>

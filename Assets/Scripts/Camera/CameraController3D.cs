@@ -175,6 +175,29 @@ namespace FaeMaze.Cameras
         /// </summary>
         public Vector3 FocalPointPosition => focalPointTransform != null ? focalPointTransform.position : _focusPoint;
 
+        /// <summary>
+        /// Applies a world-space offset to the camera and its focus targets.
+        /// Keeps the relative camera orbit configuration intact.
+        /// </summary>
+        /// <param name="worldOffset">World-space offset to apply.</param>
+        public void ApplyWorldOffset(Vector3 worldOffset)
+        {
+            if (worldOffset == Vector3.zero)
+            {
+                return;
+            }
+
+            _focusPoint += worldOffset;
+            focusTargetPosition += worldOffset;
+
+            if (focalPointTransform != null)
+            {
+                focalPointTransform.position += worldOffset;
+            }
+
+            transform.position += worldOffset;
+        }
+
         #endregion
 
         #region Unity Lifecycle
