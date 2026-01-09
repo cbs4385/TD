@@ -256,7 +256,12 @@ namespace FaeMaze.Systems
 
             // Get the newly created node (last node in the list)
             int newNodeId = nodeCountBefore; // Nodes are added sequentially
-            Debug.Log($"[DynamicGrowth] Successfully created node {newNodeId}, frontier count: {frontierCountBefore} → {forestMapState.Frontier.Count}");
+            var newNode = forestMapState.Nodes[newNodeId];
+
+            // Log the angles of edges connected to the new node
+            Debug.Log($"[DynamicGrowth] Successfully created node {newNodeId} at position ({newNode.Position.x:F2}, {newNode.Position.y:F2})");
+            Debug.Log($"[DynamicGrowth] Node {newNodeId} has {newNode.IncidentEdges.Count} edges at angles: {string.Join(", ", newNode.UsedAngles.Select(a => $"{a * Mathf.Rad2Deg:F1}°"))}");
+            Debug.Log($"[DynamicGrowth] Frontier count: {frontierCountBefore} → {forestMapState.Frontier.Count}");
 
             // Rasterize the new node and its edges to the existing grid
             var grid = mazeGridBehaviour.Grid;
