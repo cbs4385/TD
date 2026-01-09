@@ -316,6 +316,7 @@ namespace FaeMaze.Systems
                 Debug.Log($"[DynamicGrowth] Grid expansion needed: L={expandLeft}, R={expandRight}, T={expandTop}, B={expandBottom}");
                 ExpandGrid(ref grid, expandLeft, expandRight, expandTop, expandBottom, ref forestMapState);
                 ApplyGridExpansionOffset(expandLeft, expandTop);
+                ApplyGridExpansionOffsetToEntities(expandLeft, expandTop);
                 gridExpanded = true;
             }
 
@@ -495,6 +496,65 @@ namespace FaeMaze.Systems
             if (focalPointObject != null)
             {
                 focalPointObject.transform.position += worldOffset;
+            }
+        }
+
+        /// <summary>
+        /// Offsets grid-aligned entities to keep them anchored to the same tiles after expansion.
+        /// </summary>
+        private void ApplyGridExpansionOffsetToEntities(int expandLeft, int expandTop)
+        {
+            if (expandLeft == 0 && expandTop == 0)
+            {
+                return;
+            }
+
+            float tileSize = mazeGridBehaviour != null ? mazeGridBehaviour.TileSize : 1f;
+            Vector3 worldOffset = new Vector3(expandLeft * tileSize, expandTop * tileSize, 0f);
+            Vector2Int gridOffset = new Vector2Int(expandLeft, expandTop);
+
+            var heart = FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+            if (heart != null)
+            {
+                heart.transform.position += worldOffset;
+            }
+
+            var visitors = FaeMaze.Visitors.VisitorRegistry.All;
+            if (visitors != null)
+            {
+                foreach (var visitor in visitors)
+                {
+                    if (visitor != null)
+                    {
+                        visitor.transform.position += worldOffset;
+                    }
+                }
+            }
+
+            foreach (var lantern in FindObjectsByType<FaeMaze.Props.FaeLantern>(FindObjectsSortMode.None))
+            {
+                lantern.transform.position += worldOffset;
+            }
+
+            foreach (var ring in FindObjectsByType<FaeMaze.Props.FairyRing>(FindObjectsSortMode.None))
+            {
+                ring.transform.position += worldOffset;
+            }
+
+            foreach (var puka in FindObjectsByType<FaeMaze.Props.PukaHazard>(FindObjectsSortMode.None))
+            {
+                puka.transform.position += worldOffset;
+            }
+
+            foreach (var wisp in FindObjectsByType<FaeMaze.Props.WillowTheWisp>(FindObjectsSortMode.None))
+            {
+                wisp.transform.position += worldOffset;
+            }
+
+            var heartPowerManager = FaeMaze.HeartPowers.HeartPowerManager.Instance;
+            if (heartPowerManager != null)
+            {
+                heartPowerManager.ApplyGridExpansionOffset(worldOffset, gridOffset);
             }
         }
 

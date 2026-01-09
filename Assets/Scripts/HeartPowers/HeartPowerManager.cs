@@ -696,6 +696,26 @@ namespace FaeMaze.HeartPowers
         }
 
         #endregion
+
+        #region Grid Offset Handling
+
+        /// <summary>
+        /// Applies a grid expansion offset to active heart power visuals.
+        /// </summary>
+        public void ApplyGridExpansionOffset(Vector3 worldOffset, Vector2Int gridOffset)
+        {
+            if (tileVisualizer != null)
+            {
+                tileVisualizer.ApplyGridOffset(gridOffset, worldOffset);
+            }
+
+            foreach (var effect in activePowers.Values)
+            {
+                effect?.ApplyGridOffset(worldOffset, gridOffset);
+            }
+        }
+
+        #endregion
     }
 
     #region Helper Classes
@@ -724,6 +744,7 @@ namespace FaeMaze.HeartPowers
         public virtual void OnStart() { }
         public virtual void Update(float deltaTime) { elapsedTime += deltaTime; }
         public virtual void OnEnd() { }
+        public virtual void ApplyGridOffset(Vector3 worldOffset, Vector2Int gridOffset) { }
     }
 
     #endregion

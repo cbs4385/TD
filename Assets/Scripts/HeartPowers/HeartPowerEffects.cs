@@ -1503,6 +1503,22 @@ namespace FaeMaze.HeartPowers
             }
         }
 
+        public override void ApplyGridOffset(Vector3 worldOffset, Vector2Int gridOffset)
+        {
+            targetPosition += worldOffset;
+            activationTile += gridOffset;
+            visitorStartTile += gridOffset;
+            pullDestination += gridOffset;
+            lerpStartPosition += worldOffset;
+            lerpEndPosition += worldOffset;
+            graspBasePosition += worldOffset;
+
+            if (graspVisual != null)
+            {
+                graspVisual.transform.position += worldOffset;
+            }
+        }
+
         private void StopVisitor()
         {
             if (targetVisitor == null || visitorMovementStopped)
@@ -1980,6 +1996,19 @@ namespace FaeMaze.HeartPowers
                 manager.TileVisualizer.RemoveEffectsByPowerType(HeartPowerType.DevouringMaw);
             }
 
+        }
+
+        public override void ApplyGridOffset(Vector3 worldOffset, Vector2Int gridOffset)
+        {
+            targetPosition += worldOffset;
+            targetTile += gridOffset;
+            visitorStartPosition += worldOffset;
+            devourBasePosition += worldOffset;
+
+            if (devourVisual != null)
+            {
+                devourVisual.transform.position += worldOffset;
+            }
         }
 
         private VisitorControllerBase FindVisitorOnTile(Vector2Int tile)

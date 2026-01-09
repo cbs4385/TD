@@ -222,6 +222,41 @@ namespace FaeMaze.HeartPowers
             tileEffects.Clear();
         }
 
+        /// <summary>
+        /// Offsets all existing visuals by a grid/world offset (used when the maze grid expands).
+        /// </summary>
+        public void ApplyGridOffset(Vector2Int gridOffset, Vector3 worldOffset)
+        {
+            if (tileEffects.Count == 0)
+            {
+                return;
+            }
+
+            var updatedEffects = new Dictionary<Vector2Int, List<TileEffect>>(tileEffects.Count);
+
+            foreach (var kvp in tileEffects)
+            {
+                Vector2Int newTile = kvp.Key + gridOffset;
+                if (!updatedEffects.TryGetValue(newTile, out var effects))
+                {
+                    effects = new List<TileEffect>();
+                    updatedEffects[newTile] = effects;
+                }
+
+                foreach (var effect in kvp.Value)
+                {
+                    effect.tile = newTile;
+                    if (effect.visualObject != null)
+                    {
+                        effect.visualObject.transform.position += worldOffset;
+                    }
+                    effects.Add(effect);
+                }
+            }
+
+            tileEffects = updatedEffects;
+        }
+
         #endregion
 
         #region Private Methods
