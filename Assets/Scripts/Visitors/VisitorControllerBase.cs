@@ -164,6 +164,7 @@ namespace FaeMaze.Visitors
 
         protected Vector2 authoredSpriteWorldSize;
         protected Vector2Int originalDestination;
+        protected bool usesSpawnMarkerDestination;
 
         protected bool isCalculatingPath;
 
@@ -1043,6 +1044,9 @@ namespace FaeMaze.Visitors
             }
 
             originalDestination = gridPath[gridPath.Count - 1];
+            usesSpawnMarkerDestination = mazeGridBehaviour != null
+                && mazeGridBehaviour.GetSpawnPointCount() >= 1
+                && mazeGridBehaviour.IsSpawnPoint(originalDestination);
             waypointsTraversedSinceSpawn = 0;
             ResetDetourState();
             hasLoggedPathIssue = false;
@@ -1080,6 +1084,9 @@ namespace FaeMaze.Visitors
             {
                 originalDestination = gridPath[gridPath.Count - 1];
             }
+            usesSpawnMarkerDestination = mazeGridBehaviour != null
+                && mazeGridBehaviour.GetSpawnPointCount() >= 1
+                && mazeGridBehaviour.IsSpawnPoint(originalDestination);
 
             if (ShouldLogVisitorPath())
             {
@@ -1585,8 +1592,8 @@ namespace FaeMaze.Visitors
             hasReachedLantern = false;
             ClearLanternInteraction();
 
-            // Check if we're using the spawn marker system
-            bool isUsingSpawnMarkers = mazeGridBehaviour != null && mazeGridBehaviour.GetSpawnPointCount() >= 1;
+            // Check if we're using the spawn marker system for this visitor
+            bool isUsingSpawnMarkers = mazeGridBehaviour != null && usesSpawnMarkerDestination;
 
             if (isUsingSpawnMarkers)
             {
