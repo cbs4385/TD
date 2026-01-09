@@ -1466,26 +1466,27 @@ namespace FaeMaze.Visitors
                     {
                         Vector2Int currentPos = new Vector2Int(currentX, currentY);
 
-                        // Check if current position is walkable
-                        var currentNode = mazeGridBehaviour.Grid.GetNode(currentX, currentY);
-                        if (currentNode == null || !currentNode.walkable)
-                        {
-                            Debug.LogWarning($"[{name}] Current position {currentPos} is not walkable! Searching for nearest walkable tile...");
-
-                            // Find nearest walkable tile
-                            Vector2Int nearestWalkable = FindNearestWalkableTile(currentPos);
-                            if (nearestWalkable != currentPos)
-                            {
-                                Debug.Log($"[{name}] Moving from {currentPos} to nearest walkable tile {nearestWalkable}");
-                                Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearestWalkable.x, nearestWalkable.y);
-                                newWorldPos.z = transform.position.z; // Preserve Z
-                                transform.position = newWorldPos;
-                                currentPos = nearestWalkable;
-                            }
-                        }
-
+                        // First, update destination to find the best exit
                         UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
                         Debug.Log($"[{name}] Updated destination to: {originalDestination}");
+
+                        // Check if we can actually path to the new destination from current position
+                        bool canPathToDestination = TryFindPathToDestination(currentPos, originalDestination, out _);
+
+                        if (!canPathToDestination)
+                        {
+                            Debug.LogWarning($"[{name}] Cannot path from {currentPos} to destination {originalDestination}! Visitor is on disconnected tile.");
+
+                            // Find a walkable tile near the destination that IS connected
+                            Vector2Int nearDestination = FindWalkableTileNearPosition(originalDestination, 10);
+                            if (nearDestination != currentPos)
+                            {
+                                Debug.Log($"[{name}] Teleporting from disconnected tile {currentPos} to {nearDestination} near destination");
+                                Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearDestination.x, nearDestination.y);
+                                newWorldPos.z = transform.position.z; // Preserve Z
+                                transform.position = newWorldPos;
+                            }
+                        }
                     }
 
                     RecalculatePath();
@@ -2108,6 +2109,48 @@ namespace FaeMaze.Visitors
 
             Debug.LogWarning($"[{name}] Could not find walkable tile within {maxSearchRadius} tiles of {fromPos}");
             return fromPos; // Return original position as fallback
+        }
+
+        /// <summary>
+        /// Finds a walkable tile near the given position.
+        /// Used to teleport visitors from disconnected maze sections to near their destination.
+        /// </summary>
+        protected virtual Vector2Int FindWalkableTileNearPosition(Vector2Int targetPos, int maxSearchRadius = 10)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+                return targetPos;
+
+            var grid = mazeGridBehaviour.Grid;
+
+            // Spiral outward from target position
+            for (int radius = 0; radius <= maxSearchRadius; radius++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        // Only check tiles at this radius (not inner tiles already checked)
+                        if (radius > 0 && Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius)
+                            continue;
+
+                        int checkX = targetPos.x + dx;
+                        int checkY = targetPos.y + dy;
+
+                        if (grid.InBounds(checkX, checkY))
+                        {
+                            var node = grid.GetNode(checkX, checkY);
+                            if (node != null && node.walkable)
+                            {
+                                Debug.Log($"[{name}] Found walkable tile near destination at ({checkX}, {checkY}), distance: {radius}");
+                                return new Vector2Int(checkX, checkY);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Debug.LogWarning($"[{name}] Could not find walkable tile near {targetPos} within {maxSearchRadius} tiles");
+            return targetPos; // Return original position as fallback
         }
 
         /// <summary>
