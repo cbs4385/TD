@@ -475,13 +475,22 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            UpdateDestinationForRemovedExit(originalDestination);
+        }
+
+        private void UpdateDestinationForRemovedExit(Vector2Int removedExit)
+        {
+            if (mazeGridBehaviour == null || gameController == null)
+            {
+                return;
+            }
+
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
             if (spawnPoints == null || spawnPoints.Count == 0)
             {
                 return;
             }
 
-            Vector2Int removedExit = originalDestination;
             Vector2Int bestExit = Vector2Int.zero;
             int bestPathLength = int.MaxValue;
             float bestManhattan = float.PositiveInfinity;
@@ -1410,6 +1419,14 @@ namespace FaeMaze.Visitors
 
             if (isUsingSpawnMarkers)
             {
+                Vector2Int finalWaypoint = path != null && path.Count > 0 ? path[^1] : originalDestination;
+                if (mazeGridBehaviour == null || !mazeGridBehaviour.IsSpawnPoint(finalWaypoint))
+                {
+                    UpdateDestinationForRemovedExit(finalWaypoint);
+                    FlagPathRecalculation();
+                    return;
+                }
+
                 // ESCAPE: Visitor reached destination spawn point
                 state = VisitorState.Escaping;
                 SetAnimatorDirection(IdleDirection);
