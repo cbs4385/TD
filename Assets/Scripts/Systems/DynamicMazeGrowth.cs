@@ -233,8 +233,11 @@ namespace FaeMaze.Systems
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
             if (spawnPoints.Count == 0)
             {
+                Debug.Log("[DynamicGrowth] No spawn points found");
                 return;
             }
+
+            Debug.Log($"[DynamicGrowth] Starting growth cycle with {spawnPoints.Count} available spawn points");
 
             // Select a random spawn point to expand from, retrying if a chosen endpoint is blocked.
             var spawnPointsList = new List<KeyValuePair<char, Vector2Int>>(spawnPoints);
@@ -252,6 +255,8 @@ namespace FaeMaze.Systems
                 selectedSpawnId = selectedSpawnPoint.Key;
                 selectedGridPos = selectedSpawnPoint.Value;
 
+                Debug.Log($"[DynamicGrowth] Attempt {attempt + 1}: Trying spawn point '{selectedSpawnId}' at {selectedGridPos}");
+
                 // Remove portal and tile marker BEFORE generating new node
                 RemovePortalAtSpawnPoint(selectedSpawnId);
                 UpdateTileSymbol(selectedGridPos, '.');
@@ -259,11 +264,13 @@ namespace FaeMaze.Systems
                 if (TryGenerateNewNodeFromEndpoint(selectedGridPos, out nodeCenter, out newEndpoints))
                 {
                     grewSuccessfully = true;
+                    Debug.Log($"[DynamicGrowth] Successfully created node at {nodeCenter} with {newEndpoints.Count} new endpoints");
                     break;
                 }
                 else
                 {
                     // If generation failed, restore the spawn point
+                    Debug.Log($"[DynamicGrowth] Failed to generate node from spawn point '{selectedSpawnId}' at {selectedGridPos}, restoring spawn point");
                     UpdateTileSymbol(selectedGridPos, selectedSpawnId);
                     CreatePortalAtSpawnPoint(selectedSpawnId, selectedGridPos, Vector2Int.zero);
                 }
@@ -271,6 +278,7 @@ namespace FaeMaze.Systems
 
             if (!grewSuccessfully)
             {
+                Debug.LogWarning("[DynamicGrowth] Failed to grow maze - all spawn points blocked");
                 return;
             }
 
@@ -316,27 +324,37 @@ namespace FaeMaze.Systems
             newEndpoints = new List<Vector2Int>();
 
             Vector2Int direction = GetOutwardDirectionFromEndpoint(fromGridPos);
+            Debug.Log($"[TryGenerateNode] From endpoint {fromGridPos}, outward direction: {direction}");
+
             if (!TryPlaceNodeFromEndpoint(fromGridPos, direction, out nodeGridPos))
             {
+                Debug.Log($"[TryGenerateNode] Failed to place node from {fromGridPos}");
                 return false;
             }
+
+            Debug.Log($"[TryGenerateNode] Node placed at {nodeGridPos}, now creating branches");
 
             // Create 1-4 new branches from this node
             int numBranches = Random.Range(1, 5);
             List<Vector2Int> usedDirections = new List<Vector2Int> { -direction }; // Can't go back
 
+            Debug.Log($"[TryGenerateNode] Attempting to create {numBranches} branches (blocking direction: {-direction})");
+
             for (int i = 0; i < numBranches; i++)
             {
                 if (!TryCreateBranch(nodeGridPos, usedDirections, out Vector2Int branchEndpoint, out Vector2Int branchDir))
                 {
+                    Debug.Log($"[TryGenerateNode] Branch {i + 1}/{numBranches} failed");
                     continue;
                 }
 
                 usedDirections.Add(branchDir);
                 newEndpoints.Add(branchEndpoint);
+                Debug.Log($"[TryGenerateNode] Branch {i + 1}/{numBranches} succeeded, endpoint: {branchEndpoint}");
             }
 
             SetTileWalkable(nodeGridPos.x, nodeGridPos.y, 'N');
+            Debug.Log($"[TryGenerateNode] Node generation complete, created {newEndpoints.Count} endpoints");
             return true;
         }
 
@@ -345,6 +363,8 @@ namespace FaeMaze.Systems
             nodeGridPos = Vector2Int.zero;
             List<Vector2Int> candidateDirections = BuildRotatedDirections(outwardDirection);
             const int extraPlacementDistance = 4;
+
+            Debug.Log($"[TryPlaceNode] From {fromGridPos}, outward direction: {outwardDirection}, trying {candidateDirections.Count} directions");
 
             foreach (var direction in candidateDirections)
             {
@@ -368,6 +388,7 @@ namespace FaeMaze.Systems
                     }
 
                     nodeGridPos = candidateCenter;
+                    Debug.Log($"[TryPlaceNode] Found valid position at {nodeGridPos}, direction {direction}, distance {distance}");
                     // fromGridPos is already converted to '.' before this function is called
                     CarvePath(fromGridPos, nodeGridPos);
                     CarveNodeClearing(nodeGridPos);
@@ -375,6 +396,7 @@ namespace FaeMaze.Systems
                 }
             }
 
+            Debug.Log($"[TryPlaceNode] Failed to find valid position from {fromGridPos}");
             return false;
         }
 
@@ -390,8 +412,11 @@ namespace FaeMaze.Systems
             List<Vector2Int> candidateDirections = GetUnusedDirections(usedDirections);
             if (candidateDirections.Count == 0)
             {
+                Debug.Log($"[TryCreateBranch] No unused directions available");
                 return false;
             }
+
+            Debug.Log($"[TryCreateBranch] From node {nodeGridPos}, trying {candidateDirections.Count} directions");
 
             for (int attempt = 0; attempt < candidateDirections.Count; attempt++)
             {
@@ -423,10 +448,12 @@ namespace FaeMaze.Systems
                     CarvePath(nodeGridPos, candidateEndpoint);
                     branchEndpoint = candidateEndpoint;
                     branchDir = direction;
+                    Debug.Log($"[TryCreateBranch] Created branch in direction {direction} (diagonal={isDiagonal}), length={effectiveLength}, endpoint={candidateEndpoint}");
                     return true;
                 }
             }
 
+            Debug.Log($"[TryCreateBranch] Failed to create branch from {nodeGridPos}");
             return false;
         }
 
@@ -484,6 +511,7 @@ namespace FaeMaze.Systems
 
             if (bestClearance >= 0)
             {
+                Debug.Log($"[GetOutwardDirection] From {endpoint}: found clear direction {bestDirection} with clearance {bestClearance}");
                 return bestDirection;
             }
 
@@ -498,19 +526,27 @@ namespace FaeMaze.Systems
                 var node = mazeGridBehaviour.Grid.GetNode(neighbor.x, neighbor.y);
                 if (node != null && node.walkable)
                 {
-                    return endpoint - neighbor;
+                    Vector2Int outwardDir = endpoint - neighbor;
+                    Debug.Log($"[GetOutwardDirection] From {endpoint}: using opposite of walkable neighbor, direction {outwardDir}");
+                    return outwardDir;
                 }
             }
 
             Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
             Vector2Int fallback = new Vector2Int(endpoint.x - heartPos.x, endpoint.y - heartPos.y);
 
+            Vector2Int fallbackDir;
             if (Mathf.Abs(fallback.x) > Mathf.Abs(fallback.y))
             {
-                return new Vector2Int(fallback.x > 0 ? 1 : -1, 0);
+                fallbackDir = new Vector2Int(fallback.x > 0 ? 1 : -1, 0);
+            }
+            else
+            {
+                fallbackDir = new Vector2Int(0, fallback.y > 0 ? 1 : -1);
             }
 
-            return new Vector2Int(0, fallback.y > 0 ? 1 : -1);
+            Debug.Log($"[GetOutwardDirection] From {endpoint}: using fallback direction away from heart {heartPos}, direction {fallbackDir}");
+            return fallbackDir;
         }
 
         private List<Vector2Int> BuildRotatedDirections(Vector2Int startDirection)
