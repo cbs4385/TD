@@ -546,7 +546,7 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            Debug.Log($"[{name}] Finding nearest exit from {currentPos}, removed exit: {removedExit}, {spawnPoints.Count} spawn points available");
+            Debug.Log($"[{name}] Finding nearest exit from removed exit {removedExit} (current: {currentPos}), {spawnPoints.Count} spawn points available");
 
             Vector2Int previousDestination = originalDestination;
             Vector2Int bestExit = Vector2Int.zero;
@@ -554,7 +554,7 @@ namespace FaeMaze.Visitors
             float bestManhattan = float.PositiveInfinity;
             bool foundValidPath = false;
 
-            // Find nearest exit by walking distance from current position
+            // Find nearest exit by walking distance from removed exit position
             foreach (var spawn in spawnPoints.Values)
             {
                 if (spawn == removedExit)
@@ -565,15 +565,15 @@ namespace FaeMaze.Visitors
 
                 int pathLength = int.MaxValue;
                 var candidatePath = new List<MazeGrid.MazeNode>();
-                // Pathfind from current visitor position to spawn point
-                if (gameController.TryFindPath(currentPos, spawn, candidatePath, 1.0f) && candidatePath.Count > 0)
+                // Pathfind from removed exit position to spawn point
+                if (gameController.TryFindPath(removedExit, spawn, candidatePath, 1.0f) && candidatePath.Count > 0)
                 {
                     pathLength = candidatePath.Count;
                     foundValidPath = true;
                 }
 
-                // Use current position for Manhattan distance fallback
-                float manhattan = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
+                // Use removed exit for Manhattan distance fallback
+                float manhattan = Mathf.Abs(spawn.x - removedExit.x) + Mathf.Abs(spawn.y - removedExit.y);
 
                 Debug.Log($"[{name}]   Exit {spawn}: pathLength={pathLength}, manhattan={manhattan:F1}");
 
