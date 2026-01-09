@@ -605,6 +605,7 @@ namespace FaeMaze.Visitors
             {
                 Debug.Log($"[{name}] Selected exit: {bestExit} (pathLength: {bestPathLength}, manhattan: {bestManhattan:F1}, foundValidPath: {foundValidPath})");
                 originalDestination = bestExit;
+                usesSpawnMarkerDestination = true;
                 if (bestExit != previousDestination)
                 {
                     RecordRouteLog("Destination updated after exit removal", originalDestination, path);
@@ -1593,7 +1594,8 @@ namespace FaeMaze.Visitors
             ClearLanternInteraction();
 
             // Check if we're using the spawn marker system for this visitor
-            bool isUsingSpawnMarkers = mazeGridBehaviour != null && usesSpawnMarkerDestination;
+            bool isUsingSpawnMarkers = mazeGridBehaviour != null
+                && (usesSpawnMarkerDestination || originalDestination != mazeGridBehaviour.HeartGridPos);
 
             if (isUsingSpawnMarkers)
             {
@@ -2171,6 +2173,7 @@ namespace FaeMaze.Visitors
             {
                 LogVisitorPath($"original exit at {originalDestination} no longer exists. Updating to nearest exit at {nearestExit}.");
                 originalDestination = nearestExit;
+                usesSpawnMarkerDestination = true;
                 RecordRouteLog("Destination updated after exit removal", originalDestination, path);
             }
         }
