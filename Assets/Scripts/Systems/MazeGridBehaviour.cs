@@ -52,7 +52,11 @@ namespace FaeMaze.Systems
         [Header("Grid Sizing")]
         [SerializeField]
         [Tooltip("World-space size of a single maze tile")]
-        private float tileSize = 1f;
+        private float tileSize = 0.25f;
+
+        [SerializeField]
+        [Tooltip("Model scaling factor - models cover this many grid cells (e.g., 4 means each model covers 4x4 cells)")]
+        private int modelScale = 4;
 
         [Header("Orientation")]
         [SerializeField]
@@ -100,6 +104,9 @@ namespace FaeMaze.Systems
 
         /// <summary>Gets the world-space size of a single grid tile.</summary>
         public float TileSize => tileSize;
+
+        /// <summary>Gets the model scaling factor - each model covers this many grid cells.</summary>
+        public int ModelScale => modelScale;
 
         /// <summary>Gets the forest map state for dynamic maze growth (only available when using planar generator).</summary>
         public ForestMaze.PlanarForestMazeGenerator.ForestMapState ForestMapState => forestMapState;

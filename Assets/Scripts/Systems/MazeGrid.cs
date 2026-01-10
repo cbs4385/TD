@@ -88,7 +88,7 @@ namespace FaeMaze.Systems
         private const float MIN_MOVE_COST = 0.1f;
 
         /// <summary>Grid buffer size to avoid negative array indices during expansion</summary>
-        public const int GRID_BUFFER = 100;
+        public const int GRID_BUFFER = 400;
 
         #endregion
 

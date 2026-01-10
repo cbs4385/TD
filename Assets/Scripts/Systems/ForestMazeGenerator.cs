@@ -107,11 +107,11 @@ namespace FaeMaze.Systems
         {
             return new ForestMazeConfig
             {
-                width = 30,
-                height = 30,
+                width = 120,
+                height = 120,
                 numEntrances = 2,
-                minPathWidth = 2,
-                maxPathWidth = 5,
+                minPathWidth = 8,
+                maxPathWidth = 20,
                 waterCoverage = 0.15f,
                 randomSeed = 0
             };
@@ -143,8 +143,8 @@ namespace FaeMaze.Systems
         {
             return new PlanarForestMazeConfig
             {
-                gridWidth = 60,
-                gridHeight = 60,
+                gridWidth = 240,
+                gridHeight = 240,
                 growthTurns = 25,
                 randomSeed = 0
             };

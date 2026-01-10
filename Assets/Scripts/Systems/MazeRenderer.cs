@@ -204,14 +204,21 @@ namespace FaeMaze.Systems
             MazeGrid grid = mazeGridBehaviour.Grid;
             int width = grid.Width;
             int height = grid.Height;
+            int modelScale = mazeGridBehaviour.ModelScale;
 
             int renderedTiles = 0;
 
-            // Create a 3D tile for each grid cell
+            // Create a 3D tile for each grid cell (or every Nth cell if modelScale > 1)
             for (int y = 0; y < height; y++)
             {
+                // Skip rows based on modelScale to reduce model count
+                if (modelScale > 1 && y % modelScale != 0) continue;
+
                 for (int x = 0; x < width; x++)
                 {
+                    // Skip columns based on modelScale to reduce model count
+                    if (modelScale > 1 && x % modelScale != 0) continue;
+
                     var node = grid.GetNode(x, y);
                     if (node == null) continue;
 
@@ -239,6 +246,7 @@ namespace FaeMaze.Systems
         {
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
             float tileSize = mazeGridBehaviour.TileSize;
+            int modelScale = mazeGridBehaviour.ModelScale;
 
             // Determine if we should use prefabs
             bool useWallPrefab = symbol == '#' && wallPrefab != null;
@@ -269,7 +277,7 @@ namespace FaeMaze.Systems
                 tileObj.name = $"Tile_{gridX}_{gridY}_Wall";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
+                tileObj.transform.localScale = new Vector3(tileSize * 0.65f * modelScale, tileSize * 0.65f * modelScale, tileSize * modelScale);
 
                 // Force LOD0 if this wall tile borders a walkable path
                 if (IsAdjacentToWalkableTile(gridX, gridY))
@@ -287,7 +295,7 @@ namespace FaeMaze.Systems
                 tileObj.name = $"Tile_{gridX}_{gridY}_Undergrowth";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = Vector3.one * tileSize;
+                tileObj.transform.localScale = Vector3.one * tileSize * modelScale;
             }
             else if (useWaterPrefab)
             {
@@ -295,12 +303,12 @@ namespace FaeMaze.Systems
                 tileObj.name = $"Tile_{gridX}_{gridY}_Water";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = Vector3.one * tileSize;
+                tileObj.transform.localScale = Vector3.one * tileSize * modelScale;
             }
             else if (useNodeHazardPrefab)
             {
                 // Place a walkable path tile under the node hazard so the area remains traversable
-                GameObject pathBase = CreateProceduralTile(gridX, gridY, '.', pathColor, tileSize);
+                GameObject pathBase = CreateProceduralTile(gridX, gridY, '.', pathColor, tileSize * modelScale);
                 pathBase.transform.SetParent(tilesParent);
                 pathBase.transform.position = worldPos;
                 AddTileToBatchList('.', pathBase);
@@ -309,12 +317,12 @@ namespace FaeMaze.Systems
                 tileObj.name = $"Tile_{gridX}_{gridY}_NodeHazard";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = Vector3.one * tileSize;
+                tileObj.transform.localScale = Vector3.one * tileSize * modelScale;
             }
             else
             {
                 // Create procedural mesh tile if no prefab available
-                tileObj = CreateProceduralTile(gridX, gridY, symbol, color, tileSize);
+                tileObj = CreateProceduralTile(gridX, gridY, symbol, color, tileSize * modelScale);
                 tileObj.transform.SetParent(tilesParent);
 
                 // Position tile with slight Y-offset for floor tiles
