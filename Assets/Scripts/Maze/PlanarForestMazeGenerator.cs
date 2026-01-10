@@ -406,14 +406,20 @@ namespace ForestMaze
         private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null, int? parentNodeId = null)
         {
             var connectedNodeIds = GetConnectedNodeIds(state, newNode.Id);
+            var allNodesWithCapacity = state.Nodes.Where(n => n.Id != newNode.Id && n.HasCapacity()).Count();
             var candidates = state.Nodes
                 .Where(n => n.Id != newNode.Id && n.HasCapacity())
                 .Where(n => !prohibitedNodeId.HasValue || n.Id != prohibitedNodeId.Value)
                 .Where(n => !connectedNodeIds.Contains(n.Id))
                 .ToList();
 
+            Debug.Log($"  TryConnectToExisting for node {newNode.Id}: {allNodesWithCapacity} nodes with capacity, {candidates.Count} valid candidates after filtering");
+
             if (candidates.Count == 0)
+            {
+                Debug.Log($"  No valid candidates found");
                 return false;
+            }
 
             // Shuffle candidates
             for (int i = 0; i < candidates.Count; i++)
@@ -424,10 +430,13 @@ namespace ForestMaze
                 candidates[j] = temp;
             }
 
+            int attemptCount = 0;
             foreach (var candidate in candidates)
             {
+                attemptCount++;
                 if (connectedNodeIds.Contains(candidate.Id))
                 {
+                    Debug.Log($"    Candidate {candidate.Id}: already connected, skipping");
                     continue;
                 }
 
@@ -436,17 +445,26 @@ namespace ForestMaze
                 angle = (angle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
                 if (!IsAngleValid(newNode, angle))
+                {
+                    Debug.Log($"    Candidate {candidate.Id}: invalid angle for newNode");
                     continue;
+                }
 
                 float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
                 if (!IsAngleValid(candidate, reverseAngle))
+                {
+                    Debug.Log($"    Candidate {candidate.Id}: invalid reverse angle for candidate");
                     continue;
+                }
 
                 var polyline = BuildCurvedPolyline(state, newNode.Position, candidate.Position,
                     new List<int> { newNode.Id, candidate.Id });
 
                 if (polyline == null)
+                {
+                    Debug.Log($"    Candidate {candidate.Id}: polyline validation failed");
                     continue;
+                }
 
                 var edge = new Edge
                 {
@@ -466,43 +484,66 @@ namespace ForestMaze
                 if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
                 {
                     state.HasCrossConnection = true;
+                    Debug.Log($"    SUCCESS: Connected node {newNode.Id} to node {candidate.Id} (CROSS-CONNECTION)");
+                }
+                else
+                {
+                    Debug.Log($"    SUCCESS: Connected node {newNode.Id} to node {candidate.Id} (parent connection)");
                 }
 
                 return true;
             }
 
+            Debug.Log($"  All {attemptCount} connection attempts failed");
             return false;
         }
 
         /// <summary>
-        /// Ensures at least one cross-connection exists by forcing the last node to connect to a non-parent.
+        /// Ensures at least one cross-connection exists by forcing nodes to connect to non-parents.
+        /// Tries multiple nodes in reverse order until successful.
         /// </summary>
         private static void EnsureCrossConnection(ForestMapState state)
         {
             if (state.HasCrossConnection || state.Nodes.Count < 3)
+            {
+                if (state.HasCrossConnection)
+                    Debug.Log($"Cross-connection already exists, skipping enforcement");
                 return; // Already has cross-connection or too few nodes
-
-            // Find the last created node (highest ID) that has capacity
-            var lastNode = state.Nodes.OrderByDescending(n => n.Id).FirstOrDefault(n => n.HasCapacity());
-            if (lastNode == null)
-                return; // No node with capacity
-
-            // Find this node's parent (the node it was originally grown from)
-            var parentEdge = state.Edges.FirstOrDefault(e =>
-                e.NodeB.HasValue && e.NodeB.Value == lastNode.Id);
-
-            int? parentNodeId = parentEdge?.NodeA;
-
-            // Try to force a connection to any existing node except parent
-            // TryConnectToExisting will handle finding and trying candidates
-            if (TryConnectToExisting(state, lastNode, parentNodeId, parentNodeId))
-            {
-                Debug.Log($"Forced cross-connection from node {lastNode.Id} to ensure interconnected graph");
             }
-            else
+
+            Debug.Log($"No cross-connections found. Attempting to force one...");
+
+            // Try nodes in reverse order (newest first) until we successfully create a connection
+            var nodesWithCapacity = state.Nodes.OrderByDescending(n => n.Id)
+                                               .Where(n => n.HasCapacity())
+                                               .ToList();
+
+            Debug.Log($"Found {nodesWithCapacity.Count} nodes with capacity out of {state.Nodes.Count} total nodes");
+
+            foreach (var node in nodesWithCapacity)
             {
-                Debug.LogWarning($"Could not force cross-connection from node {lastNode.Id} - no valid candidates");
+                // Find this node's parent (the node it was originally grown from)
+                var parentEdge = state.Edges.FirstOrDefault(e =>
+                    e.NodeB.HasValue && e.NodeB.Value == node.Id);
+
+                int? parentNodeId = parentEdge?.NodeA;
+
+                Debug.Log($"Trying node {node.Id} (parent: {parentNodeId?.ToString() ?? "none"}, capacity: {node.MaxDegree - node.IncidentEdges.Count}/{node.MaxDegree})");
+
+                // Try to force a connection to any existing node except parent
+                // TryConnectToExisting will handle finding and trying candidates
+                if (TryConnectToExisting(state, node, parentNodeId, parentNodeId))
+                {
+                    Debug.Log($"SUCCESS: Forced cross-connection from node {node.Id} to ensure interconnected graph");
+                    return; // Success!
+                }
+                else
+                {
+                    Debug.Log($"Failed to connect node {node.Id} - trying next node...");
+                }
             }
+
+            Debug.LogWarning($"Could not force any cross-connection after trying {nodesWithCapacity.Count} nodes");
         }
 
         private static HashSet<int> GetConnectedNodeIds(ForestMapState state, int nodeId)
