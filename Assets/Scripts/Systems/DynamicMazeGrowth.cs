@@ -396,9 +396,9 @@ namespace FaeMaze.Systems
             // Ensure wall borders around newly added walkable content
             EnsureWallBordersAroundTiles(newWalkableTiles, 3);
 
-            // Remove old spawn point portals that are no longer partial edges
-            // This also signals visitors to retarget from removed spawn positions
-            RebuildSpawnPointsFromFrontier();
+            // Remove old spawn point portals and rebuild from frontier
+            // This updates spawn points but doesn't signal visitors yet
+            var removedSpawnPoints = RebuildSpawnPointsFromFrontier();
 
             // Refresh the maze renderer to show new tiles
             if (mazeRenderer != null)
@@ -407,7 +407,15 @@ namespace FaeMaze.Systems
             }
 
             // Trigger all active visitors to recalculate their paths
+            // This ensures the new spawn points are fully integrated before visitors try to path to them
             TriggerVisitorPathRecalculation();
+
+            // NOW signal visitors to retarget from removed exits
+            // The new spawn points are fully walkable and pathfindable at this point
+            if (removedSpawnPoints != null && removedSpawnPoints.Count > 0)
+            {
+                SignalVisitorsToRetargetFromRemovedExits(removedSpawnPoints);
+            }
 
             Debug.Log("[DynamicGrowth] Growth cycle complete");
         }
@@ -601,12 +609,12 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Rebuilds spawn points from the frontier edges in the ForestMapState.
         /// Removes portals for completed edges and creates portals for partial edges.
-        /// Signals visitors to retarget from removed spawn point positions.
+        /// Returns list of removed spawn points for deferred visitor retargeting.
         /// </summary>
-        private void RebuildSpawnPointsFromFrontier()
+        private List<Vector2Int> RebuildSpawnPointsFromFrontier()
         {
             var forestMapState = mazeGridBehaviour.ForestMapState;
-            if (forestMapState == null) return;
+            if (forestMapState == null) return new List<Vector2Int>();
 
             var grid = mazeGridBehaviour.Grid;
             float scale = forestMapState.Scale;
@@ -745,11 +753,9 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Signal visitors targeting removed spawn points to retarget FROM those positions
-            if (removedSpawnPoints.Count > 0)
-            {
-                SignalVisitorsToRetargetFromRemovedExits(removedSpawnPoints);
-            }
+            // Return removed spawn points for deferred visitor retargeting
+            // (will be called from GrowMaze after all updates complete)
+            return removedSpawnPoints;
         }
 
         /// <summary>
