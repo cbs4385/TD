@@ -396,6 +396,9 @@ namespace FaeMaze.Systems
             // Ensure wall borders around newly added walkable content
             EnsureWallBordersAroundTiles(newWalkableTiles, 3);
 
+            // Mark endpoints of partial frontier edges as walkable so spawn points can be placed there
+            MarkPartialEdgeEndpointsAsWalkable();
+
             // Remove old spawn point portals and rebuild from frontier
             // This updates spawn points but doesn't signal visitors yet
             var removedSpawnPoints = RebuildSpawnPointsFromFrontier();
@@ -1303,6 +1306,50 @@ namespace FaeMaze.Systems
             if (tilesToConvert.Count > 0)
             {
                 Debug.Log($"[DynamicGrowth] Added {tilesToConvert.Count} wall tiles for borders around new content");
+            }
+        }
+
+        /// <summary>
+        /// Marks the endpoints of partial frontier edges as walkable.
+        /// This ensures spawn points can be placed at the far end of partial edges.
+        /// </summary>
+        private void MarkPartialEdgeEndpointsAsWalkable()
+        {
+            var forestMapState = mazeGridBehaviour.ForestMapState;
+            if (forestMapState == null) return;
+
+            var grid = mazeGridBehaviour.Grid;
+            float scale = forestMapState.Scale;
+            Vector2 offset = forestMapState.Offset;
+
+            int markedCount = 0;
+            foreach (int edgeId in forestMapState.Frontier)
+            {
+                var edge = forestMapState.Edges[edgeId];
+                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+
+                // Get the endpoint (last point in the polyline)
+                Vector2 endPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                int px = Mathf.RoundToInt(endPoint.x);
+                int py = Mathf.RoundToInt(endPoint.y);
+
+                if (px >= 0 && px < grid.Width && py >= 0 && py < grid.Height)
+                {
+                    var node = grid.GetNode(px, py);
+                    if (node != null && !node.walkable)
+                    {
+                        node.walkable = true;
+                        node.symbol = '.';
+                        node.SetTerrain(TileType.Path);
+                        markedCount++;
+                        Debug.Log($"[DynamicGrowth] Marked partial edge {edgeId} endpoint at ({px},{py}) as walkable");
+                    }
+                }
+            }
+
+            if (markedCount > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Marked {markedCount} partial edge endpoints as walkable");
             }
         }
 
