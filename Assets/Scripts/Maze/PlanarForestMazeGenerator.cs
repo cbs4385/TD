@@ -77,6 +77,7 @@ namespace ForestMaze
             public string ValidationError = null;
             public float Scale = 1.0f; // Grid scale for rasterization
             public Vector2 Offset = Vector2.zero; // Grid offset for rasterization
+            public bool HasCrossConnection = false; // Track if any non-parent connections exist
         }
 
         private class ValidationResult
@@ -123,6 +124,9 @@ namespace ForestMaze
                         break;
                 }
 
+                // Ensure at least one cross-connection exists after initial growth
+                EnsureCrossConnection(state);
+
                 // Phase 2: Continue growing but preserve minimum open endpoints
                 for (int i = 0; i < turns && state.Frontier.Count > minOpenEndpoints; i++)
                 {
@@ -164,6 +168,9 @@ namespace ForestMaze
                 if (finalState.Frontier.Count == 0 || !Step(finalState))
                     break;
             }
+
+            // Ensure at least one cross-connection exists after initial growth
+            EnsureCrossConnection(finalState);
 
             // Phase 2: Continue growing but preserve minimum open endpoints
             for (int i = 0; i < turns && finalState.Frontier.Count > minOpenEndpoints; i++)
@@ -246,8 +253,8 @@ namespace ForestMaze
 
                 if (tryConnect)
                 {
-                    // Try to connect to existing node (root)
-                    if (TryConnectToExisting(state, node1, root.Id))
+                    // Try to connect to existing node (not root, which is the parent)
+                    if (TryConnectToExisting(state, node1, root.Id, root.Id))
                     {
                         isFirstEdge = false;
                         continue;
@@ -311,7 +318,7 @@ namespace ForestMaze
                 // Try to connect to existing node
                 if (state.Random.NextDouble() < CONNECT_PROB)
                 {
-                    if (TryConnectToExisting(state, newNode, edge.NodeA))
+                    if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA))
                         continue;
                 }
 
@@ -396,7 +403,7 @@ namespace ForestMaze
             return false;
         }
 
-        private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null)
+        private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null, int? parentNodeId = null)
         {
             var connectedNodeIds = GetConnectedNodeIds(state, newNode.Id);
             var candidates = state.Nodes
@@ -455,10 +462,47 @@ namespace ForestMaze
                 newNode.AddEdge(edge.Id, angle);
                 candidate.AddEdge(edge.Id, reverseAngle);
 
+                // Mark as cross-connection if connecting to non-parent node
+                if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
+                {
+                    state.HasCrossConnection = true;
+                }
+
                 return true;
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Ensures at least one cross-connection exists by forcing the last node to connect to a non-parent.
+        /// </summary>
+        private static void EnsureCrossConnection(ForestMapState state)
+        {
+            if (state.HasCrossConnection || state.Nodes.Count < 3)
+                return; // Already has cross-connection or too few nodes
+
+            // Find the last created node (highest ID) that has capacity
+            var lastNode = state.Nodes.OrderByDescending(n => n.Id).FirstOrDefault(n => n.HasCapacity());
+            if (lastNode == null)
+                return; // No node with capacity
+
+            // Find this node's parent (the node it was originally grown from)
+            var parentEdge = state.Edges.FirstOrDefault(e =>
+                e.NodeB.HasValue && e.NodeB.Value == lastNode.Id);
+
+            int? parentNodeId = parentEdge?.NodeA;
+
+            // Try to force a connection to any existing node except parent
+            // TryConnectToExisting will handle finding and trying candidates
+            if (TryConnectToExisting(state, lastNode, parentNodeId, parentNodeId))
+            {
+                Debug.Log($"Forced cross-connection from node {lastNode.Id} to ensure interconnected graph");
+            }
+            else
+            {
+                Debug.LogWarning($"Could not force cross-connection from node {lastNode.Id} - no valid candidates");
+            }
         }
 
         private static HashSet<int> GetConnectedNodeIds(ForestMapState state, int nodeId)
