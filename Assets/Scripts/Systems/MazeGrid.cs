@@ -58,7 +58,7 @@ namespace FaeMaze.Systems
                 this.y = y;
                 this.z = z;
                 this.height = 0f;
-                this.walkable = true;
+                this.walkable = false; // Default to non-walkable (matches TreeBramble terrain)
                 this.baseCost = 1.0f;
                 this.speedMultiplier = 1.0f;
                 this.attraction = 0.0f;
