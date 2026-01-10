@@ -1259,10 +1259,10 @@ namespace ForestMaze
 
                 int targetX = -1;
                 int targetY = -1;
-                float maxDistance = -1f;
+                float minDistanceFromEndpoint = float.MaxValue;
 
-                // Fallback: Search for walkable cell near the chosen endpoint (within small radius)
-                // Don't search the entire path - that can place portals in the middle
+                // Fallback: Search for walkable cell CLOSEST to the chosen endpoint
+                // Search within small radius to stay near the actual edge end
                 const int searchRadius = 3; // Only search 3 cells around endpoint
                 for (int dy = -searchRadius; dy <= searchRadius; dy++)
                 {
@@ -1282,10 +1282,11 @@ namespace ForestMaze
                             continue;
                         }
 
-                        float distance = (px - nx) * (px - nx) + (py - ny) * (py - ny);
-                        if (distance > maxDistance)
+                        // Find CLOSEST walkable cell to the endpoint (not farthest from node!)
+                        float distanceFromEndpoint = (px - ex) * (px - ex) + (py - ey) * (py - ey);
+                        if (distanceFromEndpoint < minDistanceFromEndpoint)
                         {
-                            maxDistance = distance;
+                            minDistanceFromEndpoint = distanceFromEndpoint;
                             targetX = px;
                             targetY = py;
                         }
