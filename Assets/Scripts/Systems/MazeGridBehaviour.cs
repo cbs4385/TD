@@ -751,47 +751,70 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Removes wall tiles that are more than maxDistance away from any walkable tile.
-        /// Uses flood fill from walkable tiles to mark walls within range.
+        /// First voids the entire buffer zone, then keeps walls within range of content.
         /// </summary>
         private void RemoveDistantWalls(int maxDistance)
         {
-            int width = grid.Width;
-            int height = grid.Height;
-            bool[,] keepWall = new bool[width, height];
+            int gridWidth = grid.Width;
+            int gridHeight = grid.Height;
+            int contentLeft = MazeGrid.GRID_BUFFER;
+            int contentRight = width + MazeGrid.GRID_BUFFER - 1;
+            int contentTop = MazeGrid.GRID_BUFFER;
+            int contentBottom = height + MazeGrid.GRID_BUFFER - 1;
 
-            // Find all walkable tiles and mark walls within maxDistance
-            for (int y = 0; y < height; y++)
+            bool[,] keepTile = new bool[gridWidth, gridHeight];
+
+            // Mark all content area tiles and tiles within maxDistance of walkable content
+            for (int y = 0; y < gridHeight; y++)
             {
-                for (int x = 0; x < width; x++)
+                for (int x = 0; x < gridWidth; x++)
                 {
                     var node = grid.GetNode(x, y);
                     if (node != null && node.walkable)
                     {
                         // Mark all tiles within maxDistance of this walkable tile
-                        MarkTilesInRange(x, y, maxDistance, keepWall);
+                        MarkTilesInRange(x, y, maxDistance, keepTile);
                     }
                 }
             }
 
-            // Remove walls that weren't marked
+            // Remove all tiles in buffer zone that weren't marked
             int removedCount = 0;
-            for (int y = 0; y < height; y++)
+            for (int y = 0; y < gridHeight; y++)
             {
-                for (int x = 0; x < width; x++)
+                for (int x = 0; x < gridWidth; x++)
                 {
-                    var node = grid.GetNode(x, y);
-                    if (node != null && !node.walkable && !keepWall[x, y])
+                    // Check if this tile is in the buffer zone
+                    bool inBufferZone = (x < contentLeft || x > contentRight || y < contentTop || y > contentBottom);
+
+                    if (inBufferZone)
                     {
-                        // Mark as empty/void (not walkable, not rendered)
-                        node.symbol = ' ';
-                        node.SetTerrain(TileType.Path); // Use Path type but keep walkable = false
-                        node.walkable = false;
-                        removedCount++;
+                        var node = grid.GetNode(x, y);
+                        if (node != null && !keepTile[x, y])
+                        {
+                            // Mark as empty/void (not walkable, not rendered)
+                            node.symbol = ' ';
+                            node.SetTerrain(TileType.Path);
+                            node.walkable = false;
+                            removedCount++;
+                        }
+                    }
+                    // Also remove distant walls within content area
+                    else
+                    {
+                        var node = grid.GetNode(x, y);
+                        if (node != null && !node.walkable && !keepTile[x, y])
+                        {
+                            node.symbol = ' ';
+                            node.SetTerrain(TileType.Path);
+                            node.walkable = false;
+                            removedCount++;
+                        }
                     }
                 }
             }
 
-            Debug.Log($"[GridOptimization] Removed {removedCount} distant wall tiles");
+            Debug.Log($"[GridOptimization] Removed {removedCount} distant wall tiles (grid: {gridWidth}x{gridHeight}, content: [{contentLeft},{contentTop}] to [{contentRight},{contentBottom}])");
         }
 
         /// <summary>
