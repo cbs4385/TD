@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Maze;
 
@@ -63,6 +64,10 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Maximum tiles per batch (to avoid meshes that are too large)")]
         private int batchChunkSize = 100;
+
+        [SerializeField]
+        [Tooltip("Downsample factor for rendering tiles; higher values spawn fewer models.")]
+        private int renderStride = 100;
 
         #endregion
 
@@ -207,22 +212,31 @@ namespace FaeMaze.Systems
 
             int renderedTiles = 0;
 
-            // Create a 3D tile for each grid cell
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    var node = grid.GetNode(x, y);
-                    if (node == null) continue;
+            int stride = Mathf.Max(1, renderStride);
 
-                    // Skip void tiles (empty buffer space)
-                    if (node.symbol == ' ') continue;
+            // Create a 3D tile for each sampled grid block
+            for (int y = 0; y < height; y += stride)
+            {
+                for (int x = 0; x < width; x += stride)
+                {
+                    if (!TrySampleBlock(grid, x, y, stride, out int representativeX, out int representativeY, out char symbol,
+                            out bool walkable, out Vector2 centroid))
+                    {
+                        continue;
+                    }
 
                     // Determine color based on tile symbol definitions
-                    Color tileColor = GetColorForSymbol(node.symbol, node.walkable);
+                    Color tileColor = GetColorForSymbol(symbol, walkable);
+
+                    float tileSize = mazeGridBehaviour.TileSize;
+                    Vector3 worldPos = mazeGridBehaviour.GridToWorld(representativeX, representativeY);
+                    Vector3 centroidOffset = new Vector3(
+                        (centroid.x - representativeX) * tileSize,
+                        (centroid.y - representativeY) * tileSize,
+                        0f);
 
                     // Create 3D tile
-                    CreateTile3D(x, y, node.symbol, tileColor);
+                    CreateTile3D(representativeX, representativeY, symbol, tileColor, worldPos + centroidOffset);
                     renderedTiles++;
                 }
             }
@@ -235,9 +249,78 @@ namespace FaeMaze.Systems
 
         }
 
-        private void CreateTile3D(int gridX, int gridY, char symbol, Color color)
+        private bool TrySampleBlock(MazeGrid grid, int startX, int startY, int stride, out int representativeX,
+            out int representativeY, out char representativeSymbol, out bool representativeWalkable, out Vector2 walkableCentroid)
         {
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
+            representativeX = startX;
+            representativeY = startY;
+            representativeSymbol = ' ';
+            representativeWalkable = false;
+            walkableCentroid = Vector2.zero;
+
+            int endX = Mathf.Min(startX + stride, grid.Width);
+            int endY = Mathf.Min(startY + stride, grid.Height);
+
+            Dictionary<char, int> symbolCounts = new Dictionary<char, int>();
+            int bestCount = 0;
+            bool hasSample = false;
+
+            int walkableCount = 0;
+            float walkableSumX = 0f;
+            float walkableSumY = 0f;
+
+            for (int y = startY; y < endY; y++)
+            {
+                for (int x = startX; x < endX; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node == null || node.symbol == ' ')
+                    {
+                        continue;
+                    }
+
+                    hasSample = true;
+                    symbolCounts.TryGetValue(node.symbol, out int count);
+                    count++;
+                    symbolCounts[node.symbol] = count;
+
+                    if (count > bestCount)
+                    {
+                        bestCount = count;
+                        representativeSymbol = node.symbol;
+                        representativeWalkable = node.walkable;
+                        representativeX = x;
+                        representativeY = y;
+                    }
+
+                    if (node.walkable)
+                    {
+                        walkableSumX += x;
+                        walkableSumY += y;
+                        walkableCount++;
+                    }
+                }
+            }
+
+            if (!hasSample)
+            {
+                return false;
+            }
+
+            if (walkableCount > 0)
+            {
+                walkableCentroid = new Vector2(walkableSumX / walkableCount, walkableSumY / walkableCount);
+            }
+            else
+            {
+                walkableCentroid = new Vector2(representativeX, representativeY);
+            }
+
+            return true;
+        }
+
+        private void CreateTile3D(int gridX, int gridY, char symbol, Color color, Vector3 worldPos)
+        {
             float tileSize = mazeGridBehaviour.TileSize;
 
             // Determine if we should use prefabs

@@ -143,8 +143,8 @@ namespace FaeMaze.Systems
         {
             return new PlanarForestMazeConfig
             {
-                gridWidth = 60,
-                gridHeight = 60,
+                gridWidth = 6000,
+                gridHeight = 6000,
                 growthTurns = 25,
                 randomSeed = 0
             };

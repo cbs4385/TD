@@ -33,6 +33,10 @@ namespace FaeMaze.UI
         private float viewRadiusTiles = 20f;
 
         [SerializeField]
+        [Tooltip("Downsample factor for path tiles to keep dot counts stable on dense grids.")]
+        private int pathSampleStride = 100;
+
+        [SerializeField]
         [Tooltip("Corner to place minimap in")]
         private Corner mapCorner = Corner.TopRight;
 
@@ -432,10 +436,11 @@ namespace FaeMaze.UI
 
             // Collect all walkable tiles within view radius
             List<Vector2Int> visiblePathTiles = new List<Vector2Int>();
+            int stride = Mathf.Max(1, pathSampleStride);
 
-            for (int y = minY; y <= maxY; y++)
+            for (int y = minY; y <= maxY; y += stride)
             {
-                for (int x = minX; x <= maxX; x++)
+                for (int x = minX; x <= maxX; x += stride)
                 {
                     // Check if in grid bounds
                     if (x < 0 || x >= mazeGridBehaviour.Grid.Width ||
