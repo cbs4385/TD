@@ -684,9 +684,10 @@ namespace FaeMaze.Systems
                 Vector2 nodeCenter = connectedNode.Position * scale + offset;
                 Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
 
-                // Try points along the edge from the node outward, stop at the last walkable one
+                // Find the walkable point that is furthest from the node center
                 Vector2Int spawnGridPos = nodeCenterGrid;
                 int walkableCount = 0;
+                float maxDistance = -1f;
 
                 for (int i = 0; i < edge.PolylinePoints.Count; i++)
                 {
@@ -699,13 +700,13 @@ namespace FaeMaze.Systems
                         var node = grid.GetNode(px, py);
                         if (node != null && node.walkable)
                         {
-                            spawnGridPos = new Vector2Int(px, py);
+                            float distance = Vector2.Distance(new Vector2(px, py), new Vector2(nodeCenterGrid.x, nodeCenterGrid.y));
+                            if (distance > maxDistance)
+                            {
+                                maxDistance = distance;
+                                spawnGridPos = new Vector2Int(px, py);
+                            }
                             walkableCount++;
-                        }
-                        else
-                        {
-                            // Stop at first non-walkable tile
-                            break;
                         }
                     }
                 }
