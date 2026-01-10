@@ -684,6 +684,8 @@ namespace FaeMaze.Systems
                 Vector2 nodeCenter = connectedNode.Position * scale + offset;
                 Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
 
+                Debug.Log($"[DynamicGrowth] Edge {edgeId}: Node {edge.NodeA} at grid {nodeCenterGrid}, {edge.PolylinePoints.Count} polyline points");
+
                 // Find the walkable point that is furthest from the node center
                 Vector2Int spawnGridPos = nodeCenterGrid;
                 int walkableCount = 0;
@@ -701,6 +703,7 @@ namespace FaeMaze.Systems
                         if (node != null && node.walkable)
                         {
                             float distance = Vector2.Distance(new Vector2(px, py), new Vector2(nodeCenterGrid.x, nodeCenterGrid.y));
+                            Debug.Log($"[DynamicGrowth]   Point {i}: ({px},{py}) walkable, distance={distance:F2}");
                             if (distance > maxDistance)
                             {
                                 maxDistance = distance;
@@ -708,6 +711,14 @@ namespace FaeMaze.Systems
                             }
                             walkableCount++;
                         }
+                        else
+                        {
+                            Debug.Log($"[DynamicGrowth]   Point {i}: ({px},{py}) NON-walkable");
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log($"[DynamicGrowth]   Point {i}: ({px},{py}) OUT OF BOUNDS");
                     }
                 }
 
@@ -720,7 +731,7 @@ namespace FaeMaze.Systems
                     UpdateTileSymbol(spawnGridPos, spawnId);
                     CreatePortalAtSpawnPoint(spawnId, spawnGridPos, nodeCenterGrid);
 
-                    Debug.Log($"[DynamicGrowth] Placed spawn point '{spawnId}' at {spawnGridPos} ({walkableCount} walkable tiles along edge)");
+                    Debug.Log($"[DynamicGrowth] Placed spawn point '{spawnId}' at {spawnGridPos} (distance={maxDistance:F2}, {walkableCount} walkable tiles along edge)");
                     spawnIndex++;
                 }
             }
