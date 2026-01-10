@@ -350,6 +350,7 @@ namespace FaeMaze.Systems
             );
 
             // Update the grid with new walkable tiles
+            List<Vector2Int> newWalkableTiles = new List<Vector2Int>();
             for (int y = 0; y < grid.Height; y++)
             {
                 for (int x = 0; x < grid.Width; x++)
@@ -359,16 +360,26 @@ namespace FaeMaze.Systems
                     {
                         // Preserve spawn point tiles as walkable paths, even if rasterization would make them walls
                         bool wasSpawnPoint = IsSpawnPointChar(node.symbol);
+                        bool wasWalkable = node.walkable;
 
                         node.symbol = gridArray[y, x];
                         if (gridArray[y, x] == '.' || gridArray[y, x] == 'N' || wasSpawnPoint)
                         {
                             node.walkable = true;
                             node.SetTerrain(TileType.Path);
+
+                            // Track newly added walkable tiles
+                            if (!wasWalkable)
+                            {
+                                newWalkableTiles.Add(new Vector2Int(x, y));
+                            }
                         }
                     }
                 }
             }
+
+            // Ensure wall borders around newly added walkable content
+            EnsureWallBordersAroundTiles(newWalkableTiles, 3);
 
             // Remove old spawn point portals that are no longer partial edges
             // This also signals visitors to retarget from removed spawn positions
@@ -1179,6 +1190,64 @@ namespace FaeMaze.Systems
             }
 
             return availableSpawnIds[nextSpawnIdIndex++];
+        }
+
+        /// <summary>
+        /// Ensures wall borders around the specified walkable tiles.
+        /// Converts void (empty) tiles within borderWidth to walls.
+        /// </summary>
+        private void EnsureWallBordersAroundTiles(List<Vector2Int> walkableTiles, int borderWidth)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return;
+            }
+
+            var grid = mazeGridBehaviour.Grid;
+            HashSet<Vector2Int> tilesToConvert = new HashSet<Vector2Int>();
+
+            // For each walkable tile, mark all void tiles within borderWidth
+            foreach (var tile in walkableTiles)
+            {
+                for (int dy = -borderWidth; dy <= borderWidth; dy++)
+                {
+                    for (int dx = -borderWidth; dx <= borderWidth; dx++)
+                    {
+                        int x = tile.x + dx;
+                        int y = tile.y + dy;
+
+                        if (x >= 0 && x < grid.Width && y >= 0 && y < grid.Height)
+                        {
+                            int distance = Mathf.Abs(dx) + Mathf.Abs(dy);
+                            if (distance <= borderWidth)
+                            {
+                                var node = grid.GetNode(x, y);
+                                if (node != null && node.symbol == ' ') // Void tile
+                                {
+                                    tilesToConvert.Add(new Vector2Int(x, y));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Convert void tiles to walls
+            foreach (var pos in tilesToConvert)
+            {
+                var node = grid.GetNode(pos.x, pos.y);
+                if (node != null)
+                {
+                    node.symbol = '#';
+                    node.SetTerrain(TileType.TreeBramble);
+                    node.walkable = false;
+                }
+            }
+
+            if (tilesToConvert.Count > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Added {tilesToConvert.Count} wall tiles for borders around new content");
+            }
         }
 
         #endregion

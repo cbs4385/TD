@@ -215,6 +215,9 @@ namespace FaeMaze.Systems
                     var node = grid.GetNode(x, y);
                     if (node == null) continue;
 
+                    // Skip void tiles (empty buffer space)
+                    if (node.symbol == ' ') continue;
+
                     // Determine color based on tile symbol definitions
                     Color tileColor = GetColorForSymbol(node.symbol, node.walkable);
 

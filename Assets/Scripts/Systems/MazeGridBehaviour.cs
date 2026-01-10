@@ -316,6 +316,9 @@ namespace FaeMaze.Systems
                 FindHeartPosition();
             }
 
+            // Optimize grid by removing distant walls and ensuring proper borders
+            OptimizeGridWalls();
+
             // Log diagnostic info
         }
 
@@ -718,6 +721,173 @@ namespace FaeMaze.Systems
             // If no 'H' was found, FindHeartPosition() was already called earlier (line 540-543)
             // DO NOT call FindHeartPosition() here - it will override the dead-end placement!
 
+            // Optimize grid by removing distant walls and ensuring proper borders
+            OptimizeGridWalls();
+
+        }
+
+        #endregion
+
+        #region Grid Optimization
+
+        /// <summary>
+        /// Optimizes the grid by removing wall tiles that are too far from walkable content
+        /// and ensuring a proper wall border around all walkable areas.
+        /// This significantly reduces rendering overhead in the buffer zones.
+        /// </summary>
+        private void OptimizeGridWalls()
+        {
+            if (grid == null)
+            {
+                return;
+            }
+
+            // Step 1: Remove walls beyond distance 4 from any walkable tile
+            RemoveDistantWalls(4);
+
+            // Step 2: Ensure all walkable tiles have a 3-tile wall border
+            EnsureWallBorder(3);
+        }
+
+        /// <summary>
+        /// Removes wall tiles that are more than maxDistance away from any walkable tile.
+        /// Uses flood fill from walkable tiles to mark walls within range.
+        /// </summary>
+        private void RemoveDistantWalls(int maxDistance)
+        {
+            int width = grid.Width;
+            int height = grid.Height;
+            bool[,] keepWall = new bool[width, height];
+
+            // Find all walkable tiles and mark walls within maxDistance
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node != null && node.walkable)
+                    {
+                        // Mark all tiles within maxDistance of this walkable tile
+                        MarkTilesInRange(x, y, maxDistance, keepWall);
+                    }
+                }
+            }
+
+            // Remove walls that weren't marked
+            int removedCount = 0;
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node != null && !node.walkable && !keepWall[x, y])
+                    {
+                        // Mark as empty/void (not walkable, not rendered)
+                        node.symbol = ' ';
+                        node.SetTerrain(TileType.Path); // Use Path type but keep walkable = false
+                        node.walkable = false;
+                        removedCount++;
+                    }
+                }
+            }
+
+            Debug.Log($"[GridOptimization] Removed {removedCount} distant wall tiles");
+        }
+
+        /// <summary>
+        /// Marks all tiles within range of a center point.
+        /// </summary>
+        private void MarkTilesInRange(int centerX, int centerY, int range, bool[,] marked)
+        {
+            for (int dy = -range; dy <= range; dy++)
+            {
+                for (int dx = -range; dx <= range; dx++)
+                {
+                    int x = centerX + dx;
+                    int y = centerY + dy;
+
+                    if (x >= 0 && x < grid.Width && y >= 0 && y < grid.Height)
+                    {
+                        // Use Manhattan distance for rectangular range
+                        int distance = Mathf.Abs(dx) + Mathf.Abs(dy);
+                        if (distance <= range)
+                        {
+                            marked[x, y] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ensures all walkable tiles have a wall border of specified width.
+        /// Any void/empty tiles within the border distance become walls.
+        /// </summary>
+        private void EnsureWallBorder(int borderWidth)
+        {
+            int width = grid.Width;
+            int height = grid.Height;
+            List<Vector2Int> tilesToConvert = new List<Vector2Int>();
+
+            // Find void tiles within borderWidth of walkable tiles
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node != null && node.symbol == ' ') // Void tile
+                    {
+                        // Check if any walkable tile is within borderWidth
+                        if (IsNearWalkableTile(x, y, borderWidth))
+                        {
+                            tilesToConvert.Add(new Vector2Int(x, y));
+                        }
+                    }
+                }
+            }
+
+            // Convert void tiles to walls
+            foreach (var pos in tilesToConvert)
+            {
+                var node = grid.GetNode(pos.x, pos.y);
+                if (node != null)
+                {
+                    node.symbol = '#';
+                    node.SetTerrain(TileType.TreeBramble);
+                    node.walkable = false;
+                }
+            }
+
+            Debug.Log($"[GridOptimization] Added {tilesToConvert.Count} wall tiles for borders");
+        }
+
+        /// <summary>
+        /// Checks if there's a walkable tile within the specified distance.
+        /// </summary>
+        private bool IsNearWalkableTile(int centerX, int centerY, int maxDistance)
+        {
+            for (int dy = -maxDistance; dy <= maxDistance; dy++)
+            {
+                for (int dx = -maxDistance; dx <= maxDistance; dx++)
+                {
+                    int x = centerX + dx;
+                    int y = centerY + dy;
+
+                    if (x >= 0 && x < grid.Width && y >= 0 && y < grid.Height)
+                    {
+                        int distance = Mathf.Abs(dx) + Mathf.Abs(dy);
+                        if (distance <= maxDistance)
+                        {
+                            var node = grid.GetNode(x, y);
+                            if (node != null && node.walkable)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         #endregion
