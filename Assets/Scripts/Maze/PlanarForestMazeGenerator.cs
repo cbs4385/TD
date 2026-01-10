@@ -236,10 +236,29 @@ namespace ForestMaze
             float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
             node1.AddEdge(edge.Id, reverseAngle);
 
-            // Fill node1's remaining capacity with partial edges
+            // Fill node1's remaining capacity with edges
+            // Ensure at least one edge tries to connect to existing node (root)
+            bool isFirstEdge = true;
             while (node1.HasCapacity())
             {
-                AddPartialEdge(state, node1);
+                // First edge always tries to connect, others have CONNECT_PROB chance
+                bool tryConnect = isFirstEdge || state.Random.NextDouble() < CONNECT_PROB;
+
+                if (tryConnect)
+                {
+                    // Try to connect to existing node (root)
+                    if (TryConnectToExisting(state, node1, root.Id))
+                    {
+                        isFirstEdge = false;
+                        continue;
+                    }
+                }
+
+                // Otherwise add partial edge
+                if (!AddPartialEdge(state, node1))
+                    break;
+
+                isFirstEdge = false;
             }
         }
 
@@ -1067,9 +1086,14 @@ namespace ForestMaze
                 int nx = Mathf.RoundToInt(nodeCenter.x);
                 int ny = Mathf.RoundToInt(nodeCenter.y);
 
-                // Prefer the true endpoint (last polyline point) for spawn placement.
-                // This endpoint cell is intentionally NOT rasterized for partial edges; it is only "placed" as a spawn marker.
-                Vector2 endPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                // Find the endpoint farthest from the connected node
+                // (Usually last point, but check both ends to be safe)
+                Vector2 firstPoint = edge.PolylinePoints[0];
+                Vector2 lastPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                float distFirst = Vector2.Distance(firstPoint, connectedNode.Position);
+                float distLast = Vector2.Distance(lastPoint, connectedNode.Position);
+
+                Vector2 endPoint = (distLast >= distFirst ? lastPoint : firstPoint) * scale + offset;
                 int ex = Mathf.RoundToInt(endPoint.x);
                 int ey = Mathf.RoundToInt(endPoint.y);
 
