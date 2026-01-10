@@ -560,6 +560,10 @@ namespace FaeMaze.Systems
                 mazeString = result.maze;
                 forestMapState = result.state; // Store state for dynamic growth
 
+                // Adjust offset to account for GRID_BUFFER
+                // This ensures rasterization during growth accounts for the buffer zone
+                forestMapState.Offset += new Vector2(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER);
+
                 // Convert string to tiles
                 tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
                 cachedGeneratedTiles = tiles;

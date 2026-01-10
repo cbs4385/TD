@@ -358,12 +358,20 @@ namespace FaeMaze.Systems
                     var node = grid.GetNode(x, y);
                     if (node != null)
                     {
+                        char newSymbol = gridArray[y, x];
+
+                        // Skip updating void tiles - preserve the optimization
+                        if (node.symbol == ' ' && newSymbol == '#')
+                        {
+                            continue; // Don't convert void back to walls
+                        }
+
                         // Preserve spawn point tiles as walkable paths, even if rasterization would make them walls
                         bool wasSpawnPoint = IsSpawnPointChar(node.symbol);
                         bool wasWalkable = node.walkable;
 
-                        node.symbol = gridArray[y, x];
-                        if (gridArray[y, x] == '.' || gridArray[y, x] == 'N' || wasSpawnPoint)
+                        node.symbol = newSymbol;
+                        if (newSymbol == '.' || newSymbol == 'N' || wasSpawnPoint)
                         {
                             node.walkable = true;
                             node.SetTerrain(TileType.Path);
@@ -373,6 +381,12 @@ namespace FaeMaze.Systems
                             {
                                 newWalkableTiles.Add(new Vector2Int(x, y));
                             }
+                        }
+                        else if (newSymbol == '#' && node.symbol != ' ')
+                        {
+                            // Only update walls if they weren't void
+                            node.walkable = false;
+                            node.SetTerrain(TileType.TreeBramble);
                         }
                     }
                 }
