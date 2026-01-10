@@ -271,7 +271,11 @@ namespace FaeMaze.Systems
             var newNode = forestMapState.Nodes[newNodeId];
 
             // Log the angles of edges connected to the new node
+            float scale = forestMapState.Scale;
+            Vector2 offset = forestMapState.Offset;
+            Vector2 nodeGridPos = newNode.Position * scale + offset;
             Debug.Log($"[DynamicGrowth] Successfully created node {newNodeId} at position ({newNode.Position.x:F2}, {newNode.Position.y:F2})");
+            Debug.Log($"[DynamicGrowth] Node {newNodeId} maps to grid ({nodeGridPos.x:F2}, {nodeGridPos.y:F2}) [scale={scale:F2}, offset=({offset.x:F2}, {offset.y:F2})]");
             Debug.Log($"[DynamicGrowth] Node {newNodeId} has {newNode.IncidentEdges.Count} edges at angles: {string.Join(", ", newNode.UsedAngles.Select(a => $"{a * Mathf.Rad2Deg:F1}°"))}");
             Debug.Log($"[DynamicGrowth] Frontier count: {frontierCountBefore} → {forestMapState.Frontier.Count}");
 
