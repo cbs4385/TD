@@ -967,7 +967,7 @@ namespace ForestMaze
             float graphHeight = maxY - minY;
 
             // Scale derived from a fixed node size in tiles to keep clearings consistent across grid sizes.
-            const float targetNodeDiameterTiles = 7f;
+            const float targetNodeDiameterTiles = 28f;
             float targetScale = (targetNodeDiameterTiles / 2f) / NODE_RADIUS;
 
             // Clamp to fit-to-grid scale to avoid clipping if the fixed scale would exceed the grid.
@@ -996,6 +996,7 @@ namespace ForestMaze
             }
 
             // Draw paths (edges)
+            int pathWidth = Mathf.Max(2, Mathf.RoundToInt(PATH_WIDTH * scale * 2));
             foreach (var edge in state.Edges.Where(e => e.PolylinePoints.Count > 1))
             {
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
@@ -1008,7 +1009,7 @@ namespace ForestMaze
                     bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
                     bool includeEndPoint = !(edge.Partial && isLastSegment);
 
-                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint);
+                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint, pathWidth);
                 }
             }
             // Draw clearings (nodes)
@@ -1199,6 +1200,9 @@ namespace ForestMaze
             float scale = state.Scale;
             Vector2 offset = state.Offset;
 
+            // Calculate path width based on scale
+            int pathWidth = Mathf.Max(2, Mathf.RoundToInt(PATH_WIDTH * scale * 2));
+
             // Rasterize edges connected to these nodes
             var edgesToRasterize = state.Edges.Where(e =>
                 nodeIds.Contains(e.NodeA) || (e.NodeB.HasValue && nodeIds.Contains(e.NodeB.Value))
@@ -1215,7 +1219,7 @@ namespace ForestMaze
                     bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
                     bool includeEndPoint = !(edge.Partial && isLastSegment);
 
-                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint);
+                    DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint, pathWidth);
                 }
             }
 
@@ -1244,7 +1248,7 @@ namespace ForestMaze
             }
         }
 
-        private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height, bool includeEndPoint = true)
+        private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height, bool includeEndPoint = true, int lineWidth = 2)
         {
             int x0 = Mathf.RoundToInt(p1.x);
             int y0 = Mathf.RoundToInt(p1.y);
@@ -1291,9 +1295,15 @@ namespace ForestMaze
                     bool atEnd = (i == steps);
                     if (!atEnd || includeEndPoint)
                     {
-                        // Draw a 2-tile wide diagonal corridor for each point
-                        Set(x, y); // Center
-                        Set(x + offsetX, y + offsetY); // Axis-aligned offset
+                        // Draw a diagonal corridor with scaled width
+                        int halfWidth = lineWidth / 2;
+                        for (int wx = -halfWidth; wx <= halfWidth; wx++)
+                        {
+                            for (int wy = -halfWidth; wy <= halfWidth; wy++)
+                            {
+                                Set(x + wx, y + wy);
+                            }
+                        }
                     }
                 }
             }
@@ -1301,6 +1311,7 @@ namespace ForestMaze
             {
                 // Horizontal or vertical path - use Bresenham with perpendicular width
                 int err = dx - dy;
+                int halfWidth = lineWidth / 2;
 
                 while (true)
                 {
@@ -1308,16 +1319,22 @@ namespace ForestMaze
 
                     if (!atEnd || includeEndPoint)
                     {
-                        Set(x0, y0);
-
-                        // Add perpendicular width (2 tiles total)
+                        // Add perpendicular width based on lineWidth
                         if (dx >= dy)
                         {
-                            Set(x0, y0 + 1);
+                            // Vertical path - widen horizontally
+                            for (int w = -halfWidth; w <= halfWidth; w++)
+                            {
+                                Set(x0, y0 + w);
+                            }
                         }
                         else
                         {
-                            Set(x0 + 1, y0);
+                            // Horizontal path - widen vertically
+                            for (int w = -halfWidth; w <= halfWidth; w++)
+                            {
+                                Set(x0 + w, y0);
+                            }
                         }
                     }
 
