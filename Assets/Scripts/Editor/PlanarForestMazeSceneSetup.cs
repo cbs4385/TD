@@ -47,8 +47,8 @@ namespace FaeMaze.Editor
             SerializedProperty configProp = mazeGridSO.FindProperty("planarGeneratorConfig");
             if (configProp != null)
             {
-                configProp.FindPropertyRelative("gridWidth").intValue = 60;
-                configProp.FindPropertyRelative("gridHeight").intValue = 60;
+                configProp.FindPropertyRelative("gridWidth").intValue = 240;
+                configProp.FindPropertyRelative("gridHeight").intValue = 240;
                 configProp.FindPropertyRelative("growthTurns").intValue = 25;
                 configProp.FindPropertyRelative("randomSeed").intValue = 0;
             }

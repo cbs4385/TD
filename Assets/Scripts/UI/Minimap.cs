@@ -33,6 +33,10 @@ namespace FaeMaze.UI
         private float viewRadiusTiles = 20f;
 
         [SerializeField]
+        [Tooltip("Stride for sampling visible path tiles on the minimap")]
+        private int pathTileStride = 4;
+
+        [SerializeField]
         [Tooltip("Corner to place minimap in")]
         private Corner mapCorner = Corner.TopRight;
 
@@ -429,13 +433,14 @@ namespace FaeMaze.UI
             int maxX = focalX + radiusInt;
             int minY = focalY - radiusInt;
             int maxY = focalY + radiusInt;
+            int stride = Mathf.Max(1, pathTileStride);
 
             // Collect all walkable tiles within view radius
             List<Vector2Int> visiblePathTiles = new List<Vector2Int>();
 
-            for (int y = minY; y <= maxY; y++)
+            for (int y = minY; y <= maxY; y += stride)
             {
-                for (int x = minX; x <= maxX; x++)
+                for (int x = minX; x <= maxX; x += stride)
                 {
                     // Check if in grid bounds
                     if (x < 0 || x >= mazeGridBehaviour.Grid.Width ||

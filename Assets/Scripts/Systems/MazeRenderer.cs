@@ -64,6 +64,16 @@ namespace FaeMaze.Systems
         [Tooltip("Maximum tiles per batch (to avoid meshes that are too large)")]
         private int batchChunkSize = 100;
 
+        [Header("Sampling Settings")]
+        [SerializeField]
+        [Tooltip("Stride for sampling maze tiles when rendering (higher values render fewer tiles)")]
+        private int renderStride = 4;
+
+        [SerializeField]
+        [Range(0f, 1f)]
+        [Tooltip("How far to skew rendered tiles toward the centroid of walkable cells in a sampled block")]
+        private float centroidSkewStrength = 1f;
+
         #endregion
 
         #region Private Fields
@@ -78,6 +88,15 @@ namespace FaeMaze.Systems
         private System.Collections.Generic.List<GameObject> pathTiles;
 
         #endregion
+
+        private struct BlockSample
+        {
+            public int gridX;
+            public int gridY;
+            public char symbol;
+            public bool walkable;
+            public Vector3 worldPos;
+        }
 
         #region Public API
 
@@ -204,25 +223,25 @@ namespace FaeMaze.Systems
             MazeGrid grid = mazeGridBehaviour.Grid;
             int width = grid.Width;
             int height = grid.Height;
+            int stride = Mathf.Max(1, renderStride);
 
             int renderedTiles = 0;
 
             // Create a 3D tile for each grid cell
-            for (int y = 0; y < height; y++)
+            for (int y = 0; y < height; y += stride)
             {
-                for (int x = 0; x < width; x++)
+                for (int x = 0; x < width; x += stride)
                 {
-                    var node = grid.GetNode(x, y);
-                    if (node == null) continue;
-
-                    // Skip void tiles (empty buffer space)
-                    if (node.symbol == ' ') continue;
+                    if (!TrySampleBlock(grid, x, y, stride, mazeOrigin, out BlockSample sample))
+                    {
+                        continue;
+                    }
 
                     // Determine color based on tile symbol definitions
-                    Color tileColor = GetColorForSymbol(node.symbol, node.walkable);
+                    Color tileColor = GetColorForSymbol(sample.symbol, sample.walkable);
 
                     // Create 3D tile
-                    CreateTile3D(x, y, node.symbol, tileColor);
+                    CreateTile3D(sample.gridX, sample.gridY, sample.symbol, tileColor, sample.worldPos);
                     renderedTiles++;
                 }
             }
@@ -235,9 +254,123 @@ namespace FaeMaze.Systems
 
         }
 
-        private void CreateTile3D(int gridX, int gridY, char symbol, Color color)
+        private bool TrySampleBlock(MazeGrid grid, int startX, int startY, int stride, Transform mazeOrigin, out BlockSample sample)
         {
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
+            sample = default;
+            if (grid == null)
+            {
+                return false;
+            }
+
+            int endX = Mathf.Min(startX + stride, grid.Width);
+            int endY = Mathf.Min(startY + stride, grid.Height);
+
+            var symbolCounts = new System.Collections.Generic.Dictionary<char, int>();
+            var walkableCounts = new System.Collections.Generic.Dictionary<char, int>();
+            var firstSymbolPos = new System.Collections.Generic.Dictionary<char, Vector2Int>();
+            var firstWalkablePos = new System.Collections.Generic.Dictionary<char, Vector2Int>();
+
+            bool hasAny = false;
+            float walkableSumX = 0f;
+            float walkableSumY = 0f;
+            int walkableCount = 0;
+
+            for (int y = startY; y < endY; y++)
+            {
+                for (int x = startX; x < endX; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node == null || node.symbol == ' ')
+                    {
+                        continue;
+                    }
+
+                    hasAny = true;
+                    if (!symbolCounts.ContainsKey(node.symbol))
+                    {
+                        symbolCounts[node.symbol] = 0;
+                        firstSymbolPos[node.symbol] = new Vector2Int(x, y);
+                    }
+                    symbolCounts[node.symbol]++;
+
+                    if (node.walkable)
+                    {
+                        if (!walkableCounts.ContainsKey(node.symbol))
+                        {
+                            walkableCounts[node.symbol] = 0;
+                            firstWalkablePos[node.symbol] = new Vector2Int(x, y);
+                        }
+                        walkableCounts[node.symbol]++;
+                        walkableSumX += x;
+                        walkableSumY += y;
+                        walkableCount++;
+                    }
+                }
+            }
+
+            if (!hasAny)
+            {
+                return false;
+            }
+
+            char chosenSymbol = ChooseMajoritySymbol(walkableCount > 0 ? walkableCounts : symbolCounts);
+            Vector2Int chosenPos = walkableCount > 0 ? firstWalkablePos[chosenSymbol] : firstSymbolPos[chosenSymbol];
+            var chosenNode = grid.GetNode(chosenPos.x, chosenPos.y);
+            if (chosenNode == null)
+            {
+                return false;
+            }
+
+            Vector3 baseWorldPos = mazeGridBehaviour.GridToWorld(chosenPos.x, chosenPos.y);
+            Vector3 centroidWorldPos = baseWorldPos;
+            if (walkableCount > 0)
+            {
+                float centroidX = walkableSumX / walkableCount;
+                float centroidY = walkableSumY / walkableCount;
+                centroidWorldPos = GridToWorldFloat(centroidX, centroidY, mazeOrigin);
+            }
+
+            Vector3 worldPos = Vector3.Lerp(baseWorldPos, centroidWorldPos, Mathf.Clamp01(centroidSkewStrength));
+
+            sample = new BlockSample
+            {
+                gridX = chosenPos.x,
+                gridY = chosenPos.y,
+                symbol = chosenNode.symbol,
+                walkable = chosenNode.walkable,
+                worldPos = worldPos
+            };
+
+            return true;
+        }
+
+        private char ChooseMajoritySymbol(System.Collections.Generic.Dictionary<char, int> counts)
+        {
+            char bestSymbol = default;
+            int bestCount = -1;
+            foreach (var entry in counts)
+            {
+                if (entry.Value > bestCount)
+                {
+                    bestCount = entry.Value;
+                    bestSymbol = entry.Key;
+                }
+            }
+
+            return bestSymbol;
+        }
+
+        private Vector3 GridToWorldFloat(float gridX, float gridY, Transform mazeOrigin)
+        {
+            float tileSize = mazeGridBehaviour.TileSize;
+            float contentX = gridX - MazeGrid.GRID_BUFFER;
+            float contentY = gridY - MazeGrid.GRID_BUFFER;
+            Vector3 originPos = mazeOrigin != null ? mazeOrigin.position : Vector3.zero;
+            return originPos + new Vector3(contentX * tileSize, contentY * tileSize, 0f);
+        }
+
+        private void CreateTile3D(int gridX, int gridY, char symbol, Color color, Vector3 worldPos)
+        {
             float tileSize = mazeGridBehaviour.TileSize;
 
             // Determine if we should use prefabs
