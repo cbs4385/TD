@@ -2159,19 +2159,26 @@ namespace FaeMaze.Visitors
             // Check if originalDestination is still a valid spawn point
             bool isStillValid = mazeGridBehaviour.IsSpawnPoint(originalDestination);
 
-            Debug.Log($"[{name}] Validating destination {originalDestination} from position {currentPos}. Is valid: {isStillValid}");
-
+            // Also check if the destination is actually reachable via pathfinding
+            bool isReachable = false;
             if (isStillValid)
-                return; // Still valid, no update needed
+            {
+                isReachable = TryFindPathToDestination(currentPos, originalDestination, out _);
+            }
 
-            // Original exit has been removed - find nearest exit by travel distance
+            Debug.Log($"[{name}] Validating destination {originalDestination} from position {currentPos}. Is valid: {isStillValid}, Is reachable: {isReachable}");
+
+            if (isStillValid && isReachable)
+                return; // Still valid and reachable, no update needed
+
+            // Original exit has been removed or is unreachable - find nearest reachable exit by travel distance
             Vector2Int nearestExit = FindNearestExitByTravelDistance(currentPos);
 
-            Debug.Log($"[{name}] Original exit at {originalDestination} no longer exists. Updating to nearest exit at {nearestExit}");
+            Debug.Log($"[{name}] Original exit at {originalDestination} no longer {(isStillValid ? "reachable" : "exists")}. Updating to nearest exit at {nearestExit}");
 
             if (nearestExit != originalDestination)
             {
-                LogVisitorPath($"original exit at {originalDestination} no longer exists. Updating to nearest exit at {nearestExit}.");
+                LogVisitorPath($"original exit at {originalDestination} no longer {(isStillValid ? "reachable" : "exists")}. Updating to nearest exit at {nearestExit}.");
                 originalDestination = nearestExit;
                 usesSpawnMarkerDestination = true;
                 RecordRouteLog("Destination updated after exit removal", originalDestination, path);
