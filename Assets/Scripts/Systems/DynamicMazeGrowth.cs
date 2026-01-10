@@ -670,25 +670,48 @@ namespace FaeMaze.Systems
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
-                // Get the endpoint in grid coordinates
-                Vector2 endPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
-                int ex = Mathf.RoundToInt(endPoint.x);
-                int ey = Mathf.RoundToInt(endPoint.y);
+                // Instead of using the endpoint (which is in unexplored space),
+                // find the furthest walkable point along the edge from the connected node
+                var connectedNode = forestMapState.Nodes[edge.NodeA];
+                Vector2 nodeCenter = connectedNode.Position * scale + offset;
+                Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
 
-                if (ex >= 0 && ex < grid.Width && ey >= 0 && ey < grid.Height)
+                // Try points along the edge from the node outward, stop at the last walkable one
+                Vector2Int spawnGridPos = nodeCenterGrid;
+                int walkableCount = 0;
+
+                for (int i = 0; i < edge.PolylinePoints.Count; i++)
+                {
+                    Vector2 point = edge.PolylinePoints[i] * scale + offset;
+                    int px = Mathf.RoundToInt(point.x);
+                    int py = Mathf.RoundToInt(point.y);
+
+                    if (px >= 0 && px < grid.Width && py >= 0 && py < grid.Height)
+                    {
+                        var node = grid.GetNode(px, py);
+                        if (node != null && node.walkable)
+                        {
+                            spawnGridPos = new Vector2Int(px, py);
+                            walkableCount++;
+                        }
+                        else
+                        {
+                            // Stop at first non-walkable tile
+                            break;
+                        }
+                    }
+                }
+
+                // Only place spawn point if we found at least one walkable tile
+                if (walkableCount > 0 && grid.InBounds(spawnGridPos.x, spawnGridPos.y))
                 {
                     char spawnId = GetNextAvailableSpawnId();
                     if (spawnId == '\0') break; // No more spawn IDs available
 
-                    UpdateTileSymbol(new Vector2Int(ex, ey), spawnId);
+                    UpdateTileSymbol(spawnGridPos, spawnId);
+                    CreatePortalAtSpawnPoint(spawnId, spawnGridPos, nodeCenterGrid);
 
-                    // Get connected node for portal orientation
-                    var connectedNode = forestMapState.Nodes[edge.NodeA];
-                    Vector2 nodeCenter = connectedNode.Position * scale + offset;
-                    Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
-
-                    CreatePortalAtSpawnPoint(spawnId, new Vector2Int(ex, ey), nodeCenterGrid);
-
+                    Debug.Log($"[DynamicGrowth] Placed spawn point '{spawnId}' at {spawnGridPos} ({walkableCount} walkable tiles along edge)");
                     spawnIndex++;
                 }
             }
