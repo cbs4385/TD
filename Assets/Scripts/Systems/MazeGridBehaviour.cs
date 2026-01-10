@@ -228,33 +228,35 @@ namespace FaeMaze.Systems
             bool foundEntrance = false;
             bool foundHeart = false;
 
-            // Parse each character
+            // Parse each character (offset by GRID_BUFFER to start content at [100, 100])
             for (int y = 0; y < height; y++)
             {
                 string line = lines[y];
                 for (int x = 0; x < line.Length; x++)
                 {
                     char c = line[x];
+                    int gridX = x + MazeGrid.GRID_BUFFER;
+                    int gridY = y + MazeGrid.GRID_BUFFER;
 
                     switch (c)
                     {
                         case '.':
-                            ApplyTileFromChar(x, y, c);
+                            ApplyTileFromChar(gridX, gridY, c);
                             break;
 
                         case '#':
-                            ApplyTileFromChar(x, y, c);
+                            ApplyTileFromChar(gridX, gridY, c);
                             break;
 
                         case 'N':
                             // Node hazard - walkable clearing center with hazard prop
-                            ApplyTileFromChar(x, y, c);
+                            ApplyTileFromChar(gridX, gridY, c);
                             break;
 
                         case 'H':
                             // Heart marker - walkable and mark position
-                            ApplyTileFromChar(x, y, c, isHeart: true);
-                            heartGridPos = new Vector2Int(x, y);
+                            ApplyTileFromChar(gridX, gridY, c, isHeart: true);
+                            heartGridPos = new Vector2Int(gridX, gridY);
                             foundHeart = true;
                             break;
 
@@ -263,15 +265,15 @@ namespace FaeMaze.Systems
                             if (char.IsUpper(c) && c != 'H' && c != 'N')
                             {
                                 // Spawn marker - walkable and store position
-                                ApplyTileFromChar(x, y, '.');
+                                ApplyTileFromChar(gridX, gridY, '.');
                                 if (!spawnPoints.ContainsKey(c))
                                 {
-                                    spawnPoints[c] = new Vector2Int(x, y);
+                                    spawnPoints[c] = new Vector2Int(gridX, gridY);
 
                                     // First spawn point also becomes the entrance
                                     if (!foundEntrance)
                                     {
-                                        entranceGridPos = new Vector2Int(x, y);
+                                        entranceGridPos = new Vector2Int(gridX, gridY);
                                         foundEntrance = true;
                                     }
                                 }
@@ -279,7 +281,7 @@ namespace FaeMaze.Systems
                             else
                             {
                                 // Unknown character - treat as wall
-                                ApplyTileFromChar(x, y, '#');
+                                ApplyTileFromChar(gridX, gridY, '#');
                             }
                             break;
                     }
@@ -288,7 +290,9 @@ namespace FaeMaze.Systems
                 // Fill remaining cells in short lines with walls
                 for (int x = line.Length; x < width; x++)
                 {
-                    ApplyTileFromChar(x, y, '#');
+                    int gridX = x + MazeGrid.GRID_BUFFER;
+                    int gridY = y + MazeGrid.GRID_BUFFER;
+                    ApplyTileFromChar(gridX, gridY, '#');
                 }
             }
 
@@ -298,11 +302,11 @@ namespace FaeMaze.Systems
                 // If using spawn markers, entrance is not required
                 if (spawnPoints.Count >= 2)
                 {
-                    entranceGridPos = new Vector2Int(0, 0); // Not used with spawn markers
+                    entranceGridPos = new Vector2Int(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER); // Not used with spawn markers
                 }
                 else
                 {
-                    entranceGridPos = new Vector2Int(0, 0);
+                    entranceGridPos = new Vector2Int(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER);
                 }
             }
 
@@ -318,9 +322,9 @@ namespace FaeMaze.Systems
         private void FindHeartPosition()
         {
 
-            // Start from approximate center
-            int centerX = width / 2;
-            int centerY = height / 2;
+            // Start from approximate center (offset by GRID_BUFFER for absolute coordinates)
+            int centerX = width / 2 + MazeGrid.GRID_BUFFER;
+            int centerY = height / 2 + MazeGrid.GRID_BUFFER;
 
             // Check if center is walkable
             if (grid.GetNode(centerX, centerY)?.walkable == true)
@@ -593,7 +597,7 @@ namespace FaeMaze.Systems
             // Create the grid
             grid = new MazeGrid(width, height);
 
-            // Convert tile types to walkability and populate grid
+            // Convert tile types to walkability and populate grid (offset by GRID_BUFFER)
             bool foundHeart = false;
             int heartCount = 0;
 
@@ -604,12 +608,14 @@ namespace FaeMaze.Systems
                     TileType tile = tiles[x, y];
                     char symbol = symbols[x, y];
                     bool isHeart = symbol == 'H';
+                    int gridX = x + MazeGrid.GRID_BUFFER;
+                    int gridY = y + MazeGrid.GRID_BUFFER;
 
-                    ApplyTileFromTileType(x, y, tile, symbol, isHeart);
+                    ApplyTileFromTileType(gridX, gridY, tile, symbol, isHeart);
 
                     if (isHeart)
                     {
-                        heartGridPos = new Vector2Int(x, y);
+                        heartGridPos = new Vector2Int(gridX, gridY);
                         foundHeart = true;
                         heartCount++;
                     }
@@ -619,7 +625,7 @@ namespace FaeMaze.Systems
                     {
                         if (!spawnPoints.ContainsKey(symbol))
                         {
-                            spawnPoints[symbol] = new Vector2Int(x, y);
+                            spawnPoints[symbol] = new Vector2Int(gridX, gridY);
                         }
                     }
                 }
@@ -642,9 +648,11 @@ namespace FaeMaze.Systems
 
                 foreach (var entrance in cachedEntranceEdges)
                 {
-                    if (grid.InBounds(entrance.x, entrance.y) && grid.GetNode(entrance.x, entrance.y)?.walkable == true)
+                    int gridX = entrance.x + MazeGrid.GRID_BUFFER;
+                    int gridY = entrance.y + MazeGrid.GRID_BUFFER;
+                    if (grid.InBounds(gridX, gridY) && grid.GetNode(gridX, gridY)?.walkable == true)
                     {
-                        borderWalkableTiles.Add(entrance);
+                        borderWalkableTiles.Add(new Vector2Int(gridX, gridY));
                     }
                 }
 
@@ -653,20 +661,22 @@ namespace FaeMaze.Systems
                 {
                     for (int x = 0; x < width; x++)
                     {
+                        int gridX = x + MazeGrid.GRID_BUFFER;
                         // Top and bottom borders
-                        if (grid.GetNode(x, 0)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(x, 0));
-                        if (grid.GetNode(x, height - 1)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(x, height - 1));
+                        if (grid.GetNode(gridX, MazeGrid.GRID_BUFFER)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(gridX, MazeGrid.GRID_BUFFER));
+                        if (grid.GetNode(gridX, height + MazeGrid.GRID_BUFFER - 1)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(gridX, height + MazeGrid.GRID_BUFFER - 1));
                     }
 
                     for (int y = 0; y < height; y++)
                     {
+                        int gridY = y + MazeGrid.GRID_BUFFER;
                         // Left and right borders
-                        if (grid.GetNode(0, y)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(0, y));
-                        if (grid.GetNode(width - 1, y)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(width - 1, y));
+                        if (grid.GetNode(MazeGrid.GRID_BUFFER, gridY)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(MazeGrid.GRID_BUFFER, gridY));
+                        if (grid.GetNode(width + MazeGrid.GRID_BUFFER - 1, gridY)?.walkable == true)
+                            borderWalkableTiles.Add(new Vector2Int(width + MazeGrid.GRID_BUFFER - 1, gridY));
                     }
                 }
 
@@ -692,7 +702,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Set entrance to first spawn point (or fallback to 0,0)
+            // Set entrance to first spawn point (or fallback to GRID_BUFFER, GRID_BUFFER)
             if (spawnPoints.Count > 0)
             {
                 // Use the first spawn point alphabetically
@@ -701,7 +711,7 @@ namespace FaeMaze.Systems
             }
             else
             {
-                entranceGridPos = new Vector2Int(0, 0);
+                entranceGridPos = new Vector2Int(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER);
             }
 
             // Heart position is set during maze parsing from 'H' marker
@@ -728,18 +738,22 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Converts grid coordinates to world position with height support.
         /// </summary>
-        /// <param name="x">Grid X coordinate</param>
-        /// <param name="y">Grid Y coordinate</param>
+        /// <param name="x">Grid X coordinate (absolute, including buffer offset)</param>
+        /// <param name="y">Grid Y coordinate (absolute, including buffer offset)</param>
         /// <param name="height">Height offset in world units</param>
         /// <returns>World position corresponding to the grid cell with height</returns>
         public Vector3 GridToWorld(int x, int y, float height)
         {
+            // Subtract buffer offset to get content-relative coordinates
+            int contentX = x - MazeGrid.GRID_BUFFER;
+            int contentY = y - MazeGrid.GRID_BUFFER;
+
             if (mazeOrigin == null)
             {
-                return new Vector3(x * tileSize, y * tileSize, -height);
+                return new Vector3(contentX * tileSize, contentY * tileSize, -height);
             }
 
-            return mazeOrigin.position + new Vector3(x * tileSize, y * tileSize, -height);
+            return mazeOrigin.position + new Vector3(contentX * tileSize, contentY * tileSize, -height);
         }
 
         /// <summary>
@@ -761,8 +775,8 @@ namespace FaeMaze.Systems
         /// Converts world position to grid coordinates.
         /// </summary>
         /// <param name="worldPos">World position to convert</param>
-        /// <param name="x">Output grid X coordinate</param>
-        /// <param name="y">Output grid Y coordinate</param>
+        /// <param name="x">Output grid X coordinate (absolute, including buffer offset)</param>
+        /// <param name="y">Output grid Y coordinate (absolute, including buffer offset)</param>
         /// <returns>True if the position maps to a valid grid cell, false otherwise</returns>
         public bool WorldToGrid(Vector3 worldPos, out int x, out int y)
         {
@@ -782,9 +796,9 @@ namespace FaeMaze.Systems
                 localPos /= tileSize;
             }
 
-            // Round to nearest integer coordinates
-            x = Mathf.RoundToInt(localPos.x);
-            y = Mathf.RoundToInt(localPos.y);
+            // Round to nearest integer coordinates and add buffer offset
+            x = Mathf.RoundToInt(localPos.x) + MazeGrid.GRID_BUFFER;
+            y = Mathf.RoundToInt(localPos.y) + MazeGrid.GRID_BUFFER;
 
             // Check if in bounds
             return grid != null && grid.InBounds(x, y);
@@ -794,8 +808,8 @@ namespace FaeMaze.Systems
         /// Converts world position to grid coordinates (alternative version using flooring).
         /// </summary>
         /// <param name="worldPos">World position to convert</param>
-        /// <param name="x">Output grid X coordinate</param>
-        /// <param name="y">Output grid Y coordinate</param>
+        /// <param name="x">Output grid X coordinate (absolute, including buffer offset)</param>
+        /// <param name="y">Output grid Y coordinate (absolute, including buffer offset)</param>
         /// <returns>True if the position maps to a valid grid cell, false otherwise</returns>
         public bool WorldToGridFloor(Vector3 worldPos, out int x, out int y)
         {
@@ -815,9 +829,9 @@ namespace FaeMaze.Systems
                 localPos /= tileSize;
             }
 
-            // Floor to integer coordinates
-            x = Mathf.FloorToInt(localPos.x);
-            y = Mathf.FloorToInt(localPos.y);
+            // Floor to integer coordinates and add buffer offset
+            x = Mathf.FloorToInt(localPos.x) + MazeGrid.GRID_BUFFER;
+            y = Mathf.FloorToInt(localPos.y) + MazeGrid.GRID_BUFFER;
 
             // Check if in bounds
             return grid != null && grid.InBounds(x, y);

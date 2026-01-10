@@ -147,6 +147,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Creates initial spawn points from edge walkable tiles if none exist.
+        /// Note: Grid now includes buffer space, so edges are at GRID_BUFFER and (dimension - GRID_BUFFER - 1).
         /// </summary>
         private void CreateInitialSpawnPoints()
         {
@@ -160,38 +161,44 @@ namespace FaeMaze.Systems
             int width = mazeGridBehaviour.Grid.Width;
             int height = mazeGridBehaviour.Grid.Height;
 
-            // Find all walkable tiles on the edges
-            for (int x = 0; x < width; x++)
+            // Content edges are at GRID_BUFFER and (dimension - GRID_BUFFER - 1)
+            int leftEdge = MazeGrid.GRID_BUFFER;
+            int rightEdge = width - MazeGrid.GRID_BUFFER - 1;
+            int topEdge = MazeGrid.GRID_BUFFER;
+            int bottomEdge = height - MazeGrid.GRID_BUFFER - 1;
+
+            // Find all walkable tiles on the content edges
+            for (int x = leftEdge; x <= rightEdge; x++)
             {
                 // Top edge
-                var topNode = mazeGridBehaviour.Grid.GetNode(x, 0);
+                var topNode = mazeGridBehaviour.Grid.GetNode(x, topEdge);
                 if (topNode != null && topNode.walkable)
                 {
-                    edgeWalkableTiles.Add(new Vector2Int(x, 0));
+                    edgeWalkableTiles.Add(new Vector2Int(x, topEdge));
                 }
 
                 // Bottom edge
-                var bottomNode = mazeGridBehaviour.Grid.GetNode(x, height - 1);
+                var bottomNode = mazeGridBehaviour.Grid.GetNode(x, bottomEdge);
                 if (bottomNode != null && bottomNode.walkable)
                 {
-                    edgeWalkableTiles.Add(new Vector2Int(x, height - 1));
+                    edgeWalkableTiles.Add(new Vector2Int(x, bottomEdge));
                 }
             }
 
-            for (int y = 1; y < height - 1; y++)
+            for (int y = topEdge + 1; y < bottomEdge; y++)
             {
                 // Left edge
-                var leftNode = mazeGridBehaviour.Grid.GetNode(0, y);
+                var leftNode = mazeGridBehaviour.Grid.GetNode(leftEdge, y);
                 if (leftNode != null && leftNode.walkable)
                 {
-                    edgeWalkableTiles.Add(new Vector2Int(0, y));
+                    edgeWalkableTiles.Add(new Vector2Int(leftEdge, y));
                 }
 
                 // Right edge
-                var rightNode = mazeGridBehaviour.Grid.GetNode(width - 1, y);
+                var rightNode = mazeGridBehaviour.Grid.GetNode(rightEdge, y);
                 if (rightNode != null && rightNode.walkable)
                 {
-                    edgeWalkableTiles.Add(new Vector2Int(width - 1, y));
+                    edgeWalkableTiles.Add(new Vector2Int(rightEdge, y));
                 }
             }
 

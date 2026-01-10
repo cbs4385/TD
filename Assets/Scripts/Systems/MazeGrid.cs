@@ -87,6 +87,9 @@ namespace FaeMaze.Systems
 
         private const float MIN_MOVE_COST = 0.1f;
 
+        /// <summary>Grid buffer size to avoid negative array indices during expansion</summary>
+        public const int GRID_BUFFER = 100;
+
         #endregion
 
         #region Private Fields
@@ -112,19 +115,20 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Creates a new maze grid with the specified dimensions.
         /// All nodes are initialized as walkable by default.
+        /// Includes buffer space to avoid negative array indices during expansion.
         /// </summary>
-        /// <param name="width">Width of the grid</param>
-        /// <param name="height">Height of the grid</param>
+        /// <param name="width">Width of the content area (actual maze)</param>
+        /// <param name="height">Height of the content area (actual maze)</param>
         public MazeGrid(int width, int height)
         {
-            this.width = width;
-            this.height = height;
-            this.nodes = new MazeNode[width, height];
+            this.width = width + (2 * GRID_BUFFER);
+            this.height = height + (2 * GRID_BUFFER);
+            this.nodes = new MazeNode[this.width, this.height];
 
-            // Initialize all nodes
-            for (int x = 0; x < width; x++)
+            // Initialize all nodes (including buffer)
+            for (int x = 0; x < this.width; x++)
             {
-                for (int y = 0; y < height; y++)
+                for (int y = 0; y < this.height; y++)
                 {
                     nodes[x, y] = new MazeNode(x, y);
                 }
