@@ -501,6 +501,7 @@ namespace ForestMaze
         /// <summary>
         /// Ensures at least one cross-connection exists by forcing nodes to connect to non-parents.
         /// Tries multiple nodes in reverse order until successful.
+        /// Temporarily increases node capacity if needed.
         /// </summary>
         private static void EnsureCrossConnection(ForestMapState state)
         {
@@ -513,7 +514,7 @@ namespace ForestMaze
 
             Debug.Log($"No cross-connections found. Attempting to force one...");
 
-            // Try nodes in reverse order (newest first) until we successfully create a connection
+            // First try nodes that already have capacity
             var nodesWithCapacity = state.Nodes.OrderByDescending(n => n.Id)
                                                .Where(n => n.HasCapacity())
                                                .ToList();
@@ -522,28 +523,80 @@ namespace ForestMaze
 
             foreach (var node in nodesWithCapacity)
             {
-                // Find this node's parent (the node it was originally grown from)
-                var parentEdge = state.Edges.FirstOrDefault(e =>
-                    e.NodeB.HasValue && e.NodeB.Value == node.Id);
-
-                int? parentNodeId = parentEdge?.NodeA;
-
-                Debug.Log($"Trying node {node.Id} (parent: {parentNodeId?.ToString() ?? "none"}, capacity: {node.MaxDegree - node.IncidentEdges.Count}/{node.MaxDegree})");
-
-                // Try to force a connection to any existing node except parent
-                // TryConnectToExisting will handle finding and trying candidates
-                if (TryConnectToExisting(state, node, parentNodeId, parentNodeId))
-                {
-                    Debug.Log($"SUCCESS: Forced cross-connection from node {node.Id} to ensure interconnected graph");
+                if (TryForceConnection(state, node))
                     return; // Success!
-                }
-                else
-                {
-                    Debug.Log($"Failed to connect node {node.Id} - trying next node...");
-                }
             }
 
-            Debug.LogWarning($"Could not force any cross-connection after trying {nodesWithCapacity.Count} nodes");
+            // If no nodes have capacity, temporarily increase capacity for pairs of nodes
+            Debug.Log($"No nodes with capacity. Temporarily increasing capacity to force cross-connection...");
+
+            var allNodes = state.Nodes.OrderByDescending(n => n.Id).ToList();
+
+            // Try each source node with temporarily increased capacity
+            foreach (var sourceNode in allNodes)
+            {
+                // Find this node's parent
+                var parentEdge = state.Edges.FirstOrDefault(e =>
+                    e.NodeB.HasValue && e.NodeB.Value == sourceNode.Id);
+                int? parentNodeId = parentEdge?.NodeA;
+
+                // Get potential target nodes (excluding parent)
+                var targetNodes = state.Nodes
+                    .Where(n => n.Id != sourceNode.Id)
+                    .Where(n => !parentNodeId.HasValue || n.Id != parentNodeId.Value)
+                    .OrderBy(n => state.Random.Next())
+                    .ToList();
+
+                // Temporarily increase source capacity
+                int origSourceCapacity = sourceNode.MaxDegree;
+                sourceNode.MaxDegree++;
+                Debug.Log($"Temporarily increased source node {sourceNode.Id} capacity to {sourceNode.MaxDegree}");
+
+                // Try each target node, temporarily increasing its capacity too
+                foreach (var targetNode in targetNodes)
+                {
+                    int origTargetCapacity = targetNode.MaxDegree;
+                    targetNode.MaxDegree++;
+                    Debug.Log($"  Temporarily increased target node {targetNode.Id} capacity to {targetNode.MaxDegree}");
+
+                    if (TryForceConnection(state, sourceNode))
+                    {
+                        Debug.Log($"SUCCESS: Forced cross-connection {sourceNode.Id}<->{targetNode.Id} with increased capacity");
+                        return; // Success! Keep both increased capacities
+                    }
+
+                    // Restore target capacity
+                    targetNode.MaxDegree = origTargetCapacity;
+                }
+
+                // Restore source capacity
+                sourceNode.MaxDegree = origSourceCapacity;
+            }
+
+            Debug.LogWarning($"Could not force any cross-connection even with increased capacity on all node pairs");
+        }
+
+        private static bool TryForceConnection(ForestMapState state, Node node)
+        {
+            // Find this node's parent (the node it was originally grown from)
+            var parentEdge = state.Edges.FirstOrDefault(e =>
+                e.NodeB.HasValue && e.NodeB.Value == node.Id);
+
+            int? parentNodeId = parentEdge?.NodeA;
+
+            Debug.Log($"Trying node {node.Id} (parent: {parentNodeId?.ToString() ?? "none"}, capacity: {node.MaxDegree - node.IncidentEdges.Count}/{node.MaxDegree})");
+
+            // Try to force a connection to any existing node except parent
+            if (TryConnectToExisting(state, node, parentNodeId, parentNodeId))
+            {
+                Debug.Log($"SUCCESS: Forced cross-connection from node {node.Id} to ensure interconnected graph");
+                return true;
+            }
+            else
+            {
+                Debug.Log($"Failed to connect node {node.Id} - trying next node...");
+                return false;
+            }
         }
 
         private static HashSet<int> GetConnectedNodeIds(ForestMapState state, int nodeId)
@@ -1208,30 +1261,34 @@ namespace ForestMaze
                 int targetY = -1;
                 float maxDistance = -1f;
 
-                // Bias the spawn point toward the farthest walkable cell from the connected node center.
-                for (int i = edge.PolylinePoints.Count - 1; i >= 0; i--)
+                // Fallback: Search for walkable cell near the chosen endpoint (within small radius)
+                // Don't search the entire path - that can place portals in the middle
+                const int searchRadius = 3; // Only search 3 cells around endpoint
+                for (int dy = -searchRadius; dy <= searchRadius; dy++)
                 {
-                    Vector2 point = edge.PolylinePoints[i] * scale + offset;
-                    int px = Mathf.RoundToInt(point.x);
-                    int py = Mathf.RoundToInt(point.y);
-
-                    if (px < 0 || px >= gridWidth || py < 0 || py >= gridHeight)
+                    for (int dx = -searchRadius; dx <= searchRadius; dx++)
                     {
-                        continue;
-                    }
+                        int px = ex + dx;
+                        int py = ey + dy;
 
-                    char candidateTile = grid[py, px];
-                    if (!IsWalkableTile(candidateTile) || candidateTile == 'H' || candidateTile == 'N')
-                    {
-                        continue;
-                    }
+                        if (px < 0 || px >= gridWidth || py < 0 || py >= gridHeight)
+                        {
+                            continue;
+                        }
 
-                    float distance = (px - nx) * (px - nx) + (py - ny) * (py - ny);
-                    if (distance > maxDistance)
-                    {
-                        maxDistance = distance;
-                        targetX = px;
-                        targetY = py;
+                        char candidateTile = grid[py, px];
+                        if (!IsWalkableTile(candidateTile) || candidateTile == 'H' || candidateTile == 'N')
+                        {
+                            continue;
+                        }
+
+                        float distance = (px - nx) * (px - nx) + (py - ny) * (py - ny);
+                        if (distance > maxDistance)
+                        {
+                            maxDistance = distance;
+                            targetX = px;
+                            targetY = py;
+                        }
                     }
                 }
 
