@@ -284,12 +284,9 @@ namespace FaeMaze.Systems
             int minBorderTiles = 5; // Minimum border tiles around maze content
             bool gridExpanded = false;
 
-            float scale = forestMapState.Scale;
-            Vector2 offset = forestMapState.Offset;
             float rasterMargin = (NodeRadius + PathRadius + WallBuffer) * scale;
 
-            // Calculate grid extents of new node and connected edges
-            Vector2 nodeGridPos = newNode.Position * scale + offset;
+            // Calculate grid extents of new node and connected edges (reuse nodeGridPos from above)
             float minX = nodeGridPos.x;
             float maxX = nodeGridPos.x;
             float minY = nodeGridPos.y;
