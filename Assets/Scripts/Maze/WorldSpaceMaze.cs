@@ -182,6 +182,22 @@ namespace ForestMaze
         }
 
         /// <summary>
+        /// Marks tiles near a position as unwalkable.
+        /// Used to block portal locations.
+        /// </summary>
+        public void MarkUnwalkable(Vector2 position)
+        {
+            var tiles = GetTilesNear(position, TileSize * 0.5f);
+            foreach (var tile in tiles)
+            {
+                if (Vector2.Distance(tile.Position, position) < tile.Size * 0.5f)
+                {
+                    tile.Walkable = false;
+                }
+            }
+        }
+
+        /// <summary>
         /// Checks if a position is occupied by any tile.
         /// </summary>
         public bool HasTileAt(Vector2 position, float tolerance = 0.1f)

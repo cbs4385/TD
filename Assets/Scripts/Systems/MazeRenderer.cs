@@ -117,6 +117,28 @@ namespace FaeMaze.Systems
         public bool HasWaterPrefab => waterPrefab != null;
         public void SetWaterPrefab(GameObject prefab) => waterPrefab = prefab;
 
+        /// <summary>
+        /// Creates a wall tile at a specific world position.
+        /// Used by DynamicMazeGrowth to place walls at portal locations.
+        /// </summary>
+        public GameObject CreateWallAtPosition(Vector3 worldPos, float orientationDegrees)
+        {
+            if (wallPrefab == null)
+            {
+                Debug.LogWarning("[MazeRenderer] Cannot create wall - wallPrefab is null");
+                return null;
+            }
+
+            Transform parent = mazeOrigin != null ? mazeOrigin : transform;
+            GameObject wallObj = Instantiate(wallPrefab, parent);
+            wallObj.transform.position = worldPos;
+            wallObj.transform.rotation = Quaternion.Euler(0f, 0f, orientationDegrees);
+            wallObj.name = $"Wall_Portal_{worldPos.x:F1}_{worldPos.y:F1}";
+
+            Debug.Log($"[MazeRenderer] Created wall at portal position {worldPos}");
+            return wallObj;
+        }
+
         #endregion
 
         #region Unity Lifecycle
