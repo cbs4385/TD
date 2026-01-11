@@ -131,14 +131,12 @@ namespace FaeMaze.Systems
             }
 
             // Use IDENTICAL logic to growth cycles:
-            // 1. Mark partial edge endpoints as walkable
-            // 2. Ensure connectivity via gap-filling
-            // 3. Rebuild spawn points from frontier edges
-            // 4. Create portals for those spawn points
+            // 1. Ensure connectivity via gap-filling (which creates walkable tiles along polylines)
+            // 2. Rebuild spawn points from frontier edges
+            // 3. Create portals for those spawn points
 
             Debug.Log($"[DynamicGrowth] Initializing spawn points from {forestMapState.Frontier.Count} frontier edges");
 
-            MarkPartialEdgeEndpointsAsWalkable();
             EnsureFrontierEdgeConnectivity(forestMapState, mazeGridBehaviour.Grid);
 
             // Add borders around gap-filled corridors
@@ -352,12 +350,8 @@ namespace FaeMaze.Systems
             // Ensure wall borders around newly added walkable content
             EnsureWallBordersAroundTiles(newWalkableTiles, 3);
 
-            // Mark endpoints of partial frontier edges as walkable so spawn points can be placed there
-            // ONLY process NEW edges created during this growth cycle, not existing frontier edges
-            MarkPartialEdgeEndpointsAsWalkable(frontierBeforeGrowth);
-
             // Ensure all frontier edge endpoints are reachable from their node centers
-            // This must run AFTER MarkPartialEdgeEndpointsAsWalkable so endpoints are in final positions
+            // Gap-filling will create walkable tiles along polyline points automatically
             EnsureFrontierEdgeConnectivity(forestMapState, grid);
 
             // Remove old spawn point portals and rebuild from frontier
