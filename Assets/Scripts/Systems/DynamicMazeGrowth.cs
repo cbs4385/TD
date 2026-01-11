@@ -694,9 +694,18 @@ namespace FaeMaze.Systems
 
                 Debug.Log($"[DynamicGrowth] Endpoint at grid {endpointGrid}");
 
-                // Find the walkable point CLOSEST to the endpoint
+                // Get a reference point from the middle of the polyline (known to be reachable)
+                Vector2 referencePoint = edge.PolylinePoints[edge.PolylinePoints.Count / 2] * scale + offset;
+                Vector2Int referenceGrid = new Vector2Int(Mathf.RoundToInt(referencePoint.x), Mathf.RoundToInt(referencePoint.y));
+
+                // Flood fill from reference point to find all reachable cells
+                var reachableCells = grid.FloodFillReachable(referenceGrid.x, referenceGrid.y, 100, 10000);
+                Debug.Log($"[DynamicGrowth] Found {reachableCells.Count} reachable cells from reference point {referenceGrid}");
+
+                // Find the walkable point CLOSEST to the endpoint that is also REACHABLE
                 Vector2Int spawnGridPos = endpointGrid;
                 int walkableCount = 0;
+                int reachableCount = 0;
                 float minDistanceToEndpoint = float.MaxValue;
 
                 // Search within a small radius around the endpoint
@@ -713,22 +722,36 @@ namespace FaeMaze.Systems
                             var node = grid.GetNode(px, py);
                             if (node != null && node.walkable)
                             {
-                                // Find CLOSEST walkable cell to the endpoint
-                                float distanceToEndpoint = (px - endpointGrid.x) * (px - endpointGrid.x) + (py - endpointGrid.y) * (py - endpointGrid.y);
-                                Debug.Log($"[DynamicGrowth]   Cell ({px},{py}) walkable, distance to endpoint={Mathf.Sqrt(distanceToEndpoint):F2}");
-                                if (distanceToEndpoint < minDistanceToEndpoint)
-                                {
-                                    minDistanceToEndpoint = distanceToEndpoint;
-                                    spawnGridPos = new Vector2Int(px, py);
-                                }
                                 walkableCount++;
+
+                                // Verify this cell is reachable from the path network
+                                Vector2Int cellPos = new Vector2Int(px, py);
+                                if (reachableCells.Contains(cellPos))
+                                {
+                                    reachableCount++;
+
+                                    // Find CLOSEST reachable cell to the endpoint
+                                    float distanceToEndpoint = (px - endpointGrid.x) * (px - endpointGrid.x) + (py - endpointGrid.y) * (py - endpointGrid.y);
+                                    Debug.Log($"[DynamicGrowth]   Cell ({px},{py}) walkable AND reachable, distance to endpoint={Mathf.Sqrt(distanceToEndpoint):F2}");
+                                    if (distanceToEndpoint < minDistanceToEndpoint)
+                                    {
+                                        minDistanceToEndpoint = distanceToEndpoint;
+                                        spawnGridPos = new Vector2Int(px, py);
+                                    }
+                                }
+                                else
+                                {
+                                    Debug.Log($"[DynamicGrowth]   Cell ({px},{py}) walkable but NOT reachable from path network");
+                                }
                             }
                         }
                     }
                 }
 
-                // Only place spawn point if we found at least one walkable tile
-                if (walkableCount > 0 && grid.InBounds(spawnGridPos.x, spawnGridPos.y))
+                Debug.Log($"[DynamicGrowth] Search results: {walkableCount} walkable, {reachableCount} reachable");
+
+                // Only place spawn point if we found at least one reachable tile
+                if (reachableCount > 0 && grid.InBounds(spawnGridPos.x, spawnGridPos.y))
                 {
                     char spawnId = GetNextAvailableSpawnId();
                     if (spawnId == '\0') break; // No more spawn IDs available
@@ -736,8 +759,12 @@ namespace FaeMaze.Systems
                     UpdateTileSymbol(spawnGridPos, spawnId);
                     CreatePortalAtSpawnPoint(spawnId, spawnGridPos, nodeCenterGrid);
 
-                    Debug.Log($"[DynamicGrowth] Placed spawn point '{spawnId}' at {spawnGridPos} (distance to endpoint={Mathf.Sqrt(minDistanceToEndpoint):F2}, {walkableCount} walkable cells in search radius)");
+                    Debug.Log($"[DynamicGrowth] Placed spawn point '{spawnId}' at {spawnGridPos} (distance to endpoint={Mathf.Sqrt(minDistanceToEndpoint):F2}, {reachableCount}/{walkableCount} reachable/walkable cells)");
                     spawnIndex++;
+                }
+                else
+                {
+                    Debug.LogWarning($"[DynamicGrowth] Could not place spawn point for edge {edgeId} - no reachable walkable cells found near endpoint {endpointGrid}");
                 }
             }
 
@@ -1314,6 +1341,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Marks the endpoints of partial frontier edges as walkable.
         /// This ensures spawn points can be placed at the far end of partial edges.
+        /// Creates a continuous walkable path from the polyline to the endpoint.
         /// </summary>
         private void MarkPartialEdgeEndpointsAsWalkable()
         {
@@ -1328,30 +1356,76 @@ namespace FaeMaze.Systems
             foreach (int edgeId in forestMapState.Frontier)
             {
                 var edge = forestMapState.Edges[edgeId];
-                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+                if (!edge.Partial || edge.PolylinePoints.Count < 2) continue;
 
-                // Get the endpoint (last point in the polyline)
+                // Get the last two points in the polyline
+                Vector2 secondToLastPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 2] * scale + offset;
                 Vector2 endPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
-                int px = Mathf.RoundToInt(endPoint.x);
-                int py = Mathf.RoundToInt(endPoint.y);
 
-                if (px >= 0 && px < grid.Width && py >= 0 && py < grid.Height)
+                int startX = Mathf.RoundToInt(secondToLastPoint.x);
+                int startY = Mathf.RoundToInt(secondToLastPoint.y);
+                int endX = Mathf.RoundToInt(endPoint.x);
+                int endY = Mathf.RoundToInt(endPoint.y);
+
+                // Draw a walkable line from the second-to-last point to the endpoint
+                // This ensures continuous connectivity
+                int dx = Mathf.Abs(endX - startX);
+                int dy = Mathf.Abs(endY - startY);
+                int sx = startX < endX ? 1 : -1;
+                int sy = startY < endY ? 1 : -1;
+                int err = dx - dy;
+
+                int x = startX;
+                int y = startY;
+
+                while (true)
                 {
-                    var node = grid.GetNode(px, py);
-                    if (node != null && !node.walkable)
+                    // Mark this cell and a small radius around it as walkable (to ensure path width)
+                    for (int oy = -1; oy <= 1; oy++)
                     {
-                        node.walkable = true;
-                        node.symbol = '.';
-                        node.SetTerrain(TileType.Path);
-                        markedCount++;
-                        Debug.Log($"[DynamicGrowth] Marked partial edge {edgeId} endpoint at ({px},{py}) as walkable");
+                        for (int ox = -1; ox <= 1; ox++)
+                        {
+                            int nx = x + ox;
+                            int ny = y + oy;
+
+                            if (nx >= 0 && nx < grid.Width && ny >= 0 && ny < grid.Height)
+                            {
+                                var node = grid.GetNode(nx, ny);
+                                if (node != null && !node.walkable)
+                                {
+                                    node.walkable = true;
+                                    node.symbol = '.';
+                                    node.SetTerrain(TileType.Path);
+                                    markedCount++;
+                                }
+                            }
+                        }
+                    }
+
+                    // Check if we've reached the endpoint
+                    if (x == endX && y == endY)
+                        break;
+
+                    // Bresenham's line algorithm step
+                    int e2 = 2 * err;
+                    if (e2 > -dy)
+                    {
+                        err -= dy;
+                        x += sx;
+                    }
+                    if (e2 < dx)
+                    {
+                        err += dx;
+                        y += sy;
                     }
                 }
+
+                Debug.Log($"[DynamicGrowth] Created walkable path for partial edge {edgeId} from ({startX},{startY}) to ({endX},{endY})");
             }
 
             if (markedCount > 0)
             {
-                Debug.Log($"[DynamicGrowth] Marked {markedCount} partial edge endpoints as walkable");
+                Debug.Log($"[DynamicGrowth] Marked {markedCount} cells as walkable along partial edge endpoints");
             }
         }
 
