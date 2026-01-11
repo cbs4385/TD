@@ -55,16 +55,12 @@ namespace FaeMaze.Systems
 
         [Header("World-Space Settings")]
         [SerializeField]
-        [Tooltip("Tile size in world units")]
-        private float worldTileSize = 1.0f;
-
-        [SerializeField]
-        [Tooltip("Node column radius")]
+        [Tooltip("Node column radius in graph units")]
         private float nodeRadius = 3.0f;
 
         [SerializeField]
-        [Tooltip("Wall border depth in tiles")]
-        private int wallBorderDepth = 3;
+        [Tooltip("Wall border depth in graph units")]
+        private float wallBorderDepth = 3.0f;
 
         [Header("Container Settings")]
         [SerializeField]
@@ -93,14 +89,17 @@ namespace FaeMaze.Systems
         private List<GameObject> waterTiles;
         private List<GameObject> pathTiles;
 
-        // World-space tile tracking - using float positions to avoid grid snapping
-        private HashSet<long> occupiedCells; // Uses quantized positions for overlap checking
-        private List<EdgeSegmentData> allEdgeSegments; // For wall orientation lookup
+        // World-space rendering state
+        private float graphScale;
+        private Vector2 graphOffset;
+        private float tileSize;
+        private HashSet<Vector2Int> occupiedGridCells; // Grid cells with path/node tiles
+        private List<EdgeSegmentData> allEdgeSegments;
 
         private struct EdgeSegmentData
         {
-            public Vector2 Start;
-            public Vector2 End;
+            public Vector2 StartGraph; // In graph space
+            public Vector2 EndGraph;
             public Vector2 Direction;
             public Vector2 Perpendicular;
         }
@@ -152,6 +151,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders the maze using world-space coordinates from the planar forest graph.
+        /// Coordinates are transformed using scale/offset to match the grid system.
         /// </summary>
         private void RenderWorldSpaceMaze()
         {
@@ -161,6 +161,11 @@ namespace FaeMaze.Systems
                 Debug.LogError("[MazeRenderer] No ForestMapState available for world-space rendering.");
                 return;
             }
+
+            // Get transformation parameters
+            graphScale = forestState.Scale;
+            graphOffset = forestState.Offset;
+            tileSize = mazeGridBehaviour.TileSize;
 
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
@@ -174,8 +179,8 @@ namespace FaeMaze.Systems
                 pathTiles = new List<GameObject>();
             }
 
-            // Track occupied positions (path/node tiles) - walls can overlap each other but not these
-            occupiedCells = new HashSet<long>();
+            // Track occupied grid cells (path/node tiles) - walls cannot overlap these
+            occupiedGridCells = new HashSet<Vector2Int>();
             allEdgeSegments = new List<EdgeSegmentData>();
 
             int renderedTiles = 0;
@@ -189,7 +194,7 @@ namespace FaeMaze.Systems
             // Step 3: Render node columns (circular, radius = nodeRadius)
             renderedTiles += RenderNodeColumns(forestState, mazeOrigin);
 
-            // Step 4: Render wall border (walls can overlap each other)
+            // Step 4: Render wall border (walls cannot overlap path/node tiles)
             renderedTiles += RenderWallBorder(forestState, mazeOrigin);
 
             Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +
@@ -199,6 +204,28 @@ namespace FaeMaze.Systems
             {
                 PerformMeshBatching();
             }
+        }
+
+        /// <summary>
+        /// Transforms a graph-space position to world position.
+        /// graphPos -> gridPos (via scale+offset) -> worldPos (via GridToWorld)
+        /// </summary>
+        private Vector3 GraphToWorldPos(Vector2 graphPos)
+        {
+            // Transform to grid coordinates
+            Vector2 gridPos = graphPos * graphScale + graphOffset;
+
+            // Use the standard grid-to-world conversion
+            return mazeGridBehaviour.GridToWorld(Mathf.RoundToInt(gridPos.x), Mathf.RoundToInt(gridPos.y));
+        }
+
+        /// <summary>
+        /// Transforms a graph-space position to grid cell coordinates.
+        /// </summary>
+        private Vector2Int GraphToGridCell(Vector2 graphPos)
+        {
+            Vector2 gridPos = graphPos * graphScale + graphOffset;
+            return new Vector2Int(Mathf.RoundToInt(gridPos.x), Mathf.RoundToInt(gridPos.y));
         }
 
         /// <summary>
@@ -218,8 +245,8 @@ namespace FaeMaze.Systems
 
                     allEdgeSegments.Add(new EdgeSegmentData
                     {
-                        Start = start,
-                        End = end,
+                        StartGraph = start,
+                        EndGraph = end,
                         Direction = dir,
                         Perpendicular = new Vector2(-dir.y, dir.x)
                     });
@@ -228,12 +255,14 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Renders path tiles along each edge at actual world positions (not grid-snapped).
-        /// Tiles are oriented along the edge direction.
+        /// Renders path tiles along each edge, oriented in the direction of the edge.
         /// </summary>
         private int RenderEdgePaths(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
+
+            // Calculate step size in graph space that corresponds to ~1 grid cell
+            float graphStepSize = 1.0f / graphScale;
 
             foreach (var edge in forestState.Edges)
             {
@@ -242,35 +271,35 @@ namespace FaeMaze.Systems
                 // Walk along each segment of the polyline
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 start = edge.PolylinePoints[i];
-                    Vector2 end = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (end - start).normalized;
-                    float segmentLength = Vector2.Distance(start, end);
+                    Vector2 startGraph = edge.PolylinePoints[i];
+                    Vector2 endGraph = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (endGraph - startGraph).normalized;
+                    float segmentLength = Vector2.Distance(startGraph, endGraph);
 
-                    // Orientation: tile's "forward" aligns with edge direction
-                    // For flat tiles on XY plane, rotation is around Z axis
+                    // Orientation in degrees
                     float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
-                    // Place tiles along the segment at actual floating-point positions
-                    int numTiles = Mathf.Max(1, Mathf.CeilToInt(segmentLength / worldTileSize));
-                    for (int j = 0; j <= numTiles; j++)
+                    // Place tiles along the segment
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / graphStepSize));
+                    for (int j = 0; j <= numSteps; j++)
                     {
-                        float t = numTiles > 0 ? (float)j / numTiles : 0;
-                        Vector2 position = Vector2.Lerp(start, end, t);
+                        float t = numSteps > 0 ? (float)j / numSteps : 0;
+                        Vector2 graphPos = Vector2.Lerp(startGraph, endGraph, t);
 
-                        // Check if this cell is already occupied (using quantized key)
-                        long cellKey = GetCellKey(position);
-                        if (occupiedCells.Contains(cellKey)) continue;
+                        // Get grid cell for this position
+                        Vector2Int gridCell = GraphToGridCell(graphPos);
+                        if (occupiedGridCells.Contains(gridCell)) continue;
 
                         // Determine symbol
                         char symbol = '.';
-                        if (edge.Partial && j == numTiles)
+                        if (edge.Partial && j == numSteps)
                         {
                             symbol = GetNextSpawnSymbol();
                         }
 
-                        CreateWorldSpaceTile(position, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedCells.Add(cellKey);
+                        Vector3 worldPos = GraphToWorldPos(graphPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                        occupiedGridCells.Add(gridCell);
                         tileCount++;
                     }
                 }
@@ -285,7 +314,10 @@ namespace FaeMaze.Systems
         private int RenderNodeColumns(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
-            int tilesRadius = Mathf.CeilToInt(nodeRadius / worldTileSize);
+
+            // Calculate step size in graph space that corresponds to ~1 grid cell
+            float graphStepSize = 1.0f / graphScale;
+            int tilesRadius = Mathf.CeilToInt(nodeRadius / graphStepSize);
 
             foreach (var node in forestState.Nodes)
             {
@@ -293,35 +325,36 @@ namespace FaeMaze.Systems
                 {
                     for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
                     {
-                        Vector2 offset = new Vector2(dx * worldTileSize, dy * worldTileSize);
-                        float distance = offset.magnitude;
+                        // Offset in graph space
+                        Vector2 graphOffset = new Vector2(dx * graphStepSize, dy * graphStepSize);
+                        float distance = graphOffset.magnitude;
 
                         // Check if within circular radius
                         if (distance > nodeRadius) continue;
 
-                        Vector2 position = node.Position + offset;
+                        Vector2 graphPos = node.Position + graphOffset;
+                        Vector2Int gridCell = GraphToGridCell(graphPos);
 
-                        // Check if this cell is already occupied
-                        long cellKey = GetCellKey(position);
-                        if (occupiedCells.Contains(cellKey)) continue;
+                        if (occupiedGridCells.Contains(gridCell)) continue;
 
                         // Orientation: tiles face outward radially from node center
                         float orientationDegrees = 0f;
                         if (distance > 0.01f)
                         {
-                            Vector2 radial = offset.normalized;
+                            Vector2 radial = graphOffset.normalized;
                             orientationDegrees = Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg;
                         }
 
                         // Determine symbol
                         char symbol = '.';
-                        if (Mathf.Abs(dx) <= 0 && Mathf.Abs(dy) <= 0)
+                        if (dx == 0 && dy == 0)
                         {
                             symbol = node.Kind == "root" ? 'H' : 'N';
                         }
 
-                        CreateWorldSpaceTile(position, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedCells.Add(cellKey);
+                        Vector3 worldPos = GraphToWorldPos(graphPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                        occupiedGridCells.Add(gridCell);
                         tileCount++;
                     }
                 }
@@ -332,56 +365,51 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders wall border tiles around all walkable tiles.
-        /// Walls can overlap each other but not path/node tiles.
+        /// Walls cannot overlap path/node tiles.
         /// Each wall is oriented perpendicular to the nearest graph tangent.
         /// </summary>
         private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
+            int borderCells = Mathf.CeilToInt(wallBorderDepth);
 
-            // Collect all positions that need walls
-            var wallPositionsToRender = new List<Vector2>();
+            // Collect all grid cells that need walls
+            var wallCells = new HashSet<Vector2Int>();
 
-            // For each occupied cell, find surrounding wall positions
-            foreach (var cellKey in occupiedCells)
+            foreach (var occupiedCell in occupiedGridCells)
             {
-                Vector2 cellCenter = GetPositionFromKey(cellKey);
-
-                for (int dx = -wallBorderDepth; dx <= wallBorderDepth; dx++)
+                for (int dx = -borderCells; dx <= borderCells; dx++)
                 {
-                    for (int dy = -wallBorderDepth; dy <= wallBorderDepth; dy++)
+                    for (int dy = -borderCells; dy <= borderCells; dy++)
                     {
                         if (dx == 0 && dy == 0) continue;
 
                         int dist = Mathf.Abs(dx) + Mathf.Abs(dy);
-                        if (dist > wallBorderDepth) continue;
+                        if (dist > borderCells) continue;
 
-                        Vector2 wallPos = cellCenter + new Vector2(dx * worldTileSize, dy * worldTileSize);
-                        long wallKey = GetCellKey(wallPos);
+                        Vector2Int wallCell = new Vector2Int(occupiedCell.x + dx, occupiedCell.y + dy);
 
-                        // Only skip if it overlaps with a path/node tile (not other walls)
-                        if (occupiedCells.Contains(wallKey)) continue;
+                        // Skip if this cell has a path/node tile
+                        if (occupiedGridCells.Contains(wallCell)) continue;
 
-                        wallPositionsToRender.Add(wallPos);
+                        wallCells.Add(wallCell);
                     }
                 }
             }
 
-            // Render walls (allowing overlap with other walls)
-            var renderedWallKeys = new HashSet<long>();
-
-            foreach (var wallPos in wallPositionsToRender)
+            // Render each wall cell
+            foreach (var wallCell in wallCells)
             {
-                long wallKey = GetCellKey(wallPos);
+                // Convert grid cell back to approximate graph position for orientation lookup
+                Vector2 approxGraphPos = (new Vector2(wallCell.x, wallCell.y) - this.graphOffset) / graphScale;
 
-                // Skip duplicates within same render pass
-                if (renderedWallKeys.Contains(wallKey)) continue;
-                renderedWallKeys.Add(wallKey);
+                // Find orientation perpendicular to nearest graph tangent
+                float orientationDegrees = GetWallOrientationFromGraph(approxGraphPos, forestState);
 
-                // Find orientation: perpendicular to nearest graph tangent
-                float orientationDegrees = GetWallOrientationFromGraph(wallPos, forestState);
+                // Get world position from grid cell
+                Vector3 worldPos = mazeGridBehaviour.GridToWorld(wallCell.x, wallCell.y);
 
-                CreateWorldSpaceTile(wallPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                 tileCount++;
             }
 
@@ -391,7 +419,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Gets wall orientation perpendicular to the tangent of the nearest graph element.
         /// </summary>
-        private float GetWallOrientationFromGraph(Vector2 wallPos, PlanarForestMazeGenerator.ForestMapState forestState)
+        private float GetWallOrientationFromGraph(Vector2 graphPos, PlanarForestMazeGenerator.ForestMapState forestState)
         {
             float minDist = float.MaxValue;
             Vector2 nearestPerpendicular = Vector2.up;
@@ -399,7 +427,7 @@ namespace FaeMaze.Systems
             // Check distance to each edge segment
             foreach (var seg in allEdgeSegments)
             {
-                float dist = DistanceToLineSegment(wallPos, seg.Start, seg.End);
+                float dist = DistanceToLineSegment(graphPos, seg.StartGraph, seg.EndGraph);
                 if (dist < minDist)
                 {
                     minDist = dist;
@@ -410,13 +438,14 @@ namespace FaeMaze.Systems
             // Check distance to each node center
             foreach (var node in forestState.Nodes)
             {
-                float dist = Vector2.Distance(wallPos, node.Position);
+                float dist = Vector2.Distance(graphPos, node.Position);
                 if (dist < minDist)
                 {
                     minDist = dist;
                     // For nodes, perpendicular points radially outward
-                    Vector2 radial = (wallPos - node.Position).normalized;
-                    nearestPerpendicular = radial;
+                    Vector2 radial = (graphPos - node.Position).normalized;
+                    if (radial.sqrMagnitude > 0.001f)
+                        nearestPerpendicular = radial;
                 }
             }
 
@@ -440,17 +469,13 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Creates a tile at a world-space position with the given orientation.
-        /// For flat tiles on XY plane, orientation rotates around Z axis.
         /// </summary>
-        private void CreateWorldSpaceTile(Vector2 position, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall)
+        private void CreateWorldSpaceTile(Vector3 worldPos, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall)
         {
-            Vector3 worldPos = mazeOrigin.position + new Vector3(position.x, position.y, 0);
-
-            // For flat tiles on XY plane facing -Z (camera), rotate only around Z axis
-            // No X rotation needed - cube with scale (x, y, 0.1) is already flat
+            // For flat tiles on XY plane, rotate only around Z axis
             Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
 
-            // For prefabs that are designed Y-up, we need the -90 X rotation
+            // For prefabs designed Y-up, need -90 X rotation
             Quaternion prefabRotation = Quaternion.Euler(-90f, 0f, orientationDegrees);
 
             GameObject tileObj = null;
@@ -469,7 +494,7 @@ namespace FaeMaze.Systems
                 tileObj = Instantiate(wallPrefab, tilesParent);
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = new Vector3(worldTileSize * 0.65f, worldTileSize * 0.65f, worldTileSize);
+                tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
                 wallTiles?.Add(tileObj);
             }
             else if (symbol == 'N' && nodeHazardPrefab != null)
@@ -483,7 +508,7 @@ namespace FaeMaze.Systems
                 tileObj = Instantiate(nodeHazardPrefab, tilesParent);
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = Vector3.one * worldTileSize;
+                tileObj.transform.localScale = Vector3.one * tileSize;
             }
             else
             {
@@ -499,7 +524,7 @@ namespace FaeMaze.Systems
 
             if (tileObj != null)
             {
-                tileObj.name = $"WorldTile_{symbol}_{position.x:F1}_{position.y:F1}";
+                tileObj.name = $"WorldTile_{symbol}_{worldPos.x:F1}_{worldPos.y:F1}";
             }
         }
 
@@ -511,8 +536,7 @@ namespace FaeMaze.Systems
             GameObject tileObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             tileObj.transform.position = worldPos;
             tileObj.transform.rotation = rotation;
-            // Flat on XY plane: width/height = worldTileSize, depth (Z) = thin
-            tileObj.transform.localScale = new Vector3(worldTileSize, worldTileSize, 0.1f);
+            tileObj.transform.localScale = new Vector3(tileSize, tileSize, 0.1f);
 
             Material material = CreatePBRMaterialForSymbol(symbol, color);
             MeshRenderer renderer = tileObj.GetComponent<MeshRenderer>();
@@ -522,24 +546,6 @@ namespace FaeMaze.Systems
             }
 
             return tileObj;
-        }
-
-        /// <summary>
-        /// Gets a quantized cell key for overlap checking.
-        /// </summary>
-        private long GetCellKey(Vector2 position)
-        {
-            // Quantize to half tile size for more precise overlap detection
-            int x = Mathf.RoundToInt(position.x / (worldTileSize * 0.5f));
-            int y = Mathf.RoundToInt(position.y / (worldTileSize * 0.5f));
-            return ((long)x << 32) | ((long)y & 0xFFFFFFFFL);
-        }
-
-        private Vector2 GetPositionFromKey(long key)
-        {
-            int x = (int)(key >> 32);
-            int y = (int)(key & 0xFFFFFFFFL);
-            return new Vector2(x * worldTileSize * 0.5f, y * worldTileSize * 0.5f);
         }
 
         private int spawnSymbolCounter = 0;
@@ -559,6 +565,7 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour.Grid == null) return;
 
+            tileSize = mazeGridBehaviour.TileSize;
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
             CreateTilesContainer(mazeOrigin);
 
@@ -593,7 +600,6 @@ namespace FaeMaze.Systems
         private void CreateGridTile3D(int gridX, int gridY, char symbol, Color color)
         {
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
-            float tileSize = mazeGridBehaviour.TileSize;
 
             if (symbol == '#' || symbol == ';' || symbol == '~')
             {
@@ -626,7 +632,7 @@ namespace FaeMaze.Systems
             }
             else if (symbol == 'N' && nodeHazardPrefab != null)
             {
-                var pathBase = CreateProceduralGridTile(gridX, gridY, '.', pathColor, tileSize);
+                var pathBase = CreateProceduralGridTile(gridX, gridY, '.', pathColor);
                 pathBase.transform.SetParent(tilesParent);
                 pathBase.transform.position = worldPos;
                 pathTiles?.Add(pathBase);
@@ -638,7 +644,7 @@ namespace FaeMaze.Systems
             }
             else
             {
-                tileObj = CreateProceduralGridTile(gridX, gridY, symbol, color, tileSize);
+                tileObj = CreateProceduralGridTile(gridX, gridY, symbol, color);
                 tileObj.transform.SetParent(tilesParent);
                 tileObj.transform.position = worldPos;
             }
@@ -649,7 +655,7 @@ namespace FaeMaze.Systems
             }
         }
 
-        private GameObject CreateProceduralGridTile(int gridX, int gridY, char symbol, Color color, float tileSize)
+        private GameObject CreateProceduralGridTile(int gridX, int gridY, char symbol, Color color)
         {
             GameObject tileObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             tileObj.name = $"Tile_{gridX}_{gridY}_{GetTileTypeName(symbol)}";
