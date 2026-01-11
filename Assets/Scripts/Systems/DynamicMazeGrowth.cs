@@ -139,21 +139,6 @@ namespace FaeMaze.Systems
 
             EnsureFrontierEdgeConnectivity(forestMapState, mazeGridBehaviour.Grid);
 
-            // Add borders around gap-filled corridors
-            List<Vector2Int> walkableTiles = new List<Vector2Int>();
-            for (int y = 0; y < mazeGridBehaviour.Grid.Height; y++)
-            {
-                for (int x = 0; x < mazeGridBehaviour.Grid.Width; x++)
-                {
-                    var node = mazeGridBehaviour.Grid.GetNode(x, y);
-                    if (node != null && node.walkable)
-                    {
-                        walkableTiles.Add(new Vector2Int(x, y));
-                    }
-                }
-            }
-            EnsureWallBordersAroundTiles(walkableTiles, 3);
-
             RebuildSpawnPointsFromFrontier();
 
             Debug.Log("[DynamicGrowth] Initialization complete using growth cycle logic");
@@ -1568,7 +1553,7 @@ namespace FaeMaze.Systems
                     if (previousSegment != null)
                     {
                         int beforeStitch = CountWalkableTiles(gridArray, grid.Width, grid.Height);
-                        StitchBresenhamSegments(gridArray, grid.Width, grid.Height, previousSegment, currentSegment);
+                        StitchBresenhamSegments(gridArray, grid.Width, grid.Height, previousSegment, currentSegment, edgeId, i);
                         int afterStitch = CountWalkableTiles(gridArray, grid.Width, grid.Height);
                         if (afterStitch > beforeStitch)
                         {
@@ -1662,7 +1647,7 @@ namespace FaeMaze.Systems
         /// Stitches two Bresenham line segments together if they don't share any cells
         /// by finding a wall tile adjacent to both lines and converting it to a path tile.
         /// </summary>
-        private void StitchBresenhamSegments(char[,] gridArray, int width, int height, List<Vector2Int> segmentA, List<Vector2Int> segmentB)
+        private void StitchBresenhamSegments(char[,] gridArray, int width, int height, List<Vector2Int> segmentA, List<Vector2Int> segmentB, int edgeId, int segmentIndex)
         {
             // Check if the segments already share any cells
             foreach (var cellA in segmentA)
@@ -1672,6 +1657,7 @@ namespace FaeMaze.Systems
                     if (cellA.x == cellB.x && cellA.y == cellB.y)
                     {
                         // Segments share a cell, already connected
+                        Debug.Log($"[DynamicGrowth] Edge {edgeId}: Segments {segmentIndex-1} and {segmentIndex} share cell ({cellA.x},{cellA.y}) - already connected");
                         return;
                     }
                 }
@@ -1703,6 +1689,7 @@ namespace FaeMaze.Systems
                                 if (x >= 0 && x < width && y >= 0 && y < height && gridArray[y, x] == '.')
                                 {
                                     // Found a path tile in the region between adjacent cells - they're connected
+                                    Debug.Log($"[DynamicGrowth] Edge {edgeId}: Segments {segmentIndex-1} and {segmentIndex} connected via path tile ({x},{y}) between ({cellA.x},{cellA.y}) and ({cellB.x},{cellB.y})");
                                     return;
                                 }
                             }
@@ -1710,6 +1697,8 @@ namespace FaeMaze.Systems
                     }
                 }
             }
+
+            Debug.Log($"[DynamicGrowth] Edge {edgeId}: Segments {segmentIndex-1} and {segmentIndex} NOT connected - searching for wall tile to convert");
 
             // Segments are not connected - find a wall tile adjacent to both and convert it
             // Search in the region containing both segments
