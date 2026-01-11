@@ -140,6 +140,22 @@ namespace FaeMaze.Systems
 
             MarkPartialEdgeEndpointsAsWalkable();
             EnsureFrontierEdgeConnectivity(forestMapState, mazeGridBehaviour.Grid);
+
+            // Add borders around gap-filled corridors
+            List<Vector2Int> walkableTiles = new List<Vector2Int>();
+            for (int y = 0; y < mazeGridBehaviour.Grid.Height; y++)
+            {
+                for (int x = 0; x < mazeGridBehaviour.Grid.Width; x++)
+                {
+                    var node = mazeGridBehaviour.Grid.GetNode(x, y);
+                    if (node != null && node.walkable)
+                    {
+                        walkableTiles.Add(new Vector2Int(x, y));
+                    }
+                }
+            }
+            EnsureWallBordersAroundTiles(walkableTiles, 3);
+
             RebuildSpawnPointsFromFrontier();
 
             Debug.Log("[DynamicGrowth] Initialization complete using growth cycle logic");
