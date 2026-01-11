@@ -353,6 +353,11 @@ namespace FaeMaze.Systems
             // Update the grid with new walkable tiles
             // CRITICAL: Only ADD new content, never REMOVE existing walkable paths
             List<Vector2Int> newWalkableTiles = new List<Vector2Int>();
+            int preservedPathCount = 0;
+            int preservedVoidCount = 0;
+            int addedPathCount = 0;
+            int addedWallCount = 0;
+
             for (int y = 0; y < grid.Height; y++)
             {
                 for (int x = 0; x < grid.Width; x++)
@@ -367,6 +372,7 @@ namespace FaeMaze.Systems
                         // Skip updating void tiles - preserve the optimization
                         if (existingSymbol == ' ' && newSymbol == '#')
                         {
+                            preservedVoidCount++;
                             continue; // Don't convert void back to walls
                         }
 
@@ -374,6 +380,7 @@ namespace FaeMaze.Systems
                         // Only add new content or update void/wall areas
                         if (IsWalkableSymbol(existingSymbol))
                         {
+                            preservedPathCount++;
                             // Keep existing walkable content, don't overwrite with walls
                             continue;
                         }
@@ -387,16 +394,20 @@ namespace FaeMaze.Systems
 
                             // Track newly added walkable tiles
                             newWalkableTiles.Add(new Vector2Int(x, y));
+                            addedPathCount++;
                         }
                         else if (newSymbol == '#')
                         {
                             // Add walls only where there wasn't walkable content
                             node.walkable = false;
                             node.SetTerrain(TileType.TreeBramble);
+                            addedWallCount++;
                         }
                     }
                 }
             }
+
+            Debug.Log($"[DynamicGrowth] Grid merge: preserved {preservedPathCount} path cells, {preservedVoidCount} void cells | added {addedPathCount} paths, {addedWallCount} walls");
 
             // Ensure wall borders around newly added walkable content
             EnsureWallBordersAroundTiles(newWalkableTiles, 3);
