@@ -126,12 +126,16 @@ namespace FaeMaze.Systems
             var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
 
             // If no spawn points exist, create them from edge walkable tiles
+            // but DON'T create portals for them - the first growth cycle will
+            // create proper spawn points at frontier edges with correct orientation
             if (spawnPoints.Count == 0)
             {
                 CreateInitialSpawnPoints();
-                spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
+                Debug.Log("[DynamicGrowth] Created initial edge-based spawn points - portals will be created during first growth cycle");
+                return;
             }
 
+            // For existing spawn points (from loaded maze), create portals
             foreach (var kvp in spawnPoints)
             {
                 char spawnId = kvp.Key;
@@ -832,7 +836,23 @@ namespace FaeMaze.Systems
                 if (!stillExists)
                 {
                     removedSpawnPoints.Add(oldSpawnPos);
-                    Debug.Log($"[DynamicGrowth] Spawn point removed at {oldSpawnPos}");
+
+                    // Find and remove the portal for this removed spawn point
+                    char removedSpawnId = '\0';
+                    foreach (var kvp in oldSpawnPoints)
+                    {
+                        if (kvp.Value == oldSpawnPos)
+                        {
+                            removedSpawnId = kvp.Key;
+                            break;
+                        }
+                    }
+
+                    if (removedSpawnId != '\0')
+                    {
+                        RemovePortalAtSpawnPoint(removedSpawnId);
+                        Debug.Log($"[DynamicGrowth] Spawn point '{removedSpawnId}' removed at {oldSpawnPos}");
+                    }
                 }
             }
 
