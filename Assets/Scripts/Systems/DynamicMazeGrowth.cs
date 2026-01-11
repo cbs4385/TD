@@ -1128,12 +1128,12 @@ namespace FaeMaze.Systems
             {
                 targetWorldPos = targetOverride ?? nodeCenterWorldPos;
             }
-            Vector2 toHeart = new Vector2(heartWorldPos.x - spawnWorldPos.x, heartWorldPos.y - spawnWorldPos.y);
-            float toHeartMagnitude = toHeart.sqrMagnitude > 0f ? toHeart.magnitude : 0f;
+            Vector2 toTarget = new Vector2(targetWorldPos.x - spawnWorldPos.x, targetWorldPos.y - spawnWorldPos.y);
+            float toTargetMagnitude = toTarget.sqrMagnitude > 0f ? toTarget.magnitude : 0f;
             float bestDot = float.NegativeInfinity;
             bool foundAdjacent = false;
             Vector2Int bestDirection = Vector2Int.zero;
-            float bestHeartDistance = float.PositiveInfinity;
+            float bestTargetDistance = float.PositiveInfinity;
 
             foreach (var dir in directions)
             {
@@ -1152,20 +1152,20 @@ namespace FaeMaze.Systems
                 Vector3 candidateWorldPos = mazeGridBehaviour.GridToWorld(checkPos.x, checkPos.y);
                 Vector2 candidateVector = new Vector2(candidateWorldPos.x - spawnWorldPos.x, candidateWorldPos.y - spawnWorldPos.y);
                 float dot = 0f;
-                if (toHeartMagnitude > 0f && candidateVector.sqrMagnitude > 0f)
+                if (toTargetMagnitude > 0f && candidateVector.sqrMagnitude > 0f)
                 {
-                    Vector2 normalizedToHeart = toHeart / toHeartMagnitude;
+                    Vector2 normalizedToTarget = toTarget / toTargetMagnitude;
                     Vector2 normalizedCandidate = candidateVector.normalized;
-                    dot = Vector2.Dot(normalizedCandidate, normalizedToHeart);
+                    dot = Vector2.Dot(normalizedCandidate, normalizedToTarget);
                 }
 
-                float heartDistance = Vector2.Distance(new Vector2(candidateWorldPos.x, candidateWorldPos.y),
-                    new Vector2(heartWorldPos.x, heartWorldPos.y));
+                float targetDistance = Vector2.Distance(new Vector2(candidateWorldPos.x, candidateWorldPos.y),
+                    new Vector2(targetWorldPos.x, targetWorldPos.y));
 
-                if (!foundAdjacent || dot > bestDot || (Mathf.Approximately(dot, bestDot) && heartDistance < bestHeartDistance))
+                if (!foundAdjacent || dot > bestDot || (Mathf.Approximately(dot, bestDot) && targetDistance < bestTargetDistance))
                 {
                     bestDot = dot;
-                    bestHeartDistance = heartDistance;
+                    bestTargetDistance = targetDistance;
                     bestDirection = dir;
                     foundAdjacent = true;
                 }

@@ -1124,7 +1124,8 @@ namespace ForestMaze
             float graphHeight = maxY - minY;
 
             // Scale derived from a fixed node size in tiles to keep clearings consistent across grid sizes.
-            const float targetNodeDiameterTiles = 28f;
+            // With NODE_RADIUS = 3.0, targetNodeDiameterTiles = 24 gives scale = 4.0, radius = 12 grid cells = 3.0 world units (at tileSize 0.25)
+            const float targetNodeDiameterTiles = 24f;
             float targetScale = (targetNodeDiameterTiles / 2f) / NODE_RADIUS;
 
             // Clamp to fit-to-grid scale to avoid clipping if the fixed scale would exceed the grid.
@@ -1327,6 +1328,9 @@ namespace ForestMaze
             // Ensure all edge walkable tiles have at least one adjacent walkable tile
             EnsureEdgeTilesAreWalkable(grid, gridWidth, gridHeight);
 
+            // Ensure all edge endpoints are reachable from node centers by progressively converting walls to paths
+            EnsureEdgeConnectivity(state, grid, gridWidth, gridHeight);
+
             // Add entrances
             AddEntrance(grid, gridWidth, gridHeight, state.Random);
 
@@ -1410,6 +1414,9 @@ namespace ForestMaze
                     }
                 }
             }
+
+            // Ensure all edge endpoints are reachable from node centers by progressively converting walls to paths
+            EnsureEdgeConnectivity(state, grid, gridWidth, gridHeight);
         }
 
         private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height, bool includeEndPoint = true, int lineWidth = 2)
@@ -1717,6 +1724,228 @@ namespace ForestMaze
             }
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Ensures all edge endpoints are reachable from their connected node centers
+        /// by progressively converting wall tiles to paths.
+        /// </summary>
+        private static void EnsureEdgeConnectivity(ForestMapState state, char[,] grid, int gridWidth, int gridHeight)
+        {
+            float scale = state.Scale;
+            Vector2 offset = state.Offset;
+
+            foreach (var edge in state.Edges)
+            {
+                Vector2Int startGrid, endGrid;
+
+                if (edge.Partial)
+                {
+                    // For frontier edges: connect endpoint to node center
+                    var connectedNode = state.Nodes[edge.NodeA];
+                    Vector2 nodeCenter = connectedNode.Position * scale + offset;
+                    Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
+
+                    Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                    Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
+
+                    startGrid = endpointGrid;
+                    endGrid = nodeCenterGrid;
+                }
+                else if (edge.NodeB.HasValue)
+                {
+                    // For connected edges: connect node centers
+                    var nodeA = state.Nodes[edge.NodeA];
+                    var nodeB = state.Nodes[edge.NodeB.Value];
+
+                    Vector2 centerA = nodeA.Position * scale + offset;
+                    Vector2 centerB = nodeB.Position * scale + offset;
+
+                    startGrid = new Vector2Int(Mathf.RoundToInt(centerA.x), Mathf.RoundToInt(centerA.y));
+                    endGrid = new Vector2Int(Mathf.RoundToInt(centerB.x), Mathf.RoundToInt(centerB.y));
+                }
+                else
+                {
+                    continue; // Skip edges without a second node
+                }
+
+                // Progressively convert walls to paths until a route exists
+                EnsurePathExists(grid, gridWidth, gridHeight, startGrid, endGrid);
+            }
+        }
+
+        /// <summary>
+        /// Ensures a path exists between start and end by progressively converting
+        /// wall tiles to walkable tiles along the best route.
+        /// </summary>
+        private static void EnsurePathExists(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
+        {
+            const int maxIterations = 100;
+            int iteration = 0;
+
+            while (iteration < maxIterations)
+            {
+                // Try to find a path considering only walkable tiles
+                var path = FindPath(grid, width, height, start, end, false);
+                if (path != null && path.Count > 0)
+                {
+                    // Path found, we're done
+                    return;
+                }
+
+                // No path found - find the best route ignoring walls and convert one blocking tile
+                var blockedPath = FindPath(grid, width, height, start, end, true);
+                if (blockedPath == null || blockedPath.Count == 0)
+                {
+                    // Can't even find a route ignoring walls - shouldn't happen
+                    Debug.LogWarning($"[EnsurePathExists] Cannot find route from ({start.x},{start.y}) to ({end.x},{end.y})");
+                    return;
+                }
+
+                // Find the first non-walkable tile along the blocked path
+                bool convertedTile = false;
+                foreach (var pos in blockedPath)
+                {
+                    if (pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height)
+                    {
+                        if (!IsWalkableTile(grid[pos.y, pos.x]))
+                        {
+                            // Convert this wall tile to a path
+                            grid[pos.y, pos.x] = '.';
+                            convertedTile = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!convertedTile)
+                {
+                    // All tiles along the path are already walkable - shouldn't happen
+                    Debug.LogWarning($"[EnsurePathExists] Path found but no walls to convert from ({start.x},{start.y}) to ({end.x},{end.y})");
+                    return;
+                }
+
+                iteration++;
+            }
+
+            if (iteration >= maxIterations)
+            {
+                Debug.LogWarning($"[EnsurePathExists] Max iterations reached for path from ({start.x},{start.y}) to ({end.x},{end.y})");
+            }
+        }
+
+        /// <summary>
+        /// Simple A* pathfinding on a char grid.
+        /// If ignoreWalls is true, treats all tiles as walkable (used to find best route for wall conversion).
+        /// Returns null if no path found, otherwise returns list of positions from start to end.
+        /// </summary>
+        private static List<Vector2Int> FindPath(char[,] grid, int width, int height, Vector2Int start, Vector2Int end, bool ignoreWalls)
+        {
+            if (start == end)
+                return new List<Vector2Int> { start };
+
+            var openSet = new List<PathNode>();
+            var closedSet = new HashSet<Vector2Int>();
+            var allNodes = new Dictionary<Vector2Int, PathNode>();
+
+            var startNode = new PathNode(start, null, 0, ManhattanDistance(start, end));
+            openSet.Add(startNode);
+            allNodes[start] = startNode;
+
+            Vector2Int[] directions = new Vector2Int[]
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(-1, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, -1)
+            };
+
+            while (openSet.Count > 0)
+            {
+                // Find node with lowest F score
+                int bestIndex = 0;
+                for (int i = 1; i < openSet.Count; i++)
+                {
+                    if (openSet[i].F < openSet[bestIndex].F)
+                        bestIndex = i;
+                }
+
+                var current = openSet[bestIndex];
+                openSet.RemoveAt(bestIndex);
+
+                if (current.Position == end)
+                {
+                    // Reconstruct path
+                    var path = new List<Vector2Int>();
+                    var node = current;
+                    while (node != null)
+                    {
+                        path.Add(node.Position);
+                        node = node.Parent;
+                    }
+                    path.Reverse();
+                    return path;
+                }
+
+                closedSet.Add(current.Position);
+
+                // Check neighbors
+                foreach (var dir in directions)
+                {
+                    Vector2Int neighbor = current.Position + dir;
+
+                    if (neighbor.x < 0 || neighbor.x >= width || neighbor.y < 0 || neighbor.y >= height)
+                        continue;
+
+                    if (closedSet.Contains(neighbor))
+                        continue;
+
+                    if (!ignoreWalls && !IsWalkableTile(grid[neighbor.y, neighbor.x]))
+                        continue;
+
+                    float newG = current.G + 1;
+                    float h = ManhattanDistance(neighbor, end);
+
+                    if (allNodes.TryGetValue(neighbor, out var existingNode))
+                    {
+                        if (newG < existingNode.G)
+                        {
+                            existingNode.G = newG;
+                            existingNode.Parent = current;
+                        }
+                    }
+                    else
+                    {
+                        var newNode = new PathNode(neighbor, current, newG, h);
+                        openSet.Add(newNode);
+                        allNodes[neighbor] = newNode;
+                    }
+                }
+            }
+
+            return null; // No path found
+        }
+
+        private static float ManhattanDistance(Vector2Int a, Vector2Int b)
+        {
+            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+        }
+
+        private class PathNode
+        {
+            public Vector2Int Position;
+            public PathNode Parent;
+            public float G; // Cost from start
+            public float H; // Heuristic cost to end
+            public float F => G + H;
+
+            public PathNode(Vector2Int position, PathNode parent, float g, float h)
+            {
+                Position = position;
+                Parent = parent;
+                G = g;
+                H = h;
+            }
         }
     }
 }
