@@ -1553,9 +1553,12 @@ namespace FaeMaze.Systems
                     Vector2 point = edge.PolylinePoints[i] * scale + offset;
                     Vector2Int pointGrid = new Vector2Int(Mathf.RoundToInt(point.x), Mathf.RoundToInt(point.y));
 
-                    // Connect previous point to this point
+                    // Connect previous point to this point using Bresenham
                     ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
                         gridArray, grid.Width, grid.Height, previousGrid, pointGrid);
+
+                    // Stitch any gaps between the Bresenham segments
+                    StitchDisconnectedPoints(gridArray, grid.Width, grid.Height, previousGrid, pointGrid);
 
                     previousGrid = pointGrid;
                 }
@@ -1592,6 +1595,52 @@ namespace FaeMaze.Systems
             }
 
             Debug.Log($"[DynamicGrowth] Gap-filling complete: {filledCount} edges filled, {skippedCount} edges skipped, {state.Frontier.Count - filledCount - skippedCount} already reachable");
+        }
+
+        /// <summary>
+        /// Stitches two points together if they're not already connected by finding
+        /// a wall tile adjacent to both and converting it to a path tile.
+        /// </summary>
+        private void StitchDisconnectedPoints(char[,] gridArray, int width, int height, Vector2Int pointA, Vector2Int pointB)
+        {
+            // Check if points are already adjacent (Manhattan distance <= 2 allows diagonal + orthogonal)
+            int dx = Mathf.Abs(pointB.x - pointA.x);
+            int dy = Mathf.Abs(pointB.y - pointA.y);
+
+            if (dx <= 1 && dy <= 1)
+            {
+                // Points are already adjacent or same, no stitching needed
+                return;
+            }
+
+            // Find wall tiles adjacent to both points
+            // Check all cells in a small region between the two points
+            int minX = Mathf.Max(0, Mathf.Min(pointA.x, pointB.x) - 1);
+            int maxX = Mathf.Min(width - 1, Mathf.Max(pointA.x, pointB.x) + 1);
+            int minY = Mathf.Max(0, Mathf.Min(pointA.y, pointB.y) - 1);
+            int maxY = Mathf.Min(height - 1, Mathf.Max(pointA.y, pointB.y) + 1);
+
+            // Look for a wall tile that's adjacent to both points
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    // Skip if not a wall
+                    if (gridArray[y, x] != '#') continue;
+
+                    // Check if this wall is adjacent to both points
+                    int distToA = Mathf.Max(Mathf.Abs(x - pointA.x), Mathf.Abs(y - pointA.y));
+                    int distToB = Mathf.Max(Mathf.Abs(x - pointB.x), Mathf.Abs(y - pointB.y));
+
+                    if (distToA <= 1 && distToB <= 1)
+                    {
+                        // Found a wall tile adjacent to both points - convert to path
+                        gridArray[y, x] = '.';
+                        Debug.Log($"[DynamicGrowth] Stitched gap between ({pointA.x},{pointA.y}) and ({pointB.x},{pointB.y}) via tile ({x},{y})");
+                        return;
+                    }
+                }
+            }
         }
 
         /// <summary>
