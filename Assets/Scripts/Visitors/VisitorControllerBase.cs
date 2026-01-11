@@ -1720,19 +1720,20 @@ namespace FaeMaze.Visitors
         {
             if (use3DModel)
             {
-                // Disable any existing 2D physics components
+                // Remove any existing 2D physics components immediately
+                // Use DestroyImmediate since we're in Awake and need them gone now
                 Rigidbody2D existingRb2D = GetComponent<Rigidbody2D>();
                 if (existingRb2D != null)
                 {
                     existingRb2D.simulated = false;
-                    Destroy(existingRb2D);
+                    DestroyImmediate(existingRb2D);
                 }
 
                 Collider2D existingCollider2D = GetComponent<Collider2D>();
                 if (existingCollider2D != null)
                 {
                     existingCollider2D.enabled = false;
-                    Destroy(existingCollider2D);
+                    DestroyImmediate(existingCollider2D);
                 }
 
                 // Setup 3D physics
@@ -1759,6 +1760,19 @@ namespace FaeMaze.Visitors
             }
             else
             {
+                // Remove any existing 3D physics components immediately
+                Rigidbody existingRb3D = GetComponent<Rigidbody>();
+                if (existingRb3D != null)
+                {
+                    DestroyImmediate(existingRb3D);
+                }
+
+                CapsuleCollider existingCapsule = GetComponent<CapsuleCollider>();
+                if (existingCapsule != null)
+                {
+                    DestroyImmediate(existingCapsule);
+                }
+
                 // Setup 2D physics
                 rb2D = GetComponent<Rigidbody2D>();
                 if (rb2D == null)
@@ -1766,8 +1780,11 @@ namespace FaeMaze.Visitors
                     rb2D = gameObject.AddComponent<Rigidbody2D>();
                 }
 
-                rb2D.bodyType = RigidbodyType2D.Kinematic;
-                rb2D.gravityScale = 0f;
+                if (rb2D != null)
+                {
+                    rb2D.bodyType = RigidbodyType2D.Kinematic;
+                    rb2D.gravityScale = 0f;
+                }
 
                 // Add CircleCollider2D for trigger detection
                 CircleCollider2D collider = GetComponent<CircleCollider2D>();
@@ -1776,8 +1793,11 @@ namespace FaeMaze.Visitors
                     collider = gameObject.AddComponent<CircleCollider2D>();
                 }
 
-                collider.radius = 0.3f;
-                collider.isTrigger = true;
+                if (collider != null)
+                {
+                    collider.radius = 0.3f;
+                    collider.isTrigger = true;
+                }
             }
         }
 
