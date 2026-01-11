@@ -55,8 +55,12 @@ namespace FaeMaze.Systems
 
         [Header("World-Space Settings")]
         [SerializeField]
-        [Tooltip("Node column radius in graph units")]
+        [Tooltip("Node column cylinder radius in graph units (greedy coverage)")]
         private float nodeRadius = 3.0f;
+
+        [SerializeField]
+        [Tooltip("Node tile placement radius in graph units (smaller to avoid cardinal axis overflow)")]
+        private float nodeTileRadius = 2.5f;
 
         [SerializeField]
         [Tooltip("Wall border depth in graph units")]
@@ -325,7 +329,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders circular node columns centered on each node.
-        /// Creates both a solid 3D cylinder and individual tiles for each node.
+        /// Creates both a solid 3D cylinder (radius=nodeRadius) and individual tiles (radius=nodeTileRadius).
         /// </summary>
         private int RenderNodeColumns(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
@@ -333,16 +337,17 @@ namespace FaeMaze.Systems
 
             // Calculate step size in graph space that corresponds to ~1 grid cell
             float graphStepSize = 1.0f / graphScale;
-            int tilesRadius = Mathf.CeilToInt(nodeRadius / graphStepSize);
+            // Use smaller nodeTileRadius for tile placement to avoid cardinal axis overflow
+            int tilesRadius = Mathf.CeilToInt(nodeTileRadius / graphStepSize);
 
-            Debug.Log($"[MazeRenderer] Node columns: nodeRadius={nodeRadius}, graphScale={graphScale}, " +
-                $"graphStepSize={graphStepSize:F3}, tilesRadius={tilesRadius}");
+            Debug.Log($"[MazeRenderer] Node columns: nodeRadius={nodeRadius}, nodeTileRadius={nodeTileRadius}, " +
+                $"graphScale={graphScale}, graphStepSize={graphStepSize:F3}, tilesRadius={tilesRadius}");
 
             foreach (var node in forestState.Nodes)
             {
                 int nodeTilesBefore = tileCount;
 
-                // Create a solid 3D cylinder at the node center to fill gaps
+                // Create a solid 3D cylinder at the node center to fill gaps (uses larger nodeRadius)
                 CreateNodeColumnCylinder(node, mazeOrigin);
 
                 for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
@@ -353,8 +358,8 @@ namespace FaeMaze.Systems
                         Vector2 offsetFromNode = new Vector2(dx * graphStepSize, dy * graphStepSize);
                         float distance = offsetFromNode.magnitude;
 
-                        // Check if within circular radius
-                        if (distance > nodeRadius) continue;
+                        // Check if within circular radius (use smaller nodeTileRadius)
+                        if (distance > nodeTileRadius) continue;
 
                         Vector2 graphPos = node.Position + offsetFromNode;
 
@@ -395,7 +400,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Creates a 3D cylinder at the node center to fill visual gaps.
-        /// Cylinder has radius 3 (in graph units) and height 0.6 (in world units).
+        /// Cylinder has radius nodeRadius (in graph units) and height 0.3 (in world units).
         /// Uses the same material as path tiles.
         /// </summary>
         private void CreateNodeColumnCylinder(PlanarForestMazeGenerator.Node node, Transform mazeOrigin)
@@ -409,8 +414,9 @@ namespace FaeMaze.Systems
             cylinder.transform.SetParent(tilesParent);
 
             // Calculate world radius: nodeRadius (graph units) * graphScale (grid cells per graph unit) * tileSize (world units per grid cell)
+            // Use the larger nodeRadius for greedy coverage
             float worldRadius = nodeRadius * tileSize * graphScale;
-            float cylinderHeight = 0.6f;
+            float cylinderHeight = 0.3f;
 
             // Unity cylinder default: radius 0.5 (diameter 1), height 2, oriented along Y axis
             // To create a flat disc on the XY plane:
@@ -497,18 +503,20 @@ namespace FaeMaze.Systems
                             foreach (float side in new[] { 1f, -1f })
                             {
                                 Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
+                                Vector2 pushDir = perpendicular * side; // Push direction: away from edge
 
-                                // Check collision with node columns and path tiles
-                                if (!IsWallPositionValid(wallGraphPos, forestState, occupiedWallPositions))
+                                // Get adjusted position (translates away from intersections)
+                                Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                                if (!adjustedPos.HasValue)
                                     continue;
 
-                                occupiedWallPositions.Add(GetQuantizedKey(wallGraphPos));
+                                occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
 
                                 // Orientation perpendicular to edge
                                 float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                 if (side < 0) orientationDegrees += 180f;
 
-                                Vector3 worldPos = GraphToWorldPos(wallGraphPos);
+                                Vector3 worldPos = GraphToWorldPos(adjustedPos.Value);
                                 CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                                 tileCount++;
                             }
@@ -542,16 +550,17 @@ namespace FaeMaze.Systems
                         Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
                         Vector2 wallGraphPos = node.Position + radialDir * r;
 
-                        // Check collision with node columns and path tiles
-                        if (!IsWallPositionValid(wallGraphPos, forestState, occupiedWallPositions))
+                        // Get adjusted position (translates away from intersections)
+                        Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, radialDir, forestState, occupiedWallPositions);
+                        if (!adjustedPos.HasValue)
                             continue;
 
-                        occupiedWallPositions.Add(GetQuantizedKey(wallGraphPos));
+                        occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
 
                         // Orientation: facing outward radially
                         float orientationDegrees = angle * Mathf.Rad2Deg;
 
-                        Vector3 worldPos = GraphToWorldPos(wallGraphPos);
+                        Vector3 worldPos = GraphToWorldPos(adjustedPos.Value);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                         tileCount++;
                     }
@@ -562,11 +571,107 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Checks if a wall position is valid (doesn't intersect node columns or path tiles).
+        /// Gets an adjusted wall position that doesn't intersect node columns or path tiles.
+        /// If the original position intersects, translates it along the shortest vector toward void.
+        /// Returns null if no valid position can be found.
+        /// </summary>
+        private Vector2? GetAdjustedWallPosition(Vector2 wallGraphPos, Vector2 pushDirection,
+            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions)
+        {
+            float graphStepSize = 1.0f / graphScale;
+            float nodeBuffer = 0.3f; // Buffer to prevent walls from touching node columns
+            int maxIterations = 10; // Prevent infinite loops
+
+            Vector2 currentPos = wallGraphPos;
+
+            for (int iter = 0; iter < maxIterations; iter++)
+            {
+                bool needsAdjustment = false;
+                Vector2 adjustmentVector = Vector2.zero;
+
+                // Check if already occupied by path tiles
+                long wallKey = GetQuantizedKey(currentPos);
+                if (occupiedPositions.Contains(wallKey))
+                {
+                    // Push along the provided direction
+                    adjustmentVector = pushDirection.normalized * graphStepSize;
+                    needsAdjustment = true;
+                }
+
+                // Check if already has a wall
+                if (!needsAdjustment && occupiedWallPositions.Contains(wallKey))
+                {
+                    return null; // Don't duplicate walls
+                }
+
+                // Check if inside any node column
+                if (!needsAdjustment)
+                {
+                    foreach (var node in forestState.Nodes)
+                    {
+                        float distToNode = Vector2.Distance(currentPos, node.Position);
+                        float minDist = nodeRadius + nodeBuffer;
+
+                        if (distToNode < minDist)
+                        {
+                            // Calculate push direction: away from node center
+                            Vector2 awayFromNode = (currentPos - node.Position).normalized;
+                            if (awayFromNode.sqrMagnitude < 0.001f)
+                                awayFromNode = pushDirection.normalized;
+
+                            // Push out to just beyond the minimum distance
+                            float pushDist = minDist - distToNode + graphStepSize * 0.5f;
+                            adjustmentVector = awayFromNode * pushDist;
+                            needsAdjustment = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check if intersecting any edge path
+                if (!needsAdjustment)
+                {
+                    foreach (var seg in allEdgeSegments)
+                    {
+                        float distToEdge = DistanceToLineSegment(currentPos, seg.StartGraph, seg.EndGraph);
+                        float minDist = 0.8f; // Minimum distance from edge center
+
+                        if (distToEdge < minDist)
+                        {
+                            // Push perpendicular to the edge, in the direction we're already going
+                            float pushDist = minDist - distToEdge + graphStepSize * 0.5f;
+                            Vector2 pushDir = Vector2.Dot(pushDirection, seg.Perpendicular) >= 0
+                                ? seg.Perpendicular
+                                : -seg.Perpendicular;
+                            adjustmentVector = pushDir * pushDist;
+                            needsAdjustment = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!needsAdjustment)
+                {
+                    // Position is valid
+                    return currentPos;
+                }
+
+                // Apply adjustment
+                currentPos += adjustmentVector;
+            }
+
+            // Could not find valid position
+            return null;
+        }
+
+        /// <summary>
+        /// Simple check if a wall position is valid (for cases where we don't want translation).
         /// </summary>
         private bool IsWallPositionValid(Vector2 wallGraphPos, PlanarForestMazeGenerator.ForestMapState forestState,
             HashSet<long> occupiedWallPositions)
         {
+            float nodeBuffer = 0.3f;
+
             // Check if already occupied by path tiles
             long wallKey = GetQuantizedKey(wallGraphPos);
             if (occupiedPositions.Contains(wallKey)) return false;
@@ -574,8 +679,7 @@ namespace FaeMaze.Systems
             // Check if already has a wall
             if (occupiedWallPositions.Contains(wallKey)) return false;
 
-            // Check if inside any node column (with small buffer)
-            float nodeBuffer = 0.5f; // Buffer to prevent walls from touching node columns
+            // Check if inside any node column
             foreach (var node in forestState.Nodes)
             {
                 float distToNode = Vector2.Distance(wallGraphPos, node.Position);
@@ -609,16 +713,20 @@ namespace FaeMaze.Systems
                     float perpOffset = perpLayer * graphStepSize;
                     Vector2 wallGraphPos = capCenterPos + perpendicular * perpOffset;
 
-                    // Check collision
-                    if (!IsWallPositionValid(wallGraphPos, forestState, occupiedWallPositions))
+                    // Push direction is forward (along edge direction) for end caps
+                    Vector2 pushDir = direction;
+
+                    // Get adjusted position (translates away from intersections)
+                    Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                    if (!adjustedPos.HasValue)
                         continue;
 
-                    occupiedWallPositions.Add(GetQuantizedKey(wallGraphPos));
+                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
 
                     // Orientation: facing back toward the edge (opposite of direction)
                     float orientationDegrees = Mathf.Atan2(-direction.y, -direction.x) * Mathf.Rad2Deg;
 
-                    Vector3 worldPos = GraphToWorldPos(wallGraphPos);
+                    Vector3 worldPos = GraphToWorldPos(adjustedPos.Value);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                     tileCount++;
                 }
