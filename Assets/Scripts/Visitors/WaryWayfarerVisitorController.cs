@@ -65,7 +65,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Timed states take priority (in order of precedence)
             if (isMesmerized)
             {
                 state = VisitorState.Mesmerized;
@@ -104,14 +103,11 @@ namespace FaeMaze.Visitors
             walkedPositions.Clear();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
-            lostSegmentActive = false;
-            lostSegmentEndIndex = 0;
         }
 
         /// <summary>
         /// Handles misstep decision at waypoint using archetype-specific chance.
         /// Wary Wayfarers have LOW misstep chance from config.
-        /// In world-space mode, delegates to base class navigation.
         /// </summary>
         protected override void HandleDetourAtWaypoint()
         {
@@ -119,11 +115,9 @@ namespace FaeMaze.Visitors
                 return;
 
             // Check if state has changed since last waypoint
-            bool stateChanged = (state != previousState);
-            if (stateChanged)
+            if (state != previousState)
             {
                 previousState = state;
-                LogVisitorPath($"state changed to {state}, recalculating path");
                 RecalculatePath();
                 return;
             }
@@ -142,7 +136,7 @@ namespace FaeMaze.Visitors
                     isOnMisstepPath = true;
                     misstepSegmentStartIndex = worldPathIndex;
 
-                    // Recalculate path - base class will handle world-space navigation
+                    // Recalculate path
                     RecalculatePath();
                     return;
                 }
@@ -152,7 +146,6 @@ namespace FaeMaze.Visitors
             if (isOnMisstepPath)
             {
                 isOnMisstepPath = false;
-                LogVisitorPath($"exiting misstep path, recalculating");
                 RecalculatePath();
                 return;
             }
@@ -176,7 +169,7 @@ namespace FaeMaze.Visitors
         /// Wary Wayfarers repath to nearest exit when frightened.
         /// Uses world-space coordinates.
         /// </summary>
-        protected override Vector2Int GetDestinationForCurrentState(Vector2Int currentPos)
+        protected override Vector3 GetDestinationForCurrentState()
         {
             // If frightened and config says to prefer exit, find nearest exit
             if (state == VisitorState.Frightened && ShouldFrightenedPreferExit())
@@ -184,14 +177,11 @@ namespace FaeMaze.Visitors
                 Vector3 nearestExit = FindNearestExitWorldSpace();
                 if (nearestExit != Vector3.zero)
                 {
-                    // Set world destination directly
-                    SetWorldDestination(nearestExit);
+                    return nearestExit;
                 }
-                return originalDestination;
             }
 
-            // Otherwise use base behavior
-            return base.GetDestinationForCurrentState(currentPos);
+            return base.GetDestinationForCurrentState();
         }
 
         /// <summary>

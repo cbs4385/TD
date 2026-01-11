@@ -216,7 +216,8 @@ namespace FaeMaze.Systems
             }
 
             // Rebuild portals from frontier edges using world-space coordinates
-            var removedSpawnPoints = RebuildSpawnPointsFromFrontier();
+            // This also signals visitors to retarget to the heart
+            RebuildSpawnPointsFromFrontier();
 
             // Refresh the maze renderer to show new geometry
             if (mazeRenderer != null)
@@ -227,24 +228,17 @@ namespace FaeMaze.Systems
             // Trigger visitor path recalculation
             TriggerVisitorPathRecalculation();
 
-            // Signal visitors to retarget from removed exits
-            if (removedSpawnPoints != null && removedSpawnPoints.Count > 0)
-            {
-                SignalVisitorsToRetargetFromRemovedExits(removedSpawnPoints);
-            }
-
             Debug.Log("[DynamicGrowth-WorldSpace] Growth cycle complete");
         }
 
         /// <summary>
         /// Rebuilds spawn points from the frontier edges in the ForestMapState.
         /// Removes portals for completed edges and creates portals for partial edges.
-        /// Returns list of removed spawn points for deferred visitor retargeting.
         /// </summary>
-        private List<Vector2Int> RebuildSpawnPointsFromFrontier()
+        private void RebuildSpawnPointsFromFrontier()
         {
-            // Pure world-space implementation - no legacy grid code
-            return RebuildSpawnPointsFromFrontierWorldSpace();
+            // Pure world-space implementation
+            RebuildSpawnPointsFromFrontierWorldSpace();
         }
 
         /// <summary>
@@ -252,10 +246,10 @@ namespace FaeMaze.Systems
         /// Graph positions ARE world positions - no transforms needed.
         /// For frontier edges, the polyline defines the path - no flood fill needed.
         /// </summary>
-        private List<Vector2Int> RebuildSpawnPointsFromFrontierWorldSpace()
+        private void RebuildSpawnPointsFromFrontierWorldSpace()
         {
             var forestMapState = mazeGridBehaviour.ForestMapState;
-            if (forestMapState == null) return new List<Vector2Int>();
+            if (forestMapState == null) return;
 
             // No scale/offset/tileSize - graph positions ARE world positions
 
@@ -336,9 +330,8 @@ namespace FaeMaze.Systems
             Debug.Log($"[DynamicGrowth-WorldSpace] Created {portalCount} portals for {forestMapState.Frontier.Count} frontier edges");
             Debug.Log($"[DynamicGrowth-WorldSpace] Portal dictionary now contains {spawnPointPortals.Count} entries: [{string.Join(", ", spawnPointPortals.Keys.Select(id => $"'{id}'"))}]");
 
-            // In pure world-space mode, we don't track grid positions for retargeting
-            // Visitors will recalculate paths based on the updated graph
-            return new List<Vector2Int>();
+            // Signal all visitors to recalculate paths based on the updated graph
+            SignalVisitorsToRetarget();
         }
 
         /// <summary>
@@ -420,13 +413,13 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Signals visitors targeting removed spawn points to retarget from those positions.
-        /// This allows visitors to select a new destination based on walking distance from the removed exit.
+        /// Signals all visitors to recalculate their paths.
+        /// Called after spawn points are updated.
         /// </summary>
-        private void SignalVisitorsToRetargetFromRemovedExits(List<Vector2Int> removedSpawnPoints)
+        private void SignalVisitorsToRetarget()
         {
             var allVisitors = FaeMaze.Visitors.VisitorRegistry.All;
-            if (allVisitors == null || removedSpawnPoints == null || removedSpawnPoints.Count == 0)
+            if (allVisitors == null)
             {
                 return;
             }
@@ -436,21 +429,14 @@ namespace FaeMaze.Systems
             {
                 if (visitor != null)
                 {
-                    // Check if visitor's destination matches any removed spawn point
-                    foreach (var removedExit in removedSpawnPoints)
-                    {
-                        if (visitor.RetargetFromRemovedExit(removedExit))
-                        {
-                            retargetedCount++;
-                            break; // Only retarget once per visitor
-                        }
-                    }
+                    visitor.RetargetToHeart();
+                    retargetedCount++;
                 }
             }
 
             if (retargetedCount > 0)
             {
-                Debug.Log($"[DynamicGrowth] Retargeted {retargetedCount} visitor(s) from removed exit positions");
+                Debug.Log($"[DynamicGrowth] Retargeted {retargetedCount} visitor(s) to heart");
             }
         }
 

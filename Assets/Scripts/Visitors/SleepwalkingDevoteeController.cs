@@ -88,7 +88,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Timed states take priority (in order of precedence)
             if (isMesmerized)
             {
                 state = VisitorState.Mesmerized;
@@ -171,29 +170,23 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Devotees always head toward Heart when mesmerized.
+        /// Override destination logic - Devotees always head toward Heart when mesmerized.
         /// Uses world-space navigation.
         /// </summary>
-        protected override Vector2Int GetDestinationForCurrentState(Vector2Int currentPos)
+        protected override Vector3 GetDestinationForCurrentState()
         {
-            if (isMesmerized)
+            if (isMesmerized && mazeGridBehaviour != null)
             {
-                // Always head to Heart while mesmerized - use world-space destination
-                if (mazeGridBehaviour != null)
-                {
-                    Vector3 heartWorldPos = mazeGridBehaviour.HeartWorldPosition;
-                    SetWorldDestination(heartWorldPos);
-                }
-                return originalDestination;
+                return mazeGridBehaviour.HeartWorldPosition;
             }
 
             // If frightened, still prefer Heart over exits (drawn to it)
-            if (state == VisitorState.Frightened)
+            if (state == VisitorState.Frightened && mazeGridBehaviour != null)
             {
-                return originalDestination; // Stay toward heart, don't flee to exits
+                return mazeGridBehaviour.HeartWorldPosition;
             }
 
-            return base.GetDestinationForCurrentState(currentPos);
+            return base.GetDestinationForCurrentState();
         }
 
         #endregion
@@ -201,23 +194,35 @@ namespace FaeMaze.Visitors
         #region Detour Behavior
 
         /// <summary>
+        /// Resets detour state - Devotees don't track confusion.
+        /// </summary>
+        protected override void ResetDetourState()
+        {
+            // Devotees don't use confusion tracking
+        }
+
+        /// <summary>
         /// Devotees don't take random detours while mesmerized.
         /// </summary>
-        protected override bool ShouldAttemptDetour(Vector2Int currentPos)
+        protected override void HandleDetourAtWaypoint()
         {
             // No detours while mesmerized - stay on course to Heart
             if (isMesmerized)
             {
-                return false;
+                // Continue along path
+                if (worldPath != null && worldPathIndex < worldPath.Count)
+                {
+                    worldPathIndex++;
+                    if (worldPathIndex >= worldPath.Count)
+                    {
+                        OnPathCompleted();
+                    }
+                }
+                return;
             }
 
-            return base.ShouldAttemptDetour(currentPos);
-        }
-
-        protected override void ResetDetourState()
-        {
-            lostSegmentActive = false;
-            lostSegmentEndIndex = 0;
+            // Use base behavior when not mesmerized
+            base.HandleDetourAtWaypoint();
         }
 
         #endregion

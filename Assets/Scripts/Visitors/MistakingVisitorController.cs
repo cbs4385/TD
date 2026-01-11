@@ -12,7 +12,6 @@ namespace FaeMaze.Visitors
     /// where they recalculate to the destination.
     ///
     /// Uses world-space navigation for all pathfinding.
-    /// Supports optional VisitorArchetypeConfig for customized behavior parameters.
     /// </summary>
     public class MistakingVisitorController : VisitorControllerBase
     {
@@ -70,13 +69,11 @@ namespace FaeMaze.Visitors
             walkedPositions.Clear();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
-            lostSegmentActive = false;
-            lostSegmentEndIndex = 0;
         }
 
         /// <summary>
         /// Handles misstep decision at waypoint.
-        /// In world-space mode, uses simplified misstep logic that triggers path recalculation.
+        /// Uses world-space navigation.
         /// </summary>
         protected override void HandleDetourAtWaypoint()
         {
@@ -84,11 +81,9 @@ namespace FaeMaze.Visitors
                 return;
 
             // Check if state has changed since last waypoint
-            bool stateChanged = (state != previousState);
-            if (stateChanged)
+            if (state != previousState)
             {
                 previousState = state;
-                LogVisitorPath($"state changed to {state}, recalculating path");
                 RecalculatePath();
                 return;
             }
@@ -98,12 +93,11 @@ namespace FaeMaze.Visitors
             {
                 // End misstep - recalculate to destination
                 isOnMisstepPath = false;
-                LogVisitorPath($"exiting misstep path, recalculating");
                 RecalculatePath();
                 return;
             }
 
-            // In world-space mode, misstep behavior is simplified
+            // Check for misstep
             if (misstepEnabled && worldPath != null && worldPathIndex < worldPath.Count)
             {
                 // Track current position
@@ -116,12 +110,10 @@ namespace FaeMaze.Visitors
                 if (roll <= misstepChance)
                 {
                     // Misstep triggered!
-                    LogVisitorPath($"taking misstep");
                     isOnMisstepPath = true;
                     misstepSegmentStartIndex = worldPathIndex;
 
-                    // Recalculate path - the base class will build a new world path
-                    // In world-space mode, this effectively gives a fresh path which may differ
+                    // Recalculate path - gives a fresh path which may differ
                     RecalculatePath();
                     return;
                 }

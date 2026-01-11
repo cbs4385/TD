@@ -27,11 +27,8 @@ namespace FaeMaze.Visitors
         private bool confusionEnabled = true;
 
         [SerializeField]
-        [Tooltip("Draw confusion segments in the scene view for debugging")]
-        private bool debugConfusionGizmos;
-
-        // Note: Confusion state fields (isConfused, confusionSegmentActive, etc.)
-        // are now in VisitorControllerBase as protected fields
+        [Tooltip("Draw debug info in the scene view")]
+        private bool debugGizmos;
 
         #endregion
 
@@ -89,7 +86,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Timed states take priority (in order of precedence)
             if (isMesmerized)
             {
                 state = VisitorState.Mesmerized;
@@ -110,7 +106,7 @@ namespace FaeMaze.Visitors
             {
                 state = VisitorState.Lured;
             }
-            else if (confusionSegmentActive)
+            else if (isConfused && confusionEnabled)
             {
                 state = VisitorState.Confused;
             }
@@ -129,80 +125,56 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected override void ResetDetourState()
         {
-            confusionSegmentActive = false;
-            confusionSegmentEndIndex = 0;
             isConfused = confusionEnabled;
-            lostSegmentActive = false;
-            lostSegmentEndIndex = 0;
         }
 
         /// <summary>
-        /// Determines whether a detour should be attempted based on confusion state.
+        /// Handles detour logic at waypoints using world-space navigation.
         /// LanternDrunks have HIGH confusion chance from config.
-        /// Uses world-space navigation.
         /// </summary>
-        protected override bool ShouldAttemptDetour(Vector2Int currentPos)
+        protected override void HandleDetourAtWaypoint()
         {
-            // Check if we're in an active confusion segment
-            if (confusionSegmentActive)
+            if (mazeGridBehaviour == null || gameController == null)
+                return;
+
+            // Check if state has changed since last waypoint
+            if (state != previousState)
             {
-                if (currentPathIndex <= confusionSegmentEndIndex)
-                {
-                    return false; // Don't interrupt active segment
-                }
-
-                // Segment complete - end it and allow normal routing
-                confusionSegmentActive = false;
-                DecideRecoveryFromConfusion();
-                currentPathIndex++;
-                RefreshStateFromFlags();
-                return false;
-            }
-
-            // Check base class state-specific detour logic
-            bool baseWantsDetour = base.ShouldAttemptDetour(currentPos);
-
-            // Confused state: check if we should trigger confusion detour
-            if (state == VisitorState.Confused && isConfused && confusionEnabled)
-            {
-                // Prevent confusion for first 10 waypoints
-                if (waypointsTraversedSinceSpawn < 10)
-                {
-                    return false;
-                }
-
-                // In world-space mode, use world path for checking position
-                if (worldPath == null || worldPathIndex >= worldPath.Count - 1)
-                {
-                    return false;
-                }
-
-                // Use archetype-specific confusion chance (HIGH for LanternDrunks)
-                float confusionChance = GetConfusionChance();
-                return Random.value <= confusionChance;
-            }
-
-            return baseWantsDetour;
-        }
-
-        /// <summary>
-        /// Handles confusion-specific detour logic.
-        /// LanternDrunks use config-based detour lengths.
-        /// Uses world-space navigation.
-        /// </summary>
-        protected override void HandleStateSpecificDetour(Vector2Int currentPos)
-        {
-            // Handle Confused state detours
-            if (state == VisitorState.Confused && isConfused && confusionEnabled)
-            {
-                // In world-space mode, trigger path recalculation
-                // The base class will handle building a new world path
+                previousState = state;
                 RecalculatePath();
                 return;
             }
 
-            // Fallback to base class implementation (handles Lost state, etc.)
-            base.HandleStateSpecificDetour(currentPos);
+            // Confused state: high chance to recalculate path at each waypoint
+            if (state == VisitorState.Confused && isConfused && confusionEnabled)
+            {
+                // Prevent confusion for first 10 waypoints
+                if (waypointsTraversedSinceSpawn >= 10 && worldPath != null && worldPathIndex < worldPath.Count - 1)
+                {
+                    // Use archetype-specific confusion chance (HIGH for LanternDrunks)
+                    float confusionChance = GetConfusionChance();
+                    if (Random.value <= confusionChance)
+                    {
+                        // Confused! Recalculate path
+                        RecalculatePath();
+
+                        // 50% chance to recover from confusion
+                        DecideRecoveryFromConfusion();
+                        RefreshStateFromFlags();
+                        return;
+                    }
+                }
+            }
+
+            // Continue along path
+            if (worldPath != null && worldPathIndex < worldPath.Count)
+            {
+                worldPathIndex++;
+                if (worldPathIndex >= worldPath.Count)
+                {
+                    OnPathCompleted();
+                }
+            }
         }
 
         #endregion
@@ -213,16 +185,10 @@ namespace FaeMaze.Visitors
         {
             base.OnDrawGizmos();
 
-            // Draw confusion segment using world path
-            if (debugConfusionGizmos && worldPath != null && worldPath.Count > 0 && confusionSegmentEndIndex > 0)
+            if (debugGizmos && isConfused && Application.isPlaying)
             {
-                Gizmos.color = Color.magenta;
-                int lastConfusionIndex = Mathf.Min(confusionSegmentEndIndex, worldPath.Count - 1);
-
-                for (int i = 0; i < lastConfusionIndex; i++)
-                {
-                    Gizmos.DrawLine(worldPath[i], worldPath[i + 1]);
-                }
+                Gizmos.color = new Color(1f, 0.8f, 0f, 0.3f); // Yellow-orange for confused lantern drunk
+                Gizmos.DrawWireSphere(transform.position, visitorSize * 0.02f);
             }
         }
 

@@ -1039,7 +1039,7 @@ namespace FaeMaze.HeartPowers
             }
         }
 
-        public override void ApplyGridOffset(Vector3 worldOffset, Vector2Int gridOffset)
+        public override void ApplyWorldOffset(Vector3 worldOffset)
         {
             targetPosition += worldOffset;
             activationWorldPos += worldOffset;
@@ -1324,7 +1324,7 @@ namespace FaeMaze.HeartPowers
             }
         }
 
-        public override void ApplyGridOffset(Vector3 worldOffset, Vector2Int gridOffset)
+        public override void ApplyWorldOffset(Vector3 worldOffset)
         {
             targetPosition += worldOffset;
             targetWorldPos += worldOffset;

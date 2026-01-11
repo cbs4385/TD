@@ -1067,13 +1067,37 @@ namespace FaeMaze.Visitors
             if (distanceToTarget < waypointReachedDistance)
             {
                 waypointsTraversedSinceSpawn++;
-                worldPathIndex++;
 
+                // Allow derived classes to handle detour logic at waypoints
+                HandleDetourAtWaypoint();
+            }
+        }
+
+        /// <summary>
+        /// Called when visitor reaches a waypoint. Override in derived classes
+        /// to implement detour behaviors (confusion, missteps, etc.).
+        /// Base implementation just advances to the next waypoint.
+        /// </summary>
+        protected virtual void HandleDetourAtWaypoint()
+        {
+            // Default: just advance to next waypoint
+            if (worldPath != null && worldPathIndex < worldPath.Count)
+            {
+                worldPathIndex++;
                 if (worldPathIndex >= worldPath.Count)
                 {
-                    OnWorldSpacePathComplete();
+                    OnPathCompleted();
                 }
             }
+        }
+
+        /// <summary>
+        /// Called when the visitor completes their path.
+        /// Delegates to OnWorldSpacePathComplete for destination handling.
+        /// </summary>
+        protected virtual void OnPathCompleted()
+        {
+            OnWorldSpacePathComplete();
         }
 
         /// <summary>
