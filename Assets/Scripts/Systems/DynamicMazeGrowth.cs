@@ -1570,10 +1570,37 @@ namespace FaeMaze.Systems
                 Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
                 Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
 
-                if (afterCount > beforeCount)
+                // Verify all cells along the corridor are reachable from node center
+                // Even if Bresenham segments share cells, individual cells might be isolated
+                List<Vector2Int> allCorridorCells = new List<Vector2Int>();
+                Vector2Int prevPoint = nodeCenterGrid;
+                for (int i = 0; i < edge.PolylinePoints.Count; i++)
+                {
+                    Vector2 point = edge.PolylinePoints[i] * scale + offset;
+                    Vector2Int pointGrid = new Vector2Int(Mathf.RoundToInt(point.x), Mathf.RoundToInt(point.y));
+
+                    List<Vector2Int> segmentCells = GetBresenhamLineCells(prevPoint, pointGrid);
+                    foreach (var cell in segmentCells)
+                    {
+                        if (!allCorridorCells.Contains(cell))
+                        {
+                            allCorridorCells.Add(cell);
+                        }
+                    }
+                    prevPoint = pointGrid;
+                }
+
+                // Ensure all corridor cells are reachable from node center
+                int connectedCount = EnsureCorridorReachability(gridArray, grid.Width, grid.Height, nodeCenterGrid, allCorridorCells, edgeId);
+                if (connectedCount > 0)
+                {
+                    afterCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
+                }
+
+                if (afterCount > beforeCount || connectedCount > 0)
                 {
                     filledCount++;
-                    Debug.Log($"[DynamicGrowth] Gap-filled edge {edgeId}: added {afterCount - beforeCount} path tiles from ({nodeCenterGrid.x},{nodeCenterGrid.y}) to ({endpointGrid.x},{endpointGrid.y})");
+                    Debug.Log($"[DynamicGrowth] Gap-filled edge {edgeId}: added {afterCount - beforeCount + connectedCount} path tiles from ({nodeCenterGrid.x},{nodeCenterGrid.y}) to ({endpointGrid.x},{endpointGrid.y})");
                 }
                 else
                 {
@@ -1597,6 +1624,115 @@ namespace FaeMaze.Systems
             }
 
             Debug.Log($"[DynamicGrowth] Gap-filling complete: {filledCount} edges filled, {skippedCount} edges skipped, {state.Frontier.Count - filledCount - skippedCount} already reachable");
+        }
+
+        /// <summary>
+        /// Ensures all cells in the corridor are reachable from the node center by converting adjacent walls to paths.
+        /// </summary>
+        private int EnsureCorridorReachability(char[,] gridArray, int width, int height, Vector2Int nodeCenter, List<Vector2Int> corridorCells, int edgeId)
+        {
+            int wallsConverted = 0;
+
+            // Flood fill from node center to find all reachable cells
+            HashSet<Vector2Int> reachable = new HashSet<Vector2Int>();
+            Queue<Vector2Int> queue = new Queue<Vector2Int>();
+            queue.Enqueue(nodeCenter);
+            reachable.Add(nodeCenter);
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+
+                // Check all 8 adjacent cells (including diagonals)
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        if (dx == 0 && dy == 0) continue;
+
+                        int nx = current.x + dx;
+                        int ny = current.y + dy;
+
+                        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+
+                        Vector2Int neighbor = new Vector2Int(nx, ny);
+                        if (reachable.Contains(neighbor)) continue;
+
+                        // Only flood through walkable tiles
+                        if (gridArray[ny, nx] == '.')
+                        {
+                            reachable.Add(neighbor);
+                            queue.Enqueue(neighbor);
+                        }
+                    }
+                }
+            }
+
+            // Check each corridor cell - if not reachable, connect it
+            foreach (var cell in corridorCells)
+            {
+                if (!reachable.Contains(cell))
+                {
+                    // This corridor cell is not reachable - find an adjacent wall to convert
+                    Debug.Log($"[DynamicGrowth] Edge {edgeId}: Corridor cell ({cell.x},{cell.y}) not reachable from node center");
+
+                    // Try to find a wall adjacent to both this cell and a reachable cell
+                    bool connected = false;
+                    for (int dy = -1; dy <= 1 && !connected; dy++)
+                    {
+                        for (int dx = -1; dx <= 1 && !connected; dx++)
+                        {
+                            if (dx == 0 && dy == 0) continue;
+
+                            int wx = cell.x + dx;
+                            int wy = cell.y + dy;
+
+                            if (wx < 0 || wx >= width || wy < 0 || wy >= height) continue;
+
+                            // Check if this is a wall
+                            if (gridArray[wy, wx] != '#') continue;
+
+                            // Check if this wall is adjacent to a reachable cell
+                            bool adjacentToReachable = false;
+                            for (int ddy = -1; ddy <= 1 && !adjacentToReachable; ddy++)
+                            {
+                                for (int ddx = -1; ddx <= 1 && !adjacentToReachable; ddx++)
+                                {
+                                    if (ddx == 0 && ddy == 0) continue;
+
+                                    int rx = wx + ddx;
+                                    int ry = wy + ddy;
+
+                                    if (rx < 0 || rx >= width || ry < 0 || ry >= height) continue;
+
+                                    Vector2Int reachableCandidate = new Vector2Int(rx, ry);
+                                    if (reachable.Contains(reachableCandidate))
+                                    {
+                                        adjacentToReachable = true;
+                                    }
+                                }
+                            }
+
+                            if (adjacentToReachable)
+                            {
+                                // Convert this wall to a path to connect the isolated cell
+                                gridArray[wy, wx] = '.';
+                                reachable.Add(new Vector2Int(wx, wy));
+                                wallsConverted++;
+                                connected = true;
+                                Debug.Log($"[DynamicGrowth] Edge {edgeId}: Connected isolated cell ({cell.x},{cell.y}) via wall at ({wx},{wy})");
+                            }
+                        }
+                    }
+
+                    if (!connected)
+                    {
+                        Debug.LogWarning($"[DynamicGrowth] Edge {edgeId}: Could not connect isolated cell ({cell.x},{cell.y})");
+                    }
+                }
+            }
+
+            return wallsConverted;
         }
 
         /// <summary>
