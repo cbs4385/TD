@@ -59,7 +59,7 @@ namespace FaeMaze.Systems
         private float worldTileSize = 1.0f;
 
         [SerializeField]
-        [Tooltip("Node column radius (same thickness as path)")]
+        [Tooltip("Node column radius")]
         private float nodeRadius = 3.0f;
 
         [SerializeField]
@@ -93,9 +93,17 @@ namespace FaeMaze.Systems
         private List<GameObject> waterTiles;
         private List<GameObject> pathTiles;
 
-        // World-space tile tracking
-        private HashSet<Vector2Int> occupiedPositions;
-        private Dictionary<Vector2Int, List<Vector2>> wallOrientationNormals;
+        // World-space tile tracking - using float positions to avoid grid snapping
+        private HashSet<long> occupiedCells; // Uses quantized positions for overlap checking
+        private List<EdgeSegmentData> allEdgeSegments; // For wall orientation lookup
+
+        private struct EdgeSegmentData
+        {
+            public Vector2 Start;
+            public Vector2 End;
+            public Vector2 Direction;
+            public Vector2 Perpendicular;
+        }
 
         #endregion
 
@@ -144,7 +152,6 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders the maze using world-space coordinates from the planar forest graph.
-        /// Tiles are positioned and oriented according to graph elements.
         /// </summary>
         private void RenderWorldSpaceMaze()
         {
@@ -157,10 +164,8 @@ namespace FaeMaze.Systems
 
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
-            // Create container for tiles
             CreateTilesContainer(mazeOrigin);
 
-            // Initialize batching lists
             if (enableMeshBatching)
             {
                 wallTiles = new List<GameObject>();
@@ -169,25 +174,27 @@ namespace FaeMaze.Systems
                 pathTiles = new List<GameObject>();
             }
 
-            // Track occupied positions for wall generation
-            occupiedPositions = new HashSet<Vector2Int>();
-            wallOrientationNormals = new Dictionary<Vector2Int, List<Vector2>>();
+            // Track occupied positions (path/node tiles) - walls can overlap each other but not these
+            occupiedCells = new HashSet<long>();
+            allEdgeSegments = new List<EdgeSegmentData>();
 
             int renderedTiles = 0;
 
-            // Step 1: Render path tiles along edges (oriented along edge direction)
+            // Step 1: Collect all edge segment data for wall orientation lookup
+            CollectEdgeSegments(forestState);
+
+            // Step 2: Render path tiles along edges (oriented along edge direction)
             renderedTiles += RenderEdgePaths(forestState, mazeOrigin);
 
-            // Step 2: Render node columns (circular, radius = nodeRadius)
+            // Step 3: Render node columns (circular, radius = nodeRadius)
             renderedTiles += RenderNodeColumns(forestState, mazeOrigin);
 
-            // Step 3: Render wall border (3 deep, normal orientation)
-            renderedTiles += RenderWallBorder(mazeOrigin);
+            // Step 4: Render wall border (walls can overlap each other)
+            renderedTiles += RenderWallBorder(forestState, mazeOrigin);
 
             Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +
                 $"({forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges)");
 
-            // Perform batching
             if (enableMeshBatching)
             {
                 PerformMeshBatching();
@@ -195,7 +202,34 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Renders path tiles along each edge, oriented in the direction of the edge.
+        /// Collects all edge segments for wall orientation lookup.
+        /// </summary>
+        private void CollectEdgeSegments(PlanarForestMazeGenerator.ForestMapState forestState)
+        {
+            foreach (var edge in forestState.Edges)
+            {
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 start = edge.PolylinePoints[i];
+                    Vector2 end = edge.PolylinePoints[i + 1];
+                    Vector2 dir = (end - start).normalized;
+
+                    allEdgeSegments.Add(new EdgeSegmentData
+                    {
+                        Start = start,
+                        End = end,
+                        Direction = dir,
+                        Perpendicular = new Vector2(-dir.y, dir.x)
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Renders path tiles along each edge at actual world positions (not grid-snapped).
+        /// Tiles are oriented along the edge direction.
         /// </summary>
         private int RenderEdgePaths(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
@@ -213,32 +247,31 @@ namespace FaeMaze.Systems
                     Vector2 direction = (end - start).normalized;
                     float segmentLength = Vector2.Distance(start, end);
 
-                    // Calculate orientation angle from direction (in degrees for Unity)
+                    // Orientation: tile's "forward" aligns with edge direction
+                    // For flat tiles on XY plane, rotation is around Z axis
                     float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
-                    // Place tiles along the segment
-                    int numTiles = Mathf.CeilToInt(segmentLength / worldTileSize);
+                    // Place tiles along the segment at actual floating-point positions
+                    int numTiles = Mathf.Max(1, Mathf.CeilToInt(segmentLength / worldTileSize));
                     for (int j = 0; j <= numTiles; j++)
                     {
                         float t = numTiles > 0 ? (float)j / numTiles : 0;
                         Vector2 position = Vector2.Lerp(start, end, t);
 
-                        Vector2Int gridPos = ToGridPosition(position);
-                        if (occupiedPositions.Contains(gridPos)) continue;
+                        // Check if this cell is already occupied (using quantized key)
+                        long cellKey = GetCellKey(position);
+                        if (occupiedCells.Contains(cellKey)) continue;
 
-                        // Determine symbol for spawn points at edge endpoints
+                        // Determine symbol
                         char symbol = '.';
                         if (edge.Partial && j == numTiles)
                         {
                             symbol = GetNextSpawnSymbol();
                         }
 
-                        CreateWorldSpaceTile(position, orientationDegrees, symbol, mazeOrigin, isPath: true);
-                        occupiedPositions.Add(gridPos);
+                        CreateWorldSpaceTile(position, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                        occupiedCells.Add(cellKey);
                         tileCount++;
-
-                        // Track normal for adjacent wall tiles
-                        AddWallNormalsAroundPosition(gridPos, direction);
                     }
                 }
             }
@@ -261,16 +294,18 @@ namespace FaeMaze.Systems
                     for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
                     {
                         Vector2 offset = new Vector2(dx * worldTileSize, dy * worldTileSize);
-                        Vector2 position = node.Position + offset;
+                        float distance = offset.magnitude;
 
                         // Check if within circular radius
-                        float distance = offset.magnitude;
                         if (distance > nodeRadius) continue;
 
-                        Vector2Int gridPos = ToGridPosition(position);
-                        if (occupiedPositions.Contains(gridPos)) continue;
+                        Vector2 position = node.Position + offset;
 
-                        // Calculate orientation: radial from center (facing outward)
+                        // Check if this cell is already occupied
+                        long cellKey = GetCellKey(position);
+                        if (occupiedCells.Contains(cellKey)) continue;
+
+                        // Orientation: tiles face outward radially from node center
                         float orientationDegrees = 0f;
                         if (distance > 0.01f)
                         {
@@ -280,21 +315,14 @@ namespace FaeMaze.Systems
 
                         // Determine symbol
                         char symbol = '.';
-                        if (dx == 0 && dy == 0)
+                        if (Mathf.Abs(dx) <= 0 && Mathf.Abs(dy) <= 0)
                         {
                             symbol = node.Kind == "root" ? 'H' : 'N';
                         }
 
-                        CreateWorldSpaceTile(position, orientationDegrees, symbol, mazeOrigin, isPath: true);
-                        occupiedPositions.Add(gridPos);
+                        CreateWorldSpaceTile(position, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                        occupiedCells.Add(cellKey);
                         tileCount++;
-
-                        // Track normal for adjacent wall tiles (radial from node center)
-                        if (distance > 0.01f)
-                        {
-                            Vector2 radialDir = offset.normalized;
-                            AddWallNormalsAroundPosition(gridPos, radialDir);
-                        }
                     }
                 }
             }
@@ -304,65 +332,56 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders wall border tiles around all walkable tiles.
-        /// Wall tiles are oriented normal to the graph element they border.
+        /// Walls can overlap each other but not path/node tiles.
+        /// Each wall is oriented perpendicular to the nearest graph tangent.
         /// </summary>
-        private int RenderWallBorder(Transform mazeOrigin)
+        private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
-            var wallPositions = new HashSet<Vector2Int>();
 
-            // Find all positions that need wall tiles
-            foreach (var walkablePos in occupiedPositions)
+            // Collect all positions that need walls
+            var wallPositionsToRender = new List<Vector2>();
+
+            // For each occupied cell, find surrounding wall positions
+            foreach (var cellKey in occupiedCells)
             {
+                Vector2 cellCenter = GetPositionFromKey(cellKey);
+
                 for (int dx = -wallBorderDepth; dx <= wallBorderDepth; dx++)
                 {
                     for (int dy = -wallBorderDepth; dy <= wallBorderDepth; dy++)
                     {
                         if (dx == 0 && dy == 0) continue;
 
-                        Vector2Int wallPos = new Vector2Int(walkablePos.x + dx, walkablePos.y + dy);
-                        if (occupiedPositions.Contains(wallPos)) continue;
+                        int dist = Mathf.Abs(dx) + Mathf.Abs(dy);
+                        if (dist > wallBorderDepth) continue;
 
-                        // Check Manhattan distance
-                        int distance = Mathf.Abs(dx) + Mathf.Abs(dy);
-                        if (distance > wallBorderDepth) continue;
+                        Vector2 wallPos = cellCenter + new Vector2(dx * worldTileSize, dy * worldTileSize);
+                        long wallKey = GetCellKey(wallPos);
 
-                        wallPositions.Add(wallPos);
+                        // Only skip if it overlaps with a path/node tile (not other walls)
+                        if (occupiedCells.Contains(wallKey)) continue;
 
-                        // Add orientation normal (pointing from walkable toward wall)
-                        if (!wallOrientationNormals.ContainsKey(wallPos))
-                        {
-                            wallOrientationNormals[wallPos] = new List<Vector2>();
-                        }
-                        Vector2 normal = new Vector2(dx, dy).normalized;
-                        wallOrientationNormals[wallPos].Add(normal);
+                        wallPositionsToRender.Add(wallPos);
                     }
                 }
             }
 
-            // Create wall tiles with averaged orientations
-            foreach (var wallPos in wallPositions)
+            // Render walls (allowing overlap with other walls)
+            var renderedWallKeys = new HashSet<long>();
+
+            foreach (var wallPos in wallPositionsToRender)
             {
-                Vector2 position = ToWorldPosition(wallPos);
+                long wallKey = GetCellKey(wallPos);
 
-                // Calculate averaged orientation from all normals
-                float orientationDegrees = 0f;
-                if (wallOrientationNormals.TryGetValue(wallPos, out var normals) && normals.Count > 0)
-                {
-                    Vector2 avgNormal = Vector2.zero;
-                    foreach (var n in normals)
-                    {
-                        avgNormal += n;
-                    }
-                    avgNormal /= normals.Count;
-                    if (avgNormal.sqrMagnitude > 0.001f)
-                    {
-                        avgNormal.Normalize();
-                        orientationDegrees = Mathf.Atan2(avgNormal.y, avgNormal.x) * Mathf.Rad2Deg;
-                    }
-                }
+                // Skip duplicates within same render pass
+                if (renderedWallKeys.Contains(wallKey)) continue;
+                renderedWallKeys.Add(wallKey);
 
-                CreateWorldSpaceTile(position, orientationDegrees, '#', mazeOrigin, isPath: false);
+                // Find orientation: perpendicular to nearest graph tangent
+                float orientationDegrees = GetWallOrientationFromGraph(wallPos, forestState);
+
+                CreateWorldSpaceTile(wallPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                 tileCount++;
             }
 
@@ -370,18 +389,72 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Creates a tile at a world-space position with the given orientation.
+        /// Gets wall orientation perpendicular to the tangent of the nearest graph element.
         /// </summary>
-        private void CreateWorldSpaceTile(Vector2 position, float orientationDegrees, char symbol, Transform mazeOrigin, bool isPath)
+        private float GetWallOrientationFromGraph(Vector2 wallPos, PlanarForestMazeGenerator.ForestMapState forestState)
+        {
+            float minDist = float.MaxValue;
+            Vector2 nearestPerpendicular = Vector2.up;
+
+            // Check distance to each edge segment
+            foreach (var seg in allEdgeSegments)
+            {
+                float dist = DistanceToLineSegment(wallPos, seg.Start, seg.End);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    nearestPerpendicular = seg.Perpendicular;
+                }
+            }
+
+            // Check distance to each node center
+            foreach (var node in forestState.Nodes)
+            {
+                float dist = Vector2.Distance(wallPos, node.Position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    // For nodes, perpendicular points radially outward
+                    Vector2 radial = (wallPos - node.Position).normalized;
+                    nearestPerpendicular = radial;
+                }
+            }
+
+            return Mathf.Atan2(nearestPerpendicular.y, nearestPerpendicular.x) * Mathf.Rad2Deg;
+        }
+
+        /// <summary>
+        /// Distance from point to line segment.
+        /// </summary>
+        private float DistanceToLineSegment(Vector2 point, Vector2 start, Vector2 end)
+        {
+            Vector2 line = end - start;
+            float len2 = line.sqrMagnitude;
+
+            if (len2 < 0.0001f) return Vector2.Distance(point, start);
+
+            float t = Mathf.Clamp01(Vector2.Dot(point - start, line) / len2);
+            Vector2 projection = start + t * line;
+            return Vector2.Distance(point, projection);
+        }
+
+        /// <summary>
+        /// Creates a tile at a world-space position with the given orientation.
+        /// For flat tiles on XY plane, orientation rotates around Z axis.
+        /// </summary>
+        private void CreateWorldSpaceTile(Vector2 position, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall)
         {
             Vector3 worldPos = mazeOrigin.position + new Vector3(position.x, position.y, 0);
 
-            // Calculate rotation: base rotation aligns to XY plane, then apply orientation
-            Quaternion baseRotation = Quaternion.Euler(-90f, 0f, 0f);
-            Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees) * baseRotation;
+            // For flat tiles on XY plane facing -Z (camera), rotate only around Z axis
+            // No X rotation needed - cube with scale (x, y, 0.1) is already flat
+            Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
+
+            // For prefabs that are designed Y-up, we need the -90 X rotation
+            Quaternion prefabRotation = Quaternion.Euler(-90f, 0f, orientationDegrees);
 
             GameObject tileObj = null;
-            Color color = GetColorForSymbol(symbol, isPath);
+            Color color = GetColorForSymbol(symbol, !isWall);
 
             // Add random jitter for walls
             if (symbol == '#')
@@ -395,26 +468,27 @@ namespace FaeMaze.Systems
             {
                 tileObj = Instantiate(wallPrefab, tilesParent);
                 tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = tileRotation;
+                tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = new Vector3(worldTileSize * 0.65f, worldTileSize * 0.65f, worldTileSize);
                 wallTiles?.Add(tileObj);
             }
             else if (symbol == 'N' && nodeHazardPrefab != null)
             {
-                // Path base
-                var pathBase = CreateProceduralWorldTile(worldPos, tileRotation, '.', pathColor);
+                // Path base (flat on XY plane)
+                var pathBase = CreateProceduralFlatTile(worldPos, tileRotation, '.', pathColor);
                 pathBase.transform.SetParent(tilesParent);
                 pathTiles?.Add(pathBase);
 
-                // Node hazard on top
+                // Node hazard on top (uses prefab rotation)
                 tileObj = Instantiate(nodeHazardPrefab, tilesParent);
                 tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = tileRotation;
+                tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = Vector3.one * worldTileSize;
             }
             else
             {
-                tileObj = CreateProceduralWorldTile(worldPos, tileRotation, symbol, color);
+                // Procedural tile - flat on XY plane
+                tileObj = CreateProceduralFlatTile(worldPos, tileRotation, symbol, color);
                 tileObj.transform.SetParent(tilesParent);
 
                 if (symbol == '#')
@@ -430,13 +504,14 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Creates a procedural mesh tile at the given world position and rotation.
+        /// Creates a flat procedural tile on the XY plane.
         /// </summary>
-        private GameObject CreateProceduralWorldTile(Vector3 worldPos, Quaternion rotation, char symbol, Color color)
+        private GameObject CreateProceduralFlatTile(Vector3 worldPos, Quaternion rotation, char symbol, Color color)
         {
             GameObject tileObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
             tileObj.transform.position = worldPos;
             tileObj.transform.rotation = rotation;
+            // Flat on XY plane: width/height = worldTileSize, depth (Z) = thin
             tileObj.transform.localScale = new Vector3(worldTileSize, worldTileSize, 0.1f);
 
             Material material = CreatePBRMaterialForSymbol(symbol, color);
@@ -450,33 +525,21 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Adds orientation normals for wall tiles around a given position.
+        /// Gets a quantized cell key for overlap checking.
         /// </summary>
-        private void AddWallNormalsAroundPosition(Vector2Int centerPos, Vector2 direction)
+        private long GetCellKey(Vector2 position)
         {
-            // Add normals pointing perpendicular to the direction for adjacent wall positions
-            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+            // Quantize to half tile size for more precise overlap detection
+            int x = Mathf.RoundToInt(position.x / (worldTileSize * 0.5f));
+            int y = Mathf.RoundToInt(position.y / (worldTileSize * 0.5f));
+            return ((long)x << 32) | ((long)y & 0xFFFFFFFFL);
+        }
 
-            for (int d = 1; d <= wallBorderDepth; d++)
-            {
-                // Positions perpendicular to the path direction
-                Vector2Int pos1 = new Vector2Int(
-                    centerPos.x + Mathf.RoundToInt(perpendicular.x * d),
-                    centerPos.y + Mathf.RoundToInt(perpendicular.y * d)
-                );
-                Vector2Int pos2 = new Vector2Int(
-                    centerPos.x - Mathf.RoundToInt(perpendicular.x * d),
-                    centerPos.y - Mathf.RoundToInt(perpendicular.y * d)
-                );
-
-                if (!wallOrientationNormals.ContainsKey(pos1))
-                    wallOrientationNormals[pos1] = new List<Vector2>();
-                wallOrientationNormals[pos1].Add(perpendicular);
-
-                if (!wallOrientationNormals.ContainsKey(pos2))
-                    wallOrientationNormals[pos2] = new List<Vector2>();
-                wallOrientationNormals[pos2].Add(-perpendicular);
-            }
+        private Vector2 GetPositionFromKey(long key)
+        {
+            int x = (int)(key >> 32);
+            int y = (int)(key & 0xFFFFFFFFL);
+            return new Vector2(x * worldTileSize * 0.5f, y * worldTileSize * 0.5f);
         }
 
         private int spawnSymbolCounter = 0;
@@ -488,35 +551,15 @@ namespace FaeMaze.Systems
             return validIds[index];
         }
 
-        private Vector2Int ToGridPosition(Vector2 worldPos)
-        {
-            return new Vector2Int(
-                Mathf.RoundToInt(worldPos.x / worldTileSize),
-                Mathf.RoundToInt(worldPos.y / worldTileSize)
-            );
-        }
-
-        private Vector2 ToWorldPosition(Vector2Int gridPos)
-        {
-            return new Vector2(gridPos.x * worldTileSize, gridPos.y * worldTileSize);
-        }
-
         #endregion
 
         #region Grid-Based Rendering (Legacy)
 
-        /// <summary>
-        /// Renders the maze using the traditional grid-based approach.
-        /// </summary>
         private void RenderGridMaze()
         {
-            if (mazeGridBehaviour.Grid == null)
-            {
-                return;
-            }
+            if (mazeGridBehaviour.Grid == null) return;
 
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
-
             CreateTilesContainer(mazeOrigin);
 
             if (enableMeshBatching)
@@ -528,22 +571,16 @@ namespace FaeMaze.Systems
             }
 
             MazeGrid grid = mazeGridBehaviour.Grid;
-            int width = grid.Width;
-            int height = grid.Height;
 
-            int renderedTiles = 0;
-
-            for (int y = 0; y < height; y++)
+            for (int y = 0; y < grid.Height; y++)
             {
-                for (int x = 0; x < width; x++)
+                for (int x = 0; x < grid.Width; x++)
                 {
                     var node = grid.GetNode(x, y);
-                    if (node == null) continue;
-                    if (node.symbol == ' ') continue;
+                    if (node == null || node.symbol == ' ') continue;
 
                     Color tileColor = GetColorForSymbol(node.symbol, node.walkable);
                     CreateGridTile3D(x, y, node.symbol, tileColor);
-                    renderedTiles++;
                 }
             }
 
@@ -558,63 +595,43 @@ namespace FaeMaze.Systems
             Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
             float tileSize = mazeGridBehaviour.TileSize;
 
-            bool useWallPrefab = symbol == '#' && wallPrefab != null;
-            bool useUndergrowthPrefab = symbol == ';' && undergrowthPrefab != null;
-            bool useWaterPrefab = symbol == '~' && waterPrefab != null;
-            bool useNodeHazardPrefab = symbol == 'N' && nodeHazardPrefab != null;
-
             if (symbol == '#' || symbol == ';' || symbol == '~')
             {
-                float jitterX = Random.Range(-0.02f, 0.02f);
-                float jitterY = Random.Range(-0.02f, 0.02f);
-                worldPos += new Vector3(jitterX, jitterY, 0f);
+                worldPos += new Vector3(Random.Range(-0.02f, 0.02f), Random.Range(-0.02f, 0.02f), 0f);
             }
 
             GameObject tileObj = null;
             Quaternion prefabRotation = Quaternion.Euler(-90f, 0f, 0f);
 
-            if (useWallPrefab)
+            if (symbol == '#' && wallPrefab != null)
             {
                 tileObj = Instantiate(wallPrefab, tilesParent);
-                tileObj.name = $"Tile_{gridX}_{gridY}_Wall";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
-
-                if (IsAdjacentToWalkableTile(gridX, gridY))
-                {
-                    LODGroup lodGroup = tileObj.GetComponentInChildren<LODGroup>();
-                    if (lodGroup != null)
-                    {
-                        lodGroup.ForceLOD(0);
-                    }
-                }
             }
-            else if (useUndergrowthPrefab)
+            else if (symbol == ';' && undergrowthPrefab != null)
             {
                 tileObj = Instantiate(undergrowthPrefab, tilesParent);
-                tileObj.name = $"Tile_{gridX}_{gridY}_Undergrowth";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = Vector3.one * tileSize;
             }
-            else if (useWaterPrefab)
+            else if (symbol == '~' && waterPrefab != null)
             {
                 tileObj = Instantiate(waterPrefab, tilesParent);
-                tileObj.name = $"Tile_{gridX}_{gridY}_Water";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = Vector3.one * tileSize;
             }
-            else if (useNodeHazardPrefab)
+            else if (symbol == 'N' && nodeHazardPrefab != null)
             {
-                GameObject pathBase = CreateProceduralGridTile(gridX, gridY, '.', pathColor, tileSize);
+                var pathBase = CreateProceduralGridTile(gridX, gridY, '.', pathColor, tileSize);
                 pathBase.transform.SetParent(tilesParent);
                 pathBase.transform.position = worldPos;
-                AddTileToBatchList('.', pathBase);
+                pathTiles?.Add(pathBase);
 
                 tileObj = Instantiate(nodeHazardPrefab, tilesParent);
-                tileObj.name = $"Tile_{gridX}_{gridY}_NodeHazard";
                 tileObj.transform.position = worldPos;
                 tileObj.transform.rotation = prefabRotation;
                 tileObj.transform.localScale = Vector3.one * tileSize;
@@ -639,39 +656,10 @@ namespace FaeMaze.Systems
             tileObj.transform.localScale = new Vector3(tileSize, tileSize, 0.1f);
 
             Material material = CreatePBRMaterialForSymbol(symbol, color);
-            MeshRenderer renderer = tileObj.GetComponent<MeshRenderer>();
-            if (renderer != null)
-            {
-                renderer.material = material;
-            }
+            var renderer = tileObj.GetComponent<MeshRenderer>();
+            if (renderer != null) renderer.material = material;
 
             return tileObj;
-        }
-
-        private bool IsAdjacentToWalkableTile(int gridX, int gridY)
-        {
-            MazeGrid grid = mazeGridBehaviour.Grid;
-            if (grid == null) return false;
-
-            int[] dx = { 0, 0, 1, -1 };
-            int[] dy = { 1, -1, 0, 0 };
-
-            for (int i = 0; i < 4; i++)
-            {
-                int nx = gridX + dx[i];
-                int ny = gridY + dy[i];
-
-                if (nx >= 0 && nx < grid.Width && ny >= 0 && ny < grid.Height)
-                {
-                    var node = grid.GetNode(nx, ny);
-                    if (node != null && node.walkable)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         #endregion
@@ -695,18 +683,10 @@ namespace FaeMaze.Systems
         {
             switch (symbol)
             {
-                case '#':
-                    wallTiles?.Add(tileObj);
-                    break;
-                case ';':
-                    undergrowthTiles?.Add(tileObj);
-                    break;
-                case '~':
-                    waterTiles?.Add(tileObj);
-                    break;
-                case '.':
-                    pathTiles?.Add(tileObj);
-                    break;
+                case '#': wallTiles?.Add(tileObj); break;
+                case ';': undergrowthTiles?.Add(tileObj); break;
+                case '~': waterTiles?.Add(tileObj); break;
+                case '.': pathTiles?.Add(tileObj); break;
             }
         }
 
@@ -714,29 +694,14 @@ namespace FaeMaze.Systems
         {
             int totalBatches = 0;
 
-            if (wallTiles != null && wallTiles.Count > 0)
-            {
-                var batches = MeshBatcher.BatchInChunks(wallTiles, tilesParent, batchChunkSize, destroyOriginals: true);
-                totalBatches += batches.Count;
-            }
-
-            if (undergrowthTiles != null && undergrowthTiles.Count > 0)
-            {
-                var batches = MeshBatcher.BatchInChunks(undergrowthTiles, tilesParent, batchChunkSize, destroyOriginals: true);
-                totalBatches += batches.Count;
-            }
-
-            if (waterTiles != null && waterTiles.Count > 0)
-            {
-                var batches = MeshBatcher.BatchInChunks(waterTiles, tilesParent, batchChunkSize, destroyOriginals: true);
-                totalBatches += batches.Count;
-            }
-
-            if (pathTiles != null && pathTiles.Count > 0)
-            {
-                var batches = MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, destroyOriginals: true);
-                totalBatches += batches.Count;
-            }
+            if (wallTiles?.Count > 0)
+                totalBatches += MeshBatcher.BatchInChunks(wallTiles, tilesParent, batchChunkSize, true).Count;
+            if (undergrowthTiles?.Count > 0)
+                totalBatches += MeshBatcher.BatchInChunks(undergrowthTiles, tilesParent, batchChunkSize, true).Count;
+            if (waterTiles?.Count > 0)
+                totalBatches += MeshBatcher.BatchInChunks(waterTiles, tilesParent, batchChunkSize, true).Count;
+            if (pathTiles?.Count > 0)
+                totalBatches += MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, true).Count;
 
             Debug.Log($"[MazeRenderer] Created {totalBatches} batched meshes.");
         }
@@ -745,84 +710,61 @@ namespace FaeMaze.Systems
         {
             switch (symbol)
             {
-                case '#':
-                    return PBRMaterialFactory.CreateWallMaterial(color);
-                case ';':
-                    return PBRMaterialFactory.CreateUndergrowthMaterial(color);
-                case '~':
-                    return PBRMaterialFactory.CreateWaterMaterial(color);
-                case '.':
-                    return PBRMaterialFactory.CreatePathMaterial(color);
-                case 'H':
-                    return PBRMaterialFactory.CreateEmissiveMaterial(color, color * 1.5f, 1.0f);
-                default:
-                    return PBRMaterialFactory.CreateLitMaterial(color);
+                case '#': return PBRMaterialFactory.CreateWallMaterial(color);
+                case ';': return PBRMaterialFactory.CreateUndergrowthMaterial(color);
+                case '~': return PBRMaterialFactory.CreateWaterMaterial(color);
+                case '.': return PBRMaterialFactory.CreatePathMaterial(color);
+                case 'H': return PBRMaterialFactory.CreateEmissiveMaterial(color, color * 1.5f, 1.0f);
+                default: return PBRMaterialFactory.CreateLitMaterial(color);
             }
         }
 
         private string GetTileTypeName(char symbol)
         {
-            switch (symbol)
+            return symbol switch
             {
-                case '#': return "Wall";
-                case ';': return "Undergrowth";
-                case '~': return "Water";
-                case 'H': return "Heart";
-                case '.': return "Path";
-                default: return "Unknown";
-            }
+                '#' => "Wall",
+                ';' => "Undergrowth",
+                '~' => "Water",
+                'H' => "Heart",
+                '.' => "Path",
+                _ => "Unknown"
+            };
         }
 
         private Color GetColorForSymbol(char symbol, bool walkable)
         {
-            switch (symbol)
+            return symbol switch
             {
-                case '#':
-                    return wallColor;
-                case ';':
-                    return undergrowthColor;
-                case '~':
-                    return waterColor;
-                case 'H':
-                    return heartColor;
-                case '.':
-                    return pathColor;
-                case 'N':
-                    return pathColor;
-                default:
-                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
-                        return pathColor;
-                    return walkable ? pathColor : wallColor;
-            }
+                '#' => wallColor,
+                ';' => undergrowthColor,
+                '~' => waterColor,
+                'H' => heartColor,
+                '.' => pathColor,
+                'N' => pathColor,
+                _ when char.IsUpper(symbol) && symbol != 'H' && symbol != 'N' => pathColor,
+                _ => walkable ? pathColor : wallColor
+            };
         }
 
         #endregion
 
         #region Public Methods
 
-        /// <summary>
-        /// Forces a complete re-render of the maze.
-        /// </summary>
         public void RefreshMaze()
         {
             if (tilesParent != null)
             {
                 foreach (Transform child in tilesParent)
-                {
                     Destroy(child.gameObject);
-                }
             }
 
             spawnSymbolCounter = 0;
 
             if (mazeGridBehaviour.UseWorldSpaceCoordinates && mazeGridBehaviour.ForestMapState != null)
-            {
                 RenderWorldSpaceMaze();
-            }
             else
-            {
                 RenderGridMaze();
-            }
         }
 
         #endregion
