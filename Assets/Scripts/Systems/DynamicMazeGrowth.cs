@@ -421,7 +421,7 @@ namespace FaeMaze.Systems
             {
                 // Update world-space data from the graph
                 // The graph has already been updated by Step()
-                worldSpaceData = Maze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, tileSize);
+                worldSpaceData = ForestMaze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, tileSize);
 
                 // Update the reference in MazeGridBehaviour using reflection
                 var worldSpaceDataField = typeof(MazeGridBehaviour).GetField("worldSpaceMazeData",
