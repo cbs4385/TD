@@ -1832,7 +1832,6 @@ namespace ForestMaze
         /// Ensures a path exists between start and end by progressively converting
         /// wall tiles to walkable tiles along the direct vector from start to end.
         /// This creates straight corridors instead of winding paths.
-        /// Creates a WIDE corridor by clearing walls perpendicular to the path direction.
         /// </summary>
         private static void EnsureDirectPathExists(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
         {
@@ -1849,7 +1848,6 @@ namespace ForestMaze
             }
 
             const int maxIterations = 100;
-            const int corridorWidth = 3; // Width in tiles perpendicular to path direction
             int iteration = 0;
 
             while (iteration < maxIterations)
@@ -1872,26 +1870,8 @@ namespace ForestMaze
                     return;
                 }
 
-                // Calculate perpendicular direction for corridor widening
-                Vector2 pathDir = new Vector2(end.x - start.x, end.y - start.y).normalized;
-                Vector2 perpDir = new Vector2(-pathDir.y, pathDir.x); // Perpendicular vector
-
-                // Convert this wall tile AND adjacent tiles perpendicular to path to create wide corridor
-                for (int offset = -(corridorWidth / 2); offset <= (corridorWidth / 2); offset++)
-                {
-                    int px = Mathf.RoundToInt(wallToRemove.Value.x + perpDir.x * offset);
-                    int py = Mathf.RoundToInt(wallToRemove.Value.y + perpDir.y * offset);
-
-                    if (px >= 0 && px < width && py >= 0 && py < height)
-                    {
-                        char currentTile = grid[py, px];
-                        // Only convert walls, don't overwrite existing paths or nodes
-                        if (currentTile == '#')
-                        {
-                            grid[py, px] = '.';
-                        }
-                    }
-                }
+                // Convert this wall tile to a path
+                grid[wallToRemove.Value.y, wallToRemove.Value.x] = '.';
 
                 iteration++;
             }
