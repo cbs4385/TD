@@ -1538,30 +1538,32 @@ namespace FaeMaze.Systems
                     continue;
                 }
 
-                // Get endpoint and node center
+                // Get node center
                 var connectedNode = state.Nodes[edge.NodeA];
                 Vector2 nodeCenter = connectedNode.Position * scale + offset;
                 Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
 
-                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
-                Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
-
                 int beforeCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
 
-                // Gap-fill from node center to endpoint
-                ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
-                    gridArray, grid.Width, grid.Height, nodeCenterGrid, endpointGrid);
-
-                // Also gap-fill to intermediate polyline points to ensure full connectivity
-                if (edge.PolylinePoints.Count >= 2)
+                // Gap-fill through ALL polyline points in sequence to ensure continuous corridor
+                // Start from node center and trace through each polyline point
+                Vector2Int previousGrid = nodeCenterGrid;
+                for (int i = 0; i < edge.PolylinePoints.Count; i++)
                 {
-                    Vector2 secondToLast = edge.PolylinePoints[edge.PolylinePoints.Count - 2] * scale + offset;
-                    Vector2Int secondToLastGrid = new Vector2Int(Mathf.RoundToInt(secondToLast.x), Mathf.RoundToInt(secondToLast.y));
+                    Vector2 point = edge.PolylinePoints[i] * scale + offset;
+                    Vector2Int pointGrid = new Vector2Int(Mathf.RoundToInt(point.x), Mathf.RoundToInt(point.y));
+
+                    // Connect previous point to this point
                     ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
-                        gridArray, grid.Width, grid.Height, nodeCenterGrid, secondToLastGrid);
+                        gridArray, grid.Width, grid.Height, previousGrid, pointGrid);
+
+                    previousGrid = pointGrid;
                 }
 
                 int afterCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
+
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
 
                 if (afterCount > beforeCount)
                 {
