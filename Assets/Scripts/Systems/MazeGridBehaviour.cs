@@ -575,6 +575,14 @@ namespace FaeMaze.Systems
         {
             spawnPoints.Clear();
 
+            // World-space coordinates: build maze directly from graph, skip string parsing
+            if (usePlanarGenerator && useWorldSpaceCoordinates)
+            {
+                InitializeFromGraphWorldSpace();
+                return;
+            }
+
+            // Legacy path: parse maze string into grid
             string mazeString;
             TileType[,] tiles;
             char[,] symbols;
@@ -601,14 +609,6 @@ namespace FaeMaze.Systems
                 cachedGeneratedSymbols = symbols;
                 cachedMazeString = mazeString;
                 hasCachedGeneration = true;
-
-                // Generate world-space maze data if enabled
-                if (useWorldSpaceCoordinates)
-                {
-                    WorldSpaceMazeGenerator.ResetSpawnIdCounter();
-                    worldSpaceMazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, worldSpaceTileSize);
-                    Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
-                }
             }
             else
             {
@@ -772,6 +772,73 @@ namespace FaeMaze.Systems
                 OptimizeGridWalls();
             }
 
+        }
+
+        /// <summary>
+        /// Initializes the maze directly from the graph state without parsing a string.
+        /// This is the proper world-space coordinate initialization path.
+        /// </summary>
+        private void InitializeFromGraphWorldSpace()
+        {
+            // Generate only the graph state (no string rasterization needed)
+            var result = ForestMaze.PlanarForestMazeGenerator.GenerateMazeWithState(
+                planarGeneratorConfig.gridWidth,
+                planarGeneratorConfig.gridHeight,
+                planarGeneratorConfig.growthTurns,
+                planarGeneratorConfig.randomSeed);
+
+            forestMapState = result.state;
+
+            // Generate world-space maze data directly from graph
+            WorldSpaceMazeGenerator.ResetSpawnIdCounter();
+            worldSpaceMazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, worldSpaceTileSize);
+            worldSpaceMazeData.RecalculateBounds();
+
+            Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
+
+            // Calculate grid dimensions from world-space bounds
+            // Add buffer for frontier edge growth
+            var bounds = worldSpaceMazeData.WorldBounds;
+            int gridMargin = 100; // Extra margin for growth
+            width = Mathf.CeilToInt(bounds.size.x) + gridMargin * 2;
+            height = Mathf.CeilToInt(bounds.size.y) + gridMargin * 2;
+
+            // Calculate offset so that world-space origin maps to grid center
+            // This ensures the graph coordinates map correctly to grid coordinates
+            float offsetX = -bounds.min.x + gridMargin + MazeGrid.GRID_BUFFER;
+            float offsetY = -bounds.min.y + gridMargin + MazeGrid.GRID_BUFFER;
+            forestMapState.Offset = new Vector2(offsetX, offsetY);
+
+            // Create the grid with dimensions based on world-space bounds
+            grid = new MazeGrid(width, height);
+
+            // Populate grid directly from world-space tiles
+            foreach (var tile in worldSpaceMazeData.Tiles)
+            {
+                // Convert world position to grid position using the offset
+                int gridX = Mathf.RoundToInt(tile.Position.x * forestMapState.Scale + forestMapState.Offset.x);
+                int gridY = Mathf.RoundToInt(tile.Position.y * forestMapState.Scale + forestMapState.Offset.y);
+
+                if (!grid.InBounds(gridX, gridY)) continue;
+
+                var node = grid.GetNode(gridX, gridY);
+                if (node == null) continue;
+
+                bool isWalkable = tile.Category == WorldSpaceTile.TileCategory.Path ||
+                                  tile.Category == WorldSpaceTile.TileCategory.Node;
+
+                char symbol = isWalkable ? (tile.Category == WorldSpaceTile.TileCategory.Node ? 'N' : '.') : '#';
+
+                node.walkable = isWalkable;
+                node.symbol = symbol;
+                node.SetTerrain(isWalkable ? TileType.Path : TileType.TreeBramble);
+            }
+
+            // Find heart position at a dead end or central location
+            FindHeartPosition();
+
+            // Set entrance position (will be updated by DynamicMazeGrowth for spawn points)
+            entranceGridPos = heartGridPos; // Temporary, spawn points set by DynamicMazeGrowth
         }
 
         #endregion
