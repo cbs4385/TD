@@ -1477,6 +1477,8 @@ namespace FaeMaze.Systems
         /// </summary>
         private void EnsureFrontierEdgeConnectivity(ForestMaze.PlanarForestMazeGenerator.ForestMapState state, MazeGrid grid)
         {
+            Debug.Log($"[DynamicGrowth] EnsureFrontierEdgeConnectivity: Processing {state.Frontier.Count} frontier edges");
+
             // Convert MazeGrid to char array for gap-filling
             char[,] gridArray = new char[grid.Height, grid.Width];
             for (int y = 0; y < grid.Height; y++)
@@ -1492,11 +1494,16 @@ namespace FaeMaze.Systems
             float scale = state.Scale;
             Vector2 offset = state.Offset;
             int filledCount = 0;
+            int skippedCount = 0;
 
             foreach (int edgeId in state.Frontier)
             {
                 var edge = state.Edges[edgeId];
-                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+                if (!edge.Partial || edge.PolylinePoints.Count == 0)
+                {
+                    skippedCount++;
+                    continue;
+                }
 
                 // Get endpoint and node center
                 var connectedNode = state.Nodes[edge.NodeA];
@@ -1517,6 +1524,10 @@ namespace FaeMaze.Systems
                     filledCount++;
                     Debug.Log($"[DynamicGrowth] Gap-filled edge {edgeId}: added {afterCount - beforeCount} path tiles from ({endpointGrid.x},{endpointGrid.y}) to ({nodeCenterGrid.x},{nodeCenterGrid.y})");
                 }
+                else
+                {
+                    Debug.Log($"[DynamicGrowth] Edge {edgeId} already reachable: ({endpointGrid.x},{endpointGrid.y}) to ({nodeCenterGrid.x},{nodeCenterGrid.y})");
+                }
             }
 
             // Apply changes back to MazeGrid
@@ -1534,10 +1545,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            if (filledCount > 0)
-            {
-                Debug.Log($"[DynamicGrowth] Gap-filled {filledCount} frontier edges");
-            }
+            Debug.Log($"[DynamicGrowth] Gap-filling complete: {filledCount} edges filled, {skippedCount} edges skipped, {state.Frontier.Count - filledCount - skippedCount} already reachable");
         }
 
         /// <summary>
