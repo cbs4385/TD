@@ -598,17 +598,25 @@ namespace FaeMaze.Systems
                 RemovePortalAtSpawnPoint(spawnId);
             }
 
-            // Also clear any remaining debug columns that might have been orphaned
+            // Also clear any remaining portals and debug visualizations that might have been orphaned
             if (portalsParent != null)
             {
+                // Create a list to avoid modifying collection during iteration
+                List<Transform> toDestroy = new List<Transform>();
                 foreach (Transform child in portalsParent)
                 {
-                    if (child != null && child.name.StartsWith("Portal_") &&
-                        (child.name.Contains("_SpawnToNode") || child.name.Contains("_XAxis")))
+                    if (child != null && child.name.StartsWith("Portal_"))
                     {
-                        DestroyImmediate(child.gameObject);
+                        toDestroy.Add(child);
                     }
                 }
+
+                foreach (var child in toDestroy)
+                {
+                    DestroyImmediate(child.gameObject);
+                }
+
+                Debug.Log($"[DynamicGrowth] Destroyed {toDestroy.Count} orphaned portal objects during rebuild");
             }
 
             // Clear all spawn point characters from grid
