@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
+using ForestMaze;
 
 namespace FaeMaze.Visitors
 {
@@ -292,13 +293,13 @@ namespace FaeMaze.Visitors
         /// </summary>
         private List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.PlanarForestMazeGenerator.ForestMapState == null)
             {
                 // Fallback: direct path
                 return new List<Vector3> { end };
             }
 
-            var graphState = mazeGridBehaviour.ForestMapState;
+            var graphState = mazeGridBehaviour.PlanarForestMazeGenerator.ForestMapState;
             var result = new List<Vector3>();
 
             // Find nearest node to start
@@ -343,7 +344,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Finds the nearest node index to a world position.
         /// </summary>
-        private int FindNearestNodeIndex(ForestMapState graphState, Vector2 worldPos)
+        private int FindNearestNodeIndex(PlanarForestMazeGenerator.ForestMapState graphState, Vector2 worldPos)
         {
             if (graphState.Nodes == null || graphState.Nodes.Count == 0)
             {
@@ -370,7 +371,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// BFS to find path through graph nodes.
         /// </summary>
-        private List<int> FindNodePath(ForestMapState graphState, int startIndex, int endIndex)
+        private List<int> FindNodePath(PlanarForestMazeGenerator.ForestMapState graphState, int startIndex, int endIndex)
         {
             if (startIndex == endIndex)
             {
@@ -390,14 +391,17 @@ namespace FaeMaze.Visitors
                 // Get neighbors from edges
                 foreach (var edge in graphState.Edges)
                 {
+                    if (edge.Partial || !edge.NodeB.HasValue)
+                        continue;
+
                     int neighborIndex = -1;
-                    if (edge.FromNodeIndex == currentNode && !visited.Contains(edge.ToNodeIndex))
+                    if (edge.NodeA == currentNode && !visited.Contains(edge.NodeB.Value))
                     {
-                        neighborIndex = edge.ToNodeIndex;
+                        neighborIndex = edge.NodeB.Value;
                     }
-                    else if (edge.ToNodeIndex == currentNode && !visited.Contains(edge.FromNodeIndex))
+                    else if (edge.NodeB.Value == currentNode && !visited.Contains(edge.NodeA))
                     {
-                        neighborIndex = edge.FromNodeIndex;
+                        neighborIndex = edge.NodeA;
                     }
 
                     if (neighborIndex >= 0)
@@ -421,31 +425,34 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Gets the world-space points along an edge between two nodes.
         /// </summary>
-        private List<Vector3> GetEdgePoints(ForestMapState graphState, int fromNode, int toNode)
+        private List<Vector3> GetEdgePoints(PlanarForestMazeGenerator.ForestMapState graphState, int fromNode, int toNode)
         {
             foreach (var edge in graphState.Edges)
             {
-                bool matchesForward = edge.FromNodeIndex == fromNode && edge.ToNodeIndex == toNode;
-                bool matchesReverse = edge.FromNodeIndex == toNode && edge.ToNodeIndex == fromNode;
+                if (edge.Partial || !edge.NodeB.HasValue)
+                    continue;
+
+                bool matchesForward = edge.NodeA == fromNode && edge.NodeB.Value == toNode;
+                bool matchesReverse = edge.NodeA == toNode && edge.NodeB.Value == fromNode;
 
                 if (matchesForward || matchesReverse)
                 {
                     var points = new List<Vector3>();
 
-                    if (edge.Polyline != null && edge.Polyline.Count > 0)
+                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
                     {
                         // Use polyline points
                         if (matchesReverse)
                         {
                             // Reverse the order for traversal
-                            for (int i = edge.Polyline.Count - 1; i >= 0; i--)
+                            for (int i = edge.PolylinePoints.Count - 1; i >= 0; i--)
                             {
-                                points.Add(new Vector3(edge.Polyline[i].x, edge.Polyline[i].y, 0));
+                                points.Add(new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, 0));
                             }
                         }
                         else
                         {
-                            foreach (var pt in edge.Polyline)
+                            foreach (var pt in edge.PolylinePoints)
                             {
                                 points.Add(new Vector3(pt.x, pt.y, 0));
                             }

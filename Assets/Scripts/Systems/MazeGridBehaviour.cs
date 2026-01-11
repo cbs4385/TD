@@ -62,8 +62,28 @@ namespace FaeMaze.Systems
         /// <summary>Gets the world-space tile size for spatial queries.</summary>
         public float WorldSpaceTileSize => worldSpaceTileSize;
 
+        /// <summary>Gets the tile size (alias for WorldSpaceTileSize).</summary>
+        public float TileSize => worldSpaceTileSize;
+
         /// <summary>Gets the heart position in world space (node 0 / seed node).</summary>
         public Vector3 HeartWorldPosition => heartWorldPosition;
+
+        /// <summary>Gets the entrance (first spawn point) position in world space.</summary>
+        public Vector3 EntranceWorldPosition
+        {
+            get
+            {
+                if (worldSpaceMazeData != null && worldSpaceMazeData.SpawnPoints.Count > 0)
+                {
+                    // Return the first spawn point as the entrance
+                    foreach (var kvp in worldSpaceMazeData.SpawnPoints)
+                    {
+                        return kvp.Value;
+                    }
+                }
+                return Vector3.zero;
+            }
+        }
 
         /// <summary>Gets the up direction for the maze, accounting for XY-plane reflection.</summary>
         public Vector3 MazeUpDirection
@@ -286,6 +306,22 @@ namespace FaeMaze.Systems
             drawGizmos = value;
         }
 
+        /// <summary>
+        /// Sets whether to draw grid gizmos (alias for SetDrawGizmos).
+        /// </summary>
+        public void SetDrawGridGizmos(bool value)
+        {
+            drawGizmos = value;
+        }
+
+        /// <summary>
+        /// Sets whether to draw attraction heatmap (no-op in world-space mode).
+        /// </summary>
+        public void SetDrawAttractionHeatmap(bool value)
+        {
+            // No-op: Attraction heatmaps not used in world-space coordinate system
+        }
+
         #endregion
 
         #region Maze Regeneration
@@ -306,7 +342,6 @@ namespace FaeMaze.Systems
             if (heart != null)
             {
                 heart.PositionFromMazeGrid();
-                heart.ApplyAttraction();
             }
 
             // Notify renderer to refresh

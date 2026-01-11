@@ -190,37 +190,32 @@ namespace FaeMaze.Visitors
         /// </summary>
         private Vector3 FindNearestExitWorldSpace()
         {
-            if (mazeGridBehaviour == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
                 return Vector3.zero;
 
-            // Get spawn points from ForestMapState if available
-            var forestState = mazeGridBehaviour.ForestMapState;
-            if (forestState == null || forestState.Nodes == null)
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (mazeData.SpawnPoints == null || mazeData.SpawnPoints.Count == 0)
                 return Vector3.zero;
 
             Vector3 nearestExit = Vector3.zero;
             float shortestDist = float.MaxValue;
             Vector3 currentPos = transform.position;
 
-            // Find portal nodes (they serve as entry/exit points)
-            foreach (var node in forestState.Nodes)
+            // Find nearest spawn point (portals/exits)
+            foreach (var kvp in mazeData.SpawnPoints)
             {
-                // Check if this is a portal/spawn node
-                if (node.IsPortal)
+                Vector3 spawnWorldPos = kvp.Value;
+
+                // Skip if this is too close to our original destination
+                float distToOriginal = Vector3.Distance(spawnWorldPos, worldDestination);
+                if (distToOriginal < 1f)
+                    continue;
+
+                float dist = Vector3.Distance(currentPos, spawnWorldPos);
+                if (dist < shortestDist)
                 {
-                    Vector3 nodeWorldPos = new Vector3(node.Position.x, node.Position.y, 0);
-
-                    // Skip if this is too close to our original destination
-                    float distToOriginal = Vector3.Distance(nodeWorldPos, worldDestination);
-                    if (distToOriginal < 1f)
-                        continue;
-
-                    float dist = Vector3.Distance(currentPos, nodeWorldPos);
-                    if (dist < shortestDist)
-                    {
-                        shortestDist = dist;
-                        nearestExit = nodeWorldPos;
-                    }
+                    shortestDist = dist;
+                    nearestExit = spawnWorldPos;
                 }
             }
 

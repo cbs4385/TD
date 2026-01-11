@@ -777,10 +777,10 @@ namespace FaeMaze.Visitors
 
             foreach (var edge in state.Edges)
             {
-                if (!edge.Partial) // Only use complete edges
+                if (!edge.Partial && edge.NodeB.HasValue) // Only use complete edges
                 {
-                    adjacency[edge.StartNodeIndex].Add(edge.EndNodeIndex);
-                    adjacency[edge.EndNodeIndex].Add(edge.StartNodeIndex);
+                    adjacency[edge.NodeA].Add(edge.NodeB.Value);
+                    adjacency[edge.NodeB.Value].Add(edge.NodeA);
                 }
             }
 

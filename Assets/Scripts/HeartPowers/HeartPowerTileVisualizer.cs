@@ -103,13 +103,19 @@ namespace FaeMaze.HeartPowers
         #region Public Methods
 
         /// <summary>
+        /// Adds a visual effect at a world position (alias for AddTileEffectAtWorldPos).
+        /// </summary>
+        public void AddEffect(Vector3 worldPos, HeartPowerType powerType, float intensity, float duration)
+            => AddTileEffectAtWorldPos(worldPos, powerType, intensity, duration);
+
+        /// <summary>
         /// Adds a visual effect at a world position.
         /// </summary>
         /// <param name="worldPos">World position for the effect</param>
         /// <param name="powerType">Which Heart Power is affecting this position</param>
         /// <param name="intensity">Effect strength (0-1)</param>
         /// <param name="duration">How long the effect lasts (0 = permanent)</param>
-        public void AddEffect(Vector3 worldPos, HeartPowerType powerType, float intensity, float duration)
+        public void AddTileEffectAtWorldPos(Vector3 worldPos, HeartPowerType powerType, float intensity, float duration)
         {
             // Check if this power type already has an effect at similar position
             bool foundExisting = false;

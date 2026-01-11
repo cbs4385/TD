@@ -205,11 +205,8 @@ namespace FaeMaze.HeartPowers
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             }
 
-            // Initialize path cost modifier
-            if (mazeGridBehaviour != null)
-            {
-                pathCostModifier = new PathCostModifier(mazeGridBehaviour);
-            }
+            // Initialize path cost modifier (world-space, no maze reference needed)
+            pathCostModifier = new PathCostModifier();
 
             // Initialize tile visualizer
             CreateTileVisualizerIfNeeded();

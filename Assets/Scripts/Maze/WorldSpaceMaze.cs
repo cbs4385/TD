@@ -97,6 +97,9 @@ namespace ForestMaze
         /// <summary>World-space bounds of the maze</summary>
         public Bounds WorldBounds;
 
+        /// <summary>World-space bounds of the maze (alias for WorldBounds)</summary>
+        public Bounds Bounds => WorldBounds;
+
         /// <summary>Tile size in world units</summary>
         public float TileSize = 1.0f;
 
