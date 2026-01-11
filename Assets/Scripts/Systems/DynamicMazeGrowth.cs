@@ -1550,22 +1550,36 @@ namespace FaeMaze.Systems
                 Vector2Int previousGrid = nodeCenterGrid;
                 List<Vector2Int> previousSegment = null;
 
+                Debug.Log($"[DynamicGrowth] Edge {edgeId}: Starting sequential trace from node ({nodeCenterGrid.x},{nodeCenterGrid.y}) through {edge.PolylinePoints.Count} polyline points");
+
                 for (int i = 0; i < edge.PolylinePoints.Count; i++)
                 {
                     Vector2 point = edge.PolylinePoints[i] * scale + offset;
                     Vector2Int pointGrid = new Vector2Int(Mathf.RoundToInt(point.x), Mathf.RoundToInt(point.y));
 
+                    Debug.Log($"[DynamicGrowth] Edge {edgeId}: Segment {i} from ({previousGrid.x},{previousGrid.y}) to ({pointGrid.x},{pointGrid.y})");
+
                     // Get the cells that will be visited by this Bresenham segment
                     List<Vector2Int> currentSegment = GetBresenhamLineCells(previousGrid, pointGrid);
+                    Debug.Log($"[DynamicGrowth] Edge {edgeId}: Segment {i} has {currentSegment.Count} cells");
 
                     // Draw the Bresenham line
+                    int beforeSegment = CountWalkableTiles(gridArray, grid.Width, grid.Height);
                     ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
                         gridArray, grid.Width, grid.Height, previousGrid, pointGrid);
+                    int afterSegment = CountWalkableTiles(gridArray, grid.Width, grid.Height);
+                    Debug.Log($"[DynamicGrowth] Edge {edgeId}: Segment {i} added {afterSegment - beforeSegment} walkable tiles");
 
                     // Stitch to the previous segment if this is not the first segment
                     if (previousSegment != null)
                     {
+                        int beforeStitch = CountWalkableTiles(gridArray, grid.Width, grid.Height);
                         StitchBresenhamSegments(gridArray, grid.Width, grid.Height, previousSegment, currentSegment);
+                        int afterStitch = CountWalkableTiles(gridArray, grid.Width, grid.Height);
+                        if (afterStitch > beforeStitch)
+                        {
+                            Debug.Log($"[DynamicGrowth] Edge {edgeId}: Stitching segments {i-1} and {i} added {afterStitch - beforeStitch} tiles");
+                        }
                     }
 
                     previousGrid = pointGrid;
@@ -1669,7 +1683,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Check if any cell from segment A is adjacent to any cell from segment B
+            // Check if there's a PATH tile adjacent to both segments (meaning they're connected)
             foreach (var cellA in segmentA)
             {
                 foreach (var cellB in segmentB)
@@ -1677,24 +1691,42 @@ namespace FaeMaze.Systems
                     int dx = Mathf.Abs(cellB.x - cellA.x);
                     int dy = Mathf.Abs(cellB.y - cellA.y);
 
-                    if (dx <= 1 && dy <= 1)
+                    // Check if cells are adjacent
+                    if (dx <= 1 && dy <= 1 && (dx > 0 || dy > 0))
                     {
-                        // Cells are adjacent, no stitching needed
-                        return;
+                        // Cells are adjacent - check if there's a walkable tile connecting them
+                        // Check all tiles between and around these adjacent cells
+                        int minX = Mathf.Min(cellA.x, cellB.x);
+                        int maxX = Mathf.Max(cellA.x, cellB.x);
+                        int minY = Mathf.Min(cellA.y, cellB.y);
+                        int maxY = Mathf.Max(cellA.y, cellB.y);
+
+                        // Check if any tile in the region is walkable and touches both cells
+                        for (int y = minY; y <= maxY; y++)
+                        {
+                            for (int x = minX; x <= maxX; x++)
+                            {
+                                if (x >= 0 && x < width && y >= 0 && y < height && gridArray[y, x] == '.')
+                                {
+                                    // Found a path tile in the region between adjacent cells - they're connected
+                                    return;
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            // Segments are not connected - find a wall tile adjacent to both
+            // Segments are not connected - find a wall tile adjacent to both and convert it
             // Search in the region containing both segments
-            int minX = Mathf.Max(0, Mathf.Min(segmentA.Min(c => c.x), segmentB.Min(c => c.x)) - 1);
-            int maxX = Mathf.Min(width - 1, Mathf.Max(segmentA.Max(c => c.x), segmentB.Max(c => c.x)) + 1);
-            int minY = Mathf.Max(0, Mathf.Min(segmentA.Min(c => c.y), segmentB.Min(c => c.y)) - 1);
-            int maxY = Mathf.Min(height - 1, Mathf.Max(segmentA.Max(c => c.y), segmentB.Max(c => c.y)) + 1);
+            int searchMinX = Mathf.Max(0, Mathf.Min(segmentA.Min(c => c.x), segmentB.Min(c => c.x)) - 1);
+            int searchMaxX = Mathf.Min(width - 1, Mathf.Max(segmentA.Max(c => c.x), segmentB.Max(c => c.x)) + 1);
+            int searchMinY = Mathf.Max(0, Mathf.Min(segmentA.Min(c => c.y), segmentB.Min(c => c.y)) - 1);
+            int searchMaxY = Mathf.Min(height - 1, Mathf.Max(segmentA.Max(c => c.y), segmentB.Max(c => c.y)) + 1);
 
-            for (int y = minY; y <= maxY; y++)
+            for (int y = searchMinY; y <= searchMaxY; y++)
             {
-                for (int x = minX; x <= maxX; x++)
+                for (int x = searchMinX; x <= searchMaxX; x++)
                 {
                     // Skip if not a wall
                     if (gridArray[y, x] != '#') continue;
