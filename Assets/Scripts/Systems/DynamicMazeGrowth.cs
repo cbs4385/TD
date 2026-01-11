@@ -1042,6 +1042,8 @@ namespace FaeMaze.Systems
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
+            Debug.Log($"[DynamicGrowth] Created portal '{spawnId}' at grid {gridPos}, world {finalWorldPos}, target {(targetNodeCenter.HasValue ? targetNodeCenter.Value.ToString() : "fallback")}");
+
             CreateDebugColumn(spawnWorldPos, targetWorldPos, Color.blue, $"Portal_{spawnId}_SpawnToNode");
             CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
                 Color.red, $"Portal_{spawnId}_XAxis");
@@ -1120,11 +1122,16 @@ namespace FaeMaze.Systems
             {
                 if (portal != null)
                 {
+                    Debug.Log($"[DynamicGrowth] Removing portal '{spawnId}' at {portal.transform.position}");
                     // Use DestroyImmediate to ensure portal is removed before creating new ones
                     // This prevents duplicate portals when GrowMaze() is called rapidly
                     DestroyImmediate(portal);
                 }
                 spawnPointPortals.Remove(spawnId);
+            }
+            else
+            {
+                Debug.LogWarning($"[DynamicGrowth] Attempted to remove portal '{spawnId}' but it was not found in dictionary");
             }
         }
 
