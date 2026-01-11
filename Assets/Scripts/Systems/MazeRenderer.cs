@@ -145,6 +145,22 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            // Check if world-space mode is enabled - if so, WorldSpaceMazeRenderer handles rendering
+            if (mazeGridBehaviour.UseWorldSpaceCoordinates && mazeGridBehaviour.ForestMapState != null)
+            {
+                var worldSpaceRenderer = GetComponent<WorldSpaceMazeRenderer>();
+                if (worldSpaceRenderer != null)
+                {
+                    Debug.Log("[MazeRenderer] World-space mode enabled, deferring to WorldSpaceMazeRenderer.");
+                    return;
+                }
+                else
+                {
+                    Debug.LogWarning("[MazeRenderer] World-space mode enabled but no WorldSpaceMazeRenderer found. " +
+                        "Add WorldSpaceMazeRenderer component for world-space rendering.");
+                }
+            }
+
             RenderMaze();
         }
 

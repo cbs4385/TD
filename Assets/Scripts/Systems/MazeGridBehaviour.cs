@@ -4,6 +4,7 @@ using System.Text;
 using UnityEngine;
 using MazeStringGenerator = ForestMaze.ForestMazeGenerator;
 using FaeMaze.Maze;
+using ForestMaze;
 
 namespace FaeMaze.Systems
 {
@@ -70,11 +71,21 @@ namespace FaeMaze.Systems
         [SerializeField]
         private bool drawAttractionHeatmap = true;
 
+        [Header("World-Space Mode")]
+        [SerializeField]
+        [Tooltip("Enable world-space coordinate system instead of grid-based")]
+        private bool useWorldSpaceCoordinates = true;
+
+        [SerializeField]
+        [Tooltip("Tile size in world units for world-space mode")]
+        private float worldSpaceTileSize = 1.0f;
+
         #endregion
 
         #region Private Fields
 
         private MazeGrid grid;
+        private WorldSpaceMazeData worldSpaceMazeData;
         private int width;
         private int height;
         private Vector2Int entranceGridPos;
@@ -110,6 +121,15 @@ namespace FaeMaze.Systems
 
         /// <summary>Gets the forest map state for dynamic maze growth (only available when using planar generator).</summary>
         public ForestMaze.PlanarForestMazeGenerator.ForestMapState ForestMapState => forestMapState;
+
+        /// <summary>Gets the world-space maze data (only available when useWorldSpaceCoordinates is enabled).</summary>
+        public WorldSpaceMazeData WorldSpaceMazeData => worldSpaceMazeData;
+
+        /// <summary>Indicates whether world-space coordinate mode is enabled.</summary>
+        public bool UseWorldSpaceCoordinates => useWorldSpaceCoordinates;
+
+        /// <summary>Gets the world-space tile size.</summary>
+        public float WorldSpaceTileSize => worldSpaceTileSize;
 
         /// <summary>Gets the up direction for the maze, accounting for XY-plane reflection.</summary>
         public Vector3 MazeUpDirection
@@ -577,6 +597,14 @@ namespace FaeMaze.Systems
                 cachedGeneratedSymbols = symbols;
                 cachedMazeString = mazeString;
                 hasCachedGeneration = true;
+
+                // Generate world-space maze data if enabled
+                if (useWorldSpaceCoordinates)
+                {
+                    WorldSpaceMazeGenerator.ResetSpawnIdCounter();
+                    worldSpaceMazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, worldSpaceTileSize);
+                    Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
+                }
             }
             else
             {
@@ -1039,6 +1067,91 @@ namespace FaeMaze.Systems
 
             // Check if in bounds
             return grid != null && grid.InBounds(x, y);
+        }
+
+        /// <summary>
+        /// Converts graph-space coordinates to world position (for world-space mode).
+        /// Graph-space is the coordinate system used by the planar generator.
+        /// </summary>
+        /// <param name="graphPos">Position in graph space</param>
+        /// <returns>World position</returns>
+        public Vector3 GraphToWorld(Vector2 graphPos)
+        {
+            if (mazeOrigin == null)
+            {
+                return new Vector3(graphPos.x, graphPos.y, 0f);
+            }
+
+            return mazeOrigin.position + new Vector3(graphPos.x, graphPos.y, 0f);
+        }
+
+        /// <summary>
+        /// Converts world position to graph-space coordinates (for world-space mode).
+        /// </summary>
+        /// <param name="worldPos">World position</param>
+        /// <returns>Position in graph space</returns>
+        public Vector2 WorldToGraph(Vector3 worldPos)
+        {
+            if (mazeOrigin == null)
+            {
+                return new Vector2(worldPos.x, worldPos.y);
+            }
+
+            Vector3 localPos = worldPos - mazeOrigin.position;
+            return new Vector2(localPos.x, localPos.y);
+        }
+
+        /// <summary>
+        /// Gets the tile at a world position in world-space mode.
+        /// </summary>
+        /// <param name="worldPos">World position to query</param>
+        /// <returns>The tile at that position, or null if not found</returns>
+        public WorldSpaceTile GetWorldSpaceTileAt(Vector3 worldPos)
+        {
+            if (worldSpaceMazeData == null)
+            {
+                return null;
+            }
+
+            Vector2 graphPos = WorldToGraph(worldPos);
+            var nearbyTiles = worldSpaceMazeData.GetTilesNear(graphPos, worldSpaceTileSize * 0.5f);
+
+            WorldSpaceTile closestTile = null;
+            float closestDist = float.MaxValue;
+
+            foreach (var tile in nearbyTiles)
+            {
+                float dist = Vector2.Distance(tile.Position, graphPos);
+                if (dist < closestDist && dist < tile.Size * 0.5f)
+                {
+                    closestDist = dist;
+                    closestTile = tile;
+                }
+            }
+
+            return closestTile;
+        }
+
+        /// <summary>
+        /// Checks if a world position is walkable in world-space mode.
+        /// </summary>
+        /// <param name="worldPos">World position to check</param>
+        /// <returns>True if the position is walkable</returns>
+        public bool IsWalkableAtWorldPos(Vector3 worldPos)
+        {
+            if (worldSpaceMazeData == null)
+            {
+                // Fall back to grid-based check
+                if (WorldToGrid(worldPos, out int x, out int y))
+                {
+                    var node = grid?.GetNode(x, y);
+                    return node != null && node.walkable;
+                }
+                return false;
+            }
+
+            Vector2 graphPos = WorldToGraph(worldPos);
+            return worldSpaceMazeData.IsWalkable(graphPos);
         }
 
         #endregion
