@@ -681,47 +681,49 @@ namespace FaeMaze.Systems
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
-                // Instead of using the endpoint (which is in unexplored space),
-                // find the furthest walkable point along the edge from the connected node
+                // Find the endpoint (last point) of the partial edge
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
                 Vector2 nodeCenter = connectedNode.Position * scale + offset;
                 Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
 
                 Debug.Log($"[DynamicGrowth] Edge {edgeId}: Node {edge.NodeA} at grid {nodeCenterGrid}, {edge.PolylinePoints.Count} polyline points");
 
-                // Find the walkable point that is furthest from the node center
-                Vector2Int spawnGridPos = nodeCenterGrid;
+                // Get the endpoint (last point in polyline)
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
+
+                Debug.Log($"[DynamicGrowth] Endpoint at grid {endpointGrid}");
+
+                // Find the walkable point CLOSEST to the endpoint
+                Vector2Int spawnGridPos = endpointGrid;
                 int walkableCount = 0;
-                float maxDistance = -1f;
+                float minDistanceToEndpoint = float.MaxValue;
 
-                for (int i = 0; i < edge.PolylinePoints.Count; i++)
+                // Search within a small radius around the endpoint
+                const int searchRadius = 3;
+                for (int dy = -searchRadius; dy <= searchRadius; dy++)
                 {
-                    Vector2 point = edge.PolylinePoints[i] * scale + offset;
-                    int px = Mathf.RoundToInt(point.x);
-                    int py = Mathf.RoundToInt(point.y);
+                    for (int dx = -searchRadius; dx <= searchRadius; dx++)
+                    {
+                        int px = endpointGrid.x + dx;
+                        int py = endpointGrid.y + dy;
 
-                    if (px >= 0 && px < grid.Width && py >= 0 && py < grid.Height)
-                    {
-                        var node = grid.GetNode(px, py);
-                        if (node != null && node.walkable)
+                        if (px >= 0 && px < grid.Width && py >= 0 && py < grid.Height)
                         {
-                            float distance = Vector2.Distance(new Vector2(px, py), new Vector2(nodeCenterGrid.x, nodeCenterGrid.y));
-                            Debug.Log($"[DynamicGrowth]   Point {i}: ({px},{py}) walkable, distance={distance:F2}");
-                            if (distance > maxDistance)
+                            var node = grid.GetNode(px, py);
+                            if (node != null && node.walkable)
                             {
-                                maxDistance = distance;
-                                spawnGridPos = new Vector2Int(px, py);
+                                // Find CLOSEST walkable cell to the endpoint
+                                float distanceToEndpoint = (px - endpointGrid.x) * (px - endpointGrid.x) + (py - endpointGrid.y) * (py - endpointGrid.y);
+                                Debug.Log($"[DynamicGrowth]   Cell ({px},{py}) walkable, distance to endpoint={Mathf.Sqrt(distanceToEndpoint):F2}");
+                                if (distanceToEndpoint < minDistanceToEndpoint)
+                                {
+                                    minDistanceToEndpoint = distanceToEndpoint;
+                                    spawnGridPos = new Vector2Int(px, py);
+                                }
+                                walkableCount++;
                             }
-                            walkableCount++;
                         }
-                        else
-                        {
-                            Debug.Log($"[DynamicGrowth]   Point {i}: ({px},{py}) NON-walkable");
-                        }
-                    }
-                    else
-                    {
-                        Debug.Log($"[DynamicGrowth]   Point {i}: ({px},{py}) OUT OF BOUNDS");
                     }
                 }
 
@@ -734,7 +736,7 @@ namespace FaeMaze.Systems
                     UpdateTileSymbol(spawnGridPos, spawnId);
                     CreatePortalAtSpawnPoint(spawnId, spawnGridPos, nodeCenterGrid);
 
-                    Debug.Log($"[DynamicGrowth] Placed spawn point '{spawnId}' at {spawnGridPos} (distance={maxDistance:F2}, {walkableCount} walkable tiles along edge)");
+                    Debug.Log($"[DynamicGrowth] Placed spawn point '{spawnId}' at {spawnGridPos} (distance to endpoint={Mathf.Sqrt(minDistanceToEndpoint):F2}, {walkableCount} walkable cells in search radius)");
                     spawnIndex++;
                 }
             }
