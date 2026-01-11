@@ -279,12 +279,15 @@ namespace FaeMaze.Systems
                 Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
                 Vector3 endpointWorld = new Vector3(endpointPos.x, endpointPos.y, 0f);
 
-                // Calculate direction from endpoint toward the node (OPPOSITE of outward direction)
-                Vector2 directionToNode = (connectedNode.Position - endpointPos).normalized;
+                // Calculate direction from node toward endpoint (outward direction)
+                Vector2 directionOutward = (endpointPos - connectedNode.Position).normalized;
 
-                // Apply half-unit offset TOWARD the node (pulling portal back from the edge)
-                Vector3 portalOffset = new Vector3(directionToNode.x, directionToNode.y, 0f) * 0.5f;
-                Vector3 portalWorldPos = endpointWorld + portalOffset;
+                // Portal is placed at the endpoint
+                Vector3 portalWorldPos = endpointWorld;
+
+                // Wall is placed 0.5 units PAST the endpoint (away from node, blocking the outside)
+                Vector3 wallOffset = new Vector3(directionOutward.x, directionOutward.y, 0f) * 0.5f;
+                Vector3 wallWorldPos = endpointWorld + wallOffset;
 
                 // Get next spawn ID
                 char spawnId = GetNextAvailableSpawnId();
@@ -295,26 +298,26 @@ namespace FaeMaze.Systems
                 }
 
                 // Calculate orientation for wall (perpendicular to path direction)
-                float orientationDegrees = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;
+                float orientationDegrees = Mathf.Atan2(directionOutward.y, directionOutward.x) * Mathf.Rad2Deg;
 
-                // Create wall at portal position to block the path
+                // Create wall PAST the portal to block the path exit
                 if (mazeRenderer != null)
                 {
-                    mazeRenderer.CreateWallAtPosition(portalWorldPos, orientationDegrees);
+                    mazeRenderer.CreateWallAtPosition(wallWorldPos, orientationDegrees);
                 }
 
-                // Mark position as unwalkable in world-space data
+                // Mark wall position as unwalkable in world-space data
                 var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
                 if (worldSpaceData != null)
                 {
-                    worldSpaceData.MarkUnwalkable(new Vector2(portalWorldPos.x, portalWorldPos.y));
+                    worldSpaceData.MarkUnwalkable(new Vector2(wallWorldPos.x, wallWorldPos.y));
                     worldSpaceData.RegisterSpawnPoint(spawnId, portalWorldPos);
                 }
 
                 // Create portal at the frontier endpoint
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, nodeCenterWorld);
 
-                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), portal at ({portalWorldPos.x:F2}, {portalWorldPos.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
+                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), wall at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
 
                 portalCount++;
             }

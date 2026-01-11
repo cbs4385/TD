@@ -935,20 +935,18 @@ namespace FaeMaze.Visitors
         protected void UpdateAnimatorDirection(Vector2 movement)
         {
             // Apply smooth rotation for any model (2D or 3D) to face movement direction
+            // All rotation is around Z axis only (top-down 2D view)
             if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
                 // Calculate angle in XY plane (0 = +X direction)
                 float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
 
+                // Z-axis only rotation for all modes
+                Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+
                 if (use3DModel && modelInstance != null)
                 {
-                    // 3D model: Apply rotations using quaternion multiplication
-                    // 1. First lay model flat (rotate X by 90° - Y-up models designed for XZ ground)
-                    // 2. Then rotate around Z to face movement direction
-                    Quaternion layFlat = Quaternion.Euler(90f, 0f, 0f);
-                    Quaternion faceDirection = Quaternion.AngleAxis(angle, Vector3.forward);
-                    Quaternion targetRotation = faceDirection * layFlat;
-
+                    // Apply Z rotation to model instance
                     modelInstance.transform.rotation = Quaternion.Slerp(
                         modelInstance.transform.rotation,
                         targetRotation,
@@ -957,9 +955,7 @@ namespace FaeMaze.Visitors
                 }
                 else if (use3DModel)
                 {
-                    // 3D mode without modelInstance: Apply rotation to visitor transform itself
-                    // This handles cases where use3DModel=true but no modelPrefab is assigned
-                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                    // Apply Z rotation to visitor transform
                     transform.rotation = Quaternion.Slerp(
                         transform.rotation,
                         targetRotation,
@@ -968,9 +964,7 @@ namespace FaeMaze.Visitors
                 }
                 else if (animator != null)
                 {
-                    // 2D mode with animator: Apply smooth Z rotation to animator transform
-                    // This provides smooth 360-degree rotation instead of cardinal snap
-                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                    // Apply Z rotation to animator transform
                     animator.transform.rotation = Quaternion.Slerp(
                         animator.transform.rotation,
                         targetRotation,
@@ -1718,11 +1712,13 @@ namespace FaeMaze.Visitors
 
         protected virtual void SetupPhysics()
         {
+            // Check for existing physics components
+            Rigidbody existingRb3D = GetComponent<Rigidbody>();
+            Rigidbody2D existingRb2D = GetComponent<Rigidbody2D>();
+
             if (use3DModel)
             {
                 // Remove any existing 2D physics components immediately
-                // Use DestroyImmediate since we're in Awake and need them gone now
-                Rigidbody2D existingRb2D = GetComponent<Rigidbody2D>();
                 if (existingRb2D != null)
                 {
                     existingRb2D.simulated = false;
@@ -1736,8 +1732,8 @@ namespace FaeMaze.Visitors
                     DestroyImmediate(existingCollider2D);
                 }
 
-                // Setup 3D physics
-                rb3D = GetComponent<Rigidbody>();
+                // Setup 3D physics - use existing or add new
+                rb3D = existingRb3D;
                 if (rb3D == null)
                 {
                     rb3D = gameObject.AddComponent<Rigidbody>();
@@ -1761,10 +1757,10 @@ namespace FaeMaze.Visitors
             else
             {
                 // Remove any existing 3D physics components immediately
-                Rigidbody existingRb3D = GetComponent<Rigidbody>();
                 if (existingRb3D != null)
                 {
                     DestroyImmediate(existingRb3D);
+                    existingRb3D = null;
                 }
 
                 CapsuleCollider existingCapsule = GetComponent<CapsuleCollider>();
@@ -1773,8 +1769,18 @@ namespace FaeMaze.Visitors
                     DestroyImmediate(existingCapsule);
                 }
 
-                // Setup 2D physics
-                rb2D = GetComponent<Rigidbody2D>();
+                // Check again if 3D rigidbody still exists (edge case protection)
+                if (GetComponent<Rigidbody>() != null)
+                {
+                    Debug.LogWarning($"[{gameObject.name}] Cannot setup 2D physics - 3D Rigidbody still present. Using 3D mode instead.");
+                    rb3D = GetComponent<Rigidbody>();
+                    rb3D.isKinematic = true;
+                    rb3D.useGravity = false;
+                    return;
+                }
+
+                // Setup 2D physics - use existing or add new
+                rb2D = existingRb2D;
                 if (rb2D == null)
                 {
                     rb2D = gameObject.AddComponent<Rigidbody2D>();
