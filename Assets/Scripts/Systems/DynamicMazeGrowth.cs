@@ -351,6 +351,7 @@ namespace FaeMaze.Systems
             );
 
             // Update the grid with new walkable tiles
+            // CRITICAL: Only ADD new content, never REMOVE existing walkable paths
             List<Vector2Int> newWalkableTiles = new List<Vector2Int>();
             for (int y = 0; y < grid.Height; y++)
             {
@@ -359,33 +360,37 @@ namespace FaeMaze.Systems
                     var node = grid.GetNode(x, y);
                     if (node != null)
                     {
+                        char existingSymbol = node.symbol;
                         char newSymbol = gridArray[y, x];
+                        bool wasWalkable = node.walkable;
 
                         // Skip updating void tiles - preserve the optimization
-                        if (node.symbol == ' ' && newSymbol == '#')
+                        if (existingSymbol == ' ' && newSymbol == '#')
                         {
                             continue; // Don't convert void back to walls
                         }
 
-                        // Preserve spawn point tiles as walkable paths, even if rasterization would make them walls
-                        bool wasSpawnPoint = IsSpawnPointChar(node.symbol);
-                        bool wasWalkable = node.walkable;
+                        // NEVER overwrite existing walkable paths with walls
+                        // Only add new content or update void/wall areas
+                        if (IsWalkableSymbol(existingSymbol))
+                        {
+                            // Keep existing walkable content, don't overwrite with walls
+                            continue;
+                        }
 
+                        // Now we can safely update non-walkable tiles
                         node.symbol = newSymbol;
-                        if (newSymbol == '.' || newSymbol == 'N' || wasSpawnPoint)
+                        if (newSymbol == '.' || newSymbol == 'N')
                         {
                             node.walkable = true;
                             node.SetTerrain(TileType.Path);
 
                             // Track newly added walkable tiles
-                            if (!wasWalkable)
-                            {
-                                newWalkableTiles.Add(new Vector2Int(x, y));
-                            }
+                            newWalkableTiles.Add(new Vector2Int(x, y));
                         }
-                        else if (newSymbol == '#' && node.symbol != ' ')
+                        else if (newSymbol == '#')
                         {
-                            // Only update walls if they weren't void
+                            // Add walls only where there wasn't walkable content
                             node.walkable = false;
                             node.SetTerrain(TileType.TreeBramble);
                         }
@@ -444,6 +449,14 @@ namespace FaeMaze.Systems
         private bool IsSpawnPointChar(char c)
         {
             return char.IsUpper(c) && c != 'H' && c != 'N';
+        }
+
+        /// <summary>
+        /// Checks if a character represents walkable terrain (paths, nodes, or spawn points).
+        /// </summary>
+        private bool IsWalkableSymbol(char c)
+        {
+            return c == '.' || c == 'N' || c == 'H' || IsSpawnPointChar(c);
         }
 
         /// <summary>
