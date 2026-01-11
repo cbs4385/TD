@@ -941,7 +941,7 @@ namespace FaeMaze.Visitors
             if (use3DModel && modelInstance != null && movement.sqrMagnitude > MovementEpsilonSqr)
             {
                 // Rotate 3D model to face movement direction in XY plane
-                // Game uses XY plane for movement with Z as depth/height
+                // Model's forward is +X axis, so angle 0 = facing +X
                 Vector3 movementDir = new Vector3(movement.x, movement.y, 0f).normalized;
 
                 if (movementDir.sqrMagnitude > 0.001f)
@@ -949,15 +949,12 @@ namespace FaeMaze.Visitors
                     // Calculate angle in XY plane (0 = +X direction)
                     float angle = Mathf.Atan2(movementDir.y, movementDir.x) * Mathf.Rad2Deg;
 
-                    // Rotate around Z axis to face movement direction
-                    // Subtract 90 because model's default forward is +Y (facing up in XY plane)
-                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle - 90f);
-
-                    modelInstance.transform.rotation = Quaternion.Slerp(
-                        modelInstance.transform.rotation,
-                        targetRotation,
-                        Time.deltaTime * 10f // Smooth rotation speed
-                    );
+                    // Preserve the model's base X and Y rotations (from prefab)
+                    // Only modify Z rotation for facing direction
+                    // Model's +X axis is forward, so no offset needed
+                    Vector3 currentEuler = modelInstance.transform.localEulerAngles;
+                    float targetZ = Mathf.LerpAngle(currentEuler.z, angle, Time.deltaTime * 10f);
+                    modelInstance.transform.localEulerAngles = new Vector3(currentEuler.x, currentEuler.y, targetZ);
                 }
             }
 
@@ -1758,7 +1755,8 @@ namespace FaeMaze.Visitors
             // Instantiate the model prefab
             modelInstance = Instantiate(modelPrefab, transform);
             modelInstance.transform.localPosition = Vector3.zero;
-            modelInstance.transform.localRotation = Quaternion.identity;
+            // Keep prefab's original rotation (e.g., X:90 for models designed for XY plane)
+            // localRotation is preserved from the prefab, only Z will be modified for facing direction
             modelInstance.transform.localScale = Vector3.one;
 
             // Look for Animator in the model (should be on root or child)
