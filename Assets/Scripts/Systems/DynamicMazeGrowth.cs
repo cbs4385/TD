@@ -1571,7 +1571,7 @@ namespace FaeMaze.Systems
                 Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
 
                 // Verify all cells along the corridor are reachable from node center
-                // Even if Bresenham segments share cells, individual cells might be isolated
+                // Only check WALKABLE cells (after gap-filling has converted walls)
                 List<Vector2Int> allCorridorCells = new List<Vector2Int>();
                 Vector2Int prevPoint = nodeCenterGrid;
                 for (int i = 0; i < edge.PolylinePoints.Count; i++)
@@ -1582,13 +1582,19 @@ namespace FaeMaze.Systems
                     List<Vector2Int> segmentCells = GetBresenhamLineCells(prevPoint, pointGrid);
                     foreach (var cell in segmentCells)
                     {
-                        if (!allCorridorCells.Contains(cell))
+                        // Only add walkable cells to the corridor check list
+                        if (!allCorridorCells.Contains(cell) &&
+                            cell.x >= 0 && cell.x < grid.Width &&
+                            cell.y >= 0 && cell.y < grid.Height &&
+                            gridArray[cell.y, cell.x] == '.')
                         {
                             allCorridorCells.Add(cell);
                         }
                     }
                     prevPoint = pointGrid;
                 }
+
+                Debug.Log($"[DynamicGrowth] Edge {edgeId}: Checking reachability for {allCorridorCells.Count} walkable corridor cells");
 
                 // Ensure all corridor cells are reachable from node center
                 int connectedCount = EnsureCorridorReachability(gridArray, grid.Width, grid.Height, nodeCenterGrid, allCorridorCells, edgeId);
