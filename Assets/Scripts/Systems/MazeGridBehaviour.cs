@@ -152,7 +152,7 @@ namespace FaeMaze.Systems
         /// </summary>
         private void InitializeFromGraph()
         {
-            // Generate the graph (no rasterization - graph positions are world positions)
+            // Generate the graph (positions are initially relative to origin)
             var result = PlanarForestMazeGenerator.GenerateMazeWithState(
                 planarGeneratorConfig.gridWidth,  // Used for initial bounds, not grid
                 planarGeneratorConfig.gridHeight,
@@ -160,6 +160,9 @@ namespace FaeMaze.Systems
                 planarGeneratorConfig.randomSeed);
 
             forestMapState = result.state;
+
+            // Transform all positions to world space by adding mazeOrigin offset
+            TransformToWorldSpace(forestMapState);
 
             // Generate world-space maze data directly from graph
             WorldSpaceMazeGenerator.ResetSpawnIdCounter();
@@ -169,13 +172,53 @@ namespace FaeMaze.Systems
             Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
 
             // Store heart world position (node 0 / root node)
-            // Use GraphToWorld to get actual world position including mazeOrigin offset
+            // Positions are now in world space - no conversion needed
             if (forestMapState.Nodes.Count > 0)
             {
                 var seedNode = forestMapState.Nodes[0];
-                heartWorldPosition = GraphToWorld(seedNode.Position);
+                heartWorldPosition = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
                 Debug.Log($"[MazeGridBehaviour] Heart at world position {heartWorldPosition}");
             }
+        }
+
+        /// <summary>
+        /// Transforms all positions in ForestMapState from local to world space
+        /// by adding the mazeOrigin offset. After this, all positions are world positions.
+        /// </summary>
+        private void TransformToWorldSpace(PlanarForestMazeGenerator.ForestMapState state)
+        {
+            if (mazeOrigin == null) return;
+
+            Vector2 offset = new Vector2(mazeOrigin.position.x, mazeOrigin.position.y);
+
+            // Transform node positions
+            foreach (var node in state.Nodes)
+            {
+                node.Position += offset;
+            }
+
+            // Transform edge polyline points
+            foreach (var edge in state.Edges)
+            {
+                for (int i = 0; i < edge.PolylinePoints.Count; i++)
+                {
+                    edge.PolylinePoints[i] += offset;
+                }
+
+                // Transform ghost center if present
+                if (edge.GhostCenter.HasValue)
+                {
+                    edge.GhostCenter = edge.GhostCenter.Value + offset;
+                }
+            }
+
+            // Transform ghost centers list
+            for (int i = 0; i < state.GhostCenters.Count; i++)
+            {
+                state.GhostCenters[i] += offset;
+            }
+
+            Debug.Log($"[MazeGridBehaviour] Transformed {state.Nodes.Count} nodes and {state.Edges.Count} edges to world space (offset: {offset})");
         }
 
         #endregion
@@ -183,31 +226,21 @@ namespace FaeMaze.Systems
         #region Coordinate Conversion
 
         /// <summary>
-        /// Converts graph-space coordinates to world position.
-        /// In pure world-space mode, this just applies the maze origin offset.
+        /// Converts Vector2 position to Vector3 world position.
+        /// Since ForestMapState positions are already in world space, this is a simple type conversion.
         /// </summary>
-        public Vector3 GraphToWorld(Vector2 graphPos)
+        public Vector3 GraphToWorld(Vector2 worldPos2D)
         {
-            if (mazeOrigin == null)
-            {
-                return new Vector3(graphPos.x, graphPos.y, 0f);
-            }
-
-            return mazeOrigin.position + new Vector3(graphPos.x, graphPos.y, 0f);
+            return new Vector3(worldPos2D.x, worldPos2D.y, 0f);
         }
 
         /// <summary>
-        /// Converts world position to graph-space coordinates.
+        /// Converts Vector3 world position to Vector2.
+        /// Since ForestMapState positions are already in world space, this is a simple type conversion.
         /// </summary>
         public Vector2 WorldToGraph(Vector3 worldPos)
         {
-            if (mazeOrigin == null)
-            {
-                return new Vector2(worldPos.x, worldPos.y);
-            }
-
-            Vector3 localPos = worldPos - mazeOrigin.position;
-            return new Vector2(localPos.x, localPos.y);
+            return new Vector2(worldPos.x, worldPos.y);
         }
 
         /// <summary>

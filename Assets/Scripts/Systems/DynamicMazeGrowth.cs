@@ -271,13 +271,13 @@ namespace FaeMaze.Systems
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
-                // Get the connected node center - use GraphToWorld for proper coordinate conversion
+                // Get the connected node center (already in world space)
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
-                Vector3 nodeCenterWorld = mazeGridBehaviour.GraphToWorld(connectedNode.Position);
+                Vector3 nodeCenterWorld = new Vector3(connectedNode.Position.x, connectedNode.Position.y, 0f);
 
-                // Use the LAST polyline point (the actual frontier endpoint)
+                // Use the LAST polyline point (the actual frontier endpoint, already in world space)
                 Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-                Vector3 endpointWorld = mazeGridBehaviour.GraphToWorld(endpointPos);
+                Vector3 endpointWorld = new Vector3(endpointPos.x, endpointPos.y, 0f);
 
                 // Apply half-unit offset to place portal flush with path end
                 // The offset is in the direction FROM the node TO the endpoint

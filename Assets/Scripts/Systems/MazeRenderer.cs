@@ -210,18 +210,18 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Converts a graph position to world position.
-        /// Uses MazeGridBehaviour.GraphToWorld to apply mazeOrigin offset.
+        /// Converts a Vector2 position to Vector3 world position.
+        /// ForestMapState positions are already in world space, so this is just type conversion.
         /// </summary>
-        private Vector3 GraphToWorldPos(Vector2 graphPos)
+        private Vector3 GraphToWorldPos(Vector2 worldPos2D)
         {
-            // Delegate to MazeGridBehaviour for consistent coordinate conversion
+            // ForestMapState positions are already in world space
+            // This is just a Vector2 to Vector3 type conversion
             if (mazeGridBehaviour != null)
             {
-                return mazeGridBehaviour.GraphToWorld(graphPos);
+                return mazeGridBehaviour.GraphToWorld(worldPos2D);
             }
-            // Fallback if mazeGridBehaviour not available
-            return new Vector3(graphPos.x, graphPos.y, 0f);
+            return new Vector3(worldPos2D.x, worldPos2D.y, 0f);
         }
 
         /// <summary>
@@ -337,12 +337,12 @@ namespace FaeMaze.Systems
                     CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                     occupiedPositions.Add(GetQuantizedKey(exactEndpoint));
                     tileCount++;
-                    Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at graph {exactEndpoint}, world {worldPos}");
+                    Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at world {worldPos}");
                 }
                 else if (isPartialEdge)
                 {
                     // Log successful endpoint placement for diagnostics
-                    Debug.Log($"[MazeRenderer] Partial edge {edge.Id}: endpoint tile placed at graph {exactEndpoint}, world {GraphToWorldPos(exactEndpoint)}");
+                    Debug.Log($"[MazeRenderer] Partial edge {edge.Id}: endpoint tile placed at world {GraphToWorldPos(exactEndpoint)}");
                 }
             }
 

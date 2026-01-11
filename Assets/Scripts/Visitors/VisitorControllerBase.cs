@@ -700,15 +700,15 @@ namespace FaeMaze.Visitors
             var graphState = mazeGridBehaviour.ForestMapState;
             var result = new List<Vector3>();
 
-            // Convert world positions to graph space for node lookup
-            Vector2 startGraphPos = mazeGridBehaviour.WorldToGraph(start);
-            Vector2 endGraphPos = mazeGridBehaviour.WorldToGraph(end);
+            // Convert Vector3 to Vector2 for node lookup (positions are already in world space)
+            Vector2 startPos2D = new Vector2(start.x, start.y);
+            Vector2 endPos2D = new Vector2(end.x, end.y);
 
             // Find nearest node to start
-            int startNodeIndex = FindNearestNodeIndex(graphState, startGraphPos);
+            int startNodeIndex = FindNearestNodeIndex(graphState, startPos2D);
 
             // Find nearest node to end (usually the heart at index 0)
-            int endNodeIndex = FindNearestNodeIndex(graphState, endGraphPos);
+            int endNodeIndex = FindNearestNodeIndex(graphState, endPos2D);
 
             if (startNodeIndex < 0 || endNodeIndex < 0)
             {
@@ -731,15 +731,15 @@ namespace FaeMaze.Visitors
 
             // Check if start is on a partial edge endpoint (spawn point)
             // If so, add that partial edge's polyline (reversed from endpoint toward connected node)
-            ForestMaze.PlanarForestMazeGenerator.Edge startPartialEdge = FindPartialEdgeAtPosition(graphState, startGraphPos);
+            ForestMaze.PlanarForestMazeGenerator.Edge startPartialEdge = FindPartialEdgeAtPosition(graphState, startPos2D);
             if (startPartialEdge != null && startPartialEdge.PolylinePoints.Count > 0)
             {
                 // Add polyline points from endpoint toward connected node (reversed order)
+                // Polyline points are already in world space
                 for (int p = startPartialEdge.PolylinePoints.Count - 2; p >= 0; p--)
                 {
                     var pt = startPartialEdge.PolylinePoints[p];
-                    Vector3 worldPt = mazeGridBehaviour.GraphToWorld(pt);
-                    worldPt.z = start.z;
+                    Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
                     result.Add(worldPt);
                 }
             }
@@ -775,14 +775,13 @@ namespace FaeMaze.Visitors
 
                 if (connectingEdge != null && connectingEdge.PolylinePoints.Count > 0)
                 {
-                    // Add polyline points in correct order, converting from graph to world space
+                    // Add polyline points in correct order (already in world space)
                     if (reversePolyline)
                     {
                         for (int p = connectingEdge.PolylinePoints.Count - 1; p >= 0; p--)
                         {
                             var pt = connectingEdge.PolylinePoints[p];
-                            Vector3 worldPt = mazeGridBehaviour.GraphToWorld(pt);
-                            worldPt.z = start.z;
+                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
                             result.Add(worldPt);
                         }
                     }
@@ -791,18 +790,16 @@ namespace FaeMaze.Visitors
                         for (int p = 0; p < connectingEdge.PolylinePoints.Count; p++)
                         {
                             var pt = connectingEdge.PolylinePoints[p];
-                            Vector3 worldPt = mazeGridBehaviour.GraphToWorld(pt);
-                            worldPt.z = start.z;
+                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
                             result.Add(worldPt);
                         }
                     }
                 }
                 else
                 {
-                    // Fallback: add node position directly, converting to world space
+                    // Fallback: add node position directly (already in world space)
                     var node = graphState.Nodes[nodeB];
-                    Vector3 worldPt = mazeGridBehaviour.GraphToWorld(node.Position);
-                    worldPt.z = start.z;
+                    Vector3 worldPt = new Vector3(node.Position.x, node.Position.y, start.z);
                     result.Add(worldPt);
                 }
             }
