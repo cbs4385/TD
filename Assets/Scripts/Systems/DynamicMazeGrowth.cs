@@ -659,11 +659,11 @@ namespace FaeMaze.Systems
                     // Node center isn't walkable - search for nearest walkable cell
                     Debug.LogWarning($"[DynamicGrowth] Node center {nodeCenterGrid} not walkable (cell={nodeCenterCell?.symbol ?? '?'}), searching for nearby walkable cell");
                     bool foundWalkable = false;
-                    for (int searchRadius = 1; searchRadius <= 5 && !foundWalkable; searchRadius++)
+                    for (int fallbackRadius = 1; fallbackRadius <= 5 && !foundWalkable; fallbackRadius++)
                     {
-                        for (int dy = -searchRadius; dy <= searchRadius && !foundWalkable; dy++)
+                        for (int dy = -fallbackRadius; dy <= fallbackRadius && !foundWalkable; dy++)
                         {
-                            for (int dx = -searchRadius; dx <= searchRadius && !foundWalkable; dx++)
+                            for (int dx = -fallbackRadius; dx <= fallbackRadius && !foundWalkable; dx++)
                             {
                                 int sx = nodeCenterGrid.x + dx;
                                 int sy = nodeCenterGrid.y + dy;
