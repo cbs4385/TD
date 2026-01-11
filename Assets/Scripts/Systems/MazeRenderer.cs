@@ -129,7 +129,7 @@ namespace FaeMaze.Systems
                 return null;
             }
 
-            Transform parent = mazeOrigin != null ? mazeOrigin : transform;
+            Transform parent = mazeGridBehaviour?.MazeOrigin ?? transform;
             GameObject wallObj = Instantiate(wallPrefab, parent);
             wallObj.transform.position = worldPos;
             wallObj.transform.rotation = Quaternion.Euler(0f, 0f, orientationDegrees);
