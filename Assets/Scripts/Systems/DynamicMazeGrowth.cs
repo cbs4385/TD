@@ -1123,11 +1123,21 @@ namespace FaeMaze.Systems
             Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
             Vector3 heartWorldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
-            targetWorldPos = targetOverride ?? heartWorldPos;
-            if (TryGetNearestNodeCenterWorldPos(gridPos, out Vector3 nodeCenterWorldPos))
+
+            // Determine target position: use override if provided, else nearest node center, else heart
+            if (targetOverride.HasValue)
             {
-                targetWorldPos = targetOverride ?? nodeCenterWorldPos;
+                targetWorldPos = targetOverride.Value;
             }
+            else if (TryGetNearestNodeCenterWorldPos(gridPos, out Vector3 nodeCenterWorldPos))
+            {
+                targetWorldPos = nodeCenterWorldPos;
+            }
+            else
+            {
+                targetWorldPos = heartWorldPos;
+            }
+
             Vector2 toTarget = new Vector2(targetWorldPos.x - spawnWorldPos.x, targetWorldPos.y - spawnWorldPos.y);
             float toTargetMagnitude = toTarget.sqrMagnitude > 0f ? toTarget.magnitude : 0f;
             float bestDot = float.NegativeInfinity;
