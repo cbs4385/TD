@@ -256,6 +256,9 @@ namespace FaeMaze.Systems
             int frontierCountBefore = forestMapState.Frontier.Count;
             Debug.Log($"[DynamicGrowth] Starting growth cycle with {frontierCountBefore} frontier edges");
 
+            // Capture frontier edges BEFORE growth to identify new edges later
+            HashSet<int> frontierBeforeGrowth = new HashSet<int>(forestMapState.Frontier);
+
             // Use the same Step() method as initial generation to add a new node
             int nodeCountBefore = forestMapState.Nodes.Count;
             bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
@@ -413,7 +416,8 @@ namespace FaeMaze.Systems
             EnsureWallBordersAroundTiles(newWalkableTiles, 3);
 
             // Mark endpoints of partial frontier edges as walkable so spawn points can be placed there
-            MarkPartialEdgeEndpointsAsWalkable();
+            // ONLY process NEW edges created during this growth cycle, not existing frontier edges
+            MarkPartialEdgeEndpointsAsWalkable(frontierBeforeGrowth);
 
             // Remove old spawn point portals and rebuild from frontier
             // This updates spawn points but doesn't signal visitors yet
@@ -1367,7 +1371,8 @@ namespace FaeMaze.Systems
         /// This ensures spawn points can be placed at the far end of partial edges.
         /// Creates a continuous walkable path from the polyline to the endpoint.
         /// </summary>
-        private void MarkPartialEdgeEndpointsAsWalkable()
+        /// <param name="excludeEdges">Optional set of edge IDs to exclude (existing edges that shouldn't be re-processed)</param>
+        private void MarkPartialEdgeEndpointsAsWalkable(HashSet<int> excludeEdges = null)
         {
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return;
@@ -1377,8 +1382,16 @@ namespace FaeMaze.Systems
             Vector2 offset = forestMapState.Offset;
 
             int markedCount = 0;
+            int skippedCount = 0;
             foreach (int edgeId in forestMapState.Frontier)
             {
+                // Skip existing edges if excludeEdges is provided (during growth)
+                if (excludeEdges != null && excludeEdges.Contains(edgeId))
+                {
+                    skippedCount++;
+                    continue;
+                }
+
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count < 2) continue;
 
@@ -1447,9 +1460,9 @@ namespace FaeMaze.Systems
                 Debug.Log($"[DynamicGrowth] Created walkable path for partial edge {edgeId} from ({startX},{startY}) to ({endX},{endY})");
             }
 
-            if (markedCount > 0)
+            if (markedCount > 0 || skippedCount > 0)
             {
-                Debug.Log($"[DynamicGrowth] Marked {markedCount} cells as walkable along partial edge endpoints");
+                Debug.Log($"[DynamicGrowth] Processed edge endpoints: {markedCount} cells marked walkable, {skippedCount} existing edges skipped");
             }
         }
 
