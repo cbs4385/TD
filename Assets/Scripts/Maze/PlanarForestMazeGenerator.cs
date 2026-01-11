@@ -1765,6 +1765,14 @@ namespace ForestMaze
 
                     startGrid = nodeCenterGrid;
                     endGrid = endpointGrid;
+
+                    // Also ensure connectivity to second-to-last point for full polyline connection
+                    if (edge.PolylinePoints.Count >= 2)
+                    {
+                        Vector2 secondToLast = edge.PolylinePoints[edge.PolylinePoints.Count - 2] * scale + offset;
+                        Vector2Int secondToLastGrid = new Vector2Int(Mathf.RoundToInt(secondToLast.x), Mathf.RoundToInt(secondToLast.y));
+                        EnsureDirectPathExists(grid, gridWidth, gridHeight, nodeCenterGrid, secondToLastGrid);
+                    }
                 }
                 else if (edge.NodeB.HasValue)
                 {

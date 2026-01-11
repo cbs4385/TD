@@ -1585,11 +1585,21 @@ namespace FaeMaze.Systems
                 Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
                 Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
 
-                // Call the gap-filling method from PlanarForestMazeGenerator
-                // IMPORTANT: Start from node center (existing path network) toward endpoint
                 int beforeCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
+
+                // Gap-fill from node center to endpoint
                 ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
                     gridArray, grid.Width, grid.Height, nodeCenterGrid, endpointGrid);
+
+                // Also gap-fill to intermediate polyline points to ensure full connectivity
+                if (edge.PolylinePoints.Count >= 2)
+                {
+                    Vector2 secondToLast = edge.PolylinePoints[edge.PolylinePoints.Count - 2] * scale + offset;
+                    Vector2Int secondToLastGrid = new Vector2Int(Mathf.RoundToInt(secondToLast.x), Mathf.RoundToInt(secondToLast.y));
+                    ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
+                        gridArray, grid.Width, grid.Height, nodeCenterGrid, secondToLastGrid);
+                }
+
                 int afterCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
 
                 if (afterCount > beforeCount)
