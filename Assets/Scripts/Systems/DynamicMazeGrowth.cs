@@ -942,12 +942,9 @@ namespace FaeMaze.Systems
             Vector3 baseWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y, -portalHeightOffset);
             Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
 
-            // Calculate portal position: center at wall edge toward maze interior
-            Vector3 wallDirection = directionToMaze3D;
-            float tileSize = mazeGridBehaviour.TileSize;
-
-            // Position portal center at the wall edge of the tile
-            Vector3 finalWorldPos = baseWorldPos + wallDirection * (tileSize * 0.5f);
+            // For frontier edge portals (with targetNodeCenter), place portal exactly at the edge endpoint
+            // without any offset toward the interior. The portal should be at the tip of the partial edge.
+            Vector3 finalWorldPos = baseWorldPos;
 
             // Create rotation: +X axis points toward the node center vector (spawn -> node).
             Vector3 rotationVector = (targetWorldPos - spawnWorldPos).normalized;
