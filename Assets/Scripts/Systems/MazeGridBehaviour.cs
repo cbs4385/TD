@@ -344,7 +344,11 @@ namespace FaeMaze.Systems
             }
 
             // Optimize grid by removing distant walls and ensuring proper borders
-            OptimizeGridWalls();
+            // Skip optimization for world-space coordinates - content may extend beyond initial bounds
+            if (!useWorldSpaceCoordinates)
+            {
+                OptimizeGridWalls();
+            }
 
             // Log diagnostic info
         }
@@ -761,7 +765,12 @@ namespace FaeMaze.Systems
             // DO NOT call FindHeartPosition() here - it will override the dead-end placement!
 
             // Optimize grid by removing distant walls and ensuring proper borders
-            OptimizeGridWalls();
+            // Skip optimization for world-space coordinates - frontier edges may extend beyond
+            // the initial content area and need those cells to remain available
+            if (!useWorldSpaceCoordinates)
+            {
+                OptimizeGridWalls();
+            }
 
         }
 

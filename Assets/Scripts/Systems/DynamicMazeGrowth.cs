@@ -1656,7 +1656,8 @@ namespace FaeMaze.Systems
                         int ey = endpointGrid.y + dy;
                         if (ex >= 0 && ex < grid.Width && ey >= 0 && ey < grid.Height)
                         {
-                            if (gridArray[ey, ex] == '#')
+                            // Convert walls AND void cells to walkable paths
+                            if (gridArray[ey, ex] == '#' || gridArray[ey, ex] == ' ')
                             {
                                 gridArray[ey, ex] = '.';
                                 endpointsMarked++;
@@ -1744,7 +1745,8 @@ namespace FaeMaze.Systems
                     {
                         if (x0 >= 0 && x0 < grid.Width && y0 >= 0 && y0 < grid.Height)
                         {
-                            if (gridArray[y0, x0] == '#')
+                            // Convert walls AND void cells to walkable paths
+                            if (gridArray[y0, x0] == '#' || gridArray[y0, x0] == ' ')
                             {
                                 gridArray[y0, x0] = '.';
                                 connectionsCreated++;
