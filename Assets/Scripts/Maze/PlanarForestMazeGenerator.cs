@@ -223,17 +223,25 @@ namespace ForestMaze
             };
             state.Nodes.Add(node1);
 
-            // Create edge between root and node1 (straight line for simplicity)
-            Vector2 direction = (node1Pos - root.Position).normalized;
-            Vector2 startBoundary = root.Position + direction * NODE_RADIUS;
-            Vector2 endBoundary = node1Pos - direction * NODE_RADIUS;
+            // Create edge between root and node1 with curved polyline
+            var initialPolyline = BuildCurvedPolyline(state, root.Position, node1Pos,
+                new List<int> { root.Id, node1.Id });
+
+            // Fallback to straight line if curved path fails
+            if (initialPolyline == null)
+            {
+                Vector2 direction = (node1Pos - root.Position).normalized;
+                Vector2 startBoundary = root.Position + direction * NODE_RADIUS;
+                Vector2 endBoundary = node1Pos - direction * NODE_RADIUS;
+                initialPolyline = new List<Vector2> { startBoundary, endBoundary };
+            }
 
             var edge = new Edge
             {
                 Id = state.NextEdgeId++,
                 NodeA = root.Id,
                 NodeB = node1.Id,
-                PolylinePoints = new List<Vector2> { startBoundary, endBoundary },
+                PolylinePoints = initialPolyline,
                 Partial = false,
                 GhostCenter = null
             };
@@ -337,7 +345,8 @@ namespace ForestMaze
                 return false;
 
             float theta0 = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
-            float length0 = (float)(state.Random.NextDouble() * 7.0 + 3.0);
+            // Longer initial length to accommodate curved paths
+            float length0 = (float)(state.Random.NextDouble() * 15.0 + 12.0);
 
             int maxRotations = (int)(180 / ROTATE_STEP);
 
@@ -357,25 +366,22 @@ namespace ForestMaze
                     continue;
 
                 float length = length0;
-                while (length >= MIN_CORRIDOR_LENGTH)
+                while (length >= MIN_SEGMENT_LENGTH * 2)
                 {
                     Vector2 direction = new Vector2(Mathf.Cos(theta), Mathf.Sin(theta));
                     Vector2 ghostCenter = node.Position + direction * (2 * NODE_RADIUS + length);
 
                     if (!IsGhostPositionValid(state, ghostCenter, node.Id))
                     {
-                        length -= SHORTEN_STEP;
+                        length -= SHORTEN_STEP * 2;
                         continue;
                     }
 
-                    // Build straight polyline (no curves)
-                    Vector2 nodeBoundary = node.Position + direction * NODE_RADIUS;
-                    Vector2 ghostBoundary = ghostCenter - direction * NODE_RADIUS;
+                    // Try to build a curved polyline to the ghost position
+                    var polyline = BuildCurvedPolylineToGhost(state, node.Position, ghostCenter,
+                        new List<int> { node.Id });
 
-                    // Create a straight path with just start and end points
-                    var polyline = new List<Vector2> { nodeBoundary, ghostBoundary };
-
-                    if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
+                    if (polyline != null && IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
                     {
                         // Success! Create the partial edge
                         var edge = new Edge
@@ -396,11 +402,47 @@ namespace ForestMaze
                         return true;
                     }
 
-                    length -= SHORTEN_STEP;
+                    length -= SHORTEN_STEP * 2;
                 }
             }
 
             return false;
+        }
+
+        private static List<Vector2> BuildCurvedPolylineToGhost(ForestMapState state, Vector2 nodeCenter, Vector2 ghostCenter,
+            List<int> incidentNodes)
+        {
+            Vector2 overallDirection = (ghostCenter - nodeCenter).normalized;
+            float totalDistance = Vector2.Distance(nodeCenter, ghostCenter);
+            float corridorDistance = totalDistance - 2 * NODE_RADIUS;
+
+            if (corridorDistance < MIN_SEGMENT_LENGTH)
+            {
+                // Too short for curved path, use straight line
+                Vector2 start = nodeCenter + overallDirection * NODE_RADIUS;
+                Vector2 end = ghostCenter - overallDirection * NODE_RADIUS;
+                return new List<Vector2> { start, end };
+            }
+
+            Vector2 startBoundary = nodeCenter + overallDirection * NODE_RADIUS;
+            Vector2 endBoundary = ghostCenter - overallDirection * NODE_RADIUS;
+
+            // Determine number of segments
+            int numSegments = Mathf.Clamp(
+                Mathf.RoundToInt(corridorDistance / ((MIN_SEGMENT_LENGTH + MAX_SEGMENT_LENGTH) / 2f)),
+                MIN_SEGMENTS,
+                MAX_SEGMENTS
+            );
+
+            // Try curved path
+            var polyline = TryBuildCurvedPath(state, startBoundary, endBoundary, overallDirection,
+                corridorDistance, numSegments, incidentNodes);
+
+            if (polyline != null)
+                return polyline;
+
+            // Fallback to straight line
+            return new List<Vector2> { startBoundary, endBoundary };
         }
 
         private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null, int? parentNodeId = null)
@@ -622,22 +664,167 @@ namespace ForestMaze
             return connected;
         }
 
+        // Curved polyline parameters
+        private const float MIN_SEGMENT_LENGTH = 4.0f;
+        private const float MAX_SEGMENT_LENGTH = 8.0f;
+        private const float MAX_CURVE_ANGLE = 35.0f; // degrees
+        private const int MIN_SEGMENTS = 3;
+        private const int MAX_SEGMENTS = 5;
+
         private static List<Vector2> BuildCurvedPolyline(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
             List<int> incidentNodes)
         {
-            Vector2 direction = (endCenter - startCenter).normalized;
-            Vector2 startBoundary = startCenter + direction * NODE_RADIUS;
-            Vector2 endBoundary = endCenter - direction * NODE_RADIUS;
+            Vector2 overallDirection = (endCenter - startCenter).normalized;
+            float totalDistance = Vector2.Distance(startCenter, endCenter);
+            float corridorDistance = totalDistance - 2 * NODE_RADIUS; // Distance between node boundaries
 
-            // Create a straight path with just start and end points
-            var polyline = new List<Vector2> { startBoundary, endBoundary };
+            if (corridorDistance < MIN_CORRIDOR_LENGTH)
+                return null;
 
-            if (IsPolylineValid(state, polyline, incidentNodes))
-            {
+            Vector2 startBoundary = startCenter + overallDirection * NODE_RADIUS;
+            Vector2 endBoundary = endCenter - overallDirection * NODE_RADIUS;
+
+            // Determine number of segments based on corridor distance
+            int numSegments = Mathf.Clamp(
+                Mathf.RoundToInt(corridorDistance / ((MIN_SEGMENT_LENGTH + MAX_SEGMENT_LENGTH) / 2f)),
+                MIN_SEGMENTS,
+                MAX_SEGMENTS
+            );
+
+            // Try to build a curved polyline
+            var polyline = TryBuildCurvedPath(state, startBoundary, endBoundary, overallDirection,
+                corridorDistance, numSegments, incidentNodes);
+
+            if (polyline != null)
                 return polyline;
+
+            // Fallback: try with fewer segments
+            for (int segs = numSegments - 1; segs >= 2; segs--)
+            {
+                polyline = TryBuildCurvedPath(state, startBoundary, endBoundary, overallDirection,
+                    corridorDistance, segs, incidentNodes);
+                if (polyline != null)
+                    return polyline;
+            }
+
+            // Final fallback: straight line
+            var straightLine = new List<Vector2> { startBoundary, endBoundary };
+            if (IsPolylineValid(state, straightLine, incidentNodes))
+                return straightLine;
+
+            return null;
+        }
+
+        private static List<Vector2> TryBuildCurvedPath(ForestMapState state, Vector2 start, Vector2 end,
+            Vector2 overallDirection, float corridorDistance, int numSegments, List<int> incidentNodes)
+        {
+            float baseSegmentLength = corridorDistance / numSegments;
+
+            // Clamp segment length to valid range
+            if (baseSegmentLength < MIN_SEGMENT_LENGTH * 0.5f || baseSegmentLength > MAX_SEGMENT_LENGTH * 2f)
+                return null;
+
+            // Try multiple random curve configurations
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                var polyline = GenerateCurvedPolyline(state, start, end, overallDirection,
+                    baseSegmentLength, numSegments, attempt);
+
+                if (polyline != null && IsPolylineValid(state, polyline, incidentNodes))
+                    return polyline;
             }
 
             return null;
+        }
+
+        private static List<Vector2> GenerateCurvedPolyline(ForestMapState state, Vector2 start, Vector2 end,
+            Vector2 overallDirection, float baseSegmentLength, int numSegments, int attempt)
+        {
+            var polyline = new List<Vector2> { start };
+            Vector2 currentPos = start;
+            Vector2 currentDirection = overallDirection;
+
+            // Generate intermediate points with curved angles
+            for (int i = 0; i < numSegments - 1; i++)
+            {
+                // Random angle deviation within limits (alternating bias for S-curves)
+                float maxAngle = MAX_CURVE_ANGLE * Mathf.Deg2Rad;
+                float angleOffset;
+
+                if (attempt == 0)
+                {
+                    // First attempt: no curve (almost straight)
+                    angleOffset = 0;
+                }
+                else
+                {
+                    // Subsequent attempts: add random curvature
+                    float bias = (i % 2 == 0) ? 1f : -1f; // Alternating bias for S-curve
+                    float randomFactor = (state.Random.Next(0, 100) / 100f - 0.5f) * 2f;
+                    angleOffset = (bias * 0.5f + randomFactor * 0.5f) * maxAngle * (attempt / 10f);
+                }
+
+                // Rotate direction by angle offset
+                float cos = Mathf.Cos(angleOffset);
+                float sin = Mathf.Sin(angleOffset);
+                Vector2 newDirection = new Vector2(
+                    currentDirection.x * cos - currentDirection.y * sin,
+                    currentDirection.x * sin + currentDirection.y * cos
+                ).normalized;
+
+                // Vary segment length within bounds
+                float lengthVariation = 1f + (state.Random.Next(-20, 21) / 100f);
+                float segmentLength = Mathf.Clamp(
+                    baseSegmentLength * lengthVariation,
+                    MIN_SEGMENT_LENGTH,
+                    MAX_SEGMENT_LENGTH
+                );
+
+                // Calculate next waypoint
+                Vector2 nextPos = currentPos + newDirection * segmentLength;
+
+                // Ensure we don't overshoot the end
+                float remainingDist = Vector2.Distance(nextPos, end);
+                float requiredDist = (numSegments - i - 1) * MIN_SEGMENT_LENGTH;
+                if (remainingDist < requiredDist)
+                {
+                    // Adjust to not overshoot
+                    Vector2 toEnd = (end - currentPos).normalized;
+                    nextPos = currentPos + toEnd * (Vector2.Distance(currentPos, end) - requiredDist);
+                }
+
+                polyline.Add(nextPos);
+                currentPos = nextPos;
+
+                // Gradually steer back toward end point
+                Vector2 toEndDir = (end - currentPos).normalized;
+                currentDirection = Vector2.Lerp(newDirection, toEndDir, 0.3f).normalized;
+            }
+
+            // Add final point
+            polyline.Add(end);
+
+            // Validate segment angles don't exceed max curve
+            for (int i = 1; i < polyline.Count - 1; i++)
+            {
+                Vector2 prevDir = (polyline[i] - polyline[i - 1]).normalized;
+                Vector2 nextDir = (polyline[i + 1] - polyline[i]).normalized;
+                float dot = Vector2.Dot(prevDir, nextDir);
+                float angle = Mathf.Acos(Mathf.Clamp(dot, -1f, 1f)) * Mathf.Rad2Deg;
+
+                if (angle > MAX_CURVE_ANGLE * 1.5f) // Allow some tolerance
+                    return null; // Angle too sharp
+            }
+
+            // Validate segment lengths
+            for (int i = 0; i < polyline.Count - 1; i++)
+            {
+                float len = Vector2.Distance(polyline[i], polyline[i + 1]);
+                if (len < MIN_SEGMENT_LENGTH * 0.3f) // Very short segments are problematic
+                    return null;
+            }
+
+            return polyline;
         }
 
         private static bool IsPolylineValid(ForestMapState state, List<Vector2> polyline,
