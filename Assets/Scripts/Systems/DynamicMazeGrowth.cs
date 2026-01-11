@@ -650,13 +650,45 @@ namespace FaeMaze.Systems
 
                 Debug.Log($"[DynamicGrowth] Endpoint at grid {endpointGrid}");
 
-                // Get a reference point from the middle of the polyline (known to be reachable)
-                Vector2 referencePoint = edge.PolylinePoints[edge.PolylinePoints.Count / 2] * scale + offset;
-                Vector2Int referenceGrid = new Vector2Int(Mathf.RoundToInt(referencePoint.x), Mathf.RoundToInt(referencePoint.y));
+                // Use node center as the starting point for flood fill
+                // The node center should be walkable as 'N' tile
+                Vector2Int floodFillStart = nodeCenterGrid;
+                var nodeCenterCell = grid.GetNode(nodeCenterGrid.x, nodeCenterGrid.y);
+                if (nodeCenterCell == null || !nodeCenterCell.walkable)
+                {
+                    // Node center isn't walkable - search for nearest walkable cell
+                    Debug.LogWarning($"[DynamicGrowth] Node center {nodeCenterGrid} not walkable (cell={nodeCenterCell?.symbol ?? '?'}), searching for nearby walkable cell");
+                    bool foundWalkable = false;
+                    for (int searchRadius = 1; searchRadius <= 5 && !foundWalkable; searchRadius++)
+                    {
+                        for (int dy = -searchRadius; dy <= searchRadius && !foundWalkable; dy++)
+                        {
+                            for (int dx = -searchRadius; dx <= searchRadius && !foundWalkable; dx++)
+                            {
+                                int sx = nodeCenterGrid.x + dx;
+                                int sy = nodeCenterGrid.y + dy;
+                                if (grid.InBounds(sx, sy))
+                                {
+                                    var searchCell = grid.GetNode(sx, sy);
+                                    if (searchCell != null && searchCell.walkable)
+                                    {
+                                        floodFillStart = new Vector2Int(sx, sy);
+                                        foundWalkable = true;
+                                        Debug.Log($"[DynamicGrowth] Found walkable cell at {floodFillStart} (symbol={searchCell.symbol})");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!foundWalkable)
+                    {
+                        Debug.LogWarning($"[DynamicGrowth] Could not find walkable cell near node center {nodeCenterGrid}");
+                        continue;
+                    }
+                }
 
-                // Flood fill from reference point to find all reachable cells
-                var reachableCells = grid.FloodFillReachable(referenceGrid.x, referenceGrid.y, 100, 10000);
-                Debug.Log($"[DynamicGrowth] Found {reachableCells.Count} reachable cells from reference point {referenceGrid}");
+                var reachableCells = grid.FloodFillReachable(floodFillStart.x, floodFillStart.y, 100, 10000);
+                Debug.Log($"[DynamicGrowth] Found {reachableCells.Count} reachable cells from {floodFillStart} (node center={nodeCenterGrid})");
 
                 // Find the walkable point CLOSEST to the endpoint that is also REACHABLE
                 Vector2Int spawnGridPos = endpointGrid;
@@ -1612,6 +1644,40 @@ namespace FaeMaze.Systems
                 {
                     Debug.Log($"[DynamicGrowth] Edge {edgeId} already reachable: ({nodeCenterGrid.x},{nodeCenterGrid.y}) to ({endpointGrid.x},{endpointGrid.y})");
                 }
+            }
+
+            // Explicitly ensure all frontier edge endpoints are marked as walkable
+            // The Bresenham line may not exactly hit the endpoint due to rounding
+            int endpointsMarked = 0;
+            foreach (int edgeId in state.Frontier)
+            {
+                var edge = state.Edges[edgeId];
+                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
+
+                // Mark the endpoint and immediate neighbors as walkable
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int ex = endpointGrid.x + dx;
+                        int ey = endpointGrid.y + dy;
+                        if (ex >= 0 && ex < grid.Width && ey >= 0 && ey < grid.Height)
+                        {
+                            if (gridArray[ey, ex] == '#')
+                            {
+                                gridArray[ey, ex] = '.';
+                                endpointsMarked++;
+                            }
+                        }
+                    }
+                }
+            }
+            if (endpointsMarked > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Marked {endpointsMarked} additional cells near endpoints as walkable");
             }
 
             // Apply changes back to MazeGrid
