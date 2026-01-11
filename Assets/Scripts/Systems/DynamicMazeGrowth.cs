@@ -894,7 +894,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// World-space version of RebuildSpawnPointsFromFrontier.
-        /// Works purely with world-space coordinates without any grid-based reachability tests.
+        /// Graph positions ARE world positions - no transforms needed.
         /// For frontier edges, the polyline defines the path - no flood fill needed.
         /// </summary>
         private List<Vector2Int> RebuildSpawnPointsFromFrontierWorldSpace()
@@ -902,20 +902,7 @@ namespace FaeMaze.Systems
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return new List<Vector2Int>();
 
-            float scale = forestMapState.Scale;
-            Vector2 offset = forestMapState.Offset;
-            float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
-
-            // Capture current spawn points before clearing
-            var oldSpawnPoints = new Dictionary<Vector2Int, char>();
-            var currentSpawns = mazeGridBehaviour.GetAllSpawnPoints();
-            if (currentSpawns != null)
-            {
-                foreach (var kvp in currentSpawns)
-                {
-                    oldSpawnPoints[kvp.Value] = kvp.Key;
-                }
-            }
+            // No scale/offset/tileSize - graph positions ARE world positions
 
             // Clear ALL existing portals
             var portalsToRemove = new List<char>(spawnPointPortals.Keys);
@@ -949,33 +936,21 @@ namespace FaeMaze.Systems
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
 
-            // Get the maze origin for coordinate transformation
-            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? mazeGridBehaviour.transform;
-            const float GRID_BUFFER = 400f;
-
-            // Place portals at partial edge endpoints using world-space coordinates directly
-            // For frontier edges, the polyline defines the path - the endpoint is ALWAYS reachable
+            // Place portals at partial edge endpoints
+            // Graph positions ARE world positions - no transform needed
             int portalCount = 0;
             foreach (int edgeId in forestMapState.Frontier)
             {
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
-                // Get the connected node center in world space
-                // Transformation: graphPos -> gridPos -> contentPos -> worldPos
-                // gridPos = graphPos * scale + offset
-                // contentPos = gridPos - GRID_BUFFER
-                // worldPos = mazeOrigin.position + contentPos * tileSize
+                // Get the connected node center - graph position IS world position
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
-                Vector2 nodeGridPos = connectedNode.Position * scale + offset;
-                Vector2 nodeContentPos = nodeGridPos - new Vector2(GRID_BUFFER, GRID_BUFFER);
-                Vector3 nodeCenterWorld = mazeOrigin.position + new Vector3(nodeContentPos.x * tileSize, nodeContentPos.y * tileSize, 0f);
+                Vector3 nodeCenterWorld = new Vector3(connectedNode.Position.x, connectedNode.Position.y, 0f);
 
-                // Get the endpoint (last point in polyline) in world space
-                Vector2 endpointGraphPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-                Vector2 endpointGridPos = endpointGraphPos * scale + offset;
-                Vector2 endpointContentPos = endpointGridPos - new Vector2(GRID_BUFFER, GRID_BUFFER);
-                Vector3 endpointWorld = mazeOrigin.position + new Vector3(endpointContentPos.x * tileSize, endpointContentPos.y * tileSize, 0f);
+                // Get the endpoint (last point in polyline) - graph position IS world position
+                Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                Vector3 endpointWorld = new Vector3(endpointPos.x, endpointPos.y, 0f);
 
                 Debug.Log($"[DynamicGrowth-WorldSpace] Edge {edgeId}: Node {edge.NodeA} at world {nodeCenterWorld}, endpoint at world {endpointWorld}, {edge.PolylinePoints.Count} polyline points");
 

@@ -167,9 +167,10 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Get transformation parameters
-            graphScale = forestState.Scale;
-            graphOffset = forestState.Offset;
+            // Pure world-space mode: graph positions ARE world positions
+            // No scale, offset, or grid buffer transforms needed
+            graphScale = 1.0f;
+            graphOffset = Vector2.zero;
             tileSize = mazeGridBehaviour.TileSize;
 
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
@@ -220,30 +221,22 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Transforms a graph-space position to world position using floating-point precision.
-        /// No grid snapping - true world-space positioning along edges.
+        /// Converts a graph position to world position.
+        /// In pure world-space mode, graph positions ARE world positions.
         /// </summary>
         private Vector3 GraphToWorldPos(Vector2 graphPos)
         {
-            // Transform to grid coordinates (floating-point)
-            Vector2 gridPos = graphPos * graphScale + graphOffset;
-
-            // Convert to content-relative coordinates (subtract GRID_BUFFER = 400)
-            float contentX = gridPos.x - 400f;
-            float contentY = gridPos.y - 400f;
-
-            // Get world position using floating-point coordinates
-            Transform origin = mazeGridBehaviour.MazeOrigin ?? transform;
-            return origin.position + new Vector3(contentX * tileSize, contentY * tileSize, 0f);
+            // Graph positions ARE world positions - just convert Vector2 to Vector3
+            return new Vector3(graphPos.x, graphPos.y, 0f);
         }
 
         /// <summary>
-        /// Transforms a graph-space position to grid cell coordinates.
+        /// Transforms a graph-space position to a quantized key (for overlap detection).
         /// </summary>
         private Vector2Int GraphToGridCell(Vector2 graphPos)
         {
-            Vector2 gridPos = graphPos * graphScale + graphOffset;
-            return new Vector2Int(Mathf.RoundToInt(gridPos.x), Mathf.RoundToInt(gridPos.y));
+            // Quantize to integer positions for overlap detection
+            return new Vector2Int(Mathf.RoundToInt(graphPos.x), Mathf.RoundToInt(graphPos.y));
         }
 
         /// <summary>

@@ -73,11 +73,16 @@ namespace ForestMaze
             public int NextEdgeId = 0;
             public int TurnCount = 0;
             public System.Random Random;
-            public bool ValidationPassed = false; // Set during rasterization
+            public bool ValidationPassed = true; // Always true in world-space mode
             public string ValidationError = null;
-            public float Scale = 1.0f; // Grid scale for rasterization
-            public Vector2 Offset = Vector2.zero; // Grid offset for rasterization
             public bool HasCrossConnection = false; // Track if any non-parent connections exist
+
+            // DEPRECATED - Legacy grid rasterization fields, kept for compatibility but unused
+            // In world-space mode, graph positions ARE world positions (no transform needed)
+            [System.Obsolete("No longer used - graph positions are world positions")]
+            public float Scale = 1.0f;
+            [System.Obsolete("No longer used - graph positions are world positions")]
+            public Vector2 Offset = Vector2.zero;
         }
 
         private class ValidationResult
@@ -90,97 +95,51 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Generate a planar organic forest maze and return the state for dynamic growth.
+        /// Generate a planar organic forest maze graph and return the state for dynamic growth.
+        /// Works in pure world-space - graph positions ARE world positions (no transform needed).
         /// </summary>
-        /// <param name="gridWidth">Target grid width (map will be sized to fit)</param>
-        /// <param name="gridHeight">Target grid height (map will be sized to fit)</param>
+        /// <param name="gridWidth">Ignored - legacy parameter kept for API compatibility</param>
+        /// <param name="gridHeight">Ignored - legacy parameter kept for API compatibility</param>
         /// <param name="turns">Number of growth turns (more turns = more nodes)</param>
         /// <param name="seed">Random seed</param>
-        /// <returns>Tuple of (maze string, generation state)</returns>
+        /// <returns>Tuple of (empty string for legacy compatibility, generation state with world-space positions)</returns>
         public static (string maze, ForestMapState state) GenerateMazeWithState(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
         {
-            const int maxRetries = 5;
             const int minNodeCount = 6; // Root + at least 5 normal nodes
-            const int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points (was 4)
+            const int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points
             int baseSeed = seed.HasValue ? seed.Value : System.Environment.TickCount;
 
-            for (int retry = 0; retry < maxRetries; retry++)
+            var state = new ForestMapState
             {
-                // Use different seed for each retry
-                int currentSeed = baseSeed + retry;
-
-                var state = new ForestMapState
-                {
-                    Random = new System.Random(currentSeed)
-                };
-
-                // Initialize with root and first node
-                Initialize(state);
-
-                // Phase 1: Grow until we have minimum nodes
-                for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
-                {
-                    if (state.Frontier.Count == 0 || !Step(state))
-                        break;
-                }
-
-                // Ensure at least one cross-connection exists after initial growth
-                EnsureCrossConnection(state);
-
-                // Phase 2: Continue growing but preserve minimum open endpoints
-                for (int i = 0; i < turns && state.Frontier.Count > minOpenEndpoints; i++)
-                {
-                    if (!Step(state))
-                        break;
-                }
-
-                // Rasterize the graph to a grid (includes validation)
-                string result = RasterizeToGrid(state, gridWidth, gridHeight);
-
-                // Check if validation passed
-                if (state.ValidationPassed)
-                {
-                    // Success!
-                    if (retry > 0)
-                    {
-                        Debug.Log($"Maze generation succeeded on retry {retry + 1} with seed {currentSeed}");
-                    }
-                    return (result, state);
-                }
-
-                // Validation failed, log and retry
-                Debug.LogWarning($"Attempt {retry + 1}/{maxRetries} failed validation: {state.ValidationError}");
-            }
-
-            // If all retries failed, return the last attempt anyway
-            Debug.LogError($"Maze generation failed validation after {maxRetries} attempts, returning last attempt");
-            var finalState = new ForestMapState
-            {
-                Random = new System.Random(baseSeed + maxRetries)
+                Random = new System.Random(baseSeed),
+                ValidationPassed = true // Always valid in world-space mode
             };
 
             // Initialize with root and first node
-            Initialize(finalState);
+            Initialize(state);
 
             // Phase 1: Grow until we have minimum nodes
-            for (int i = 0; i < turns && finalState.Nodes.Count < minNodeCount; i++)
+            for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
             {
-                if (finalState.Frontier.Count == 0 || !Step(finalState))
+                if (state.Frontier.Count == 0 || !Step(state))
                     break;
             }
 
             // Ensure at least one cross-connection exists after initial growth
-            EnsureCrossConnection(finalState);
+            EnsureCrossConnection(state);
 
             // Phase 2: Continue growing but preserve minimum open endpoints
-            for (int i = 0; i < turns && finalState.Frontier.Count > minOpenEndpoints; i++)
+            for (int i = 0; i < turns && state.Frontier.Count > minOpenEndpoints; i++)
             {
-                if (!Step(finalState))
+                if (!Step(state))
                     break;
             }
 
-            string finalResult = RasterizeToGrid(finalState, gridWidth, gridHeight);
-            return (finalResult, finalState);
+            Debug.Log($"[PlanarForest] Generated graph with {state.Nodes.Count} nodes, {state.Edges.Count} edges, {state.Frontier.Count} frontier edges");
+
+            // Return empty string for legacy compatibility - no rasterization in world-space mode
+            // Graph positions ARE world positions
+            return ("", state);
         }
 
         /// <summary>

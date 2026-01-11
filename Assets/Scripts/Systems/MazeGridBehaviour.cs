@@ -775,82 +775,51 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Initializes the maze directly from the graph state without parsing a string.
-        /// This is the proper world-space coordinate initialization path.
+        /// Initializes the maze directly from the graph state in pure world-space.
+        /// NO grid, NO coordinate transforms - graph positions ARE world positions.
         /// </summary>
         private void InitializeFromGraphWorldSpace()
         {
-            // Generate the graph state (includes rasterization which sets Scale and Offset)
+            // Generate the graph (no rasterization - graph positions are world positions)
             var result = ForestMaze.PlanarForestMazeGenerator.GenerateMazeWithState(
-                planarGeneratorConfig.gridWidth,
-                planarGeneratorConfig.gridHeight,
+                planarGeneratorConfig.gridWidth,  // Ignored in world-space mode
+                planarGeneratorConfig.gridHeight, // Ignored in world-space mode
                 planarGeneratorConfig.growthTurns,
                 planarGeneratorConfig.randomSeed);
 
             forestMapState = result.state;
 
-            // IMPORTANT: Preserve the Scale and Offset from rasterization
-            // These are used by MazeRenderer for graph-to-world transformation
-            // Do NOT overwrite them with world-space bounds calculations
-
             // Generate world-space maze data directly from graph
+            // Graph positions ARE world positions - no transform needed
             WorldSpaceMazeGenerator.ResetSpawnIdCounter();
             worldSpaceMazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, worldSpaceTileSize);
             worldSpaceMazeData.RecalculateBounds();
 
             Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
 
-            // Use the grid dimensions from the original rasterization
-            width = planarGeneratorConfig.gridWidth;
-            height = planarGeneratorConfig.gridHeight;
-
-            // Create the grid for legacy compatibility (pathfinding, etc.)
-            grid = new MazeGrid(width, height);
-
-            // Populate grid from world-space tiles using the preserved Scale and Offset
-            foreach (var tile in worldSpaceMazeData.Tiles)
-            {
-                // Convert tile position to grid position
-                int gridX = Mathf.RoundToInt(tile.Position.x * forestMapState.Scale + forestMapState.Offset.x);
-                int gridY = Mathf.RoundToInt(tile.Position.y * forestMapState.Scale + forestMapState.Offset.y);
-
-                if (!grid.InBounds(gridX, gridY)) continue;
-
-                var node = grid.GetNode(gridX, gridY);
-                if (node == null) continue;
-
-                bool isWalkable = tile.Category == WorldSpaceTile.TileCategory.Path ||
-                                  tile.Category == WorldSpaceTile.TileCategory.Node;
-
-                char symbol = isWalkable ? (tile.Category == WorldSpaceTile.TileCategory.Node ? 'N' : '.') : '#';
-
-                node.walkable = isWalkable;
-                node.symbol = symbol;
-                node.SetTerrain(isWalkable ? TileType.Path : TileType.TreeBramble);
-            }
-
-            // Set heart position at the seed node (node 0 / root node)
-            // This is where the focal point should be
+            // Store heart world position (node 0 / root node)
             if (forestMapState.Nodes.Count > 0)
             {
                 var seedNode = forestMapState.Nodes[0];
-                Vector2 seedGridPos = seedNode.Position * forestMapState.Scale + forestMapState.Offset;
-                heartGridPos = new Vector2Int(Mathf.RoundToInt(seedGridPos.x), Mathf.RoundToInt(seedGridPos.y));
-
-                // Mark the heart tile in the grid
-                MarkHeartTile(heartGridPos);
-
-                Debug.Log($"[MazeGridBehaviour] Heart positioned at seed node 0: grid ({heartGridPos.x}, {heartGridPos.y})");
-            }
-            else
-            {
-                // Fallback to center if no nodes
-                FindHeartPosition();
+                heartWorldPosition = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
+                Debug.Log($"[MazeGridBehaviour] Heart at world position {heartWorldPosition}");
             }
 
-            // Set entrance position (will be updated by DynamicMazeGrowth for spawn points)
-            entranceGridPos = heartGridPos;
+            // NO grid creation - world-space mode doesn't use grids
+            grid = null;
+            width = 0;
+            height = 0;
         }
+
+        /// <summary>
+        /// Heart position in world space (for world-space mode).
+        /// </summary>
+        private Vector3 heartWorldPosition;
+
+        /// <summary>
+        /// Gets the heart position in world space.
+        /// </summary>
+        public Vector3 HeartWorldPosition => heartWorldPosition;
 
         #endregion
 
