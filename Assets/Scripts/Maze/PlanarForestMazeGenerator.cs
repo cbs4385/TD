@@ -1782,6 +1782,18 @@ namespace ForestMaze
         /// </summary>
         private static void EnsureDirectPathExists(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
         {
+            // Skip if start or end is out of bounds
+            if (start.x < 0 || start.x >= width || start.y < 0 || start.y >= height)
+            {
+                Debug.LogWarning($"[EnsureDirectPath] Start position ({start.x},{start.y}) is out of bounds (grid: {width}x{height})");
+                return;
+            }
+            if (end.x < 0 || end.x >= width || end.y < 0 || end.y >= height)
+            {
+                Debug.LogWarning($"[EnsureDirectPath] End position ({end.x},{end.y}) is out of bounds (grid: {width}x{height})");
+                return;
+            }
+
             const int maxIterations = 100;
             int iteration = 0;
 
@@ -1895,6 +1907,12 @@ namespace ForestMaze
         /// </summary>
         private static bool IsReachable(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
         {
+            // Check bounds first
+            if (start.x < 0 || start.x >= width || start.y < 0 || start.y >= height)
+                return false;
+            if (end.x < 0 || end.x >= width || end.y < 0 || end.y >= height)
+                return false;
+
             if (start == end)
                 return true;
 
