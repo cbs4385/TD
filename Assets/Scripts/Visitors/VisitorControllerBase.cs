@@ -949,11 +949,14 @@ namespace FaeMaze.Visitors
                     // Calculate angle in XY plane (0 = +X direction)
                     float angle = Mathf.Atan2(movementDir.y, movementDir.x) * Mathf.Rad2Deg;
 
-                    // Set world rotation with:
-                    // X: 90 to lay model flat on XY plane (Y-up models designed for XZ ground)
-                    // Y: 0 (no pitch)
-                    // Z: angle to face movement direction (model's +X axis is forward)
-                    Quaternion targetRotation = Quaternion.Euler(90f, 0f, angle);
+                    // Apply rotations in correct order using quaternion multiplication:
+                    // 1. First lay model flat (rotate X by 90° - Y-up models designed for XZ ground)
+                    // 2. Then rotate around Z to face movement direction
+                    // Note: Unity quaternion multiplication applies right operand first
+                    Quaternion layFlat = Quaternion.Euler(90f, 0f, 0f);
+                    Quaternion faceDirection = Quaternion.AngleAxis(angle, Vector3.forward);
+                    Quaternion targetRotation = faceDirection * layFlat;
+
                     modelInstance.transform.rotation = Quaternion.Slerp(
                         modelInstance.transform.rotation,
                         targetRotation,

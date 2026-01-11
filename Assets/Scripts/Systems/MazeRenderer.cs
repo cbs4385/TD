@@ -264,6 +264,11 @@ namespace FaeMaze.Systems
             {
                 if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
 
+                // Track whether we've placed a tile at the exact endpoint for partial edges
+                bool isPartialEdge = edge.Partial;
+                Vector2 exactEndpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                bool endpointTilePlaced = false;
+
                 // Walk along each segment of the polyline
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
@@ -275,22 +280,41 @@ namespace FaeMaze.Systems
                     // Orientation in degrees
                     float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
+                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
+
                     // Place tiles along the segment
                     int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / graphStepSize));
                     for (int j = 0; j <= numSteps; j++)
                     {
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
-                        Vector2 graphPos = Vector2.Lerp(startGraph, endGraph, t);
+
+                        // Use exact endpoint position for the last point of last segment
+                        // This avoids floating-point precision issues with Lerp
+                        Vector2 graphPos;
+                        bool isExactEndpoint = false;
+                        if (isLastSegment && j == numSteps)
+                        {
+                            graphPos = exactEndpoint;
+                            isExactEndpoint = true;
+                        }
+                        else
+                        {
+                            graphPos = Vector2.Lerp(startGraph, endGraph, t);
+                        }
 
                         // Check if position already occupied using quantized key
+                        // For frontier endpoints, always place the tile (override occupation check)
                         long posKey = GetQuantizedKey(graphPos);
-                        if (occupiedPositions.Contains(posKey)) continue;
+                        bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
+
+                        if (!forcePlace && occupiedPositions.Contains(posKey)) continue;
 
                         // Determine symbol
                         char symbol = '.';
-                        if (edge.Partial && j == numSteps)
+                        if (isPartialEdge && isExactEndpoint)
                         {
                             symbol = GetNextSpawnSymbol();
+                            endpointTilePlaced = true;
                         }
 
                         Vector3 worldPos = GraphToWorldPos(graphPos);
@@ -298,6 +322,22 @@ namespace FaeMaze.Systems
                         occupiedPositions.Add(posKey);
                         tileCount++;
                     }
+                }
+
+                // Fallback: if endpoint tile wasn't placed for partial edge, force place it
+                if (isPartialEdge && !endpointTilePlaced)
+                {
+                    // Calculate orientation from second-to-last to last point
+                    Vector2 prevPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 2];
+                    Vector2 direction = (exactEndpoint - prevPoint).normalized;
+                    float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+
+                    Vector3 worldPos = GraphToWorldPos(exactEndpoint);
+                    char symbol = GetNextSpawnSymbol();
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                    occupiedPositions.Add(GetQuantizedKey(exactEndpoint));
+                    tileCount++;
+                    Debug.Log($"[MazeRenderer] Force-placed endpoint tile for partial edge at {exactEndpoint}");
                 }
             }
 

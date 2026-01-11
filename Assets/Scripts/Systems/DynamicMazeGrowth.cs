@@ -300,6 +300,12 @@ namespace FaeMaze.Systems
                 Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
                 Vector3 endpointWorld = mazeGridBehaviour.GraphToWorld(endpointPos);
 
+                // Apply half-unit offset to place portal flush with path end
+                // The offset is in the direction FROM the node TO the endpoint
+                Vector2 directionToEndpoint = (endpointPos - connectedNode.Position).normalized;
+                Vector3 portalOffset = new Vector3(directionToEndpoint.x, directionToEndpoint.y, 0f) * 0.5f;
+                endpointWorld += portalOffset;
+
                 Debug.Log($"[DynamicGrowth-WorldSpace] Edge {edgeId}: Node {edge.NodeA} at world {nodeCenterWorld}, endpoint at world {endpointWorld}, {edge.PolylinePoints.Count} polyline points");
 
                 // Get next spawn ID
