@@ -4,7 +4,6 @@ namespace FaeMaze.Systems
 {
     /// <summary>
     /// Helper script to automatically set up the visual components for the maze.
-    /// Attach this to any GameObject with MazeGridBehaviour and it will add the necessary components.
     /// </summary>
     [RequireComponent(typeof(MazeGridBehaviour))]
     public class MazeVisualSetup : MonoBehaviour
@@ -72,7 +71,7 @@ namespace FaeMaze.Systems
         private void CenterCameraOnMaze()
         {
             MazeGridBehaviour mazeGrid = GetComponent<MazeGridBehaviour>();
-            if (mazeGrid == null || mazeGrid.Grid == null)
+            if (mazeGrid == null || mazeGrid.ForestMapState == null)
             {
                 return;
             }
@@ -84,24 +83,26 @@ namespace FaeMaze.Systems
             }
 
             // Center camera on the heart of the maze (for orthographic cameras)
-            // For perspective cameras with CameraController3D, the controller handles positioning
             if (mainCamera.orthographic)
             {
-                Vector3 heartWorldPos = mazeGrid.GridToWorld(mazeGrid.HeartGridPos.x, mazeGrid.HeartGridPos.y);
+                Vector3 heartWorldPos = mazeGrid.HeartWorldPosition;
                 Vector3 cameraPos = mainCamera.transform.position;
                 cameraPos.x = heartWorldPos.x;
                 cameraPos.y = heartWorldPos.y;
                 mainCamera.transform.position = cameraPos;
 
-                // Set orthographic size to show entire maze
-                float maxDimension = Mathf.Max(mazeGrid.Grid.Width, mazeGrid.Grid.Height);
-                mainCamera.orthographicSize = maxDimension * 0.6f; // 0.6 gives some padding
+                // Set orthographic size based on world-space bounds
+                if (mazeGrid.WorldSpaceMazeData != null)
+                {
+                    var bounds = mazeGrid.WorldSpaceMazeData.Bounds;
+                    float maxDimension = Mathf.Max(bounds.size.x, bounds.size.y);
+                    mainCamera.orthographicSize = maxDimension * 0.6f;
+                }
             }
         }
 
         private void Start()
         {
-            // Try camera centering again in Start if it failed in Awake
             if (autoCenterCamera)
             {
                 Camera mainCamera = Camera.main;

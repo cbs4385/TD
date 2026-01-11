@@ -3,9 +3,7 @@ using UnityEngine;
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// Creates a lit particle effect that covers the maze area and extends on the z-plane from 0 to -5.
-    /// Particles are dark by default and only become visible when illuminated by 3D point lights
-    /// from models (wisp, heart, visitors), helping players locate glowing entities in the maze.
+    /// Creates a lit particle effect that covers the maze area.
     /// </summary>
     [RequireComponent(typeof(ParticleSystem))]
     public class MazeParticleSystem : MonoBehaviour
@@ -27,15 +25,15 @@ namespace FaeMaze.Systems
         private float particleSize = 0.08f;
 
         [SerializeField]
-        [Tooltip("Particle base color (white, brightness determined by lights)")]
+        [Tooltip("Particle base color")]
         private Color particleColor = new Color(1f, 1f, 1f, 0.8f);
 
         [SerializeField]
-        [Tooltip("Minimum Z position (closest to camera)")]
+        [Tooltip("Minimum Z position")]
         private float minZ = 0f;
 
         [SerializeField]
-        [Tooltip("Maximum Z position (farthest from camera)")]
+        [Tooltip("Maximum Z position")]
         private float maxZ = -5f;
 
         [SerializeField]
@@ -52,7 +50,7 @@ namespace FaeMaze.Systems
 
         [Header("Material Settings")]
         [SerializeField]
-        [Tooltip("Optional custom lit material (uses URP Particles/Lit shader if not set)")]
+        [Tooltip("Optional custom lit material")]
         private Material particleMaterial;
 
         #endregion
@@ -68,7 +66,6 @@ namespace FaeMaze.Systems
 
         private void Awake()
         {
-            // Find maze grid if not assigned
             if (mazeGridBehaviour == null)
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
@@ -101,7 +98,6 @@ namespace FaeMaze.Systems
 
             particleRenderer = GetComponent<ParticleSystemRenderer>();
 
-            // Main module
             var main = particleSystemComponent.main;
             main.loop = true;
             main.startLifetime = new ParticleSystem.MinMaxCurve(5f, 15f);
@@ -112,18 +108,14 @@ namespace FaeMaze.Systems
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.playOnAwake = true;
 
-            // Emission module
             var emission = particleSystemComponent.emission;
             emission.enabled = true;
-            emission.rateOverTime = maxParticles / 10f; // Emit enough to maintain particle count
+            emission.rateOverTime = maxParticles / 10f;
 
-            // Shape module - emit in a box shape covering the maze
             var shape = particleSystemComponent.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Box;
-            // Will set size in PositionParticleSystem after we have maze dimensions
 
-            // Velocity over lifetime - slow drift
             var velocity = particleSystemComponent.velocityOverLifetime;
             velocity.enabled = true;
             velocity.space = ParticleSystemSimulationSpace.World;
@@ -131,7 +123,6 @@ namespace FaeMaze.Systems
             velocity.y = new ParticleSystem.MinMaxCurve(-driftSpeed, driftSpeed);
             velocity.z = new ParticleSystem.MinMaxCurve(-driftSpeed * 0.5f, driftSpeed * 0.5f);
 
-            // Rotation over lifetime
             if (enableRotation)
             {
                 var rotation = particleSystemComponent.rotationOverLifetime;
@@ -139,47 +130,39 @@ namespace FaeMaze.Systems
                 rotation.z = new ParticleSystem.MinMaxCurve(-rotationSpeed, rotationSpeed);
             }
 
-            // Renderer settings
             if (particleRenderer != null)
             {
                 particleRenderer.renderMode = ParticleSystemRenderMode.Billboard;
 
-                // Use provided material or create default unlit material
                 if (particleMaterial != null)
                 {
                     particleRenderer.material = particleMaterial;
                 }
                 else
                 {
-                    // Create lit particle material that responds to 3D point lights
                     Material defaultMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Lit"));
                     if (defaultMat.shader == null || defaultMat.shader.name == "Hidden/InternalErrorShader")
                     {
-                        // Fallback to built-in lit particles
                         defaultMat = new Material(Shader.Find("Particles/Standard Surface"));
                     }
 
-                    // Set light gray base color with low alpha - bright enough to reflect light but transparent enough to be invisible when unlit
                     defaultMat.SetColor("_BaseColor", new Color(0.8f, 0.8f, 0.8f, 0.15f));
 
-                    // Configure material to be highly responsive to lights
                     if (defaultMat.HasProperty("_Smoothness"))
                     {
-                        defaultMat.SetFloat("_Smoothness", 0.85f); // Smooth for light reflection
+                        defaultMat.SetFloat("_Smoothness", 0.85f);
                     }
                     if (defaultMat.HasProperty("_Metallic"))
                     {
-                        defaultMat.SetFloat("_Metallic", 0.0f); // Non-metallic for better diffuse response
+                        defaultMat.SetFloat("_Metallic", 0.0f);
                     }
-
-                    // Use transparent surface with additive blending
                     if (defaultMat.HasProperty("_Surface"))
                     {
-                        defaultMat.SetFloat("_Surface", 1); // Transparent
+                        defaultMat.SetFloat("_Surface", 1);
                     }
                     if (defaultMat.HasProperty("_Blend"))
                     {
-                        defaultMat.SetFloat("_Blend", 1); // Additive
+                        defaultMat.SetFloat("_Blend", 1);
                     }
                     if (defaultMat.HasProperty("_SrcBlend"))
                     {
@@ -187,79 +170,65 @@ namespace FaeMaze.Systems
                     }
                     if (defaultMat.HasProperty("_DstBlend"))
                     {
-                        defaultMat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One); // Additive
+                        defaultMat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
                     }
                     if (defaultMat.HasProperty("_ZWrite"))
                     {
-                        defaultMat.SetFloat("_ZWrite", 0); // No depth write for transparent
+                        defaultMat.SetFloat("_ZWrite", 0);
                     }
 
                     defaultMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                     defaultMat.EnableKeyword("_BLENDMODE_ADD");
-                    defaultMat.renderQueue = 3000; // Transparent queue
+                    defaultMat.renderQueue = 3000;
 
                     particleRenderer.material = defaultMat;
                 }
 
-                // Configure particle renderer for light interaction
                 particleRenderer.receiveShadows = false;
                 particleRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-                // Use vertex streams to allow lights to affect particles
                 particleRenderer.enableGPUInstancing = true;
             }
         }
 
         private void PositionParticleSystem()
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
             {
                 return;
             }
 
-            // Get maze dimensions
-            int width = mazeGridBehaviour.Grid.Width;
-            int height = mazeGridBehaviour.Grid.Height;
-            float tileSize = mazeGridBehaviour.TileSize;
+            // Use world-space bounds from WorldSpaceMazeData
+            if (mazeGridBehaviour.WorldSpaceMazeData == null)
+            {
+                return;
+            }
 
-            // Calculate world-space bounds of the maze
-            Vector3 minCorner = mazeGridBehaviour.GridToWorld(0, 0);
-            Vector3 maxCorner = mazeGridBehaviour.GridToWorld(width - 1, height - 1);
+            var bounds = mazeGridBehaviour.WorldSpaceMazeData.Bounds;
+            float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
 
-            // Calculate center and size
-            Vector3 center = (minCorner + maxCorner) / 2f;
-            float worldWidth = Mathf.Abs(maxCorner.x - minCorner.x) + tileSize;
-            float worldHeight = Mathf.Abs(maxCorner.y - minCorner.y) + tileSize;
+            Vector3 center = bounds.center;
+            float worldWidth = bounds.size.x + tileSize;
+            float worldHeight = bounds.size.y + tileSize;
             float zDepth = Mathf.Abs(maxZ - minZ);
 
-            // Center the particle system in Z-space
             float centerZ = (minZ + maxZ) / 2f;
 
-            // Position the particle system at the center of the maze
             transform.position = new Vector3(center.x, center.y, centerZ);
 
-            // Configure shape module with maze dimensions
             var shape = particleSystemComponent.shape;
             shape.scale = new Vector3(worldWidth, worldHeight, zDepth);
-
         }
 
         #endregion
 
         #region Public Methods
 
-        /// <summary>
-        /// Sets the particle emission rate.
-        /// </summary>
         public void SetEmissionRate(float rate)
         {
             var emission = particleSystemComponent.emission;
             emission.rateOverTime = rate;
         }
 
-        /// <summary>
-        /// Sets the maximum number of particles.
-        /// </summary>
         public void SetMaxParticles(int count)
         {
             maxParticles = count;
@@ -267,9 +236,6 @@ namespace FaeMaze.Systems
             main.maxParticles = count;
         }
 
-        /// <summary>
-        /// Enables or disables the particle system.
-        /// </summary>
         public void SetEnabled(bool enabled)
         {
             if (enabled)

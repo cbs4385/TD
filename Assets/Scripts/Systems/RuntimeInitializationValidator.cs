@@ -6,7 +6,6 @@ namespace FaeMaze.Systems
 {
     /// <summary>
     /// Validates that all game systems initialize correctly at runtime.
-    /// Verifies essence events, visitor spawning, and maze rendering.
     /// </summary>
     public class RuntimeInitializationValidator : MonoBehaviour
     {
@@ -51,22 +50,12 @@ namespace FaeMaze.Systems
             validationReport.AppendLine($"Validation Time: {Time.time:F2}s after scene start");
             validationReport.AppendLine();
 
-            // Validate Game Controller
             ValidateGameController();
-
-            // Validate Maze Grid
             ValidateMazeGrid();
-
-            // Validate Maze Renderer
             ValidateMazeRenderer();
-
-            // Validate UI Systems
             ValidateUIControllers();
-
-            // Validate Heart of the Maze
             ValidateHeart();
 
-            // Final Report
             validationReport.AppendLine();
             validationReport.AppendLine("=== Validation Complete ===");
 
@@ -85,25 +74,10 @@ namespace FaeMaze.Systems
 
             validationReport.AppendLine("✓ GameController.Instance exists");
 
-            // Check essence
             int essence = GameController.Instance.CurrentEssence;
             validationReport.AppendLine($"✓ Current Essence: {essence}");
-
-            // Note: Cannot directly check event subscribers from outside the class
-            // Events work correctly if GameController is properly initialized
             validationReport.AppendLine("✓ OnEssenceChanged event available");
 
-            // Check maze grid registration
-            if (GameController.Instance.MazeGrid == null)
-            {
-                validationReport.AppendLine("⚠ WARNING: MazeGrid not registered");
-            }
-            else
-            {
-                validationReport.AppendLine("✓ MazeGrid registered");
-            }
-
-            // Check heart registration
             if (GameController.Instance.Heart == null)
             {
                 validationReport.AppendLine("⚠ WARNING: Heart not registered");
@@ -118,7 +92,7 @@ namespace FaeMaze.Systems
 
         private void ValidateMazeGrid()
         {
-            validationReport.AppendLine("--- MazeGrid ---");
+            validationReport.AppendLine("--- MazeGridBehaviour ---");
 
             var mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
@@ -130,16 +104,20 @@ namespace FaeMaze.Systems
 
             validationReport.AppendLine("✓ MazeGridBehaviour exists");
 
-            MazeGrid grid = mazeGridBehaviour.Grid;
-
-            if (grid == null)
+            var forestState = mazeGridBehaviour.ForestMapState;
+            if (forestState == null)
             {
-                validationReport.AppendLine("✗ FAILED: MazeGrid is NULL");
+                validationReport.AppendLine("✗ FAILED: ForestMapState is NULL");
                 return;
             }
 
-            validationReport.AppendLine($"✓ MazeGrid created ({grid.Width}x{grid.Height})");
-            validationReport.AppendLine($"  {grid.GetGridInfo()}");
+            validationReport.AppendLine($"✓ ForestMapState created ({forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges)");
+
+            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (worldSpaceData != null)
+            {
+                validationReport.AppendLine($"✓ WorldSpaceMazeData: {worldSpaceData.Tiles.Count} tiles");
+            }
 
             validationReport.AppendLine();
         }
@@ -159,14 +137,12 @@ namespace FaeMaze.Systems
 
             validationReport.AppendLine("✓ MazeRenderer exists");
 
-            // Check for rendered tiles
             Transform tilesParent = mazeRenderer.transform.Find("MazeTiles");
             if (tilesParent != null)
             {
                 int tileCount = tilesParent.childCount;
                 validationReport.AppendLine($"✓ Tiles rendered: {tileCount} objects");
 
-                // Check for batched meshes
                 int batchCount = 0;
                 foreach (Transform child in tilesParent)
                 {
@@ -193,7 +169,6 @@ namespace FaeMaze.Systems
         {
             validationReport.AppendLine("--- UI Controllers ---");
 
-            // Check UIController
             var uiController = FindFirstObjectByType<UIController>();
             if (uiController != null)
             {
@@ -204,7 +179,6 @@ namespace FaeMaze.Systems
                 validationReport.AppendLine("⚠ WARNING: UIController not found");
             }
 
-            // Check PlayerResourcesUIController
             var resourcesUI = FindFirstObjectByType<PlayerResourcesUIController>();
             if (resourcesUI != null)
             {
@@ -232,9 +206,8 @@ namespace FaeMaze.Systems
             }
 
             validationReport.AppendLine("✓ HeartOfTheMaze exists");
-            validationReport.AppendLine($"  Grid Position: {heart.GridPosition}");
+            validationReport.AppendLine($"  World Position: {heart.transform.position}");
 
-            // Check for 3D components
             var heartLight = heart.GetComponent<Light>();
             if (heartLight != null)
             {
@@ -254,9 +227,6 @@ namespace FaeMaze.Systems
 
         #region Public Methods
 
-        /// <summary>
-        /// Gets the validation report as a string.
-        /// </summary>
         public string GetValidationReport()
         {
             if (!validationComplete)
@@ -267,9 +237,6 @@ namespace FaeMaze.Systems
             return validationReport.ToString();
         }
 
-        /// <summary>
-        /// Checks if validation has completed.
-        /// </summary>
         public bool IsValidationComplete => validationComplete;
 
         #endregion

@@ -4,29 +4,24 @@ namespace FaeMaze.Systems
 {
     /// <summary>
     /// Automatically initializes maze visual components when the scene loads.
-    /// This ensures the maze is always visible even if components weren't added in the editor.
     /// </summary>
     public static class MazeAutoInitializer
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Initialize()
         {
-
-            // Find MazeGridBehaviour in scene
             MazeGridBehaviour mazeGrid = Object.FindFirstObjectByType<MazeGridBehaviour>();
             if (mazeGrid == null)
             {
                 return;
             }
 
-            // Check if MazeRenderer exists
             MazeRenderer renderer = mazeGrid.GetComponent<MazeRenderer>();
             if (renderer == null)
             {
                 renderer = mazeGrid.gameObject.AddComponent<MazeRenderer>();
             }
 
-            // Setup camera
             SetupCamera(mazeGrid);
         }
 
@@ -38,35 +33,35 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Wait a frame for the grid to initialize, then center camera
             CoroutineRunner runner = new GameObject("CoroutineRunner").AddComponent<CoroutineRunner>();
             runner.StartCoroutine(CenterCameraDelayed(mainCamera, mazeGrid));
         }
 
         private static System.Collections.IEnumerator CenterCameraDelayed(Camera camera, MazeGridBehaviour mazeGrid)
         {
-            // Wait for grid to be initialized
             yield return new WaitForEndOfFrame();
 
-            if (mazeGrid.Grid == null)
+            if (mazeGrid.ForestMapState == null)
             {
                 yield break;
             }
 
-            // Center camera on the heart of the maze
-            Vector3 heartWorldPos = mazeGrid.GridToWorld(mazeGrid.HeartGridPos.x, mazeGrid.HeartGridPos.y);
+            // Center camera on the heart of the maze (world-space position)
+            Vector3 heartWorldPos = mazeGrid.HeartWorldPosition;
             Vector3 cameraPos = camera.transform.position;
             cameraPos.x = heartWorldPos.x;
             cameraPos.y = heartWorldPos.y;
             camera.transform.position = cameraPos;
 
-            // Set orthographic size to show entire maze
-            float maxDimension = Mathf.Max(mazeGrid.Grid.Width, mazeGrid.Grid.Height);
-            camera.orthographicSize = maxDimension * 0.6f; // 0.6 gives some padding
-
+            // Set orthographic size based on world-space bounds
+            if (mazeGrid.WorldSpaceMazeData != null)
+            {
+                var bounds = mazeGrid.WorldSpaceMazeData.Bounds;
+                float maxDimension = Mathf.Max(bounds.size.x, bounds.size.y);
+                camera.orthographicSize = maxDimension * 0.6f;
+            }
         }
 
-        // Helper class to run coroutines
         private class CoroutineRunner : MonoBehaviour
         {
         }

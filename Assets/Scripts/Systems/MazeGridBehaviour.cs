@@ -234,6 +234,142 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Legacy Compatibility Methods
+
+        /// <summary>
+        /// Converts world position to approximate grid coordinates.
+        /// Provided for legacy compatibility with grid-based code.
+        /// </summary>
+        public bool WorldToGrid(Vector3 worldPos, out int x, out int y)
+        {
+            Vector2 graphPos = WorldToGraph(worldPos);
+            x = Mathf.RoundToInt(graphPos.x / worldSpaceTileSize);
+            y = Mathf.RoundToInt(graphPos.y / worldSpaceTileSize);
+            return worldSpaceMazeData != null && worldSpaceMazeData.IsWalkable(graphPos);
+        }
+
+        /// <summary>
+        /// Converts grid coordinates to world position.
+        /// Provided for legacy compatibility with grid-based code.
+        /// </summary>
+        public Vector3 GridToWorld(int x, int y)
+        {
+            Vector2 graphPos = new Vector2(x * worldSpaceTileSize, y * worldSpaceTileSize);
+            return GraphToWorld(graphPos);
+        }
+
+        /// <summary>
+        /// Checks if a grid position is a spawn point.
+        /// </summary>
+        public bool IsSpawnPoint(Vector2Int gridPos)
+        {
+            if (worldSpaceMazeData == null)
+            {
+                return false;
+            }
+
+            Vector2 worldPos = new Vector2(gridPos.x * worldSpaceTileSize, gridPos.y * worldSpaceTileSize);
+            foreach (var spawn in worldSpaceMazeData.SpawnPoints.Values)
+            {
+                if (Vector2.Distance(new Vector2(spawn.x, spawn.y), worldPos) < worldSpaceTileSize * 0.5f)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Gets all spawn points as grid positions.
+        /// </summary>
+        public Dictionary<char, Vector2Int> GetAllSpawnPoints()
+        {
+            var result = new Dictionary<char, Vector2Int>();
+            if (worldSpaceMazeData == null)
+            {
+                return result;
+            }
+
+            foreach (var kvp in worldSpaceMazeData.SpawnPoints)
+            {
+                int x = Mathf.RoundToInt(kvp.Value.x / worldSpaceTileSize);
+                int y = Mathf.RoundToInt(kvp.Value.y / worldSpaceTileSize);
+                result[kvp.Key] = new Vector2Int(x, y);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Legacy Grid shim for backwards compatibility with visitor controllers.
+        /// </summary>
+        public LegacyGridShim Grid => _legacyGridShim ??= new LegacyGridShim(this);
+        private LegacyGridShim _legacyGridShim;
+
+        /// <summary>
+        /// Shim class providing legacy Grid API for visitor controllers.
+        /// </summary>
+        public class LegacyGridShim
+        {
+            private readonly MazeGridBehaviour _maze;
+
+            public LegacyGridShim(MazeGridBehaviour maze)
+            {
+                _maze = maze;
+            }
+
+            /// <summary>
+            /// Gets a node at the specified grid position.
+            /// Returns a shim node with walkability information.
+            /// </summary>
+            public LegacyNodeShim GetNode(int x, int y)
+            {
+                if (_maze.worldSpaceMazeData == null)
+                {
+                    return null;
+                }
+
+                Vector2 worldPos = new Vector2(x * _maze.worldSpaceTileSize, y * _maze.worldSpaceTileSize);
+                bool walkable = _maze.worldSpaceMazeData.IsWalkable(worldPos);
+                return new LegacyNodeShim(x, y, walkable);
+            }
+
+            /// <summary>
+            /// Gets the speed multiplier at a grid position.
+            /// </summary>
+            public float GetSpeedMultiplier(int x, int y)
+            {
+                return 1.0f; // Default speed in world-space mode
+            }
+
+            /// <summary>
+            /// Gets the movement cost at a grid position.
+            /// </summary>
+            public float GetMoveCost(int x, int y, float attractionMultiplier)
+            {
+                return 1.0f; // Default cost in world-space mode
+            }
+        }
+
+        /// <summary>
+        /// Shim class representing a legacy grid node.
+        /// </summary>
+        public class LegacyNodeShim
+        {
+            public int x;
+            public int y;
+            public bool walkable;
+            public TileType terrain = TileType.Path;
+
+            public LegacyNodeShim(int x, int y, bool walkable)
+            {
+                this.x = x;
+                this.y = y;
+                this.walkable = walkable;
+            }
+        }
+
+        #endregion
+
         #region Gizmos
 
         private void OnDrawGizmos()

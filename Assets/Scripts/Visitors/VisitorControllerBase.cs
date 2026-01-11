@@ -246,6 +246,12 @@ namespace FaeMaze.Visitors
         protected Vector2Int spawnGridPosition;
         protected bool hasSpawnGridPosition;
 
+        // World-space navigation (pure world-space mode without grid)
+        protected bool useWorldSpaceNavigation;
+        protected Vector3 worldDestination;
+        protected List<Vector3> worldPath;
+        protected int worldPathIndex;
+
         #endregion
 
         #region Properties
@@ -533,88 +539,16 @@ namespace FaeMaze.Visitors
 
         private void UpdateDestinationForRemovedExit(Vector2Int currentPos, Vector2Int removedExit)
         {
-            if (mazeGridBehaviour == null || gameController == null)
+            // In world-space mode, switch to world destination if available
+            if (useWorldSpaceNavigation && mazeGridBehaviour != null)
             {
-                Debug.LogWarning($"[{name}] Cannot update destination: mazeGridBehaviour or gameController is null");
+                // Navigate to heart instead
+                SetWorldDestination(mazeGridBehaviour.HeartWorldPosition);
                 return;
             }
 
-            var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
-            if (spawnPoints == null || spawnPoints.Count == 0)
-            {
-                Debug.LogWarning($"[{name}] Cannot update destination: no spawn points available");
-                return;
-            }
-
-            Debug.Log($"[{name}] Finding nearest exit from removed exit {removedExit} (current: {currentPos}), {spawnPoints.Count} spawn points available");
-
-            Vector2Int previousDestination = originalDestination;
-            Vector2Int bestExit = Vector2Int.zero;
-            int bestPathLength = int.MaxValue;
-            float bestManhattan = float.PositiveInfinity;
-            bool foundValidPath = false;
-
-            // Find nearest exit by walking distance from removed exit position
-            foreach (var spawn in spawnPoints.Values)
-            {
-                if (spawn == removedExit)
-                {
-                    Debug.Log($"[{name}]   Skipping removed exit at {spawn}");
-                    continue;
-                }
-
-                int pathLength = int.MaxValue;
-                var candidatePath = new List<MazeGrid.MazeNode>();
-                // Pathfind from removed exit position to spawn point
-                if (gameController.TryFindPath(removedExit, spawn, candidatePath, 1.0f) && candidatePath.Count > 0)
-                {
-                    pathLength = candidatePath.Count;
-                    foundValidPath = true;
-                }
-
-                // Use removed exit for Manhattan distance fallback
-                float manhattan = Mathf.Abs(spawn.x - removedExit.x) + Mathf.Abs(spawn.y - removedExit.y);
-
-                Debug.Log($"[{name}]   Exit {spawn}: pathLength={pathLength}, manhattan={manhattan:F1}");
-
-                // Only update if we found a valid path, OR if no valid paths exist yet and this is closer by Manhattan
-                if (foundValidPath && pathLength < bestPathLength)
-                {
-                    bestPathLength = pathLength;
-                    bestManhattan = manhattan;
-                    bestExit = spawn;
-                    Debug.Log($"[{name}]     -> New best exit (valid path)");
-                }
-                else if (!foundValidPath && bestExit == Vector2Int.zero)
-                {
-                    // No valid paths yet, use first exit as default
-                    bestExit = spawn;
-                    bestManhattan = manhattan;
-                    Debug.Log($"[{name}]     -> Set as fallback exit");
-                }
-                else if (!foundValidPath && manhattan < bestManhattan)
-                {
-                    // Still no valid paths, but this is closer by Manhattan
-                    bestExit = spawn;
-                    bestManhattan = manhattan;
-                    Debug.Log($"[{name}]     -> New closest exit by Manhattan distance");
-                }
-            }
-
-            if (bestExit != Vector2Int.zero)
-            {
-                Debug.Log($"[{name}] Selected exit: {bestExit} (pathLength: {bestPathLength}, manhattan: {bestManhattan:F1}, foundValidPath: {foundValidPath})");
-                originalDestination = bestExit;
-                usesSpawnMarkerDestination = true;
-                if (bestExit != previousDestination)
-                {
-                    RecordRouteLog("Destination updated after exit removal", originalDestination, path);
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[{name}] Could not find any valid exit!");
-            }
+            // Legacy grid-based destination update is no longer supported
+            Debug.LogWarning($"[{name}] UpdateDestinationForRemovedExit: Grid-based pathfinding not available. Consider using SetWorldDestination.");
         }
 
         private string FormatPath(List<Vector2Int> candidatePath)
@@ -677,7 +611,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            MazeGrid grid = mazeGridBehaviour.Grid;
             List<string> issues = new List<string>();
 
             int targetIndex = Mathf.Clamp(currentPathIndex, 0, path.Count - 1);
@@ -686,16 +619,6 @@ namespace FaeMaze.Visitors
             if (manhattanToTarget > 1)
             {
                 issues.Add($"stalling away from next waypoint {target} (index {targetIndex})");
-            }
-
-            if (grid != null)
-            {
-                MazeGrid.MazeNode targetNode = grid.GetNode(target.x, target.y);
-                if (targetNode == null || !targetNode.walkable)
-                {
-                    string reason = targetNode == null ? "missing" : "not walkable";
-                    issues.Add($"next waypoint {target} is {reason}");
-                }
             }
 
             for (int i = targetIndex + 1; i < path.Count; i++)
@@ -707,43 +630,12 @@ namespace FaeMaze.Visitors
                 {
                     issues.Add($"non-adjacent hop between {prev} (index {i - 1}) and {next} (index {i})");
                 }
-
-                if (grid != null)
-                {
-                    MazeGrid.MazeNode node = grid.GetNode(next.x, next.y);
-                    if (node == null || !node.walkable)
-                    {
-                        string reason = node == null ? "missing" : "not walkable";
-                        issues.Add($"waypoint {next} at index {i} is {reason}");
-                    }
-                }
             }
 
             if (issues.Count > 0)
             {
                 string destination = originalDestination.ToString();
-                Vector2Int resolvedDestination = originalDestination;
-                if (mazeGridBehaviour != null)
-                {
-                    resolvedDestination = GetDestinationForCurrentState(currentGrid);
-                    destination = resolvedDestination.ToString();
-                }
-
-                string targetNodeStatus = "unknown";
-                if (grid != null)
-                {
-                    MazeGrid.MazeNode targetNode = grid.GetNode(target.x, target.y);
-                    if (targetNode == null)
-                    {
-                        targetNodeStatus = "missing";
-                    }
-                    else
-                    {
-                        targetNodeStatus = targetNode.walkable ? "walkable" : "blocked";
-                    }
-                }
-
-                Debug.LogWarning($"[{name}] Stall diagnostics at {currentGrid} (state: {state}, currentPathIndex: {currentPathIndex}, destination: {destination}). Next waypoint {target} (index {targetIndex}, node: {targetNodeStatus}). Issues: {string.Join("; ", issues)}.");
+                Debug.LogWarning($"[{name}] Stall diagnostics at {currentGrid} (state: {state}, currentPathIndex: {currentPathIndex}, destination: {destination}). Next waypoint {target} (index {targetIndex}). Issues: {string.Join("; ", issues)}.");
                 hasLoggedPathIssue = true;
             }
         }
@@ -1011,7 +903,7 @@ namespace FaeMaze.Visitors
         {
             gameController = controller;
 
-            if (gameController != null && gameController.MazeGrid != null)
+            if (mazeGridBehaviour == null)
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             }
@@ -1065,53 +957,179 @@ namespace FaeMaze.Visitors
             RecalculatePath();
         }
 
+
         /// <summary>
-        /// Sets the path using MazeNode objects.
+        /// Sets a world-space destination for the visitor to walk toward.
+        /// Uses world-space navigation along the graph edges.
         /// </summary>
-        public virtual void SetPath(List<MazeGrid.MazeNode> nodePath)
+        public virtual void SetWorldDestination(Vector3 destination)
         {
-            if (nodePath == null || nodePath.Count == 0)
+            useWorldSpaceNavigation = true;
+            worldDestination = destination;
+            worldPathIndex = 0;
+
+            // Build world-space path from current position to destination
+            worldPath = BuildWorldPath(transform.position, destination);
+
+            if (worldPath != null && worldPath.Count > 0)
             {
-                return;
-            }
+                state = VisitorState.Walking;
+                waypointsTraversedSinceSpawn = 0;
 
-            List<Vector2Int> gridPath = new List<Vector2Int>();
-            foreach (var node in nodePath)
+                if (ShouldLogVisitorPath())
+                {
+                    LogVisitorPath($"SetWorldDestination to {destination}. Path has {worldPath.Count} waypoints.");
+                }
+            }
+            else
             {
-                gridPath.Add(new Vector2Int(node.x, node.y));
+                Debug.LogWarning($"[{name}] SetWorldDestination: No path found from {transform.position} to {destination}");
+                state = VisitorState.Idle;
             }
-
-            if (gridPath.Count > 0)
-            {
-                originalDestination = gridPath[gridPath.Count - 1];
-            }
-            usesSpawnMarkerDestination = mazeGridBehaviour != null
-                && mazeGridBehaviour.GetSpawnPointCount() >= 1
-                && mazeGridBehaviour.IsSpawnPoint(originalDestination);
-
-            if (ShouldLogVisitorPath())
-            {
-                LogVisitorPath($"SetPath(List<MazeNode>) with {gridPath.Count} waypoint(s). Provided path: {FormatPath(gridPath)}. Current world position: {transform.position}.");
-            }
-
-            waypointsTraversedSinceSpawn = 0;
-            ResetDetourState();
-            hasLoggedPathIssue = false;
-            lastLoggedWaypointIndex = -1;
-            stalledDuration = 0f;
-            hasLoggedCurrentStall = false;
-            isCurrentlyStalled = false;
-            hasDumpedStallRouteLog = false;
-
-            // Initialize previous state for change detection
-            previousState = state;
-
-            RecordRouteLog("SetPath(List<MazeNode>)", originalDestination, gridPath);
-            RecalculatePath();
         }
 
         /// <summary>
-        /// Logs warnings for obvious path integrity problems such as gaps or blocked nodes.
+        /// Builds a world-space path from start to end using graph edges.
+        /// Returns a list of world positions to traverse.
+        /// </summary>
+        protected virtual List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
+            {
+                // Fallback: direct path
+                return new List<Vector3> { end };
+            }
+
+            var graphState = mazeGridBehaviour.ForestMapState;
+            var result = new List<Vector3>();
+
+            // Find nearest node to start
+            int startNodeIndex = FindNearestNodeIndex(graphState, new Vector2(start.x, start.y));
+
+            // Find nearest node to end (usually the heart at index 0)
+            int endNodeIndex = FindNearestNodeIndex(graphState, new Vector2(end.x, end.y));
+
+            if (startNodeIndex < 0 || endNodeIndex < 0)
+            {
+                // Fallback: direct path
+                return new List<Vector3> { end };
+            }
+
+            // BFS to find path through nodes
+            var nodePath = FindNodePath(graphState, startNodeIndex, endNodeIndex);
+
+            if (nodePath == null || nodePath.Count == 0)
+            {
+                // Fallback: direct path
+                return new List<Vector3> { end };
+            }
+
+            // Convert node path to world positions following edge polylines
+            for (int i = 0; i < nodePath.Count; i++)
+            {
+                var node = graphState.Nodes[nodePath[i]];
+                result.Add(new Vector3(node.Position.x, node.Position.y, start.z));
+            }
+
+            // Ensure we end exactly at the destination
+            if (result.Count > 0 && Vector3.Distance(result[result.Count - 1], end) > 0.1f)
+            {
+                result.Add(end);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Finds the nearest node index to a position.
+        /// </summary>
+        protected int FindNearestNodeIndex(ForestMaze.PlanarForestMazeGenerator.ForestMapState state, Vector2 position)
+        {
+            int nearest = -1;
+            float nearestDist = float.MaxValue;
+
+            for (int i = 0; i < state.Nodes.Count; i++)
+            {
+                float dist = Vector2.Distance(state.Nodes[i].Position, position);
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearest = i;
+                }
+            }
+
+            return nearest;
+        }
+
+        /// <summary>
+        /// Finds a path through nodes using BFS.
+        /// </summary>
+        protected List<int> FindNodePath(ForestMaze.PlanarForestMazeGenerator.ForestMapState state, int startNode, int endNode)
+        {
+            if (startNode == endNode)
+            {
+                return new List<int> { startNode };
+            }
+
+            // Build adjacency from edges
+            var adjacency = new Dictionary<int, List<int>>();
+            for (int i = 0; i < state.Nodes.Count; i++)
+            {
+                adjacency[i] = new List<int>();
+            }
+
+            foreach (var edge in state.Edges)
+            {
+                if (!edge.Partial) // Only use complete edges
+                {
+                    adjacency[edge.StartNodeIndex].Add(edge.EndNodeIndex);
+                    adjacency[edge.EndNodeIndex].Add(edge.StartNodeIndex);
+                }
+            }
+
+            // BFS
+            var queue = new Queue<int>();
+            var visited = new HashSet<int>();
+            var parent = new Dictionary<int, int>();
+
+            queue.Enqueue(startNode);
+            visited.Add(startNode);
+            parent[startNode] = -1;
+
+            while (queue.Count > 0)
+            {
+                int current = queue.Dequeue();
+
+                if (current == endNode)
+                {
+                    // Reconstruct path
+                    var path = new List<int>();
+                    int node = endNode;
+                    while (node != -1)
+                    {
+                        path.Add(node);
+                        node = parent[node];
+                    }
+                    path.Reverse();
+                    return path;
+                }
+
+                foreach (int neighbor in adjacency[current])
+                {
+                    if (!visited.Contains(neighbor))
+                    {
+                        visited.Add(neighbor);
+                        parent[neighbor] = current;
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            return null; // No path found
+        }
+
+        /// <summary>
+        /// Logs warnings for obvious path integrity problems such as gaps.
         /// Helps diagnose invalid paths produced by pathfinding before movement begins.
         /// </summary>
         private void LogPathIntegrityIssues(List<Vector2Int> candidatePath, Vector2Int currentPos, string context)
@@ -1121,7 +1139,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            MazeGrid grid = mazeGridBehaviour.Grid;
             List<string> issues = new List<string>();
 
             // Verify starting step from the visitor's resolved grid position
@@ -1136,17 +1153,7 @@ namespace FaeMaze.Visitors
                 issues.Add($"start {firstWaypoint} is not adjacent to current grid position {currentPos}");
             }
 
-            if (grid != null)
-            {
-                var firstNode = grid.GetNode(firstWaypoint.x, firstWaypoint.y);
-                if (firstNode == null || !firstNode.walkable)
-                {
-                    string reason = firstNode == null ? "missing" : "not walkable";
-                    issues.Add($"starting waypoint {firstWaypoint} is {reason}");
-                }
-            }
-
-            // Validate each subsequent hop for adjacency and walkability (supports diagonal movement)
+            // Validate each subsequent hop for adjacency (supports diagonal movement)
             for (int i = 1; i < candidatePath.Count; i++)
             {
                 Vector2Int previous = candidatePath[i - 1];
@@ -1161,16 +1168,6 @@ namespace FaeMaze.Visitors
                 if (!isValidMove)
                 {
                     issues.Add($"non-adjacent step between {previous} (index {i - 1}) and {waypoint} (index {i})");
-                }
-
-                if (grid != null)
-                {
-                    MazeGrid.MazeNode node = grid.GetNode(waypoint.x, waypoint.y);
-                    if (node == null || !node.walkable)
-                    {
-                        string reason = node == null ? "missing" : "not walkable";
-                        issues.Add($"waypoint {waypoint} at index {i} is {reason}");
-                    }
                 }
             }
 
@@ -1358,6 +1355,13 @@ namespace FaeMaze.Visitors
 
         protected virtual void UpdateWalking()
         {
+            // Handle world-space navigation mode
+            if (useWorldSpaceNavigation)
+            {
+                UpdateWorldSpaceWalking();
+                return;
+            }
+
             if (path == null || path.Count == 0)
             {
                 state = VisitorState.Idle;
@@ -1421,38 +1425,8 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // Move toward target (apply speed multiplier from terrain)
-            float terrainSpeedMultiplier = 1f;
-            MazeGrid mazeGrid = mazeGridBehaviour.Grid;
-            if (mazeGrid != null)
-            {
-                MazeGrid.MazeNode targetNode = mazeGrid.GetNode(targetGridPos.x, targetGridPos.y);
-                if (targetNode == null || !targetNode.walkable)
-                {
-                    if (!hasLoggedPathIssue)
-                    {
-                        string reason = targetNode == null ? "missing" : "not walkable";
-                        string terrainType = targetNode != null ? targetNode.terrain.ToString() : "unknown";
-                        if (LogVisitorPathWarning($"cannot move to waypoint {targetGridPos} at index {currentPathIndex} because node is {reason} (terrain: {terrainType}, walkable: {targetNode?.walkable}). Path length: {path.Count}."))
-                        {
-                            hasLoggedPathIssue = true;
-                        }
-                    }
-
-                    UpdatePathLoggingOnMovement(previousPosition, transform.position);
-                    return; // Non-walkable nodes remain blocked
-                }
-
-                // Debug log when moving to water tiles
-                if (targetNode.terrain == TileType.Water)
-                {
-                }
-
-                terrainSpeedMultiplier = mazeGrid.GetSpeedMultiplier(targetGridPos.x, targetGridPos.y);
-            }
-
-            terrainSpeedMultiplier = Mathf.Max(terrainSpeedMultiplier, 0.01f); // Prevent zero speed
-            float effectiveSpeed = moveSpeed * speedMultiplier * terrainSpeedMultiplier;
+            // Move toward target
+            float effectiveSpeed = moveSpeed * speedMultiplier;
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
                 targetWorldPos,
@@ -1498,6 +1472,125 @@ namespace FaeMaze.Visitors
             {
                 OnWaypointReached();
             }
+        }
+
+        /// <summary>
+        /// Handles movement in world-space navigation mode.
+        /// Walks along the world path toward the destination.
+        /// </summary>
+        protected virtual void UpdateWorldSpaceWalking()
+        {
+            if (worldPath == null || worldPath.Count == 0)
+            {
+                state = VisitorState.Idle;
+                SetAnimatorDirection(IdleDirection);
+                useWorldSpaceNavigation = false;
+                return;
+            }
+
+            if (worldPathIndex >= worldPath.Count)
+            {
+                // Path complete - arrived at destination
+                OnWorldSpacePathComplete();
+                return;
+            }
+
+            // Get current target waypoint
+            Vector3 targetWorldPos = worldPath[worldPathIndex];
+            float effectiveSpeed = moveSpeed * speedMultiplier;
+
+            Vector3 newPosition = Vector3.MoveTowards(
+                transform.position,
+                targetWorldPos,
+                effectiveSpeed * Time.deltaTime
+            );
+
+            Vector3 movementDelta = newPosition - transform.position;
+            UpdateAnimatorDirection(movementDelta);
+
+            // Apply movement using appropriate physics
+            if (use3DModel)
+            {
+                if (rb3D != null)
+                {
+                    rb3D.MovePosition(newPosition);
+                    Physics.SyncTransforms();
+                }
+                else
+                {
+                    transform.position = newPosition;
+                }
+            }
+            else
+            {
+                if (rb2D != null)
+                {
+                    rb2D.MovePosition(newPosition);
+                    Physics2D.SyncTransforms();
+                }
+                else
+                {
+                    transform.position = newPosition;
+                }
+            }
+
+            // Check if we've reached the waypoint
+            float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
+            if (distanceToTarget < waypointReachedDistance)
+            {
+                waypointsTraversedSinceSpawn++;
+                worldPathIndex++;
+
+                if (worldPathIndex >= worldPath.Count)
+                {
+                    OnWorldSpacePathComplete();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Called when the visitor reaches its world-space destination.
+        /// </summary>
+        protected virtual void OnWorldSpacePathComplete()
+        {
+            if (ShouldLogVisitorPath())
+            {
+                LogVisitorPath($"reached world-space destination at {worldDestination}");
+            }
+
+            // Check if at the heart (destination is near the heart)
+            if (mazeGridBehaviour != null)
+            {
+                float distToHeart = Vector3.Distance(transform.position, mazeGridBehaviour.HeartWorldPosition);
+                if (distToHeart < 5f) // Within 5 units of heart
+                {
+                    // Visitor has reached the heart - trigger consumed
+                    state = VisitorState.Consumed;
+                    OnConsumedByHeart();
+                    return;
+                }
+            }
+
+            // Otherwise, just become idle
+            state = VisitorState.Idle;
+            useWorldSpaceNavigation = false;
+        }
+
+        /// <summary>
+        /// Called when a visitor is consumed by the Heart of the Maze.
+        /// Override in derived classes for specific behavior.
+        /// </summary>
+        protected virtual void OnConsumedByHeart()
+        {
+            // Award essence if using heart destination (not spawn marker escape)
+            if (gameController != null)
+            {
+                int essenceReward = config != null ? config.EssenceReward : 10;
+                gameController.AddEssence(essenceReward);
+            }
+
+            // Destroy the visitor
+            Destroy(gameObject, 0.1f);
         }
 
         protected virtual void OnWaypointReached()
@@ -1801,56 +1894,21 @@ namespace FaeMaze.Visitors
             currentPathIndex = 0;
             ResetDetourState();
 
-            // Calculate path to lantern
-            if (gameController != null && mazeGridBehaviour != null &&
-                mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            // Navigate to lantern using world-space path
+            if (mazeGridBehaviour != null)
             {
-                Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-                List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
-                // Fascinated visitors use normal attraction (they're already mesmerized)
-                if (gameController.TryFindPath(currentPos, fascinationLanternPosition, pathToLantern, 1.0f) && pathToLantern.Count > 0)
-                {
-                    // Convert to Vector2Int path
-                    path = new List<Vector2Int>();
-                    foreach (var node in pathToLantern)
-                    {
-                        path.Add(new Vector2Int(node.x, node.y));
-                    }
-
-                    // Find starting waypoint
-                    currentPathIndex = 0;
-                    if (path.Count > 1)
-                    {
-                        // Try to find current grid position in the path
-                        for (int i = 0; i < path.Count; i++)
-                        {
-                            if (path[i] == currentPos)
-                            {
-                                currentPathIndex = i;
-                                break;
-                            }
-                        }
-
-                        // If very close to current tile center, advance to next
-                        Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
-                        float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
-                        if (currentPathIndex < path.Count - 1 && distToCurrentTile < waypointReachedDistance)
-                        {
-                            currentPathIndex++;
-                        }
-                    }
-
-                    RefreshStateFromFlags();
-                    RecordRouteLog("Fascinated: path to lantern", fascinationLanternPosition, path);
-                }
-                else
-                {
-                    isFascinated = false;
-                    hasReachedLantern = false;
-                    ClearLanternInteraction();
-                    RefreshStateFromFlags();
-                }
+                Vector3 lanternWorldPos = mazeGridBehaviour.GridToWorld(fascinationLanternPosition.x, fascinationLanternPosition.y);
+                worldPath = BuildWorldPath(transform.position, lanternWorldPos);
+                worldPathIndex = 0;
+                useWorldSpaceNavigation = true;
+                RefreshStateFromFlags();
+            }
+            else
+            {
+                isFascinated = false;
+                hasReachedLantern = false;
+                ClearLanternInteraction();
+                RefreshStateFromFlags();
             }
         }
 
@@ -2079,34 +2137,43 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Attempts to find a path from start to destination using A*.
-        /// Returns true if successful, with the path in the out parameter.
+        /// Attempts to find a path from start to destination.
+        /// In world-space mode, uses graph-based pathfinding.
         /// </summary>
         protected bool TryFindPathToDestination(Vector2Int start, Vector2Int destination, out List<Vector2Int> pathResult)
         {
             pathResult = null;
 
-            if (gameController == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
             {
                 return false;
             }
 
-            // Use state-based attraction multiplier for pathfinding
-            float attractionMultiplier = GetAttractionMultiplier();
+            // Convert grid coords to world space and use graph pathfinding
+            Vector3 startWorld = mazeGridBehaviour.GridToWorld(start.x, start.y);
+            Vector3 endWorld = mazeGridBehaviour.GridToWorld(destination.x, destination.y);
 
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (!gameController.TryFindPath(start, destination, pathNodes, attractionMultiplier) || pathNodes.Count == 0)
+            var worldPath = BuildWorldPath(startWorld, endWorld);
+            if (worldPath == null || worldPath.Count == 0)
             {
                 return false;
             }
 
+            // Convert world path back to grid positions
             pathResult = new List<Vector2Int>();
-            foreach (var node in pathNodes)
+            foreach (var worldPos in worldPath)
             {
-                pathResult.Add(new Vector2Int(node.x, node.y));
+                if (mazeGridBehaviour.WorldToGrid(worldPos, out int gx, out int gy))
+                {
+                    Vector2Int gridPos = new Vector2Int(gx, gy);
+                    if (pathResult.Count == 0 || pathResult[pathResult.Count - 1] != gridPos)
+                    {
+                        pathResult.Add(gridPos);
+                    }
+                }
             }
 
-            return true;
+            return pathResult.Count > 0;
         }
 
         /// <summary>
@@ -2720,81 +2787,13 @@ namespace FaeMaze.Visitors
             ResetDetourState();
             waypointsTraversedSinceSpawn = 0;
 
-            // Get current position and pathfind to lantern
-            if (gameController != null && mazeGridBehaviour != null &&
-                mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            // Navigate to lantern using world-space path
+            if (mazeGridBehaviour != null)
             {
-                Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-                List<MazeGrid.MazeNode> pathToLantern = new List<MazeGrid.MazeNode>();
-                // Fascinated visitors use normal attraction (they're already mesmerized)
-                if (gameController.TryFindPath(currentPos, lanternGridPosition, pathToLantern, 1.0f) && pathToLantern.Count > 0)
-                {
-                    // Convert to Vector2Int path
-                    path = new List<Vector2Int>();
-                    foreach (var node in pathToLantern)
-                    {
-                        path.Add(new Vector2Int(node.x, node.y));
-                    }
-
-                    // Find starting waypoint without backtracking
-                    currentPathIndex = 0;
-                    if (path.Count > 1)
-                    {
-                        // Try to find current grid position in the path
-                        int currentGridIndex = -1;
-                        for (int i = 0; i < path.Count; i++)
-                        {
-                            if (path[i] == currentPos)
-                            {
-                                currentGridIndex = i;
-                                break;
-                            }
-                        }
-
-                        if (currentGridIndex >= 0)
-                        {
-                            currentPathIndex = currentGridIndex;
-
-                            // If very close to center, advance to next waypoint
-                            Vector3 currentTileWorldPos = mazeGridBehaviour.GridToWorld(currentPos.x, currentPos.y);
-                            float distToCurrentTile = Vector3.Distance(transform.position, currentTileWorldPos);
-                            if (currentPathIndex < path.Count - 1 && distToCurrentTile < waypointReachedDistance)
-                            {
-                                currentPathIndex++;
-                            }
-                        }
-                        else
-                        {
-                            // Current tile not in path - use closest waypoint with forward bias
-                            Vector3 currentWorldPos = transform.position;
-                            float closestDist = float.MaxValue;
-
-                            for (int i = 0; i < path.Count; i++)
-                            {
-                                Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
-                                float dist = Vector3.Distance(currentWorldPos, waypointWorldPos);
-
-                                // Prefer waypoints ahead by biasing distance
-                                float biasedDist = dist - (i * 0.01f);
-
-                                if (biasedDist < closestDist)
-                                {
-                                    closestDist = biasedDist;
-                                    currentPathIndex = i;
-                                }
-                            }
-
-                            if (currentPathIndex < path.Count - 1 && closestDist < waypointReachedDistance)
-                            {
-                                currentPathIndex++;
-                            }
-                        }
-
-                        hasLoggedPathIssue = false;
-                        LogPathIntegrityIssues(path, currentPos, "fascination path");
-                    }
-                }
+                Vector3 lanternWorldPos = mazeGridBehaviour.GridToWorld(lanternGridPosition.x, lanternGridPosition.y);
+                worldPath = BuildWorldPath(transform.position, lanternWorldPos);
+                worldPathIndex = 0;
+                useWorldSpaceNavigation = true;
             }
         }
 
