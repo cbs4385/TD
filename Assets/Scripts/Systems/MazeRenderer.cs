@@ -188,14 +188,21 @@ namespace FaeMaze.Systems
             // Step 1: Collect all edge segment data for wall orientation lookup
             CollectEdgeSegments(forestState);
 
-            // Step 2: Render path tiles along edges (oriented along edge direction)
-            renderedTiles += RenderEdgePaths(forestState, mazeOrigin);
+            // Step 2: Render node columns FIRST (circular, radius = nodeRadius)
+            // This ensures node columns take priority over edges
+            int nodeColumnTiles = RenderNodeColumns(forestState, mazeOrigin);
+            renderedTiles += nodeColumnTiles;
+            Debug.Log($"[MazeRenderer] Rendered {nodeColumnTiles} node column tiles");
 
-            // Step 3: Render node columns (circular, radius = nodeRadius)
-            renderedTiles += RenderNodeColumns(forestState, mazeOrigin);
+            // Step 3: Render path tiles along edges (oriented along edge direction)
+            int edgeTiles = RenderEdgePaths(forestState, mazeOrigin);
+            renderedTiles += edgeTiles;
+            Debug.Log($"[MazeRenderer] Rendered {edgeTiles} edge path tiles");
 
             // Step 4: Render wall border (walls cannot overlap path/node tiles)
-            renderedTiles += RenderWallBorder(forestState, mazeOrigin);
+            int wallTileCount = RenderWallBorder(forestState, mazeOrigin);
+            renderedTiles += wallTileCount;
+            Debug.Log($"[MazeRenderer] Rendered {wallTileCount} wall tiles");
 
             Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +
                 $"({forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges)");
@@ -324,8 +331,13 @@ namespace FaeMaze.Systems
             float graphStepSize = 1.0f / graphScale;
             int tilesRadius = Mathf.CeilToInt(nodeRadius / graphStepSize);
 
+            Debug.Log($"[MazeRenderer] Node columns: nodeRadius={nodeRadius}, graphScale={graphScale}, " +
+                $"graphStepSize={graphStepSize:F3}, tilesRadius={tilesRadius}");
+
             foreach (var node in forestState.Nodes)
             {
+                int nodeTilesBefore = tileCount;
+
                 for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
                 {
                     for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
@@ -363,6 +375,10 @@ namespace FaeMaze.Systems
                         tileCount++;
                     }
                 }
+
+                int nodeTilesRendered = tileCount - nodeTilesBefore;
+                Debug.Log($"[MazeRenderer] Node {node.Id} at graph ({node.Position.x:F2}, {node.Position.y:F2}): " +
+                    $"rendered {nodeTilesRendered} column tiles");
             }
 
             return tileCount;
@@ -483,9 +499,12 @@ namespace FaeMaze.Systems
             // For flat tiles on XY plane, rotate only around Z axis
             Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
 
-            // For prefabs designed Y-up: first lay flat (-90 X), then rotate around
-            // the now-vertical axis (local Y = world Z) by orientationDegrees
-            Quaternion prefabRotation = Quaternion.Euler(-90f, orientationDegrees, 0f);
+            // For wall prefabs (trees): rotate around Z axis to face perpendicular to graph
+            // Trees stay upright (Y-up) but rotate to face the direction of orientationDegrees
+            Quaternion wallPrefabRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
+
+            // For other prefabs designed Y-up that need to lie flat
+            Quaternion flatPrefabRotation = Quaternion.Euler(-90f, 0f, orientationDegrees);
 
             GameObject tileObj = null;
             Color color = GetColorForSymbol(symbol, !isWall);
@@ -502,7 +521,7 @@ namespace FaeMaze.Systems
             {
                 tileObj = Instantiate(wallPrefab, tilesParent);
                 tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = prefabRotation;
+                tileObj.transform.rotation = wallPrefabRotation; // Rotate around Z to face perpendicular
                 tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
                 wallTiles?.Add(tileObj);
             }
@@ -513,10 +532,10 @@ namespace FaeMaze.Systems
                 pathBase.transform.SetParent(tilesParent);
                 pathTiles?.Add(pathBase);
 
-                // Node hazard on top (uses prefab rotation)
+                // Node hazard on top (uses flat prefab rotation)
                 tileObj = Instantiate(nodeHazardPrefab, tilesParent);
                 tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = prefabRotation;
+                tileObj.transform.rotation = flatPrefabRotation;
                 tileObj.transform.localScale = Vector3.one * tileSize;
             }
             else
