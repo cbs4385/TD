@@ -1829,9 +1829,8 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Ensures a path exists between start and end by progressively converting
-        /// wall tiles to walkable tiles along the direct vector from start to end.
-        /// This creates straight corridors instead of winding paths.
+        /// Ensures a path exists between start and end by converting ALL wall tiles
+        /// along the direct vector to walkable tiles. This creates a straight corridor.
         /// </summary>
         private static void EnsureDirectPathExists(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
         {
@@ -1847,38 +1846,56 @@ namespace ForestMaze
                 return;
             }
 
-            const int maxIterations = 100;
-            int iteration = 0;
+            // Use Bresenham's line algorithm to trace direct path from start to end
+            int x0 = start.x;
+            int y0 = start.y;
+            int x1 = end.x;
+            int y1 = end.y;
 
-            while (iteration < maxIterations)
+            int dx = Mathf.Abs(x1 - x0);
+            int dy = Mathf.Abs(y1 - y0);
+            int sx = x0 < x1 ? 1 : -1;
+            int sy = y0 < y1 ? 1 : -1;
+            int err = dx - dy;
+
+            int wallsRemoved = 0;
+            int x = x0;
+            int y = y0;
+
+            while (true)
             {
-                // Check if path exists using simple flood fill
-                if (IsReachable(grid, width, height, start, end))
+                // Convert wall tiles to paths along the direct line
+                if (x >= 0 && x < width && y >= 0 && y < height)
                 {
-                    return; // Path exists, we're done
+                    char tile = grid[y, x];
+                    if (tile == '#')  // Wall tile - convert to path
+                    {
+                        grid[y, x] = '.';
+                        wallsRemoved++;
+                    }
                 }
 
-                // Find the furthest walkable point from start toward end
-                Vector2Int furthestWalkable = FindFurthestWalkableAlongVector(grid, width, height, start, end);
+                // Check if we've reached the end
+                if (x == x1 && y == y1)
+                    break;
 
-                // Find the next wall tile to remove along the vector from furthest point to end
-                Vector2Int? wallToRemove = FindNextWallAlongVector(grid, width, height, furthestWalkable, end);
-
-                if (!wallToRemove.HasValue)
+                // Bresenham step
+                int e2 = 2 * err;
+                if (e2 > -dy)
                 {
-                    Debug.LogWarning($"[EnsureDirectPath] Cannot find wall to remove from ({start.x},{start.y}) to ({end.x},{end.y})");
-                    return;
+                    err -= dy;
+                    x += sx;
                 }
-
-                // Convert this wall tile to a path
-                grid[wallToRemove.Value.y, wallToRemove.Value.x] = '.';
-
-                iteration++;
+                if (e2 < dx)
+                {
+                    err += dx;
+                    y += sy;
+                }
             }
 
-            if (iteration >= maxIterations)
+            if (wallsRemoved > 0)
             {
-                Debug.LogWarning($"[EnsureDirectPath] Max iterations reached for path from ({start.x},{start.y}) to ({end.x},{end.y})");
+                Debug.Log($"[EnsureDirectPath] Removed {wallsRemoved} wall tiles along direct path from ({start.x},{start.y}) to ({end.x},{end.y})");
             }
         }
 
