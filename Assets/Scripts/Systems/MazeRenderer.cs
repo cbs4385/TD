@@ -275,8 +275,8 @@ namespace FaeMaze.Systems
         {
             int tileCount = 0;
 
-            // Calculate step size in graph space that corresponds to ~1 grid cell
-            float graphStepSize = 1.0f / graphScale;
+            // Calculate step size in graph space - use half-step for denser tile placement
+            float graphStepSize = 0.5f / graphScale;
 
             foreach (var edge in forestState.Edges)
             {
