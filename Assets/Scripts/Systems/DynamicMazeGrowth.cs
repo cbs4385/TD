@@ -751,9 +751,9 @@ namespace FaeMaze.Systems
                     char removedSpawnId = '\0';
                     foreach (var kvp in oldSpawnPoints)
                     {
-                        if (kvp.Value == oldSpawnPos)
+                        if (kvp.Key == oldSpawnPos)
                         {
-                            removedSpawnId = kvp.Key;
+                            removedSpawnId = kvp.Value;
                             break;
                         }
                     }
