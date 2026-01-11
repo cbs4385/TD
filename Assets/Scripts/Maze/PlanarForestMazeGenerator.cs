@@ -1161,10 +1161,8 @@ namespace ForestMaze
                     Vector2 p1 = edge.PolylinePoints[i] * scale + offset;
                     Vector2 p2 = edge.PolylinePoints[i + 1] * scale + offset;
 
-                    // For partial (open) edges, do not rasterize the very final endpoint cell.
-                    // Adjacency is guaranteed by the previously rasterized step(s).
-                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
-                    bool includeEndPoint = !(edge.Partial && isLastSegment);
+                    // Always include endpoints for 1-cell wide paths to ensure connectivity
+                    bool includeEndPoint = true;
 
                     DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint, pathWidth);
                 }
@@ -1382,9 +1380,8 @@ namespace ForestMaze
                     Vector2 p1 = edge.PolylinePoints[i] * scale + offset;
                     Vector2 p2 = edge.PolylinePoints[i + 1] * scale + offset;
 
-                    // For partial (open) edges, do not rasterize the very final endpoint cell
-                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
-                    bool includeEndPoint = !(edge.Partial && isLastSegment);
+                    // Always include endpoints for 1-cell wide paths to ensure connectivity
+                    bool includeEndPoint = true;
 
                     DrawLineOnGrid(grid, p1, p2, '.', gridWidth, gridHeight, includeEndPoint, pathWidth);
                 }
