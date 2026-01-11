@@ -345,9 +345,16 @@ namespace FaeMaze.Systems
             // Apply maze coordinate system rotation (-90 around X to match 2D plane)
             rotation = rotation * Quaternion.Euler(-90f, 0f, 0f);
 
-            // Instantiate portal
-            GameObject portal = Instantiate(portalPrefab, finalWorldPos, rotation, portalsParent);
+            // Instantiate portal without parent first, then set parent while preserving world position
+            // This avoids the issue where passing parent to Instantiate treats world coords as local coords
+            GameObject portal = Instantiate(portalPrefab, finalWorldPos, rotation);
             portal.name = $"Portal_{spawnId}";
+
+            // Set parent while keeping world position
+            if (portalsParent != null)
+            {
+                portal.transform.SetParent(portalsParent, worldPositionStays: true);
+            }
 
             // Track portal
             spawnPointPortals[spawnId] = portal;

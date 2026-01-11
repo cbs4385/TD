@@ -56,7 +56,7 @@ namespace FaeMaze.Visitors
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("Use 3D model instead of sprite-based rendering")]
-        protected bool use3DModel = false;
+        protected bool use3DModel = true;
 
         [SerializeField]
         [Tooltip("3D model prefab to instantiate for this visitor")]
@@ -958,9 +958,20 @@ namespace FaeMaze.Visitors
                         Time.deltaTime * 10f
                     );
                 }
+                else if (use3DModel)
+                {
+                    // 3D mode without modelInstance: Apply rotation to visitor transform itself
+                    // This handles cases where use3DModel=true but no modelPrefab is assigned
+                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                    transform.rotation = Quaternion.Slerp(
+                        transform.rotation,
+                        targetRotation,
+                        Time.deltaTime * 10f
+                    );
+                }
                 else if (animator != null)
                 {
-                    // 2D mode or animator-based model: Apply smooth Z rotation to animator transform
+                    // 2D mode with animator: Apply smooth Z rotation to animator transform
                     // This provides smooth 360-degree rotation instead of cardinal snap
                     Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
                     animator.transform.rotation = Quaternion.Slerp(
@@ -1712,6 +1723,21 @@ namespace FaeMaze.Visitors
         {
             if (use3DModel)
             {
+                // Disable any existing 2D physics components
+                Rigidbody2D existingRb2D = GetComponent<Rigidbody2D>();
+                if (existingRb2D != null)
+                {
+                    existingRb2D.simulated = false;
+                    Destroy(existingRb2D);
+                }
+
+                Collider2D existingCollider2D = GetComponent<Collider2D>();
+                if (existingCollider2D != null)
+                {
+                    existingCollider2D.enabled = false;
+                    Destroy(existingCollider2D);
+                }
+
                 // Setup 3D physics
                 rb3D = GetComponent<Rigidbody>();
                 if (rb3D == null)
