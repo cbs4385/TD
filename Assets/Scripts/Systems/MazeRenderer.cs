@@ -408,25 +408,27 @@ namespace FaeMaze.Systems
             cylinder.name = $"NodeColumn_{node.Id}_{node.Kind}";
             cylinder.transform.SetParent(tilesParent);
 
-            // Position cylinder - offset Z slightly behind tiles so tiles render on top
-            cylinder.transform.position = worldPos + new Vector3(0f, 0f, 0.05f);
-
-            // Unity cylinder default: radius 0.5, height 2
-            // We want: radius = nodeRadius in graph units converted to world space
-            //          height = 0.6 in world units
-            // Cylinder lies flat on XY plane, so we need to rotate it
-            cylinder.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // Rotate to lie flat
-
             // Calculate world radius: nodeRadius (graph units) * graphScale (grid cells per graph unit) * tileSize (world units per grid cell)
-            // But actually, looking at GraphToWorldPos, we skip the graphScale in the final conversion
-            // The radius in world units = nodeRadius * tileSize (since we're working in content-relative coords)
             float worldRadius = nodeRadius * tileSize * graphScale;
             float cylinderHeight = 0.6f;
 
-            // Scale: X and Z control diameter (default diameter = 1), Y controls height (default = 2)
-            // To get radius R and height H: scaleX = scaleZ = R * 2, scaleY = H / 2
+            // Unity cylinder default: radius 0.5 (diameter 1), height 2, oriented along Y axis
+            // To create a flat disc on the XY plane:
+            // 1. Scale to get the right diameter and thickness
+            // 2. Rotate so the circular face is parallel to XY plane (height along Z)
+
+            // First set scale (applied before rotation):
+            // - X scale = diameter (for X radius)
+            // - Y scale = height/2 (since default height is 2)
+            // - Z scale = diameter (for Z radius, which becomes Y after rotation)
             float diameter = worldRadius * 2f;
             cylinder.transform.localScale = new Vector3(diameter, cylinderHeight / 2f, diameter);
+
+            // Rotate 90° around X so the cylinder lies flat (circular face in XY plane, thickness along Z)
+            cylinder.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+            // Position cylinder - offset Z slightly behind tiles so tiles render on top
+            cylinder.transform.position = worldPos + new Vector3(0f, 0f, 0.05f);
 
             // Apply path material to match path tiles
             Material pathMaterial = PBRMaterialFactory.CreatePathMaterial(pathColor);
@@ -443,11 +445,11 @@ namespace FaeMaze.Systems
                 Destroy(col);
             }
 
-            // Add to path tiles for batching
-            pathTiles?.Add(cylinder);
+            // DO NOT add to pathTiles - keep cylinder as separate object to avoid batching distortion
+            // Cylinders cannot be combined with cube meshes properly
 
             Debug.Log($"[MazeRenderer] Created node column cylinder for node {node.Id} at world ({worldPos.x:F2}, {worldPos.y:F2}), " +
-                $"worldRadius={worldRadius:F2}, height={cylinderHeight:F2}");
+                $"worldRadius={worldRadius:F2}, diameter={diameter:F2}, height={cylinderHeight:F2}, graphScale={graphScale:F2}, tileSize={tileSize:F4}");
         }
 
         /// <summary>
