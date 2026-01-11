@@ -1718,6 +1718,41 @@ namespace FaeMaze.Systems
                                 // Convert this wall to a path to connect the isolated cell
                                 gridArray[wy, wx] = '.';
                                 reachable.Add(new Vector2Int(wx, wy));
+
+                                // Also add the isolated cell itself to reachable
+                                reachable.Add(cell);
+
+                                // Flood fill from the newly connected cell to pick up adjacent walkable cells
+                                Queue<Vector2Int> floodQueue = new Queue<Vector2Int>();
+                                floodQueue.Enqueue(cell);
+
+                                while (floodQueue.Count > 0)
+                                {
+                                    Vector2Int current = floodQueue.Dequeue();
+
+                                    for (int fdy = -1; fdy <= 1; fdy++)
+                                    {
+                                        for (int fdx = -1; fdx <= 1; fdx++)
+                                        {
+                                            if (fdx == 0 && fdy == 0) continue;
+
+                                            int nx = current.x + fdx;
+                                            int ny = current.y + fdy;
+
+                                            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+
+                                            Vector2Int neighbor = new Vector2Int(nx, ny);
+                                            if (reachable.Contains(neighbor)) continue;
+
+                                            if (gridArray[ny, nx] == '.')
+                                            {
+                                                reachable.Add(neighbor);
+                                                floodQueue.Enqueue(neighbor);
+                                            }
+                                        }
+                                    }
+                                }
+
                                 wallsConverted++;
                                 connected = true;
                                 Debug.Log($"[DynamicGrowth] Edge {edgeId}: Connected isolated cell ({cell.x},{cell.y}) via wall at ({wx},{wy})");
