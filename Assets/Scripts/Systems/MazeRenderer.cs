@@ -337,7 +337,12 @@ namespace FaeMaze.Systems
                     CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                     occupiedPositions.Add(GetQuantizedKey(exactEndpoint));
                     tileCount++;
-                    Debug.Log($"[MazeRenderer] Force-placed endpoint tile for partial edge at {exactEndpoint}");
+                    Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at graph {exactEndpoint}, world {worldPos}");
+                }
+                else if (isPartialEdge)
+                {
+                    // Log successful endpoint placement for diagnostics
+                    Debug.Log($"[MazeRenderer] Partial edge {edge.Id}: endpoint tile placed at graph {exactEndpoint}, world {GraphToWorldPos(exactEndpoint)}");
                 }
             }
 
@@ -357,13 +362,8 @@ namespace FaeMaze.Systems
             // Use smaller nodeTileRadius for tile placement to avoid cardinal axis overflow
             int tilesRadius = Mathf.CeilToInt(nodeTileRadius / graphStepSize);
 
-            Debug.Log($"[MazeRenderer] Node columns: nodeRadius={nodeRadius}, nodeTileRadius={nodeTileRadius}, " +
-                $"graphScale={graphScale}, graphStepSize={graphStepSize:F3}, tilesRadius={tilesRadius}");
-
             foreach (var node in forestState.Nodes)
             {
-                int nodeTilesBefore = tileCount;
-
                 // Create a solid 3D cylinder at the node center to fill gaps (uses larger nodeRadius)
                 CreateNodeColumnCylinder(node, mazeOrigin);
 
@@ -405,10 +405,6 @@ namespace FaeMaze.Systems
                         tileCount++;
                     }
                 }
-
-                int nodeTilesRendered = tileCount - nodeTilesBefore;
-                Debug.Log($"[MazeRenderer] Node {node.Id} at graph ({node.Position.x:F2}, {node.Position.y:F2}): " +
-                    $"rendered {nodeTilesRendered} column tiles + 1 cylinder");
             }
 
             return tileCount;
@@ -465,9 +461,6 @@ namespace FaeMaze.Systems
 
             // DO NOT add to pathTiles - keep cylinder as separate object to avoid batching distortion
             // Cylinders cannot be combined with cube meshes properly
-
-            Debug.Log($"[MazeRenderer] Created node column cylinder for node {node.Id} at world ({worldPos.x:F2}, {worldPos.y:F2}), " +
-                $"worldRadius={worldRadius:F2}, diameter={diameter:F2}, yScale=0.03, graphScale={graphScale:F2}, tileSize={tileSize:F4}");
         }
 
         /// <summary>
@@ -686,10 +679,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            if (tileCount > 0)
-            {
-                Debug.Log($"[MazeRenderer] Gap-fill pass added {tileCount} wall tiles");
-            }
 
             return tileCount;
         }

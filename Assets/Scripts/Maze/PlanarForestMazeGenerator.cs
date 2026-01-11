@@ -414,11 +414,8 @@ namespace ForestMaze
                 .Where(n => !connectedNodeIds.Contains(n.Id))
                 .ToList();
 
-            Debug.Log($"  TryConnectToExisting for node {newNode.Id}: {allNodesWithCapacity} nodes with capacity, {candidates.Count} valid candidates after filtering");
-
             if (candidates.Count == 0)
             {
-                Debug.Log($"  No valid candidates found");
                 return false;
             }
 
@@ -431,13 +428,10 @@ namespace ForestMaze
                 candidates[j] = temp;
             }
 
-            int attemptCount = 0;
             foreach (var candidate in candidates)
             {
-                attemptCount++;
                 if (connectedNodeIds.Contains(candidate.Id))
                 {
-                    Debug.Log($"    Candidate {candidate.Id}: already connected, skipping");
                     continue;
                 }
 
@@ -447,14 +441,12 @@ namespace ForestMaze
 
                 if (!IsAngleValid(newNode, angle))
                 {
-                    Debug.Log($"    Candidate {candidate.Id}: invalid angle for newNode");
                     continue;
                 }
 
                 float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
                 if (!IsAngleValid(candidate, reverseAngle))
                 {
-                    Debug.Log($"    Candidate {candidate.Id}: invalid reverse angle for candidate");
                     continue;
                 }
 
@@ -463,7 +455,6 @@ namespace ForestMaze
 
                 if (polyline == null)
                 {
-                    Debug.Log($"    Candidate {candidate.Id}: polyline validation failed");
                     continue;
                 }
 
@@ -485,17 +476,11 @@ namespace ForestMaze
                 if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
                 {
                     state.HasCrossConnection = true;
-                    Debug.Log($"    SUCCESS: Connected node {newNode.Id} to node {candidate.Id} (CROSS-CONNECTION)");
-                }
-                else
-                {
-                    Debug.Log($"    SUCCESS: Connected node {newNode.Id} to node {candidate.Id} (parent connection)");
                 }
 
                 return true;
             }
 
-            Debug.Log($"  All {attemptCount} connection attempts failed");
             return false;
         }
 
@@ -508,19 +493,13 @@ namespace ForestMaze
         {
             if (state.HasCrossConnection || state.Nodes.Count < 3)
             {
-                if (state.HasCrossConnection)
-                    Debug.Log($"Cross-connection already exists, skipping enforcement");
                 return; // Already has cross-connection or too few nodes
             }
-
-            Debug.Log($"No cross-connections found. Attempting to force one...");
 
             // First try nodes that already have capacity
             var nodesWithCapacity = state.Nodes.OrderByDescending(n => n.Id)
                                                .Where(n => n.HasCapacity())
                                                .ToList();
-
-            Debug.Log($"Found {nodesWithCapacity.Count} nodes with capacity out of {state.Nodes.Count} total nodes");
 
             foreach (var node in nodesWithCapacity)
             {
@@ -529,8 +508,6 @@ namespace ForestMaze
             }
 
             // If no nodes have capacity, temporarily increase capacity for pairs of nodes
-            Debug.Log($"No nodes with capacity. Temporarily increasing capacity to force cross-connection...");
-
             var allNodes = state.Nodes.OrderByDescending(n => n.Id).ToList();
 
             // Try each source node with temporarily increased capacity
@@ -551,18 +528,15 @@ namespace ForestMaze
                 // Temporarily increase source capacity
                 int origSourceCapacity = sourceNode.MaxDegree;
                 sourceNode.MaxDegree++;
-                Debug.Log($"Temporarily increased source node {sourceNode.Id} capacity to {sourceNode.MaxDegree}");
 
                 // Try each target node, temporarily increasing its capacity too
                 foreach (var targetNode in targetNodes)
                 {
                     int origTargetCapacity = targetNode.MaxDegree;
                     targetNode.MaxDegree++;
-                    Debug.Log($"  Temporarily increased target node {targetNode.Id} capacity to {targetNode.MaxDegree}");
 
                     if (TryForceConnection(state, sourceNode))
                     {
-                        Debug.Log($"SUCCESS: Forced cross-connection {sourceNode.Id}<->{targetNode.Id} with increased capacity");
                         return; // Success! Keep both increased capacities
                     }
 
@@ -574,7 +548,7 @@ namespace ForestMaze
                 sourceNode.MaxDegree = origSourceCapacity;
             }
 
-            Debug.LogWarning($"Could not force any cross-connection even with increased capacity on all node pairs");
+            Debug.LogWarning($"[PlanarForest] Could not force cross-connection even with increased capacity");
         }
 
         private static bool TryForceConnection(ForestMapState state, Node node)
@@ -585,19 +559,8 @@ namespace ForestMaze
 
             int? parentNodeId = parentEdge?.NodeA;
 
-            Debug.Log($"Trying node {node.Id} (parent: {parentNodeId?.ToString() ?? "none"}, capacity: {node.MaxDegree - node.IncidentEdges.Count}/{node.MaxDegree})");
-
             // Try to force a connection to any existing node except parent
-            if (TryConnectToExisting(state, node, parentNodeId, parentNodeId))
-            {
-                Debug.Log($"SUCCESS: Forced cross-connection from node {node.Id} to ensure interconnected graph");
-                return true;
-            }
-            else
-            {
-                Debug.Log($"Failed to connect node {node.Id} - trying next node...");
-                return false;
-            }
+            return TryConnectToExisting(state, node, parentNodeId, parentNodeId);
         }
 
         private static HashSet<int> GetConnectedNodeIds(ForestMapState state, int nodeId)
@@ -1082,7 +1045,6 @@ namespace ForestMaze
                     var node = state.Nodes[nodeId];
                     if (Vector2.Distance(node.Position, worldPos) > 0.1f)
                     {
-                        Debug.Log($"Backfill: Node {nodeId} position adjusted from {node.Position} to {worldPos}");
                         node.Position = worldPos;
                     }
                 }
@@ -1111,9 +1073,6 @@ namespace ForestMaze
                     edge.PolylinePoints.Add(endBoundary);
                 }
             }
-
-            Debug.Log($"Backfill complete: Updated {validation.ActualNodePositions.Count} nodes and " +
-                     $"{state.Edges.Count(e => e.IsComplete())} edges");
         }
 
         private static int? SelectFrontierEdgeBiased(ForestMapState state)
@@ -1889,11 +1848,8 @@ namespace ForestMaze
         /// </summary>
         private static void EnsureEdgeConnectivity(ForestMapState state, char[,] grid, int gridWidth, int gridHeight)
         {
-            Debug.Log($"[PlanarForest] EnsureEdgeConnectivity: Processing {state.Edges.Count} edges for initial generation");
             float scale = state.Scale;
             Vector2 offset = state.Offset;
-            int filledCount = 0;
-            int skippedCount = 0;
 
             foreach (var edge in state.Edges)
             {
@@ -1934,27 +1890,12 @@ namespace ForestMaze
                 }
                 else
                 {
-                    skippedCount++;
                     continue; // Skip edges without a second node
                 }
 
-                // Count tiles before gap-filling
-                int beforeCount = CountWalkableTilesInGrid(grid, gridWidth, gridHeight);
-
                 // Progressively convert walls to paths along the direct vector until reachable
                 EnsureDirectPathExists(grid, gridWidth, gridHeight, startGrid, endGrid);
-
-                // Count tiles after gap-filling
-                int afterCount = CountWalkableTilesInGrid(grid, gridWidth, gridHeight);
-
-                if (afterCount > beforeCount)
-                {
-                    filledCount++;
-                    Debug.Log($"[PlanarForest] Gap-filled edge: added {afterCount - beforeCount} tiles from ({startGrid.x},{startGrid.y}) to ({endGrid.x},{endGrid.y})");
-                }
             }
-
-            Debug.Log($"[PlanarForest] Gap-filling complete: {filledCount} edges filled, {skippedCount} edges skipped");
         }
 
         private static int CountWalkableTilesInGrid(char[,] grid, int width, int height)
@@ -2039,10 +1980,6 @@ namespace ForestMaze
                 }
             }
 
-            if (wallsRemoved > 0)
-            {
-                Debug.Log($"[EnsureDirectPath] Removed {wallsRemoved} wall tiles along direct path from ({start.x},{start.y}) to ({end.x},{end.y})");
-            }
         }
 
         /// <summary>

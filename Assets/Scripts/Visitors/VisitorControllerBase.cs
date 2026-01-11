@@ -937,28 +937,34 @@ namespace FaeMaze.Visitors
 
         protected void UpdateAnimatorDirection(Vector2 movement)
         {
-            // For 3D models, also handle rotation towards movement direction
-            if (use3DModel && modelInstance != null && movement.sqrMagnitude > MovementEpsilonSqr)
+            // Apply smooth rotation for any model (2D or 3D) to face movement direction
+            if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
-                // Rotate 3D model to face movement direction in XY plane
-                // Model's forward is +X axis, so angle 0 = facing +X
-                Vector3 movementDir = new Vector3(movement.x, movement.y, 0f).normalized;
+                // Calculate angle in XY plane (0 = +X direction)
+                float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
 
-                if (movementDir.sqrMagnitude > 0.001f)
+                if (use3DModel && modelInstance != null)
                 {
-                    // Calculate angle in XY plane (0 = +X direction)
-                    float angle = Mathf.Atan2(movementDir.y, movementDir.x) * Mathf.Rad2Deg;
-
-                    // Apply rotations in correct order using quaternion multiplication:
+                    // 3D model: Apply rotations using quaternion multiplication
                     // 1. First lay model flat (rotate X by 90° - Y-up models designed for XZ ground)
                     // 2. Then rotate around Z to face movement direction
-                    // Note: Unity quaternion multiplication applies right operand first
                     Quaternion layFlat = Quaternion.Euler(90f, 0f, 0f);
                     Quaternion faceDirection = Quaternion.AngleAxis(angle, Vector3.forward);
                     Quaternion targetRotation = faceDirection * layFlat;
 
                     modelInstance.transform.rotation = Quaternion.Slerp(
                         modelInstance.transform.rotation,
+                        targetRotation,
+                        Time.deltaTime * 10f
+                    );
+                }
+                else if (animator != null)
+                {
+                    // 2D mode or animator-based model: Apply smooth Z rotation to animator transform
+                    // This provides smooth 360-degree rotation instead of cardinal snap
+                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                    animator.transform.rotation = Quaternion.Slerp(
+                        animator.transform.rotation,
                         targetRotation,
                         Time.deltaTime * 10f
                     );
