@@ -24,18 +24,13 @@ namespace FaeMaze.Systems
 
         [Header("References")]
         [SerializeField]
-        [Tooltip("Transform acting as the origin point for world-space conversions")]
+        [Tooltip("Parent transform for maze objects (purely for hierarchy organization)")]
         private Transform mazeOrigin;
 
         [Header("World-Space Settings")]
         [SerializeField]
         [Tooltip("Tile size in world units for spatial lookups")]
         private float worldSpaceTileSize = 1.0f;
-
-        [Header("Orientation")]
-        [SerializeField]
-        [Tooltip("Mirror the maze and models through the XY plane to correct vertical orientation.")]
-        private bool reflectThroughXYPlane = true;
 
         [Header("Debug Visualization")]
         [SerializeField]
@@ -119,27 +114,7 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform;
             }
 
-            ApplyXYPlaneReflection();
             InitializeFromGraph();
-        }
-
-        #endregion
-
-        #region Orientation
-
-        private void ApplyXYPlaneReflection()
-        {
-            if (!reflectThroughXYPlane || mazeOrigin == null)
-            {
-                return;
-            }
-
-            Vector3 scale = mazeOrigin.localScale;
-            mazeOrigin.localScale = scale;
-
-            Vector3 originPosition = mazeOrigin.position;
-            originPosition.z = Mathf.Abs(originPosition.z);
-            mazeOrigin.position = originPosition;
         }
 
         #endregion
@@ -148,21 +123,18 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Initializes the maze directly from the graph state in pure world-space.
-        /// NO grid, NO coordinate transforms - graph positions ARE world positions.
+        /// Graph positions ARE world positions - no transforms needed.
         /// </summary>
         private void InitializeFromGraph()
         {
-            // Generate the graph (positions are initially relative to origin)
+            // Generate the graph - positions are directly in world space
             var result = PlanarForestMazeGenerator.GenerateMazeWithState(
-                planarGeneratorConfig.gridWidth,  // Used for initial bounds, not grid
+                planarGeneratorConfig.gridWidth,
                 planarGeneratorConfig.gridHeight,
                 planarGeneratorConfig.growthTurns,
                 planarGeneratorConfig.randomSeed);
 
             forestMapState = result.state;
-
-            // Transform all positions to world space by adding mazeOrigin offset
-            TransformToWorldSpace(forestMapState);
 
             // Generate world-space maze data directly from graph
             WorldSpaceMazeGenerator.ResetSpawnIdCounter();
@@ -172,53 +144,12 @@ namespace FaeMaze.Systems
             Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
 
             // Store heart world position (node 0 / root node)
-            // Positions are now in world space - no conversion needed
             if (forestMapState.Nodes.Count > 0)
             {
                 var seedNode = forestMapState.Nodes[0];
                 heartWorldPosition = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
                 Debug.Log($"[MazeGridBehaviour] Heart at world position {heartWorldPosition}");
             }
-        }
-
-        /// <summary>
-        /// Transforms all positions in ForestMapState from local to world space
-        /// by adding the mazeOrigin offset. After this, all positions are world positions.
-        /// </summary>
-        private void TransformToWorldSpace(PlanarForestMazeGenerator.ForestMapState state)
-        {
-            if (mazeOrigin == null) return;
-
-            Vector2 offset = new Vector2(mazeOrigin.position.x, mazeOrigin.position.y);
-
-            // Transform node positions
-            foreach (var node in state.Nodes)
-            {
-                node.Position += offset;
-            }
-
-            // Transform edge polyline points
-            foreach (var edge in state.Edges)
-            {
-                for (int i = 0; i < edge.PolylinePoints.Count; i++)
-                {
-                    edge.PolylinePoints[i] += offset;
-                }
-
-                // Transform ghost center if present
-                if (edge.GhostCenter.HasValue)
-                {
-                    edge.GhostCenter = edge.GhostCenter.Value + offset;
-                }
-            }
-
-            // Transform ghost centers list
-            for (int i = 0; i < state.GhostCenters.Count; i++)
-            {
-                state.GhostCenters[i] += offset;
-            }
-
-            Debug.Log($"[MazeGridBehaviour] Transformed {state.Nodes.Count} nodes and {state.Edges.Count} edges to world space (offset: {offset})");
         }
 
         #endregion
