@@ -1755,7 +1755,7 @@ namespace ForestMaze
 
                 if (edge.Partial)
                 {
-                    // For frontier edges: connect endpoint to node center
+                    // For frontier edges: connect node center to endpoint
                     var connectedNode = state.Nodes[edge.NodeA];
                     Vector2 nodeCenter = connectedNode.Position * scale + offset;
                     Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
@@ -1763,8 +1763,8 @@ namespace ForestMaze
                     Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
                     Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
 
-                    startGrid = endpointGrid;
-                    endGrid = nodeCenterGrid;
+                    startGrid = nodeCenterGrid;
+                    endGrid = endpointGrid;
                 }
                 else if (edge.NodeB.HasValue)
                 {
