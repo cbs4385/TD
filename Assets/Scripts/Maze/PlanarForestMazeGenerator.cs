@@ -747,33 +747,21 @@ namespace ForestMaze
             // Generate intermediate points with curved angles
             for (int i = 0; i < numSegments - 1; i++)
             {
-                // Random angle deviation: 5-25% of MAX_CURVE_ANGLE (35°) = ~1.75 to 8.75 degrees per segment
-                // This creates subtle, organic curves without sharp turns that fail validation
+                // Random angle deviation within limits (alternating bias for S-curves)
                 float maxAngle = MAX_CURVE_ANGLE * Mathf.Deg2Rad;
-                float minPercent = 0.05f;  // 5% of max angle
-                float maxPercent = 0.25f;  // 25% of max angle
+                float angleOffset;
 
-                // Random percentage between 5-25%
-                float percent = minPercent + (state.Random.Next(0, 100) / 100f) * (maxPercent - minPercent);
-                float angleOffset = maxAngle * percent;
-
-                // Alternate direction for S-curve effect, with some randomization
-                float directionBias = (i % 2 == 0) ? 1f : -1f;
-                // Add some randomization to the direction (30% chance to flip)
-                if (state.Random.Next(0, 100) < 30)
-                    directionBias = -directionBias;
-
-                angleOffset *= directionBias;
-
-                // On first attempt, use even gentler curves for better success rate
                 if (attempt == 0)
                 {
-                    angleOffset *= 0.5f; // Half the angle on first attempt
+                    // First attempt: no curve (almost straight)
+                    angleOffset = 0;
                 }
-                // On later attempts, try different curve patterns
-                else if (attempt % 2 == 1)
+                else
                 {
-                    angleOffset = -angleOffset; // Mirror the curve on odd attempts
+                    // Subsequent attempts: add random curvature
+                    float bias = (i % 2 == 0) ? 1f : -1f; // Alternating bias for S-curve
+                    float randomFactor = (state.Random.Next(0, 100) / 100f - 0.5f) * 2f;
+                    angleOffset = (bias * 0.5f + randomFactor * 0.5f) * maxAngle * (attempt / 10f);
                 }
 
                 // Rotate direction by angle offset
