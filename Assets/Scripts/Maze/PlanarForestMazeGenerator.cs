@@ -747,21 +747,31 @@ namespace ForestMaze
             // Generate intermediate points with curved angles
             for (int i = 0; i < numSegments - 1; i++)
             {
-                // Random angle deviation within limits (alternating bias for S-curves)
-                float maxAngle = MAX_CURVE_ANGLE * Mathf.Deg2Rad;
-                float angleOffset;
+                // Random angle deviation: 5-25% of 90 degrees = ~4.5 to 22.5 degrees per segment
+                // This creates organic, slightly curved paths without sharp turns
+                float minAngleDeg = 5f;  // Minimum angle deviation in degrees
+                float maxAngleDeg = 25f; // Maximum angle deviation in degrees
 
-                if (attempt == 0)
+                // Random angle between min and max
+                float angleDeg = minAngleDeg + (state.Random.Next(0, 100) / 100f) * (maxAngleDeg - minAngleDeg);
+                float angleOffset = angleDeg * Mathf.Deg2Rad;
+
+                // Alternate direction for S-curve effect, with some randomization
+                float directionBias = (i % 2 == 0) ? 1f : -1f;
+                // Add some randomization to the direction (30% chance to flip)
+                if (state.Random.Next(0, 100) < 30)
+                    directionBias = -directionBias;
+
+                angleOffset *= directionBias;
+
+                // On later attempts, try different curve patterns
+                if (attempt > 0)
                 {
-                    // First attempt: no curve (almost straight)
-                    angleOffset = 0;
-                }
-                else
-                {
-                    // Subsequent attempts: add random curvature
-                    float bias = (i % 2 == 0) ? 1f : -1f; // Alternating bias for S-curve
-                    float randomFactor = (state.Random.Next(0, 100) / 100f - 0.5f) * 2f;
-                    angleOffset = (bias * 0.5f + randomFactor * 0.5f) * maxAngle * (attempt / 10f);
+                    // Vary the pattern based on attempt number
+                    if (attempt % 2 == 1)
+                        angleOffset = -angleOffset; // Mirror the curve
+                    if (attempt >= 5)
+                        angleOffset *= 0.5f; // Try gentler curves on later attempts
                 }
 
                 // Rotate direction by angle offset
