@@ -325,6 +325,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders circular node columns centered on each node.
+        /// Creates both a solid 3D cylinder and individual tiles for each node.
         /// </summary>
         private int RenderNodeColumns(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
@@ -340,6 +341,9 @@ namespace FaeMaze.Systems
             foreach (var node in forestState.Nodes)
             {
                 int nodeTilesBefore = tileCount;
+
+                // Create a solid 3D cylinder at the node center to fill gaps
+                CreateNodeColumnCylinder(node, mazeOrigin);
 
                 for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
                 {
@@ -383,10 +387,67 @@ namespace FaeMaze.Systems
 
                 int nodeTilesRendered = tileCount - nodeTilesBefore;
                 Debug.Log($"[MazeRenderer] Node {node.Id} at graph ({node.Position.x:F2}, {node.Position.y:F2}): " +
-                    $"rendered {nodeTilesRendered} column tiles");
+                    $"rendered {nodeTilesRendered} column tiles + 1 cylinder");
             }
 
             return tileCount;
+        }
+
+        /// <summary>
+        /// Creates a 3D cylinder at the node center to fill visual gaps.
+        /// Cylinder has radius 3 (in graph units) and height 0.6 (in world units).
+        /// Uses the same material as path tiles.
+        /// </summary>
+        private void CreateNodeColumnCylinder(PlanarForestMazeGenerator.Node node, Transform mazeOrigin)
+        {
+            // Get world position of node center
+            Vector3 worldPos = GraphToWorldPos(node.Position);
+
+            // Create cylinder primitive
+            GameObject cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            cylinder.name = $"NodeColumn_{node.Id}_{node.Kind}";
+            cylinder.transform.SetParent(tilesParent);
+
+            // Position cylinder - offset Z slightly behind tiles so tiles render on top
+            cylinder.transform.position = worldPos + new Vector3(0f, 0f, 0.05f);
+
+            // Unity cylinder default: radius 0.5, height 2
+            // We want: radius = nodeRadius in graph units converted to world space
+            //          height = 0.6 in world units
+            // Cylinder lies flat on XY plane, so we need to rotate it
+            cylinder.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // Rotate to lie flat
+
+            // Calculate world radius: nodeRadius (graph units) * graphScale (grid cells per graph unit) * tileSize (world units per grid cell)
+            // But actually, looking at GraphToWorldPos, we skip the graphScale in the final conversion
+            // The radius in world units = nodeRadius * tileSize (since we're working in content-relative coords)
+            float worldRadius = nodeRadius * tileSize * graphScale;
+            float cylinderHeight = 0.6f;
+
+            // Scale: X and Z control diameter (default diameter = 1), Y controls height (default = 2)
+            // To get radius R and height H: scaleX = scaleZ = R * 2, scaleY = H / 2
+            float diameter = worldRadius * 2f;
+            cylinder.transform.localScale = new Vector3(diameter, cylinderHeight / 2f, diameter);
+
+            // Apply path material to match path tiles
+            Material pathMaterial = PBRMaterialFactory.CreatePathMaterial(pathColor);
+            MeshRenderer renderer = cylinder.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.material = pathMaterial;
+            }
+
+            // Remove collider (not needed for visual)
+            Collider col = cylinder.GetComponent<Collider>();
+            if (col != null)
+            {
+                Destroy(col);
+            }
+
+            // Add to path tiles for batching
+            pathTiles?.Add(cylinder);
+
+            Debug.Log($"[MazeRenderer] Created node column cylinder for node {node.Id} at world ({worldPos.x:F2}, {worldPos.y:F2}), " +
+                $"worldRadius={worldRadius:F2}, height={cylinderHeight:F2}");
         }
 
         /// <summary>
