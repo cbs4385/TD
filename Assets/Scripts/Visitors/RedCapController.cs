@@ -424,6 +424,7 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Gets the world-space points along an edge between two nodes.
+        /// Uses GraphToWorld for proper coordinate conversion.
         /// </summary>
         private List<Vector3> GetEdgePoints(PlanarForestMazeGenerator.ForestMapState graphState, int fromNode, int toNode)
         {
@@ -441,20 +442,22 @@ namespace FaeMaze.Visitors
 
                     if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
                     {
-                        // Use polyline points
+                        // Use polyline points with proper world-space conversion
                         if (matchesReverse)
                         {
                             // Reverse the order for traversal
                             for (int i = edge.PolylinePoints.Count - 1; i >= 0; i--)
                             {
-                                points.Add(new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, 0));
+                                Vector3 worldPt = mazeGridBehaviour.GraphToWorld(edge.PolylinePoints[i]);
+                                points.Add(worldPt);
                             }
                         }
                         else
                         {
                             foreach (var pt in edge.PolylinePoints)
                             {
-                                points.Add(new Vector3(pt.x, pt.y, 0));
+                                Vector3 worldPt = mazeGridBehaviour.GraphToWorld(pt);
+                                points.Add(worldPt);
                             }
                         }
                     }
@@ -462,7 +465,8 @@ namespace FaeMaze.Visitors
                     {
                         // Direct line from node to node
                         var targetNode = matchesForward ? graphState.Nodes[toNode] : graphState.Nodes[fromNode];
-                        points.Add(new Vector3(targetNode.Position.x, targetNode.Position.y, 0));
+                        Vector3 worldPt = mazeGridBehaviour.GraphToWorld(targetNode.Position);
+                        points.Add(worldPt);
                     }
 
                     return points;

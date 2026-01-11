@@ -211,11 +211,16 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Converts a graph position to world position.
-        /// In pure world-space mode, graph positions ARE world positions.
+        /// Uses MazeGridBehaviour.GraphToWorld to apply mazeOrigin offset.
         /// </summary>
         private Vector3 GraphToWorldPos(Vector2 graphPos)
         {
-            // Graph positions ARE world positions - just convert Vector2 to Vector3
+            // Delegate to MazeGridBehaviour for consistent coordinate conversion
+            if (mazeGridBehaviour != null)
+            {
+                return mazeGridBehaviour.GraphToWorld(graphPos);
+            }
+            // Fallback if mazeGridBehaviour not available
             return new Vector3(graphPos.x, graphPos.y, 0f);
         }
 

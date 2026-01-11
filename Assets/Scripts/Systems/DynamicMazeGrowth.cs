@@ -293,13 +293,13 @@ namespace FaeMaze.Systems
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
-                // Get the connected node center - graph position IS world position
+                // Get the connected node center - use GraphToWorld for proper coordinate conversion
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
-                Vector3 nodeCenterWorld = new Vector3(connectedNode.Position.x, connectedNode.Position.y, 0f);
+                Vector3 nodeCenterWorld = mazeGridBehaviour.GraphToWorld(connectedNode.Position);
 
-                // Get the endpoint (last point in polyline) - graph position IS world position
+                // Get the endpoint (last point in polyline) - use GraphToWorld for proper coordinate conversion
                 Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-                Vector3 endpointWorld = new Vector3(endpointPos.x, endpointPos.y, 0f);
+                Vector3 endpointWorld = mazeGridBehaviour.GraphToWorld(endpointPos);
 
                 Debug.Log($"[DynamicGrowth-WorldSpace] Edge {edgeId}: Node {edge.NodeA} at world {nodeCenterWorld}, endpoint at world {endpointWorld}, {edge.PolylinePoints.Count} polyline points");
 
