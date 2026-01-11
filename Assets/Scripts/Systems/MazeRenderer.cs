@@ -385,59 +385,119 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Renders wall border tiles around all walkable tiles.
-        /// Walls cannot overlap path/node tiles.
-        /// Each wall is oriented perpendicular to the nearest graph tangent.
+        /// Renders wall border by projecting outward from edges and nodes in world space.
+        /// Walls are placed at perpendicular offsets from graph elements using floating-point coordinates.
         /// </summary>
         private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
-            int borderCells = Mathf.CeilToInt(wallBorderDepth);
+            float graphStepSize = 1.0f / graphScale;
 
-            // Collect all grid cells that need walls
-            var wallCells = new HashSet<Vector2Int>();
+            // Track occupied positions to avoid overlap (use quantized keys for floating-point positions)
+            var occupiedWallPositions = new HashSet<long>();
 
-            foreach (var occupiedCell in occupiedGridCells)
+            // Project walls from edges (perpendicular to edge direction)
+            foreach (var edge in forestState.Edges)
             {
-                for (int dx = -borderCells; dx <= borderCells; dx++)
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    for (int dy = -borderCells; dy <= borderCells; dy++)
+                    Vector2 startGraph = edge.PolylinePoints[i];
+                    Vector2 endGraph = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (endGraph - startGraph).normalized;
+                    Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+
+                    // Walk along the segment
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / graphStepSize));
+                    for (int j = 0; j <= numSteps; j++)
                     {
-                        if (dx == 0 && dy == 0) continue;
+                        float t = numSteps > 0 ? (float)j / numSteps : 0;
+                        Vector2 centerGraphPos = Vector2.Lerp(startGraph, endGraph, t);
 
-                        int dist = Mathf.Abs(dx) + Mathf.Abs(dy);
-                        if (dist > borderCells) continue;
+                        // Project walls perpendicular to edge at distances 1, 2, 3 graph units
+                        for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+                        {
+                            float offset = layer * graphStepSize;
 
-                        Vector2Int wallCell = new Vector2Int(occupiedCell.x + dx, occupiedCell.y + dy);
+                            // Both sides of the edge
+                            foreach (float side in new[] { 1f, -1f })
+                            {
+                                Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
 
-                        // Skip if this cell has a path/node tile
-                        if (occupiedGridCells.Contains(wallCell)) continue;
+                                // Check if position overlaps with path/node tiles
+                                Vector2Int gridCell = GraphToGridCell(wallGraphPos);
+                                if (occupiedGridCells.Contains(gridCell)) continue;
 
-                        wallCells.Add(wallCell);
+                                // Check if we already placed a wall here
+                                long wallKey = GetQuantizedKey(wallGraphPos);
+                                if (occupiedWallPositions.Contains(wallKey)) continue;
+                                occupiedWallPositions.Add(wallKey);
+
+                                // Orientation perpendicular to edge
+                                float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                                if (side < 0) orientationDegrees += 180f;
+
+                                Vector3 worldPos = GraphToWorldPos(wallGraphPos);
+                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                tileCount++;
+                            }
+                        }
                     }
                 }
             }
 
-            // Render each wall cell
-            foreach (var wallCell in wallCells)
+            // Project walls from nodes (radially outward beyond the column radius)
+            foreach (var node in forestState.Nodes)
             {
-                // Convert grid cell back to approximate graph position for orientation lookup
-                Vector2 approxGraphPos = (new Vector2(wallCell.x, wallCell.y) - this.graphOffset) / graphScale;
+                // Place walls in rings around the node, starting just outside nodeRadius
+                float startRadius = nodeRadius + graphStepSize;
+                float endRadius = nodeRadius + wallBorderDepth;
 
-                // Find orientation perpendicular to nearest graph tangent
-                float orientationDegrees = GetWallOrientationFromGraph(approxGraphPos, forestState);
+                // Angular step for good coverage
+                int angularSteps = Mathf.CeilToInt(2 * Mathf.PI * endRadius / graphStepSize);
 
-                // Get world position using floating-point coordinates (same formula as GraphToWorldPos)
-                float contentX = wallCell.x - 400f;
-                float contentY = wallCell.y - 400f;
-                Transform origin = mazeGridBehaviour.MazeOrigin ?? transform;
-                Vector3 worldPos = origin.position + new Vector3(contentX * tileSize, contentY * tileSize, 0f);
+                for (float r = startRadius; r <= endRadius; r += graphStepSize)
+                {
+                    for (int a = 0; a < angularSteps; a++)
+                    {
+                        float angle = (float)a / angularSteps * 2 * Mathf.PI;
+                        Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                        Vector2 wallGraphPos = node.Position + radialDir * r;
 
-                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                tileCount++;
+                        // Check if position overlaps with path/node tiles
+                        Vector2Int gridCell = GraphToGridCell(wallGraphPos);
+                        if (occupiedGridCells.Contains(gridCell)) continue;
+
+                        // Check if we already placed a wall here
+                        long wallKey = GetQuantizedKey(wallGraphPos);
+                        if (occupiedWallPositions.Contains(wallKey)) continue;
+                        occupiedWallPositions.Add(wallKey);
+
+                        // Orientation: facing outward radially
+                        float orientationDegrees = angle * Mathf.Rad2Deg;
+
+                        Vector3 worldPos = GraphToWorldPos(wallGraphPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                        tileCount++;
+                    }
+                }
             }
 
             return tileCount;
+        }
+
+        /// <summary>
+        /// Gets a quantized key for floating-point positions to detect overlap.
+        /// </summary>
+        private long GetQuantizedKey(Vector2 graphPos)
+        {
+            // Quantize to half-step resolution for overlap detection
+            float quantizeStep = 0.5f / graphScale;
+            int qx = Mathf.RoundToInt(graphPos.x / quantizeStep);
+            int qy = Mathf.RoundToInt(graphPos.y / quantizeStep);
+            return ((long)qx << 32) | ((long)qy & 0xFFFFFFFFL);
         }
 
         /// <summary>
