@@ -108,12 +108,12 @@ namespace FaeMaze.Systems
         #region Initialization
 
         /// <summary>
-        /// Creates portals at all existing spawn points.
-        /// If no spawn points exist, creates them from edge walkable tiles.
+        /// Initializes spawn points and portals using the SAME logic as growth cycles.
+        /// This ensures consistent behavior between initialization and dynamic growth.
         /// </summary>
         private void InitializeSpawnPointPortals()
         {
-            if (mazeGridBehaviour == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
             {
                 return;
             }
@@ -123,116 +123,26 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            var spawnPoints = mazeGridBehaviour.GetAllSpawnPoints();
-
-            // If no spawn points exist, create them from edge walkable tiles
-            // but DON'T create portals for them - the first growth cycle will
-            // create proper spawn points at frontier edges with correct orientation
-            if (spawnPoints.Count == 0)
+            var forestMapState = mazeGridBehaviour.ForestMapState;
+            if (forestMapState == null || forestMapState.Frontier.Count == 0)
             {
-                CreateInitialSpawnPoints();
-                Debug.Log("[DynamicGrowth] Created initial edge-based spawn points - portals will be created during first growth cycle");
+                Debug.LogWarning("[DynamicGrowth] No ForestMapState or frontier edges - skipping spawn point initialization");
                 return;
             }
 
-            // For existing spawn points (from loaded maze), create portals
-            foreach (var kvp in spawnPoints)
-            {
-                char spawnId = kvp.Key;
-                Vector2Int gridPos = kvp.Value;
+            // Use IDENTICAL logic to growth cycles:
+            // 1. Mark partial edge endpoints as walkable
+            // 2. Ensure connectivity via gap-filling
+            // 3. Rebuild spawn points from frontier edges
+            // 4. Create portals for those spawn points
 
-                // Find the nearest node center to use as portal target
-                Vector2Int? targetNodeGrid = null;
-                if (TryGetNearestNodeCenterGridPos(gridPos, out Vector2Int nodeCenterGrid))
-                {
-                    targetNodeGrid = nodeCenterGrid;
-                }
+            Debug.Log($"[DynamicGrowth] Initializing spawn points from {forestMapState.Frontier.Count} frontier edges");
 
-                CreatePortalAtSpawnPoint(spawnId, gridPos, targetNodeGrid);
-            }
+            MarkPartialEdgeEndpointsAsWalkable();
+            EnsureFrontierEdgeConnectivity(forestMapState, mazeGridBehaviour.Grid);
+            RebuildSpawnPointsFromFrontier();
 
-            // Track which spawn ID to use next
-            nextSpawnIdIndex = spawnPoints.Count;
-
-        }
-
-        /// <summary>
-        /// Creates initial spawn points from edge walkable tiles if none exist.
-        /// Note: Grid now includes buffer space, so edges are at GRID_BUFFER and (dimension - GRID_BUFFER - 1).
-        /// </summary>
-        private void CreateInitialSpawnPoints()
-        {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
-            {
-                return;
-            }
-
-            List<Vector2Int> edgeWalkableTiles = new List<Vector2Int>();
-
-            int width = mazeGridBehaviour.Grid.Width;
-            int height = mazeGridBehaviour.Grid.Height;
-
-            // Content edges are at GRID_BUFFER and (dimension - GRID_BUFFER - 1)
-            int leftEdge = MazeGrid.GRID_BUFFER;
-            int rightEdge = width - MazeGrid.GRID_BUFFER - 1;
-            int topEdge = MazeGrid.GRID_BUFFER;
-            int bottomEdge = height - MazeGrid.GRID_BUFFER - 1;
-
-            // Find all walkable tiles on the content edges
-            for (int x = leftEdge; x <= rightEdge; x++)
-            {
-                // Top edge
-                var topNode = mazeGridBehaviour.Grid.GetNode(x, topEdge);
-                if (topNode != null && topNode.walkable)
-                {
-                    edgeWalkableTiles.Add(new Vector2Int(x, topEdge));
-                }
-
-                // Bottom edge
-                var bottomNode = mazeGridBehaviour.Grid.GetNode(x, bottomEdge);
-                if (bottomNode != null && bottomNode.walkable)
-                {
-                    edgeWalkableTiles.Add(new Vector2Int(x, bottomEdge));
-                }
-            }
-
-            for (int y = topEdge + 1; y < bottomEdge; y++)
-            {
-                // Left edge
-                var leftNode = mazeGridBehaviour.Grid.GetNode(leftEdge, y);
-                if (leftNode != null && leftNode.walkable)
-                {
-                    edgeWalkableTiles.Add(new Vector2Int(leftEdge, y));
-                }
-
-                // Right edge
-                var rightNode = mazeGridBehaviour.Grid.GetNode(rightEdge, y);
-                if (rightNode != null && rightNode.walkable)
-                {
-                    edgeWalkableTiles.Add(new Vector2Int(rightEdge, y));
-                }
-            }
-
-            if (edgeWalkableTiles.Count == 0)
-            {
-                return;
-            }
-
-            // Select up to 4 evenly distributed edge tiles as spawn points
-            int numSpawnPoints = Mathf.Min(4, edgeWalkableTiles.Count);
-            for (int i = 0; i < numSpawnPoints; i++)
-            {
-                int index = (i * edgeWalkableTiles.Count) / numSpawnPoints;
-                Vector2Int pos = edgeWalkableTiles[index];
-                char spawnId = availableSpawnIds[i];
-
-                // Update the tile symbol
-                UpdateTileSymbol(pos, spawnId);
-
-            }
-
-            // Rebuild spawn points dictionary
-            RebuildSpawnPointsDictionary();
+            Debug.Log("[DynamicGrowth] Initialization complete using growth cycle logic");
         }
 
         #endregion
