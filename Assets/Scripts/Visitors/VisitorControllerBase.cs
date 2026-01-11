@@ -1626,21 +1626,33 @@ namespace FaeMaze.Visitors
                     UpdateDestinationForRemovedExit(currentPos, finalWaypoint);
                     Debug.Log($"[{name}] Updated destination to: {originalDestination}");
 
+                    // Check if visitor is on a walkable tile
+                    bool isOnWalkableTile = mazeGridBehaviour.Grid.GetNode(currentPos.x, currentPos.y)?.walkable ?? false;
+
                     // Check if we can actually path to the new destination from current position
                     bool canPathToDestination = TryFindPathToDestination(currentPos, originalDestination, out _);
 
                     if (!canPathToDestination)
                     {
-                        Debug.LogWarning($"[{name}] Cannot path from {currentPos} to destination {originalDestination}! Visitor is on disconnected tile.");
-
-                        // Find a walkable tile near the destination that IS connected
-                        Vector2Int nearDestination = FindWalkableTileNearPosition(originalDestination, 10);
-                        if (nearDestination != currentPos)
+                        if (!isOnWalkableTile)
                         {
-                            Debug.Log($"[{name}] Teleporting from disconnected tile {currentPos} to {nearDestination} near destination");
-                            Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearDestination.x, nearDestination.y);
-                            newWorldPos.z = transform.position.z; // Preserve Z
-                            transform.position = newWorldPos;
+                            // Visitor is on an unwalkable tile (rare) - teleport to nearest walkable
+                            Debug.LogWarning($"[{name}] Cannot path from {currentPos} to destination {originalDestination}! Visitor is on unwalkable tile.");
+
+                            Vector2Int nearDestination = FindWalkableTileNearPosition(originalDestination, 10);
+                            if (nearDestination != currentPos)
+                            {
+                                Debug.Log($"[{name}] Teleporting from unwalkable tile {currentPos} to {nearDestination} near destination");
+                                Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearDestination.x, nearDestination.y);
+                                newWorldPos.z = transform.position.z; // Preserve Z
+                                transform.position = newWorldPos;
+                            }
+                        }
+                        else
+                        {
+                            // Visitor is on a walkable tile but path not found immediately
+                            // This can happen during maze growth - just continue, path will resolve
+                            Debug.Log($"[{name}] Path to {originalDestination} not found immediately from {currentPos}, continuing to walk toward destination");
                         }
                     }
 
@@ -2431,6 +2443,29 @@ namespace FaeMaze.Visitors
                         hasLoggedPathIssue = true;
                     }
                 }
+
+                // If we have an existing path, keep using it while we wait for grid to stabilize
+                // This prevents visitors from getting stuck when paths are temporarily blocked during maze growth
+                if (path != null && path.Count > 0 && currentPathIndex < path.Count)
+                {
+                    Debug.Log($"[{name}] Pathfinding failed but keeping existing path ({path.Count - currentPathIndex} steps remaining)");
+                    isCalculatingPath = false;
+                    return;
+                }
+
+                // No existing path - try to walk toward a walkable tile near current position
+                // This helps when visitor is at edge of walkable area during maze transition
+                Vector2Int nearbyWalkable = FindNearestWalkableTile(currentPos);
+                if (nearbyWalkable != currentPos)
+                {
+                    Debug.Log($"[{name}] No path found, walking to nearby walkable tile {nearbyWalkable}");
+                    path = new List<Vector2Int> { currentPos, nearbyWalkable };
+                    currentPathIndex = 0;
+                    recentlyReachedTiles.Clear();
+                    recentlyReachedTiles.Enqueue(currentPos);
+                    RecordRouteLog("Walking to nearby tile (pathfinding failed)", nearbyWalkable, path);
+                }
+
                 isCalculatingPath = false;
                 return;
             }
