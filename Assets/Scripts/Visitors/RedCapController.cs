@@ -9,6 +9,7 @@ namespace FaeMaze.Visitors
     /// Red Cap - A hostile actor that hunts visitors and drains essence.
     /// Moves faster than visitors, actively stalks them, and penalizes the player
     /// when catching one.
+    /// Uses world-space navigation to pursue targets.
     /// </summary>
     public class RedCapController : MonoBehaviour
     {
@@ -85,7 +86,7 @@ namespace FaeMaze.Visitors
         private RedCapState state = RedCapState.Idle;
         private MazeGridBehaviour mazeGridBehaviour;
         private GameController gameController;
-        private List<Vector2Int> currentPath = new List<Vector2Int>();
+        private List<Vector3> worldPath = new List<Vector3>();
         private int currentWaypointIndex;
         private VisitorControllerBase targetVisitor;
         private float targetUpdateTimer;
@@ -238,7 +239,7 @@ namespace FaeMaze.Visitors
                 if (allVisitors.Length == 0)
                 {
                     targetVisitor = null;
-                    currentPath.Clear();
+                    worldPath.Clear();
                     state = RedCapState.Idle;
                     return;
                 }
@@ -270,51 +271,198 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Recalculates the path to the current target visitor.
+        /// Recalculates the path to the current target visitor using world-space pathfinding.
         /// </summary>
         private void RecalculatePathToTarget()
         {
-            if (targetVisitor == null || gameController == null || mazeGridBehaviour == null)
+            if (targetVisitor == null || mazeGridBehaviour == null)
             {
-                currentPath.Clear();
+                worldPath.Clear();
                 return;
             }
 
-            // Get current grid position
-            int currentX, currentY;
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out currentX, out currentY))
-            {
-                currentPath.Clear();
-                return;
-            }
-            Vector2Int currentGridPos = new Vector2Int(currentX, currentY);
+            // Use world-space pathfinding
+            worldPath = BuildWorldPath(transform.position, targetVisitor.transform.position);
+            currentWaypointIndex = 0;
+        }
 
-            // Get target grid position
-            int targetX, targetY;
-            if (!mazeGridBehaviour.WorldToGrid(targetVisitor.transform.position, out targetX, out targetY))
+        /// <summary>
+        /// Builds a world-space path from start to end using graph edges.
+        /// Returns a list of world positions to traverse.
+        /// </summary>
+        private List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
             {
-                currentPath.Clear();
-                return;
+                // Fallback: direct path
+                return new List<Vector3> { end };
             }
-            Vector2Int targetGridPos = new Vector2Int(targetX, targetY);
 
-            // Find path using GameController's pathfinding
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            // Red Caps use normal attraction (they're single-mindedly hunting, not affected by visitor states)
-            if (gameController.TryFindPath(currentGridPos, targetGridPos, pathNodes, 1.0f))
+            var graphState = mazeGridBehaviour.ForestMapState;
+            var result = new List<Vector3>();
+
+            // Find nearest node to start
+            int startNodeIndex = FindNearestNodeIndex(graphState, new Vector2(start.x, start.y));
+            int endNodeIndex = FindNearestNodeIndex(graphState, new Vector2(end.x, end.y));
+
+            if (startNodeIndex < 0 || endNodeIndex < 0)
             {
-                currentPath.Clear();
-                foreach (var node in pathNodes)
+                // Fallback: direct path
+                return new List<Vector3> { end };
+            }
+
+            // BFS to find path through nodes
+            var nodePath = FindNodePath(graphState, startNodeIndex, endNodeIndex);
+
+            if (nodePath == null || nodePath.Count == 0)
+            {
+                // Fallback: direct path
+                return new List<Vector3> { end };
+            }
+
+            // Convert node path to world positions following edge polylines
+            for (int i = 0; i < nodePath.Count - 1; i++)
+            {
+                int fromNode = nodePath[i];
+                int toNode = nodePath[i + 1];
+
+                // Find edge between these nodes
+                var edgePoints = GetEdgePoints(graphState, fromNode, toNode);
+                if (edgePoints != null)
                 {
-                    currentPath.Add(new Vector2Int(node.x, node.y));
+                    result.AddRange(edgePoints);
                 }
+            }
 
-                currentWaypointIndex = 0;
-            }
-            else
+            // Add final destination
+            result.Add(end);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Finds the nearest node index to a world position.
+        /// </summary>
+        private int FindNearestNodeIndex(ForestMapState graphState, Vector2 worldPos)
+        {
+            if (graphState.Nodes == null || graphState.Nodes.Count == 0)
             {
-                currentPath.Clear();
+                return -1;
             }
+
+            int nearestIndex = -1;
+            float nearestDist = float.MaxValue;
+
+            for (int i = 0; i < graphState.Nodes.Count; i++)
+            {
+                var node = graphState.Nodes[i];
+                float dist = Vector2.Distance(worldPos, node.Position);
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearestIndex = i;
+                }
+            }
+
+            return nearestIndex;
+        }
+
+        /// <summary>
+        /// BFS to find path through graph nodes.
+        /// </summary>
+        private List<int> FindNodePath(ForestMapState graphState, int startIndex, int endIndex)
+        {
+            if (startIndex == endIndex)
+            {
+                return new List<int> { startIndex };
+            }
+
+            var visited = new HashSet<int>();
+            var queue = new Queue<List<int>>();
+            queue.Enqueue(new List<int> { startIndex });
+            visited.Add(startIndex);
+
+            while (queue.Count > 0)
+            {
+                var currentPath = queue.Dequeue();
+                int currentNode = currentPath[currentPath.Count - 1];
+
+                // Get neighbors from edges
+                foreach (var edge in graphState.Edges)
+                {
+                    int neighborIndex = -1;
+                    if (edge.FromNodeIndex == currentNode && !visited.Contains(edge.ToNodeIndex))
+                    {
+                        neighborIndex = edge.ToNodeIndex;
+                    }
+                    else if (edge.ToNodeIndex == currentNode && !visited.Contains(edge.FromNodeIndex))
+                    {
+                        neighborIndex = edge.FromNodeIndex;
+                    }
+
+                    if (neighborIndex >= 0)
+                    {
+                        var newPath = new List<int>(currentPath) { neighborIndex };
+
+                        if (neighborIndex == endIndex)
+                        {
+                            return newPath;
+                        }
+
+                        visited.Add(neighborIndex);
+                        queue.Enqueue(newPath);
+                    }
+                }
+            }
+
+            return null; // No path found
+        }
+
+        /// <summary>
+        /// Gets the world-space points along an edge between two nodes.
+        /// </summary>
+        private List<Vector3> GetEdgePoints(ForestMapState graphState, int fromNode, int toNode)
+        {
+            foreach (var edge in graphState.Edges)
+            {
+                bool matchesForward = edge.FromNodeIndex == fromNode && edge.ToNodeIndex == toNode;
+                bool matchesReverse = edge.FromNodeIndex == toNode && edge.ToNodeIndex == fromNode;
+
+                if (matchesForward || matchesReverse)
+                {
+                    var points = new List<Vector3>();
+
+                    if (edge.Polyline != null && edge.Polyline.Count > 0)
+                    {
+                        // Use polyline points
+                        if (matchesReverse)
+                        {
+                            // Reverse the order for traversal
+                            for (int i = edge.Polyline.Count - 1; i >= 0; i--)
+                            {
+                                points.Add(new Vector3(edge.Polyline[i].x, edge.Polyline[i].y, 0));
+                            }
+                        }
+                        else
+                        {
+                            foreach (var pt in edge.Polyline)
+                            {
+                                points.Add(new Vector3(pt.x, pt.y, 0));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Direct line from node to node
+                        var targetNode = matchesForward ? graphState.Nodes[toNode] : graphState.Nodes[fromNode];
+                        points.Add(new Vector3(targetNode.Position.x, targetNode.Position.y, 0));
+                    }
+
+                    return points;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -322,22 +470,21 @@ namespace FaeMaze.Visitors
         /// </summary>
         private void FollowPath()
         {
-            if (currentPath.Count == 0 || currentWaypointIndex >= currentPath.Count)
+            if (worldPath.Count == 0 || currentWaypointIndex >= worldPath.Count)
             {
                 // No path or reached end - recalculate
                 RecalculatePathToTarget();
 
                 // If we still don't have a path, move directly toward the visitor as a fallback
-                if (currentPath.Count == 0 && targetVisitor != null)
+                if (worldPath.Count == 0 && targetVisitor != null)
                 {
                     MoveDirectlyToward(targetVisitor.transform.position);
                 }
                 return;
             }
 
-            // Get current waypoint
-            Vector2Int waypointGridPos = currentPath[currentWaypointIndex];
-            Vector3 waypointWorldPos = mazeGridBehaviour.GridToWorld(waypointGridPos.x, waypointGridPos.y);
+            // Get current waypoint in world space
+            Vector3 waypointWorldPos = worldPath[currentWaypointIndex];
 
             // Move toward waypoint
             Vector3 direction = (waypointWorldPos - transform.position).normalized;
@@ -354,7 +501,7 @@ namespace FaeMaze.Visitors
                 currentWaypointIndex++;
 
                 // Recalculate path periodically to adjust for moving target
-                if (currentWaypointIndex >= currentPath.Count)
+                if (currentWaypointIndex >= worldPath.Count)
                 {
                     RecalculatePathToTarget();
                 }
@@ -515,7 +662,7 @@ namespace FaeMaze.Visitors
 
             // Clear target and find a new one
             targetVisitor = null;
-            currentPath.Clear();
+            worldPath.Clear();
         }
 
         #endregion
@@ -596,19 +743,19 @@ namespace FaeMaze.Visitors
             Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.3f);
             Gizmos.DrawWireSphere(transform.position, contactRadius);
 
-            // Draw path if available
-            if (currentPath != null && currentPath.Count > 0 && mazeGridBehaviour != null)
+            // Draw path in world space
+            if (worldPath != null && worldPath.Count > 0)
             {
                 Gizmos.color = new Color(1f, 0f, 0f, 0.5f);
 
-                for (int i = currentWaypointIndex; i < currentPath.Count; i++)
+                for (int i = currentWaypointIndex; i < worldPath.Count; i++)
                 {
-                    Vector3 worldPos = mazeGridBehaviour.GridToWorld(currentPath[i].x, currentPath[i].y);
+                    Vector3 worldPos = worldPath[i];
                     Gizmos.DrawSphere(worldPos, 0.1f);
 
                     if (i > currentWaypointIndex)
                     {
-                        Vector3 prevWorldPos = mazeGridBehaviour.GridToWorld(currentPath[i - 1].x, currentPath[i - 1].y);
+                        Vector3 prevWorldPos = worldPath[i - 1];
                         Gizmos.DrawLine(prevWorldPos, worldPos);
                     }
                     else if (i == currentWaypointIndex)

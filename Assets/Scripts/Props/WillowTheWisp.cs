@@ -2,12 +2,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
-using FaeMaze.Maze;
 
 namespace FaeMaze.Props
 {
     /// <summary>
     /// A mystical Willow-the-Wisp that wanders the maze and lures visitors to the Heart of the Maze.
+    /// Uses world-space coordinates for all movement and detection.
     /// Wanders at 2x visitor speed when alone, slows to visitor speed when leading.
     /// </summary>
     [RequireComponent(typeof(Collider2D))]
@@ -50,16 +50,8 @@ namespace FaeMaze.Props
 
         [Header("Influence Settings")]
         [SerializeField]
-        [Tooltip("Detection radius in grid tiles (Manhattan distance)")]
-        private int detectionRadius = 8;
-
-        [SerializeField]
-        [Tooltip("Maximum flood-fill steps for influence area calculation")]
-        private int maxFloodFillSteps = 30;
-
-        [SerializeField]
-        [Tooltip("How often to recalculate influence area (seconds)")]
-        private float influenceRecalculateInterval = 2f;
+        [Tooltip("Detection radius in world units")]
+        private float detectionRadius = 8f;
 
         [SerializeField]
         [Tooltip("How often to scan for visitors (seconds)")]
@@ -128,6 +120,15 @@ namespace FaeMaze.Props
         [Tooltip("Maximum glow intensity")]
         private float glowMaxIntensity = 1.5f;
 
+        [Header("Wandering Settings")]
+        [SerializeField]
+        [Tooltip("Time between wander direction changes (seconds)")]
+        private float wanderDirectionChangeInterval = 2f;
+
+        [SerializeField]
+        [Tooltip("Distance to check ahead for walkability")]
+        private float walkabilityCheckDistance = 0.5f;
+
         #endregion
 
         #region Private Fields
@@ -141,24 +142,19 @@ namespace FaeMaze.Props
         private Vector3 baseScale;
         private Vector3 initialScale;
 
-        // Influence area
-        private Vector2Int gridPosition;
-        private HashSet<Vector2Int> influenceCells;
-        private float influenceRecalculateTimer;
-
         // Visitor detection and targeting
         private VisitorController targetVisitor;
         private float visitorScanTimer;
 
-        // Wandering path
-        private List<Vector2Int> wanderPath;
-        private int currentPathIndex;
+        // Wandering
+        private Vector3 wanderDirection;
+        private float wanderDirectionTimer;
 
         // Visitor being led
         private VisitorController followingVisitor;
 
         // Target destination (Heart of the Maze)
-        private Vector2Int heartGridPosition;
+        private Vector3 heartWorldPosition;
 
         private const string DirectionParameter = "Direction";
         private GameObject modelInstance;
@@ -173,6 +169,9 @@ namespace FaeMaze.Props
 
         /// <summary>Gets whether this wisp is currently leading a visitor</summary>
         public bool IsLeading => state == WispState.Leading && followingVisitor != null;
+
+        /// <summary>Gets the world position of this wisp</summary>
+        public Vector3 WorldPosition => transform.position;
 
         #endregion
 
@@ -192,11 +191,6 @@ namespace FaeMaze.Props
 
         private void Start()
         {
-            // Log rotation at Start to see if it's being preserved
-            if (modelInstance != null)
-            {
-            }
-
             // Find references
             AcquireDependencies();
 
@@ -211,20 +205,17 @@ namespace FaeMaze.Props
                 return;
             }
 
-            // Get heart position
-            if (gameController.Heart != null)
+            // Get heart position in world space
+            if (mazeGridBehaviour != null)
             {
-                heartGridPosition = gameController.Heart.GridPosition;
+                heartWorldPosition = mazeGridBehaviour.HeartWorldPosition;
             }
 
-            // Ensure wisp starts on a walkable tile
+            // Ensure wisp starts on a walkable position
             EnsureWalkablePosition();
 
-            // Calculate initial influence area
-            CalculateInfluenceArea();
-
-            // Start wandering
-            GenerateRandomWanderPath();
+            // Start wandering with a random direction
+            PickRandomWanderDirection();
         }
 
         private void Update()
@@ -242,14 +233,6 @@ namespace FaeMaze.Props
             if (enableGlow && glowLight != null)
             {
                 UpdateGlowPulse();
-            }
-
-            // Periodically recalculate influence area
-            influenceRecalculateTimer += Time.deltaTime;
-            if (influenceRecalculateTimer >= influenceRecalculateInterval)
-            {
-                influenceRecalculateTimer = 0f;
-                CalculateInfluenceArea();
             }
 
             // Periodically scan for visitors (except when already leading)
@@ -305,27 +288,16 @@ namespace FaeMaze.Props
         #region Influence and Detection
 
         /// <summary>
-        /// Calculates the flood-fill influence area for visitor detection.
+        /// Checks if a position is within this wisp's detection radius.
         /// </summary>
-        private void CalculateInfluenceArea()
+        public bool IsPositionInDetectionRange(Vector3 worldPos)
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
-                return;
-
-            // Convert world position to grid coordinates
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
-            {
-                return;
-            }
-
-            gridPosition = new Vector2Int(x, y);
-
-            // Use flood-fill to get reachable tiles
-            influenceCells = mazeGridBehaviour.Grid.FloodFillReachable(x, y, detectionRadius, maxFloodFillSteps);
+            float distance = Vector3.Distance(transform.position, worldPos);
+            return distance <= detectionRadius;
         }
 
         /// <summary>
-        /// Scans for visitors within the influence area and picks the best target.
+        /// Scans for visitors within the detection radius and picks the best target.
         /// Prioritizes the closest visitor with the least status effects.
         /// </summary>
         private bool IsVisitorChaseable(FaeMaze.Visitors.VisitorControllerBase.VisitorState state)
@@ -338,15 +310,12 @@ namespace FaeMaze.Props
 
         private void ScanForVisitors()
         {
-            if (influenceCells == null || influenceCells.Count == 0)
-                return;
-
             // Find all visitors in the scene
             VisitorController[] allVisitors = FindObjectsByType<VisitorController>(FindObjectsSortMode.None);
             if (allVisitors.Length == 0)
                 return;
 
-            // Filter visitors that are within influence area and walkable
+            // Filter visitors that are within detection radius
             List<VisitorController> candidateVisitors = new List<VisitorController>();
             foreach (var visitor in allVisitors)
             {
@@ -359,14 +328,11 @@ namespace FaeMaze.Props
                 if (followWisp != null && followWisp.IsFollowing)
                     continue;
 
-                // Check if visitor is in influence area
-                if (mazeGridBehaviour.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                // Check if visitor is in detection range using world-space distance
+                float distance = Vector3.Distance(transform.position, visitor.transform.position);
+                if (distance <= detectionRadius)
                 {
-                    Vector2Int visitorGridPos = new Vector2Int(vx, vy);
-                    if (influenceCells.Contains(visitorGridPos))
-                    {
-                        candidateVisitors.Add(visitor);
-                    }
+                    candidateVisitors.Add(visitor);
                 }
             }
 
@@ -533,8 +499,6 @@ namespace FaeMaze.Props
         private void UpdateGlowPulse()
         {
             // Calculate pulsing intensity using sine wave
-            // frequency in Hz = cycles per second
-            // Time.time * frequency * 2π gives us the angle for sin wave
             float angle = Time.time * glowFrequency * 2f * Mathf.PI;
 
             // Map sin wave from [-1, 1] to [0, 1]
@@ -550,189 +514,110 @@ namespace FaeMaze.Props
 
         #region Wandering Behavior
 
-        private void GenerateRandomWanderPath()
+        private void PickRandomWanderDirection()
         {
-            if (mazeGridBehaviour == null || gameController == null)
-                return;
-
-            // Get current grid position
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
+            // Pick a random cardinal direction
+            int direction = Random.Range(0, 4);
+            switch (direction)
             {
-                return;
+                case 0: wanderDirection = Vector3.up; break;
+                case 1: wanderDirection = Vector3.down; break;
+                case 2: wanderDirection = Vector3.left; break;
+                case 3: wanderDirection = Vector3.right; break;
             }
 
-            Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-            // Pick a random walkable tile as destination
-            Vector2Int randomDest = GetRandomWalkableTile();
-            if (randomDest == currentPos)
-            {
-                // Try again in a moment
-                Invoke(nameof(GenerateRandomWanderPath), 1f);
-                return;
-            }
-
-            // Find path to random destination
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            // Wisps use normal attraction (they're mischievous spirits, not affected by visitor states)
-            if (gameController.TryFindPath(currentPos, randomDest, pathNodes, 1.0f) && pathNodes.Count > 0)
-            {
-                wanderPath = new List<Vector2Int>();
-                foreach (var node in pathNodes)
-                {
-                    wanderPath.Add(new Vector2Int(node.x, node.y));
-                }
-
-                currentPathIndex = 0;
-            }
-            else
-            {
-                // Try again
-                Invoke(nameof(GenerateRandomWanderPath), 1f);
-            }
-        }
-
-        private Vector2Int GetRandomWalkableTile()
-        {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
-                return Vector2Int.zero;
-
-            var grid = mazeGridBehaviour.Grid;
-            int maxAttempts = 50;
-            int attempts = 0;
-
-            while (attempts < maxAttempts)
-            {
-                int x = Random.Range(0, grid.Width);
-                int y = Random.Range(0, grid.Height);
-
-                var node = grid.GetNode(x, y);
-                if (node != null && node.walkable)
-                {
-                    return new Vector2Int(x, y);
-                }
-
-                attempts++;
-            }
-
-            // Fallback: return current position
-            if (mazeGridBehaviour.WorldToGrid(transform.position, out int cx, out int cy))
-            {
-                return new Vector2Int(cx, cy);
-            }
-
-            return Vector2Int.zero;
+            wanderDirectionTimer = 0f;
         }
 
         /// <summary>
-        /// Ensures the wisp is positioned on a walkable tile. If not, finds the nearest walkable tile.
+        /// Ensures the wisp is positioned on a walkable location. If not, finds a nearby walkable position.
         /// </summary>
         private void EnsureWalkablePosition()
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            if (mazeGridBehaviour == null)
                 return;
-
-            var grid = mazeGridBehaviour.Grid;
-
-            // Get current grid position
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                Vector2Int randomPos = GetRandomWalkableTile();
-                transform.position = mazeGridBehaviour.GridToWorld(randomPos.x, randomPos.y);
-                return;
-            }
 
             // Check if current position is walkable
-            var currentNode = grid.GetNode(currentX, currentY);
-            if (currentNode != null && currentNode.walkable)
+            if (mazeGridBehaviour.IsWalkableAtWorldPos(transform.position))
             {
                 return;
             }
 
-            // Current position is not walkable, find nearest walkable tile
-
-            Vector2Int nearestWalkable = FindNearestWalkableTile(currentX, currentY);
-            if (nearestWalkable != new Vector2Int(currentX, currentY))
-            {
-                Vector3 newWorldPos = mazeGridBehaviour.GridToWorld(nearestWalkable.x, nearestWalkable.y);
-                transform.position = newWorldPos;
-            }
-            else
-            {
-                // Couldn't find nearby walkable tile, use random one
-                Vector2Int randomPos = GetRandomWalkableTile();
-                transform.position = mazeGridBehaviour.GridToWorld(randomPos.x, randomPos.y);
-            }
+            // Current position is not walkable, find nearest walkable position
+            Vector3 nearestWalkable = FindNearestWalkablePosition(transform.position);
+            transform.position = nearestWalkable;
         }
 
         /// <summary>
-        /// Finds the nearest walkable tile using a spiral search pattern.
+        /// Finds the nearest walkable position using a spiral search pattern.
         /// </summary>
-        private Vector2Int FindNearestWalkableTile(int startX, int startY)
+        private Vector3 FindNearestWalkablePosition(Vector3 startPos)
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
-                return new Vector2Int(startX, startY);
+            if (mazeGridBehaviour == null)
+                return startPos;
 
-            var grid = mazeGridBehaviour.Grid;
+            float searchStep = 1f;
             int maxRadius = 10;
 
             // Spiral search outward from start position
             for (int radius = 1; radius <= maxRadius; radius++)
             {
-                for (int dx = -radius; dx <= radius; dx++)
+                float currentRadius = radius * searchStep;
+
+                // Check cardinal directions at this radius
+                Vector3[] offsets = new Vector3[]
                 {
-                    for (int dy = -radius; dy <= radius; dy++)
+                    new Vector3(currentRadius, 0, 0),
+                    new Vector3(-currentRadius, 0, 0),
+                    new Vector3(0, currentRadius, 0),
+                    new Vector3(0, -currentRadius, 0),
+                    new Vector3(currentRadius, currentRadius, 0),
+                    new Vector3(-currentRadius, currentRadius, 0),
+                    new Vector3(currentRadius, -currentRadius, 0),
+                    new Vector3(-currentRadius, -currentRadius, 0)
+                };
+
+                foreach (var offset in offsets)
+                {
+                    Vector3 checkPos = startPos + offset;
+                    if (mazeGridBehaviour.IsWalkableAtWorldPos(checkPos))
                     {
-                        // Only check tiles on the current radius perimeter
-                        if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius)
-                            continue;
-
-                        int checkX = startX + dx;
-                        int checkY = startY + dy;
-
-                        // Check bounds
-                        if (checkX < 0 || checkX >= grid.Width || checkY < 0 || checkY >= grid.Height)
-                            continue;
-
-                        var node = grid.GetNode(checkX, checkY);
-                        if (node != null && node.walkable)
-                        {
-                            return new Vector2Int(checkX, checkY);
-                        }
+                        return checkPos;
                     }
                 }
             }
 
-            // Fallback
-            return new Vector2Int(startX, startY);
+            // Fallback - return original position
+            return startPos;
         }
 
         private void UpdateWandering()
         {
-            if (wanderPath == null || wanderPath.Count == 0)
+            // Update direction change timer
+            wanderDirectionTimer += Time.deltaTime;
+            if (wanderDirectionTimer >= wanderDirectionChangeInterval)
             {
-                GenerateRandomWanderPath();
+                PickRandomWanderDirection();
+            }
+
+            // Check if we can move in the current direction
+            Vector3 nextPosition = transform.position + wanderDirection * walkabilityCheckDistance;
+
+            if (mazeGridBehaviour != null && !mazeGridBehaviour.IsWalkableAtWorldPos(nextPosition))
+            {
+                // Can't move in current direction, pick a new one
+                PickRandomWanderDirection();
                 return;
             }
 
-            if (currentPathIndex >= wanderPath.Count)
-            {
-                // Reached end of wander path, generate new one
-                GenerateRandomWanderPath();
-                return;
-            }
-
-            // Move toward current waypoint
-            Vector2Int targetGridPos = wanderPath[currentPathIndex];
-            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
-
-            UpdateAnimatorDirection(targetWorldPos - transform.position);
-
+            // Move in the wander direction
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
-                targetWorldPos,
+                transform.position + wanderDirection,
                 wanderSpeed * Time.deltaTime
             );
+
+            UpdateAnimatorDirection(wanderDirection);
 
             if (rb != null)
             {
@@ -742,13 +627,6 @@ namespace FaeMaze.Props
             else
             {
                 transform.position = newPosition;
-            }
-
-            // Check if waypoint reached
-            float distance = Vector3.Distance(transform.position, targetWorldPos);
-            if (distance < waypointReachedDistance)
-            {
-                currentPathIndex++;
             }
         }
 
@@ -764,18 +642,12 @@ namespace FaeMaze.Props
             if (visitor == null)
                 return;
 
-
             targetVisitor = visitor;
             state = WispState.Chasing;
-            wanderPath = null; // Clear wander path
-            currentPathIndex = 0;
-
-            // Generate initial path to visitor
-            GeneratePathToVisitor();
         }
 
         /// <summary>
-        /// Updates the chasing behavior: pursue the target visitor using pathfinding.
+        /// Updates the chasing behavior: pursue the target visitor using direct movement.
         /// </summary>
         private void UpdateChasing()
         {
@@ -804,87 +676,33 @@ namespace FaeMaze.Props
                 return;
             }
 
-            // If we don't have a path or reached the end, generate a new path
-            if (wanderPath == null || wanderPath.Count == 0 || currentPathIndex >= wanderPath.Count)
-            {
-                GeneratePathToVisitor();
-                if (wanderPath == null || wanderPath.Count == 0)
-                {
-                    // Can't find path, return to wandering
-                    ReturnToWandering();
-                    return;
-                }
-            }
-
-            // Follow the path to the visitor
-            Vector2Int targetGridPos = wanderPath[currentPathIndex];
-            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
-
-            UpdateAnimatorDirection(targetWorldPos - transform.position);
-
+            // Move toward the visitor
+            Vector3 direction = (targetVisitor.transform.position - transform.position).normalized;
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
-                targetWorldPos,
+                targetVisitor.transform.position,
                 chaseSpeed * Time.deltaTime
             );
 
-            if (rb != null)
+            // Check walkability before moving
+            if (mazeGridBehaviour == null || mazeGridBehaviour.IsWalkableAtWorldPos(newPosition))
             {
-                rb.MovePosition(newPosition);
-                Physics2D.SyncTransforms();
-            }
-            else
-            {
-                transform.position = newPosition;
-            }
+                UpdateAnimatorDirection(direction);
 
-            // Check if waypoint reached
-            float waypointDistance = Vector3.Distance(transform.position, targetWorldPos);
-            if (waypointDistance < waypointReachedDistance)
-            {
-                currentPathIndex++;
-            }
-        }
-
-        /// <summary>
-        /// Generates a path to the current target visitor's position.
-        /// </summary>
-        private void GeneratePathToVisitor()
-        {
-            if (mazeGridBehaviour == null || gameController == null || targetVisitor == null)
-                return;
-
-            // Get current grid position
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                return;
-            }
-
-            Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-            // Get visitor's grid position
-            if (!mazeGridBehaviour.WorldToGrid(targetVisitor.transform.position, out int visitorX, out int visitorY))
-            {
-                return;
-            }
-
-            Vector2Int visitorPos = new Vector2Int(visitorX, visitorY);
-
-            // Find path to visitor
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            if (gameController.TryFindPath(currentPos, visitorPos, pathNodes, 1.0f) && pathNodes.Count > 0)
-            {
-                wanderPath = new List<Vector2Int>();
-                foreach (var node in pathNodes)
+                if (rb != null)
                 {
-                    wanderPath.Add(new Vector2Int(node.x, node.y));
+                    rb.MovePosition(newPosition);
+                    Physics2D.SyncTransforms();
                 }
-
-                currentPathIndex = 0;
+                else
+                {
+                    transform.position = newPosition;
+                }
             }
             else
             {
-                wanderPath = null;
+                // Can't reach visitor directly, return to wandering
+                ReturnToWandering();
             }
         }
 
@@ -894,7 +712,6 @@ namespace FaeMaze.Props
 
         private void CaptureVisitor(VisitorController visitor)
         {
-
             followingVisitor = visitor;
             state = WispState.Leading;
 
@@ -906,51 +723,10 @@ namespace FaeMaze.Props
             }
             followWisp.StartFollowing(this);
 
-            // Generate path to heart
-            GeneratePathToHeart();
-        }
-
-        private void GeneratePathToHeart()
-        {
-            if (mazeGridBehaviour == null || gameController == null)
-                return;
-
-            // Update heart position if we didn't have it before
-            if (gameController.Heart != null)
+            // Update heart position
+            if (mazeGridBehaviour != null)
             {
-                heartGridPosition = gameController.Heart.GridPosition;
-            }
-            else
-            {
-                ReturnToWandering();
-                return;
-            }
-
-            // Get current position
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int currentX, out int currentY))
-            {
-                ReturnToWandering();
-                return;
-            }
-
-            Vector2Int currentPos = new Vector2Int(currentX, currentY);
-
-            // Find path to heart
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            // Wisps use normal attraction (they're mischievous spirits, not affected by visitor states)
-            if (gameController.TryFindPath(currentPos, heartGridPosition, pathNodes, 1.0f) && pathNodes.Count > 0)
-            {
-                wanderPath = new List<Vector2Int>();
-                foreach (var node in pathNodes)
-                {
-                    wanderPath.Add(new Vector2Int(node.x, node.y));
-                }
-
-                currentPathIndex = 0;
-            }
-            else
-            {
-                ReturnToWandering();
+                heartWorldPosition = mazeGridBehaviour.HeartWorldPosition;
             }
         }
 
@@ -963,46 +739,39 @@ namespace FaeMaze.Props
                 return;
             }
 
-            if (wanderPath == null || wanderPath.Count == 0)
-            {
-                GeneratePathToHeart();
-                return;
-            }
+            // Calculate distance to heart
+            float distanceToHeart = Vector3.Distance(transform.position, heartWorldPosition);
 
-            if (currentPathIndex >= wanderPath.Count)
+            // Check if we've reached the heart
+            if (distanceToHeart <= waypointReachedDistance)
             {
                 // Reached heart - visitor should be consumed soon
                 ReturnToWandering();
                 return;
             }
 
-            // Move toward current waypoint at visitor speed
-            Vector2Int targetGridPos = wanderPath[currentPathIndex];
-            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetGridPos.x, targetGridPos.y);
-
-            UpdateAnimatorDirection(targetWorldPos - transform.position);
-
+            // Move toward the heart at visitor speed
+            Vector3 direction = (heartWorldPosition - transform.position).normalized;
             Vector3 newPosition = Vector3.MoveTowards(
                 transform.position,
-                targetWorldPos,
+                heartWorldPosition,
                 leadSpeed * Time.deltaTime
             );
 
-            if (rb != null)
+            // Check walkability before moving
+            if (mazeGridBehaviour == null || mazeGridBehaviour.IsWalkableAtWorldPos(newPosition))
             {
-                rb.MovePosition(newPosition);
-                Physics2D.SyncTransforms();
-            }
-            else
-            {
-                transform.position = newPosition;
-            }
+                UpdateAnimatorDirection(direction);
 
-            // Check if waypoint reached
-            float distance = Vector3.Distance(transform.position, targetWorldPos);
-            if (distance < waypointReachedDistance)
-            {
-                currentPathIndex++;
+                if (rb != null)
+                {
+                    rb.MovePosition(newPosition);
+                    Physics2D.SyncTransforms();
+                }
+                else
+                {
+                    transform.position = newPosition;
+                }
             }
         }
 
@@ -1011,11 +780,9 @@ namespace FaeMaze.Props
             state = WispState.Wandering;
             targetVisitor = null;
             followingVisitor = null;
-            wanderPath = null;
-            currentPathIndex = 0;
 
-            // Generate new random wander path
-            GenerateRandomWanderPath();
+            // Pick a new random wander direction
+            PickRandomWanderDirection();
         }
 
         private void UpdateAnimatorDirection(Vector3 direction)
@@ -1116,42 +883,15 @@ namespace FaeMaze.Props
 
         private void OnDrawGizmos()
         {
-            // Draw influence area
-            if (influenceCells != null && influenceCells.Count > 0 && mazeGridBehaviour != null)
+            // Draw detection radius
+            Gizmos.color = new Color(0.9f, 1f, 0.4f, 0.1f); // Semi-transparent yellow-green
+            Gizmos.DrawWireSphere(transform.position, detectionRadius);
+
+            // Draw current movement direction
+            if (state == WispState.Wandering && wanderDirection != Vector3.zero)
             {
-                Gizmos.color = new Color(0.9f, 1f, 0.4f, 0.1f); // Semi-transparent yellow-green
-                foreach (var cell in influenceCells)
-                {
-                    Vector3 worldPos = mazeGridBehaviour.GridToWorld(cell.x, cell.y);
-                    Gizmos.DrawCube(worldPos, new Vector3(0.8f, 0.8f, 0.1f));
-                }
-            }
-
-            // Draw current path
-            if (wanderPath != null && wanderPath.Count > 0 && mazeGridBehaviour != null)
-            {
-                // Color based on state
-                if (state == WispState.Leading)
-                    Gizmos.color = Color.yellow;
-                else if (state == WispState.Chasing)
-                    Gizmos.color = Color.red;
-                else
-                    Gizmos.color = Color.green;
-
-                for (int i = 0; i < wanderPath.Count - 1; i++)
-                {
-                    Vector3 start = mazeGridBehaviour.GridToWorld(wanderPath[i].x, wanderPath[i].y);
-                    Vector3 end = mazeGridBehaviour.GridToWorld(wanderPath[i + 1].x, wanderPath[i + 1].y);
-                    Gizmos.DrawLine(start, end);
-                }
-
-                // Draw current target
-                if (currentPathIndex < wanderPath.Count)
-                {
-                    Gizmos.color = Color.yellow;
-                    Vector3 target = mazeGridBehaviour.GridToWorld(wanderPath[currentPathIndex].x, wanderPath[currentPathIndex].y);
-                    Gizmos.DrawWireSphere(target, 0.2f);
-                }
+                Gizmos.color = Color.green;
+                Gizmos.DrawLine(transform.position, transform.position + wanderDirection * 2f);
             }
 
             // Draw line to target visitor when chasing
@@ -1166,6 +906,13 @@ namespace FaeMaze.Props
             {
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawLine(transform.position, followingVisitor.transform.position);
+            }
+
+            // Draw line to heart when leading
+            if (state == WispState.Leading && heartWorldPosition != Vector3.zero)
+            {
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawLine(transform.position, heartWorldPosition);
             }
         }
 

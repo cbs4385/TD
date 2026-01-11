@@ -397,18 +397,6 @@ namespace FaeMaze.Systems
             RenderMaze();
         }
 
-        /// <summary>
-        /// Gets the world position for a grid coordinate (for compatibility with existing systems).
-        /// </summary>
-        public Vector3 GridToWorld(int x, int y)
-        {
-            if (mazeGridBehaviour != null)
-            {
-                return mazeGridBehaviour.GridToWorld(x, y);
-            }
-            return new Vector3(x * tileSize, y * tileSize, 0);
-        }
-
         #endregion
     }
 }

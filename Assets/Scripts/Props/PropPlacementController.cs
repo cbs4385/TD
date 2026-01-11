@@ -10,8 +10,9 @@ using FaeMaze.Audio;
 namespace FaeMaze.Props
 {
     /// <summary>
-    /// Handles player placement of props on the maze grid by spending essence.
-    /// Tracks tile occupancy to prevent duplicate props on the same tile.
+    /// Handles player placement of props on the maze by spending essence.
+    /// Uses world-space coordinates for all placement logic.
+    /// Tracks position occupancy to prevent duplicate props at the same location.
     /// Supports multiple placeable item types (FaeLantern, FairyRing, etc.).
     /// </summary>
     public class PropPlacementController : MonoBehaviour
@@ -53,11 +54,11 @@ namespace FaeMaze.Props
             [Tooltip("Maximum number of this item that can be placed per maze (0 = unlimited)")]
             public int maxPerMaze = 0;
 
-            [Tooltip("Minimum distance in tiles between instances of this item (0 = no restriction)")]
-            public int minDistanceBetweenProps = 0;
+            [Tooltip("Minimum distance in world units between instances of this item (0 = no restriction)")]
+            public float minDistanceBetweenProps = 0f;
 
-            [Tooltip("If true, only allow placement on Path/Junction/DeadEnd tiles")]
-            public bool requiresPathTile = false;
+            [Tooltip("If true, only allow placement on walkable locations")]
+            public bool requiresWalkable = true;
 
             [Header("Preview Settings")]
             [Tooltip("Sprite to use for preview (optional; falls back to prefab's sprite)")]
@@ -65,6 +66,23 @@ namespace FaeMaze.Props
 
             [Tooltip("Color for the preview ghost (semi-transparent recommended)")]
             public Color previewColor = new Color(1f, 1f, 1f, 0.5f);
+        }
+
+        /// <summary>
+        /// Represents a placed prop with its world position.
+        /// </summary>
+        private class PlacedProp
+        {
+            public Vector3 WorldPosition;
+            public GameObject PropObject;
+            public string ItemId;
+
+            public PlacedProp(Vector3 worldPos, GameObject prop, string itemId)
+            {
+                WorldPosition = worldPos;
+                PropObject = prop;
+                ItemId = itemId;
+            }
         }
 
         #endregion
@@ -89,13 +107,18 @@ namespace FaeMaze.Props
         [Tooltip("List of all placeable item types")]
         private List<PlaceableItem> placeableItems = new List<PlaceableItem>();
 
+        [Header("Placement Settings")]
+        [SerializeField]
+        [Tooltip("Minimum distance between any two props in world units")]
+        private float occupancyRadius = 0.5f;
+
         [Header("Preview")]
         [SerializeField]
         [Tooltip("Parent transform for preview objects (optional; will create if null)")]
         private Transform previewRoot;
 
         [SerializeField]
-        [Tooltip("Color tint for invalid placement (e.g., non-walkable tiles)")]
+        [Tooltip("Color tint for invalid placement (e.g., non-walkable locations)")]
         private Color invalidPlacementColor = new Color(1f, 0.3f, 0.3f, 0.5f);
 
         [Header("Build Mode")]
@@ -125,7 +148,7 @@ namespace FaeMaze.Props
         #region Private Fields
 
         private Camera mainCamera;
-        private Dictionary<Vector2Int, GameObject> occupiedTiles;
+        private List<PlacedProp> placedProps;
         private PlaceableItem currentSelection;
 
         // Preview fields
@@ -175,8 +198,8 @@ namespace FaeMaze.Props
                 return;
             }
 
-            // Initialize occupancy tracking
-            occupiedTiles = new Dictionary<Vector2Int, GameObject>();
+            // Initialize placed props list
+            placedProps = new List<PlacedProp>();
 
             // FORCE build mode to Inactive - props are hazards and should not be player-placeable
             // This overrides any Inspector settings to ensure build mode is always disabled
@@ -363,37 +386,19 @@ namespace FaeMaze.Props
             Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Mouse.current.position.ReadValue());
             mouseWorldPos.z = 0; // Ensure z is 0 for 2D
 
-            // Convert world position to grid coordinates
-            if (!mazeGridBehaviour.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
+            // Check if position is already occupied
+            if (IsPositionOccupied(mouseWorldPos))
             {
                 return;
             }
 
-            Vector2Int gridPos = new Vector2Int(gridX, gridY);
-
-            // Check if tile is already occupied
-            if (occupiedTiles.ContainsKey(gridPos))
+            // Check if position is walkable (if required)
+            if (currentSelection.requiresWalkable)
             {
-                return;
-            }
-
-            // Get the maze node at this position
-            MazeGrid grid = mazeGridBehaviour.Grid;
-            if (grid == null)
-            {
-                return;
-            }
-
-            MazeGrid.MazeNode node = grid.GetNode(gridX, gridY);
-            if (node == null)
-            {
-                return;
-            }
-
-            // Check if tile is walkable
-            if (!node.walkable)
-            {
-                return;
+                if (!mazeGridBehaviour.IsWalkableAtWorldPos(mouseWorldPos))
+                {
+                    return;
+                }
             }
 
             // Try to spend essence
@@ -408,23 +413,19 @@ namespace FaeMaze.Props
             }
 
             // Place the prop
-            PlaceProp(gridPos, currentSelection);
+            PlaceProp(mouseWorldPos, currentSelection);
         }
 
         /// <summary>
-        /// Places a prop at the specified grid position.
+        /// Places a prop at the specified world position.
         /// </summary>
-        /// <param name="gridPos">Grid coordinates where the prop should be placed</param>
+        /// <param name="worldPos">World position where the prop should be placed</param>
         /// <param name="item">The placeable item to instantiate</param>
-        private void PlaceProp(Vector2Int gridPos, PlaceableItem item)
+        private void PlaceProp(Vector3 worldPos, PlaceableItem item)
         {
-            // Get world position for placement
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
-
             // Instantiate the prop
             GameObject prop = Instantiate(item.prefab, worldPos, Quaternion.identity);
-            prop.name = $"{item.id}_{gridPos.x}_{gridPos.y}";
-
+            prop.name = $"{item.id}_{worldPos.x:F1}_{worldPos.y:F1}";
 
             // Track prop placement for statistics
             if (Systems.GameStatsTracker.Instance != null)
@@ -432,47 +433,49 @@ namespace FaeMaze.Props
                 Systems.GameStatsTracker.Instance.RecordPropPlaced(item.displayName);
             }
 
-            // Mark tile as occupied
-            occupiedTiles[gridPos] = prop;
+            // Track placed prop
+            placedProps.Add(new PlacedProp(worldPos, prop, item.id));
 
             // Play placement sound
             SoundManager.Instance?.PlayLanternPlaced();
-
-            // The MazeAttractor or other components on the prop will automatically
-            // apply their effects in their Start() methods
         }
 
         /// <summary>
-        /// Removes a prop from occupancy tracking (useful if props are destroyed).
+        /// Removes a prop from tracking (useful if props are destroyed).
         /// </summary>
-        /// <param name="gridPos">Grid position to free up</param>
-        public void RemoveProp(Vector2Int gridPos)
+        /// <param name="worldPos">World position of the prop to remove</param>
+        public void RemoveProp(Vector3 worldPos)
         {
-            if (occupiedTiles.ContainsKey(gridPos))
+            var propToRemove = placedProps.FirstOrDefault(p =>
+                Vector3.Distance(p.WorldPosition, worldPos) < occupancyRadius);
+
+            if (propToRemove != null)
             {
-                GameObject prop = occupiedTiles[gridPos];
-                occupiedTiles.Remove(gridPos);
+                placedProps.Remove(propToRemove);
             }
         }
 
         /// <summary>
-        /// Checks if a tile is occupied by a prop.
+        /// Checks if a position is occupied by a prop.
         /// </summary>
-        /// <param name="gridPos">Grid position to check</param>
+        /// <param name="worldPos">World position to check</param>
         /// <returns>True if occupied, false otherwise</returns>
-        public bool IsTileOccupied(Vector2Int gridPos)
+        public bool IsPositionOccupied(Vector3 worldPos)
         {
-            return occupiedTiles.ContainsKey(gridPos);
+            return placedProps.Any(p =>
+                Vector3.Distance(p.WorldPosition, worldPos) < occupancyRadius);
         }
 
         /// <summary>
-        /// Gets the prop GameObject at the specified grid position.
+        /// Gets the prop GameObject at the specified world position.
         /// </summary>
-        /// <param name="gridPos">Grid position to query</param>
+        /// <param name="worldPos">World position to query</param>
         /// <returns>The prop GameObject if found, null otherwise</returns>
-        public GameObject GetPropAt(Vector2Int gridPos)
+        public GameObject GetPropAt(Vector3 worldPos)
         {
-            return occupiedTiles.TryGetValue(gridPos, out GameObject prop) ? prop : null;
+            var prop = placedProps.FirstOrDefault(p =>
+                Vector3.Distance(p.WorldPosition, worldPos) < occupancyRadius);
+            return prop?.PropObject;
         }
 
         #endregion
@@ -624,22 +627,12 @@ namespace FaeMaze.Props
             Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Mouse.current.position.ReadValue());
             mouseWorldPos.z = 0f;
 
-            // Convert to grid coordinates
-            if (!mazeGridBehaviour.WorldToGrid(mouseWorldPos, out int gridX, out int gridY))
-            {
-                HidePreview();
-                return;
-            }
-
-            Vector2Int gridPos = new Vector2Int(gridX, gridY);
-
-            // Check if tile is valid for placement
-            bool isValid = IsTileValidForPlacement(gridPos);
+            // Check if position is valid for placement
+            bool isValid = IsPositionValidForPlacement(mouseWorldPos);
             isPreviewValid = isValid;
 
-            // Position preview at grid cell
-            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
-            previewInstance.transform.position = targetWorldPos;
+            // Position preview at mouse position
+            previewInstance.transform.position = mouseWorldPos;
 
             // Show preview
             if (!previewInstance.activeSelf)
@@ -663,26 +656,28 @@ namespace FaeMaze.Props
         }
 
         /// <summary>
-        /// Checks if a tile is valid for placement.
+        /// Checks if a position is valid for placement using world-space checks.
         /// </summary>
-        private bool IsTileValidForPlacement(Vector2Int gridPos)
+        private bool IsPositionValidForPlacement(Vector3 worldPos)
         {
-            if (currentSelection == null || mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            if (currentSelection == null || mazeGridBehaviour == null)
             {
                 return false;
             }
 
-            // Check if tile is occupied
-            if (occupiedTiles.ContainsKey(gridPos))
+            // Check if position is occupied
+            if (IsPositionOccupied(worldPos))
             {
                 return false;
             }
 
-            // Check if tile is walkable
-            MazeGrid.MazeNode node = mazeGridBehaviour.Grid.GetNode(gridPos.x, gridPos.y);
-            if (node == null || !node.walkable)
+            // Check if position is walkable (if required)
+            if (currentSelection.requiresWalkable)
             {
-                return false;
+                if (!mazeGridBehaviour.IsWalkableAtWorldPos(worldPos))
+                {
+                    return false;
+                }
             }
 
             // Check max per maze constraint
@@ -698,16 +693,7 @@ namespace FaeMaze.Props
             // Check minimum distance constraint
             if (currentSelection.minDistanceBetweenProps > 0)
             {
-                if (!IsMinDistanceSatisfied(gridPos, currentSelection.id, currentSelection.minDistanceBetweenProps))
-                {
-                    return false;
-                }
-            }
-
-            // Check tile type constraint (Path/Junction/DeadEnd)
-            if (currentSelection.requiresPathTile)
-            {
-                if (!IsPathJunctionOrDeadEnd(gridPos))
+                if (!IsMinDistanceSatisfied(worldPos, currentSelection.id, currentSelection.minDistanceBetweenProps))
                 {
                     return false;
                 }
@@ -721,70 +707,27 @@ namespace FaeMaze.Props
         /// </summary>
         private int CountPlacedItemsOfType(string itemId)
         {
-            int count = 0;
-            foreach (var kvp in occupiedTiles)
-            {
-                if (kvp.Value != null && kvp.Value.name.StartsWith(itemId))
-                {
-                    count++;
-                }
-            }
-            return count;
+            return placedProps.Count(p => p.ItemId == itemId);
         }
 
         /// <summary>
         /// Checks if the minimum distance constraint is satisfied.
         /// </summary>
-        private bool IsMinDistanceSatisfied(Vector2Int gridPos, string itemId, int minDistance)
+        private bool IsMinDistanceSatisfied(Vector3 worldPos, string itemId, float minDistance)
         {
-            foreach (var kvp in occupiedTiles)
+            foreach (var prop in placedProps)
             {
                 // Only check distance to same item type
-                if (kvp.Value != null && kvp.Value.name.StartsWith(itemId))
+                if (prop.ItemId == itemId)
                 {
-                    int manhattanDist = Mathf.Abs(gridPos.x - kvp.Key.x) + Mathf.Abs(gridPos.y - kvp.Key.y);
-                    if (manhattanDist < minDistance)
+                    float distance = Vector3.Distance(worldPos, prop.WorldPosition);
+                    if (distance < minDistance)
                     {
                         return false;
                     }
                 }
             }
             return true;
-        }
-
-        /// <summary>
-        /// Checks if a tile is a Path, Junction, or DeadEnd.
-        /// </summary>
-        private bool IsPathJunctionOrDeadEnd(Vector2Int gridPos)
-        {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
-            {
-                return false;
-            }
-
-            // Count walkable neighbors to determine tile type
-            int walkableNeighbors = 0;
-            Vector2Int[] directions = new Vector2Int[]
-            {
-                new Vector2Int(0, 1),   // Up
-                new Vector2Int(0, -1),  // Down
-                new Vector2Int(1, 0),   // Right
-                new Vector2Int(-1, 0)   // Left
-            };
-
-            foreach (var dir in directions)
-            {
-                Vector2Int neighborPos = gridPos + dir;
-                var neighborNode = mazeGridBehaviour.Grid.GetNode(neighborPos.x, neighborPos.y);
-                if (neighborNode != null && neighborNode.walkable)
-                {
-                    walkableNeighbors++;
-                }
-            }
-
-            // DeadEnd: 1 neighbor, Path: 2 neighbors, Junction: 3+ neighbors
-            // Reject isolated tiles (0 neighbors) and open areas (not valid path tiles)
-            return walkableNeighbors >= 1 && walkableNeighbors <= 4;
         }
 
         /// <summary>
@@ -853,15 +796,14 @@ namespace FaeMaze.Props
 
         private void OnDrawGizmosSelected()
         {
-            if (mazeGridBehaviour == null || occupiedTiles == null)
+            if (placedProps == null)
                 return;
 
-            // Draw occupied tiles
+            // Draw placed props
             Gizmos.color = Color.red;
-            foreach (var kvp in occupiedTiles)
+            foreach (var prop in placedProps)
             {
-                Vector3 worldPos = mazeGridBehaviour.GridToWorld(kvp.Key.x, kvp.Key.y);
-                Gizmos.DrawWireSphere(worldPos, 0.3f);
+                Gizmos.DrawWireSphere(prop.WorldPosition, occupancyRadius);
             }
 
             // Draw current selection info

@@ -6,9 +6,9 @@ using FaeMaze.Systems;
 namespace FaeMaze.Props
 {
     /// <summary>
-    /// A mystical Puka that links water tiles and creates hazards for visitors.
+    /// A mystical Puka that creates hazards for visitors using world-space coordinates.
     /// When visitors become adjacent to a Puka, they may be teleported or destroyed.
-    /// Pukas automatically link to at least two water tiles in the maze.
+    /// Pukas can link to water locations in the maze.
     /// </summary>
     public class PukaHazard : MonoBehaviour
     {
@@ -43,7 +43,7 @@ namespace FaeMaze.Props
         private float noInteractionChance = 0.2f;
 
         [SerializeField]
-        [Tooltip("Chance (0-1) that visitor is teleported to linked water tile")]
+        [Tooltip("Chance (0-1) that visitor is teleported to linked water location")]
         [Range(0f, 1f)]
         private float teleportChance = 0.7f;
 
@@ -55,8 +55,13 @@ namespace FaeMaze.Props
         private float scanInterval = 0.5f;
 
         [SerializeField]
-        [Tooltip("Maximum number of water tiles to link (0 = unlimited)")]
-        private int maxLinkedTiles = 5;
+        [Tooltip("World-space distance to consider a visitor adjacent")]
+        private float adjacencyDistance = 1.5f;
+
+        [Header("Linked Teleport Locations")]
+        [SerializeField]
+        [Tooltip("World positions where visitors can be teleported to (water locations)")]
+        private List<Vector3> linkedWaterPositions = new List<Vector3>();
 
         [Header("Visual Settings")]
         [SerializeField]
@@ -89,7 +94,7 @@ namespace FaeMaze.Props
 
         [Header("Debug")]
         [SerializeField]
-        [Tooltip("Draw linked water tiles in Scene view")]
+        [Tooltip("Draw linked water locations in Scene view")]
         private bool debugDrawLinks = true;
 
         #endregion
@@ -97,8 +102,6 @@ namespace FaeMaze.Props
         #region Private Fields
 
         private MazeGridBehaviour mazeGridBehaviour;
-        private Vector2Int gridPosition;
-        private List<Vector2Int> linkedWaterTiles;
         private HashSet<GameObject> processedVisitors; // Track which visitors we've already interacted with
         private float scanTimer;
         private SpriteRenderer spriteRenderer;
@@ -110,11 +113,11 @@ namespace FaeMaze.Props
 
         #region Properties
 
-        /// <summary>Gets the grid position of this Puka</summary>
-        public Vector2Int GridPosition => gridPosition;
+        /// <summary>Gets the world position of this Puka</summary>
+        public Vector3 WorldPosition => transform.position;
 
-        /// <summary>Gets the list of linked water tiles</summary>
-        public IReadOnlyList<Vector2Int> LinkedWaterTiles => linkedWaterTiles;
+        /// <summary>Gets the list of linked water positions in world space</summary>
+        public IReadOnlyList<Vector3> LinkedWaterPositions => linkedWaterPositions;
 
         #endregion
 
@@ -123,7 +126,6 @@ namespace FaeMaze.Props
         private void Awake()
         {
             initialScale = transform.localScale;
-            linkedWaterTiles = new List<Vector2Int>();
             processedVisitors = new HashSet<GameObject>();
             SetupSpriteRenderer();
         }
@@ -137,17 +139,6 @@ namespace FaeMaze.Props
             {
                 return;
             }
-
-            // Get grid position
-            if (!mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
-            {
-                return;
-            }
-
-            gridPosition = new Vector2Int(x, y);
-
-            // Find and link water tiles
-            FindAndLinkWaterTiles();
 
             // Spawn Kelpie if enabled
             if (spawnKelpie && kelpiePrefab != null)
@@ -187,78 +178,6 @@ namespace FaeMaze.Props
 
         #endregion
 
-        #region Water Tile Linking
-
-        /// <summary>
-        /// Finds and links to water tiles in the maze.
-        /// Links to at least 2 water tiles if available.
-        /// </summary>
-        private void FindAndLinkWaterTiles()
-        {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
-            {
-                return;
-            }
-
-            var grid = mazeGridBehaviour.Grid;
-            linkedWaterTiles.Clear();
-
-            // Find all water tiles in the maze
-            List<Vector2Int> allWaterTiles = new List<Vector2Int>();
-            for (int x = 0; x < grid.Width; x++)
-            {
-                for (int y = 0; y < grid.Height; y++)
-                {
-                    var node = grid.GetNode(x, y);
-                    if (node != null && node.terrain == TileType.Water)
-                    {
-                        Vector2Int waterPos = new Vector2Int(x, y);
-                        // Don't link to ourselves
-                        if (waterPos != gridPosition)
-                        {
-                            allWaterTiles.Add(waterPos);
-                        }
-                    }
-                }
-            }
-
-            if (allWaterTiles.Count == 0)
-            {
-                return;
-            }
-
-            // Shuffle the list for random selection
-            ShuffleList(allWaterTiles);
-
-            // Link to at least 2 water tiles (or all available if fewer than 2)
-            int tilesToLink = Mathf.Min(
-                maxLinkedTiles > 0 ? maxLinkedTiles : allWaterTiles.Count,
-                allWaterTiles.Count
-            );
-            tilesToLink = Mathf.Max(tilesToLink, Mathf.Min(2, allWaterTiles.Count));
-
-            for (int i = 0; i < tilesToLink; i++)
-            {
-                linkedWaterTiles.Add(allWaterTiles[i]);
-            }
-        }
-
-        /// <summary>
-        /// Shuffles a list using Fisher-Yates algorithm.
-        /// </summary>
-        private void ShuffleList<T>(List<T> list)
-        {
-            for (int i = list.Count - 1; i > 0; i--)
-            {
-                int j = Random.Range(0, i + 1);
-                T temp = list[i];
-                list[i] = list[j];
-                list[j] = temp;
-            }
-        }
-
-        #endregion
-
         #region Visitor Detection and Interaction
 
         private bool IsVisitorActive(FaeMaze.Visitors.VisitorControllerBase.VisitorState state)
@@ -270,7 +189,7 @@ namespace FaeMaze.Props
         }
 
         /// <summary>
-        /// Scans for visitors adjacent to this Puka (within 1 grid tile).
+        /// Scans for visitors adjacent to this Puka using world-space distance.
         /// </summary>
         private void ScanForAdjacentVisitors()
         {
@@ -291,23 +210,17 @@ namespace FaeMaze.Props
                     continue;
                 }
 
-                // Check if visitor is walking
+                // Check if visitor is active
                 if (!IsVisitorActive(visitor.State))
                 {
                     continue;
                 }
 
-                // Get visitor grid position
-                if (mazeGridBehaviour.WorldToGrid(visitor.transform.position, out int vx, out int vy))
+                // Check world-space distance for adjacency
+                float distance = Vector3.Distance(transform.position, visitor.transform.position);
+                if (distance <= adjacencyDistance)
                 {
-                    Vector2Int visitorPos = new Vector2Int(vx, vy);
-
-                    // Check if visitor is adjacent (Manhattan distance = 1)
-                    int distance = Mathf.Abs(visitorPos.x - gridPosition.x) + Mathf.Abs(visitorPos.y - gridPosition.y);
-                    if (distance == 1)
-                    {
-                        InteractWithVisitor(visitor.gameObject, visitorPos);
-                    }
+                    InteractWithVisitor(visitor.gameObject, visitor.transform.position);
                 }
             }
 
@@ -324,17 +237,11 @@ namespace FaeMaze.Props
                     continue;
                 }
 
-                // Get visitor grid position
-                if (mazeGridBehaviour.WorldToGrid(mistakingVisitor.transform.position, out int vx, out int vy))
+                // Check world-space distance for adjacency
+                float distance = Vector3.Distance(transform.position, mistakingVisitor.transform.position);
+                if (distance <= adjacencyDistance)
                 {
-                    Vector2Int visitorPos = new Vector2Int(vx, vy);
-
-                    // Check if visitor is adjacent (Manhattan distance = 1)
-                    int distance = Mathf.Abs(visitorPos.x - gridPosition.x) + Mathf.Abs(visitorPos.y - gridPosition.y);
-                    if (distance == 1)
-                    {
-                        InteractWithVisitor(mistakingVisitor.gameObject, visitorPos);
-                    }
+                    InteractWithVisitor(mistakingVisitor.gameObject, mistakingVisitor.transform.position);
                 }
             }
 
@@ -346,7 +253,7 @@ namespace FaeMaze.Props
         /// Interacts with a visitor that has become adjacent to this Puka.
         /// Rolls for one of three outcomes: no interaction, teleport, or kill.
         /// </summary>
-        private void InteractWithVisitor(GameObject visitorObject, Vector2Int visitorPos)
+        private void InteractWithVisitor(GameObject visitorObject, Vector3 visitorWorldPos)
         {
             if (visitorObject == null)
             {
@@ -357,7 +264,7 @@ namespace FaeMaze.Props
             processedVisitors.Add(visitorObject);
 
             // Calculate approach direction based on visitor position relative to Puka
-            int direction = CalculateApproachDirection(visitorPos);
+            int direction = CalculateApproachDirection(visitorWorldPos);
 
             // Set Direction parameter on Animator if present
             var animator = GetComponent<Animator>();
@@ -376,94 +283,64 @@ namespace FaeMaze.Props
             }
             else if (roll < noInteractionChance + teleportChance)
             {
-                // 70% - Teleport to linked water tile
-                TeleportVisitor(visitorObject, visitorPos);
+                // 70% - Teleport to linked water location
+                TeleportVisitor(visitorObject);
             }
             else
             {
                 // 10% - Kill visitor
-                KillVisitor(visitorObject, visitorPos);
+                KillVisitor(visitorObject);
             }
         }
 
         /// <summary>
-        /// Calculates which direction the visitor is approaching from.
-        /// Returns: 1 (+y), 2 (-y), 3 (-x), 4 (+x), or 0 (diagonal/other)
+        /// Calculates which direction the visitor is approaching from using world-space.
+        /// Returns: 1 (+y), 2 (-y), 3 (-x), 4 (+x), or 0 (other)
         /// </summary>
-        private int CalculateApproachDirection(Vector2Int visitorPos)
+        private int CalculateApproachDirection(Vector3 visitorWorldPos)
         {
-            Vector2Int delta = visitorPos - gridPosition;
+            Vector3 delta = visitorWorldPos - transform.position;
 
-            // Check for cardinal directions only (Manhattan distance = 1)
-            if (delta.x == 0 && delta.y == 1)
+            // Determine dominant direction
+            if (Mathf.Abs(delta.y) > Mathf.Abs(delta.x))
             {
-                return 1; // Approaching from +y (north)
+                return delta.y > 0 ? 1 : 2; // +y (north) : -y (south)
             }
-            else if (delta.x == 0 && delta.y == -1)
+            else if (Mathf.Abs(delta.x) > 0.01f)
             {
-                return 2; // Approaching from -y (south)
-            }
-            else if (delta.x == -1 && delta.y == 0)
-            {
-                return 3; // Approaching from -x (west)
-            }
-            else if (delta.x == 1 && delta.y == 0)
-            {
-                return 4; // Approaching from +x (east)
+                return delta.x < 0 ? 3 : 4; // -x (west) : +x (east)
             }
 
-            return 0; // Diagonal or other (shouldn't happen with Manhattan distance check)
+            return 0; // Centered or other
         }
 
         /// <summary>
-        /// Teleports a visitor to a randomly selected linked water tile.
+        /// Teleports a visitor to a randomly selected linked water location.
         /// </summary>
-        private void TeleportVisitor(GameObject visitorObject, Vector2Int fromPos)
+        private void TeleportVisitor(GameObject visitorObject)
         {
-            if (linkedWaterTiles.Count == 0)
+            if (linkedWaterPositions.Count == 0)
             {
                 return;
             }
 
-            // Pick a random linked water tile
-            Vector2Int targetTile = linkedWaterTiles[Random.Range(0, linkedWaterTiles.Count)];
-            Vector3 targetWorldPos = mazeGridBehaviour.GridToWorld(targetTile.x, targetTile.y);
+            // Pick a random linked water position
+            Vector3 targetWorldPos = linkedWaterPositions[Random.Range(0, linkedWaterPositions.Count)];
 
             // Teleport the visitor
             visitorObject.transform.position = targetWorldPos;
 
-            // Try to recalculate path for the visitor
+            // Let the visitor recalculate its own path
             var visitorController = visitorObject.GetComponent<VisitorController>();
-            if (visitorController != null && GameController.Instance != null)
+            if (visitorController != null)
             {
-                // Get heart position as destination
-                if (GameController.Instance.Heart != null)
-                {
-                    Vector2Int heartPos = GameController.Instance.Heart.GridPosition;
-                    List<MazeGrid.MazeNode> newPath = new List<MazeGrid.MazeNode>();
-
-                    if (GameController.Instance.TryFindPath(targetTile, heartPos, newPath))
-                    {
-                        visitorController.SetPath(newPath);
-                    }
-                }
+                visitorController.RecalculatePath();
             }
 
-            // Try for mistaking visitor
             var mistakingVisitorController = visitorObject.GetComponent<MistakingVisitorController>();
-            if (mistakingVisitorController != null && GameController.Instance != null)
+            if (mistakingVisitorController != null)
             {
-                // Get heart position as destination
-                if (GameController.Instance.Heart != null)
-                {
-                    Vector2Int heartPos = GameController.Instance.Heart.GridPosition;
-                    List<MazeGrid.MazeNode> newPath = new List<MazeGrid.MazeNode>();
-
-                    if (GameController.Instance.TryFindPath(targetTile, heartPos, newPath))
-                    {
-                        mistakingVisitorController.SetPath(newPath);
-                    }
-                }
+                mistakingVisitorController.RecalculatePath();
             }
 
             // Play sound effect if available
@@ -473,7 +350,7 @@ namespace FaeMaze.Props
         /// <summary>
         /// Kills a visitor immediately.
         /// </summary>
-        private void KillVisitor(GameObject visitorObject, Vector2Int atPos)
+        private void KillVisitor(GameObject visitorObject)
         {
             // Play death sound if available
             FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed(); // Reuse consumption sound
@@ -564,48 +441,78 @@ namespace FaeMaze.Props
 
         #endregion
 
+        #region Public Methods
+
+        /// <summary>
+        /// Adds a water position to the linked teleport locations.
+        /// </summary>
+        /// <param name="worldPos">World position to add</param>
+        public void AddLinkedWaterPosition(Vector3 worldPos)
+        {
+            if (!linkedWaterPositions.Contains(worldPos))
+            {
+                linkedWaterPositions.Add(worldPos);
+            }
+        }
+
+        /// <summary>
+        /// Clears all linked water positions.
+        /// </summary>
+        public void ClearLinkedWaterPositions()
+        {
+            linkedWaterPositions.Clear();
+        }
+
+        #endregion
+
         #region Gizmos
 
         private void OnDrawGizmos()
         {
-            if (!debugDrawLinks || linkedWaterTiles == null || mazeGridBehaviour == null)
+            if (!debugDrawLinks || linkedWaterPositions == null)
             {
                 return;
             }
 
-            // Draw lines to linked water tiles
+            // Draw lines to linked water positions
             Gizmos.color = new Color(0f, 1f, 0f, 0.3f); // Semi-transparent green
-            foreach (var waterTile in linkedWaterTiles)
+            foreach (var waterPos in linkedWaterPositions)
             {
-                Vector3 waterWorldPos = mazeGridBehaviour.GridToWorld(waterTile.x, waterTile.y);
-                Gizmos.DrawLine(transform.position, waterWorldPos);
+                Gizmos.DrawLine(transform.position, waterPos);
 
-                // Draw small sphere at linked tile
-                Gizmos.DrawWireSphere(waterWorldPos, 0.2f);
+                // Draw small sphere at linked position
+                Gizmos.DrawWireSphere(waterPos, 0.2f);
             }
+
+            // Draw adjacency radius
+            Gizmos.color = new Color(0f, 1f, 0f, 0.15f);
+            Gizmos.DrawWireSphere(transform.position, adjacencyDistance);
         }
 
         private void OnDrawGizmosSelected()
         {
-            if (!debugDrawLinks || linkedWaterTiles == null || mazeGridBehaviour == null)
+            if (!debugDrawLinks || linkedWaterPositions == null)
             {
                 return;
             }
 
             // Draw brighter when selected
             Gizmos.color = new Color(0f, 1f, 0f, 0.6f);
-            foreach (var waterTile in linkedWaterTiles)
+            foreach (var waterPos in linkedWaterPositions)
             {
-                Vector3 waterWorldPos = mazeGridBehaviour.GridToWorld(waterTile.x, waterTile.y);
-                Gizmos.DrawLine(transform.position, waterWorldPos);
+                Gizmos.DrawLine(transform.position, waterPos);
 
-                // Draw sphere at linked tile
-                Gizmos.DrawSphere(waterWorldPos, 0.15f);
+                // Draw sphere at linked position
+                Gizmos.DrawSphere(waterPos, 0.15f);
             }
 
             // Draw this Puka's position
             Gizmos.color = Color.green;
             Gizmos.DrawWireSphere(transform.position, 0.3f);
+
+            // Draw adjacency radius
+            Gizmos.color = new Color(0f, 1f, 0f, 0.3f);
+            Gizmos.DrawWireSphere(transform.position, adjacencyDistance);
         }
 
         #endregion

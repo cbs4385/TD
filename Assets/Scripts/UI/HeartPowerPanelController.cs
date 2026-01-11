@@ -959,7 +959,7 @@ namespace FaeMaze.UI
         /// </summary>
         private Vector3 GetMouseWorldPosition()
         {
-            if (mainCamera == null || heartPowerManager == null)
+            if (mainCamera == null)
             {
                 return Vector3.zero;
             }
@@ -971,18 +971,6 @@ namespace FaeMaze.UI
             // For orthographic camera, we need to match the camera's z-plane
             Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, mainCamera.nearClipPlane));
             mouseWorldPos.z = 0; // Assuming 2D game on Z=0 plane
-
-
-            // Validate the position is on the grid
-            if (heartPowerManager.MazeGrid != null)
-            {
-                if (!heartPowerManager.MazeGrid.WorldToGrid(mouseWorldPos, out int gx, out int gy))
-                {
-                    // Invalid position - use Heart position as fallback
-                    Vector2Int heartPos = heartPowerManager.MazeGrid.HeartGridPos;
-                    mouseWorldPos = heartPowerManager.MazeGrid.GridToWorld(heartPos.x, heartPos.y);
-                }
-            }
 
             return mouseWorldPos;
         }

@@ -8,6 +8,7 @@ namespace FaeMaze.Visitors
     /// Wary Wayfarer archetype - cautious and resistant to distraction,
     /// but highly prone to fight-or-flight when threatened.
     /// Repaths to nearest exit when frightened.
+    /// Uses world-space navigation for all pathfinding.
     /// </summary>
     public class WaryWayfarerVisitorController : VisitorControllerBase
     {
@@ -22,9 +23,9 @@ namespace FaeMaze.Visitors
         [Tooltip("Draw misstep paths in scene view for debugging")]
         private bool debugMisstepGizmos;
 
-        // Misstep tracking
+        // Misstep tracking - using world positions
         private bool isOnMisstepPath;
-        private HashSet<Vector2Int> walkedTiles;
+        private HashSet<Vector3> walkedPositions;
         private int misstepSegmentStartIndex;
 
         #endregion
@@ -48,7 +49,7 @@ namespace FaeMaze.Visitors
         protected override void Awake()
         {
             base.Awake();
-            walkedTiles = new HashSet<Vector2Int>();
+            walkedPositions = new HashSet<Vector3>();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
         }
@@ -93,14 +94,14 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Detour Behavior - Misstep with Archetype Awareness
+        #region Detour Behavior - World-Space Navigation
 
         /// <summary>
         /// Resets misstep state when starting a new path or becoming fascinated.
         /// </summary>
         protected override void ResetDetourState()
         {
-            walkedTiles.Clear();
+            walkedPositions.Clear();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
             lostSegmentActive = false;
@@ -110,20 +111,12 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Handles misstep decision at waypoint using archetype-specific chance.
         /// Wary Wayfarers have LOW misstep chance from config.
-        /// Only recalculates when state changes or at decision points (nodes/branches).
+        /// In world-space mode, delegates to base class navigation.
         /// </summary>
         protected override void HandleDetourAtWaypoint()
         {
             if (mazeGridBehaviour == null || gameController == null)
                 return;
-
-            if (path == null || currentPathIndex >= path.Count)
-            {
-                RecalculatePath();
-                return;
-            }
-
-            Vector2Int currentPos = path[currentPathIndex];
 
             // Check if state has changed since last waypoint
             bool stateChanged = (state != previousState);
@@ -135,205 +128,44 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Check if we should attempt a state-specific detour
-            if (ShouldAttemptDetour(currentPos))
+            // In world-space mode, misstep behavior is simplified
+            // Use archetype-specific misstep chance (very low for Wary Wayfarers)
+            if (misstepEnabled && !isOnMisstepPath)
             {
-                HandleStateSpecificDetour(currentPos);
-                return;
+                float misstepChance = GetConfusionChance();
+                bool shouldMisstep = Random.value <= misstepChance;
+
+                if (shouldMisstep && worldPath != null && worldPathIndex < worldPath.Count)
+                {
+                    // Mark current position as walked
+                    walkedPositions.Add(transform.position);
+                    isOnMisstepPath = true;
+                    misstepSegmentStartIndex = worldPathIndex;
+
+                    // Recalculate path - base class will handle world-space navigation
+                    RecalculatePath();
+                    return;
+                }
             }
 
-            // Check if at a node (decision point marked 'N' or 'H')
-            bool atNode = IsAtNode(currentPos);
-
-            // If misstep is disabled or we're not at a node, just continue following the path
-            if (!misstepEnabled || !atNode)
-            {
-                currentPathIndex++;
-                if (currentPathIndex >= path.Count)
-                    OnPathCompleted();
-                return;
-            }
-
-            // At a node - track as walked and check for misstep behavior
-            walkedTiles.Add(currentPos);
-
-            // Get all unwalked adjacent tiles
-            List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
-
-            // Check for dead end (no unwalked neighbors) - recalculate
-            if (unwalkedNeighbors.Count == 0)
-            {
-                isOnMisstepPath = false;
-                LogVisitorPath($"at node {currentPos} with dead end, recalculating path");
-                RecalculatePath();
-                return;
-            }
-
-            // If on misstep path and reached a branch, recalculate to destination
+            // If on misstep path and at a branch point, exit misstep
             if (isOnMisstepPath)
             {
-                if (unwalkedNeighbors.Count >= 2)
-                {
-                    // Reached a new branch - exit misstep path
-                    isOnMisstepPath = false;
-                    LogVisitorPath($"at node {currentPos}, exiting misstep path, recalculating");
-                    RecalculatePath();
-                }
-                else
-                {
-                    // Continue on misstep path (corridor)
-                    currentPathIndex++;
-                    if (currentPathIndex >= path.Count)
-                    {
-                        // Reached end of misstep path unexpectedly - recalculate
-                        isOnMisstepPath = false;
-                        RecalculatePath();
-                    }
-                }
+                isOnMisstepPath = false;
+                LogVisitorPath($"exiting misstep path, recalculating");
+                RecalculatePath();
                 return;
             }
 
-            // Not a branch if only 1 unwalked neighbor - just continue
-            if (unwalkedNeighbors.Count == 1)
+            // Continue along path
+            if (worldPath != null && worldPathIndex < worldPath.Count)
             {
-                currentPathIndex++;
-                if (currentPathIndex >= path.Count)
+                worldPathIndex++;
+                if (worldPathIndex >= worldPath.Count)
+                {
                     OnPathCompleted();
-                return;
-            }
-
-            // At a branch (2+ unwalked neighbors) - get optimal next step via A*
-            Vector2Int? optimalNext = GetOptimalNextStep(currentPos);
-            if (!optimalNext.HasValue)
-            {
-                LogVisitorPath($"at node {currentPos}, no optimal path found, recalculating");
-                RecalculatePath();
-                return;
-            }
-
-            // Use archetype-specific confusion/misstep chance (very low for Wary Wayfarers)
-            float misstepChance = GetConfusionChance();
-            bool shouldMisstep = Random.value <= misstepChance;
-
-            if (!shouldMisstep)
-            {
-                // Take optimal path - recalculate to get fresh path
-                LogVisitorPath($"at node {currentPos}, taking optimal path, recalculating");
-                RecalculatePath();
-                return;
-            }
-
-            // Take a misstep - choose a non-optimal branch
-            List<Vector2Int> misstepCandidates = new List<Vector2Int>(unwalkedNeighbors);
-            misstepCandidates.Remove(optimalNext.Value);
-
-            if (misstepCandidates.Count == 0)
-            {
-                // No wrong choices available - take optimal
-                LogVisitorPath($"at node {currentPos}, no misstep options, taking optimal path");
-                RecalculatePath();
-                return;
-            }
-
-            Vector2Int chosenMisstep = misstepCandidates[Random.Range(0, misstepCandidates.Count)];
-
-            // Build misstep path
-            List<Vector2Int> misstepPath = BuildMisstepPath(currentPos, chosenMisstep);
-
-            if (misstepPath.Count == 0)
-            {
-                RecalculatePath();
-                return;
-            }
-
-            // Replace current path with misstep path
-            LogVisitorPath($"at node {currentPos}, taking misstep toward {chosenMisstep}");
-            path = misstepPath;
-            currentPathIndex = 0;
-            isOnMisstepPath = true;
-            misstepSegmentStartIndex = 0;
-        }
-
-        /// <summary>
-        /// Gets the optimal next step from current position using A*.
-        /// Returns null if path cannot be calculated.
-        /// </summary>
-        private Vector2Int? GetOptimalNextStep(Vector2Int currentPos)
-        {
-            List<MazeGrid.MazeNode> optimalPath = new List<MazeGrid.MazeNode>();
-            // Use state-based attraction multiplier for optimal path calculation
-            float attractionMultiplier = GetAttractionMultiplier();
-            if (gameController.TryFindPath(currentPos, originalDestination, optimalPath, attractionMultiplier) && optimalPath.Count > 1)
-            {
-                return new Vector2Int(optimalPath[1].x, optimalPath[1].y);
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Builds path following mistaken direction until reaching next branch.
-        /// </summary>
-        private List<Vector2Int> BuildMisstepPath(Vector2Int startPos, Vector2Int firstStep)
-        {
-            List<Vector2Int> misstepPath = new List<Vector2Int>();
-            HashSet<Vector2Int> misstepPathSet = new HashSet<Vector2Int>();
-
-            Vector2Int previousPos = startPos;
-            Vector2Int currentPos = firstStep;
-            Vector2Int currentDirection = firstStep - startPos;
-
-            misstepPath.Add(startPos);
-            misstepPath.Add(firstStep);
-            misstepPathSet.Add(startPos);
-            misstepPathSet.Add(firstStep);
-
-            int maxIterations = 100;
-            int iterations = 0;
-
-            while (iterations < maxIterations)
-            {
-                List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos, misstepPathSet);
-
-                // Reached a dead end or another branch
-                if (unwalkedNeighbors.Count == 0 || unwalkedNeighbors.Count >= 2)
-                {
-                    break;
-                }
-
-                // Continue forward (only one unwalked neighbor = corridor)
-                Vector2Int nextPos = unwalkedNeighbors[0];
-                misstepPath.Add(nextPos);
-                misstepPathSet.Add(nextPos);
-
-                currentDirection = nextPos - currentPos;
-                previousPos = currentPos;
-                currentPos = nextPos;
-                iterations++;
-            }
-
-            return misstepPath;
-        }
-
-        /// <summary>
-        /// Gets unwalked neighbors excluding those in the given set.
-        /// </summary>
-        private List<Vector2Int> GetUnwalkedNeighbors(Vector2Int position, HashSet<Vector2Int> excludeSet = null)
-        {
-            List<Vector2Int> neighbors = GetWalkableNeighbors(position);
-            List<Vector2Int> unwalked = new List<Vector2Int>();
-
-            foreach (var neighbor in neighbors)
-            {
-                if (!walkedTiles.Contains(neighbor))
-                {
-                    if (excludeSet == null || !excludeSet.Contains(neighbor))
-                    {
-                        unwalked.Add(neighbor);
-                    }
                 }
             }
-
-            return unwalked;
         }
 
         #endregion
@@ -342,13 +174,20 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Wary Wayfarers repath to nearest exit when frightened.
+        /// Uses world-space coordinates.
         /// </summary>
         protected override Vector2Int GetDestinationForCurrentState(Vector2Int currentPos)
         {
             // If frightened and config says to prefer exit, find nearest exit
             if (state == VisitorState.Frightened && ShouldFrightenedPreferExit())
             {
-                return FindNearestExit(currentPos);
+                Vector3 nearestExit = FindNearestExitWorldSpace();
+                if (nearestExit != Vector3.zero)
+                {
+                    // Set world destination directly
+                    SetWorldDestination(nearestExit);
+                }
+                return originalDestination;
             }
 
             // Otherwise use base behavior
@@ -356,35 +195,42 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Finds the nearest exit spawn point from current position.
-        /// Returns originalDestination if no exits found.
+        /// Finds the nearest exit spawn point from current position in world space.
+        /// Returns Vector3.zero if no exits found.
         /// </summary>
-        private Vector2Int FindNearestExit(Vector2Int currentPos)
+        private Vector3 FindNearestExitWorldSpace()
         {
-            // Get all spawn points from maze grid
             if (mazeGridBehaviour == null)
-                return originalDestination;
+                return Vector3.zero;
 
-            var allSpawns = mazeGridBehaviour.GetAllSpawnPoints();
-            if (allSpawns == null || allSpawns.Count < 2)
-                return originalDestination; // Need at least entrance and one exit
+            // Get spawn points from ForestMapState if available
+            var forestState = mazeGridBehaviour.ForestMapState;
+            if (forestState == null || forestState.Nodes == null)
+                return Vector3.zero;
 
-            Vector2Int nearestExit = originalDestination;
+            Vector3 nearestExit = Vector3.zero;
             float shortestDist = float.MaxValue;
+            Vector3 currentPos = transform.position;
 
-            // Find nearest spawn point that isn't the original destination (entrance)
-            foreach (var spawn in allSpawns.Values)
+            // Find portal nodes (they serve as entry/exit points)
+            foreach (var node in forestState.Nodes)
             {
-                // Skip the entrance (original destination)
-                if (spawn == originalDestination)
-                    continue;
-
-                // Calculate Manhattan distance
-                float dist = Mathf.Abs(spawn.x - currentPos.x) + Mathf.Abs(spawn.y - currentPos.y);
-                if (dist < shortestDist)
+                // Check if this is a portal/spawn node
+                if (node.IsPortal)
                 {
-                    shortestDist = dist;
-                    nearestExit = spawn;
+                    Vector3 nodeWorldPos = new Vector3(node.Position.x, node.Position.y, 0);
+
+                    // Skip if this is too close to our original destination
+                    float distToOriginal = Vector3.Distance(nodeWorldPos, worldDestination);
+                    if (distToOriginal < 1f)
+                        continue;
+
+                    float dist = Vector3.Distance(currentPos, nodeWorldPos);
+                    if (dist < shortestDist)
+                    {
+                        shortestDist = dist;
+                        nearestExit = nodeWorldPos;
+                    }
                 }
             }
 
@@ -399,18 +245,15 @@ namespace FaeMaze.Visitors
         {
             base.OnDrawGizmos();
 
-            if (path != null && path.Count > 0 && mazeGridBehaviour != null)
+            // Draw misstep path in world space
+            if (debugMisstepGizmos && worldPath != null && worldPath.Count > 0 && isOnMisstepPath && misstepSegmentStartIndex >= 0)
             {
-                if (debugMisstepGizmos && isOnMisstepPath && misstepSegmentStartIndex >= 0)
-                {
-                    Gizmos.color = Color.yellow;
+                Gizmos.color = Color.yellow;
 
-                    for (int i = misstepSegmentStartIndex; i < path.Count - 1; i++)
-                    {
-                        Vector3 start = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
-                        Vector3 end = mazeGridBehaviour.GridToWorld(path[i + 1].x, path[i + 1].y);
-                        Gizmos.DrawLine(start, end);
-                    }
+                int endIndex = Mathf.Min(worldPath.Count - 1, misstepSegmentStartIndex + 10);
+                for (int i = misstepSegmentStartIndex; i < endIndex; i++)
+                {
+                    Gizmos.DrawLine(worldPath[i], worldPath[i + 1]);
                 }
             }
         }

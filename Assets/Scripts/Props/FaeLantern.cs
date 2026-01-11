@@ -5,7 +5,7 @@ using FaeMaze.Systems;
 namespace FaeMaze.Props
 {
     /// <summary>
-    /// FaeLantern that fascinates visitors using flood-fill area of effect.
+    /// FaeLantern that fascinates visitors using world-space area of effect.
     /// Visitors entering the influence area abandon their path, move to the lantern,
     /// stand still for 2 seconds, then wander randomly at intersections.
     /// </summary>
@@ -24,12 +24,8 @@ namespace FaeMaze.Props
 
         [Header("Influence Settings")]
         [SerializeField]
-        [Tooltip("Radius of influence in grid tiles (Manhattan distance)")]
-        private int influenceRadius = 6;
-
-        [SerializeField]
-        [Tooltip("Maximum flood-fill steps for influence area calculation")]
-        private int maxFloodFillSteps = 24;
+        [Tooltip("Radius of influence in world units")]
+        private float influenceRadius = 6f;
 
         [SerializeField]
         [Tooltip("Duration in seconds that visitor stands fascinated at the lantern")]
@@ -44,13 +40,9 @@ namespace FaeMaze.Props
         [Tooltip("Cooldown in seconds before a visitor can be fascinated again")]
         private float cooldownSec = 5.0f;
 
-        [SerializeField]
-        [Tooltip("Attraction delta applied to grid nodes within influence area")]
-        private float attractionDelta = 2.0f;
-
         [Header("Debug")]
         [SerializeField]
-        [Tooltip("Draw the flood-fill influence area in Scene view")]
+        [Tooltip("Draw the influence area in Scene view")]
         private bool debugDrawInfluence = true;
 
         [Header("Visual Settings")]
@@ -75,8 +67,6 @@ namespace FaeMaze.Props
         #region Private Fields
 
         private MazeGridBehaviour _gridBehaviour;
-        private Vector2Int _gridPosition;
-        private HashSet<Vector2Int> _influenceCells;
         private SpriteRenderer _spriteRenderer;
         private Animator _animator;
         private Vector3 _initialScale;
@@ -87,8 +77,8 @@ namespace FaeMaze.Props
 
         #region Properties
 
-        /// <summary>Gets the grid position of this lantern</summary>
-        public Vector2Int GridPosition => _gridPosition;
+        /// <summary>Gets the world position of this lantern</summary>
+        public Vector3 WorldPosition => transform.position;
 
         /// <summary>Gets the fascination duration in seconds</summary>
         public float FascinationDuration => fascinationDuration;
@@ -98,6 +88,9 @@ namespace FaeMaze.Props
 
         /// <summary>Gets the cooldown in seconds before re-fascination</summary>
         public float CooldownSec => cooldownSec;
+
+        /// <summary>Gets the influence radius in world units</summary>
+        public float InfluenceRadius => influenceRadius;
 
         #endregion
 
@@ -122,15 +115,6 @@ namespace FaeMaze.Props
             SetIdleDirection();
         }
 
-        private void Start()
-        {
-            // Wait for grid to be ready and calculate influence area
-            if (_gridBehaviour != null && _gridBehaviour.Grid != null)
-            {
-                CalculateInfluenceArea();
-            }
-        }
-
         private void OnEnable()
         {
             _activeLanterns.Add(this);
@@ -148,51 +132,17 @@ namespace FaeMaze.Props
 
         #endregion
 
-        #region Influence Calculation
+        #region Influence Checks
 
         /// <summary>
-        /// Calculates the flood-fill influence area for this lantern.
-        /// Only tiles reachable via walkable paths are included.
-        /// Applies attraction delta to all influenced nodes.
+        /// Checks if a world position is within this lantern's influence area.
         /// </summary>
-        private void CalculateInfluenceArea()
+        /// <param name="worldPos">World position to check</param>
+        /// <returns>True if the position is within influence radius</returns>
+        public bool IsPositionInInfluence(Vector3 worldPos)
         {
-            // Convert world position to grid coordinates
-            if (!_gridBehaviour.WorldToGrid(transform.position, out int x, out int y))
-            {
-                return;
-            }
-
-            _gridPosition = new Vector2Int(x, y);
-
-            // Use flood-fill to get reachable tiles (stops when either radius or step limit is reached)
-            _influenceCells = _gridBehaviour.Grid.FloodFillReachable(x, y, influenceRadius, maxFloodFillSteps);
-
-            // Apply attraction delta to all influenced cells
-            foreach (var cell in _influenceCells)
-            {
-                _gridBehaviour.Grid.AddAttraction(cell.x, cell.y, attractionDelta);
-            }
-
-        }
-
-        /// <summary>
-        /// Checks if a grid cell is within this lantern's influence area.
-        /// </summary>
-        /// <param name="cell">Grid position to check</param>
-        /// <returns>True if the cell is within influence</returns>
-        public bool IsCellInInfluence(Vector2Int cell)
-        {
-            return _influenceCells != null && _influenceCells.Contains(cell);
-        }
-
-        /// <summary>
-        /// Gets the cached flood-filled influence area for visitor checks.
-        /// </summary>
-        /// <returns>Read-only collection of influenced grid cells</returns>
-        public IReadOnlyCollection<Vector2Int> GetInfluenceArea()
-        {
-            return _influenceCells ?? new HashSet<Vector2Int>();
+            float distance = Vector3.Distance(transform.position, worldPos);
+            return distance <= influenceRadius;
         }
 
         #endregion
@@ -206,7 +156,7 @@ namespace FaeMaze.Props
         /// </summary>
         private void UpdateDirectionToClosestVisitor()
         {
-            if (_animator == null || _influenceCells == null || _gridBehaviour == null)
+            if (_animator == null)
             {
                 return;
             }
@@ -224,35 +174,19 @@ namespace FaeMaze.Props
                 if (visitor.IsFascinated)
                     continue;
 
-                // Get visitor's grid position
-                if (_gridBehaviour.WorldToGrid(visitor.transform.position, out int visitorX, out int visitorY))
+                // Check if visitor is in influence area using world-space distance
+                float distance = Vector3.Distance(transform.position, visitor.transform.position);
+                if (distance <= influenceRadius && distance < closestDistance)
                 {
-                    Vector2Int visitorGridPos = new Vector2Int(visitorX, visitorY);
-
-                    // Check if visitor is in influence area
-                    if (IsCellInInfluence(visitorGridPos))
-                    {
-                        // Calculate distance to lantern
-                        float distance = Vector2Int.Distance(visitorGridPos, _gridPosition);
-
-                        if (distance < closestDistance)
-                        {
-                            closestDistance = distance;
-                            closestVisitor = visitor;
-                        }
-                    }
+                    closestDistance = distance;
+                    closestVisitor = visitor;
                 }
             }
 
             // Update direction based on closest visitor
             if (closestVisitor != null)
             {
-                // Get visitor's grid position
-                if (_gridBehaviour.WorldToGrid(closestVisitor.transform.position, out int visitorX, out int visitorY))
-                {
-                    Vector2Int visitorGridPos = new Vector2Int(visitorX, visitorY);
-                    SetInteractionDirection(visitorGridPos);
-                }
+                SetInteractionDirection(closestVisitor.transform.position);
             }
             else
             {
@@ -264,31 +198,25 @@ namespace FaeMaze.Props
         /// <summary>
         /// Sets the animator Direction parameter based on where the visitor is relative to the lantern.
         /// </summary>
-        /// <param name="visitorGridPosition">Grid position of the interacting visitor.</param>
-        public void SetInteractionDirection(Vector2Int visitorGridPosition)
+        /// <param name="visitorWorldPosition">World position of the interacting visitor.</param>
+        public void SetInteractionDirection(Vector3 visitorWorldPosition)
         {
             if (_animator == null)
             {
                 return;
             }
 
+            Vector3 delta = visitorWorldPosition - transform.position;
             int directionValue = 0; // Idle by default
 
-            if (visitorGridPosition.y > _gridPosition.y)
+            // Determine dominant axis
+            if (Mathf.Abs(delta.y) > Mathf.Abs(delta.x))
             {
-                directionValue = 1; // Up (-y direction)
+                directionValue = delta.y > 0 ? 1 : 2; // Up : Down
             }
-            else if (visitorGridPosition.y < _gridPosition.y)
+            else if (Mathf.Abs(delta.x) > 0.01f)
             {
-                directionValue = 2; // Down (+y direction)
-            }
-            else if (visitorGridPosition.x < _gridPosition.x)
-            {
-                directionValue = 3; // Left (-x direction)
-            }
-            else if (visitorGridPosition.x > _gridPosition.x)
-            {
-                directionValue = 4; // Right (+x direction)
+                directionValue = delta.x < 0 ? 3 : 4; // Left : Right
             }
 
             _animator.SetInteger(DirectionParameter, directionValue);
@@ -360,46 +288,48 @@ namespace FaeMaze.Props
 
         private void OnDrawGizmos()
         {
-            if (!debugDrawInfluence || _influenceCells == null || _gridBehaviour == null)
+            if (!debugDrawInfluence)
             {
                 return;
             }
 
-            // Draw influence area
+            // Draw influence area as a world-space circle
             Gizmos.color = new Color(1f, 0.9f, 0.3f, 0.2f); // Semi-transparent golden
-            foreach (var cell in _influenceCells)
-            {
-                Vector3 worldPos = _gridBehaviour.GridToWorld(cell.x, cell.y);
-                Gizmos.DrawCube(worldPos, new Vector3(0.9f, 0.9f, 0.1f));
-            }
+            DrawCircleGizmo(transform.position, influenceRadius, 32);
 
             // Draw lantern center
-            if (_gridPosition != Vector2Int.zero)
-            {
-                Gizmos.color = new Color(1f, 0.7f, 0f, 0.8f);
-                Vector3 centerWorld = _gridBehaviour.GridToWorld(_gridPosition.x, _gridPosition.y);
-                Gizmos.DrawWireSphere(centerWorld, 0.4f);
-            }
+            Gizmos.color = new Color(1f, 0.7f, 0f, 0.8f);
+            Gizmos.DrawWireSphere(transform.position, 0.4f);
         }
 
         private void OnDrawGizmosSelected()
         {
-            if (!debugDrawInfluence || _influenceCells == null || _gridBehaviour == null)
+            if (!debugDrawInfluence)
             {
                 return;
             }
 
             // Draw brighter when selected
             Gizmos.color = new Color(1f, 0.9f, 0.3f, 0.4f);
-            foreach (var cell in _influenceCells)
-            {
-                Vector3 worldPos = _gridBehaviour.GridToWorld(cell.x, cell.y);
-                Gizmos.DrawCube(worldPos, new Vector3(0.95f, 0.95f, 0.1f));
-            }
+            DrawCircleGizmo(transform.position, influenceRadius, 32);
 
             // Draw influence radius as wire sphere
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(transform.position, influenceRadius);
+        }
+
+        private void DrawCircleGizmo(Vector3 center, float radius, int segments)
+        {
+            float angleStep = 360f / segments;
+            Vector3 prevPoint = center + new Vector3(radius, 0, 0);
+
+            for (int i = 1; i <= segments; i++)
+            {
+                float angle = i * angleStep * Mathf.Deg2Rad;
+                Vector3 newPoint = center + new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0);
+                Gizmos.DrawLine(prevPoint, newPoint);
+                prevPoint = newPoint;
+            }
         }
 
         #endregion

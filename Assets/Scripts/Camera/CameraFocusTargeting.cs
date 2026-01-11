@@ -48,7 +48,6 @@ namespace FaeMaze.Cameras
 
         private GameObject focusHighlightInstance;
         private MeshRenderer focusHighlightRenderer;
-        private Vector2Int? currentFocusedTile = null;
         private Vector3? currentFocusedWorldPosition = null;
         private bool isHighlightVisible = false;
 
@@ -57,19 +56,14 @@ namespace FaeMaze.Cameras
         #region Properties
 
         /// <summary>
-        /// Gets the currently focused tile in grid coordinates (null if none).
-        /// </summary>
-        public Vector2Int? FocusedTile => currentFocusedTile;
-
-        /// <summary>
         /// Gets the currently focused world position (null if none).
         /// </summary>
         public Vector3? FocusedWorldPosition => currentFocusedWorldPosition;
 
         /// <summary>
-        /// Gets whether a tile is currently focused.
+        /// Gets whether a position is currently focused.
         /// </summary>
-        public bool HasFocusedTile => currentFocusedTile.HasValue;
+        public bool HasFocusedPosition => currentFocusedWorldPosition.HasValue;
 
         #endregion
 
@@ -118,13 +112,12 @@ namespace FaeMaze.Cameras
         #region Focus Detection
 
         /// <summary>
-        /// Updates the currently focused tile by raycasting from screen center.
+        /// Updates the currently focused position by raycasting from screen center.
         /// </summary>
         private void UpdateFocusedTile()
         {
             if (mainCamera == null)
             {
-                currentFocusedTile = null;
                 currentFocusedWorldPosition = null;
                 return;
             }
@@ -135,24 +128,19 @@ namespace FaeMaze.Cameras
             // Cast ray from screen center
             Ray ray = mainCamera.ScreenPointToRay(screenCenter);
 
-            // Raycast to find tile
+            // Raycast to find position on maze
             if (Physics.Raycast(ray, out RaycastHit hit, maxRaycastDistance, tileLayerMask))
             {
-                // Hit something - check if it's on the maze grid
+                // Hit something - use world position directly
                 Vector3 hitWorldPos = hit.point;
                 hitWorldPos.z = 0f; // Ensure Z=0 for 2D maze plane
 
-                if (mazeGrid != null && mazeGrid.WorldToGrid(hitWorldPos, out int gridX, out int gridY))
-                {
-                    currentFocusedTile = new Vector2Int(gridX, gridY);
-                    currentFocusedWorldPosition = mazeGrid.GridToWorld(gridX, gridY);
-                    isHighlightVisible = true;
-                    return;
-                }
+                currentFocusedWorldPosition = hitWorldPos;
+                isHighlightVisible = true;
+                return;
             }
 
-            // No valid tile found
-            currentFocusedTile = null;
+            // No valid position found
             currentFocusedWorldPosition = null;
             isHighlightVisible = false;
         }
@@ -221,18 +209,16 @@ namespace FaeMaze.Cameras
         }
 
         /// <summary>
-        /// Gets the focused tile and world position. Returns true if a tile is focused.
+        /// Gets the focused world position. Returns true if a position is focused.
         /// </summary>
-        public bool TryGetFocusedTile(out Vector2Int gridPos, out Vector3 worldPos)
+        public bool TryGetFocusedPosition(out Vector3 worldPos)
         {
-            if (currentFocusedTile.HasValue && currentFocusedWorldPosition.HasValue)
+            if (currentFocusedWorldPosition.HasValue)
             {
-                gridPos = currentFocusedTile.Value;
                 worldPos = currentFocusedWorldPosition.Value;
                 return true;
             }
 
-            gridPos = Vector2Int.zero;
             worldPos = Vector3.zero;
             return false;
         }

@@ -282,15 +282,16 @@ namespace FaeMaze.Cameras
                 return false;
             }
 
-            MazeGrid grid = mazeGridBehaviour.Grid;
-            if (grid == null)
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (mazeData == null)
             {
                 return false;
             }
 
-            origin = mazeGridBehaviour.GridToWorld(0, 0);
-            width = grid.Width;
-            height = grid.Height;
+            Bounds bounds = mazeData.Bounds;
+            origin = bounds.min;
+            width = bounds.size.x;
+            height = bounds.size.y;
             return true;
         }
 

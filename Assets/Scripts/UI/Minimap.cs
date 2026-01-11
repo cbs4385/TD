@@ -410,75 +410,9 @@ namespace FaeMaze.UI
 
         private void UpdatePathTileDots()
         {
-            if (mazeGridBehaviour.Grid == null)
-            {
-                return;
-            }
-
-            // Get focal point grid position
-            Vector3 focalWorldPos = focalPoint.position;
-            int focalX, focalY;
-            if (!mazeGridBehaviour.WorldToGrid(focalWorldPos, out focalX, out focalY))
-            {
-                return;
-            }
-
-            // Calculate tile range to check (based on view radius)
-            int radiusInt = Mathf.CeilToInt(viewRadiusTiles);
-            int minX = focalX - radiusInt;
-            int maxX = focalX + radiusInt;
-            int minY = focalY - radiusInt;
-            int maxY = focalY + radiusInt;
-
-            // Collect all walkable tiles within view radius
-            List<Vector2Int> visiblePathTiles = new List<Vector2Int>();
-
-            for (int y = minY; y <= maxY; y++)
-            {
-                for (int x = minX; x <= maxX; x++)
-                {
-                    // Check if in grid bounds
-                    if (x < 0 || x >= mazeGridBehaviour.Grid.Width ||
-                        y < 0 || y >= mazeGridBehaviour.Grid.Height)
-                    {
-                        continue;
-                    }
-
-                    // Check if tile is walkable
-                    var node = mazeGridBehaviour.Grid.GetNode(x, y);
-                    if (node != null && node.walkable)
-                    {
-                        Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(x, y);
-
-                        // Check if within view radius
-                        if (IsInViewRadius(tileWorldPos))
-                        {
-                            visiblePathTiles.Add(new Vector2Int(x, y));
-                        }
-                    }
-                }
-            }
-
-            // Ensure we have enough dots
-            while (pathTileDots.Count < visiblePathTiles.Count)
-            {
-                pathTileDots.Add(CreatePathTileDot());
-            }
-
-            // Update each dot
-            for (int i = 0; i < visiblePathTiles.Count; i++)
-            {
-                Vector2Int gridPos = visiblePathTiles[i];
-                Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(gridPos.x, gridPos.y);
-                Vector2 minimapPos = WorldToMinimapPosition(tileWorldPos);
-
-                Image dot = pathTileDots[i];
-                dot.gameObject.SetActive(true);
-                dot.rectTransform.anchoredPosition = minimapPos;
-            }
-
-            // Hide unused dots
-            for (int i = visiblePathTiles.Count; i < pathTileDots.Count; i++)
+            // Path tile visualization requires grid access which is not available in world-space mode
+            // Hide all path tile dots
+            for (int i = 0; i < pathTileDots.Count; i++)
             {
                 pathTileDots[i].gameObject.SetActive(false);
             }
@@ -497,7 +431,7 @@ namespace FaeMaze.UI
 
         private Vector2 WorldToMinimapPosition(Vector3 worldPos)
         {
-            if (focalPoint == null || mazeGridBehaviour == null || minimapPanel == null)
+            if (focalPoint == null || minimapPanel == null)
             {
                 return Vector2.zero;
             }
@@ -506,24 +440,22 @@ namespace FaeMaze.UI
             Vector3 focalWorldPos = focalPoint.position;
             Vector3 relativePos = worldPos - focalWorldPos;
 
-            // Convert to tiles (only X and Y matter for top-down view)
-            float tileSize = mazeGridBehaviour.TileSize;
-            float relativeX = relativePos.x / tileSize;
-            float relativeY = relativePos.y / tileSize;
+            // Use world units directly - viewRadiusTiles represents world units now
+            float viewRadiusWorld = viewRadiusTiles;
 
             // Convert to minimap pixels
             float mapSize = minimapPanel.rect.width;
-            float pixelsPerTile = mapSize / (viewRadiusTiles * 2f);
+            float pixelsPerUnit = mapSize / (viewRadiusWorld * 2f);
 
-            float minimapX = relativeX * pixelsPerTile;
-            float minimapY = relativeY * pixelsPerTile;
+            float minimapX = relativePos.x * pixelsPerUnit;
+            float minimapY = relativePos.y * pixelsPerUnit;
 
             return new Vector2(minimapX, minimapY);
         }
 
         private bool IsInViewRadius(Vector3 worldPos)
         {
-            if (focalPoint == null || mazeGridBehaviour == null)
+            if (focalPoint == null)
             {
                 return false;
             }
@@ -531,12 +463,10 @@ namespace FaeMaze.UI
             Vector3 focalWorldPos = focalPoint.position;
             Vector3 relativePos = worldPos - focalWorldPos;
 
-            float tileSize = mazeGridBehaviour.TileSize;
-            float distanceInTiles = Mathf.Sqrt(
-                (relativePos.x * relativePos.x + relativePos.y * relativePos.y) / (tileSize * tileSize)
-            );
+            // Calculate distance in world units
+            float distanceWorld = Mathf.Sqrt(relativePos.x * relativePos.x + relativePos.y * relativePos.y);
 
-            return distanceInTiles <= viewRadiusTiles;
+            return distanceWorld <= viewRadiusTiles;
         }
     }
 }

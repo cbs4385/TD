@@ -142,10 +142,12 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Determines whether a detour should be attempted based on confusion state.
+        /// World-space version - confusion is handled by base class navigation.
         /// </summary>
         protected override bool ShouldAttemptDetour(Vector2Int currentPos)
         {
-            // Check if we're in an active confusion segment
+            // In world-space mode, confusion segments are not tracked by grid position
+            // The base class handles world-space navigation
             if (confusionSegmentActive)
             {
                 // Still traversing confusion segment
@@ -174,14 +176,8 @@ namespace FaeMaze.Visitors
                     return false;
                 }
 
-                // Check if at intersection
-                if (!IsAtIntersection(currentPos))
-                {
-                    return false;
-                }
-
-                // Check if we're near the end of the path
-                if (path == null || currentPathIndex >= path.Count - 1)
+                // In world-space mode, use world path index for checking position
+                if (worldPath == null || worldPathIndex >= worldPath.Count - 1)
                 {
                     return false;
                 }
@@ -196,47 +192,16 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Handles confusion-specific detour logic.
+        /// World-space version - uses world coordinates.
         /// </summary>
         protected override void HandleStateSpecificDetour(Vector2Int currentPos)
         {
             // Handle Confused state detours
             if (state == VisitorState.Confused && isConfused && confusionEnabled)
             {
-                // Get next intended position
-                if (currentPathIndex + 1 >= path.Count)
-                {
-                    RecalculatePath();
-                    return;
-                }
-
-                Vector2Int nextPos = path[currentPathIndex + 1];
-                List<Vector2Int> walkableNeighbors = GetWalkableNeighbors(currentPos);
-
-                // Exclude previous tile
-                if (currentPathIndex > 0)
-                {
-                    walkableNeighbors.Remove(path[currentPathIndex - 1]);
-                }
-
-                // Get detour directions (non-forward directions)
-                List<Vector2Int> detourDirections = new List<Vector2Int>();
-                foreach (var neighbor in walkableNeighbors)
-                {
-                    if (neighbor != nextPos)
-                    {
-                        detourDirections.Add(neighbor);
-                    }
-                }
-
-                if (detourDirections.Count == 0)
-                {
-                    RecalculatePath();
-                    return;
-                }
-
-                // Pick random detour direction
-                Vector2Int detourStart = detourDirections[Random.Range(0, detourDirections.Count)];
-                BeginConfusionSegment(currentPos, detourStart);
+                // In world-space mode, trigger path recalculation
+                // The base class will handle building a new world path
+                RecalculatePath();
                 return;
             }
 
@@ -252,20 +217,15 @@ namespace FaeMaze.Visitors
         {
             base.OnDrawGizmos();
 
-            // Draw confusion segment
-            if (path != null && path.Count > 0 && mazeGridBehaviour != null)
+            // Draw confusion segment using world path
+            if (debugConfusionGizmos && worldPath != null && worldPath.Count > 0 && confusionSegmentEndIndex > 0)
             {
-                if (debugConfusionGizmos && confusionSegmentEndIndex > 0)
-                {
-                    Gizmos.color = Color.magenta;
-                    int lastConfusionIndex = Mathf.Min(confusionSegmentEndIndex, path.Count - 1);
+                Gizmos.color = Color.magenta;
+                int lastConfusionIndex = Mathf.Min(confusionSegmentEndIndex, worldPath.Count - 1);
 
-                    for (int i = 0; i < lastConfusionIndex; i++)
-                    {
-                        Vector3 start = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
-                        Vector3 end = mazeGridBehaviour.GridToWorld(path[i + 1].x, path[i + 1].y);
-                        Gizmos.DrawLine(start, end);
-                    }
+                for (int i = 0; i < lastConfusionIndex; i++)
+                {
+                    Gizmos.DrawLine(worldPath[i], worldPath[i + 1]);
                 }
             }
         }

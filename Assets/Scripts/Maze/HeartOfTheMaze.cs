@@ -12,17 +12,9 @@ namespace FaeMaze.Maze
     {
         #region Serialized Fields
 
-        [Header("Grid Position")]
+        [Header("Position Settings")]
         [SerializeField]
-        [Tooltip("X coordinate in the maze grid (auto-set from 'H' marker if autoPosition is true)")]
-        private int gridX;
-
-        [SerializeField]
-        [Tooltip("Y coordinate in the maze grid (auto-set from 'H' marker if autoPosition is true)")]
-        private int gridY;
-
-        [SerializeField]
-        [Tooltip("Automatically position heart from 'H' marker in maze file")]
+        [Tooltip("Automatically position heart from maze data")]
         private bool autoPosition = true;
 
         [Header("Essence Settings")]
@@ -55,19 +47,6 @@ namespace FaeMaze.Maze
         [SerializeField]
         [Tooltip("Base emission color for pulsing")]
         private Color emissionColor = new Color(1f, 0.2f, 0.2f, 1f);
-
-        [Header("Attraction Settings")]
-        [SerializeField]
-        [Tooltip("Radius of attraction influence in grid units")]
-        private float attractionRadius = 5f;
-
-        [SerializeField]
-        [Tooltip("Strength of attraction (higher = stronger pull)")]
-        private float attractionStrength = 2.0f;
-
-        [SerializeField]
-        [Tooltip("Enable attraction to draw visitors toward the heart")]
-        private bool enableAttraction = true;
 
         [Header("3D Lighting Settings")]
         [SerializeField]
@@ -124,9 +103,6 @@ namespace FaeMaze.Maze
 
         #region Properties
 
-        /// <summary>Gets the grid position of the heart</summary>
-        public Vector2Int GridPosition => new Vector2Int(gridX, gridY);
-
         /// <summary>Gets the essence value per visitor</summary>
         public int EssencePerVisitor => essencePerVisitor;
 
@@ -135,17 +111,7 @@ namespace FaeMaze.Maze
         #region Public Methods
 
         /// <summary>
-        /// Sets the grid position for the heart.
-        /// </summary>
-        /// <param name="pos">The grid position to set</param>
-        public void SetGridPosition(Vector2Int pos)
-        {
-            gridX = pos.x;
-            gridY = pos.y;
-        }
-
-        /// <summary>
-        /// Positions the heart from the 'H' marker in the maze file.
+        /// Positions the heart using the maze's world-space heart position.
         /// Can be called to reposition after maze regeneration.
         /// </summary>
         public void PositionFromMazeGrid()
@@ -157,17 +123,9 @@ namespace FaeMaze.Maze
                 return;
             }
 
-            // Get heart position from maze grid
-            Vector2Int heartPos = mazeGridBehaviour.HeartGridPos;
-
-            // Update grid position
-            gridX = heartPos.x;
-            gridY = heartPos.y;
-
-            // Convert to world position and update transform
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(heartPos.x, heartPos.y);
+            // Get heart position directly in world space
+            Vector3 worldPos = mazeGridBehaviour.HeartWorldPosition;
             transform.position = worldPos;
-
         }
 
         /// <summary>
@@ -225,13 +183,6 @@ namespace FaeMaze.Maze
             if (autoPosition)
             {
                 PositionFromMazeGrid();
-            }
-
-            // Apply attraction to draw visitors toward the heart
-            // (Done in Awake() to ensure attraction is applied before any Start() methods)
-            if (enableAttraction)
-            {
-                ApplyAttraction();
             }
         }
 
@@ -497,75 +448,6 @@ namespace FaeMaze.Maze
 
         #endregion
 
-        #region Attraction
-
-        /// <summary>
-        /// Applies attraction to nearby tiles on the maze grid.
-        /// Draws visitors toward the Heart of the Maze.
-        /// Can be called to reapply after maze regeneration.
-        /// </summary>
-        public void ApplyAttraction()
-        {
-            // Find the MazeGridBehaviour in the scene
-            var mazeGridBehaviour = FindFirstObjectByType<FaeMaze.Systems.MazeGridBehaviour>();
-            if (mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            if (mazeGridBehaviour.Grid == null)
-            {
-                return;
-            }
-
-            var grid = mazeGridBehaviour.Grid;
-
-            // Calculate grid radius
-            int gridRadius = Mathf.CeilToInt(attractionRadius);
-
-            int affectedCount = 0;
-            float totalAttractionApplied = 0f;
-
-            // Apply attraction to tiles within radius
-            for (int dx = -gridRadius; dx <= gridRadius; dx++)
-            {
-                for (int dy = -gridRadius; dy <= gridRadius; dy++)
-                {
-                    int targetX = gridX + dx;
-                    int targetY = gridY + dy;
-
-                    // Check bounds
-                    if (!grid.InBounds(targetX, targetY))
-                        continue;
-
-                    // Check if node is walkable
-                    var node = grid.GetNode(targetX, targetY);
-                    if (node == null || !node.walkable)
-                        continue;
-
-                    // Calculate distance
-                    float distance = Mathf.Sqrt(dx * dx + dy * dy);
-
-                    // Skip if outside radius
-                    if (distance > attractionRadius)
-                        continue;
-
-                    // Calculate attraction with falloff
-                    float falloff = Mathf.Clamp01(1f - (distance / attractionRadius));
-                    float effectiveAttraction = attractionStrength * falloff;
-
-                    // Apply attraction to grid
-                    grid.AddAttraction(targetX, targetY, effectiveAttraction);
-
-                    affectedCount++;
-                    totalAttractionApplied += effectiveAttraction;
-                }
-            }
-
-        }
-
-        #endregion
-
         #region Gizmos
 
         private void OnDrawGizmos()
@@ -578,27 +460,6 @@ namespace FaeMaze.Maze
             Gizmos.color = new Color(1f, 0f, 0f, 0.3f);
             float pulse = Mathf.PingPong(Time.time * 2f, 0.3f);
             Gizmos.DrawSphere(transform.position, 0.5f + pulse);
-
-            // Draw attraction radius if enabled
-            if (enableAttraction)
-            {
-                Gizmos.color = new Color(1f, 0.5f, 0.5f, 0.2f);
-                DrawCircleGizmo(transform.position, attractionRadius, 32);
-            }
-        }
-
-        private void DrawCircleGizmo(Vector3 center, float radius, int segments)
-        {
-            float angleStep = 360f / segments;
-            Vector3 prevPoint = center + new Vector3(radius, 0, 0);
-
-            for (int i = 1; i <= segments; i++)
-            {
-                float angle = i * angleStep * Mathf.Deg2Rad;
-                Vector3 newPoint = center + new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0);
-                Gizmos.DrawLine(prevPoint, newPoint);
-                prevPoint = newPoint;
-            }
         }
 
         #endregion

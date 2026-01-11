@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Audio;
@@ -39,7 +38,6 @@ namespace FaeMaze.DebugTools
 
         #region Private Fields
 
-        private MazeGridBehaviour mazeGridBehaviour;
         private int visitorSpawnCount = 0;
 
         #endregion
@@ -48,15 +46,6 @@ namespace FaeMaze.DebugTools
 
         private void Start()
         {
-            // Find the MazeGridBehaviour in the scene
-            mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-
-            if (mazeGridBehaviour == null)
-            {
-                enabled = false;
-                return;
-            }
-
             ValidateReferences();
         }
 
@@ -74,7 +63,7 @@ namespace FaeMaze.DebugTools
         #region Spawning
 
         /// <summary>
-        /// Spawns a visitor at the entrance with an A* path to the heart.
+        /// Spawns a visitor at the entrance position.
         /// </summary>
         public void SpawnVisitor()
         {
@@ -83,28 +72,8 @@ namespace FaeMaze.DebugTools
                 return;
             }
 
-            if (mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            // Get grid positions
-            Vector2Int entrancePos = entrance.GridPosition;
-            Vector2Int heartPos = heart.GridPosition;
-
-
-            // Find path using A* through GameController
-            List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-            bool pathFound = GameController.Instance.TryFindPath(entrancePos, heartPos, pathNodes);
-
-            if (!pathFound || pathNodes.Count == 0)
-            {
-                return;
-            }
-
-
-            // Get world position for spawn
-            Vector3 spawnWorldPos = mazeGridBehaviour.GridToWorld(entrancePos.x, entrancePos.y) + spawnOffset;
+            // Get world position for spawn directly from entrance transform
+            Vector3 spawnWorldPos = entrance.transform.position + spawnOffset;
 
             // Instantiate visitor (rotated 180 degrees on z-axis)
             VisitorController visitor = Instantiate(visitorPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
@@ -114,65 +83,8 @@ namespace FaeMaze.DebugTools
 
             GameController.Instance.SetLastSpawnedVisitor(visitor);
 
-            // Initialize visitor
+            // Initialize visitor - pathfinding is handled by the visitor controller in world-space mode
             visitor.Initialize(GameController.Instance);
-
-            // Set path (using MazeNode list directly)
-            visitor.SetPath(pathNodes);
-
-        }
-
-        /// <summary>
-        /// Creates a straight-line path between two grid positions.
-        /// Uses Bresenham's line algorithm for grid-based line drawing.
-        /// </summary>
-        private List<Vector2Int> CreateStraightLinePath(Vector2Int start, Vector2Int end)
-        {
-            List<Vector2Int> path = new List<Vector2Int>();
-
-            int x0 = start.x;
-            int y0 = start.y;
-            int x1 = end.x;
-            int y1 = end.y;
-
-            int dx = Mathf.Abs(x1 - x0);
-            int dy = Mathf.Abs(y1 - y0);
-
-            int sx = x0 < x1 ? 1 : -1;
-            int sy = y0 < y1 ? 1 : -1;
-
-            int err = dx - dy;
-
-            int x = x0;
-            int y = y0;
-
-            // Add points along the line
-            while (true)
-            {
-                path.Add(new Vector2Int(x, y));
-
-                // Check if we've reached the end
-                if (x == x1 && y == y1)
-                {
-                    break;
-                }
-
-                int e2 = 2 * err;
-
-                if (e2 > -dy)
-                {
-                    err -= dy;
-                    x += sx;
-                }
-
-                if (e2 < dx)
-                {
-                    err += dx;
-                    y += sy;
-                }
-            }
-
-            return path;
         }
 
         #endregion
@@ -207,11 +119,11 @@ namespace FaeMaze.DebugTools
 
         private void OnDrawGizmosSelected()
         {
-            if (entrance != null && heart != null && mazeGridBehaviour != null)
+            if (entrance != null && heart != null)
             {
-                // Draw line from entrance to heart
-                Vector3 entranceWorld = mazeGridBehaviour.GridToWorld(entrance.GridPosition.x, entrance.GridPosition.y);
-                Vector3 heartWorld = mazeGridBehaviour.GridToWorld(heart.GridPosition.x, heart.GridPosition.y);
+                // Draw line from entrance to heart using world positions
+                Vector3 entranceWorld = entrance.transform.position;
+                Vector3 heartWorld = heart.transform.position;
 
                 Gizmos.color = Color.magenta;
                 Gizmos.DrawLine(entranceWorld, heartWorld);

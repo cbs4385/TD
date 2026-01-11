@@ -675,24 +675,7 @@ namespace FaeMaze.HeartPowers
 
         private void OnDrawGizmos()
         {
-            if (pathCostModifier == null || !Application.isPlaying)
-            {
-                return;
-            }
-
-            // Draw modified tiles
-            foreach (var tile in pathCostModifier.GetModifiedTiles())
-            {
-                float modifier = pathCostModifier.GetTotalModifier(tile);
-                Vector3 worldPos = mazeGridBehaviour.GridToWorld(tile.x, tile.y);
-
-                // Color based on modifier: green = cheaper, red = more expensive
-                Color color = modifier < 0 ? Color.green : Color.red;
-                color.a = 0.5f;
-
-                Gizmos.color = color;
-                Gizmos.DrawCube(worldPos, Vector3.one * mazeGridBehaviour.TileSize * 0.8f);
-            }
+            // Grid-based gizmos removed - using world-space coordinates now
         }
 
         #endregion

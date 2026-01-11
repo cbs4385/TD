@@ -10,6 +10,7 @@ namespace FaeMaze.Visitors
     /// Kelpie - A water spirit bound to a water tile near Puka hazards.
     /// Remains stationary and lures adjacent visitors toward the nearby Puka.
     /// Activates and animates when visitors come near.
+    /// Uses world-space coordinates for all position checks.
     /// </summary>
     public class KelpieController : MonoBehaviour
     {
@@ -73,7 +74,6 @@ namespace FaeMaze.Visitors
         private SpriteRenderer spriteRenderer;
         private Animator animator;
         private bool initialized;
-        private Vector2Int gridPosition;
 
         // Direction tracking for animation
         private const int IdleDirection = 0;
@@ -90,8 +90,8 @@ namespace FaeMaze.Visitors
         /// <summary>Gets the assigned Puka hazard</summary>
         public PukaHazard AssignedPuka => assignedPuka;
 
-        /// <summary>Gets the grid position of this Kelpie</summary>
-        public Vector2Int GridPosition => gridPosition;
+        /// <summary>Gets the world position of this Kelpie</summary>
+        public Vector3 WorldPosition => transform.position;
 
         #endregion
 
@@ -147,12 +147,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Get grid position
-            if (mazeGridBehaviour.WorldToGrid(transform.position, out int x, out int y))
-            {
-                gridPosition = new Vector2Int(x, y);
-            }
-
             // Find nearest Puka
             AssignNearestPuka();
 
@@ -184,6 +178,7 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Assigns the nearest Puka hazard to this Kelpie.
+        /// Uses world-space distance calculation.
         /// </summary>
         private void AssignNearestPuka()
         {
@@ -225,7 +220,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Scans for visitors adjacent to this Kelpie.
+        /// Scans for visitors adjacent to this Kelpie using world-space distance.
         /// </summary>
         private void ScanForAdjacentVisitors()
         {
@@ -252,7 +247,7 @@ namespace FaeMaze.Visitors
                     continue;
                 }
 
-                // Check if visitor is adjacent (within detection radius)
+                // Check if visitor is adjacent (within detection radius) using world-space distance
                 float distance = Vector3.Distance(transform.position, visitor.transform.position);
                 if (distance <= detectionRadius)
                 {

@@ -83,7 +83,7 @@ namespace FaeMaze.Cameras
 
         private void Update()
         {
-            if (enableGlow && glowLight != null && focalPointTransform != null && mazeGridBehaviour != null)
+            if (enableGlow && glowLight != null && focalPointTransform != null)
             {
                 UpdateGlowPosition();
                 UpdateGlowPulse();
@@ -126,19 +126,13 @@ namespace FaeMaze.Cameras
 
         private void UpdateGlowPosition()
         {
-            // Convert focal point world position to grid coordinates
+            // Position the light at the focal point's world position
             Vector3 focalPos = focalPointTransform.position;
 
-            if (mazeGridBehaviour.WorldToGrid(focalPos, out int gridX, out int gridY))
+            // Position the light at the focal point with Z offset to illuminate the surface
+            if (lightObject != null)
             {
-                // Get the center of the tile in world space
-                Vector3 tileWorldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
-
-                // Position the light at the tile center with Z offset to illuminate the tile surface
-                if (lightObject != null)
-                {
-                    lightObject.transform.position = new Vector3(tileWorldPos.x, tileWorldPos.y, lightZOffset);
-                }
+                lightObject.transform.position = new Vector3(focalPos.x, focalPos.y, lightZOffset);
             }
         }
 

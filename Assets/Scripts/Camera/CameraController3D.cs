@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Systems;
@@ -666,10 +665,9 @@ namespace FaeMaze.Cameras
 
                 startRotation = Quaternion.LookRotation(facingDirection, mazeUp);
             }
-            else if (mazeGridBehaviour != null && mazeGridBehaviour.Grid != null)
+            else if (mazeGridBehaviour != null && mazeGridBehaviour.HeartWorldPosition != Vector3.zero)
             {
-                Vector2Int heartGrid = mazeGridBehaviour.HeartGridPos;
-                startPosition = mazeGridBehaviour.GridToWorld(heartGrid.x, heartGrid.y);
+                startPosition = mazeGridBehaviour.HeartWorldPosition;
                 startPosition.z = 0f;
 
                 Vector3 mazeForward = mazeGridBehaviour.MazeUpDirection;
@@ -762,36 +760,15 @@ namespace FaeMaze.Cameras
                 return Vector3.zero;
             }
 
-            if (mazeGridBehaviour != null)
-            {
-                List<MazeGrid.MazeNode> pathNodes = new List<MazeGrid.MazeNode>();
-                bool pathFound = GameController.Instance.TryFindPath(entrance.GridPosition, heart.GridPosition, pathNodes);
-                if (pathFound && pathNodes.Count >= 2)
-                {
-                    MazeGrid.MazeNode lastNode = pathNodes[pathNodes.Count - 1];
-                    MazeGrid.MazeNode previousNode = pathNodes[pathNodes.Count - 2];
-
-                    Vector3 lastWorld = mazeGridBehaviour.NodeToWorld(lastNode);
-                    Vector3 previousWorld = mazeGridBehaviour.NodeToWorld(previousNode);
-                    Vector3 direction = lastWorld - previousWorld;
-                    direction.z = 0f;
-
-                    if (direction.sqrMagnitude > 0.0001f)
-                    {
-                        direction.Normalize();
-                        return direction;
-                    }
-                }
-            }
-
-            Vector3 fallbackDirection = heart.transform.position - entrance.transform.position;
-            fallbackDirection.z = 0f;
-            if (fallbackDirection.sqrMagnitude < 0.0001f)
+            // Use direct direction from entrance to heart (world-space only)
+            Vector3 direction = heart.transform.position - entrance.transform.position;
+            direction.z = 0f;
+            if (direction.sqrMagnitude < 0.0001f)
             {
                 return Vector3.up;
             }
 
-            return fallbackDirection.normalized;
+            return direction.normalized;
         }
 
         private void UpdateFocalPointCameraPosition()
@@ -865,24 +842,30 @@ namespace FaeMaze.Cameras
 
         private void ConstrainFocalPointToMazeBounds()
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null || focalPointTransform == null)
+            if (mazeGridBehaviour == null || focalPointTransform == null)
+            {
+                return;
+            }
+
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (mazeData == null)
             {
                 return;
             }
 
             Vector3 currentPos = focalPointTransform.position;
-            int mazeWidth = mazeGridBehaviour.Grid.Width;
-            int mazeHeight = mazeGridBehaviour.Grid.Height;
+            Bounds bounds = mazeData.Bounds;
 
-            // Constrain to grid positions (-1,-1) to (mazeWidth, mazeHeight)
-            // Maze tiles occupy positions 0 to (mazeWidth-1), so position mazeWidth is 1 tile outside
-            // Convert grid positions to world positions
-            Vector3 minWorldPos = mazeGridBehaviour.GridToWorld(-1, -1);
-            Vector3 maxWorldPos = mazeGridBehaviour.GridToWorld(mazeWidth, mazeHeight);
+            // Add a small margin (1 tile worth) around the bounds
+            float margin = mazeGridBehaviour.TileSize;
+            float minX = bounds.min.x - margin;
+            float maxX = bounds.max.x + margin;
+            float minY = bounds.min.y - margin;
+            float maxY = bounds.max.y + margin;
 
             // Clamp position to bounds
-            currentPos.x = Mathf.Clamp(currentPos.x, minWorldPos.x, maxWorldPos.x);
-            currentPos.y = Mathf.Clamp(currentPos.y, minWorldPos.y, maxWorldPos.y);
+            currentPos.x = Mathf.Clamp(currentPos.x, minX, maxX);
+            currentPos.y = Mathf.Clamp(currentPos.y, minY, maxY);
 
             focalPointTransform.position = currentPos;
         }

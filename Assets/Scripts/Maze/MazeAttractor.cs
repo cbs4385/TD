@@ -1,12 +1,11 @@
-using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 
 namespace FaeMaze.Maze
 {
     /// <summary>
-    /// Base class for props that influence visitor pathfinding through attraction.
-    /// Attracts visitors by reducing movement cost of nearby tiles.
+    /// Base class for props that influence visitor behavior through world-space triggers.
+    /// Uses trigger colliders for visitor detection and interaction.
     /// </summary>
     public class MazeAttractor : MonoBehaviour
     {
@@ -14,11 +13,11 @@ namespace FaeMaze.Maze
 
         [Header("Attraction Settings")]
         [SerializeField]
-        [Tooltip("Radius of attraction influence in grid units")]
+        [Tooltip("Radius of attraction influence in world units")]
         private float radius = 3f;
 
         [SerializeField]
-        [Tooltip("Strength of attraction (higher = stronger pull)")]
+        [Tooltip("Strength of attraction (used for visitor behavior weighting)")]
         private float attractionStrength = 0.5f;
 
         [Header("Debug")]
@@ -54,7 +53,7 @@ namespace FaeMaze.Maze
 
         [Header("Fascination (FaeLantern)")]
         [SerializeField]
-        [Tooltip("Enable fascination mechanic (visitors retarget to lantern then wander)")]
+        [Tooltip("Enable fascination mechanic (visitors retarget to attractor then wander)")]
         private bool enableFascination = false;
 
         [SerializeField]
@@ -67,8 +66,6 @@ namespace FaeMaze.Maze
         #region Private Fields
 
         private MazeGridBehaviour gridBehaviour;
-        private Vector2Int gridPosition;
-        private bool isApplied = false;
         private SpriteRenderer spriteRenderer;
         private CircleCollider2D triggerCollider;
         private Vector3 initialScale;
@@ -77,14 +74,14 @@ namespace FaeMaze.Maze
 
         #region Properties
 
-        /// <summary>Gets the attraction radius</summary>
+        /// <summary>Gets the attraction radius in world units</summary>
         public float Radius => radius;
 
         /// <summary>Gets the attraction strength</summary>
         public float AttractionStrength => attractionStrength;
 
-        /// <summary>Gets the grid position of this attractor</summary>
-        public Vector2Int GridPosition => gridPosition;
+        /// <summary>Gets the world position of this attractor</summary>
+        public Vector3 WorldPosition => transform.position;
 
         #endregion
 
@@ -97,19 +94,6 @@ namespace FaeMaze.Maze
 
             initialScale = transform.localScale;
 
-            if (gridBehaviour == null)
-            {
-                return;
-            }
-
-            // Determine grid position
-            if (!gridBehaviour.WorldToGrid(transform.position, out int x, out int y))
-            {
-                return;
-            }
-
-            gridPosition = new Vector2Int(x, y);
-
             SetupSpriteRenderer();
         }
 
@@ -121,19 +105,7 @@ namespace FaeMaze.Maze
                 SetupTriggerCollider();
             }
 
-            // Apply attraction BEFORE path recalculation
-            // (Done in Start() to ensure MazeGridBehaviour.Awake() has completed and Grid exists)
-            if (gridBehaviour != null && gridBehaviour.Grid != null)
-            {
-                ApplyAttraction(gridBehaviour);
-            }
-            else
-            {
-                return;
-            }
-
             // Trigger path recalculation for all active visitors
-            // (This happens after attraction is applied)
             RecalculateAllVisitorPaths();
         }
 
@@ -157,13 +129,12 @@ namespace FaeMaze.Maze
 
             triggerCollider.isTrigger = true;
             triggerCollider.radius = radius;
-
         }
 
         private void CreateVisualSprite()
         {
-            // Create a simple circle sprite for the lantern
-            spriteRenderer.sprite = CreateLanternSprite(32);
+            // Create a simple circle sprite for the attractor
+            spriteRenderer.sprite = CreateAttractorSprite(32);
         }
 
         private void SetupSpriteRenderer()
@@ -204,22 +175,22 @@ namespace FaeMaze.Maze
             }
         }
 
-        private Sprite CreateLanternSprite(int resolution)
+        private Sprite CreateAttractorSprite(int resolution)
         {
             int size = resolution;
             Texture2D texture = new Texture2D(size, size);
             Color[] pixels = new Color[size * size];
 
             Vector2 center = new Vector2(size / 2f, size / 2f);
-            float radius = size / 2f;
+            float spriteRadius = size / 2f;
 
-            // Create a circle (simplified lantern shape)
+            // Create a circle (simplified attractor shape)
             for (int y = 0; y < size; y++)
             {
                 for (int x = 0; x < size; x++)
                 {
                     float dist = Vector2.Distance(new Vector2(x, y), center);
-                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
+                    pixels[y * size + x] = dist <= spriteRadius ? Color.white : Color.clear;
                 }
             }
 
@@ -234,29 +205,15 @@ namespace FaeMaze.Maze
             );
         }
 
-        // OnEnable/OnDisable removed - Awake() handles initial attraction application
-        // No need to reapply on enable since attraction persists on the grid
-
         private void OnTriggerEnter2D(Collider2D other)
         {
             // Check if a visitor entered the attraction radius
             var visitor = other.GetComponent<Visitors.VisitorController>();
             if (visitor != null)
             {
-
-                // Apply fascination if enabled (FaeLantern-specific behavior)
-                if (enableFascination && !visitor.IsFascinated)
-                {
-                    // Roll for fascination
-                    float roll = Random.value;
-                    bool willFascinate = roll <= fascinationChance;
-
-
-                    if (willFascinate)
-                    {
-                        visitor.BecomeFascinated(gridPosition);
-                    }
-                }
+                // Note: Fascination is handled by FaeLantern directly, not through MazeAttractor
+                // The enableFascination field is kept for backwards compatibility but fascination
+                // requires world-space visitor APIs that are implemented in FaeLantern
 
                 // Apply slow effect if enabled
                 if (enableVisitorSlowing)
@@ -282,122 +239,17 @@ namespace FaeMaze.Maze
 
         #endregion
 
-        #region Attraction Application
+        #region Public Methods
 
         /// <summary>
-        /// Applies attraction to nearby tiles on the maze grid.
-        /// Uses BFS/flood-fill to propagate influence only along walkable paths.
-        /// Distance-based falloff ensures natural influence that respects maze structure.
+        /// Checks if a world position is within this attractor's influence radius.
         /// </summary>
-        /// <param name="gridBehaviour">The maze grid behaviour to apply attraction to</param>
-        public void ApplyAttraction(MazeGridBehaviour gridBehaviour)
+        /// <param name="worldPos">World position to check</param>
+        /// <returns>True if within influence radius</returns>
+        public bool IsPositionInInfluence(Vector3 worldPos)
         {
-            if (gridBehaviour == null || gridBehaviour.Grid == null)
-            {
-                return;
-            }
-
-            MazeGrid grid = gridBehaviour.Grid;
-
-            // Calculate grid radius (convert world radius to grid units)
-            int gridRadius = Mathf.CeilToInt(radius);
-
-            int affectedCount = 0;
-            float totalAttractionApplied = 0f;
-
-            // Use BFS to propagate attraction through walkable tiles only
-            Queue<Vector2Int> queue = new Queue<Vector2Int>();
-            Dictionary<Vector2Int, float> distances = new Dictionary<Vector2Int, float>();
-
-            // Start from lantern position
-            queue.Enqueue(gridPosition);
-            distances[gridPosition] = 0f;
-
-            // Cardinal directions for BFS
-            Vector2Int[] directions = new Vector2Int[]
-            {
-                new Vector2Int(0, 1),   // Up
-                new Vector2Int(0, -1),  // Down
-                new Vector2Int(1, 0),   // Right
-                new Vector2Int(-1, 0)   // Left
-            };
-
-            while (queue.Count > 0)
-            {
-                Vector2Int current = queue.Dequeue();
-                float currentDistance = distances[current];
-
-                // Apply attraction at current position
-                var currentNode = grid.GetNode(current.x, current.y);
-                if (currentNode != null && currentNode.walkable)
-                {
-                    // Calculate attraction with falloff based on path distance
-                    float falloff = Mathf.Clamp01(1f - (currentDistance / radius));
-                    float effectiveAttraction = attractionStrength * falloff;
-
-                    grid.AddAttraction(current.x, current.y, effectiveAttraction);
-
-                    affectedCount++;
-                    totalAttractionApplied += effectiveAttraction;
-                }
-
-                // Explore neighbors
-                foreach (var dir in directions)
-                {
-                    Vector2Int neighbor = current + dir;
-
-                    // Check bounds
-                    if (!grid.InBounds(neighbor.x, neighbor.y))
-                        continue;
-
-                    // Check if node is walkable
-                    var neighborNode = grid.GetNode(neighbor.x, neighbor.y);
-                    if (neighborNode == null || !neighborNode.walkable)
-                        continue;
-
-                    // Calculate new distance (1 unit per step)
-                    float newDistance = currentDistance + 1f;
-
-                    // Skip if outside radius
-                    if (newDistance > radius)
-                        continue;
-
-                    // Skip if already visited with a shorter or equal distance
-                    if (distances.ContainsKey(neighbor) && distances[neighbor] <= newDistance)
-                        continue;
-
-                    // Mark as visited and enqueue
-                    distances[neighbor] = newDistance;
-                    queue.Enqueue(neighbor);
-                }
-            }
-
-            isApplied = true;
-        }
-
-        /// <summary>
-        /// Removes this attractor's influence from the grid.
-        /// For MVP, simply clears all attraction on the grid and reapplies other attractors.
-        /// </summary>
-        public void RemoveAttraction(MazeGridBehaviour gridBehaviour)
-        {
-            if (gridBehaviour == null || gridBehaviour.Grid == null)
-                return;
-
-            // For MVP: Clear all attraction and let other attractors reapply
-            // A more sophisticated system would track which attractor modified which tile
-            gridBehaviour.Grid.ClearAllAttraction();
-
-            // Find all other attractors and reapply them
-            var allAttractors = FindObjectsByType<MazeAttractor>(FindObjectsSortMode.None);
-            foreach (var attractor in allAttractors)
-            {
-                if (attractor != this && attractor.enabled && attractor.isApplied)
-                {
-                    attractor.ApplyAttraction(gridBehaviour);
-                }
-            }
-
+            float distance = Vector3.Distance(transform.position, worldPos);
+            return distance <= radius;
         }
 
         #endregion
@@ -414,20 +266,18 @@ namespace FaeMaze.Maze
 
         /// <summary>
         /// Triggers all active visitors to recalculate their paths.
-        /// Called when a new attractor is placed so visitors can take advantage of the new attraction.
+        /// Called when a new attractor is placed so visitors can respond to the new attraction.
         /// </summary>
         private void RecalculateAllVisitorPaths()
         {
             // Find all active visitors in the scene
             var visitors = FindObjectsByType<Visitors.VisitorController>(FindObjectsSortMode.None);
 
-            int recalculatedCount = 0;
             foreach (var visitor in visitors)
             {
                 if (visitor != null && IsVisitorMoving(visitor.State))
                 {
                     visitor.RecalculatePath();
-                    recalculatedCount++;
                 }
             }
         }
@@ -461,33 +311,26 @@ namespace FaeMaze.Maze
             Gizmos.color = new Color(1f, 0.7f, 0f, 0.6f);
             DrawCircle(transform.position, radius, 32);
 
-            // Draw grid position if available
-            if (gridBehaviour != null && isApplied)
-            {
-                Vector3 gridWorldPos = gridBehaviour.GridToWorld(gridPosition.x, gridPosition.y);
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawWireSphere(gridWorldPos, 0.3f);
-
-                // Draw line from world pos to grid center
-                Gizmos.DrawLine(transform.position, gridWorldPos);
-            }
+            // Draw attractor center
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, 0.3f);
         }
 
-        private void DrawCircle(Vector3 center, float radius, int segments)
+        private void DrawCircle(Vector3 center, float circleRadius, int segments)
         {
             float angleStep = 360f / segments;
-            Vector3 prevPoint = center + new Vector3(radius, 0, 0);
+            Vector3 prevPoint = center + new Vector3(circleRadius, 0, 0);
 
             for (int i = 1; i <= segments; i++)
             {
                 float angle = i * angleStep * Mathf.Deg2Rad;
-                Vector3 newPoint = center + new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0);
+                Vector3 newPoint = center + new Vector3(Mathf.Cos(angle) * circleRadius, Mathf.Sin(angle) * circleRadius, 0);
                 Gizmos.DrawLine(prevPoint, newPoint);
                 prevPoint = newPoint;
             }
         }
 
-        private void DrawFilledCircle(Vector3 center, float radius, int segments)
+        private void DrawFilledCircle(Vector3 center, float circleRadius, int segments)
         {
             float angleStep = 360f / segments;
 
@@ -496,8 +339,8 @@ namespace FaeMaze.Maze
                 float angle1 = i * angleStep * Mathf.Deg2Rad;
                 float angle2 = (i + 1) * angleStep * Mathf.Deg2Rad;
 
-                Vector3 point1 = center + new Vector3(Mathf.Cos(angle1) * radius, Mathf.Sin(angle1) * radius, 0);
-                Vector3 point2 = center + new Vector3(Mathf.Cos(angle2) * radius, Mathf.Sin(angle2) * radius, 0);
+                Vector3 point1 = center + new Vector3(Mathf.Cos(angle1) * circleRadius, Mathf.Sin(angle1) * circleRadius, 0);
+                Vector3 point2 = center + new Vector3(Mathf.Cos(angle2) * circleRadius, Mathf.Sin(angle2) * circleRadius, 0);
 
                 Gizmos.DrawLine(center, point1);
                 Gizmos.DrawLine(center, point2);

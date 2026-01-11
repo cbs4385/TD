@@ -10,17 +10,9 @@ namespace FaeMaze.Maze
     {
         #region Serialized Fields
 
-        [Header("Grid Position")]
+        [Header("Position Settings")]
         [SerializeField]
-        [Tooltip("X coordinate in the maze grid (auto-set if autoPosition is true)")]
-        private int gridX;
-
-        [SerializeField]
-        [Tooltip("Y coordinate in the maze grid (auto-set if autoPosition is true)")]
-        private int gridY;
-
-        [SerializeField]
-        [Tooltip("Automatically position entrance from maze grid")]
+        [Tooltip("Automatically position entrance from maze data")]
         private bool autoPosition = true;
 
         [Header("Visual Settings")]
@@ -45,27 +37,6 @@ namespace FaeMaze.Maze
         #region Private Fields
 
         private SpriteRenderer spriteRenderer;
-
-        #endregion
-
-        #region Properties
-
-        /// <summary>Gets the grid position of this entrance</summary>
-        public Vector2Int GridPosition => new Vector2Int(gridX, gridY);
-
-        #endregion
-
-        #region Public Methods
-
-        /// <summary>
-        /// Sets the grid position for this entrance.
-        /// </summary>
-        /// <param name="pos">The grid position to set</param>
-        public void SetGridPosition(Vector2Int pos)
-        {
-            gridX = pos.x;
-            gridY = pos.y;
-        }
 
         #endregion
 
@@ -99,7 +70,7 @@ namespace FaeMaze.Maze
         }
 
         /// <summary>
-        /// Positions the entrance from the maze grid entrance position.
+        /// Positions the entrance using the maze's world-space entrance position.
         /// Can be called to reposition after maze regeneration.
         /// </summary>
         public void PositionFromMazeGrid()
@@ -111,15 +82,8 @@ namespace FaeMaze.Maze
                 return;
             }
 
-            // Get entrance position from maze grid
-            Vector2Int entrancePos = mazeGridBehaviour.EntranceGridPos;
-
-            // Update grid position
-            gridX = entrancePos.x;
-            gridY = entrancePos.y;
-
-            // Convert to world position and update transform
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(entrancePos.x, entrancePos.y);
+            // Get entrance position directly in world space
+            Vector3 worldPos = mazeGridBehaviour.EntranceWorldPosition;
             transform.position = worldPos;
         }
 

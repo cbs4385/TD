@@ -7,13 +7,12 @@ namespace FaeMaze.Visitors
 {
     /// <summary>
     /// A visitor variant that takes intentional missteps at branching points.
-    /// At any tile with multiple unwalked adjacent tiles, misstep chance is based on
-    /// archetype config (defaults to 25%). Once on a mistaken path, they continue
-    /// until reaching another branching point, where they recalculate an A* path
-    /// to the destination and apply the misstep chance again.
+    /// Uses archetype config for misstep chance (defaults to 25%).
+    /// Once on a mistaken path, they continue until reaching another branching point,
+    /// where they recalculate to the destination.
     ///
+    /// Uses world-space navigation for all pathfinding.
     /// Supports optional VisitorArchetypeConfig for customized behavior parameters.
-    /// All other behaviors (animations, speed, fascination states, etc.) are preserved.
     /// </summary>
     public class MistakingVisitorController : VisitorControllerBase
     {
@@ -28,9 +27,9 @@ namespace FaeMaze.Visitors
         [Tooltip("Draw misstep paths in scene view for debugging")]
         private bool debugMisstepGizmos;
 
-        // Misstep tracking
+        // Misstep tracking - using world positions
         private bool isOnMisstepPath;
-        private HashSet<Vector2Int> walkedTiles;
+        private HashSet<Vector3> walkedPositions;
         private int misstepSegmentStartIndex;
 
         #endregion
@@ -54,7 +53,7 @@ namespace FaeMaze.Visitors
         protected override void Awake()
         {
             base.Awake();
-            walkedTiles = new HashSet<Vector2Int>();
+            walkedPositions = new HashSet<Vector3>();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
         }
@@ -68,7 +67,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected override void ResetDetourState()
         {
-            walkedTiles.Clear();
+            walkedPositions.Clear();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
             lostSegmentActive = false;
@@ -77,22 +76,12 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Handles misstep decision at waypoint.
-        /// Detects branching points (tiles with 2+ unwalked neighbors) and rolls for misstep.
-        /// If on misstep path and reached branch, recalculates A* to destination.
-        /// Only recalculates when state changes or at decision points (nodes).
+        /// In world-space mode, uses simplified misstep logic that triggers path recalculation.
         /// </summary>
         protected override void HandleDetourAtWaypoint()
         {
             if (mazeGridBehaviour == null || gameController == null)
                 return;
-
-            if (path == null || currentPathIndex >= path.Count)
-            {
-                RecalculatePath();
-                return;
-            }
-
-            Vector2Int currentPos = path[currentPathIndex];
 
             // Check if state has changed since last waypoint
             bool stateChanged = (state != previousState);
@@ -104,334 +93,49 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Check if we should attempt a state-specific detour
-            if (ShouldAttemptDetour(currentPos))
-            {
-                HandleStateSpecificDetour(currentPos);
-                return;
-            }
-
-            // Check if at a node (decision point marked 'N' or 'H')
-            bool atNode = IsAtNode(currentPos);
-
-            // If misstep is disabled or we're not at a node, just continue following the path
-            if (!misstepEnabled || !atNode)
-            {
-                currentPathIndex++;
-                if (currentPathIndex >= path.Count)
-                    OnPathCompleted();
-                return;
-            }
-
-            // At a node - track as walked and check for misstep behavior
-            walkedTiles.Add(currentPos);
-
-            // Get all unwalked adjacent tiles
-            List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
-
-            // Check for dead end (no unwalked neighbors) - recalculate
-            if (unwalkedNeighbors.Count == 0)
-            {
-                isOnMisstepPath = false;
-                LogVisitorPath($"at node {currentPos} with dead end, recalculating path");
-                RecalculatePath();
-                return;
-            }
-
-            // Not a branch if only 1 unwalked neighbor - just continue
-            if (unwalkedNeighbors.Count == 1)
-            {
-                // If on misstep, continue until branch or dead end
-                if (isOnMisstepPath)
-                {
-                    // Just advance to next waypoint
-                    currentPathIndex++;
-                    if (currentPathIndex >= path.Count)
-                    {
-                        // Reached end of misstep path unexpectedly - recalculate
-                        isOnMisstepPath = false;
-                        RecalculatePath();
-                    }
-                    return;
-                }
-
-                // Not on misstep and not a branch - just continue
-                currentPathIndex++;
-                if (currentPathIndex >= path.Count)
-                    OnPathCompleted();
-                return;
-            }
-
-            // This is a branching point with 2+ unwalked neighbors
+            // If on misstep path and at a branch point, exit misstep and recalculate
             if (isOnMisstepPath)
             {
-                // End misstep - recalculate A* to destination
+                // End misstep - recalculate to destination
                 isOnMisstepPath = false;
-                LogVisitorPath($"at node {currentPos}, exiting misstep path, recalculating");
-                RecalculatePath();
-                // Don't return - check for new misstep below
-            }
-
-            // After recalculating, recheck unwalked neighbors for new misstep decision
-            unwalkedNeighbors = GetUnwalkedNeighbors(currentPos);
-            if (unwalkedNeighbors.Count < 2)
-            {
-                return; // No longer a branch after recalc
-            }
-
-            // Use archetype-specific misstep chance (or default 0.25)
-            float misstepChance = GetConfusionChance();
-            float roll = Random.value;
-            if (roll > misstepChance)
-            {
-                // No misstep - recalculate to get fresh optimal path
-                LogVisitorPath($"at node {currentPos}, taking optimal path, recalculating");
+                LogVisitorPath($"exiting misstep path, recalculating");
                 RecalculatePath();
                 return;
             }
 
-            // Misstep triggered!
-            LogVisitorPath($"at node {currentPos}, taking misstep");
-            TakeMisstep(currentPos, unwalkedNeighbors);
-        }
-
-        #endregion
-
-        #region Misstep System
-
-        /// <summary>
-        /// Gets all walkable neighbor tiles that have not been walked.
-        /// Used to identify branching points.
-        /// </summary>
-        private List<Vector2Int> GetUnwalkedNeighbors(Vector2Int gridPos)
-        {
-            List<Vector2Int> neighbors = new List<Vector2Int>();
-
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            // In world-space mode, misstep behavior is simplified
+            if (misstepEnabled && worldPath != null && worldPathIndex < worldPath.Count)
             {
-                return neighbors;
-            }
+                // Track current position
+                walkedPositions.Add(transform.position);
 
-            Vector2Int[] directions = new Vector2Int[]
-            {
-                new Vector2Int(0, 1),   // Up
-                new Vector2Int(0, -1),  // Down
-                new Vector2Int(1, 0),   // Right
-                new Vector2Int(-1, 0)   // Left
-            };
+                // Use archetype-specific misstep chance (or default 0.25)
+                float misstepChance = GetConfusionChance();
+                float roll = Random.value;
 
-            foreach (var dir in directions)
-            {
-                Vector2Int neighborPos = gridPos + dir;
-                var node = mazeGridBehaviour.Grid.GetNode(neighborPos.x, neighborPos.y);
-
-                if (node != null && node.walkable && !walkedTiles.Contains(neighborPos))
+                if (roll <= misstepChance)
                 {
-                    neighbors.Add(neighborPos);
+                    // Misstep triggered!
+                    LogVisitorPath($"taking misstep");
+                    isOnMisstepPath = true;
+                    misstepSegmentStartIndex = worldPathIndex;
+
+                    // Recalculate path - the base class will build a new world path
+                    // In world-space mode, this effectively gives a fresh path which may differ
+                    RecalculatePath();
+                    return;
                 }
             }
 
-            return neighbors;
-        }
-
-        /// <summary>
-        /// Executes a misstep by choosing wrong direction at branch.
-        /// Selects randomly among unwalked neighbors, biased against immediate backtracking.
-        /// Builds path following chosen direction until next branch.
-        /// </summary>
-        private void TakeMisstep(Vector2Int currentPos, List<Vector2Int> unwalkedNeighbors)
-        {
-            if (unwalkedNeighbors.Count == 0)
+            // Continue along path
+            if (worldPath != null && worldPathIndex < worldPath.Count)
             {
-                RecalculatePath();
-                return;
-            }
-
-            // Determine optimal next step from A*
-            Vector2Int? optimalNext = GetOptimalNextStep(currentPos);
-
-            // Filter out optimal direction to get "wrong" choices
-            List<Vector2Int> wrongChoices = new List<Vector2Int>(unwalkedNeighbors);
-            if (optimalNext.HasValue)
-            {
-                wrongChoices.Remove(optimalNext.Value);
-            }
-
-            if (wrongChoices.Count == 0)
-            {
-                wrongChoices = new List<Vector2Int>(unwalkedNeighbors);
-            }
-
-            // Bias against backtracking to immediately previous tile
-            Vector2Int? previousTile = null;
-            if (currentPathIndex > 0 && currentPathIndex < path.Count)
-            {
-                previousTile = path[currentPathIndex - 1];
-            }
-
-            if (previousTile.HasValue && wrongChoices.Count > 1)
-            {
-                wrongChoices.Remove(previousTile.Value);
-            }
-
-            // Choose random wrong direction
-            Vector2Int chosenWrongStep = wrongChoices[Random.Range(0, wrongChoices.Count)];
-
-            // Build path following this wrong direction
-            List<Vector2Int> misstepPath = BuildMisstepPath(currentPos, chosenWrongStep);
-
-            if (misstepPath.Count == 0)
-            {
-                RecalculatePath();
-                return;
-            }
-
-            // Set the misstep path
-            List<Vector2Int> newPath = new List<Vector2Int>();
-            newPath.Add(currentPos);
-            newPath.AddRange(misstepPath);
-
-            path = newPath;
-            currentPathIndex = 1; // Start at index 1 since index 0 is current position
-            isOnMisstepPath = true;
-            misstepSegmentStartIndex = 1;
-
-            RefreshStateFromFlags();
-        }
-
-        /// <summary>
-        /// Gets the optimal next step from current position using A*.
-        /// Returns null if path cannot be calculated.
-        /// </summary>
-        private Vector2Int? GetOptimalNextStep(Vector2Int currentPos)
-        {
-            List<MazeGrid.MazeNode> optimalPath = new List<MazeGrid.MazeNode>();
-            // Use state-based attraction multiplier for optimal path calculation
-            float attractionMultiplier = GetAttractionMultiplier();
-            if (gameController.TryFindPath(currentPos, originalDestination, optimalPath, attractionMultiplier) && optimalPath.Count > 1)
-            {
-                return new Vector2Int(optimalPath[1].x, optimalPath[1].y);
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Builds path following mistaken direction until reaching next branch.
-        /// Continues chosen direction, avoiding backtracking and loops.
-        /// Stops at tile with 2+ unwalked neighbors (branching point).
-        /// </summary>
-        private List<Vector2Int> BuildMisstepPath(Vector2Int startPos, Vector2Int firstStep)
-        {
-            List<Vector2Int> misstepPath = new List<Vector2Int>();
-            HashSet<Vector2Int> misstepPathSet = new HashSet<Vector2Int>();
-
-            Vector2Int previousPos = startPos;
-            Vector2Int currentPos = firstStep;
-            Vector2Int currentDirection = firstStep - startPos;
-
-            int safetyLimit = 200;
-            int iterations = 0;
-
-            while (iterations < safetyLimit)
-            {
-                iterations++;
-
-                // Validate walkable
-                var node = mazeGridBehaviour.Grid?.GetNode(currentPos.x, currentPos.y);
-                if (node == null || !node.walkable)
+                worldPathIndex++;
+                if (worldPathIndex >= worldPath.Count)
                 {
-                    break;
-                }
-
-                // Check if backtracking to walked tile
-                if (walkedTiles.Contains(currentPos))
-                {
-                    misstepPath.Add(currentPos);
-                    break;
-                }
-
-                // Check for loop in misstep path
-                if (misstepPathSet.Contains(currentPos))
-                {
-                    break;
-                }
-
-                // Add to misstep path
-                misstepPath.Add(currentPos);
-                misstepPathSet.Add(currentPos);
-
-                // Check if branching point
-                List<Vector2Int> unwalkedNeighbors = GetUnwalkedNeighborsExcluding(currentPos, misstepPathSet);
-                unwalkedNeighbors.Remove(previousPos);
-
-                if (unwalkedNeighbors.Count >= 2)
-                {
-                    // Reached branch - stop
-                    break;
-                }
-
-                if (unwalkedNeighbors.Count == 0)
-                {
-                    // Dead end
-                    break;
-                }
-
-                // Continue in same direction if possible
-                Vector2Int preferredNext = currentPos + currentDirection;
-                Vector2Int nextPos;
-
-                if (unwalkedNeighbors.Contains(preferredNext))
-                {
-                    nextPos = preferredNext;
-                }
-                else
-                {
-                    nextPos = unwalkedNeighbors[0];
-                    currentDirection = nextPos - currentPos;
-                }
-
-                previousPos = currentPos;
-                currentPos = nextPos;
-            }
-
-            return misstepPath;
-        }
-
-        /// <summary>
-        /// Gets unwalked neighbors excluding tiles in provided set.
-        /// Used during misstep path building to avoid loops.
-        /// </summary>
-        private List<Vector2Int> GetUnwalkedNeighborsExcluding(Vector2Int gridPos, HashSet<Vector2Int> excludeSet)
-        {
-            List<Vector2Int> neighbors = new List<Vector2Int>();
-
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
-            {
-                return neighbors;
-            }
-
-            Vector2Int[] directions = new Vector2Int[]
-            {
-                new Vector2Int(0, 1),
-                new Vector2Int(0, -1),
-                new Vector2Int(1, 0),
-                new Vector2Int(-1, 0)
-            };
-
-            foreach (var dir in directions)
-            {
-                Vector2Int neighborPos = gridPos + dir;
-                var node = mazeGridBehaviour.Grid.GetNode(neighborPos.x, neighborPos.y);
-
-                if (node != null && node.walkable &&
-                    !walkedTiles.Contains(neighborPos) &&
-                    !excludeSet.Contains(neighborPos))
-                {
-                    neighbors.Add(neighborPos);
+                    OnPathCompleted();
                 }
             }
-
-            return neighbors;
         }
 
         #endregion
@@ -442,19 +146,15 @@ namespace FaeMaze.Visitors
         {
             base.OnDrawGizmos();
 
-            // Draw misstep segment in red
-            if (path != null && path.Count > 0 && mazeGridBehaviour != null)
+            // Draw misstep segment in red using world path
+            if (debugMisstepGizmos && worldPath != null && worldPath.Count > 0 && isOnMisstepPath && misstepSegmentStartIndex >= 0)
             {
-                if (debugMisstepGizmos && isOnMisstepPath && misstepSegmentStartIndex >= 0)
-                {
-                    Gizmos.color = Color.red;
+                Gizmos.color = Color.red;
 
-                    for (int i = misstepSegmentStartIndex; i < path.Count - 1; i++)
-                    {
-                        Vector3 start = mazeGridBehaviour.GridToWorld(path[i].x, path[i].y);
-                        Vector3 end = mazeGridBehaviour.GridToWorld(path[i + 1].x, path[i + 1].y);
-                        Gizmos.DrawLine(start, end);
-                    }
+                int endIndex = Mathf.Min(worldPath.Count - 1, misstepSegmentStartIndex + 10);
+                for (int i = misstepSegmentStartIndex; i < endIndex; i++)
+                {
+                    Gizmos.DrawLine(worldPath[i], worldPath[i + 1]);
                 }
             }
         }

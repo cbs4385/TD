@@ -5,7 +5,7 @@ namespace FaeMaze.HeartPowers
 {
     /// <summary>
     /// Debug visualization for Heart powers in the Scene view.
-    /// Shows AoE radii, modified tiles, active effects, etc.
+    /// Shows AoE radii, active effects, etc. using world-space coordinates.
     /// </summary>
     public class HeartPowerDebugVisualizer : MonoBehaviour
     {
@@ -18,24 +18,12 @@ namespace FaeMaze.HeartPowers
 
         [Header("Visualization Settings")]
         [SerializeField]
-        [Tooltip("Show path cost modifiers as colored tiles")]
-        private bool showPathModifiers = true;
-
-        [SerializeField]
         [Tooltip("Show power activation preview on mouse cursor")]
         private bool showMousePreview = true;
 
         [SerializeField]
-        [Tooltip("Preview radius for AoE powers")]
+        [Tooltip("Preview radius for AoE powers (in world units)")]
         private float previewRadius = 3f;
-
-        [SerializeField]
-        [Tooltip("Color for positive cost modifiers (more expensive tiles)")]
-        private Color expensiveColor = new Color(1f, 0.2f, 0.2f, 0.3f);
-
-        [SerializeField]
-        [Tooltip("Color for negative cost modifiers (cheaper/desirable tiles)")]
-        private Color desirableColor = new Color(0.2f, 1f, 0.2f, 0.3f);
 
         [SerializeField]
         [Tooltip("Color for mouse preview")]
@@ -77,45 +65,10 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Draw path modifiers
-            if (showPathModifiers)
-            {
-                DrawPathModifiers();
-            }
-
             // Draw mouse preview
             if (showMousePreview)
             {
                 DrawMousePreview();
-            }
-        }
-
-        private void DrawPathModifiers()
-        {
-            if (heartPowerManager.PathModifier == null || heartPowerManager.MazeGrid == null)
-            {
-                return;
-            }
-
-            foreach (var tile in heartPowerManager.PathModifier.GetModifiedTiles())
-            {
-                float modifier = heartPowerManager.PathModifier.GetTotalModifier(tile);
-                Vector3 worldPos = heartPowerManager.MazeGrid.GridToWorld(tile.x, tile.y);
-
-                // Color based on modifier value
-                Color color = modifier < 0 ? desirableColor : expensiveColor;
-                float alpha = Mathf.Clamp01(Mathf.Abs(modifier) / 5f) * 0.5f;
-                color.a = alpha;
-
-                Gizmos.color = color;
-                float tileSize = heartPowerManager.MazeGrid.TileSize;
-                Gizmos.DrawCube(worldPos, Vector3.one * tileSize * 0.9f);
-
-                // Draw modifier value
-#if UNITY_EDITOR
-                UnityEditor.Handles.color = Color.white;
-                UnityEditor.Handles.Label(worldPos, modifier.ToString("F1"));
-#endif
             }
         }
 
@@ -128,9 +81,9 @@ namespace FaeMaze.HeartPowers
 
             Vector3 mouseWorldPos = GetMouseWorldPosition();
 
-            // Draw AoE preview circle
+            // Draw AoE preview circle (world-space radius)
             Gizmos.color = previewColor;
-            DrawCircle(mouseWorldPos, previewRadius * heartPowerManager.MazeGrid.TileSize, 32);
+            DrawCircle(mouseWorldPos, previewRadius, 32);
 
             // Draw crosshair at mouse
             Gizmos.color = Color.yellow;

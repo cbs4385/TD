@@ -1,24 +1,24 @@
 using System.Collections.Generic;
 using UnityEngine;
-using FaeMaze.Systems;
 
 namespace FaeMaze.HeartPowers
 {
     /// <summary>
-    /// Visualizes Heart Power effects on maze tiles using ROYGBIV spectrum colors.
-    /// Creates glowing overlays on affected tiles to show where effects are active
+    /// Visualizes Heart Power effects at world positions using ROYGBIV spectrum colors.
+    /// Creates glowing overlays on affected positions to show where effects are active
     /// and their intensity.
+    /// Works purely with Vector3 world positions.
     /// </summary>
     public class HeartPowerTileVisualizer : MonoBehaviour
     {
         #region Nested Types
 
         /// <summary>
-        /// Represents a visual effect on a single tile.
+        /// Represents a visual effect at a world position.
         /// </summary>
-        private class TileEffect
+        private class PositionEffect
         {
-            public Vector2Int tile;
+            public Vector3 worldPosition;
             public HeartPowerType powerType;
             public float intensity;          // 0-1, how strong the effect is
             public float expirationTime;     // Time.time when effect expires
@@ -34,15 +34,15 @@ namespace FaeMaze.HeartPowers
 
         [Header("Visual Settings")]
         [SerializeField]
-        [Tooltip("Size of the tile overlay sprite (in world units)")]
+        [Tooltip("Size of the overlay sprite (in world units)")]
         private float overlaySize = 1.0f;
 
         [SerializeField]
-        [Tooltip("Sorting layer name for tile overlays (e.g., 'Default', 'Terrain', 'Effects')")]
+        [Tooltip("Sorting layer name for overlays (e.g., 'Default', 'Terrain', 'Effects')")]
         private string sortingLayerName = "Default";
 
         [SerializeField]
-        [Tooltip("Sorting order within the layer for tile overlays")]
+        [Tooltip("Sorting order within the layer for overlays")]
         private int sortingOrder = 100;
 
         [SerializeField]
@@ -61,8 +61,7 @@ namespace FaeMaze.HeartPowers
 
         #region Private Fields
 
-        private MazeGridBehaviour mazeGridBehaviour;
-        private Dictionary<Vector2Int, List<TileEffect>> tileEffects = new Dictionary<Vector2Int, List<TileEffect>>();
+        private List<PositionEffect> activeEffects = new List<PositionEffect>();
         private GameObject effectsContainer;
 
         // ROYGBIV spectrum colors matching HeartPowerPanelController
@@ -80,8 +79,7 @@ namespace FaeMaze.HeartPowers
         };
 
         // Reusable lists for cleanup
-        private readonly List<Vector2Int> _tilesToRemove = new List<Vector2Int>();
-        private readonly List<TileEffect> _effectsToRemove = new List<TileEffect>();
+        private readonly List<PositionEffect> _effectsToRemove = new List<PositionEffect>();
 
         #endregion
 
@@ -89,17 +87,8 @@ namespace FaeMaze.HeartPowers
 
         private void Awake()
         {
-            mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-
-            if (mazeGridBehaviour == null)
-            {
-            }
-            else
-            {
-            }
-
             // Create container for all effect visuals
-            effectsContainer = new GameObject("HeartPowerTileEffects");
+            effectsContainer = new GameObject("HeartPowerEffects");
             effectsContainer.transform.SetParent(transform);
         }
 
@@ -114,31 +103,21 @@ namespace FaeMaze.HeartPowers
         #region Public Methods
 
         /// <summary>
-        /// Adds a visual effect to a tile.
+        /// Adds a visual effect at a world position.
         /// </summary>
-        /// <param name="tile">Grid position of the tile</param>
-        /// <param name="powerType">Which Heart Power is affecting this tile</param>
+        /// <param name="worldPos">World position for the effect</param>
+        /// <param name="powerType">Which Heart Power is affecting this position</param>
         /// <param name="intensity">Effect strength (0-1)</param>
         /// <param name="duration">How long the effect lasts (0 = permanent)</param>
-        public void AddTileEffect(Vector2Int tile, HeartPowerType powerType, float intensity, float duration)
+        public void AddEffect(Vector3 worldPos, HeartPowerType powerType, float intensity, float duration)
         {
-
-            if (mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            // Ensure tile effects list exists
-            if (!tileEffects.ContainsKey(tile))
-            {
-                tileEffects[tile] = new List<TileEffect>();
-            }
-
-            // Check if this power type is already affecting this tile
+            // Check if this power type already has an effect at similar position
             bool foundExisting = false;
-            foreach (var effect in tileEffects[tile])
+            float proximityThreshold = 0.5f;
+
+            foreach (var effect in activeEffects)
             {
-                if (effect.powerType == powerType)
+                if (effect.powerType == powerType && Vector3.Distance(effect.worldPosition, worldPos) < proximityThreshold)
                 {
                     // Update existing effect
                     effect.intensity = intensity;
@@ -151,17 +130,16 @@ namespace FaeMaze.HeartPowers
             if (!foundExisting)
             {
                 // Create new effect
-                TileEffect newEffect = new TileEffect
+                PositionEffect newEffect = new PositionEffect
                 {
-                    tile = tile,
+                    worldPosition = worldPos,
                     powerType = powerType,
                     intensity = intensity,
                     expirationTime = duration > 0 ? Time.time + duration : 0
                 };
 
                 CreateVisualForEffect(newEffect);
-                tileEffects[tile].Add(newEffect);
-
+                activeEffects.Add(newEffect);
             }
         }
 
@@ -170,91 +148,49 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void RemoveEffectsByPowerType(HeartPowerType powerType)
         {
-            _tilesToRemove.Clear();
+            _effectsToRemove.Clear();
 
-            foreach (var kvp in tileEffects)
+            foreach (var effect in activeEffects)
             {
-                _effectsToRemove.Clear();
-
-                foreach (var effect in kvp.Value)
+                if (effect.powerType == powerType)
                 {
-                    if (effect.powerType == powerType)
-                    {
-                        _effectsToRemove.Add(effect);
-                    }
-                }
-
-                // Remove the effects
-                foreach (var effect in _effectsToRemove)
-                {
-                    DestroyEffect(effect);
-                    kvp.Value.Remove(effect);
-                }
-
-                // Mark tile for removal if no effects remain
-                if (kvp.Value.Count == 0)
-                {
-                    _tilesToRemove.Add(kvp.Key);
+                    _effectsToRemove.Add(effect);
                 }
             }
 
-            // Remove empty tiles
-            foreach (var tile in _tilesToRemove)
+            foreach (var effect in _effectsToRemove)
             {
-                tileEffects.Remove(tile);
+                DestroyEffect(effect);
+                activeEffects.Remove(effect);
             }
-
         }
 
         /// <summary>
-        /// Removes all tile effects.
+        /// Removes all effects.
         /// </summary>
         public void ClearAllEffects()
         {
-            foreach (var kvp in tileEffects)
+            foreach (var effect in activeEffects)
             {
-                foreach (var effect in kvp.Value)
-                {
-                    DestroyEffect(effect);
-                }
+                DestroyEffect(effect);
             }
 
-            tileEffects.Clear();
+            activeEffects.Clear();
         }
 
         /// <summary>
-        /// Offsets all existing visuals by a grid/world offset (used when the maze grid expands).
+        /// Offsets all existing visuals by a world offset (used when the maze expands).
         /// </summary>
-        public void ApplyGridOffset(Vector2Int gridOffset, Vector3 worldOffset)
+        public void ApplyWorldOffset(Vector3 worldOffset)
         {
-            if (tileEffects.Count == 0)
+            foreach (var effect in activeEffects)
             {
-                return;
-            }
-
-            var updatedEffects = new Dictionary<Vector2Int, List<TileEffect>>(tileEffects.Count);
-
-            foreach (var kvp in tileEffects)
-            {
-                Vector2Int newTile = kvp.Key + gridOffset;
-                if (!updatedEffects.TryGetValue(newTile, out var effects))
+                effect.worldPosition += worldOffset;
+                if (effect.visualObject != null)
                 {
-                    effects = new List<TileEffect>();
-                    updatedEffects[newTile] = effects;
-                }
-
-                foreach (var effect in kvp.Value)
-                {
-                    effect.tile = newTile;
-                    if (effect.visualObject != null)
-                    {
-                        effect.visualObject.transform.position += worldOffset;
-                    }
-                    effects.Add(effect);
+                    effect.visualObject.transform.position += worldOffset;
                 }
             }
-
-            tileEffects = updatedEffects;
         }
 
         #endregion
@@ -262,18 +198,15 @@ namespace FaeMaze.HeartPowers
         #region Private Methods
 
         /// <summary>
-        /// Creates a visual overlay for a tile effect.
+        /// Creates a visual overlay for an effect.
         /// </summary>
-        private void CreateVisualForEffect(TileEffect effect)
+        private void CreateVisualForEffect(PositionEffect effect)
         {
-            if (mazeGridBehaviour == null) return;
-
-            // Get world position for this tile
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(effect.tile.x, effect.tile.y);
+            Vector3 worldPos = effect.worldPosition;
             worldPos.z = 0; // Ensure sprite is at Z=0 for 2D visibility
 
             // Create game object for this effect
-            GameObject effectObj = new GameObject($"TileEffect_{effect.powerType}_{effect.tile}");
+            GameObject effectObj = new GameObject($"Effect_{effect.powerType}");
             effectObj.transform.SetParent(effectsContainer.transform);
             effectObj.transform.position = worldPos;
 
@@ -284,13 +217,12 @@ namespace FaeMaze.HeartPowers
             sr.sortingLayerName = sortingLayerName;
             sr.sortingOrder = sortingOrder;
 
-            // Scale to fit tile
+            // Scale overlay
             effectObj.transform.localScale = Vector3.one * overlaySize;
 
             // Store references
             effect.visualObject = effectObj;
             effect.spriteRenderer = sr;
-
         }
 
         /// <summary>
@@ -300,21 +232,18 @@ namespace FaeMaze.HeartPowers
         {
             float pulsePhase = Time.time * pulseSpeed;
 
-            foreach (var kvp in tileEffects)
+            foreach (var effect in activeEffects)
             {
-                foreach (var effect in kvp.Value)
-                {
-                    if (effect.spriteRenderer == null) continue;
+                if (effect.spriteRenderer == null) continue;
 
-                    // Calculate pulsing alpha
-                    float pulse = (Mathf.Sin(pulsePhase) + 1f) * 0.5f; // 0 to 1
-                    float alpha = Mathf.Lerp(minAlpha, maxAlpha, pulse) * effect.intensity;
+                // Calculate pulsing alpha
+                float pulse = (Mathf.Sin(pulsePhase) + 1f) * 0.5f; // 0 to 1
+                float alpha = Mathf.Lerp(minAlpha, maxAlpha, pulse) * effect.intensity;
 
-                    // Apply color with pulsing alpha
-                    Color color = GetColorForPowerType(effect.powerType);
-                    color.a = alpha;
-                    effect.spriteRenderer.color = color;
-                }
+                // Apply color with pulsing alpha
+                Color color = GetColorForPowerType(effect.powerType);
+                color.a = alpha;
+                effect.spriteRenderer.color = color;
             }
         }
 
@@ -323,45 +252,27 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void CleanupExpiredEffects()
         {
-            _tilesToRemove.Clear();
+            _effectsToRemove.Clear();
 
-            foreach (var kvp in tileEffects)
+            foreach (var effect in activeEffects)
             {
-                _effectsToRemove.Clear();
-
-                foreach (var effect in kvp.Value)
+                if (effect.IsExpired)
                 {
-                    if (effect.IsExpired)
-                    {
-                        _effectsToRemove.Add(effect);
-                    }
-                }
-
-                // Destroy expired effects
-                foreach (var effect in _effectsToRemove)
-                {
-                    DestroyEffect(effect);
-                    kvp.Value.Remove(effect);
-                }
-
-                // Mark for removal if empty
-                if (kvp.Value.Count == 0)
-                {
-                    _tilesToRemove.Add(kvp.Key);
+                    _effectsToRemove.Add(effect);
                 }
             }
 
-            // Remove empty tile entries
-            foreach (var tile in _tilesToRemove)
+            foreach (var effect in _effectsToRemove)
             {
-                tileEffects.Remove(tile);
+                DestroyEffect(effect);
+                activeEffects.Remove(effect);
             }
         }
 
         /// <summary>
         /// Destroys the visual object for an effect.
         /// </summary>
-        private void DestroyEffect(TileEffect effect)
+        private void DestroyEffect(PositionEffect effect)
         {
             if (effect.visualObject != null)
             {
@@ -383,7 +294,7 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Creates a simple circle sprite for tile overlays.
+        /// Creates a simple circle sprite for overlays.
         /// </summary>
         private Sprite CreateCircleSprite()
         {

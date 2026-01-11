@@ -6,6 +6,7 @@ namespace FaeMaze.Visitors
     /// Sleepwalking Devotee archetype - begins in a trance,
     /// pulled directly toward the Heart, but reacts strongly to interference.
     /// High-value target for essence rewards.
+    /// Uses world-space navigation for all pathfinding.
     /// </summary>
     public class SleepwalkingDevoteeController : VisitorControllerBase
     {
@@ -54,6 +55,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Sets up initial mesmerized state for Devotees.
         /// Called at spawn to put them into trance toward the Heart.
+        /// Uses world-space navigation.
         /// </summary>
         private void InitializeMesmerizedState()
         {
@@ -66,19 +68,12 @@ namespace FaeMaze.Visitors
                 currentStateTimer = currentStateDuration;
                 state = VisitorState.Mesmerized;
 
-                // Ensure destination is the Heart
-                if (mazeGridBehaviour != null && gameController != null && gameController.Heart != null)
+                // Ensure destination is the Heart using world-space position
+                if (mazeGridBehaviour != null)
                 {
-                    Vector3 heartWorldPos = gameController.Heart.transform.position;
-                    if (mazeGridBehaviour.WorldToGrid(heartWorldPos, out int hx, out int hy))
-                    {
-                        originalDestination = new Vector2Int(hx, hy);
-
-                        // Recalculate path to heart
-                        RecalculatePath();
-                    }
+                    Vector3 heartWorldPos = mazeGridBehaviour.HeartWorldPosition;
+                    SetWorldDestination(heartWorldPos);
                 }
-
             }
         }
 
@@ -177,20 +172,19 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Devotees always head toward Heart when mesmerized.
+        /// Uses world-space navigation.
         /// </summary>
         protected override Vector2Int GetDestinationForCurrentState(Vector2Int currentPos)
         {
             if (isMesmerized)
             {
-                // Always head to Heart while mesmerized
-                if (gameController != null && gameController.Heart != null)
+                // Always head to Heart while mesmerized - use world-space destination
+                if (mazeGridBehaviour != null)
                 {
-                    Vector3 heartWorldPos = gameController.Heart.transform.position;
-                    if (mazeGridBehaviour.WorldToGrid(heartWorldPos, out int hx, out int hy))
-                    {
-                        return new Vector2Int(hx, hy);
-                    }
+                    Vector3 heartWorldPos = mazeGridBehaviour.HeartWorldPosition;
+                    SetWorldDestination(heartWorldPos);
                 }
+                return originalDestination;
             }
 
             // If frightened, still prefer Heart over exits (drawn to it)
