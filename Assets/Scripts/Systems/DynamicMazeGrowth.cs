@@ -1417,25 +1417,16 @@ namespace FaeMaze.Systems
 
                 while (true)
                 {
-                    // Mark this cell and a small radius around it as walkable (to ensure path width)
-                    for (int oy = -1; oy <= 1; oy++)
+                    // Mark only the current cell as walkable (1-cell wide path)
+                    if (x >= 0 && x < grid.Width && y >= 0 && y < grid.Height)
                     {
-                        for (int ox = -1; ox <= 1; ox++)
+                        var node = grid.GetNode(x, y);
+                        if (node != null && !node.walkable)
                         {
-                            int nx = x + ox;
-                            int ny = y + oy;
-
-                            if (nx >= 0 && nx < grid.Width && ny >= 0 && ny < grid.Height)
-                            {
-                                var node = grid.GetNode(nx, ny);
-                                if (node != null && !node.walkable)
-                                {
-                                    node.walkable = true;
-                                    node.symbol = '.';
-                                    node.SetTerrain(TileType.Path);
-                                    markedCount++;
-                                }
-                            }
+                            node.walkable = true;
+                            node.symbol = '.';
+                            node.SetTerrain(TileType.Path);
+                            markedCount++;
                         }
                     }
 

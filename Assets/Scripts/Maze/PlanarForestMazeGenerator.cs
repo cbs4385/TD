@@ -1152,8 +1152,8 @@ namespace ForestMaze
                 }
             }
 
-            // Draw paths (edges)
-            int pathWidth = Mathf.Max(2, Mathf.RoundToInt(PATH_WIDTH * scale * 2));
+            // Draw paths (edges) - use narrow 1-cell wide paths
+            int pathWidth = 1;  // Always 1 cell wide for clean pathfinding
             foreach (var edge in state.Edges.Where(e => e.PolylinePoints.Count > 1))
             {
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
@@ -1367,8 +1367,8 @@ namespace ForestMaze
             float scale = state.Scale;
             Vector2 offset = state.Offset;
 
-            // Calculate path width based on scale
-            int pathWidth = Mathf.Max(2, Mathf.RoundToInt(PATH_WIDTH * scale * 2));
+            // Calculate path width - use narrow 1-cell wide paths
+            int pathWidth = 1;  // Always 1 cell wide for clean pathfinding
 
             // Rasterize edges connected to these nodes
             var edgesToRasterize = state.Edges.Where(e =>
