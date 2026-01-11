@@ -132,24 +132,9 @@ namespace FaeMaze.Systems
 
             Debug.Log($"[DynamicGrowth] Initializing spawn points from {forestMapState.Frontier.Count} frontier edges");
 
-            // World-space mode: no grid-based connectivity needed, work directly with coordinates
-            if (mazeGridBehaviour.UseWorldSpaceCoordinates)
-            {
-                RebuildSpawnPointsFromFrontier();
-                Debug.Log("[DynamicGrowth] Initialization complete using world-space coordinates");
-                return;
-            }
-
-            // Grid-based mode (legacy): ensure connectivity then rebuild spawn points
-            if (mazeGridBehaviour.Grid == null)
-            {
-                return;
-            }
-
-            EnsureFrontierEdgeConnectivity(forestMapState, mazeGridBehaviour.Grid);
+            // Pure world-space - no grid-based connectivity needed
             RebuildSpawnPointsFromFrontier();
-
-            Debug.Log("[DynamicGrowth] Initialization complete using grid-based logic");
+            Debug.Log("[DynamicGrowth] Initialization complete using world-space coordinates");
         }
 
         #endregion
