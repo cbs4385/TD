@@ -416,25 +416,21 @@ namespace FaeMaze.Systems
             // Calculate world radius: nodeRadius (graph units) * graphScale (grid cells per graph unit) * tileSize (world units per grid cell)
             // Use the larger nodeRadius for greedy coverage
             float worldRadius = nodeRadius * tileSize * graphScale;
-            float cylinderHeight = 0.3f;
 
             // Unity cylinder default: radius 0.5 (diameter 1), height 2, oriented along Y axis
             // To create a flat disc on the XY plane:
             // 1. Scale to get the right diameter and thickness
             // 2. Rotate so the circular face is parallel to XY plane (height along Z)
 
-            // First set scale (applied before rotation):
-            // - X scale = diameter (for X radius)
-            // - Y scale = height/2 (since default height is 2)
-            // - Z scale = diameter (for Z radius, which becomes Y after rotation)
+            // Scale: X and Z for diameter, Y for thickness (0.03 for thin disc)
             float diameter = worldRadius * 2f;
-            cylinder.transform.localScale = new Vector3(diameter, cylinderHeight / 2f, diameter);
+            cylinder.transform.localScale = new Vector3(diameter, 0.03f, diameter);
 
             // Rotate 90° around X so the cylinder lies flat (circular face in XY plane, thickness along Z)
             cylinder.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
-            // Position cylinder - offset Z slightly behind tiles so tiles render on top
-            cylinder.transform.position = worldPos + new Vector3(0f, 0f, 0.05f);
+            // Position cylinder at Z=0 (same plane as tiles)
+            cylinder.transform.position = worldPos;
 
             // Apply path material to match path tiles
             Material pathMaterial = PBRMaterialFactory.CreatePathMaterial(pathColor);
@@ -455,7 +451,7 @@ namespace FaeMaze.Systems
             // Cylinders cannot be combined with cube meshes properly
 
             Debug.Log($"[MazeRenderer] Created node column cylinder for node {node.Id} at world ({worldPos.x:F2}, {worldPos.y:F2}), " +
-                $"worldRadius={worldRadius:F2}, diameter={diameter:F2}, height={cylinderHeight:F2}, graphScale={graphScale:F2}, tileSize={tileSize:F4}");
+                $"worldRadius={worldRadius:F2}, diameter={diameter:F2}, yScale=0.03, graphScale={graphScale:F2}, tileSize={tileSize:F4}");
         }
 
         /// <summary>
@@ -535,8 +531,8 @@ namespace FaeMaze.Systems
             // Project walls from nodes (radially outward beyond the column radius)
             foreach (var node in forestState.Nodes)
             {
-                // Place walls in rings around the node, starting just outside nodeRadius
-                float startRadius = nodeRadius + graphStepSize;
+                // Place walls in rings around the node, starting at the edge of nodeRadius
+                float startRadius = nodeRadius;
                 float endRadius = nodeRadius + wallBorderDepth;
 
                 // Angular step for good coverage
@@ -579,7 +575,7 @@ namespace FaeMaze.Systems
             PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions)
         {
             float graphStepSize = 1.0f / graphScale;
-            float nodeBuffer = 0.3f; // Buffer to prevent walls from touching node columns
+            float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
             int maxIterations = 10; // Prevent infinite loops
 
             Vector2 currentPos = wallGraphPos;
@@ -670,7 +666,7 @@ namespace FaeMaze.Systems
         private bool IsWallPositionValid(Vector2 wallGraphPos, PlanarForestMazeGenerator.ForestMapState forestState,
             HashSet<long> occupiedWallPositions)
         {
-            float nodeBuffer = 0.3f;
+            float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
 
             // Check if already occupied by path tiles
             long wallKey = GetQuantizedKey(wallGraphPos);
