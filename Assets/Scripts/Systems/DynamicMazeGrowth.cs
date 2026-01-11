@@ -332,8 +332,8 @@ namespace FaeMaze.Systems
 
             Debug.Log($"[DynamicGrowth] Grid merge: preserved {preservedPathCount} path cells, {preservedVoidCount} void cells | added {addedPathCount} paths, {addedWallCount} walls");
 
-            // Ensure wall borders around newly added walkable content
-            EnsureWallBordersAroundTiles(newWalkableTiles, 3);
+            // DISABLED: Border creation interferes with gap-filling connectivity
+            // EnsureWallBordersAroundTiles(newWalkableTiles, 3);
 
             // Ensure all frontier edge endpoints are reachable from their node centers
             // Gap-filling will create walkable tiles along polyline points automatically
