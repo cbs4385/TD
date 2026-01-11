@@ -588,6 +588,7 @@ namespace FaeMaze.Systems
             // Clear ALL existing portals and debug visualizations
             // This ensures we remove portals for edges that have been completed
             var portalsToRemove = new List<char>(spawnPointPortals.Keys);
+            Debug.Log($"[DynamicGrowth] Portal dictionary contains {spawnPointPortals.Count} entries before clearing: [{string.Join(", ", portalsToRemove.Select(id => $"'{id}'"))}]");
             foreach (char spawnId in portalsToRemove)
             {
                 RemovePortalAtSpawnPoint(spawnId);
@@ -755,6 +756,9 @@ namespace FaeMaze.Systems
                     Debug.LogWarning($"[DynamicGrowth] Could not place spawn point for edge {edgeId} - no reachable walkable cells found near endpoint {endpointGrid}");
                 }
             }
+
+            // Log final portal dictionary state after all portals created
+            Debug.Log($"[DynamicGrowth] Portal dictionary contains {spawnPointPortals.Count} entries after creation: [{string.Join(", ", spawnPointPortals.Keys.Select(id => $"'{id}'"))}]");
 
             // Rebuild the spawn points dictionary
             RebuildSpawnPointsDictionary();
@@ -1664,6 +1668,98 @@ namespace FaeMaze.Systems
             if (endpointsMarked > 0)
             {
                 Debug.Log($"[DynamicGrowth] Marked {endpointsMarked} additional cells near endpoints as walkable");
+            }
+
+            // Ensure each endpoint area is actually connected to the node center
+            // The endpoint cells may have been marked walkable but isolated from the path network
+            int connectionsCreated = 0;
+            foreach (int edgeId in state.Frontier)
+            {
+                var edge = state.Edges[edgeId];
+                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+
+                // Get node center and endpoint
+                var connectedNode = state.Nodes[edge.NodeA];
+                Vector2 nodeCenter = connectedNode.Position * scale + offset;
+                Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
+
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
+
+                // Do flood fill from node center to check if endpoint is reachable
+                HashSet<Vector2Int> reachable = new HashSet<Vector2Int>();
+                Queue<Vector2Int> floodQueue = new Queue<Vector2Int>();
+                floodQueue.Enqueue(nodeCenterGrid);
+                reachable.Add(nodeCenterGrid);
+
+                while (floodQueue.Count > 0 && !reachable.Contains(endpointGrid))
+                {
+                    Vector2Int current = floodQueue.Dequeue();
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        for (int dx = -1; dx <= 1; dx++)
+                        {
+                            if (dx == 0 && dy == 0) continue;
+                            int nx = current.x + dx;
+                            int ny = current.y + dy;
+                            if (nx < 0 || nx >= grid.Width || ny < 0 || ny >= grid.Height) continue;
+                            Vector2Int neighbor = new Vector2Int(nx, ny);
+                            if (reachable.Contains(neighbor)) continue;
+                            if (gridArray[ny, nx] == '.' || gridArray[ny, nx] == 'N')
+                            {
+                                reachable.Add(neighbor);
+                                floodQueue.Enqueue(neighbor);
+                            }
+                        }
+                    }
+                }
+
+                // If endpoint not reachable, create direct path from endpoint to nearest reachable cell
+                if (!reachable.Contains(endpointGrid))
+                {
+                    Debug.Log($"[DynamicGrowth] Edge {edgeId}: Endpoint {endpointGrid} not reachable from node center, creating direct path");
+
+                    // Find the nearest reachable cell to the endpoint
+                    Vector2Int nearestReachable = nodeCenterGrid;
+                    float minDist = float.MaxValue;
+                    foreach (var cell in reachable)
+                    {
+                        float dist = (cell.x - endpointGrid.x) * (cell.x - endpointGrid.x) +
+                                     (cell.y - endpointGrid.y) * (cell.y - endpointGrid.y);
+                        if (dist < minDist)
+                        {
+                            minDist = dist;
+                            nearestReachable = cell;
+                        }
+                    }
+
+                    // Create path from endpoint to nearest reachable using Bresenham line
+                    int x0 = endpointGrid.x, y0 = endpointGrid.y;
+                    int x1 = nearestReachable.x, y1 = nearestReachable.y;
+                    int dx = Mathf.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+                    int dy = -Mathf.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+                    int err = dx + dy;
+
+                    while (true)
+                    {
+                        if (x0 >= 0 && x0 < grid.Width && y0 >= 0 && y0 < grid.Height)
+                        {
+                            if (gridArray[y0, x0] == '#')
+                            {
+                                gridArray[y0, x0] = '.';
+                                connectionsCreated++;
+                            }
+                        }
+                        if (x0 == x1 && y0 == y1) break;
+                        int e2 = 2 * err;
+                        if (e2 >= dy) { err += dy; x0 += sx; }
+                        if (e2 <= dx) { err += dx; y0 += sy; }
+                    }
+                }
+            }
+            if (connectionsCreated > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Created {connectionsCreated} path tiles to connect isolated endpoints");
             }
 
             // Apply changes back to MazeGrid
