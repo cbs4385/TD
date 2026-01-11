@@ -109,6 +109,9 @@ namespace ForestMaze
         /// <summary>Wall border depth in tiles</summary>
         public int WallBorderDepth = 3;
 
+        /// <summary>Spawn points mapped by their ID character to world position</summary>
+        public Dictionary<char, Vector3> SpawnPoints = new Dictionary<char, Vector3>();
+
         /// <summary>Spatial lookup for quick tile access by position</summary>
         private Dictionary<Vector2Int, List<WorldSpaceTile>> _spatialGrid;
 
@@ -190,6 +193,42 @@ namespace ForestMaze
                 Mathf.FloorToInt(position.x * SPATIAL_GRID_RESOLUTION),
                 Mathf.FloorToInt(position.y * SPATIAL_GRID_RESOLUTION)
             );
+        }
+
+        /// <summary>
+        /// Registers a spawn point at a world position.
+        /// </summary>
+        public void RegisterSpawnPoint(char spawnId, Vector3 worldPosition)
+        {
+            SpawnPoints[spawnId] = worldPosition;
+        }
+
+        /// <summary>
+        /// Removes a spawn point by ID.
+        /// </summary>
+        public void RemoveSpawnPoint(char spawnId)
+        {
+            SpawnPoints.Remove(spawnId);
+        }
+
+        /// <summary>
+        /// Clears all spawn points.
+        /// </summary>
+        public void ClearSpawnPoints()
+        {
+            SpawnPoints.Clear();
+        }
+
+        /// <summary>
+        /// Gets a spawn point world position by ID.
+        /// </summary>
+        public Vector3? GetSpawnPointPosition(char spawnId)
+        {
+            if (SpawnPoints.TryGetValue(spawnId, out var pos))
+            {
+                return pos;
+            }
+            return null;
         }
 
         /// <summary>

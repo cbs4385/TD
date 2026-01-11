@@ -113,7 +113,7 @@ namespace FaeMaze.Systems
         /// </summary>
         private void InitializeSpawnPointPortals()
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            if (mazeGridBehaviour == null)
             {
                 return;
             }
@@ -130,18 +130,26 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Use IDENTICAL logic to growth cycles:
-            // 1. Ensure connectivity via gap-filling (which creates walkable tiles along polylines)
-            // 2. Rebuild spawn points from frontier edges
-            // 3. Create portals for those spawn points
-
             Debug.Log($"[DynamicGrowth] Initializing spawn points from {forestMapState.Frontier.Count} frontier edges");
 
-            EnsureFrontierEdgeConnectivity(forestMapState, mazeGridBehaviour.Grid);
+            // World-space mode: no grid-based connectivity needed, work directly with coordinates
+            if (mazeGridBehaviour.UseWorldSpaceCoordinates)
+            {
+                RebuildSpawnPointsFromFrontier();
+                Debug.Log("[DynamicGrowth] Initialization complete using world-space coordinates");
+                return;
+            }
 
+            // Grid-based mode (legacy): ensure connectivity then rebuild spawn points
+            if (mazeGridBehaviour.Grid == null)
+            {
+                return;
+            }
+
+            EnsureFrontierEdgeConnectivity(forestMapState, mazeGridBehaviour.Grid);
             RebuildSpawnPointsFromFrontier();
 
-            Debug.Log("[DynamicGrowth] Initialization complete using growth cycle logic");
+            Debug.Log("[DynamicGrowth] Initialization complete using grid-based logic");
         }
 
         #endregion
@@ -154,9 +162,9 @@ namespace FaeMaze.Systems
         /// </summary>
         public void GrowMaze()
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            if (mazeGridBehaviour == null)
             {
-                Debug.LogWarning("[DynamicGrowth] MazeGridBehaviour or Grid is null");
+                Debug.LogWarning("[DynamicGrowth] MazeGridBehaviour is null");
                 return;
             }
 
@@ -170,6 +178,20 @@ namespace FaeMaze.Systems
             if (forestMapState.Frontier.Count == 0)
             {
                 Debug.Log("[DynamicGrowth] No frontier edges available for growth");
+                return;
+            }
+
+            // World-space mode: use simplified growth that works with world coordinates
+            if (mazeGridBehaviour.UseWorldSpaceCoordinates)
+            {
+                GrowMazeWorldSpace(forestMapState);
+                return;
+            }
+
+            // Grid-based mode (legacy)
+            if (mazeGridBehaviour.Grid == null)
+            {
+                Debug.LogWarning("[DynamicGrowth] Grid is null");
                 return;
             }
 
@@ -361,6 +383,74 @@ namespace FaeMaze.Systems
             }
 
             Debug.Log("[DynamicGrowth] Growth cycle complete");
+        }
+
+        /// <summary>
+        /// World-space version of GrowMaze.
+        /// Works directly with world-space coordinates without any grid-based operations.
+        /// </summary>
+        private void GrowMazeWorldSpace(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
+        {
+            int frontierCountBefore = forestMapState.Frontier.Count;
+            Debug.Log($"[DynamicGrowth-WorldSpace] Starting growth cycle with {frontierCountBefore} frontier edges");
+
+            // Use the same Step() method as initial generation to add a new node
+            int nodeCountBefore = forestMapState.Nodes.Count;
+            bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
+
+            if (!success)
+            {
+                Debug.LogWarning("[DynamicGrowth-WorldSpace] Step() failed - no valid placement found");
+                return;
+            }
+
+            // Get the newly created node
+            int newNodeId = nodeCountBefore;
+            var newNode = forestMapState.Nodes[newNodeId];
+
+            float scale = forestMapState.Scale;
+            Vector2 offset = forestMapState.Offset;
+            float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
+
+            Debug.Log($"[DynamicGrowth-WorldSpace] Created node {newNodeId} at position ({newNode.Position.x:F2}, {newNode.Position.y:F2})");
+            Debug.Log($"[DynamicGrowth-WorldSpace] Frontier count: {frontierCountBefore} → {forestMapState.Frontier.Count}");
+
+            // Regenerate world-space maze data from updated graph
+            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (worldSpaceData != null)
+            {
+                // Update world-space data from the graph
+                // The graph has already been updated by Step()
+                worldSpaceData = Maze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, tileSize);
+
+                // Update the reference in MazeGridBehaviour using reflection
+                var worldSpaceDataField = typeof(MazeGridBehaviour).GetField("worldSpaceMazeData",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (worldSpaceDataField != null)
+                {
+                    worldSpaceDataField.SetValue(mazeGridBehaviour, worldSpaceData);
+                }
+            }
+
+            // Rebuild portals from frontier edges using world-space coordinates
+            var removedSpawnPoints = RebuildSpawnPointsFromFrontier();
+
+            // Refresh the maze renderer to show new geometry
+            if (mazeRenderer != null)
+            {
+                mazeRenderer.RefreshMaze();
+            }
+
+            // Trigger visitor path recalculation
+            TriggerVisitorPathRecalculation();
+
+            // Signal visitors to retarget from removed exits
+            if (removedSpawnPoints != null && removedSpawnPoints.Count > 0)
+            {
+                SignalVisitorsToRetargetFromRemovedExits(removedSpawnPoints);
+            }
+
+            Debug.Log("[DynamicGrowth-WorldSpace] Growth cycle complete");
         }
 
         /// <summary>
@@ -566,6 +656,12 @@ namespace FaeMaze.Systems
         {
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return new List<Vector2Int>();
+
+            // Use world-space portal placement when enabled - no grid-based tests
+            if (mazeGridBehaviour.UseWorldSpaceCoordinates)
+            {
+                return RebuildSpawnPointsFromFrontierWorldSpace();
+            }
 
             var grid = mazeGridBehaviour.Grid;
             float scale = forestMapState.Scale;
@@ -794,6 +890,169 @@ namespace FaeMaze.Systems
             // Return removed spawn points for deferred visitor retargeting
             // (will be called from GrowMaze after all updates complete)
             return removedSpawnPoints;
+        }
+
+        /// <summary>
+        /// World-space version of RebuildSpawnPointsFromFrontier.
+        /// Works purely with world-space coordinates without any grid-based reachability tests.
+        /// For frontier edges, the polyline defines the path - no flood fill needed.
+        /// </summary>
+        private List<Vector2Int> RebuildSpawnPointsFromFrontierWorldSpace()
+        {
+            var forestMapState = mazeGridBehaviour.ForestMapState;
+            if (forestMapState == null) return new List<Vector2Int>();
+
+            float scale = forestMapState.Scale;
+            Vector2 offset = forestMapState.Offset;
+            float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
+
+            // Capture current spawn points before clearing
+            var oldSpawnPoints = new Dictionary<Vector2Int, char>();
+            var currentSpawns = mazeGridBehaviour.GetAllSpawnPoints();
+            if (currentSpawns != null)
+            {
+                foreach (var kvp in currentSpawns)
+                {
+                    oldSpawnPoints[kvp.Value] = kvp.Key;
+                }
+            }
+
+            // Clear ALL existing portals
+            var portalsToRemove = new List<char>(spawnPointPortals.Keys);
+            Debug.Log($"[DynamicGrowth-WorldSpace] Portal dictionary contains {spawnPointPortals.Count} entries before clearing: [{string.Join(", ", portalsToRemove.Select(id => $"'{id}'"))}]");
+            foreach (char spawnId in portalsToRemove)
+            {
+                RemovePortalAtSpawnPoint(spawnId);
+            }
+
+            // Clear any orphaned portal objects
+            if (portalsParent != null)
+            {
+                List<Transform> toDestroy = new List<Transform>();
+                foreach (Transform child in portalsParent)
+                {
+                    if (child != null && child.name.StartsWith("Portal_"))
+                    {
+                        toDestroy.Add(child);
+                    }
+                }
+                foreach (var child in toDestroy)
+                {
+                    DestroyImmediate(child.gameObject);
+                }
+                if (toDestroy.Count > 0)
+                {
+                    Debug.Log($"[DynamicGrowth-WorldSpace] Destroyed {toDestroy.Count} orphaned portal objects");
+                }
+            }
+
+            // Reset spawn ID index
+            nextSpawnIdIndex = 0;
+
+            // Place portals at partial edge endpoints using world-space coordinates directly
+            // For frontier edges, the polyline defines the path - the endpoint is ALWAYS reachable
+            int portalCount = 0;
+            foreach (int edgeId in forestMapState.Frontier)
+            {
+                var edge = forestMapState.Edges[edgeId];
+                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+
+                // Get the connected node center in world space
+                var connectedNode = forestMapState.Nodes[edge.NodeA];
+                Vector2 nodeCenterLogical = connectedNode.Position * scale + offset;
+                Vector3 nodeCenterWorld = new Vector3(nodeCenterLogical.x * tileSize, nodeCenterLogical.y * tileSize, 0f);
+
+                // Get the endpoint (last point in polyline) in world space
+                Vector2 endpointLogical = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                Vector3 endpointWorld = new Vector3(endpointLogical.x * tileSize, endpointLogical.y * tileSize, 0f);
+
+                Debug.Log($"[DynamicGrowth-WorldSpace] Edge {edgeId}: Node {edge.NodeA} at world {nodeCenterWorld}, endpoint at world {endpointWorld}, {edge.PolylinePoints.Count} polyline points");
+
+                // Get next spawn ID
+                char spawnId = GetNextAvailableSpawnId();
+                if (spawnId == '\0')
+                {
+                    Debug.LogWarning("[DynamicGrowth-WorldSpace] No more spawn IDs available");
+                    break;
+                }
+
+                // Create portal at the world-space endpoint position
+                // No grid tests needed - the polyline IS the path, endpoint is always reachable
+                CreatePortalAtWorldPosition(spawnId, endpointWorld, nodeCenterWorld);
+
+                // Also update spawn points in the world-space data
+                var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+                if (worldSpaceData != null)
+                {
+                    // Register the spawn point at this world position
+                    worldSpaceData.RegisterSpawnPoint(spawnId, endpointWorld);
+                }
+
+                Debug.Log($"[DynamicGrowth-WorldSpace] Placed portal '{spawnId}' at world position {endpointWorld}");
+                portalCount++;
+            }
+
+            Debug.Log($"[DynamicGrowth-WorldSpace] Created {portalCount} portals for {forestMapState.Frontier.Count} frontier edges");
+            Debug.Log($"[DynamicGrowth-WorldSpace] Portal dictionary now contains {spawnPointPortals.Count} entries: [{string.Join(", ", spawnPointPortals.Keys.Select(id => $"'{id}'"))}]");
+
+            // Find removed spawn points for visitor retargeting
+            var removedSpawnPoints = new List<Vector2Int>();
+            foreach (var oldSpawnPos in oldSpawnPoints.Keys)
+            {
+                // In world-space mode, we track by spawn ID, not position
+                // Mark old positions as removed for visitor retargeting
+                removedSpawnPoints.Add(oldSpawnPos);
+            }
+
+            return removedSpawnPoints;
+        }
+
+        /// <summary>
+        /// Creates a portal at a specific world-space position (no grid coordinates).
+        /// </summary>
+        private void CreatePortalAtWorldPosition(char spawnId, Vector3 worldPos, Vector3 nodeCenterWorld)
+        {
+            if (portalPrefab == null)
+            {
+                return;
+            }
+
+            // Remove existing portal at this spawn ID if it exists
+            if (spawnPointPortals.ContainsKey(spawnId))
+            {
+                RemovePortalAtSpawnPoint(spawnId);
+            }
+
+            // Calculate direction from portal to node center (for facing)
+            Vector3 directionToNode = (nodeCenterWorld - worldPos).normalized;
+            if (directionToNode == Vector3.zero)
+            {
+                directionToNode = Vector3.right; // Default facing
+            }
+
+            // Apply height offset
+            Vector3 finalWorldPos = new Vector3(worldPos.x, worldPos.y, -portalHeightOffset);
+
+            // Create rotation: +X axis points toward the node center
+            float angle = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;
+            Quaternion rotation = Quaternion.Euler(0f, 0f, angle);
+
+            // Apply maze coordinate system rotation (-90 around X to match 2D plane)
+            rotation = rotation * Quaternion.Euler(-90f, 0f, 0f);
+
+            // Instantiate portal
+            GameObject portal = Instantiate(portalPrefab, finalWorldPos, rotation, portalsParent);
+            portal.name = $"Portal_{spawnId}";
+
+            // Track portal
+            spawnPointPortals[spawnId] = portal;
+
+            Debug.Log($"[DynamicGrowth-WorldSpace] Created portal '{spawnId}' at world {finalWorldPos}, facing toward {nodeCenterWorld}");
+
+            // Create debug visualization
+            CreateDebugColumn(worldPos, nodeCenterWorld, Color.blue, $"Portal_{spawnId}_ToNode");
+            CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
+                Color.red, $"Portal_{spawnId}_XAxis");
         }
 
         /// <summary>
