@@ -700,11 +700,15 @@ namespace FaeMaze.Visitors
             var graphState = mazeGridBehaviour.ForestMapState;
             var result = new List<Vector3>();
 
+            // Convert world positions to graph space for node lookup
+            Vector2 startGraphPos = mazeGridBehaviour.WorldToGraph(start);
+            Vector2 endGraphPos = mazeGridBehaviour.WorldToGraph(end);
+
             // Find nearest node to start
-            int startNodeIndex = FindNearestNodeIndex(graphState, new Vector2(start.x, start.y));
+            int startNodeIndex = FindNearestNodeIndex(graphState, startGraphPos);
 
             // Find nearest node to end (usually the heart at index 0)
-            int endNodeIndex = FindNearestNodeIndex(graphState, new Vector2(end.x, end.y));
+            int endNodeIndex = FindNearestNodeIndex(graphState, endGraphPos);
 
             if (startNodeIndex < 0 || endNodeIndex < 0)
             {
@@ -722,10 +726,70 @@ namespace FaeMaze.Visitors
             }
 
             // Convert node path to world positions following edge polylines
-            for (int i = 0; i < nodePath.Count; i++)
+            // Add start position first
+            result.Add(start);
+
+            // For each pair of consecutive nodes, find the connecting edge and add its polyline points
+            for (int i = 0; i < nodePath.Count - 1; i++)
             {
-                var node = graphState.Nodes[nodePath[i]];
-                result.Add(new Vector3(node.Position.x, node.Position.y, start.z));
+                int nodeA = nodePath[i];
+                int nodeB = nodePath[i + 1];
+
+                // Find the edge connecting these nodes
+                ForestMaze.PlanarForestMazeGenerator.Edge connectingEdge = null;
+                bool reversePolyline = false;
+
+                foreach (var edge in graphState.Edges)
+                {
+                    if (!edge.Partial && edge.NodeB.HasValue)
+                    {
+                        if (edge.NodeA == nodeA && edge.NodeB.Value == nodeB)
+                        {
+                            connectingEdge = edge;
+                            reversePolyline = false;
+                            break;
+                        }
+                        else if (edge.NodeA == nodeB && edge.NodeB.Value == nodeA)
+                        {
+                            connectingEdge = edge;
+                            reversePolyline = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (connectingEdge != null && connectingEdge.PolylinePoints.Count > 0)
+                {
+                    // Add polyline points in correct order, converting from graph to world space
+                    if (reversePolyline)
+                    {
+                        for (int p = connectingEdge.PolylinePoints.Count - 1; p >= 0; p--)
+                        {
+                            var pt = connectingEdge.PolylinePoints[p];
+                            Vector3 worldPt = mazeGridBehaviour.GraphToWorld(pt);
+                            worldPt.z = start.z;
+                            result.Add(worldPt);
+                        }
+                    }
+                    else
+                    {
+                        for (int p = 0; p < connectingEdge.PolylinePoints.Count; p++)
+                        {
+                            var pt = connectingEdge.PolylinePoints[p];
+                            Vector3 worldPt = mazeGridBehaviour.GraphToWorld(pt);
+                            worldPt.z = start.z;
+                            result.Add(worldPt);
+                        }
+                    }
+                }
+                else
+                {
+                    // Fallback: add node position directly, converting to world space
+                    var node = graphState.Nodes[nodeB];
+                    Vector3 worldPt = mazeGridBehaviour.GraphToWorld(node.Position);
+                    worldPt.z = start.z;
+                    result.Add(worldPt);
+                }
             }
 
             // Ensure we end exactly at the destination
