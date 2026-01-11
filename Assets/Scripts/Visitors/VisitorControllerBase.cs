@@ -949,12 +949,16 @@ namespace FaeMaze.Visitors
                     // Calculate angle in XY plane (0 = +X direction)
                     float angle = Mathf.Atan2(movementDir.y, movementDir.x) * Mathf.Rad2Deg;
 
-                    // Preserve the model's base X and Y rotations (from prefab)
-                    // Only modify Z rotation for facing direction
-                    // Model's +X axis is forward, so no offset needed
-                    Vector3 currentEuler = modelInstance.transform.localEulerAngles;
-                    float targetZ = Mathf.LerpAngle(currentEuler.z, angle, Time.deltaTime * 10f);
-                    modelInstance.transform.localEulerAngles = new Vector3(currentEuler.x, currentEuler.y, targetZ);
+                    // Set world rotation with:
+                    // X: 90 to lay model flat on XY plane (Y-up models designed for XZ ground)
+                    // Y: 0 (no pitch)
+                    // Z: angle to face movement direction (model's +X axis is forward)
+                    Quaternion targetRotation = Quaternion.Euler(90f, 0f, angle);
+                    modelInstance.transform.rotation = Quaternion.Slerp(
+                        modelInstance.transform.rotation,
+                        targetRotation,
+                        Time.deltaTime * 10f
+                    );
                 }
             }
 

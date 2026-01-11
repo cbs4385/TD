@@ -285,26 +285,22 @@ namespace FaeMaze.Systems
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
 
-            // Place portals at partial edge endpoints
-            // Use second-to-last polyline point to ensure portal is on rendered path tiles
+            // Place portals at partial edge endpoints (the actual frontier)
             int portalCount = 0;
             foreach (int edgeId in forestMapState.Frontier)
             {
                 var edge = forestMapState.Edges[edgeId];
-                if (!edge.Partial || edge.PolylinePoints.Count < 2) continue;
+                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
                 // Get the connected node center - use GraphToWorld for proper coordinate conversion
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
                 Vector3 nodeCenterWorld = mazeGridBehaviour.GraphToWorld(connectedNode.Position);
 
-                // Use second-to-last polyline point for portal placement
-                // The last point extends to where a future node would be (empty space)
-                // The second-to-last point is still on the rendered corridor
-                int portalPointIndex = Mathf.Max(0, edge.PolylinePoints.Count - 2);
-                Vector2 portalPos = edge.PolylinePoints[portalPointIndex];
-                Vector3 portalWorld = mazeGridBehaviour.GraphToWorld(portalPos);
+                // Use the LAST polyline point (the actual frontier endpoint)
+                Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                Vector3 endpointWorld = mazeGridBehaviour.GraphToWorld(endpointPos);
 
-                Debug.Log($"[DynamicGrowth-WorldSpace] Edge {edgeId}: Node {edge.NodeA} at world {nodeCenterWorld}, portal at polyline[{portalPointIndex}] = {portalWorld}, {edge.PolylinePoints.Count} polyline points");
+                Debug.Log($"[DynamicGrowth-WorldSpace] Edge {edgeId}: Node {edge.NodeA} at world {nodeCenterWorld}, endpoint at world {endpointWorld}, {edge.PolylinePoints.Count} polyline points");
 
                 // Get next spawn ID
                 char spawnId = GetNextAvailableSpawnId();
@@ -314,18 +310,18 @@ namespace FaeMaze.Systems
                     break;
                 }
 
-                // Create portal at the calculated position (on the rendered path)
-                CreatePortalAtWorldPosition(spawnId, portalWorld, nodeCenterWorld);
+                // Create portal at the frontier endpoint
+                CreatePortalAtWorldPosition(spawnId, endpointWorld, nodeCenterWorld);
 
                 // Also update spawn points in the world-space data
                 var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
                 if (worldSpaceData != null)
                 {
                     // Register the spawn point at this world position
-                    worldSpaceData.RegisterSpawnPoint(spawnId, portalWorld);
+                    worldSpaceData.RegisterSpawnPoint(spawnId, endpointWorld);
                 }
 
-                Debug.Log($"[DynamicGrowth-WorldSpace] Placed portal '{spawnId}' at world position {portalWorld}");
+                Debug.Log($"[DynamicGrowth-WorldSpace] Placed portal '{spawnId}' at world position {endpointWorld}");
                 portalCount++;
             }
 
