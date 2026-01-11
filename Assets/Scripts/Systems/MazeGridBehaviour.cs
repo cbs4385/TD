@@ -780,7 +780,7 @@ namespace FaeMaze.Systems
         /// </summary>
         private void InitializeFromGraphWorldSpace()
         {
-            // Generate only the graph state (no string rasterization needed)
+            // Generate the graph state (includes rasterization which sets Scale and Offset)
             var result = ForestMaze.PlanarForestMazeGenerator.GenerateMazeWithState(
                 planarGeneratorConfig.gridWidth,
                 planarGeneratorConfig.gridHeight,
@@ -789,6 +789,10 @@ namespace FaeMaze.Systems
 
             forestMapState = result.state;
 
+            // IMPORTANT: Preserve the Scale and Offset from rasterization
+            // These are used by MazeRenderer for graph-to-world transformation
+            // Do NOT overwrite them with world-space bounds calculations
+
             // Generate world-space maze data directly from graph
             WorldSpaceMazeGenerator.ResetSpawnIdCounter();
             worldSpaceMazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, worldSpaceTileSize);
@@ -796,26 +800,17 @@ namespace FaeMaze.Systems
 
             Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
 
-            // Calculate grid dimensions from world-space bounds
-            // Add buffer for frontier edge growth
-            var bounds = worldSpaceMazeData.WorldBounds;
-            int gridMargin = 100; // Extra margin for growth
-            width = Mathf.CeilToInt(bounds.size.x) + gridMargin * 2;
-            height = Mathf.CeilToInt(bounds.size.y) + gridMargin * 2;
+            // Use the grid dimensions from the original rasterization
+            width = planarGeneratorConfig.gridWidth;
+            height = planarGeneratorConfig.gridHeight;
 
-            // Calculate offset so that world-space origin maps to grid center
-            // This ensures the graph coordinates map correctly to grid coordinates
-            float offsetX = -bounds.min.x + gridMargin + MazeGrid.GRID_BUFFER;
-            float offsetY = -bounds.min.y + gridMargin + MazeGrid.GRID_BUFFER;
-            forestMapState.Offset = new Vector2(offsetX, offsetY);
-
-            // Create the grid with dimensions based on world-space bounds
+            // Create the grid for legacy compatibility (pathfinding, etc.)
             grid = new MazeGrid(width, height);
 
-            // Populate grid directly from world-space tiles
+            // Populate grid from world-space tiles using the preserved Scale and Offset
             foreach (var tile in worldSpaceMazeData.Tiles)
             {
-                // Convert world position to grid position using the offset
+                // Convert tile position to grid position
                 int gridX = Mathf.RoundToInt(tile.Position.x * forestMapState.Scale + forestMapState.Offset.x);
                 int gridY = Mathf.RoundToInt(tile.Position.y * forestMapState.Scale + forestMapState.Offset.y);
 
@@ -834,11 +829,27 @@ namespace FaeMaze.Systems
                 node.SetTerrain(isWalkable ? TileType.Path : TileType.TreeBramble);
             }
 
-            // Find heart position at a dead end or central location
-            FindHeartPosition();
+            // Set heart position at the seed node (node 0 / root node)
+            // This is where the focal point should be
+            if (forestMapState.Nodes.Count > 0)
+            {
+                var seedNode = forestMapState.Nodes[0];
+                Vector2 seedGridPos = seedNode.Position * forestMapState.Scale + forestMapState.Offset;
+                heartGridPos = new Vector2Int(Mathf.RoundToInt(seedGridPos.x), Mathf.RoundToInt(seedGridPos.y));
+
+                // Mark the heart tile in the grid
+                MarkHeartTile(heartGridPos);
+
+                Debug.Log($"[MazeGridBehaviour] Heart positioned at seed node 0: grid ({heartGridPos.x}, {heartGridPos.y})");
+            }
+            else
+            {
+                // Fallback to center if no nodes
+                FindHeartPosition();
+            }
 
             // Set entrance position (will be updated by DynamicMazeGrowth for spawn points)
-            entranceGridPos = heartGridPos; // Temporary, spawn points set by DynamicMazeGrowth
+            entranceGridPos = heartGridPos;
         }
 
         #endregion

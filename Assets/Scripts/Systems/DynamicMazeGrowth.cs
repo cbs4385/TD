@@ -949,6 +949,10 @@ namespace FaeMaze.Systems
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
 
+            // Get the maze origin for coordinate transformation
+            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? mazeGridBehaviour.transform;
+            const float GRID_BUFFER = 400f;
+
             // Place portals at partial edge endpoints using world-space coordinates directly
             // For frontier edges, the polyline defines the path - the endpoint is ALWAYS reachable
             int portalCount = 0;
@@ -958,13 +962,20 @@ namespace FaeMaze.Systems
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
                 // Get the connected node center in world space
+                // Transformation: graphPos -> gridPos -> contentPos -> worldPos
+                // gridPos = graphPos * scale + offset
+                // contentPos = gridPos - GRID_BUFFER
+                // worldPos = mazeOrigin.position + contentPos * tileSize
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
-                Vector2 nodeCenterLogical = connectedNode.Position * scale + offset;
-                Vector3 nodeCenterWorld = new Vector3(nodeCenterLogical.x * tileSize, nodeCenterLogical.y * tileSize, 0f);
+                Vector2 nodeGridPos = connectedNode.Position * scale + offset;
+                Vector2 nodeContentPos = nodeGridPos - new Vector2(GRID_BUFFER, GRID_BUFFER);
+                Vector3 nodeCenterWorld = mazeOrigin.position + new Vector3(nodeContentPos.x * tileSize, nodeContentPos.y * tileSize, 0f);
 
                 // Get the endpoint (last point in polyline) in world space
-                Vector2 endpointLogical = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
-                Vector3 endpointWorld = new Vector3(endpointLogical.x * tileSize, endpointLogical.y * tileSize, 0f);
+                Vector2 endpointGraphPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                Vector2 endpointGridPos = endpointGraphPos * scale + offset;
+                Vector2 endpointContentPos = endpointGridPos - new Vector2(GRID_BUFFER, GRID_BUFFER);
+                Vector3 endpointWorld = mazeOrigin.position + new Vector3(endpointContentPos.x * tileSize, endpointContentPos.y * tileSize, 0f);
 
                 Debug.Log($"[DynamicGrowth-WorldSpace] Edge {edgeId}: Node {edge.NodeA} at world {nodeCenterWorld}, endpoint at world {endpointWorld}, {edge.PolylinePoints.Count} polyline points");
 
