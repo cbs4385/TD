@@ -293,13 +293,13 @@ namespace FaeMaze.Visitors
         /// </summary>
         private List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.PlanarForestMazeGenerator.ForestMapState == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
             {
                 // Fallback: direct path
                 return new List<Vector3> { end };
             }
 
-            var graphState = mazeGridBehaviour.PlanarForestMazeGenerator.ForestMapState;
+            var graphState = mazeGridBehaviour.ForestMapState;
             var result = new List<Vector3>();
 
             // Find nearest node to start
