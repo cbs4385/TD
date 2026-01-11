@@ -1523,11 +1523,11 @@ namespace FaeMaze.Systems
                 if (afterCount > beforeCount)
                 {
                     filledCount++;
-                    Debug.Log($"[DynamicGrowth] Gap-filled edge {edgeId}: added {afterCount - beforeCount} path tiles from ({endpointGrid.x},{endpointGrid.y}) to ({nodeCenterGrid.x},{nodeCenterGrid.y})");
+                    Debug.Log($"[DynamicGrowth] Gap-filled edge {edgeId}: added {afterCount - beforeCount} path tiles from ({nodeCenterGrid.x},{nodeCenterGrid.y}) to ({endpointGrid.x},{endpointGrid.y})");
                 }
                 else
                 {
-                    Debug.Log($"[DynamicGrowth] Edge {edgeId} already reachable: ({endpointGrid.x},{endpointGrid.y}) to ({nodeCenterGrid.x},{nodeCenterGrid.y})");
+                    Debug.Log($"[DynamicGrowth] Edge {edgeId} already reachable: ({nodeCenterGrid.x},{nodeCenterGrid.y}) to ({endpointGrid.x},{endpointGrid.y})");
                 }
             }
 
