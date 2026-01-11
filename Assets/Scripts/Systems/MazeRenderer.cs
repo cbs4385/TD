@@ -576,7 +576,14 @@ namespace FaeMaze.Systems
         {
             float graphStepSize = 1.0f / graphScale;
             float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
-            int maxIterations = 10; // Prevent infinite loops
+            int maxIterations = 15; // Prevent infinite loops
+
+            // Wall model radius in graph units (wall is 0.65 * tileSize in world, convert to graph)
+            float wallRadius = 0.65f / graphScale;
+            // Path tile radius in graph units
+            float pathRadius = 1.0f / graphScale;
+            // Combined radius for collision detection
+            float collisionRadius = (wallRadius + pathRadius) * 0.5f;
 
             Vector2 currentPos = wallGraphPos;
 
@@ -585,19 +592,26 @@ namespace FaeMaze.Systems
                 bool needsAdjustment = false;
                 Vector2 adjustmentVector = Vector2.zero;
 
-                // Check if already occupied by path tiles
+                // Check if already has a wall at this position
                 long wallKey = GetQuantizedKey(currentPos);
-                if (occupiedPositions.Contains(wallKey))
-                {
-                    // Push along the provided direction
-                    adjustmentVector = pushDirection.normalized * graphStepSize;
-                    needsAdjustment = true;
-                }
-
-                // Check if already has a wall
-                if (!needsAdjustment && occupiedWallPositions.Contains(wallKey))
+                if (occupiedWallPositions.Contains(wallKey))
                 {
                     return null; // Don't duplicate walls
+                }
+
+                // Check if wall model would intersect any path tile (check multiple sample points)
+                if (!needsAdjustment)
+                {
+                    Vector2? pathIntersection = CheckWallPathIntersection(currentPos, wallRadius);
+                    if (pathIntersection.HasValue)
+                    {
+                        // Push away from the intersecting path position
+                        Vector2 awayFromPath = (currentPos - pathIntersection.Value).normalized;
+                        if (awayFromPath.sqrMagnitude < 0.001f)
+                            awayFromPath = pushDirection.normalized;
+                        adjustmentVector = awayFromPath * graphStepSize;
+                        needsAdjustment = true;
+                    }
                 }
 
                 // Check if inside any node column
@@ -624,18 +638,18 @@ namespace FaeMaze.Systems
                     }
                 }
 
-                // Check if intersecting any edge path
+                // Check if intersecting any edge path (line segment check)
                 if (!needsAdjustment)
                 {
                     foreach (var seg in allEdgeSegments)
                     {
                         float distToEdge = DistanceToLineSegment(currentPos, seg.StartGraph, seg.EndGraph);
-                        float minDist = 0.8f; // Minimum distance from edge center
+                        float minDist = collisionRadius; // Use collision radius
 
                         if (distToEdge < minDist)
                         {
                             // Push perpendicular to the edge, in the direction we're already going
-                            float pushDist = minDist - distToEdge + graphStepSize * 0.5f;
+                            float pushDist = minDist - distToEdge + graphStepSize * 0.25f;
                             Vector2 pushDir = Vector2.Dot(pushDirection, seg.Perpendicular) >= 0
                                 ? seg.Perpendicular
                                 : -seg.Perpendicular;
@@ -658,6 +672,36 @@ namespace FaeMaze.Systems
 
             // Could not find valid position
             return null;
+        }
+
+        /// <summary>
+        /// Checks if a wall at the given position would intersect any path tile.
+        /// Samples multiple points around the wall to account for model size.
+        /// Returns the position of the intersecting path tile, or null if no intersection.
+        /// </summary>
+        private Vector2? CheckWallPathIntersection(Vector2 wallPos, float wallRadius)
+        {
+            float sampleStep = 0.25f / graphScale;
+
+            // Sample points in a grid around the wall position
+            for (float dx = -wallRadius; dx <= wallRadius; dx += sampleStep)
+            {
+                for (float dy = -wallRadius; dy <= wallRadius; dy += sampleStep)
+                {
+                    // Only check points within the circular radius
+                    if (dx * dx + dy * dy > wallRadius * wallRadius) continue;
+
+                    Vector2 samplePos = wallPos + new Vector2(dx, dy);
+                    long sampleKey = GetQuantizedKey(samplePos);
+
+                    if (occupiedPositions.Contains(sampleKey))
+                    {
+                        return samplePos; // Found intersection
+                    }
+                }
+            }
+
+            return null; // No intersection
         }
 
         /// <summary>
