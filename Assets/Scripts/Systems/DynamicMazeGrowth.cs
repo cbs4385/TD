@@ -47,9 +47,9 @@ namespace FaeMaze.Systems
         private MazeRenderer mazeRenderer;
         private float nextGrowthTime;
 
-        private const float NodeRadius = 12.0f;
-        private const float PathRadius = 2.0f;
-        private const float WallBuffer = 4.0f;
+        private const float NodeRadius = 3.0f;  // Logical radius (matches NODE_RADIUS in PlanarForestMazeGenerator)
+        private const float PathRadius = 0.5f;  // Logical path radius
+        private const float WallBuffer = 1.0f;  // Logical wall buffer
 
         // Track portals at each spawn point
         private Dictionary<char, GameObject> spawnPointPortals = new Dictionary<char, GameObject>();
