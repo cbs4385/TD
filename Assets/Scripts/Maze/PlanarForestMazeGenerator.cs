@@ -1728,7 +1728,8 @@ namespace ForestMaze
 
         /// <summary>
         /// Ensures all edge endpoints are reachable from their connected node centers
-        /// by progressively converting wall tiles to paths.
+        /// by progressively converting wall tiles to paths along the direct vector.
+        /// Creates straight corridors from portals to nodes instead of winding paths.
         /// </summary>
         private static void EnsureEdgeConnectivity(ForestMapState state, char[,] grid, int gridWidth, int gridHeight)
         {
@@ -1769,88 +1770,141 @@ namespace ForestMaze
                     continue; // Skip edges without a second node
                 }
 
-                // Progressively convert walls to paths until a route exists
-                EnsurePathExists(grid, gridWidth, gridHeight, startGrid, endGrid);
+                // Progressively convert walls to paths along the direct vector until reachable
+                EnsureDirectPathExists(grid, gridWidth, gridHeight, startGrid, endGrid);
             }
         }
 
         /// <summary>
         /// Ensures a path exists between start and end by progressively converting
-        /// wall tiles to walkable tiles along the best route.
+        /// wall tiles to walkable tiles along the direct vector from start to end.
+        /// This creates straight corridors instead of winding paths.
         /// </summary>
-        private static void EnsurePathExists(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
+        private static void EnsureDirectPathExists(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
         {
             const int maxIterations = 100;
             int iteration = 0;
 
             while (iteration < maxIterations)
             {
-                // Try to find a path considering only walkable tiles
-                var path = FindPath(grid, width, height, start, end, false);
-                if (path != null && path.Count > 0)
+                // Check if path exists using simple flood fill
+                if (IsReachable(grid, width, height, start, end))
                 {
-                    // Path found, we're done
+                    return; // Path exists, we're done
+                }
+
+                // Find the furthest walkable point from start toward end
+                Vector2Int furthestWalkable = FindFurthestWalkableAlongVector(grid, width, height, start, end);
+
+                // Find the next wall tile to remove along the vector from furthest point to end
+                Vector2Int? wallToRemove = FindNextWallAlongVector(grid, width, height, furthestWalkable, end);
+
+                if (!wallToRemove.HasValue)
+                {
+                    Debug.LogWarning($"[EnsureDirectPath] Cannot find wall to remove from ({start.x},{start.y}) to ({end.x},{end.y})");
                     return;
                 }
 
-                // No path found - find the best route ignoring walls and convert one blocking tile
-                var blockedPath = FindPath(grid, width, height, start, end, true);
-                if (blockedPath == null || blockedPath.Count == 0)
-                {
-                    // Can't even find a route ignoring walls - shouldn't happen
-                    Debug.LogWarning($"[EnsurePathExists] Cannot find route from ({start.x},{start.y}) to ({end.x},{end.y})");
-                    return;
-                }
-
-                // Find the first non-walkable tile along the blocked path
-                bool convertedTile = false;
-                foreach (var pos in blockedPath)
-                {
-                    if (pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height)
-                    {
-                        if (!IsWalkableTile(grid[pos.y, pos.x]))
-                        {
-                            // Convert this wall tile to a path
-                            grid[pos.y, pos.x] = '.';
-                            convertedTile = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!convertedTile)
-                {
-                    // All tiles along the path are already walkable - shouldn't happen
-                    Debug.LogWarning($"[EnsurePathExists] Path found but no walls to convert from ({start.x},{start.y}) to ({end.x},{end.y})");
-                    return;
-                }
+                // Convert this wall tile to a path
+                grid[wallToRemove.Value.y, wallToRemove.Value.x] = '.';
 
                 iteration++;
             }
 
             if (iteration >= maxIterations)
             {
-                Debug.LogWarning($"[EnsurePathExists] Max iterations reached for path from ({start.x},{start.y}) to ({end.x},{end.y})");
+                Debug.LogWarning($"[EnsureDirectPath] Max iterations reached for path from ({start.x},{start.y}) to ({end.x},{end.y})");
             }
         }
 
         /// <summary>
-        /// Simple A* pathfinding on a char grid.
-        /// If ignoreWalls is true, treats all tiles as walkable (used to find best route for wall conversion).
-        /// Returns null if no path found, otherwise returns list of positions from start to end.
+        /// Finds the furthest walkable point from start along the vector toward end.
         /// </summary>
-        private static List<Vector2Int> FindPath(char[,] grid, int width, int height, Vector2Int start, Vector2Int end, bool ignoreWalls)
+        private static Vector2Int FindFurthestWalkableAlongVector(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
+        {
+            Vector2 direction = new Vector2(end.x - start.x, end.y - start.y);
+            float distance = direction.magnitude;
+            if (distance < 0.001f)
+                return start;
+
+            direction /= distance; // Normalize
+
+            Vector2Int furthest = start;
+            float furthestDist = 0;
+
+            // Walk along the vector checking each grid cell
+            for (float t = 0; t <= distance; t += 0.5f)
+            {
+                int x = Mathf.RoundToInt(start.x + direction.x * t);
+                int y = Mathf.RoundToInt(start.y + direction.y * t);
+
+                if (x < 0 || x >= width || y < 0 || y >= height)
+                    break;
+
+                if (IsWalkableTile(grid[y, x]))
+                {
+                    // Check if this point is reachable from start
+                    Vector2Int point = new Vector2Int(x, y);
+                    if (IsReachable(grid, width, height, start, point))
+                    {
+                        if (t > furthestDist)
+                        {
+                            furthestDist = t;
+                            furthest = point;
+                        }
+                    }
+                }
+            }
+
+            return furthest;
+        }
+
+        /// <summary>
+        /// Finds the next wall tile along the vector from start to end that should be removed.
+        /// </summary>
+        private static Vector2Int? FindNextWallAlongVector(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
+        {
+            Vector2 direction = new Vector2(end.x - start.x, end.y - start.y);
+            float distance = direction.magnitude;
+            if (distance < 0.001f)
+                return null;
+
+            direction /= distance; // Normalize
+
+            // Walk along the vector from start toward end
+            for (float t = 1.0f; t <= distance; t += 0.5f)
+            {
+                int x = Mathf.RoundToInt(start.x + direction.x * t);
+                int y = Mathf.RoundToInt(start.y + direction.y * t);
+
+                if (x < 0 || x >= width || y < 0 || y >= height)
+                    continue;
+
+                // Found a wall tile - this is the one to remove
+                if (!IsWalkableTile(grid[y, x]))
+                {
+                    return new Vector2Int(x, y);
+                }
+            }
+
+            return null; // No wall found along vector
+        }
+
+        /// <summary>
+        /// Checks if end is reachable from start using flood fill.
+        /// </summary>
+        private static bool IsReachable(char[,] grid, int width, int height, Vector2Int start, Vector2Int end)
         {
             if (start == end)
-                return new List<Vector2Int> { start };
+                return true;
 
-            var openSet = new List<PathNode>();
-            var closedSet = new HashSet<Vector2Int>();
-            var allNodes = new Dictionary<Vector2Int, PathNode>();
+            if (!IsWalkableTile(grid[start.y, start.x]) || !IsWalkableTile(grid[end.y, end.x]))
+                return false;
 
-            var startNode = new PathNode(start, null, 0, ManhattanDistance(start, end));
-            openSet.Add(startNode);
-            allNodes[start] = startNode;
+            HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+            Queue<Vector2Int> queue = new Queue<Vector2Int>();
+            queue.Enqueue(start);
+            visited.Add(start);
 
             Vector2Int[] directions = new Vector2Int[]
             {
@@ -1860,92 +1914,33 @@ namespace ForestMaze
                 new Vector2Int(0, -1)
             };
 
-            while (openSet.Count > 0)
+            while (queue.Count > 0)
             {
-                // Find node with lowest F score
-                int bestIndex = 0;
-                for (int i = 1; i < openSet.Count; i++)
-                {
-                    if (openSet[i].F < openSet[bestIndex].F)
-                        bestIndex = i;
-                }
+                Vector2Int current = queue.Dequeue();
 
-                var current = openSet[bestIndex];
-                openSet.RemoveAt(bestIndex);
+                if (current == end)
+                    return true;
 
-                if (current.Position == end)
-                {
-                    // Reconstruct path
-                    var path = new List<Vector2Int>();
-                    var node = current;
-                    while (node != null)
-                    {
-                        path.Add(node.Position);
-                        node = node.Parent;
-                    }
-                    path.Reverse();
-                    return path;
-                }
-
-                closedSet.Add(current.Position);
-
-                // Check neighbors
                 foreach (var dir in directions)
                 {
-                    Vector2Int neighbor = current.Position + dir;
+                    Vector2Int neighbor = current + dir;
 
                     if (neighbor.x < 0 || neighbor.x >= width || neighbor.y < 0 || neighbor.y >= height)
                         continue;
 
-                    if (closedSet.Contains(neighbor))
+                    if (visited.Contains(neighbor))
                         continue;
 
-                    if (!ignoreWalls && !IsWalkableTile(grid[neighbor.y, neighbor.x]))
+                    if (!IsWalkableTile(grid[neighbor.y, neighbor.x]))
                         continue;
 
-                    float newG = current.G + 1;
-                    float h = ManhattanDistance(neighbor, end);
-
-                    if (allNodes.TryGetValue(neighbor, out var existingNode))
-                    {
-                        if (newG < existingNode.G)
-                        {
-                            existingNode.G = newG;
-                            existingNode.Parent = current;
-                        }
-                    }
-                    else
-                    {
-                        var newNode = new PathNode(neighbor, current, newG, h);
-                        openSet.Add(newNode);
-                        allNodes[neighbor] = newNode;
-                    }
+                    visited.Add(neighbor);
+                    queue.Enqueue(neighbor);
                 }
             }
 
-            return null; // No path found
+            return false; // End not reachable from start
         }
 
-        private static float ManhattanDistance(Vector2Int a, Vector2Int b)
-        {
-            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
-        }
-
-        private class PathNode
-        {
-            public Vector2Int Position;
-            public PathNode Parent;
-            public float G; // Cost from start
-            public float H; // Heuristic cost to end
-            public float F => G + H;
-
-            public PathNode(Vector2Int position, PathNode parent, float g, float h)
-            {
-                Position = position;
-                Parent = parent;
-                G = g;
-                H = h;
-            }
-        }
     }
 }
