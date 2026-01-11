@@ -207,16 +207,21 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Transforms a graph-space position to world position.
-        /// graphPos -> gridPos (via scale+offset) -> worldPos (via GridToWorld)
+        /// Transforms a graph-space position to world position using floating-point precision.
+        /// No grid snapping - true world-space positioning along edges.
         /// </summary>
         private Vector3 GraphToWorldPos(Vector2 graphPos)
         {
-            // Transform to grid coordinates
+            // Transform to grid coordinates (floating-point)
             Vector2 gridPos = graphPos * graphScale + graphOffset;
 
-            // Use the standard grid-to-world conversion
-            return mazeGridBehaviour.GridToWorld(Mathf.RoundToInt(gridPos.x), Mathf.RoundToInt(gridPos.y));
+            // Convert to content-relative coordinates (subtract GRID_BUFFER = 400)
+            float contentX = gridPos.x - 400f;
+            float contentY = gridPos.y - 400f;
+
+            // Get world position using floating-point coordinates
+            Transform origin = mazeGridBehaviour.MazeOrigin ?? transform;
+            return origin.position + new Vector3(contentX * tileSize, contentY * tileSize, 0f);
         }
 
         /// <summary>
@@ -325,14 +330,14 @@ namespace FaeMaze.Systems
                 {
                     for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
                     {
-                        // Offset in graph space
-                        Vector2 graphOffset = new Vector2(dx * graphStepSize, dy * graphStepSize);
-                        float distance = graphOffset.magnitude;
+                        // Offset from node center in graph space
+                        Vector2 offsetFromNode = new Vector2(dx * graphStepSize, dy * graphStepSize);
+                        float distance = offsetFromNode.magnitude;
 
                         // Check if within circular radius
                         if (distance > nodeRadius) continue;
 
-                        Vector2 graphPos = node.Position + graphOffset;
+                        Vector2 graphPos = node.Position + offsetFromNode;
                         Vector2Int gridCell = GraphToGridCell(graphPos);
 
                         if (occupiedGridCells.Contains(gridCell)) continue;
@@ -341,7 +346,7 @@ namespace FaeMaze.Systems
                         float orientationDegrees = 0f;
                         if (distance > 0.01f)
                         {
-                            Vector2 radial = graphOffset.normalized;
+                            Vector2 radial = offsetFromNode.normalized;
                             orientationDegrees = Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg;
                         }
 
@@ -406,8 +411,11 @@ namespace FaeMaze.Systems
                 // Find orientation perpendicular to nearest graph tangent
                 float orientationDegrees = GetWallOrientationFromGraph(approxGraphPos, forestState);
 
-                // Get world position from grid cell
-                Vector3 worldPos = mazeGridBehaviour.GridToWorld(wallCell.x, wallCell.y);
+                // Get world position using floating-point coordinates (same formula as GraphToWorldPos)
+                float contentX = wallCell.x - 400f;
+                float contentY = wallCell.y - 400f;
+                Transform origin = mazeGridBehaviour.MazeOrigin ?? transform;
+                Vector3 worldPos = origin.position + new Vector3(contentX * tileSize, contentY * tileSize, 0f);
 
                 CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                 tileCount++;
@@ -475,8 +483,9 @@ namespace FaeMaze.Systems
             // For flat tiles on XY plane, rotate only around Z axis
             Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
 
-            // For prefabs designed Y-up, need -90 X rotation
-            Quaternion prefabRotation = Quaternion.Euler(-90f, 0f, orientationDegrees);
+            // For prefabs designed Y-up: first lay flat (-90 X), then rotate around
+            // the now-vertical axis (local Y = world Z) by orientationDegrees
+            Quaternion prefabRotation = Quaternion.Euler(-90f, orientationDegrees, 0f);
 
             GameObject tileObj = null;
             Color color = GetColorForSymbol(symbol, !isWall);
