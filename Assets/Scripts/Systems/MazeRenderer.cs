@@ -1,14 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
-using FaeMaze.Maze;
 using ForestMaze;
 
 namespace FaeMaze.Systems
 {
     /// <summary>
     /// Renders the maze visually using 3D meshes and prefabs.
-    /// Supports both grid-based and world-space coordinate modes.
-    /// In world-space mode, tiles are oriented along graph elements.
+    /// Pure world-space mode - tiles are oriented along graph elements.
     /// </summary>
     [RequireComponent(typeof(MazeGridBehaviour))]
     public class MazeRenderer : MonoBehaviour
@@ -98,7 +96,6 @@ namespace FaeMaze.Systems
         private Vector2 graphOffset;
         private float tileSize;
         private HashSet<long> occupiedPositions; // All occupied positions using quantized keys
-        private HashSet<Vector2Int> occupiedGridCells; // Grid cells with path/node tiles (for legacy compatibility)
         private List<EdgeSegmentData> allEdgeSegments;
 
         private struct EdgeSegmentData
@@ -134,20 +131,13 @@ namespace FaeMaze.Systems
         {
             mazeGridBehaviour = GetComponent<MazeGridBehaviour>();
 
-            if (mazeGridBehaviour == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
             {
                 return;
             }
 
-            // Use world-space rendering if enabled and we have a forest state
-            if (mazeGridBehaviour.UseWorldSpaceCoordinates && mazeGridBehaviour.ForestMapState != null)
-            {
-                RenderWorldSpaceMaze();
-            }
-            else
-            {
-                RenderGridMaze();
-            }
+            // Pure world-space rendering
+            RenderWorldSpaceMaze();
         }
 
         #endregion
@@ -156,7 +146,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders the maze using world-space coordinates from the planar forest graph.
-        /// Coordinates are transformed using scale/offset to match the grid system.
+        /// Graph positions ARE world positions - no transforms needed.
         /// </summary>
         private void RenderWorldSpaceMaze()
         {
@@ -171,7 +161,7 @@ namespace FaeMaze.Systems
             // No scale, offset, or grid buffer transforms needed
             graphScale = 1.0f;
             graphOffset = Vector2.zero;
-            tileSize = mazeGridBehaviour.TileSize;
+            tileSize = mazeGridBehaviour.WorldSpaceTileSize;
 
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
@@ -187,7 +177,6 @@ namespace FaeMaze.Systems
 
             // Track all occupied positions using quantized keys for consistent overlap detection
             occupiedPositions = new HashSet<long>();
-            occupiedGridCells = new HashSet<Vector2Int>(); // Legacy compatibility
             allEdgeSegments = new List<EdgeSegmentData>();
 
             int renderedTiles = 0;
@@ -228,15 +217,6 @@ namespace FaeMaze.Systems
         {
             // Graph positions ARE world positions - just convert Vector2 to Vector3
             return new Vector3(graphPos.x, graphPos.y, 0f);
-        }
-
-        /// <summary>
-        /// Transforms a graph-space position to a quantized key (for overlap detection).
-        /// </summary>
-        private Vector2Int GraphToGridCell(Vector2 graphPos)
-        {
-            // Quantize to integer positions for overlap detection
-            return new Vector2Int(Mathf.RoundToInt(graphPos.x), Mathf.RoundToInt(graphPos.y));
         }
 
         /// <summary>
@@ -311,7 +291,6 @@ namespace FaeMaze.Systems
                         Vector3 worldPos = GraphToWorldPos(graphPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(posKey);
-                        occupiedGridCells.Add(GraphToGridCell(graphPos)); // Legacy
                         tileCount++;
                     }
                 }
@@ -378,7 +357,6 @@ namespace FaeMaze.Systems
                         Vector3 worldPos = GraphToWorldPos(graphPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(posKey);
-                        occupiedGridCells.Add(GraphToGridCell(graphPos)); // Legacy
                         tileCount++;
                     }
                 }
@@ -1039,117 +1017,6 @@ namespace FaeMaze.Systems
 
         #endregion
 
-        #region Grid-Based Rendering (Legacy)
-
-        private void RenderGridMaze()
-        {
-            if (mazeGridBehaviour.Grid == null) return;
-
-            tileSize = mazeGridBehaviour.TileSize;
-            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
-            CreateTilesContainer(mazeOrigin);
-
-            if (enableMeshBatching)
-            {
-                wallTiles = new List<GameObject>();
-                undergrowthTiles = new List<GameObject>();
-                waterTiles = new List<GameObject>();
-                pathTiles = new List<GameObject>();
-            }
-
-            MazeGrid grid = mazeGridBehaviour.Grid;
-
-            for (int y = 0; y < grid.Height; y++)
-            {
-                for (int x = 0; x < grid.Width; x++)
-                {
-                    var node = grid.GetNode(x, y);
-                    if (node == null || node.symbol == ' ') continue;
-
-                    Color tileColor = GetColorForSymbol(node.symbol, node.walkable);
-                    CreateGridTile3D(x, y, node.symbol, tileColor);
-                }
-            }
-
-            if (enableMeshBatching)
-            {
-                PerformMeshBatching();
-            }
-        }
-
-        private void CreateGridTile3D(int gridX, int gridY, char symbol, Color color)
-        {
-            Vector3 worldPos = mazeGridBehaviour.GridToWorld(gridX, gridY);
-
-            if (symbol == '#' || symbol == ';' || symbol == '~')
-            {
-                worldPos += new Vector3(Random.Range(-0.02f, 0.02f), Random.Range(-0.02f, 0.02f), 0f);
-            }
-
-            GameObject tileObj = null;
-            Quaternion prefabRotation = Quaternion.Euler(-90f, 0f, 0f);
-
-            if (symbol == '#' && wallPrefab != null)
-            {
-                tileObj = Instantiate(wallPrefab, tilesParent);
-                tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
-            }
-            else if (symbol == ';' && undergrowthPrefab != null)
-            {
-                tileObj = Instantiate(undergrowthPrefab, tilesParent);
-                tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = Vector3.one * tileSize;
-            }
-            else if (symbol == '~' && waterPrefab != null)
-            {
-                tileObj = Instantiate(waterPrefab, tilesParent);
-                tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = Vector3.one * tileSize;
-            }
-            else if (symbol == 'N' && nodeHazardPrefab != null)
-            {
-                var pathBase = CreateProceduralGridTile(gridX, gridY, '.', pathColor);
-                pathBase.transform.SetParent(tilesParent);
-                pathBase.transform.position = worldPos;
-                pathTiles?.Add(pathBase);
-
-                tileObj = Instantiate(nodeHazardPrefab, tilesParent);
-                tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = prefabRotation;
-                tileObj.transform.localScale = Vector3.one * tileSize;
-            }
-            else
-            {
-                tileObj = CreateProceduralGridTile(gridX, gridY, symbol, color);
-                tileObj.transform.SetParent(tilesParent);
-                tileObj.transform.position = worldPos;
-            }
-
-            if (enableMeshBatching && tileObj != null)
-            {
-                AddTileToBatchList(symbol, tileObj);
-            }
-        }
-
-        private GameObject CreateProceduralGridTile(int gridX, int gridY, char symbol, Color color)
-        {
-            GameObject tileObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            tileObj.name = $"Tile_{gridX}_{gridY}_{GetTileTypeName(symbol)}";
-            tileObj.transform.localScale = new Vector3(tileSize, tileSize, 0.1f);
-
-            Material material = CreatePBRMaterialForSymbol(symbol, color);
-            var renderer = tileObj.GetComponent<MeshRenderer>();
-            if (renderer != null) renderer.material = material;
-
-            return tileObj;
-        }
-
-        #endregion
-
         #region Shared Methods
 
         private void CreateTilesContainer(Transform mazeOrigin)
@@ -1247,10 +1114,10 @@ namespace FaeMaze.Systems
 
             spawnSymbolCounter = 0;
 
-            if (mazeGridBehaviour.UseWorldSpaceCoordinates && mazeGridBehaviour.ForestMapState != null)
+            if (mazeGridBehaviour != null && mazeGridBehaviour.ForestMapState != null)
+            {
                 RenderWorldSpaceMaze();
-            else
-                RenderGridMaze();
+            }
         }
 
         #endregion

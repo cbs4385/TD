@@ -1,63 +1,36 @@
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using UnityEngine;
-using MazeStringGenerator = ForestMaze.ForestMazeGenerator;
-using FaeMaze.Maze;
 using ForestMaze;
 
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// MonoBehaviour wrapper for the MazeGrid data structure.
-    /// Handles grid initialization from text file or runtime generation, world-space conversions, and registration with GameController.
+    /// MonoBehaviour wrapper for world-space maze data.
+    /// Handles maze initialization from the planar forest generator and world-space coordinate conversions.
     ///
-    /// Coordinate system:
-    /// - X increases to the right
-    /// - Y increases downward (lines[0] is Y=0, top of maze)
-    /// - Grid origin (0,0) is at top-left of the maze
+    /// Pure world-space coordinate system:
+    /// - Graph positions ARE world positions
+    /// - No grid, no rasterization, no coordinate transforms
     /// </summary>
-    [DefaultExecutionOrder(-100)] // Execute before other scripts to ensure grid is initialized first
+    [DefaultExecutionOrder(-100)]
     public class MazeGridBehaviour : MonoBehaviour
     {
         #region Serialized Fields
 
-        [Header("Initialization Mode")]
+        [Header("Planar Generator Config")]
         [SerializeField]
-        [Tooltip("Use runtime generation instead of loading from file")]
-        private bool useRuntimeGeneration = false;
-
-        [Header("Maze File")]
-        [SerializeField]
-        [Tooltip("Text file containing the maze layout (used when useRuntimeGeneration is false)")]
-        private TextAsset mazeFile;
-
-        [Header("Runtime Generation")]
-        [SerializeField]
-        [Tooltip("Use planar organic generator instead of Kruskal-based generator")]
-        private bool usePlanarGenerator = false;
-
-        [SerializeField]
-        [Tooltip("Configuration for runtime maze generation (used when useRuntimeGeneration is true and usePlanarGenerator is false)")]
-        private ForestMazeConfig generatorConfig = ForestMazeConfig.Default();
-
-        [SerializeField]
-        [Tooltip("Configuration for planar organic maze generation (used when useRuntimeGeneration is true and usePlanarGenerator is true)")]
+        [Tooltip("Configuration for planar organic maze generation")]
         private PlanarForestMazeConfig planarGeneratorConfig = PlanarForestMazeConfig.Default();
 
         [Header("References")]
         [SerializeField]
-        [Tooltip("Transform acting as the origin point for world-to-grid conversions")]
+        [Tooltip("Transform acting as the origin point for world-space conversions")]
         private Transform mazeOrigin;
 
-        [Header("Grid Sizing")]
+        [Header("World-Space Settings")]
         [SerializeField]
-        [Tooltip("World-space size of a single maze tile")]
-        private float tileSize = 0.25f;
-
-        [SerializeField]
-        [Tooltip("Model scaling factor - models cover this many grid cells (e.g., 4 means each model covers 4x4 cells)")]
-        private int modelScale = 4;
+        [Tooltip("Tile size in world units for spatial lookups")]
+        private float worldSpaceTileSize = 1.0f;
 
         [Header("Orientation")]
         [SerializeField]
@@ -66,70 +39,31 @@ namespace FaeMaze.Systems
 
         [Header("Debug Visualization")]
         [SerializeField]
-        private bool drawGridGizmos = true;
-
-        [SerializeField]
-        private bool drawAttractionHeatmap = true;
-
-        [Header("World-Space Mode")]
-        [SerializeField]
-        [Tooltip("Enable world-space coordinate system instead of grid-based")]
-        private bool useWorldSpaceCoordinates = true;
-
-        [SerializeField]
-        [Tooltip("Tile size in world units for world-space mode")]
-        private float worldSpaceTileSize = 1.0f;
+        private bool drawGizmos = true;
 
         #endregion
 
         #region Private Fields
 
-        private MazeGrid grid;
         private WorldSpaceMazeData worldSpaceMazeData;
-        private int width;
-        private int height;
-        private Vector2Int entranceGridPos;
-        private Vector2Int heartGridPos;
-        private Dictionary<char, Vector2Int> spawnPoints = new Dictionary<char, Vector2Int>();
-        private ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState; // For dynamic growth
-
-        private static TileType[,] cachedGeneratedTiles;
-        private static char[,] cachedGeneratedSymbols;
-        private static string cachedMazeString;
-        private static List<Vector2Int> cachedEntranceEdges = new List<Vector2Int>();
-        private static ForestMazeConfig cachedConfig;
-        private static bool hasCachedGeneration;
+        private PlanarForestMazeGenerator.ForestMapState forestMapState;
+        private Vector3 heartWorldPosition;
 
         #endregion
 
         #region Properties
 
-        /// <summary>Gets the underlying MazeGrid data structure</summary>
-        public MazeGrid Grid => grid;
+        /// <summary>Gets the forest map state for dynamic maze growth.</summary>
+        public PlanarForestMazeGenerator.ForestMapState ForestMapState => forestMapState;
 
-        /// <summary>Gets the entrance grid position</summary>
-        public Vector2Int EntranceGridPos => entranceGridPos;
-
-        /// <summary>Gets the heart grid position</summary>
-        public Vector2Int HeartGridPos => heartGridPos;
-
-        /// <summary>Gets the world-space size of a single grid tile.</summary>
-        public float TileSize => tileSize;
-
-        /// <summary>Gets the model scaling factor - each model covers this many grid cells.</summary>
-        public int ModelScale => modelScale;
-
-        /// <summary>Gets the forest map state for dynamic maze growth (only available when using planar generator).</summary>
-        public ForestMaze.PlanarForestMazeGenerator.ForestMapState ForestMapState => forestMapState;
-
-        /// <summary>Gets the world-space maze data (only available when useWorldSpaceCoordinates is enabled).</summary>
+        /// <summary>Gets the world-space maze data for tile lookups.</summary>
         public WorldSpaceMazeData WorldSpaceMazeData => worldSpaceMazeData;
 
-        /// <summary>Indicates whether world-space coordinate mode is enabled.</summary>
-        public bool UseWorldSpaceCoordinates => useWorldSpaceCoordinates;
-
-        /// <summary>Gets the world-space tile size.</summary>
+        /// <summary>Gets the world-space tile size for spatial queries.</summary>
         public float WorldSpaceTileSize => worldSpaceTileSize;
+
+        /// <summary>Gets the heart position in world space (node 0 / seed node).</summary>
+        public Vector3 HeartWorldPosition => heartWorldPosition;
 
         /// <summary>Gets the up direction for the maze, accounting for XY-plane reflection.</summary>
         public Vector3 MazeUpDirection
@@ -160,38 +94,13 @@ namespace FaeMaze.Systems
 
         private void Awake()
         {
-            // Validate references
             if (mazeOrigin == null)
             {
-                mazeOrigin = transform; // Fallback to self
+                mazeOrigin = transform;
             }
 
             ApplyXYPlaneReflection();
-
-            // Planar generation should always run procedurally even if a maze file was previously assigned in the scene
-            if (usePlanarGenerator)
-            {
-                useRuntimeGeneration = true;
-            }
-
-            // Initialize based on mode
-            if (useRuntimeGeneration)
-            {
-                InitializeFromGenerator();
-            }
-            else
-            {
-                InitializeFromFile();
-            }
-        }
-
-        private void Start()
-        {
-            // Register with GameController (all Awake() calls are done by now)
-            if (GameController.Instance != null)
-            {
-                GameController.Instance.RegisterMazeGrid(grid);
-            }
+            InitializeFromGraph();
         }
 
         #endregion
@@ -206,7 +115,6 @@ namespace FaeMaze.Systems
             }
 
             Vector3 scale = mazeOrigin.localScale;
-//            scale.z = -Mathf.Abs(scale.z);
             mazeOrigin.localScale = scale;
 
             Vector3 originPosition = mazeOrigin.position;
@@ -218,579 +126,22 @@ namespace FaeMaze.Systems
 
         #region Initialization
 
-        private void OnValidate()
-        {
-        }
-
-        private void InitializeFromFile()
-        {
-            // Validate maze file
-            if (mazeFile == null)
-            {
-                return;
-            }
-
-
-            // Parse the text file
-            var lines = mazeFile.text
-                .Replace("\r", string.Empty)
-                .Split('\n')
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .ToArray();
-
-            if (lines.Length == 0)
-            {
-                return;
-            }
-
-            // Determine dimensions
-            height = lines.Length;
-            width = lines.Max(line => line.Length);
-
-
-            // Create the grid
-            grid = new MazeGrid(width, height);
-
-            // Track if we found entrance and heart
-            bool foundEntrance = false;
-            bool foundHeart = false;
-
-            // Parse each character (offset by GRID_BUFFER to start content at [100, 100])
-            for (int y = 0; y < height; y++)
-            {
-                string line = lines[y];
-                for (int x = 0; x < line.Length; x++)
-                {
-                    char c = line[x];
-                    int gridX = x + MazeGrid.GRID_BUFFER;
-                    int gridY = y + MazeGrid.GRID_BUFFER;
-
-                    switch (c)
-                    {
-                        case '.':
-                            ApplyTileFromChar(gridX, gridY, c);
-                            break;
-
-                        case '#':
-                            ApplyTileFromChar(gridX, gridY, c);
-                            break;
-
-                        case 'N':
-                            // Node hazard - walkable clearing center with hazard prop
-                            ApplyTileFromChar(gridX, gridY, c);
-                            break;
-
-                        case 'H':
-                            // Heart marker - walkable and mark position
-                            ApplyTileFromChar(gridX, gridY, c, isHeart: true);
-                            heartGridPos = new Vector2Int(gridX, gridY);
-                            foundHeart = true;
-                            break;
-
-                        default:
-                            // Check if it's a spawn point marker (uppercase letter, excluding H and N)
-                            if (char.IsUpper(c) && c != 'H' && c != 'N')
-                            {
-                                // Spawn marker - walkable and store position
-                                ApplyTileFromChar(gridX, gridY, '.');
-                                if (!spawnPoints.ContainsKey(c))
-                                {
-                                    spawnPoints[c] = new Vector2Int(gridX, gridY);
-
-                                    // First spawn point also becomes the entrance
-                                    if (!foundEntrance)
-                                    {
-                                        entranceGridPos = new Vector2Int(gridX, gridY);
-                                        foundEntrance = true;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                // Unknown character - treat as wall
-                                ApplyTileFromChar(gridX, gridY, '#');
-                            }
-                            break;
-                    }
-                }
-
-                // Fill remaining cells in short lines with walls
-                for (int x = line.Length; x < width; x++)
-                {
-                    int gridX = x + MazeGrid.GRID_BUFFER;
-                    int gridY = y + MazeGrid.GRID_BUFFER;
-                    ApplyTileFromChar(gridX, gridY, '#');
-                }
-            }
-
-            // Validate entrance (only required for legacy system)
-            if (!foundEntrance)
-            {
-                // If using spawn markers, entrance is not required
-                if (spawnPoints.Count >= 2)
-                {
-                    entranceGridPos = new Vector2Int(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER); // Not used with spawn markers
-                }
-                else
-                {
-                    entranceGridPos = new Vector2Int(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER);
-                }
-            }
-
-            // Find heart position (only if 'H' marker not found)
-            if (!foundHeart)
-            {
-                FindHeartPosition();
-            }
-
-            // Optimize grid by removing distant walls and ensuring proper borders
-            // Skip optimization for world-space coordinates - content may extend beyond initial bounds
-            if (!useWorldSpaceCoordinates)
-            {
-                OptimizeGridWalls();
-            }
-
-            // Log diagnostic info
-        }
-
-        private void FindHeartPosition()
-        {
-
-            // Start from approximate center (offset by GRID_BUFFER for absolute coordinates)
-            int centerX = width / 2 + MazeGrid.GRID_BUFFER;
-            int centerY = height / 2 + MazeGrid.GRID_BUFFER;
-
-            // Check if center is walkable
-            if (grid.GetNode(centerX, centerY)?.walkable == true)
-            {
-                heartGridPos = new Vector2Int(centerX, centerY);
-                MarkHeartTile(heartGridPos);
-                return;
-            }
-
-            // Search outward in expanding rings (BFS-style)
-            for (int radius = 1; radius < Mathf.Max(width, height); radius++)
-            {
-                // Check points in a ring around center
-                for (int dx = -radius; dx <= radius; dx++)
-                {
-                    for (int dy = -radius; dy <= radius; dy++)
-                    {
-                        // Only check ring perimeter, not interior
-                        if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius)
-                            continue;
-
-                        int checkX = centerX + dx;
-                        int checkY = centerY + dy;
-
-                        if (grid.InBounds(checkX, checkY))
-                        {
-                            var node = grid.GetNode(checkX, checkY);
-                            if (node != null && node.walkable)
-                            {
-                                heartGridPos = new Vector2Int(checkX, checkY);
-                                MarkHeartTile(heartGridPos);
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Fallback - should never reach here if maze has any walkable tiles
-            heartGridPos = entranceGridPos;
-            MarkHeartTile(heartGridPos);
-        }
-
-        private void MarkHeartTile(Vector2Int position)
-        {
-            ApplyTileFromTileType(position.x, position.y, TileType.Path, 'H', true);
-        }
-
-        private void ClearGenerationCache()
-        {
-            cachedGeneratedTiles = null;
-            cachedGeneratedSymbols = null;
-            cachedMazeString = null;
-            cachedEntranceEdges.Clear();
-            hasCachedGeneration = false;
-        }
-
-        private bool HasCachedTilesForConfig(ForestMazeConfig configToCheck)
-        {
-            if (!hasCachedGeneration)
-            {
-                return false;
-            }
-
-            return
-                cachedConfig.width == configToCheck.width &&
-                cachedConfig.height == configToCheck.height &&
-                cachedConfig.numEntrances == configToCheck.numEntrances &&
-                cachedConfig.minPathWidth == configToCheck.minPathWidth &&
-                cachedConfig.maxPathWidth == configToCheck.maxPathWidth &&
-                Mathf.Approximately(cachedConfig.waterCoverage, configToCheck.waterCoverage) &&
-                cachedConfig.randomSeed == configToCheck.randomSeed;
-        }
-
-        private TileType[,] ConvertMazeStringToTiles(string mazeString, out char[,] symbolGrid, out List<Vector2Int> entranceEdges)
-        {
-            entranceEdges = new List<Vector2Int>();
-
-            if (string.IsNullOrWhiteSpace(mazeString))
-            {
-                symbolGrid = null;
-                return null;
-            }
-
-            var lines = mazeString
-                .Replace("\r", string.Empty)
-                .Split('\n')
-                .Where(l => !string.IsNullOrEmpty(l))
-                .ToArray();
-
-            int parsedHeight = lines.Length;
-            int parsedWidth = lines.Max(l => l.Length);
-
-            symbolGrid = new char[parsedWidth, parsedHeight];
-            var tiles = new TileType[parsedWidth, parsedHeight];
-
-            for (int y = 0; y < parsedHeight; y++)
-            {
-                string line = lines[y];
-
-                for (int x = 0; x < parsedWidth; x++)
-                {
-                    char c = x < line.Length ? line[x] : '#';
-
-                    symbolGrid[x, y] = c;
-                    tiles[x, y] = TileFromChar(c);
-
-                    bool isEdge = x == 0 || y == 0 || x == parsedWidth - 1 || y == parsedHeight - 1;
-                    if (isEdge && (c == '.' || c == 'H'))
-                    {
-                        entranceEdges.Add(new Vector2Int(x, y));
-                    }
-                }
-            }
-
-            return tiles;
-        }
-
-        private void LogGeneratedTiles(TileType[,] tilesToLog, string label)
-        {
-            if (tilesToLog == null)
-            {
-                return;
-            }
-
-            int logWidth = tilesToLog.GetLength(0);
-            int logHeight = tilesToLog.GetLength(1);
-
-            var builder = new StringBuilder(logHeight * (logWidth + 1));
-            for (int y = 0; y < logHeight; y++)
-            {
-                for (int x = 0; x < logWidth; x++)
-                {
-                    builder.Append(SymbolFromTile(tilesToLog[x, y]));
-                }
-
-                if (y < logHeight - 1)
-                {
-                    builder.Append('\n');
-                }
-            }
-
-        }
-
-        private void ApplyTileFromChar(int x, int y, char c, bool isHeart = false)
-        {
-            TileType tile = TileFromChar(c);
-            ApplyTileFromTileType(x, y, tile, c, isHeart);
-        }
-
-        private void ApplyTileFromTileType(int x, int y, TileType tile, char symbol, bool isHeart = false)
-        {
-            var node = grid.GetNode(x, y);
-            if (node == null)
-            {
-                return;
-            }
-
-            // Apply terrain properties (sets walkable, baseCost, and speedMultiplier)
-            node.SetTerrain(tile);
-            node.symbol = symbol;
-            node.isHeart = isHeart;
-
-            // Heart tiles override terrain properties to be walkable paths
-            if (isHeart)
-            {
-                node.SetTerrain(TileType.Path);
-                node.symbol = 'H';
-                node.isHeart = true;
-            }
-        }
-
-        private TileType TileFromChar(char c)
-        {
-            switch (c)
-            {
-                case '#':
-                    return TileType.TreeBramble;
-                case ';':
-                    return TileType.Undergrowth;
-                case '~':
-                    return TileType.Water;
-                case '.':
-                case 'H':
-                case 'N': // Node hazard - walkable clearing center
-                    return TileType.Path;
-                default:
-                    // Spawn points (uppercase letters except H and N) are walkable
-                    if (char.IsUpper(c) && c != 'H' && c != 'N')
-                        return TileType.Path;
-                    return TileType.TreeBramble;
-            }
-        }
-
-        private char SymbolFromTile(TileType tile)
-        {
-            switch (tile)
-            {
-                case TileType.TreeBramble:
-                    return '#';
-                case TileType.Undergrowth:
-                    return ';';
-                case TileType.Water:
-                    return '~';
-                default:
-                    return '.';
-            }
-        }
-
-        /// <summary>
-        /// Initializes the maze grid using ForestMazeGenerator or PlanarForestMazeGenerator for runtime procedural generation.
-        /// </summary>
-        private void InitializeFromGenerator()
-        {
-            spawnPoints.Clear();
-
-            // World-space coordinates: build maze directly from graph, skip string parsing
-            if (usePlanarGenerator && useWorldSpaceCoordinates)
-            {
-                InitializeFromGraphWorldSpace();
-                return;
-            }
-
-            // Legacy path: parse maze string into grid
-            string mazeString;
-            TileType[,] tiles;
-            char[,] symbols;
-
-            if (usePlanarGenerator)
-            {
-                // Use planar organic generator with state tracking for dynamic growth
-                var result = ForestMaze.PlanarForestMazeGenerator.GenerateMazeWithState(
-                    planarGeneratorConfig.gridWidth,
-                    planarGeneratorConfig.gridHeight,
-                    planarGeneratorConfig.growthTurns,
-                    planarGeneratorConfig.randomSeed);
-
-                mazeString = result.maze;
-                forestMapState = result.state; // Store state for dynamic growth
-
-                // Adjust offset to account for GRID_BUFFER
-                // This ensures rasterization during growth accounts for the buffer zone
-                forestMapState.Offset += new Vector2(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER);
-
-                // Convert string to tiles
-                tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
-                cachedGeneratedTiles = tiles;
-                cachedGeneratedSymbols = symbols;
-                cachedMazeString = mazeString;
-                hasCachedGeneration = true;
-            }
-            else
-            {
-                // Use traditional Kruskal-based generator
-                if (!HasCachedTilesForConfig(generatorConfig) || cachedGeneratedTiles == null || cachedGeneratedSymbols == null)
-                {
-                    mazeString = MazeStringGenerator.GenerateMaze(
-                        generatorConfig.width,
-                        generatorConfig.height,
-                        generatorConfig.numEntrances,
-                        generatorConfig.randomSeed);
-
-                    tiles = ConvertMazeStringToTiles(mazeString, out symbols, out cachedEntranceEdges);
-                    cachedGeneratedTiles = tiles;
-                    cachedGeneratedSymbols = symbols;
-                    cachedConfig = generatorConfig;
-                    cachedMazeString = mazeString;
-                    hasCachedGeneration = true;
-                }
-                else
-                {
-                    tiles = cachedGeneratedTiles;
-                    symbols = cachedGeneratedSymbols;
-                }
-            }
-
-            // Get dimensions from generated maze
-            width = tiles.GetLength(0);
-            height = tiles.GetLength(1);
-
-
-            // Create the grid
-            grid = new MazeGrid(width, height);
-
-            // Convert tile types to walkability and populate grid (offset by GRID_BUFFER)
-            bool foundHeart = false;
-            int heartCount = 0;
-
-            for (int x = 0; x < width; x++)
-            {
-                for (int y = 0; y < height; y++)
-                {
-                    TileType tile = tiles[x, y];
-                    char symbol = symbols[x, y];
-                    bool isHeart = symbol == 'H';
-                    int gridX = x + MazeGrid.GRID_BUFFER;
-                    int gridY = y + MazeGrid.GRID_BUFFER;
-
-                    ApplyTileFromTileType(gridX, gridY, tile, symbol, isHeart);
-
-                    if (isHeart)
-                    {
-                        heartGridPos = new Vector2Int(gridX, gridY);
-                        foundHeart = true;
-                        heartCount++;
-                    }
-
-                    // Extract spawn points (uppercase letters except H and N)
-                    if (char.IsUpper(symbol) && symbol != 'H' && symbol != 'N')
-                    {
-                        if (!spawnPoints.ContainsKey(symbol))
-                        {
-                            spawnPoints[symbol] = new Vector2Int(gridX, gridY);
-                        }
-                    }
-                }
-            }
-
-
-            if (!foundHeart)
-            {
-                FindHeartPosition();
-            }
-            else
-            {
-            }
-
-            // Only create border-based spawn points if none were found in the maze symbols
-            if (spawnPoints.Count == 0)
-            {
-                // Collect entrance positions (prefer carved entrances from the generator)
-                HashSet<Vector2Int> borderWalkableTiles = new HashSet<Vector2Int>();
-
-                foreach (var entrance in cachedEntranceEdges)
-                {
-                    int gridX = entrance.x + MazeGrid.GRID_BUFFER;
-                    int gridY = entrance.y + MazeGrid.GRID_BUFFER;
-                    if (grid.InBounds(gridX, gridY) && grid.GetNode(gridX, gridY)?.walkable == true)
-                    {
-                        borderWalkableTiles.Add(new Vector2Int(gridX, gridY));
-                    }
-                }
-
-                // If generator didn't yield any (or for redundancy), check all border tiles
-                if (borderWalkableTiles.Count == 0)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
-                        int gridX = x + MazeGrid.GRID_BUFFER;
-                        // Top and bottom borders
-                        if (grid.GetNode(gridX, MazeGrid.GRID_BUFFER)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(gridX, MazeGrid.GRID_BUFFER));
-                        if (grid.GetNode(gridX, height + MazeGrid.GRID_BUFFER - 1)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(gridX, height + MazeGrid.GRID_BUFFER - 1));
-                    }
-
-                    for (int y = 0; y < height; y++)
-                    {
-                        int gridY = y + MazeGrid.GRID_BUFFER;
-                        // Left and right borders
-                        if (grid.GetNode(MazeGrid.GRID_BUFFER, gridY)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(MazeGrid.GRID_BUFFER, gridY));
-                        if (grid.GetNode(width + MazeGrid.GRID_BUFFER - 1, gridY)?.walkable == true)
-                            borderWalkableTiles.Add(new Vector2Int(width + MazeGrid.GRID_BUFFER - 1, gridY));
-                    }
-                }
-
-                // Set up spawn points from border entrances
-                // Use up to 4 evenly distributed entrances as spawn points
-                char[] spawnIds = new char[] { 'A', 'B', 'C', 'D' };
-                List<Vector2Int> borderWalkableList = borderWalkableTiles.ToList();
-                // Sort for deterministic ordering so indexing stays stable between runs
-                borderWalkableList.Sort((a, b) =>
-                {
-                    int cmp = a.x.CompareTo(b.x);
-                    return cmp != 0 ? cmp : a.y.CompareTo(b.y);
-                });
-
-                int borderCount = borderWalkableList.Count;
-                int numSpawns = Mathf.Min(borderCount, spawnIds.Length);
-
-                for (int i = 0; i < numSpawns; i++)
-                {
-                    int index = (i * borderCount) / numSpawns;
-                    Vector2Int pos = borderWalkableList[index];
-                    spawnPoints[spawnIds[i]] = pos;
-                }
-            }
-
-            // Set entrance to first spawn point (or fallback to GRID_BUFFER, GRID_BUFFER)
-            if (spawnPoints.Count > 0)
-            {
-                // Use the first spawn point alphabetically
-                var firstSpawnId = spawnPoints.Keys.OrderBy(c => c).First();
-                entranceGridPos = spawnPoints[firstSpawnId];
-            }
-            else
-            {
-                entranceGridPos = new Vector2Int(MazeGrid.GRID_BUFFER, MazeGrid.GRID_BUFFER);
-            }
-
-            // Heart position is set during maze parsing from 'H' marker
-            // If no 'H' was found, FindHeartPosition() was already called earlier (line 540-543)
-            // DO NOT call FindHeartPosition() here - it will override the dead-end placement!
-
-            // Optimize grid by removing distant walls and ensuring proper borders
-            // Skip optimization for world-space coordinates - frontier edges may extend beyond
-            // the initial content area and need those cells to remain available
-            if (!useWorldSpaceCoordinates)
-            {
-                OptimizeGridWalls();
-            }
-
-        }
-
         /// <summary>
         /// Initializes the maze directly from the graph state in pure world-space.
         /// NO grid, NO coordinate transforms - graph positions ARE world positions.
         /// </summary>
-        private void InitializeFromGraphWorldSpace()
+        private void InitializeFromGraph()
         {
             // Generate the graph (no rasterization - graph positions are world positions)
-            var result = ForestMaze.PlanarForestMazeGenerator.GenerateMazeWithState(
-                planarGeneratorConfig.gridWidth,  // Ignored in world-space mode
-                planarGeneratorConfig.gridHeight, // Ignored in world-space mode
+            var result = PlanarForestMazeGenerator.GenerateMazeWithState(
+                planarGeneratorConfig.gridWidth,  // Used for initial bounds, not grid
+                planarGeneratorConfig.gridHeight,
                 planarGeneratorConfig.growthTurns,
                 planarGeneratorConfig.randomSeed);
 
             forestMapState = result.state;
 
             // Generate world-space maze data directly from graph
-            // Graph positions ARE world positions - no transform needed
             WorldSpaceMazeGenerator.ResetSpawnIdCounter();
             worldSpaceMazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, worldSpaceTileSize);
             worldSpaceMazeData.RecalculateBounds();
@@ -804,208 +155,6 @@ namespace FaeMaze.Systems
                 heartWorldPosition = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
                 Debug.Log($"[MazeGridBehaviour] Heart at world position {heartWorldPosition}");
             }
-
-            // NO grid creation - world-space mode doesn't use grids
-            grid = null;
-            width = 0;
-            height = 0;
-        }
-
-        /// <summary>
-        /// Heart position in world space (for world-space mode).
-        /// </summary>
-        private Vector3 heartWorldPosition;
-
-        /// <summary>
-        /// Gets the heart position in world space.
-        /// </summary>
-        public Vector3 HeartWorldPosition => heartWorldPosition;
-
-        #endregion
-
-        #region Grid Optimization
-
-        /// <summary>
-        /// Optimizes the grid by removing wall tiles that are too far from walkable content
-        /// and ensuring a proper wall border around all walkable areas.
-        /// This significantly reduces rendering overhead in the buffer zones.
-        /// </summary>
-        private void OptimizeGridWalls()
-        {
-            if (grid == null)
-            {
-                return;
-            }
-
-            // Step 1: Remove walls beyond distance 4 from any walkable tile
-            RemoveDistantWalls(4);
-
-            // Step 2: Ensure all walkable tiles have a 3-tile wall border
-            EnsureWallBorder(3);
-        }
-
-        /// <summary>
-        /// Removes wall tiles that are more than maxDistance away from any walkable tile.
-        /// First voids the entire buffer zone, then keeps walls within range of content.
-        /// </summary>
-        private void RemoveDistantWalls(int maxDistance)
-        {
-            int gridWidth = grid.Width;
-            int gridHeight = grid.Height;
-            int contentLeft = MazeGrid.GRID_BUFFER;
-            int contentRight = width + MazeGrid.GRID_BUFFER - 1;
-            int contentTop = MazeGrid.GRID_BUFFER;
-            int contentBottom = height + MazeGrid.GRID_BUFFER - 1;
-
-            bool[,] keepTile = new bool[gridWidth, gridHeight];
-
-            // Mark all content area tiles and tiles within maxDistance of walkable content
-            for (int y = 0; y < gridHeight; y++)
-            {
-                for (int x = 0; x < gridWidth; x++)
-                {
-                    var node = grid.GetNode(x, y);
-                    if (node != null && node.walkable)
-                    {
-                        // Mark all tiles within maxDistance of this walkable tile
-                        MarkTilesInRange(x, y, maxDistance, keepTile);
-                    }
-                }
-            }
-
-            // Remove all tiles in buffer zone that weren't marked
-            int removedCount = 0;
-            for (int y = 0; y < gridHeight; y++)
-            {
-                for (int x = 0; x < gridWidth; x++)
-                {
-                    // Check if this tile is in the buffer zone
-                    bool inBufferZone = (x < contentLeft || x > contentRight || y < contentTop || y > contentBottom);
-
-                    if (inBufferZone)
-                    {
-                        var node = grid.GetNode(x, y);
-                        if (node != null && !keepTile[x, y])
-                        {
-                            // Mark as empty/void (not walkable, not rendered)
-                            node.symbol = ' ';
-                            node.SetTerrain(TileType.Path);
-                            node.walkable = false;
-                            removedCount++;
-                        }
-                    }
-                    // Also remove distant walls within content area
-                    else
-                    {
-                        var node = grid.GetNode(x, y);
-                        if (node != null && !node.walkable && !keepTile[x, y])
-                        {
-                            node.symbol = ' ';
-                            node.SetTerrain(TileType.Path);
-                            node.walkable = false;
-                            removedCount++;
-                        }
-                    }
-                }
-            }
-
-            Debug.Log($"[GridOptimization] Removed {removedCount} distant wall tiles (grid: {gridWidth}x{gridHeight}, content: [{contentLeft},{contentTop}] to [{contentRight},{contentBottom}])");
-        }
-
-        /// <summary>
-        /// Marks all tiles within range of a center point.
-        /// </summary>
-        private void MarkTilesInRange(int centerX, int centerY, int range, bool[,] marked)
-        {
-            for (int dy = -range; dy <= range; dy++)
-            {
-                for (int dx = -range; dx <= range; dx++)
-                {
-                    int x = centerX + dx;
-                    int y = centerY + dy;
-
-                    if (x >= 0 && x < grid.Width && y >= 0 && y < grid.Height)
-                    {
-                        // Use Manhattan distance for rectangular range
-                        int distance = Mathf.Abs(dx) + Mathf.Abs(dy);
-                        if (distance <= range)
-                        {
-                            marked[x, y] = true;
-                        }
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Ensures all walkable tiles have a wall border of specified width.
-        /// Any void/empty tiles within the border distance become walls.
-        /// </summary>
-        private void EnsureWallBorder(int borderWidth)
-        {
-            int width = grid.Width;
-            int height = grid.Height;
-            List<Vector2Int> tilesToConvert = new List<Vector2Int>();
-
-            // Find void tiles within borderWidth of walkable tiles
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    var node = grid.GetNode(x, y);
-                    if (node != null && node.symbol == ' ') // Void tile
-                    {
-                        // Check if any walkable tile is within borderWidth
-                        if (IsNearWalkableTile(x, y, borderWidth))
-                        {
-                            tilesToConvert.Add(new Vector2Int(x, y));
-                        }
-                    }
-                }
-            }
-
-            // Convert void tiles to walls
-            foreach (var pos in tilesToConvert)
-            {
-                var node = grid.GetNode(pos.x, pos.y);
-                if (node != null)
-                {
-                    node.symbol = '#';
-                    node.SetTerrain(TileType.TreeBramble);
-                    node.walkable = false;
-                }
-            }
-
-            Debug.Log($"[GridOptimization] Added {tilesToConvert.Count} wall tiles for borders");
-        }
-
-        /// <summary>
-        /// Checks if there's a walkable tile within the specified distance.
-        /// </summary>
-        private bool IsNearWalkableTile(int centerX, int centerY, int maxDistance)
-        {
-            for (int dy = -maxDistance; dy <= maxDistance; dy++)
-            {
-                for (int dx = -maxDistance; dx <= maxDistance; dx++)
-                {
-                    int x = centerX + dx;
-                    int y = centerY + dy;
-
-                    if (x >= 0 && x < grid.Width && y >= 0 && y < grid.Height)
-                    {
-                        int distance = Mathf.Abs(dx) + Mathf.Abs(dy);
-                        if (distance <= maxDistance)
-                        {
-                            var node = grid.GetNode(x, y);
-                            if (node != null && node.walkable)
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-            return false;
         }
 
         #endregion
@@ -1013,124 +162,9 @@ namespace FaeMaze.Systems
         #region Coordinate Conversion
 
         /// <summary>
-        /// Converts grid coordinates to world position (2D backward compatibility).
+        /// Converts graph-space coordinates to world position.
+        /// In pure world-space mode, this just applies the maze origin offset.
         /// </summary>
-        /// <param name="x">Grid X coordinate</param>
-        /// <param name="y">Grid Y coordinate</param>
-        /// <returns>World position corresponding to the grid cell at ground level</returns>
-        public Vector3 GridToWorld(int x, int y)
-        {
-            return GridToWorld(x, y, 0f);
-        }
-
-        /// <summary>
-        /// Converts grid coordinates to world position with height support.
-        /// </summary>
-        /// <param name="x">Grid X coordinate (absolute, including buffer offset)</param>
-        /// <param name="y">Grid Y coordinate (absolute, including buffer offset)</param>
-        /// <param name="height">Height offset in world units</param>
-        /// <returns>World position corresponding to the grid cell with height</returns>
-        public Vector3 GridToWorld(int x, int y, float height)
-        {
-            // Subtract buffer offset to get content-relative coordinates
-            int contentX = x - MazeGrid.GRID_BUFFER;
-            int contentY = y - MazeGrid.GRID_BUFFER;
-
-            if (mazeOrigin == null)
-            {
-                return new Vector3(contentX * tileSize, contentY * tileSize, -height);
-            }
-
-            return mazeOrigin.position + new Vector3(contentX * tileSize, contentY * tileSize, -height);
-        }
-
-        /// <summary>
-        /// Converts a MazeNode to world position using its stored height.
-        /// </summary>
-        /// <param name="node">The maze node</param>
-        /// <returns>World position corresponding to the node</returns>
-        public Vector3 NodeToWorld(MazeGrid.MazeNode node)
-        {
-            if (node == null)
-            {
-                return Vector3.zero;
-            }
-
-            return GridToWorld(node.x, node.y, node.height);
-        }
-
-        /// <summary>
-        /// Converts world position to grid coordinates.
-        /// </summary>
-        /// <param name="worldPos">World position to convert</param>
-        /// <param name="x">Output grid X coordinate (absolute, including buffer offset)</param>
-        /// <param name="y">Output grid Y coordinate (absolute, including buffer offset)</param>
-        /// <returns>True if the position maps to a valid grid cell, false otherwise</returns>
-        public bool WorldToGrid(Vector3 worldPos, out int x, out int y)
-        {
-            if (mazeOrigin == null)
-            {
-                x = 0;
-                y = 0;
-                return false;
-            }
-
-            // Calculate relative position from origin
-            Vector3 localPos = worldPos - mazeOrigin.position;
-
-            // Account for tile size so each grid cell maps to one tile
-            if (!Mathf.Approximately(tileSize, 0f))
-            {
-                localPos /= tileSize;
-            }
-
-            // Round to nearest integer coordinates and add buffer offset
-            x = Mathf.RoundToInt(localPos.x) + MazeGrid.GRID_BUFFER;
-            y = Mathf.RoundToInt(localPos.y) + MazeGrid.GRID_BUFFER;
-
-            // Check if in bounds
-            return grid != null && grid.InBounds(x, y);
-        }
-
-        /// <summary>
-        /// Converts world position to grid coordinates (alternative version using flooring).
-        /// </summary>
-        /// <param name="worldPos">World position to convert</param>
-        /// <param name="x">Output grid X coordinate (absolute, including buffer offset)</param>
-        /// <param name="y">Output grid Y coordinate (absolute, including buffer offset)</param>
-        /// <returns>True if the position maps to a valid grid cell, false otherwise</returns>
-        public bool WorldToGridFloor(Vector3 worldPos, out int x, out int y)
-        {
-            if (mazeOrigin == null)
-            {
-                x = 0;
-                y = 0;
-                return false;
-            }
-
-            // Calculate relative position from origin
-            Vector3 localPos = worldPos - mazeOrigin.position;
-
-            // Account for tile size so each grid cell maps to one tile
-            if (!Mathf.Approximately(tileSize, 0f))
-            {
-                localPos /= tileSize;
-            }
-
-            // Floor to integer coordinates and add buffer offset
-            x = Mathf.FloorToInt(localPos.x) + MazeGrid.GRID_BUFFER;
-            y = Mathf.FloorToInt(localPos.y) + MazeGrid.GRID_BUFFER;
-
-            // Check if in bounds
-            return grid != null && grid.InBounds(x, y);
-        }
-
-        /// <summary>
-        /// Converts graph-space coordinates to world position (for world-space mode).
-        /// Graph-space is the coordinate system used by the planar generator.
-        /// </summary>
-        /// <param name="graphPos">Position in graph space</param>
-        /// <returns>World position</returns>
         public Vector3 GraphToWorld(Vector2 graphPos)
         {
             if (mazeOrigin == null)
@@ -1142,10 +176,8 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Converts world position to graph-space coordinates (for world-space mode).
+        /// Converts world position to graph-space coordinates.
         /// </summary>
-        /// <param name="worldPos">World position</param>
-        /// <returns>Position in graph space</returns>
         public Vector2 WorldToGraph(Vector3 worldPos)
         {
             if (mazeOrigin == null)
@@ -1158,10 +190,8 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets the tile at a world position in world-space mode.
+        /// Gets the tile at a world position.
         /// </summary>
-        /// <param name="worldPos">World position to query</param>
-        /// <returns>The tile at that position, or null if not found</returns>
         public WorldSpaceTile GetWorldSpaceTileAt(Vector3 worldPos)
         {
             if (worldSpaceMazeData == null)
@@ -1189,20 +219,12 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Checks if a world position is walkable in world-space mode.
+        /// Checks if a world position is walkable.
         /// </summary>
-        /// <param name="worldPos">World position to check</param>
-        /// <returns>True if the position is walkable</returns>
         public bool IsWalkableAtWorldPos(Vector3 worldPos)
         {
             if (worldSpaceMazeData == null)
             {
-                // Fall back to grid-based check
-                if (WorldToGrid(worldPos, out int x, out int y))
-                {
-                    var node = grid?.GetNode(x, y);
-                    return node != null && node.walkable;
-                }
                 return false;
             }
 
@@ -1216,115 +238,52 @@ namespace FaeMaze.Systems
 
         private void OnDrawGizmos()
         {
-            if (!drawGridGizmos || grid == null || mazeOrigin == null)
+            if (!drawGizmos || worldSpaceMazeData == null || mazeOrigin == null)
             {
                 return;
             }
 
             Color originalColor = Gizmos.color;
 
-            float maxAttraction = 0f;
-            if (drawAttractionHeatmap)
+            // Draw heart position
+            Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.9f);
+            Gizmos.DrawWireSphere(heartWorldPosition, 2f);
+
+            // Draw nodes
+            if (forestMapState != null)
             {
-                for (int x = 0; x < width; x++)
+                Gizmos.color = new Color(0.2f, 0.8f, 0.2f, 0.5f);
+                foreach (var node in forestMapState.Nodes)
                 {
-                    for (int y = 0; y < height; y++)
-                    {
-                        var node = grid.GetNode(x, y);
-                        if (node != null)
-                        {
-                            maxAttraction = Mathf.Max(maxAttraction, node.attraction);
-                        }
-                    }
+                    Vector3 nodePos = GraphToWorld(node.Position);
+                    Gizmos.DrawWireSphere(nodePos, 1.5f);
                 }
 
-                if (Mathf.Approximately(maxAttraction, 0f))
+                // Draw edges
+                Gizmos.color = new Color(0.4f, 0.6f, 1f, 0.5f);
+                foreach (var edge in forestMapState.Edges)
                 {
-                    maxAttraction = 1f;
-                }
-            }
+                    if (edge.PolylinePoints.Count < 2) continue;
 
-            Color walkableBaseColor = new Color(0.2f, 0.8f, 0.2f, 0.35f);
-            Color blockedColor = new Color(0.6f, 0.1f, 0.1f, 0.4f);
-            Vector3 cellSize = new Vector3(0.95f * tileSize, 0.95f * tileSize, 0.1f);
-
-            for (int x = 0; x < width; x++)
-            {
-                for (int y = 0; y < height; y++)
-                {
-                    var node = grid.GetNode(x, y);
-                    if (node == null)
+                    for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                     {
-                        continue;
-                    }
-
-                    Vector3 cellCenter = GridToWorld(x, y);
-
-                    if (node.walkable)
-                    {
-                        Color tileColor = walkableBaseColor;
-
-                        if (drawAttractionHeatmap)
-                        {
-                            float t = Mathf.InverseLerp(0f, maxAttraction, node.attraction);
-                            tileColor = Color.Lerp(walkableBaseColor, Color.cyan, t);
-                        }
-
-                        Gizmos.color = tileColor;
-                        Gizmos.DrawCube(cellCenter, cellSize);
-                    }
-                    else
-                    {
-                        Gizmos.color = blockedColor;
-                        Gizmos.DrawCube(cellCenter, cellSize);
+                        Vector3 p1 = GraphToWorld(edge.PolylinePoints[i]);
+                        Vector3 p2 = GraphToWorld(edge.PolylinePoints[i + 1]);
+                        Gizmos.DrawLine(p1, p2);
                     }
                 }
             }
-
-            // Highlight entrance and heart positions
-            Gizmos.color = new Color(0.2f, 0.4f, 1f, 0.8f);
-            Gizmos.DrawWireCube(GridToWorld(entranceGridPos.x, entranceGridPos.y), Vector3.one * 1.1f);
-
-            Gizmos.color = new Color(1f, 0.9f, 0.1f, 0.9f);
-            Gizmos.DrawWireCube(GridToWorld(heartGridPos.x, heartGridPos.y), Vector3.one * 1.1f);
 
             Gizmos.color = originalColor;
-        }
-
-        private void OnDrawGizmosSelected()
-        {
-            if (grid == null || mazeOrigin == null)
-                return;
-
-            // Draw grid bounds
-            Gizmos.color = Color.yellow;
-            Vector3 center = mazeOrigin.position + new Vector3(width / 2f, height / 2f, 0);
-            Vector3 size = new Vector3(width, height, 0);
-            Gizmos.DrawWireCube(center, size);
-
-            // Draw entrance position
-            Gizmos.color = Color.green;
-            Vector3 entrancePos = GridToWorld(entranceGridPos.x, entranceGridPos.y);
-            Gizmos.DrawWireSphere(entrancePos, 0.5f);
-
-            // Draw heart position
-            Gizmos.color = Color.red;
-            Vector3 heartPos = GridToWorld(heartGridPos.x, heartGridPos.y);
-            Gizmos.DrawWireSphere(heartPos, 0.5f);
         }
 
         #endregion
 
         #region Debug Controls
 
-        public void SetDrawGridGizmos(bool value)
+        public void SetDrawGizmos(bool value)
         {
-            drawGridGizmos = value;
-        }
-
-        public void SetDrawAttractionHeatmap(bool value)
-        {
-            drawAttractionHeatmap = value;
+            drawGizmos = value;
         }
 
         #endregion
@@ -1332,43 +291,17 @@ namespace FaeMaze.Systems
         #region Maze Regeneration
 
         /// <summary>
-        /// Regenerates the procedurally generated maze with a new random seed.
-        /// Only works when useRuntimeGeneration is true.
-        /// Clears cache and generates a new layout, then notifies all systems.
+        /// Regenerates the maze with a new random seed.
         /// </summary>
         public void RegenerateMaze()
         {
-            if (!useRuntimeGeneration)
-            {
-                return;
-            }
-
-            // Clear cache to force new generation
-            hasCachedGeneration = false;
-            cachedGeneratedTiles = null;
-            cachedGeneratedSymbols = null;
-            cachedMazeString = null;
-            cachedEntranceEdges.Clear();
-
             // Use current time as random seed for variety
-            generatorConfig.randomSeed = System.DateTime.Now.Millisecond + (System.DateTime.Now.Second * 1000);
+            planarGeneratorConfig.randomSeed = System.DateTime.Now.Millisecond + (System.DateTime.Now.Second * 1000);
 
             // Regenerate maze
-            InitializeFromGenerator();
+            InitializeFromGraph();
 
-            // Re-register with GameController
-            if (GameController.Instance != null)
-            {
-                GameController.Instance.RegisterMazeGrid(grid);
-            }
-
-            // Reposition entrance and heart markers
-            var entrance = Object.FindFirstObjectByType<FaeMaze.Maze.MazeEntrance>();
-            if (entrance != null)
-            {
-                entrance.PositionFromMazeGrid();
-            }
-
+            // Reposition heart marker
             var heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
             if (heart != null)
             {
@@ -1382,127 +315,54 @@ namespace FaeMaze.Systems
             {
                 renderer.RefreshMaze();
             }
-
         }
 
         #endregion
 
-        #region Spawn Point API
+        #region Spawn Point API (World-Space)
 
         /// <summary>
-        /// Gets the grid position of a specific spawn point.
+        /// Gets a spawn point position in world space by ID.
         /// </summary>
-        /// <param name="spawnId">The spawn marker character (A, B, C, D)</param>
-        /// <param name="position">Output position if found</param>
-        /// <returns>True if spawn point exists, false otherwise</returns>
-        public bool TryGetSpawnPoint(char spawnId, out Vector2Int position)
+        public bool TryGetSpawnPointWorldPos(char spawnId, out Vector3 worldPos)
         {
-            return spawnPoints.TryGetValue(spawnId, out position);
-        }
-
-        /// <summary>
-        /// Gets the grid position of a specific spawn point.
-        /// Throws exception if spawn point doesn't exist.
-        /// </summary>
-        /// <param name="spawnId">The spawn marker character (A, B, C, D)</param>
-        /// <returns>Grid position of the spawn point</returns>
-        public Vector2Int GetSpawnPoint(char spawnId)
-        {
-            if (!spawnPoints.ContainsKey(spawnId))
+            worldPos = Vector3.zero;
+            if (worldSpaceMazeData == null)
             {
-                return Vector2Int.zero;
-            }
-            return spawnPoints[spawnId];
-        }
-
-        /// <summary>
-        /// Gets all spawn points as a read-only dictionary.
-        /// </summary>
-        /// <returns>Dictionary mapping spawn IDs to grid positions</returns>
-        public IReadOnlyDictionary<char, Vector2Int> GetAllSpawnPoints()
-        {
-            return spawnPoints;
-        }
-
-        /// <summary>
-        /// Gets a random spawn point from all available spawn markers.
-        /// </summary>
-        /// <param name="spawnId">Output spawn ID that was selected</param>
-        /// <param name="position">Output grid position</param>
-        /// <returns>True if at least one spawn point exists, false otherwise</returns>
-        public bool TryGetRandomSpawnPoint(out char spawnId, out Vector2Int position)
-        {
-            if (spawnPoints.Count == 0)
-            {
-                spawnId = '\0';
-                position = Vector2Int.zero;
                 return false;
             }
 
-            // Get random spawn point
-            var keys = new List<char>(spawnPoints.Keys);
-            int randomIndex = Random.Range(0, keys.Count);
-            spawnId = keys[randomIndex];
-            position = spawnPoints[spawnId];
-            return true;
-        }
-
-        /// <summary>
-        /// Gets two different random spawn points for start and destination.
-        /// </summary>
-        /// <param name="startId">Output start spawn ID</param>
-        /// <param name="startPos">Output start grid position</param>
-        /// <param name="destId">Output destination spawn ID</param>
-        /// <param name="destPos">Output destination grid position</param>
-        /// <returns>True if at least two different spawn points exist, false otherwise</returns>
-        public bool TryGetRandomSpawnPair(out char startId, out Vector2Int startPos, out char destId, out Vector2Int destPos)
-        {
-            if (spawnPoints.Count < 2)
+            var pos = worldSpaceMazeData.GetSpawnPointPosition(spawnId);
+            if (pos.HasValue)
             {
-                startId = '\0';
-                startPos = Vector2Int.zero;
-                destId = '\0';
-                destPos = Vector2Int.zero;
-                return false;
+                worldPos = pos.Value;
+                return true;
             }
-
-            // Get list of spawn IDs
-            var keys = new List<char>(spawnPoints.Keys);
-
-            // Pick random start
-            int startIndex = Random.Range(0, keys.Count);
-            startId = keys[startIndex];
-            startPos = spawnPoints[startId];
-
-            // Pick random destination (different from start)
-            int destIndex;
-            do
-            {
-                destIndex = Random.Range(0, keys.Count);
-            } while (destIndex == startIndex);
-
-            destId = keys[destIndex];
-            destPos = spawnPoints[destId];
-
-            return true;
+            return false;
         }
 
         /// <summary>
-        /// Gets the number of spawn points detected in the maze.
+        /// Gets all spawn point IDs.
+        /// </summary>
+        public IEnumerable<char> GetAllSpawnPointIds()
+        {
+            if (worldSpaceMazeData == null)
+            {
+                return new List<char>();
+            }
+            return worldSpaceMazeData.SpawnPoints.Keys;
+        }
+
+        /// <summary>
+        /// Gets the number of spawn points.
         /// </summary>
         public int GetSpawnPointCount()
         {
-            return spawnPoints.Count;
-        }
-
-        /// <summary>
-        /// Checks if a given grid position is a spawn point (exit).
-        /// </summary>
-        /// <param name="position">Grid position to check</param>
-        /// <returns>True if the position is a spawn point, false otherwise</returns>
-        public bool IsSpawnPoint(Vector2Int position)
-        {
-            return spawnPoints.ContainsValue(position);
+            if (worldSpaceMazeData == null)
+            {
+                return 0;
+            }
+            return worldSpaceMazeData.SpawnPoints.Count;
         }
 
         #endregion

@@ -1,9 +1,7 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using FaeMaze.Maze;
-using FaeMaze.Cameras;
+using ForestMaze;
 
 namespace FaeMaze.Systems
 {
