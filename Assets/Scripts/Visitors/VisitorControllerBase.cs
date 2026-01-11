@@ -729,6 +729,21 @@ namespace FaeMaze.Visitors
             // Add start position first
             result.Add(start);
 
+            // Check if start is on a partial edge endpoint (spawn point)
+            // If so, add that partial edge's polyline (reversed from endpoint toward connected node)
+            ForestMaze.PlanarForestMazeGenerator.Edge startPartialEdge = FindPartialEdgeAtPosition(graphState, startGraphPos);
+            if (startPartialEdge != null && startPartialEdge.PolylinePoints.Count > 0)
+            {
+                // Add polyline points from endpoint toward connected node (reversed order)
+                for (int p = startPartialEdge.PolylinePoints.Count - 2; p >= 0; p--)
+                {
+                    var pt = startPartialEdge.PolylinePoints[p];
+                    Vector3 worldPt = mazeGridBehaviour.GraphToWorld(pt);
+                    worldPt.z = start.z;
+                    result.Add(worldPt);
+                }
+            }
+
             // For each pair of consecutive nodes, find the connecting edge and add its polyline points
             for (int i = 0; i < nodePath.Count - 1; i++)
             {
@@ -889,6 +904,33 @@ namespace FaeMaze.Visitors
             return null; // No path found
         }
 
+        /// <summary>
+        /// Finds a partial edge whose endpoint is near the given graph position.
+        /// Used to determine if a visitor is at a spawn point on a frontier edge.
+        /// </summary>
+        protected ForestMaze.PlanarForestMazeGenerator.Edge FindPartialEdgeAtPosition(
+            ForestMaze.PlanarForestMazeGenerator.ForestMapState state, Vector2 graphPosition)
+        {
+            const float EndpointTolerance = 2.0f; // Graph units tolerance for matching
+
+            foreach (var edge in state.Edges)
+            {
+                if (!edge.Partial || edge.PolylinePoints.Count == 0)
+                    continue;
+
+                // Check if the position matches the endpoint of this partial edge
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                float distance = Vector2.Distance(endpoint, graphPosition);
+
+                if (distance < EndpointTolerance)
+                {
+                    return edge;
+                }
+            }
+
+            return null;
+        }
+
         #endregion
 
         #region Movement
@@ -898,16 +940,19 @@ namespace FaeMaze.Visitors
             // For 3D models, also handle rotation towards movement direction
             if (use3DModel && modelInstance != null && movement.sqrMagnitude > MovementEpsilonSqr)
             {
-                // Rotate 3D model to face movement direction
+                // Rotate 3D model to face movement direction in XY plane
+                // Game uses XY plane for movement with Z as depth/height
                 Vector3 movementDir = new Vector3(movement.x, movement.y, 0f).normalized;
 
-                // Convert XY movement to 3D rotation (Y-axis up)
-                // In 3D with top-down view, X/Y movement maps to X/Z in 3D space
-                Vector3 facing = new Vector3(movementDir.x, 0f, movementDir.y);
-
-                if (facing.sqrMagnitude > 0.001f)
+                if (movementDir.sqrMagnitude > 0.001f)
                 {
-                    Quaternion targetRotation = Quaternion.LookRotation(facing, Vector3.up);
+                    // Calculate angle in XY plane (0 = +X direction)
+                    float angle = Mathf.Atan2(movementDir.y, movementDir.x) * Mathf.Rad2Deg;
+
+                    // Rotate around Z axis to face movement direction
+                    // Subtract 90 because model's default forward is +Y (facing up in XY plane)
+                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle - 90f);
+
                     modelInstance.transform.rotation = Quaternion.Slerp(
                         modelInstance.transform.rotation,
                         targetRotation,
