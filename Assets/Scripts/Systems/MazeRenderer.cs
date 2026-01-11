@@ -455,6 +455,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Renders wall border by projecting outward from edges and nodes in world space.
         /// Walls are placed at perpendicular offsets from graph elements using floating-point coordinates.
+        /// Includes collision detection against node columns and path tiles.
         /// </summary>
         private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
@@ -477,6 +478,9 @@ namespace FaeMaze.Systems
                     Vector2 perpendicular = new Vector2(-direction.y, direction.x);
                     float segmentLength = Vector2.Distance(startGraph, endGraph);
 
+                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
+                    bool isFrontierEdge = edge.Partial;
+
                     // Walk along the segment
                     int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / graphStepSize));
                     for (int j = 0; j <= numSteps; j++)
@@ -494,13 +498,11 @@ namespace FaeMaze.Systems
                             {
                                 Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
 
-                                // Check if position overlaps with path/node tiles using quantized key
-                                long wallKey = GetQuantizedKey(wallGraphPos);
-                                if (occupiedPositions.Contains(wallKey)) continue;
+                                // Check collision with node columns and path tiles
+                                if (!IsWallPositionValid(wallGraphPos, forestState, occupiedWallPositions))
+                                    continue;
 
-                                // Check if we already placed a wall here
-                                if (occupiedWallPositions.Contains(wallKey)) continue;
-                                occupiedWallPositions.Add(wallKey);
+                                occupiedWallPositions.Add(GetQuantizedKey(wallGraphPos));
 
                                 // Orientation perpendicular to edge
                                 float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
@@ -511,6 +513,13 @@ namespace FaeMaze.Systems
                                 tileCount++;
                             }
                         }
+                    }
+
+                    // Add end cap walls for frontier edges (along the long axis at the end)
+                    if (isLastSegment && isFrontierEdge)
+                    {
+                        tileCount += RenderEdgeEndCap(endGraph, direction, perpendicular, forestState,
+                            occupiedWallPositions, mazeOrigin, graphStepSize);
                     }
                 }
             }
@@ -533,13 +542,11 @@ namespace FaeMaze.Systems
                         Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
                         Vector2 wallGraphPos = node.Position + radialDir * r;
 
-                        // Check if position overlaps with path/node tiles using quantized key
-                        long wallKey = GetQuantizedKey(wallGraphPos);
-                        if (occupiedPositions.Contains(wallKey)) continue;
+                        // Check collision with node columns and path tiles
+                        if (!IsWallPositionValid(wallGraphPos, forestState, occupiedWallPositions))
+                            continue;
 
-                        // Check if we already placed a wall here
-                        if (occupiedWallPositions.Contains(wallKey)) continue;
-                        occupiedWallPositions.Add(wallKey);
+                        occupiedWallPositions.Add(GetQuantizedKey(wallGraphPos));
 
                         // Orientation: facing outward radially
                         float orientationDegrees = angle * Mathf.Rad2Deg;
@@ -548,6 +555,72 @@ namespace FaeMaze.Systems
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                         tileCount++;
                     }
+                }
+            }
+
+            return tileCount;
+        }
+
+        /// <summary>
+        /// Checks if a wall position is valid (doesn't intersect node columns or path tiles).
+        /// </summary>
+        private bool IsWallPositionValid(Vector2 wallGraphPos, PlanarForestMazeGenerator.ForestMapState forestState,
+            HashSet<long> occupiedWallPositions)
+        {
+            // Check if already occupied by path tiles
+            long wallKey = GetQuantizedKey(wallGraphPos);
+            if (occupiedPositions.Contains(wallKey)) return false;
+
+            // Check if already has a wall
+            if (occupiedWallPositions.Contains(wallKey)) return false;
+
+            // Check if inside any node column (with small buffer)
+            float nodeBuffer = 0.5f; // Buffer to prevent walls from touching node columns
+            foreach (var node in forestState.Nodes)
+            {
+                float distToNode = Vector2.Distance(wallGraphPos, node.Position);
+                if (distToNode < nodeRadius + nodeBuffer)
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Renders end cap walls at the end of a frontier edge, perpendicular to the edge direction.
+        /// This closes off the open end of the path with walls along the long axis.
+        /// </summary>
+        private int RenderEdgeEndCap(Vector2 endPoint, Vector2 direction, Vector2 perpendicular,
+            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions,
+            Transform mazeOrigin, float graphStepSize)
+        {
+            int tileCount = 0;
+
+            // Place walls at the end of the edge, extending perpendicular (forming end cap)
+            // and also extending forward along the direction to close off the end
+            for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+            {
+                float forwardOffset = layer * graphStepSize;
+                Vector2 capCenterPos = endPoint + direction * forwardOffset;
+
+                // Place walls across the perpendicular width at this forward position
+                for (int perpLayer = -Mathf.CeilToInt(wallBorderDepth); perpLayer <= Mathf.CeilToInt(wallBorderDepth); perpLayer++)
+                {
+                    float perpOffset = perpLayer * graphStepSize;
+                    Vector2 wallGraphPos = capCenterPos + perpendicular * perpOffset;
+
+                    // Check collision
+                    if (!IsWallPositionValid(wallGraphPos, forestState, occupiedWallPositions))
+                        continue;
+
+                    occupiedWallPositions.Add(GetQuantizedKey(wallGraphPos));
+
+                    // Orientation: facing back toward the edge (opposite of direction)
+                    float orientationDegrees = Mathf.Atan2(-direction.y, -direction.x) * Mathf.Rad2Deg;
+
+                    Vector3 worldPos = GraphToWorldPos(wallGraphPos);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    tileCount++;
                 }
             }
 
