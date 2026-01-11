@@ -781,23 +781,9 @@ namespace FaeMaze.Systems
                 if (!stillExists)
                 {
                     removedSpawnPoints.Add(oldSpawnPos);
-
-                    // Find and remove the portal for this removed spawn point
-                    char removedSpawnId = '\0';
-                    foreach (var kvp in oldSpawnPoints)
-                    {
-                        if (kvp.Key == oldSpawnPos)
-                        {
-                            removedSpawnId = kvp.Value;
-                            break;
-                        }
-                    }
-
-                    if (removedSpawnId != '\0')
-                    {
-                        RemovePortalAtSpawnPoint(removedSpawnId);
-                        Debug.Log($"[DynamicGrowth] Spawn point '{removedSpawnId}' removed at {oldSpawnPos}");
-                    }
+                    // Note: Old portals were already removed at the start of this method (lines 588-594)
+                    // Do NOT call RemovePortalAtSpawnPoint here - spawn IDs get reused for new portals
+                    Debug.Log($"[DynamicGrowth] Old spawn position {oldSpawnPos} no longer exists in frontier");
                 }
             }
 
