@@ -125,12 +125,11 @@ namespace FaeMaze.Visitors
         protected bool isEntranced;
         protected float speedMultiplier = 1f;
 
-        // 2D rendering and physics
+        // Rendering
         protected SpriteRenderer spriteRenderer;
-        protected Rigidbody2D rb2D;
-
-        // 3D rendering and physics
         protected GameObject modelInstance;
+
+        // 3D physics
         protected Rigidbody rb3D;
 
         protected Vector2 authoredSpriteWorldSize;
@@ -1157,30 +1156,15 @@ namespace FaeMaze.Visitors
             Vector3 movementDelta = newPosition - transform.position;
             UpdateAnimatorDirection(movementDelta);
 
-            // Apply movement using appropriate physics
-            if (use3DModel)
+            // Apply movement using 3D physics
+            if (rb3D != null)
             {
-                if (rb3D != null)
-                {
-                    rb3D.MovePosition(newPosition);
-                    Physics.SyncTransforms();
-                }
-                else
-                {
-                    transform.position = newPosition;
-                }
+                rb3D.MovePosition(newPosition);
+                Physics.SyncTransforms();
             }
             else
             {
-                if (rb2D != null)
-                {
-                    rb2D.MovePosition(newPosition);
-                    Physics2D.SyncTransforms();
-                }
-                else
-                {
-                    transform.position = newPosition;
-                }
+                transform.position = newPosition;
             }
 
             // Check if we've reached the waypoint
@@ -1712,98 +1696,56 @@ namespace FaeMaze.Visitors
 
         protected virtual void SetupPhysics()
         {
-            // Check for existing physics components
-            Rigidbody existingRb3D = GetComponent<Rigidbody>();
+            // Always use 3D physics
+
+            // Remove any existing 2D physics components
             Rigidbody2D existingRb2D = GetComponent<Rigidbody2D>();
-
-            if (use3DModel)
+            if (existingRb2D != null)
             {
-                // Remove any existing 2D physics components immediately
-                if (existingRb2D != null)
+                existingRb2D.simulated = false;
+                DestroyImmediate(existingRb2D);
+            }
+
+            Collider2D[] existingColliders2D = GetComponents<Collider2D>();
+            foreach (var col2D in existingColliders2D)
+            {
+                if (col2D != null)
                 {
-                    existingRb2D.simulated = false;
-                    DestroyImmediate(existingRb2D);
+                    col2D.enabled = false;
+                    DestroyImmediate(col2D);
                 }
+            }
 
-                Collider2D existingCollider2D = GetComponent<Collider2D>();
-                if (existingCollider2D != null)
-                {
-                    existingCollider2D.enabled = false;
-                    DestroyImmediate(existingCollider2D);
-                }
+            // Setup 3D physics - use existing or add new
+            rb3D = GetComponent<Rigidbody>();
+            if (rb3D == null)
+            {
+                rb3D = gameObject.AddComponent<Rigidbody>();
+            }
 
-                // Setup 3D physics - use existing or add new
-                rb3D = existingRb3D;
-                if (rb3D == null)
-                {
-                    rb3D = gameObject.AddComponent<Rigidbody>();
-                }
+            rb3D.isKinematic = true;
+            rb3D.useGravity = false;
 
-                rb3D.isKinematic = true;
-                rb3D.useGravity = false;
+            // Use existing 3D collider (SphereCollider or CapsuleCollider) or add CapsuleCollider
+            SphereCollider sphereCollider = GetComponent<SphereCollider>();
+            CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
 
-                // Add CapsuleCollider for trigger detection (better for humanoid characters)
-                CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
-                if (capsuleCollider == null)
-                {
-                    capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
-                    capsuleCollider.height = 1.8f; // Typical humanoid height
-                    capsuleCollider.radius = 0.3f;
-                    capsuleCollider.center = new Vector3(0, 0.9f, 0); // Center at waist
-                }
-
+            if (sphereCollider != null)
+            {
+                sphereCollider.isTrigger = true;
+            }
+            else if (capsuleCollider != null)
+            {
                 capsuleCollider.isTrigger = true;
             }
             else
             {
-                // Remove any existing 3D physics components immediately
-                if (existingRb3D != null)
-                {
-                    DestroyImmediate(existingRb3D);
-                    existingRb3D = null;
-                }
-
-                CapsuleCollider existingCapsule = GetComponent<CapsuleCollider>();
-                if (existingCapsule != null)
-                {
-                    DestroyImmediate(existingCapsule);
-                }
-
-                // Check again if 3D rigidbody still exists (edge case protection)
-                if (GetComponent<Rigidbody>() != null)
-                {
-                    Debug.LogWarning($"[{gameObject.name}] Cannot setup 2D physics - 3D Rigidbody still present. Using 3D mode instead.");
-                    rb3D = GetComponent<Rigidbody>();
-                    rb3D.isKinematic = true;
-                    rb3D.useGravity = false;
-                    return;
-                }
-
-                // Setup 2D physics - use existing or add new
-                rb2D = existingRb2D;
-                if (rb2D == null)
-                {
-                    rb2D = gameObject.AddComponent<Rigidbody2D>();
-                }
-
-                if (rb2D != null)
-                {
-                    rb2D.bodyType = RigidbodyType2D.Kinematic;
-                    rb2D.gravityScale = 0f;
-                }
-
-                // Add CircleCollider2D for trigger detection
-                CircleCollider2D collider = GetComponent<CircleCollider2D>();
-                if (collider == null)
-                {
-                    collider = gameObject.AddComponent<CircleCollider2D>();
-                }
-
-                if (collider != null)
-                {
-                    collider.radius = 0.3f;
-                    collider.isTrigger = true;
-                }
+                // Add CapsuleCollider if no 3D collider exists
+                capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
+                capsuleCollider.height = 1.8f;
+                capsuleCollider.radius = 0.3f;
+                capsuleCollider.center = new Vector3(0, 0.9f, 0);
+                capsuleCollider.isTrigger = true;
             }
         }
 
