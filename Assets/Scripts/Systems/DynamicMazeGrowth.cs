@@ -137,7 +137,14 @@ namespace FaeMaze.Systems
                 char spawnId = kvp.Key;
                 Vector2Int gridPos = kvp.Value;
 
-                CreatePortalAtSpawnPoint(spawnId, gridPos);
+                // Find the nearest node center to use as portal target
+                Vector2Int? targetNodeGrid = null;
+                if (TryGetNearestNodeCenterGridPos(gridPos, out Vector2Int nodeCenterGrid))
+                {
+                    targetNodeGrid = nodeCenterGrid;
+                }
+
+                CreatePortalAtSpawnPoint(spawnId, gridPos, targetNodeGrid);
             }
 
             // Track which spawn ID to use next
@@ -1279,6 +1286,71 @@ namespace FaeMaze.Systems
                 if (node != null && (node.symbol == 'N' || node.symbol == 'H'))
                 {
                     nodeWorldPos = mazeGridBehaviour.GridToWorld(current.x, current.y);
+                    return true;
+                }
+
+                foreach (var dir in directions)
+                {
+                    Vector2Int next = current + dir;
+                    if (!mazeGridBehaviour.Grid.InBounds(next.x, next.y))
+                    {
+                        continue;
+                    }
+
+                    if (visited[next.x, next.y])
+                    {
+                        continue;
+                    }
+
+                    var nextNode = mazeGridBehaviour.Grid.GetNode(next.x, next.y);
+                    if (nextNode == null || !nextNode.walkable)
+                    {
+                        continue;
+                    }
+
+                    visited[next.x, next.y] = true;
+                    queue.Enqueue(next);
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Finds the nearest node center to the given grid position using BFS.
+        /// Returns grid coordinates instead of world coordinates.
+        /// </summary>
+        private bool TryGetNearestNodeCenterGridPos(Vector2Int gridPos, out Vector2Int nodeCenterGrid)
+        {
+            nodeCenterGrid = Vector2Int.zero;
+            if (mazeGridBehaviour == null || mazeGridBehaviour.Grid == null)
+            {
+                return false;
+            }
+
+            int width = mazeGridBehaviour.Grid.Width;
+            int height = mazeGridBehaviour.Grid.Height;
+            bool[,] visited = new bool[width, height];
+            Queue<Vector2Int> queue = new Queue<Vector2Int>();
+
+            queue.Enqueue(gridPos);
+            visited[gridPos.x, gridPos.y] = true;
+
+            Vector2Int[] directions =
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(-1, 0),
+                new Vector2Int(0, 1),
+                new Vector2Int(0, -1)
+            };
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                var node = mazeGridBehaviour.Grid.GetNode(current.x, current.y);
+                if (node != null && (node.symbol == 'N' || node.symbol == 'H'))
+                {
+                    nodeCenterGrid = current;
                     return true;
                 }
 
