@@ -419,6 +419,10 @@ namespace FaeMaze.Systems
             // ONLY process NEW edges created during this growth cycle, not existing frontier edges
             MarkPartialEdgeEndpointsAsWalkable(frontierBeforeGrowth);
 
+            // Ensure all frontier edge endpoints are reachable from their node centers
+            // This must run AFTER MarkPartialEdgeEndpointsAsWalkable so endpoints are in final positions
+            EnsureFrontierEdgeConnectivity(forestMapState, grid);
+
             // Remove old spawn point portals and rebuild from frontier
             // This updates spawn points but doesn't signal visitors yet
             var removedSpawnPoints = RebuildSpawnPointsFromFrontier();
@@ -1465,6 +1469,95 @@ namespace FaeMaze.Systems
             {
                 Debug.Log($"[DynamicGrowth] Processed edge endpoints: {markedCount} cells marked walkable, {skippedCount} existing edges skipped");
             }
+        }
+
+        /// <summary>
+        /// Ensures all frontier edge endpoints are reachable from their connected node centers
+        /// by progressively converting wall tiles to paths. Must be called AFTER endpoint marking.
+        /// </summary>
+        private void EnsureFrontierEdgeConnectivity(ForestMaze.PlanarForestMazeGenerator.ForestMapState state, MazeGrid grid)
+        {
+            // Convert MazeGrid to char array for gap-filling
+            char[,] gridArray = new char[grid.Height, grid.Width];
+            for (int y = 0; y < grid.Height; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    gridArray[y, x] = node != null ? node.symbol : '#';
+                }
+            }
+
+            // Run gap-filling on all frontier edges
+            float scale = state.Scale;
+            Vector2 offset = state.Offset;
+            int filledCount = 0;
+
+            foreach (int edgeId in state.Frontier)
+            {
+                var edge = state.Edges[edgeId];
+                if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+
+                // Get endpoint and node center
+                var connectedNode = state.Nodes[edge.NodeA];
+                Vector2 nodeCenter = connectedNode.Position * scale + offset;
+                Vector2Int nodeCenterGrid = new Vector2Int(Mathf.RoundToInt(nodeCenter.x), Mathf.RoundToInt(nodeCenter.y));
+
+                Vector2 endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1] * scale + offset;
+                Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
+
+                // Call the gap-filling method from PlanarForestMazeGenerator
+                int beforeCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
+                ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
+                    gridArray, grid.Width, grid.Height, endpointGrid, nodeCenterGrid);
+                int afterCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
+
+                if (afterCount > beforeCount)
+                {
+                    filledCount++;
+                    Debug.Log($"[DynamicGrowth] Gap-filled edge {edgeId}: added {afterCount - beforeCount} path tiles from ({endpointGrid.x},{endpointGrid.y}) to ({nodeCenterGrid.x},{nodeCenterGrid.y})");
+                }
+            }
+
+            // Apply changes back to MazeGrid
+            for (int y = 0; y < grid.Height; y++)
+            {
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var node = grid.GetNode(x, y);
+                    if (node != null && gridArray[y, x] == '.' && !node.walkable)
+                    {
+                        node.walkable = true;
+                        node.symbol = '.';
+                        node.SetTerrain(TileType.Path);
+                    }
+                }
+            }
+
+            if (filledCount > 0)
+            {
+                Debug.Log($"[DynamicGrowth] Gap-filled {filledCount} frontier edges");
+            }
+        }
+
+        /// <summary>
+        /// Counts walkable tiles in a char grid.
+        /// </summary>
+        private int CountWalkableTiles(char[,] grid, int width, int height)
+        {
+            int count = 0;
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    char c = grid[y, x];
+                    if (c == '.' || c == 'N' || c == 'H' || (char.IsUpper(c) && c != 'H' && c != 'N'))
+                    {
+                        count++;
+                    }
+                }
+            }
+            return count;
         }
 
         #endregion

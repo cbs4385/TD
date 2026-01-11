@@ -1415,8 +1415,9 @@ namespace ForestMaze
                 }
             }
 
-            // Ensure all edge endpoints are reachable from node centers by progressively converting walls to paths
-            EnsureEdgeConnectivity(state, grid, gridWidth, gridHeight);
+            // Note: Gap-filling is NOT done here for dynamic growth.
+            // DynamicMazeGrowth will call EnsureEdgeConnectivityPublic AFTER endpoint marking
+            // to ensure endpoints are in their final positions before gap-filling.
         }
 
         private static void DrawLineOnGrid(char[,] grid, Vector2 p1, Vector2 p2, char ch, int width, int height, bool includeEndPoint = true, int lineWidth = 2)
@@ -1724,6 +1725,15 @@ namespace ForestMaze
             }
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Public wrapper for gap-filling a single edge endpoint to node center connection.
+        /// Used by DynamicMazeGrowth to ensure frontier edges are reachable after endpoint marking.
+        /// </summary>
+        public static void EnsureEdgeConnectivityPublic(char[,] grid, int gridWidth, int gridHeight, Vector2Int start, Vector2Int end)
+        {
+            EnsureDirectPathExists(grid, gridWidth, gridHeight, start, end);
         }
 
         /// <summary>
