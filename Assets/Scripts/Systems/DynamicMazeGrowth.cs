@@ -1514,9 +1514,10 @@ namespace FaeMaze.Systems
                 Vector2Int endpointGrid = new Vector2Int(Mathf.RoundToInt(endpoint.x), Mathf.RoundToInt(endpoint.y));
 
                 // Call the gap-filling method from PlanarForestMazeGenerator
+                // IMPORTANT: Start from node center (existing path network) toward endpoint
                 int beforeCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
                 ForestMaze.PlanarForestMazeGenerator.EnsureEdgeConnectivityPublic(
-                    gridArray, grid.Width, grid.Height, endpointGrid, nodeCenterGrid);
+                    gridArray, grid.Width, grid.Height, nodeCenterGrid, endpointGrid);
                 int afterCount = CountWalkableTiles(gridArray, grid.Width, grid.Height);
 
                 if (afterCount > beforeCount)
