@@ -93,7 +93,8 @@ namespace FaeMaze.Systems
         private float graphScale;
         private Vector2 graphOffset;
         private float tileSize;
-        private HashSet<Vector2Int> occupiedGridCells; // Grid cells with path/node tiles
+        private HashSet<long> occupiedPositions; // All occupied positions using quantized keys
+        private HashSet<Vector2Int> occupiedGridCells; // Grid cells with path/node tiles (for legacy compatibility)
         private List<EdgeSegmentData> allEdgeSegments;
 
         private struct EdgeSegmentData
@@ -179,8 +180,9 @@ namespace FaeMaze.Systems
                 pathTiles = new List<GameObject>();
             }
 
-            // Track occupied grid cells (path/node tiles) - walls cannot overlap these
-            occupiedGridCells = new HashSet<Vector2Int>();
+            // Track all occupied positions using quantized keys for consistent overlap detection
+            occupiedPositions = new HashSet<long>();
+            occupiedGridCells = new HashSet<Vector2Int>(); // Legacy compatibility
             allEdgeSegments = new List<EdgeSegmentData>();
 
             int renderedTiles = 0;
@@ -298,9 +300,9 @@ namespace FaeMaze.Systems
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
                         Vector2 graphPos = Vector2.Lerp(startGraph, endGraph, t);
 
-                        // Get grid cell for this position
-                        Vector2Int gridCell = GraphToGridCell(graphPos);
-                        if (occupiedGridCells.Contains(gridCell)) continue;
+                        // Check if position already occupied using quantized key
+                        long posKey = GetQuantizedKey(graphPos);
+                        if (occupiedPositions.Contains(posKey)) continue;
 
                         // Determine symbol
                         char symbol = '.';
@@ -311,7 +313,8 @@ namespace FaeMaze.Systems
 
                         Vector3 worldPos = GraphToWorldPos(graphPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedGridCells.Add(gridCell);
+                        occupiedPositions.Add(posKey);
+                        occupiedGridCells.Add(GraphToGridCell(graphPos)); // Legacy
                         tileCount++;
                     }
                 }
@@ -350,9 +353,10 @@ namespace FaeMaze.Systems
                         if (distance > nodeRadius) continue;
 
                         Vector2 graphPos = node.Position + offsetFromNode;
-                        Vector2Int gridCell = GraphToGridCell(graphPos);
 
-                        if (occupiedGridCells.Contains(gridCell)) continue;
+                        // Check if position already occupied using quantized key
+                        long posKey = GetQuantizedKey(graphPos);
+                        if (occupiedPositions.Contains(posKey)) continue;
 
                         // Orientation: tiles face outward radially from node center
                         float orientationDegrees = 0f;
@@ -371,7 +375,8 @@ namespace FaeMaze.Systems
 
                         Vector3 worldPos = GraphToWorldPos(graphPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedGridCells.Add(gridCell);
+                        occupiedPositions.Add(posKey);
+                        occupiedGridCells.Add(GraphToGridCell(graphPos)); // Legacy
                         tileCount++;
                     }
                 }
@@ -426,12 +431,11 @@ namespace FaeMaze.Systems
                             {
                                 Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
 
-                                // Check if position overlaps with path/node tiles
-                                Vector2Int gridCell = GraphToGridCell(wallGraphPos);
-                                if (occupiedGridCells.Contains(gridCell)) continue;
+                                // Check if position overlaps with path/node tiles using quantized key
+                                long wallKey = GetQuantizedKey(wallGraphPos);
+                                if (occupiedPositions.Contains(wallKey)) continue;
 
                                 // Check if we already placed a wall here
-                                long wallKey = GetQuantizedKey(wallGraphPos);
                                 if (occupiedWallPositions.Contains(wallKey)) continue;
                                 occupiedWallPositions.Add(wallKey);
 
@@ -466,12 +470,11 @@ namespace FaeMaze.Systems
                         Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
                         Vector2 wallGraphPos = node.Position + radialDir * r;
 
-                        // Check if position overlaps with path/node tiles
-                        Vector2Int gridCell = GraphToGridCell(wallGraphPos);
-                        if (occupiedGridCells.Contains(gridCell)) continue;
+                        // Check if position overlaps with path/node tiles using quantized key
+                        long wallKey = GetQuantizedKey(wallGraphPos);
+                        if (occupiedPositions.Contains(wallKey)) continue;
 
                         // Check if we already placed a wall here
-                        long wallKey = GetQuantizedKey(wallGraphPos);
                         if (occupiedWallPositions.Contains(wallKey)) continue;
                         occupiedWallPositions.Add(wallKey);
 
