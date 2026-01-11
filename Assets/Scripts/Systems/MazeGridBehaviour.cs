@@ -169,10 +169,11 @@ namespace FaeMaze.Systems
             Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
 
             // Store heart world position (node 0 / root node)
+            // Use GraphToWorld to get actual world position including mazeOrigin offset
             if (forestMapState.Nodes.Count > 0)
             {
                 var seedNode = forestMapState.Nodes[0];
-                heartWorldPosition = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
+                heartWorldPosition = GraphToWorld(seedNode.Position);
                 Debug.Log($"[MazeGridBehaviour] Heart at world position {heartWorldPosition}");
             }
         }
