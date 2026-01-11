@@ -1743,8 +1743,11 @@ namespace ForestMaze
         /// </summary>
         private static void EnsureEdgeConnectivity(ForestMapState state, char[,] grid, int gridWidth, int gridHeight)
         {
+            Debug.Log($"[PlanarForest] EnsureEdgeConnectivity: Processing {state.Edges.Count} edges for initial generation");
             float scale = state.Scale;
             Vector2 offset = state.Offset;
+            int filledCount = 0;
+            int skippedCount = 0;
 
             foreach (var edge in state.Edges)
             {
@@ -1777,12 +1780,44 @@ namespace ForestMaze
                 }
                 else
                 {
+                    skippedCount++;
                     continue; // Skip edges without a second node
                 }
 
+                // Count tiles before gap-filling
+                int beforeCount = CountWalkableTilesInGrid(grid, gridWidth, gridHeight);
+
                 // Progressively convert walls to paths along the direct vector until reachable
                 EnsureDirectPathExists(grid, gridWidth, gridHeight, startGrid, endGrid);
+
+                // Count tiles after gap-filling
+                int afterCount = CountWalkableTilesInGrid(grid, gridWidth, gridHeight);
+
+                if (afterCount > beforeCount)
+                {
+                    filledCount++;
+                    Debug.Log($"[PlanarForest] Gap-filled edge: added {afterCount - beforeCount} tiles from ({startGrid.x},{startGrid.y}) to ({endGrid.x},{endGrid.y})");
+                }
             }
+
+            Debug.Log($"[PlanarForest] Gap-filling complete: {filledCount} edges filled, {skippedCount} edges skipped");
+        }
+
+        private static int CountWalkableTilesInGrid(char[,] grid, int width, int height)
+        {
+            int count = 0;
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    char c = grid[y, x];
+                    if (c == '.' || c == 'N' || c == 'H' || (char.IsUpper(c) && c != 'H' && c != 'N'))
+                    {
+                        count++;
+                    }
+                }
+            }
+            return count;
         }
 
         /// <summary>
