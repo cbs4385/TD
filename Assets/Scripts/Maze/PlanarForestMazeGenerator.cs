@@ -932,7 +932,7 @@ namespace ForestMaze
                 }
 
                 // Create perpendicular junction from branch point to poly2's path
-                Vector2 perpPoint = CreatePerpendicularIntersection(poly2[1], branchPoint, poly1Dir);
+                Vector2 branchPerpPoint = CreatePerpendicularIntersection(poly2[1], branchPoint, poly1Dir);
 
                 List<Vector2> boundaryNewPoly = new List<Vector2>();
                 boundaryNewPoly.Add(sharedStart);
@@ -944,9 +944,9 @@ namespace ForestMaze
                 }
 
                 // Add perpendicular point if different from branch point
-                if (Vector2.Distance(perpPoint, branchPoint) > 0.1f)
+                if (Vector2.Distance(branchPerpPoint, branchPoint) > 0.1f)
                 {
-                    boundaryNewPoly.Add(perpPoint);
+                    boundaryNewPoly.Add(branchPerpPoint);
                 }
 
                 // Add remaining poly2 points
