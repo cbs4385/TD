@@ -984,8 +984,8 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Renders end cap walls at the end of a frontier edge, perpendicular to the edge direction.
-        /// This closes off the open end of the path with walls along the long axis.
+        /// Renders end cap walls at the end of a frontier edge, aligned along the edge direction.
+        /// Walls are placed perpendicular to the edge to close off the open end.
         /// </summary>
         private int RenderEdgeEndCap(Vector2 endPoint, Vector2 direction, Vector2 perpendicular,
             PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions,
@@ -993,8 +993,8 @@ namespace FaeMaze.Systems
         {
             int tileCount = 0;
 
-            // Place walls at the end of the edge, extending perpendicular (forming end cap)
-            // and also extending forward along the direction to close off the end
+            // Place walls perpendicular to the edge direction to close off the end
+            // Walls are positioned along the perpendicular axis at the endpoint
             for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
             {
                 float forwardOffset = layer * stepSize;
@@ -1016,8 +1016,9 @@ namespace FaeMaze.Systems
 
                     occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
 
-                    // Orientation: facing back toward the edge (opposite of direction)
-                    float orientationDegrees = Mathf.Atan2(-direction.y, -direction.x) * Mathf.Rad2Deg;
+                    // Orientation: aligned along the edge direction (toward connected end)
+                    // This makes walls face perpendicular to the edge, closing off the path
+                    float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
                     Vector3 worldPos = ToVector3(adjustedPos.Value);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
