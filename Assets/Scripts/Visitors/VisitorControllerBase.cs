@@ -867,7 +867,9 @@ namespace FaeMaze.Visitors
             visited.Add(startTile);
             parent[startTile] = null;
 
-            float neighborRadius = mazeData.TileSize * 1.5f; // Tiles within 1.5 tile-widths are neighbors
+            // Tiles are placed at 1.0 unit intervals; diagonal neighbors are sqrt(2) ≈ 1.414 apart
+            // Use 1.2 to only connect immediate neighbors, not skip tiles
+            float neighborRadius = mazeData.TileSize * 1.2f;
 
             while (queue.Count > 0)
             {
@@ -887,8 +889,8 @@ namespace FaeMaze.Visitors
                     }
                     path.Reverse();
 
-                    // Simplify path by removing collinear points
-                    return SimplifyTilePath(path);
+                    // Don't simplify - keep all tile positions to stay on walkable terrain
+                    return path;
                 }
 
                 // Get neighboring walkable tiles

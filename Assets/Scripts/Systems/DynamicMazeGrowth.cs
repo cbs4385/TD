@@ -181,8 +181,8 @@ namespace FaeMaze.Systems
             int nodeCountBefore = forestMapState.Nodes.Count;
             int edgeCountBefore = forestMapState.Edges.Count;
 
-            // Find the consumed spawn point position BEFORE the step
-            Vector3 consumedSpawnPos = Vector3.zero;
+            // Store endpoint positions for all frontier edges BEFORE step
+            var frontierEndpoints = new Dictionary<int, Vector3>();
             foreach (int edgeIndex in frontierIndicesBefore)
             {
                 if (edgeIndex >= 0 && edgeIndex < forestMapState.Edges.Count)
@@ -190,10 +190,8 @@ namespace FaeMaze.Systems
                     var edge = forestMapState.Edges[edgeIndex];
                     if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
                     {
-                        // The endpoint of a partial edge is the spawn point
                         var endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-                        consumedSpawnPos = new Vector3(endpoint.x, endpoint.y, 0);
-                        break; // Step will consume one of the frontier edges
+                        frontierEndpoints[edgeIndex] = new Vector3(endpoint.x, endpoint.y, 0);
                     }
                 }
             }
@@ -211,34 +209,37 @@ namespace FaeMaze.Systems
             int newNodeId = nodeCountBefore;
             var newNode = forestMapState.Nodes[newNodeId];
 
-            // Find new/modified edges (edges added after the step or changed from partial to complete)
-            var newEdges = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
-            for (int i = 0; i < forestMapState.Edges.Count; i++)
+            // Find the CONSUMED spawn point - the edge that was in frontier before but not after
+            Vector3 consumedSpawnPos = Vector3.zero;
+            int consumedEdgeIndex = -1;
+            foreach (int edgeIndex in frontierIndicesBefore)
             {
-                var edge = forestMapState.Edges[i];
-                // New edges (index >= edgeCountBefore)
-                if (i >= edgeCountBefore)
+                if (!forestMapState.Frontier.Contains(edgeIndex))
                 {
-                    newEdges.Add(edge);
-                }
-                // Or edges that were in frontier before but now completed
-                else if (frontierIndicesBefore.Contains(i) && !forestMapState.Frontier.Contains(i))
-                {
-                    newEdges.Add(edge);
+                    // This edge was consumed (removed from frontier)
+                    consumedEdgeIndex = edgeIndex;
+                    if (frontierEndpoints.TryGetValue(edgeIndex, out Vector3 endpoint))
+                    {
+                        consumedSpawnPos = endpoint;
+                        Debug.Log($"[DynamicGrowth] Consumed spawn at edge {edgeIndex}, position {consumedSpawnPos}");
+                    }
+                    break;
                 }
             }
 
-            // Also add the new partial edges (current frontier edges that weren't there before)
-            foreach (int edgeIndex in forestMapState.Frontier)
+            // Find new/modified edges - ONLY the completed edge and new partial edges from this growth
+            var newEdges = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
+
+            // Add the completed edge (was partial, now complete)
+            if (consumedEdgeIndex >= 0 && consumedEdgeIndex < forestMapState.Edges.Count)
             {
-                if (!frontierIndicesBefore.Contains(edgeIndex) && edgeIndex < forestMapState.Edges.Count)
-                {
-                    var edge = forestMapState.Edges[edgeIndex];
-                    if (!newEdges.Contains(edge))
-                    {
-                        newEdges.Add(edge);
-                    }
-                }
+                newEdges.Add(forestMapState.Edges[consumedEdgeIndex]);
+            }
+
+            // Add truly new edges (index >= edgeCountBefore)
+            for (int i = edgeCountBefore; i < forestMapState.Edges.Count; i++)
+            {
+                newEdges.Add(forestMapState.Edges[i]);
             }
 
             Debug.Log($"[DynamicGrowth] Added node {newNodeId}, {newEdges.Count} new/modified edges");
