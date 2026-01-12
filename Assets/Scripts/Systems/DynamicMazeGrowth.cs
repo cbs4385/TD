@@ -205,16 +205,18 @@ namespace FaeMaze.Systems
             }
 
             // Rebuild portals from frontier edges using world-space coordinates
+            // This also registers spawn points and signals visitors to retarget
             RebuildSpawnPointsFromFrontier();
 
-            // Refresh the maze renderer to show new geometry
+            // Trigger visitor path recalculation after spawn points are registered
+            TriggerVisitorPathRecalculation();
+
+            // Refresh the maze renderer asynchronously to avoid lag
+            // This runs in the background while visitors navigate
             if (mazeRenderer != null)
             {
-                mazeRenderer.RefreshMaze();
+                mazeRenderer.RefreshMazeAsync();
             }
-
-            // Trigger visitor path recalculation
-            TriggerVisitorPathRecalculation();
         }
 
         /// <summary>
@@ -236,6 +238,14 @@ namespace FaeMaze.Systems
         {
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return;
+
+            // Clear spawn points in world-space data before registering new ones
+            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (worldSpaceData != null)
+            {
+                worldSpaceData.ClearSpawnPoints();
+                Debug.Log($"[DynamicGrowth] Cleared spawn points, frontier has {forestMapState.Frontier.Count} edges");
+            }
 
             // Clear ALL existing portals
             var portalsToRemove = new List<char>(spawnPointPortals.Keys);
@@ -353,6 +363,14 @@ namespace FaeMaze.Systems
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, nodeCenterWorld);
 
                 portalCount++;
+            }
+
+            // Log all registered spawn points before signaling visitors
+            var finalSpawnPoints = mazeGridBehaviour.WorldSpaceMazeData?.SpawnPoints;
+            if (finalSpawnPoints != null)
+            {
+                var spawnInfo = string.Join(", ", finalSpawnPoints.Select(kvp => $"{kvp.Key}:{kvp.Value:F1}"));
+                Debug.Log($"[DynamicGrowth] Registered {finalSpawnPoints.Count} spawn points: [{spawnInfo}]");
             }
 
             // Signal all visitors to recalculate paths based on the updated graph

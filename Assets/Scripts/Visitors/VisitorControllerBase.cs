@@ -432,6 +432,7 @@ namespace FaeMaze.Visitors
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
+                Debug.Log($"[Pathfinding] {name}: RetargetToNearestSpawn - no maze data, falling back to heart");
                 RetargetToHeart();
                 return;
             }
@@ -439,9 +440,14 @@ namespace FaeMaze.Visitors
             var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints;
             if (spawnPoints == null || spawnPoints.Count == 0)
             {
+                Debug.Log($"[Pathfinding] {name}: RetargetToNearestSpawn - no spawn points available, falling back to heart");
                 RetargetToHeart();
                 return;
             }
+
+            // Log available spawn points
+            var spawnInfo = string.Join(", ", spawnPoints.Select(kvp => $"{kvp.Key}"));
+            Debug.Log($"[Pathfinding] {name}: RetargetToNearestSpawn - considering {spawnPoints.Count} spawn points: [{spawnInfo}]");
 
             Vector3 currentPos = transform.position;
             Vector3 bestSpawn = Vector3.zero;

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ForestMaze;
@@ -1153,6 +1154,10 @@ namespace FaeMaze.Systems
 
         #region Public Methods
 
+        /// <summary>
+        /// Synchronous maze refresh - destroys and recreates all tiles immediately.
+        /// Use RefreshMazeAsync for non-blocking refresh during gameplay.
+        /// </summary>
         public void RefreshMaze()
         {
             if (tilesParent != null)
@@ -1167,6 +1172,293 @@ namespace FaeMaze.Systems
             {
                 RenderWorldSpaceMaze();
             }
+        }
+
+        /// <summary>
+        /// Async maze refresh - builds new tiles invisibly in a coroutine and swaps them in.
+        /// Does not block the main thread during tile generation.
+        /// </summary>
+        public void RefreshMazeAsync()
+        {
+            StartCoroutine(RefreshMazeCoroutine());
+        }
+
+        /// <summary>
+        /// Coroutine that builds tiles in batches over multiple frames.
+        /// Creates tiles invisibly, then swaps the entire container at once.
+        /// </summary>
+        private IEnumerator RefreshMazeCoroutine()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
+            {
+                yield break;
+            }
+
+            var forestState = mazeGridBehaviour.ForestMapState;
+            Debug.Log($"[MazeRenderer] Starting async refresh with {forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges");
+
+            // Create a temporary container for new tiles (invisible at first)
+            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
+            GameObject newContainer = new GameObject("MazeTiles_Building");
+            newContainer.transform.SetParent(mazeOrigin, worldPositionStays: false);
+            newContainer.transform.localPosition = Vector3.zero;
+            newContainer.transform.localRotation = Quaternion.identity;
+            newContainer.transform.localScale = Vector3.one;
+
+            // Start invisible - we'll swap it in when done
+            newContainer.SetActive(false);
+
+            Transform oldTilesParent = tilesParent;
+            tilesParent = newContainer.transform;
+
+            // Store current state
+            spawnSymbolCounter = 0;
+            graphScale = 1.0f;
+            graphOffset = Vector2.zero;
+            tileSize = mazeGridBehaviour.WorldSpaceTileSize;
+
+            if (enableMeshBatching)
+            {
+                wallTiles = new List<GameObject>();
+                undergrowthTiles = new List<GameObject>();
+                waterTiles = new List<GameObject>();
+                pathTiles = new List<GameObject>();
+            }
+
+            occupiedPositions = new HashSet<long>();
+            allEdgeSegments = new List<EdgeSegmentData>();
+
+            int tilesCreated = 0;
+            int batchSize = 50; // Number of tiles per frame
+
+            // Step 1: Collect edge segments
+            CollectEdgeSegments(forestState);
+            yield return null; // Yield after collecting edges
+
+            // Step 2: Render node columns
+            foreach (var node in forestState.Nodes)
+            {
+                // Create node cylinder
+                CreateNodeColumnCylinder(node, mazeOrigin);
+
+                float graphStepSize = 1.0f / graphScale;
+                int tilesRadius = Mathf.CeilToInt(nodeTileRadius / graphStepSize);
+
+                for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
+                {
+                    for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
+                    {
+                        Vector2 offsetFromNode = new Vector2(dx * graphStepSize, dy * graphStepSize);
+                        float distance = offsetFromNode.magnitude;
+                        if (distance > nodeTileRadius) continue;
+
+                        Vector2 graphPos = node.Position + offsetFromNode;
+                        long posKey = GetQuantizedKey(graphPos);
+                        if (occupiedPositions.Contains(posKey)) continue;
+
+                        float orientationDegrees = 0f;
+                        if (distance > 0.01f)
+                        {
+                            Vector2 radial = offsetFromNode.normalized;
+                            orientationDegrees = Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg;
+                        }
+
+                        char symbol = '.';
+                        if (dx == 0 && dy == 0)
+                        {
+                            symbol = node.Kind == "root" ? 'H' : 'N';
+                        }
+
+                        Vector3 worldPos = GraphToWorldPos(graphPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                        occupiedPositions.Add(posKey);
+                        tilesCreated++;
+
+                        if (tilesCreated % batchSize == 0)
+                        {
+                            yield return null; // Yield every batch
+                        }
+                    }
+                }
+            }
+
+            Debug.Log($"[MazeRenderer] Async: Created {tilesCreated} node tiles");
+            yield return null;
+
+            // Step 3: Render edge paths
+            int edgeTilesStart = tilesCreated;
+            float edgeGraphStepSize = 0.5f / graphScale;
+
+            foreach (var edge in forestState.Edges)
+            {
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                bool isPartialEdge = edge.Partial;
+                Vector2 exactEndpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                bool endpointTilePlaced = false;
+
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 startGraph = edge.PolylinePoints[i];
+                    Vector2 endGraph = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (endGraph - startGraph).normalized;
+                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+                    float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
+
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / edgeGraphStepSize));
+                    for (int j = 0; j <= numSteps; j++)
+                    {
+                        float t = numSteps > 0 ? (float)j / numSteps : 0;
+
+                        Vector2 graphPos;
+                        bool isExactEndpoint = false;
+                        if (isLastSegment && j == numSteps)
+                        {
+                            graphPos = exactEndpoint;
+                            isExactEndpoint = true;
+                        }
+                        else
+                        {
+                            graphPos = Vector2.Lerp(startGraph, endGraph, t);
+                        }
+
+                        long posKey = GetQuantizedKey(graphPos);
+                        bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
+
+                        if (!forcePlace && occupiedPositions.Contains(posKey)) continue;
+
+                        char symbol = '.';
+                        if (isPartialEdge && isExactEndpoint)
+                        {
+                            symbol = GetNextSpawnSymbol();
+                            endpointTilePlaced = true;
+                        }
+
+                        Vector3 worldPos = GraphToWorldPos(graphPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                        occupiedPositions.Add(posKey);
+                        tilesCreated++;
+
+                        if (tilesCreated % batchSize == 0)
+                        {
+                            yield return null;
+                        }
+                    }
+                }
+            }
+
+            Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - edgeTilesStart} edge tiles");
+            yield return null;
+
+            // Step 4: Render wall border (simplified - fewer walls during async for speed)
+            int wallTilesStart = tilesCreated;
+            var occupiedWallPositions = new HashSet<long>();
+            float wallGraphStepSize = 0.5f / graphScale;
+
+            foreach (var edge in forestState.Edges)
+            {
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 startGraph = edge.PolylinePoints[i];
+                    Vector2 endGraph = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (endGraph - startGraph).normalized;
+                    Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / wallGraphStepSize));
+                    for (int j = 0; j <= numSteps; j++)
+                    {
+                        float t = numSteps > 0 ? (float)j / numSteps : 0;
+                        Vector2 centerGraphPos = Vector2.Lerp(startGraph, endGraph, t);
+
+                        for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+                        {
+                            float offset = layer * wallGraphStepSize;
+
+                            foreach (float side in new[] { 1f, -1f })
+                            {
+                                Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
+                                Vector2 pushDir = perpendicular * side;
+
+                                Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                                if (!adjustedPos.HasValue) continue;
+
+                                occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+
+                                float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                                if (side < 0) orientationDegrees += 180f;
+
+                                Vector3 worldPos = GraphToWorldPos(adjustedPos.Value);
+                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                tilesCreated++;
+
+                                if (tilesCreated % batchSize == 0)
+                                {
+                                    yield return null;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - wallTilesStart} wall tiles");
+            yield return null;
+
+            // Step 5: Perform mesh batching
+            if (enableMeshBatching)
+            {
+                PerformMeshBatching();
+            }
+            yield return null;
+
+            // Step 6: Swap containers - make new visible, destroy old
+            newContainer.name = "MazeTiles";
+            newContainer.SetActive(true);
+
+            if (oldTilesParent != null)
+            {
+                // Destroy old tiles over a few frames to reduce spike
+                StartCoroutine(DestroyOldTilesGradually(oldTilesParent.gameObject));
+            }
+
+            Debug.Log($"[MazeRenderer] Async refresh complete: {tilesCreated} total tiles");
+        }
+
+        /// <summary>
+        /// Destroys old tile container gradually to avoid frame spike.
+        /// </summary>
+        private IEnumerator DestroyOldTilesGradually(GameObject oldContainer)
+        {
+            // First, disable the container to hide it immediately
+            oldContainer.SetActive(false);
+            yield return null;
+
+            // Destroy children in batches
+            Transform oldTransform = oldContainer.transform;
+            int destroyBatch = 100;
+            int destroyed = 0;
+
+            while (oldTransform.childCount > 0)
+            {
+                int toDestroy = Mathf.Min(destroyBatch, oldTransform.childCount);
+                for (int i = 0; i < toDestroy; i++)
+                {
+                    if (oldTransform.childCount > 0)
+                    {
+                        DestroyImmediate(oldTransform.GetChild(0).gameObject);
+                        destroyed++;
+                    }
+                }
+                yield return null;
+            }
+
+            // Finally destroy the empty container
+            Destroy(oldContainer);
+            Debug.Log($"[MazeRenderer] Destroyed {destroyed} old tiles");
         }
 
         #endregion
