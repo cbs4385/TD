@@ -188,11 +188,17 @@ namespace ForestMaze
         public void MarkUnwalkable(Vector2 position)
         {
             var tiles = GetTilesNear(position, TileSize * 0.5f);
+            int markedCount = 0;
             foreach (var tile in tiles)
             {
                 if (Vector2.Distance(tile.Position, position) < tile.Size * 0.5f)
                 {
-                    tile.Walkable = false;
+                    if (tile.Walkable)
+                    {
+                        tile.Walkable = false;
+                        markedCount++;
+                        UnityEngine.Debug.Log($"[WorldSpaceMazeData] Marked tile at {tile.Position} (category: {tile.Category}) as unwalkable");
+                    }
                 }
             }
         }
