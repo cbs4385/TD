@@ -595,6 +595,9 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Fill gaps between diverging edges at nodes
+            tileCount += FillAllDivergingEdgeGaps(forestState, occupiedWallPositions, mazeOrigin, stepSize);
+
             // Gap-filling pass: check along inner edge of buffer for any remaining gaps
             tileCount += FillInnerEdgeGaps(forestState, occupiedWallPositions, mazeOrigin, stepSize);
 
@@ -1042,6 +1045,135 @@ namespace FaeMaze.Systems
                     Vector3 worldPos = ToVector3(adjustedPos.Value);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                     tileCount++;
+                }
+            }
+
+            return tileCount;
+        }
+
+        /// <summary>
+        /// Fills the triangular gap between two edges that diverge from a node at a small angle.
+        /// Places wall tiles in the region between the two edge directions where normal perpendicular
+        /// walls can't be placed because they'd collide with the other edge's path.
+        /// </summary>
+        private int FillDivergingEdgeGap(Vector2 nodePos, Vector2 dir1, Vector2 dir2,
+            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions,
+            Transform mazeOrigin, float stepSize)
+        {
+            int tileCount = 0;
+
+            // Calculate angle between the two edge directions
+            float dot = Vector2.Dot(dir1, dir2);
+            float cross = dir1.x * dir2.y - dir1.y * dir2.x;
+
+            // Skip if edges are going in very different directions (large angle between them)
+            // We only need to fill gaps when edges are close together (small angle)
+            if (dot < 0.5f) return 0; // More than 60 degrees apart - no gap fill needed
+
+            // Calculate the angular range to fill
+            float angle1 = Mathf.Atan2(dir1.y, dir1.x);
+            float angle2 = Mathf.Atan2(dir2.y, dir2.x);
+
+            // Ensure we sweep the smaller arc between the two directions
+            float angleDiff = angle2 - angle1;
+            if (angleDiff > Mathf.PI) angleDiff -= 2 * Mathf.PI;
+            if (angleDiff < -Mathf.PI) angleDiff += 2 * Mathf.PI;
+
+            // Number of angular steps based on gap size
+            int angularSteps = Mathf.Max(3, Mathf.CeilToInt(Mathf.Abs(angleDiff) / (Mathf.PI / 16f)));
+
+            // Fill the gap starting from node edge (nodeRadius) out to wallBorderDepth beyond
+            float startRadius = nodeRadius;
+            float endRadius = nodeRadius + wallBorderDepth * 1.5f; // Extend a bit further to ensure coverage
+
+            for (float r = startRadius; r <= endRadius; r += stepSize)
+            {
+                for (int a = 0; a <= angularSteps; a++)
+                {
+                    float t = angularSteps > 0 ? (float)a / angularSteps : 0;
+                    float currentAngle = angle1 + angleDiff * t;
+                    Vector2 radiusDir = new Vector2(Mathf.Cos(currentAngle), Mathf.Sin(currentAngle));
+
+                    Vector2 wallPos = nodePos + radiusDir * r;
+
+                    // Get adjusted position
+                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radiusDir, forestState, occupiedWallPositions);
+                    if (!adjustedPos.HasValue)
+                        continue;
+
+                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+
+                    // Orientation facing outward from node
+                    float orientationDegrees = currentAngle * Mathf.Rad2Deg;
+
+                    Vector3 worldPos = ToVector3(adjustedPos.Value);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    tileCount++;
+                }
+            }
+
+            return tileCount;
+        }
+
+        /// <summary>
+        /// Fills gaps between all pairs of diverging edges at each node.
+        /// </summary>
+        private int FillAllDivergingEdgeGaps(PlanarForestMazeGenerator.ForestMapState forestState,
+            HashSet<long> occupiedWallPositions, Transform mazeOrigin, float stepSize)
+        {
+            int tileCount = 0;
+
+            foreach (var node in forestState.Nodes)
+            {
+                // Find all edges connected to this node
+                List<Vector2> edgeDirections = new List<Vector2>();
+
+                foreach (var edge in forestState.Edges)
+                {
+                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                    // Check if edge starts or ends at this node
+                    Vector2 firstPoint = edge.PolylinePoints[0];
+                    Vector2 lastPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+
+                    float distToFirst = Vector2.Distance(firstPoint, node.Position);
+                    float distToLast = Vector2.Distance(lastPoint, node.Position);
+
+                    Vector2 direction;
+                    if (distToFirst < nodeRadius + 2f)
+                    {
+                        // Edge starts at this node - direction is from node toward second point
+                        if (edge.PolylinePoints.Count >= 2)
+                        {
+                            direction = (edge.PolylinePoints[1] - node.Position).normalized;
+                            edgeDirections.Add(direction);
+                        }
+                    }
+                    else if (distToLast < nodeRadius + 2f)
+                    {
+                        // Edge ends at this node - direction is from node toward second-to-last point
+                        if (edge.PolylinePoints.Count >= 2)
+                        {
+                            direction = (edge.PolylinePoints[edge.PolylinePoints.Count - 2] - node.Position).normalized;
+                            edgeDirections.Add(direction);
+                        }
+                    }
+                }
+
+                // Fill gaps between each pair of adjacent edges (sorted by angle)
+                if (edgeDirections.Count >= 2)
+                {
+                    // Sort by angle
+                    edgeDirections.Sort((a, b) =>
+                        Mathf.Atan2(a.y, a.x).CompareTo(Mathf.Atan2(b.y, b.x)));
+
+                    // Fill gaps between consecutive edges
+                    for (int i = 0; i < edgeDirections.Count; i++)
+                    {
+                        int nextIdx = (i + 1) % edgeDirections.Count;
+                        tileCount += FillDivergingEdgeGap(node.Position, edgeDirections[i], edgeDirections[nextIdx],
+                            forestState, occupiedWallPositions, mazeOrigin, stepSize);
+                    }
                 }
             }
 
