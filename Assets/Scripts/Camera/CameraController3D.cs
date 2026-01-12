@@ -796,7 +796,7 @@ namespace FaeMaze.Cameras
             // 45 degrees = angled view
             // 89 degrees = nearly above focal point (near top-down view)
             float angleRad = focalViewAngle * Mathf.Deg2Rad;
-            float cameraDistance = 2f; // Fixed distance from focal point
+            float cameraDistance = 5f; // Fixed distance from focal point
             float horizontalDistance = cameraDistance * Mathf.Cos(angleRad);
             float verticalOffset = cameraDistance * Mathf.Sin(angleRad);
 
