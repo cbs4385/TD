@@ -655,7 +655,8 @@ namespace ForestMaze
         // Curved polyline parameters
         private const float MIN_SEGMENT_LENGTH = 4.0f;
         private const float MAX_SEGMENT_LENGTH = 8.0f;
-        private const float MAX_CURVE_ANGLE = 35.0f; // degrees
+        private const float MIN_CURVE_ANGLE = 15.0f; // degrees - minimum angle between segments
+        private const float MAX_CURVE_ANGLE = 35.0f; // degrees - maximum angle between segments
         private const int MIN_SEGMENTS = 3;
         private const int MAX_SEGMENTS = 5;
 
@@ -736,22 +737,21 @@ namespace ForestMaze
             // Generate intermediate points with curved angles
             for (int i = 0; i < numSegments - 1; i++)
             {
-                // Random angle deviation within limits (alternating bias for S-curves)
+                // Always apply curvature between MIN_CURVE_ANGLE and MAX_CURVE_ANGLE
+                float minAngle = MIN_CURVE_ANGLE * Mathf.Deg2Rad;
                 float maxAngle = MAX_CURVE_ANGLE * Mathf.Deg2Rad;
-                float angleOffset;
 
-                if (attempt == 0)
-                {
-                    // First attempt: no curve (almost straight)
-                    angleOffset = 0;
-                }
-                else
-                {
-                    // Subsequent attempts: add random curvature
-                    float bias = (i % 2 == 0) ? 1f : -1f; // Alternating bias for S-curve
-                    float randomFactor = (state.Random.Next(0, 100) / 100f - 0.5f) * 2f;
-                    angleOffset = (bias * 0.5f + randomFactor * 0.5f) * maxAngle * (attempt / 10f);
-                }
+                // Random angle magnitude between min and max
+                float angleMagnitude = minAngle + (float)state.Random.NextDouble() * (maxAngle - minAngle);
+
+                // Alternating direction for S-curve pattern, with some randomness
+                float bias = (i % 2 == 0) ? 1f : -1f;
+                // Add variation based on attempt number for different curve patterns
+                if (attempt % 2 == 1) bias = -bias; // Flip pattern on odd attempts
+
+                // Small random variation to the direction
+                float randomVariation = ((float)state.Random.NextDouble() - 0.5f) * 0.3f;
+                float angleOffset = angleMagnitude * (bias + randomVariation);
 
                 // Rotate direction by angle offset
                 float cos = Mathf.Cos(angleOffset);
