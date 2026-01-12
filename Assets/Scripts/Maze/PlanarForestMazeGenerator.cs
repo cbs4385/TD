@@ -781,54 +781,248 @@ namespace ForestMaze
 
         private static bool TryMergeEdgeSegments(Edge edge1, Edge edge2, Vector2? sharedNodePos, ref int mergeCount)
         {
-            bool merged = false;
+            // Try to merge edge2 onto edge1, then edge1 onto edge2
+            bool merged1 = TryMergeEdgeOntoTarget(edge2, edge1, sharedNodePos, ref mergeCount);
+            bool merged2 = TryMergeEdgeOntoTarget(edge1, edge2, sharedNodePos, ref mergeCount);
+            return merged1 || merged2;
+        }
 
-            // For each intermediate point in edge2, check if it's too close to edge1's path
-            // If so, snap it directly onto edge1's path to eliminate narrow gaps
-            for (int j = 1; j < edge2.PolylinePoints.Count - 1; j++) // Skip endpoints
+        /// <summary>
+        /// Attempts to merge sourceEdge onto targetEdge by creating perpendicular transitions.
+        /// When points on sourceEdge are too close to targetEdge, we:
+        /// 1. Find where the close region starts (merge entry point)
+        /// 2. Find where it ends (merge exit / divergence point)
+        /// 3. Create perpendicular connectors at entry and exit
+        /// 4. Replace the middle section with points on targetEdge's path
+        /// </summary>
+        private static bool TryMergeEdgeOntoTarget(Edge sourceEdge, Edge targetEdge, Vector2? sharedNodePos, ref int mergeCount)
+        {
+            if (sourceEdge.PolylinePoints.Count < 2 || targetEdge.PolylinePoints.Count < 2)
+                return false;
+
+            // Find all points in sourceEdge that are close to targetEdge
+            List<int> closePointIndices = new List<int>();
+            List<Vector2> closestPointsOnTarget = new List<Vector2>();
+            List<int> closestSegmentIndices = new List<int>();
+
+            for (int i = 0; i < sourceEdge.PolylinePoints.Count; i++)
             {
-                Vector2 p2 = edge2.PolylinePoints[j];
+                Vector2 p = sourceEdge.PolylinePoints[i];
 
                 // Skip points too close to shared node
-                if (sharedNodePos.HasValue && Vector2.Distance(p2, sharedNodePos.Value) < NODE_PROXIMITY_SKIP)
+                if (sharedNodePos.HasValue && Vector2.Distance(p, sharedNodePos.Value) < NODE_PROXIMITY_SKIP)
                     continue;
 
-                // Find closest point on edge1's entire polyline
-                Vector2 closestOnEdge1 = ClosestPointOnPolyline(p2, edge1.PolylinePoints);
-                float dist = Vector2.Distance(p2, closestOnEdge1);
+                // Find closest point on target edge's path and which segment it's on
+                int closestSegIdx;
+                Vector2 closestOnTarget = ClosestPointOnPolylineWithSegment(p, targetEdge.PolylinePoints, out closestSegIdx);
+                float dist = Vector2.Distance(p, closestOnTarget);
 
-                // If too close, snap edge2's point onto edge1's path
-                if (dist < MERGE_DISTANCE && dist > 0.01f) // Skip if already coincident
+                if (dist < MERGE_DISTANCE && dist > 0.01f)
                 {
-                    edge2.PolylinePoints[j] = closestOnEdge1;
-                    merged = true;
-                    mergeCount++;
+                    closePointIndices.Add(i);
+                    closestPointsOnTarget.Add(closestOnTarget);
+                    closestSegmentIndices.Add(closestSegIdx);
                 }
             }
 
-            // Also check edge1's points against edge2's path (bidirectional)
-            for (int i = 1; i < edge1.PolylinePoints.Count - 1; i++) // Skip endpoints
+            if (closePointIndices.Count == 0)
+                return false;
+
+            // Find contiguous runs of close points
+            List<(int startIdx, int endIdx)> runs = FindContiguousRuns(closePointIndices);
+
+            bool anyMerged = false;
+            int insertionOffset = 0; // Track how many points we've added/removed
+
+            foreach (var (runStartInList, runEndInList) in runs)
             {
-                Vector2 p1 = edge1.PolylinePoints[i];
+                int firstCloseIdx = closePointIndices[runStartInList] + insertionOffset;
+                int lastCloseIdx = closePointIndices[runEndInList] + insertionOffset;
 
-                // Skip points too close to shared node
-                if (sharedNodePos.HasValue && Vector2.Distance(p1, sharedNodePos.Value) < NODE_PROXIMITY_SKIP)
-                    continue;
+                // Get the target edge segment direction at entry and exit points
+                Vector2 entryPointOnTarget = closestPointsOnTarget[runStartInList];
+                Vector2 exitPointOnTarget = closestPointsOnTarget[runEndInList];
+                int entrySegment = closestSegmentIndices[runStartInList];
+                int exitSegment = closestSegmentIndices[runEndInList];
 
-                // Find closest point on edge2's entire polyline
-                Vector2 closestOnEdge2 = ClosestPointOnPolyline(p1, edge2.PolylinePoints);
-                float dist = Vector2.Distance(p1, closestOnEdge2);
+                // Build the new polyline section
+                List<Vector2> newSection = new List<Vector2>();
 
-                // If too close, snap edge1's point onto edge2's path
-                if (dist < MERGE_DISTANCE && dist > 0.01f) // Skip if already coincident
+                // If we're not at the start of sourceEdge, add perpendicular entry from previous point
+                if (firstCloseIdx > 0)
                 {
-                    edge1.PolylinePoints[i] = closestOnEdge2;
-                    merged = true;
-                    mergeCount++;
+                    Vector2 prevPoint = sourceEdge.PolylinePoints[firstCloseIdx - 1];
+                    Vector2 entryDir = GetSegmentDirection(targetEdge.PolylinePoints, entrySegment);
+
+                    // Project previous point onto target edge direction to find perpendicular intersection
+                    Vector2 perpEntryPoint = CreatePerpendicularIntersection(prevPoint, entryPointOnTarget, entryDir);
+                    newSection.Add(perpEntryPoint);
+                }
+                else
+                {
+                    // At start of edge, just use the entry point directly
+                    newSection.Add(entryPointOnTarget);
+                }
+
+                // If entry and exit are on different segments, add intermediate points along target path
+                if (entrySegment != exitSegment || Vector2.Distance(entryPointOnTarget, exitPointOnTarget) > 0.5f)
+                {
+                    AddIntermediatePointsAlongTarget(newSection, targetEdge.PolylinePoints,
+                        entryPointOnTarget, exitPointOnTarget, entrySegment, exitSegment);
+                }
+
+                // If we're not at the end of sourceEdge, add perpendicular exit to next point
+                if (lastCloseIdx < sourceEdge.PolylinePoints.Count - 1)
+                {
+                    Vector2 nextPoint = sourceEdge.PolylinePoints[lastCloseIdx + 1];
+                    Vector2 exitDir = GetSegmentDirection(targetEdge.PolylinePoints, exitSegment);
+
+                    // Project next point onto target edge direction to find perpendicular intersection
+                    Vector2 perpExitPoint = CreatePerpendicularIntersection(nextPoint, exitPointOnTarget, exitDir);
+
+                    // Only add if different from last point in newSection
+                    if (newSection.Count == 0 || Vector2.Distance(newSection[newSection.Count - 1], perpExitPoint) > 0.1f)
+                    {
+                        newSection.Add(perpExitPoint);
+                    }
+                }
+                else
+                {
+                    // At end of edge, use exit point directly if different from last added
+                    if (newSection.Count == 0 || Vector2.Distance(newSection[newSection.Count - 1], exitPointOnTarget) > 0.1f)
+                    {
+                        newSection.Add(exitPointOnTarget);
+                    }
+                }
+
+                // Replace the close points section with our new perpendicular section
+                int removeCount = lastCloseIdx - firstCloseIdx + 1;
+                sourceEdge.PolylinePoints.RemoveRange(firstCloseIdx, removeCount);
+                sourceEdge.PolylinePoints.InsertRange(firstCloseIdx, newSection);
+
+                insertionOffset += newSection.Count - removeCount;
+                mergeCount++;
+                anyMerged = true;
+            }
+
+            return anyMerged;
+        }
+
+        /// <summary>
+        /// Find contiguous runs of indices in a sorted list.
+        /// </summary>
+        private static List<(int startIdx, int endIdx)> FindContiguousRuns(List<int> indices)
+        {
+            var runs = new List<(int, int)>();
+            if (indices.Count == 0) return runs;
+
+            int runStart = 0;
+            for (int i = 1; i < indices.Count; i++)
+            {
+                // If there's a gap of more than 1, end the current run
+                if (indices[i] - indices[i - 1] > 1)
+                {
+                    runs.Add((runStart, i - 1));
+                    runStart = i;
+                }
+            }
+            runs.Add((runStart, indices.Count - 1));
+            return runs;
+        }
+
+        /// <summary>
+        /// Gets the direction vector of a segment in the polyline.
+        /// </summary>
+        private static Vector2 GetSegmentDirection(List<Vector2> polyline, int segmentIndex)
+        {
+            if (segmentIndex >= polyline.Count - 1)
+                segmentIndex = polyline.Count - 2;
+            if (segmentIndex < 0)
+                segmentIndex = 0;
+
+            return (polyline[segmentIndex + 1] - polyline[segmentIndex]).normalized;
+        }
+
+        /// <summary>
+        /// Creates a point on the target line that forms a perpendicular intersection from sourcePoint.
+        /// </summary>
+        private static Vector2 CreatePerpendicularIntersection(Vector2 sourcePoint, Vector2 targetPoint, Vector2 targetDir)
+        {
+            // Project sourcePoint onto the line passing through targetPoint with direction targetDir
+            Vector2 toSource = sourcePoint - targetPoint;
+            float projection = Vector2.Dot(toSource, targetDir);
+            return targetPoint + targetDir * projection;
+        }
+
+        /// <summary>
+        /// Adds intermediate points along the target polyline between entry and exit points.
+        /// </summary>
+        private static void AddIntermediatePointsAlongTarget(List<Vector2> result, List<Vector2> targetPolyline,
+            Vector2 entryPoint, Vector2 exitPoint, int entrySegment, int exitSegment)
+        {
+            // Determine direction along the polyline
+            bool forward = exitSegment >= entrySegment;
+
+            if (forward)
+            {
+                // Add vertices between entry and exit segments
+                for (int i = entrySegment + 1; i <= exitSegment && i < targetPolyline.Count; i++)
+                {
+                    Vector2 vertex = targetPolyline[i];
+                    if (Vector2.Distance(vertex, entryPoint) > 0.1f && Vector2.Distance(vertex, exitPoint) > 0.1f)
+                    {
+                        if (result.Count == 0 || Vector2.Distance(result[result.Count - 1], vertex) > 0.1f)
+                        {
+                            result.Add(vertex);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Going backwards along the polyline
+                for (int i = entrySegment; i >= exitSegment + 1 && i > 0; i--)
+                {
+                    Vector2 vertex = targetPolyline[i];
+                    if (Vector2.Distance(vertex, entryPoint) > 0.1f && Vector2.Distance(vertex, exitPoint) > 0.1f)
+                    {
+                        if (result.Count == 0 || Vector2.Distance(result[result.Count - 1], vertex) > 0.1f)
+                        {
+                            result.Add(vertex);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Find the closest point on a polyline and report which segment it's on.
+        /// </summary>
+        private static Vector2 ClosestPointOnPolylineWithSegment(Vector2 point, List<Vector2> polyline, out int segmentIndex)
+        {
+            segmentIndex = 0;
+            if (polyline.Count == 0)
+                return point;
+            if (polyline.Count == 1)
+                return polyline[0];
+
+            Vector2 closestPoint = polyline[0];
+            float closestDistSq = float.MaxValue;
+
+            for (int i = 0; i < polyline.Count - 1; i++)
+            {
+                Vector2 segmentClosest = ClosestPointOnSegment(point, polyline[i], polyline[i + 1]);
+                float distSq = (point - segmentClosest).sqrMagnitude;
+                if (distSq < closestDistSq)
+                {
+                    closestDistSq = distSq;
+                    closestPoint = segmentClosest;
+                    segmentIndex = i;
                 }
             }
 
-            return merged;
+            return closestPoint;
         }
 
         /// <summary>
