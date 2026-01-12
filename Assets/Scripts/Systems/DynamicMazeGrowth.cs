@@ -237,42 +237,12 @@ namespace FaeMaze.Systems
             }
 
             // Add truly new edges (index >= edgeCountBefore)
+            // Note: Merge and spacing operations now only modify these new edges,
+            // never existing edges. So we don't need special tracking for wall regeneration.
             for (int i = edgeCountBefore; i < forestMapState.Edges.Count; i++)
             {
                 newEdges.Add(forestMapState.Edges[i]);
             }
-
-            // Add edges that were modified during merge operations (flagged on the Edge object itself)
-            // These edges had their polylines changed and need wall borders regenerated
-            // Also collect old polyline paths for wall removal
-            int mergedCount = 0;
-            var oldPolylinePaths = new List<List<Vector2>>();
-            foreach (var edge in forestMapState.Edges)
-            {
-                if (edge.NeedsWallRegeneration)
-                {
-                    bool wasAlreadyInList = newEdges.Contains(edge);
-                    if (!wasAlreadyInList)
-                    {
-                        newEdges.Add(edge);
-                    }
-                    // Collect old polyline path for wall removal
-                    bool hasOldPath = edge.OldPolylinePoints != null && edge.OldPolylinePoints.Count >= 2;
-                    if (hasOldPath)
-                    {
-                        oldPolylinePaths.Add(edge.OldPolylinePoints);
-                    }
-
-                    Debug.Log($"[WALLREGEN] PICKUP Edge {edge.Id}: NeedsRegen=true, hasOldPath={hasOldPath}, oldPts={edge.OldPolylinePoints?.Count ?? 0}, wasAlreadyInList={wasAlreadyInList}");
-
-                    // Clear flags after processing
-                    edge.NeedsWallRegeneration = false;
-                    edge.OldPolylinePoints = null;
-                    mergedCount++;
-                }
-            }
-
-            Debug.Log($"[WALLREGEN] SUMMARY: {mergedCount} edges flagged, {oldPolylinePaths.Count} with old paths to remove walls from");
 
             // Capture old spawn point positions BEFORE regenerating WorldSpaceMazeData
             // GenerateFromGraph creates a new object with empty spawn points
@@ -325,33 +295,9 @@ namespace FaeMaze.Systems
                 Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
                 mazeRenderer.RemoveWallsNearPosition(newNodeWorldPos, 5f); // Node radius is ~3, plus border
 
-                // 3. Remove walls along OLD paths of merged edges (before they were modified)
-                // This clears walls that were generated along the old polyline path
+                // 3. Remove walls along all new edge paths (sample along segments, not just control points)
                 float wallRemovalStepSize = 1.0f; // Sample every 1 unit along the path
                 float wallRemovalRadius = 2.5f; // Slightly larger than path width + buffer
-                int oldPathIdx = 0;
-                foreach (var oldPath in oldPolylinePaths)
-                {
-                    Debug.Log($"[WALLREGEN] Removing walls along OLD path {oldPathIdx}: {oldPath.Count} points, first={oldPath[0]}, last={oldPath[oldPath.Count-1]}");
-                    for (int i = 0; i < oldPath.Count - 1; i++)
-                    {
-                        Vector2 start = oldPath[i];
-                        Vector2 end = oldPath[i + 1];
-                        float segmentLength = Vector2.Distance(start, end);
-                        int numSamples = Mathf.Max(2, Mathf.CeilToInt(segmentLength / wallRemovalStepSize));
-
-                        for (int j = 0; j <= numSamples; j++)
-                        {
-                            float t = (float)j / numSamples;
-                            Vector2 samplePoint = Vector2.Lerp(start, end, t);
-                            Vector3 pointWorldPos = new Vector3(samplePoint.x, samplePoint.y, 0);
-                            mazeRenderer.RemoveWallsNearPosition(pointWorldPos, wallRemovalRadius);
-                        }
-                    }
-                    oldPathIdx++;
-                }
-
-                // 4. Remove walls along all new edge paths (sample along segments, not just control points)
                 foreach (var edge in newEdges)
                 {
                     if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
@@ -374,13 +320,13 @@ namespace FaeMaze.Systems
                     }
                 }
 
-                // 5. Add tiles for the new node
+                // 4. Add tiles for the new node
                 mazeRenderer.AddNodeTilesIncremental(newNode);
 
-                // 6. Add tiles for new/modified edges
+                // 5. Add tiles for new edges
                 mazeRenderer.AddEdgeTilesIncremental(newEdges);
 
-                // 7. Add walls around the new elements
+                // 6. Add walls around the new elements
                 mazeRenderer.AddWallsIncremental(newEdges, newNode);
             }
         }

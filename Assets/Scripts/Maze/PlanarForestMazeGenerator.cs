@@ -242,7 +242,8 @@ namespace ForestMaze
             }
 
             // Merge nearby edges that are too close together
-            MergeNearbyEdges(state);
+            // During initial generation, all edges are new so pass 0
+            MergeNearbyEdges(state, 0);
         }
 
         /// <summary>
@@ -251,6 +252,10 @@ namespace ForestMaze
         /// </summary>
         public static bool Step(ForestMapState state)
         {
+            // Track edge count before step - edges created during this step are "new"
+            // and can be modified by merge/spacing. Existing edges should never be modified.
+            int edgeCountBeforeStep = state.Edges.Count;
+
             // Select a frontier edge using center-biased selection
             int? edgeId = SelectFrontierEdgeBiased(state);
             if (!edgeId.HasValue)
@@ -341,7 +346,8 @@ namespace ForestMaze
             // Debug.Log($"[PlanarForest] ===== STEP COMPLETE: Node {newNode.Id} - frontier={hasFrontierEdge}, crossConnect={hasExistingConnection}, finalEdges={newNode.IncidentEdges.Count}/{newNode.MaxDegree} =====");
 
             // Merge nearby edges that are too close together
-            MergeNearbyEdges(state);
+            // Only modify edges created during this step (index >= edgeCountBeforeStep)
+            MergeNearbyEdges(state, edgeCountBeforeStep);
 
             state.TurnCount++;
             return true;
@@ -721,10 +727,10 @@ namespace ForestMaze
 
         /// <summary>
         /// Merges nearby edge segments that are too close together to fit wall/tree models between them.
-        /// When any point on one edge is within MERGE_DISTANCE of another edge's path,
-        /// it snaps onto that path to eliminate narrow gaps regardless of angle.
+        /// Only modifies edges with index >= firstNewEdgeIndex (new edges created this step).
+        /// Existing edges are never modified to prevent wall gaps.
         /// </summary>
-        public static void MergeNearbyEdges(ForestMapState state)
+        public static void MergeNearbyEdges(ForestMapState state, int firstNewEdgeIndex)
         {
             if (state.Edges.Count < 2)
                 return;
@@ -739,21 +745,26 @@ namespace ForestMaze
                 pass++;
                 bool anyMerged = false;
 
-                // For each edge, check against all other edges for potential merging
-                for (int i = 0; i < state.Edges.Count; i++)
+                // Only iterate over NEW edges (index >= firstNewEdgeIndex)
+                // These are the only edges that can be modified
+                for (int newEdgeIdx = firstNewEdgeIndex; newEdgeIdx < state.Edges.Count; newEdgeIdx++)
                 {
-                    var edge1 = state.Edges[i];
-                    if (edge1.PolylinePoints.Count < 2)
+                    var newEdge = state.Edges[newEdgeIdx];
+                    if (newEdge.PolylinePoints.Count < 2)
                         continue;
 
-                    for (int j = i + 1; j < state.Edges.Count; j++)
+                    // Check against ALL other edges (including existing ones)
+                    for (int otherIdx = 0; otherIdx < state.Edges.Count; otherIdx++)
                     {
-                        var edge2 = state.Edges[j];
-                        if (edge2.PolylinePoints.Count < 2)
+                        if (otherIdx == newEdgeIdx)
+                            continue;
+
+                        var otherEdge = state.Edges[otherIdx];
+                        if (otherEdge.PolylinePoints.Count < 2)
                             continue;
 
                         // Get shared node if any (to skip points near it)
-                        int? sharedNode = GetSharedNode(edge1, edge2);
+                        int? sharedNode = GetSharedNode(newEdge, otherEdge);
                         Vector2? sharedNodePos = null;
                         if (sharedNode.HasValue)
                         {
@@ -763,23 +774,12 @@ namespace ForestMaze
                         }
 
                         // Only merge edges that share a node
-                        // Parallel segment merging was too aggressive and caused cascading issues
                         if (sharedNodePos.HasValue)
                         {
-                            // Save old polyline before merge (merge modifies edge2)
-                            var oldPolyline = new List<Vector2>(edge2.PolylinePoints);
-
-                            if (TryMergeEdgesFromSharedNode(edge1, edge2, sharedNodePos.Value, ref mergeCount))
+                            // newEdge is the one that will be modified to merge onto otherEdge
+                            if (TryMergeNewEdgeOntoExisting(newEdge, otherEdge, sharedNodePos.Value, ref mergeCount))
                             {
                                 anyMerged = true;
-                                // Mark edge2 as needing wall regeneration (merge functions modify edge2's polyline)
-                                edge2.NeedsWallRegeneration = true;
-                                // Store old path for wall removal (only if not already stored from prior merge)
-                                if (edge2.OldPolylinePoints == null)
-                                {
-                                    edge2.OldPolylinePoints = oldPolyline;
-                                    Debug.Log($"[WALLREGEN] Edge {edge2.Id} MERGED: flagged for regen, saved {oldPolyline.Count} old points, now has {edge2.PolylinePoints.Count} new points");
-                                }
                             }
                         }
                     }
@@ -792,7 +792,8 @@ namespace ForestMaze
             }
 
             // Enforce minimum edge spacing at each node
-            EnforceMinimumEdgeSpacing(state);
+            // Only modify new edges (index >= firstNewEdgeIndex)
+            EnforceMinimumEdgeSpacing(state, firstNewEdgeIndex);
         }
 
         /// <summary>
@@ -805,17 +806,19 @@ namespace ForestMaze
         /// Enforces minimum spacing between edges at each node.
         /// When edges connect to a node too close together on the circumference,
         /// adjusts their starting points to ensure at least MIN_EDGE_SPACING units apart.
+        /// Only modifies edges with index >= firstNewEdgeIndex (new edges).
         /// IMPORTANT: Preserves the last segment direction for frontier edges (portal orientation).
         /// </summary>
-        private static void EnforceMinimumEdgeSpacing(ForestMapState state)
+        private static void EnforceMinimumEdgeSpacing(ForestMapState state, int firstNewEdgeIndex)
         {
             foreach (var node in state.Nodes)
             {
-                // Find all edges connected to this node
-                List<(Edge edge, bool startsAtNode, float angle)> connectedEdges = new List<(Edge, bool, float)>();
+                // Find all edges connected to this node, tracking their index
+                List<(Edge edge, int edgeIndex, bool startsAtNode, float angle)> connectedEdges = new List<(Edge, int, bool, float)>();
 
-                foreach (var edge in state.Edges)
+                for (int edgeIdx = 0; edgeIdx < state.Edges.Count; edgeIdx++)
                 {
+                    var edge = state.Edges[edgeIdx];
                     if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
 
                     float distStart = Vector2.Distance(edge.PolylinePoints[0], node.Position);
@@ -830,14 +833,14 @@ namespace ForestMaze
                         // Edge starts at this node - get direction toward second point
                         Vector2 dir = (edge.PolylinePoints[1] - node.Position).normalized;
                         float angle = Mathf.Atan2(dir.y, dir.x);
-                        connectedEdges.Add((edge, true, angle));
+                        connectedEdges.Add((edge, edgeIdx, true, angle));
                     }
                     else if (endsAtNode)
                     {
                         // Edge ends at this node - get direction toward second-to-last point
                         Vector2 dir = (edge.PolylinePoints[edge.PolylinePoints.Count - 2] - node.Position).normalized;
                         float angle = Mathf.Atan2(dir.y, dir.x);
-                        connectedEdges.Add((edge, false, angle));
+                        connectedEdges.Add((edge, edgeIdx, false, angle));
                     }
                 }
 
@@ -845,8 +848,6 @@ namespace ForestMaze
                 {
                     continue;
                 }
-
-                // Debug.Log($"[EdgeSpacing] Node {node.Id}: Found {connectedEdges.Count} connected edges");
 
                 // Sort by angle
                 connectedEdges.Sort((a, b) => a.angle.CompareTo(b.angle));
@@ -867,31 +868,35 @@ namespace ForestMaze
                         angleDiff = (next.angle + 2 * Mathf.PI) - current.angle;
                     }
 
-                    // If too close, adjust the second edge outward
+                    // If too close, only adjust the edge if it's NEW (index >= firstNewEdgeIndex)
+                    // Never modify existing edges
                     if (angleDiff < minAngleSeparation && angleDiff > 0.01f)
                     {
-                        float adjustment = minAngleSeparation - angleDiff;
-                        float newAngle = next.angle + adjustment;
+                        // Try to adjust the "next" edge if it's new
+                        bool nextIsNew = next.edgeIndex >= firstNewEdgeIndex;
+                        bool currentIsNew = current.edgeIndex >= firstNewEdgeIndex;
 
-                        // Save old polyline before adjustment (only if not already saved from a prior modification)
-                        bool savedOldPath = false;
-                        if (next.edge.OldPolylinePoints == null)
+                        if (!nextIsNew && !currentIsNew)
                         {
-                            next.edge.OldPolylinePoints = new List<Vector2>(next.edge.PolylinePoints);
-                            savedOldPath = true;
+                            // Both edges are existing - cannot adjust, skip
+                            continue;
                         }
 
+                        // Prefer to adjust the new edge
+                        var edgeToAdjust = nextIsNew ? next : current;
+                        float adjustment = minAngleSeparation - angleDiff;
+                        float newAngle = nextIsNew
+                            ? next.angle + adjustment
+                            : current.angle - adjustment;  // Move current backward if it's the new one
+
                         // Adjust the edge's polyline to use the new angle
-                        // IMPORTANT: Preserve the last segment direction for portal orientation
-                        AdjustEdgeAngleAtNode(next.edge, next.startsAtNode, node.Position, next.angle, newAngle, state);
-
-                        // Mark edge as needing wall regeneration
-                        next.edge.NeedsWallRegeneration = true;
-
-                        Debug.Log($"[WALLREGEN] Edge {next.edge.Id} SPACING: flagged for regen at node {node.Id}, savedOldPath={savedOldPath}, oldPts={next.edge.OldPolylinePoints?.Count}, newPts={next.edge.PolylinePoints.Count}");
+                        // Since we only adjust NEW edges, they will get walls generated
+                        // as part of normal incremental rendering - no special tracking needed
+                        AdjustEdgeAngleAtNode(edgeToAdjust.edge, edgeToAdjust.startsAtNode, node.Position, edgeToAdjust.angle, newAngle, state);
 
                         // Update the angle in our list for subsequent comparisons
-                        connectedEdges[nextIdx] = (next.edge, next.startsAtNode, newAngle);
+                        int idxToUpdate = nextIsNew ? nextIdx : i;
+                        connectedEdges[idxToUpdate] = (edgeToAdjust.edge, edgeToAdjust.edgeIndex, edgeToAdjust.startsAtNode, newAngle);
                     }
                 }
             }
@@ -1051,14 +1056,25 @@ namespace ForestMaze
         }
 
         /// <summary>
+        /// Merges a new edge onto an existing edge at a shared node.
+        /// Only the newEdge is modified - existingEdge is never changed.
+        /// </summary>
+        private static bool TryMergeNewEdgeOntoExisting(Edge newEdge, Edge existingEdge, Vector2 sharedNodePos, ref int mergeCount)
+        {
+            // Call the shared node merge with newEdge as edge2 (the one that gets modified)
+            // existingEdge is edge1 (the target that newEdge merges onto)
+            return TryMergeEdgesFromSharedNode(existingEdge, newEdge, sharedNodePos, ref mergeCount);
+        }
+
+        /// <summary>
         /// Special merge handling for edges that share a node.
         /// Handles both diverging edges (from shared node) and converging edges (toward shared node).
+        /// NOTE: This function only modifies edge2, never edge1.
         /// </summary>
         private static bool TryMergeEdgesFromSharedNode(Edge edge1, Edge edge2, Vector2 sharedNodePos, ref int mergeCount)
         {
             if (edge1.PolylinePoints.Count < 2 || edge2.PolylinePoints.Count < 2)
             {
-                // Debug.Log($"[EdgeMerge] SharedNode: SKIP - not enough points (e1={edge1.PolylinePoints.Count}, e2={edge2.PolylinePoints.Count})");
                 return false;
             }
 
