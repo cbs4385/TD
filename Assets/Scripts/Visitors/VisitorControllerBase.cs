@@ -868,11 +868,15 @@ namespace FaeMaze.Visitors
             parent[startTile] = null;
 
             // Tiles are placed at 1.0 unit intervals; diagonal neighbors are sqrt(2) ≈ 1.414 apart
-            // Use 1.2 to only connect immediate neighbors, not skip tiles
-            float neighborRadius = mazeData.TileSize * 1.2f;
+            // Use 1.5 to ensure we connect tiles even with slight positioning variations
+            float neighborRadius = mazeData.TileSize * 1.5f;
 
-            while (queue.Count > 0)
+            int iterations = 0;
+            int maxIterations = 50000; // Safety limit
+
+            while (queue.Count > 0 && iterations < maxIterations)
             {
+                iterations++;
                 var current = queue.Dequeue();
 
                 // Check if reached destination
@@ -888,6 +892,8 @@ namespace FaeMaze.Visitors
                         parent.TryGetValue(node, out node);
                     }
                     path.Reverse();
+
+                    Debug.Log($"[Pathfinding] {name}: BFS found path with {path.Count} tiles after {iterations} iterations");
 
                     // Don't simplify - keep all tile positions to stay on walkable terrain
                     return path;
@@ -910,6 +916,7 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            Debug.LogWarning($"[Pathfinding] {name}: BFS failed after {iterations} iterations (visited {visited.Count} tiles, queue empty: {queue.Count == 0})");
             return null; // No path found
         }
 

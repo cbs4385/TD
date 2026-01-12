@@ -249,6 +249,7 @@ namespace FaeMaze.Systems
             var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
             if (worldSpaceData != null)
             {
+                int oldTileCount = worldSpaceData.Tiles.Count;
                 worldSpaceData = ForestMaze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, mazeGridBehaviour.WorldSpaceTileSize);
 
                 var worldSpaceDataField = typeof(MazeGridBehaviour).GetField("worldSpaceMazeData",
@@ -257,6 +258,9 @@ namespace FaeMaze.Systems
                 {
                     worldSpaceDataField.SetValue(mazeGridBehaviour, worldSpaceData);
                 }
+
+                int walkableCount = worldSpaceData.Tiles.Count(t => t.Walkable);
+                Debug.Log($"[DynamicGrowth] Regenerated WorldSpaceMazeData: {oldTileCount} -> {worldSpaceData.Tiles.Count} tiles ({walkableCount} walkable)");
             }
 
             // Rebuild portals from frontier edges using world-space coordinates
