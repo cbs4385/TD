@@ -941,10 +941,10 @@ namespace FaeMaze.Visitors
             if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
                 // Calculate Z rotation angle for model facing direction
-                // Model default (0° Z rotation) faces Up (+Y), so:
-                // - Up (+Y): 0°, Down (-Y): 180°, Left (-X): 90°, Right (+X): -90°
-                // Formula: angle = atan2(y,x) - 90° maps movement direction to rotation
-                float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg - 90f;
+                // Model setup: forward = +X (model space), up = -Z (model space)
+                // At Z=0° rotation, model faces +X in world space
+                // Z rotation around world Z axis rotates model in XY plane
+                float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
 
                 // Direction rotation is Z-axis only
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
