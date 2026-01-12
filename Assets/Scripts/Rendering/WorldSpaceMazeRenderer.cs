@@ -112,7 +112,7 @@ namespace FaeMaze.Systems
             if (forestState == null)
             {
                 // Debug.LogWarning("[WorldSpaceMazeRenderer] No ForestMapState available. " +
-                    "Ensure usePlanarGenerator is enabled on MazeGridBehaviour.");
+                //     "Ensure usePlanarGenerator is enabled on MazeGridBehaviour.");
                 return;
             }
 
@@ -136,7 +136,7 @@ namespace FaeMaze.Systems
             mazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestState, tileSize);
 
             // Debug.Log($"[WorldSpaceMazeRenderer] Generated {mazeData.Tiles.Count} tiles from graph with " +
-                $"{forestState.Nodes.Count} nodes and {forestState.Edges.Count} edges");
+            //     $"{forestState.Nodes.Count} nodes and {forestState.Edges.Count} edges");
         }
 
         #endregion

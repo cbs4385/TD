@@ -220,7 +220,7 @@ namespace FaeMaze.Systems
             // Debug.Log($"[MazeRenderer] Rendered {wallTileCount} wall tiles");
 
             // Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +
-                $"({forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges)");
+            //     $"({forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges)");
 
             if (enableMeshBatching)
             {
