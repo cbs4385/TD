@@ -486,7 +486,8 @@ namespace FaeMaze.Systems
             {
                 if (visitor != null)
                 {
-                    visitor.RetargetToHeart();
+                    // Retarget to nearest spawn point by walking distance
+                    visitor.RetargetToNearestSpawn();
                     retargetedCount++;
                 }
             }

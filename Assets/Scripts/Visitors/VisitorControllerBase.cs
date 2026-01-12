@@ -414,6 +414,58 @@ namespace FaeMaze.Visitors
             }
         }
 
+        /// <summary>
+        /// Retargets visitor to the nearest spawn point by walking distance.
+        /// If no spawn points are available, falls back to the heart.
+        /// </summary>
+        public void RetargetToNearestSpawn()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+            {
+                RetargetToHeart();
+                return;
+            }
+
+            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints;
+            if (spawnPoints == null || spawnPoints.Count == 0)
+            {
+                RetargetToHeart();
+                return;
+            }
+
+            Vector3 currentPos = transform.position;
+            Vector3 bestSpawn = mazeGridBehaviour.HeartWorldPosition;
+            float shortestWalkingDist = float.MaxValue;
+
+            foreach (var kvp in spawnPoints)
+            {
+                Vector3 spawnPos = kvp.Value;
+
+                // Calculate walking distance by building a path
+                var testPath = BuildWorldPath(currentPos, spawnPos);
+                if (testPath == null || testPath.Count == 0)
+                    continue;
+
+                // Calculate total path length
+                float pathLength = 0f;
+                Vector3 prevPoint = currentPos;
+                foreach (var point in testPath)
+                {
+                    pathLength += Vector3.Distance(prevPoint, point);
+                    prevPoint = point;
+                }
+
+                if (pathLength < shortestWalkingDist)
+                {
+                    shortestWalkingDist = pathLength;
+                    bestSpawn = spawnPos;
+                }
+            }
+
+            Debug.Log($"[{name}] Retargeting to nearest spawn at {bestSpawn} (walking dist: {shortestWalkingDist:F1})");
+            SetWorldDestination(bestSpawn);
+        }
+
         private string FormatWorldPath(List<Vector3> candidatePath)
         {
             if (candidatePath == null || candidatePath.Count == 0)
@@ -782,9 +834,11 @@ namespace FaeMaze.Visitors
                 if (connectingEdge != null && connectingEdge.PolylinePoints.Count > 0)
                 {
                     // Add polyline points in correct order (already in world space)
+                    // Skip the first point (node we came from) to avoid duplicates and node-center paths
                     if (reversePolyline)
                     {
-                        for (int p = connectingEdge.PolylinePoints.Count - 1; p >= 0; p--)
+                        // Reversed: skip the last point (index Count-1) which is the node we came from
+                        for (int p = connectingEdge.PolylinePoints.Count - 2; p >= 0; p--)
                         {
                             var pt = connectingEdge.PolylinePoints[p];
                             Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
@@ -793,7 +847,8 @@ namespace FaeMaze.Visitors
                     }
                     else
                     {
-                        for (int p = 0; p < connectingEdge.PolylinePoints.Count; p++)
+                        // Forward: skip the first point (index 0) which is the node we came from
+                        for (int p = 1; p < connectingEdge.PolylinePoints.Count; p++)
                         {
                             var pt = connectingEdge.PolylinePoints[p];
                             Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
