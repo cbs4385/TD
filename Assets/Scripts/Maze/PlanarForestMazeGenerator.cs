@@ -118,22 +118,17 @@ namespace ForestMaze
             // Initialize with root and first node
             Initialize(state);
 
-            // Phase 1: Grow until we have minimum nodes
-            for (int i = 0; i < turns && state.Nodes.Count < minNodeCount; i++)
+            // Grow until we have minimum nodes (using turns as TOTAL step limit)
+            int totalSteps = 0;
+            while (totalSteps < turns && state.Nodes.Count < minNodeCount)
             {
                 if (state.Frontier.Count == 0 || !Step(state))
                     break;
+                totalSteps++;
             }
 
             // Ensure at least one cross-connection exists after initial growth
             EnsureCrossConnection(state);
-
-            // Phase 2: Continue growing but preserve minimum open endpoints
-            for (int i = 0; i < turns && state.Frontier.Count > minOpenEndpoints; i++)
-            {
-                if (!Step(state))
-                    break;
-            }
 
             Debug.Log($"[PlanarForest] Generated graph with {state.Nodes.Count} nodes, {state.Edges.Count} edges, {state.Frontier.Count} frontier edges");
 
@@ -211,19 +206,14 @@ namespace ForestMaze
             node1.AddEdge(edge.Id, reverseAngle);
 
             // Fill node1's remaining capacity with edges
-            // Ensure at least one edge tries to connect to existing node (root)
-            bool isFirstEdge = true;
             while (node1.HasCapacity())
             {
-                // First edge always tries to connect, others have CONNECT_PROB chance
-                bool tryConnect = isFirstEdge || state.Random.NextDouble() < CONNECT_PROB;
-
-                if (tryConnect)
+                // Try to connect to existing node (25% chance, allow forcing capacity)
+                if (state.Random.NextDouble() < CONNECT_PROB)
                 {
-                    // Try to connect to existing node (not root, which is the parent)
-                    if (TryConnectToExisting(state, node1, root.Id, root.Id))
+                    if (TryConnectToExisting(state, node1, root.Id, root.Id, allowForceCapacity: true))
                     {
-                        isFirstEdge = false;
+                        Debug.Log($"[PlanarForest] Init: Created cross-connection from node {node1.Id}");
                         continue;
                     }
                 }
@@ -231,8 +221,6 @@ namespace ForestMaze
                 // Otherwise add partial edge
                 if (!AddPartialEdge(state, node1))
                     break;
-
-                isFirstEdge = false;
             }
         }
 
