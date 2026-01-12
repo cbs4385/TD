@@ -493,7 +493,8 @@ namespace FaeMaze.Systems
         private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
-            float graphStepSize = 1.0f / graphScale;
+            // Use half-unit steps along edges to ensure at least one wall per 0.5 units
+            float graphStepSize = 0.5f / graphScale;
 
             // Track occupied positions to avoid overlap (use quantized keys for floating-point positions)
             var occupiedWallPositions = new HashSet<long>();
@@ -711,7 +712,8 @@ namespace FaeMaze.Systems
         private Vector2? GetAdjustedWallPosition(Vector2 wallGraphPos, Vector2 pushDirection,
             PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions)
         {
-            float graphStepSize = 1.0f / graphScale;
+            // Use half-unit steps for finer adjustment precision
+            float graphStepSize = 0.5f / graphScale;
             float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
             int maxIterations = 15; // Prevent infinite loops
 
