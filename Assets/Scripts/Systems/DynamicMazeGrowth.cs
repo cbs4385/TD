@@ -244,9 +244,20 @@ namespace FaeMaze.Systems
 
             Debug.Log($"[DynamicGrowth] Added node {newNodeId}, {newEdges.Count} new/modified edges");
 
+            // Capture old spawn point positions BEFORE regenerating WorldSpaceMazeData
+            // GenerateFromGraph creates a new object with empty SpawnPoints dictionary
+            var oldSpawnPositions = new List<Vector3>();
+            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (worldSpaceData != null && worldSpaceData.SpawnPoints != null)
+            {
+                foreach (var kvp in worldSpaceData.SpawnPoints)
+                {
+                    oldSpawnPositions.Add(kvp.Value);
+                }
+            }
+
             // Regenerate world-space maze data from updated graph
             // This is needed for pathfinding to work correctly
-            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
             if (worldSpaceData != null)
             {
                 int oldTileCount = worldSpaceData.Tiles.Count;
@@ -265,8 +276,8 @@ namespace FaeMaze.Systems
 
             // Rebuild portals from frontier edges using world-space coordinates
             // This also registers spawn points and signals affected visitors to retarget
-            // (only visitors whose destination was removed need to find new destinations)
-            RebuildSpawnPointsFromFrontier();
+            // Pass the captured old spawn positions since WorldSpaceMazeData was regenerated
+            RebuildSpawnPointsFromFrontier(oldSpawnPositions);
 
             // Note: TriggerVisitorPathRecalculation removed - it was redundant because:
             // 1. Affected visitors get new paths through SignalAffectedVisitorsToRetarget()
@@ -315,8 +326,17 @@ namespace FaeMaze.Systems
         /// </summary>
         private void RebuildSpawnPointsFromFrontier()
         {
-            // Pure world-space implementation
-            RebuildSpawnPointsFromFrontierWorldSpace();
+            // Called during initialization - no old spawn positions to track
+            RebuildSpawnPointsFromFrontierWorldSpace(null);
+        }
+
+        /// <summary>
+        /// Rebuilds spawn points from the frontier edges in the ForestMapState.
+        /// Accepts pre-captured old spawn positions for detecting removed spawn points.
+        /// </summary>
+        private void RebuildSpawnPointsFromFrontier(List<Vector3> oldSpawnPositions)
+        {
+            RebuildSpawnPointsFromFrontierWorldSpace(oldSpawnPositions);
         }
 
         /// <summary>
@@ -324,24 +344,20 @@ namespace FaeMaze.Systems
         /// Graph positions ARE world positions - no transforms needed.
         /// For frontier edges, the polyline defines the path - no flood fill needed.
         /// </summary>
-        private void RebuildSpawnPointsFromFrontierWorldSpace()
+        /// <param name="oldSpawnPositions">Pre-captured spawn positions from before WorldSpaceMazeData regeneration, or null for initialization</param>
+        private void RebuildSpawnPointsFromFrontierWorldSpace(List<Vector3> oldSpawnPositions)
         {
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return;
 
-            // Capture existing spawn point positions BEFORE clearing them
-            // This allows us to identify which spawn points were removed
-            var oldSpawnPositions = new List<Vector3>();
-            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
-            if (worldSpaceData != null && worldSpaceData.SpawnPoints != null)
+            // Use provided old spawn positions, or empty list if not provided (initialization)
+            if (oldSpawnPositions == null)
             {
-                foreach (var kvp in worldSpaceData.SpawnPoints)
-                {
-                    oldSpawnPositions.Add(kvp.Value);
-                }
+                oldSpawnPositions = new List<Vector3>();
             }
 
             // Clear spawn points in world-space data before registering new ones
+            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
             if (worldSpaceData != null)
             {
                 worldSpaceData.ClearSpawnPoints();
