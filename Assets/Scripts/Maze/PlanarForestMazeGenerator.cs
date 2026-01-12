@@ -698,13 +698,14 @@ namespace ForestMaze
         }
 
         // Edge merging parameters
-        private const float MERGE_DISTANCE = 1.0f; // Distance below which parallel edges should merge
-        private const float PARALLEL_THRESHOLD = 0.85f; // Dot product threshold for considering segments parallel
+        private const float MERGE_DISTANCE = 1.5f; // Distance below which parallel edges should merge (increased for tree models)
+        private const float PARALLEL_THRESHOLD = 0.7f; // Dot product threshold for considering segments parallel (relaxed for curves)
+        private const float NODE_PROXIMITY_SKIP = NODE_RADIUS + 1.0f; // Don't merge points this close to shared nodes
 
         /// <summary>
-        /// Merges nearby edge segments that are too close together to fit wall tiles between them.
+        /// Merges nearby edge segments that are too close together to fit wall/tree models between them.
         /// When two edge polyline segments are within MERGE_DISTANCE and running roughly parallel,
-        /// one edge's segment is adjusted to follow the other's path.
+        /// both edges' points are moved to a shared midpoint path so they become truly coincident.
         /// </summary>
         public static void MergeNearbyEdges(ForestMapState state)
         {
@@ -713,90 +714,139 @@ namespace ForestMaze
 
             int mergeCount = 0;
 
-            // For each edge, check against all other edges for potential merging
-            for (int i = 0; i < state.Edges.Count; i++)
+            // Multiple passes to handle cascading merges
+            for (int pass = 0; pass < 3; pass++)
             {
-                var edge1 = state.Edges[i];
-                if (edge1.PolylinePoints.Count < 2)
-                    continue;
+                bool anyMerged = false;
 
-                for (int j = i + 1; j < state.Edges.Count; j++)
+                // For each edge, check against all other edges for potential merging
+                for (int i = 0; i < state.Edges.Count; i++)
                 {
-                    var edge2 = state.Edges[j];
-                    if (edge2.PolylinePoints.Count < 2)
+                    var edge1 = state.Edges[i];
+                    if (edge1.PolylinePoints.Count < 2)
                         continue;
 
-                    // Skip edges that share a node (they should diverge from node, not merge)
-                    if (EdgesShareNode(edge1, edge2))
-                        continue;
-
-                    // Check each segment pair for merge opportunity
-                    if (TryMergeEdgeSegments(edge1, edge2, ref mergeCount))
+                    for (int j = i + 1; j < state.Edges.Count; j++)
                     {
-                        // Edges were modified, continue checking
+                        var edge2 = state.Edges[j];
+                        if (edge2.PolylinePoints.Count < 2)
+                            continue;
+
+                        // Get shared node if any (to skip points near it)
+                        int? sharedNode = GetSharedNode(edge1, edge2);
+                        Vector2? sharedNodePos = null;
+                        if (sharedNode.HasValue)
+                        {
+                            var node = state.Nodes.FirstOrDefault(n => n.Id == sharedNode.Value);
+                            if (node != null)
+                                sharedNodePos = node.Position;
+                        }
+
+                        // Check each segment pair for merge opportunity
+                        if (TryMergeEdgeSegments(edge1, edge2, sharedNodePos, ref mergeCount))
+                        {
+                            anyMerged = true;
+                        }
                     }
                 }
+
+                if (!anyMerged)
+                    break;
             }
 
             if (mergeCount > 0)
             {
-                Debug.Log($"[PlanarForest] MergeNearbyEdges: Merged {mergeCount} segment pairs");
+                Debug.Log($"[PlanarForest] MergeNearbyEdges: Consolidated {mergeCount} point pairs into shared paths");
             }
         }
 
-        private static bool EdgesShareNode(Edge edge1, Edge edge2)
+        /// <summary>
+        /// Returns the shared node ID if the two edges share exactly one node, null otherwise.
+        /// </summary>
+        private static int? GetSharedNode(Edge edge1, Edge edge2)
         {
+            List<int> shared = new List<int>();
+
             if (edge1.NodeA == edge2.NodeA || edge1.NodeA == edge2.NodeB)
-                return true;
-            if (edge1.NodeB.HasValue && (edge1.NodeB.Value == edge2.NodeA || edge1.NodeB.Value == edge2.NodeB))
-                return true;
-            return false;
+                shared.Add(edge1.NodeA);
+            if (edge1.NodeB.HasValue)
+            {
+                if (edge1.NodeB.Value == edge2.NodeA)
+                    shared.Add(edge2.NodeA);
+                else if (edge1.NodeB.Value == edge2.NodeB)
+                    shared.Add(edge1.NodeB.Value);
+            }
+
+            return shared.Count == 1 ? shared[0] : (int?)null;
         }
 
-        private static bool TryMergeEdgeSegments(Edge edge1, Edge edge2, ref int mergeCount)
+        private static bool TryMergeEdgeSegments(Edge edge1, Edge edge2, Vector2? sharedNodePos, ref int mergeCount)
         {
             bool merged = false;
 
-            // Track which points in edge2 need to be merged (excluding endpoints connected to nodes)
-            HashSet<int> pointsToMerge = new HashSet<int>();
+            // Find all pairs of points that need to be merged together
+            // Store as (edge1 point index, edge2 point index) pairs
+            List<(int idx1, int idx2, Vector2 midpoint)> mergePairs = new List<(int, int, Vector2)>();
 
-            // Sample along edge1's polyline and check distance to edge2's segments
-            for (int i = 0; i < edge1.PolylinePoints.Count - 1; i++)
+            // Check each point in edge2 against edge1's segments
+            for (int j = 1; j < edge2.PolylinePoints.Count - 1; j++) // Skip endpoints
             {
-                Vector2 a1 = edge1.PolylinePoints[i];
-                Vector2 a2 = edge1.PolylinePoints[i + 1];
-                Vector2 dir1 = (a2 - a1).normalized;
+                Vector2 p2 = edge2.PolylinePoints[j];
 
-                for (int j = 0; j < edge2.PolylinePoints.Count - 1; j++)
+                // Skip points too close to shared node
+                if (sharedNodePos.HasValue && Vector2.Distance(p2, sharedNodePos.Value) < NODE_PROXIMITY_SKIP)
+                    continue;
+
+                // Find closest point on edge1
+                float closestDist = float.MaxValue;
+                int closestIdx1 = -1;
+                Vector2 closestPoint = p2;
+
+                for (int i = 0; i < edge1.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 b1 = edge2.PolylinePoints[j];
-                    Vector2 b2 = edge2.PolylinePoints[j + 1];
-                    Vector2 dir2 = (b2 - b1).normalized;
+                    Vector2 a1 = edge1.PolylinePoints[i];
+                    Vector2 a2 = edge1.PolylinePoints[i + 1];
 
-                    // Check if segments are roughly parallel (either direction)
-                    float dot = Mathf.Abs(Vector2.Dot(dir1, dir2));
-                    if (dot < PARALLEL_THRESHOLD)
+                    // Check direction compatibility (roughly parallel)
+                    if (j < edge2.PolylinePoints.Count - 1)
+                    {
+                        Vector2 dir1 = (a2 - a1).normalized;
+                        Vector2 dir2 = (edge2.PolylinePoints[j + 1] - edge2.PolylinePoints[j]).normalized;
+                        float dot = Mathf.Abs(Vector2.Dot(dir1, dir2));
+                        if (dot < PARALLEL_THRESHOLD)
+                            continue;
+                    }
+
+                    Vector2 closest = ClosestPointOnSegment(p2, a1, a2);
+                    float dist = Vector2.Distance(p2, closest);
+
+                    if (dist < closestDist && dist < MERGE_DISTANCE)
+                    {
+                        closestDist = dist;
+                        closestPoint = closest;
+                        // Find which endpoint of segment is closer to determine which point to adjust
+                        closestIdx1 = Vector2.Distance(closest, a1) < Vector2.Distance(closest, a2) ? i : i + 1;
+                    }
+                }
+
+                if (closestIdx1 >= 0 && closestIdx1 > 0 && closestIdx1 < edge1.PolylinePoints.Count - 1)
+                {
+                    // Skip if edge1's point is too close to shared node
+                    if (sharedNodePos.HasValue &&
+                        Vector2.Distance(edge1.PolylinePoints[closestIdx1], sharedNodePos.Value) < NODE_PROXIMITY_SKIP)
                         continue;
 
-                    // Check distance between segments
-                    float dist = SegmentToSegmentDistance(a1, a2, b1, b2);
-                    if (dist >= MERGE_DISTANCE)
-                        continue;
-
-                    // Mark intermediate points for merging (not endpoints connected to nodes)
-                    if (j > 0)
-                        pointsToMerge.Add(j);
-                    if (j + 1 < edge2.PolylinePoints.Count - 1)
-                        pointsToMerge.Add(j + 1);
+                    // Calculate midpoint between the two points
+                    Vector2 midpoint = (edge1.PolylinePoints[closestIdx1] + p2) * 0.5f;
+                    mergePairs.Add((closestIdx1, j, midpoint));
                 }
             }
 
-            // Now project all marked points onto the closest point on edge1's full polyline
-            foreach (int idx in pointsToMerge)
+            // Apply the merges - move both points to midpoint
+            foreach (var (idx1, idx2, midpoint) in mergePairs)
             {
-                Vector2 point = edge2.PolylinePoints[idx];
-                Vector2 closest = ClosestPointOnPolyline(point, edge1.PolylinePoints);
-                edge2.PolylinePoints[idx] = closest;
+                edge1.PolylinePoints[idx1] = midpoint;
+                edge2.PolylinePoints[idx2] = midpoint;
                 merged = true;
                 mergeCount++;
             }
