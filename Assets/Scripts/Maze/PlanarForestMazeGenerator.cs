@@ -282,11 +282,15 @@ namespace ForestMaze
             // Fill new node's remaining capacity
             while (newNode.HasCapacity())
             {
-                // Try to connect to existing node
+                // Try to connect to existing node (25% chance)
                 if (state.Random.NextDouble() < CONNECT_PROB)
                 {
-                    if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA))
+                    // Allow forcing connection even to nodes at capacity during growth
+                    if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA, allowForceCapacity: true))
+                    {
+                        Debug.Log($"[PlanarForest] Growth: Created cross-connection from node {newNode.Id}");
                         continue;
+                    }
                 }
 
                 // Otherwise add partial edge
@@ -404,15 +408,26 @@ namespace ForestMaze
             return new List<Vector2> { startBoundary, endBoundary };
         }
 
-        private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null, int? parentNodeId = null)
+        private static bool TryConnectToExisting(ForestMapState state, Node newNode, int? prohibitedNodeId = null, int? parentNodeId = null, bool allowForceCapacity = false)
         {
             var connectedNodeIds = GetConnectedNodeIds(state, newNode.Id);
-            var allNodesWithCapacity = state.Nodes.Where(n => n.Id != newNode.Id && n.HasCapacity()).Count();
+
+            // First try nodes with capacity
             var candidates = state.Nodes
                 .Where(n => n.Id != newNode.Id && n.HasCapacity())
                 .Where(n => !prohibitedNodeId.HasValue || n.Id != prohibitedNodeId.Value)
                 .Where(n => !connectedNodeIds.Contains(n.Id))
                 .ToList();
+
+            // If no candidates with capacity and we're allowed to force, include nodes at capacity
+            if (candidates.Count == 0 && allowForceCapacity)
+            {
+                candidates = state.Nodes
+                    .Where(n => n.Id != newNode.Id)
+                    .Where(n => !prohibitedNodeId.HasValue || n.Id != prohibitedNodeId.Value)
+                    .Where(n => !connectedNodeIds.Contains(n.Id))
+                    .ToList();
+            }
 
             if (candidates.Count == 0)
             {
@@ -456,6 +471,13 @@ namespace ForestMaze
                 if (polyline == null)
                 {
                     continue;
+                }
+
+                // Expand candidate's capacity if needed (when allowForceCapacity is true)
+                if (!candidate.HasCapacity())
+                {
+                    candidate.MaxDegree++;
+                    Debug.Log($"[PlanarForest] Expanded node {candidate.Id} capacity to {candidate.MaxDegree} for cross-connection");
                 }
 
                 var edge = new Edge
