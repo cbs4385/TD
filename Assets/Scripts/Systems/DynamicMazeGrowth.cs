@@ -437,13 +437,10 @@ namespace FaeMaze.Systems
                     if (wall3 != null) portalWalls.Add(wall3);
                 }
 
-                // Mark wall positions as unwalkable in world-space data
-                // (worldSpaceData already defined in outer scope)
+                // Register spawn point (walls are visual only, don't mark tiles unwalkable
+                // as that blocks pathfinding through spawn points)
                 if (worldSpaceData != null)
                 {
-                    worldSpaceData.MarkUnwalkable(new Vector2(wallWorldPos.x, wallWorldPos.y));
-                    worldSpaceData.MarkUnwalkable(new Vector2((wallWorldPos + perpendicular * tileSize).x, (wallWorldPos + perpendicular * tileSize).y));
-                    worldSpaceData.MarkUnwalkable(new Vector2((wallWorldPos - perpendicular * tileSize).x, (wallWorldPos - perpendicular * tileSize).y));
                     worldSpaceData.RegisterSpawnPoint(spawnId, portalWorldPos);
                 }
 
