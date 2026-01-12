@@ -797,7 +797,8 @@ namespace FaeMaze.Visitors
             if (tilePath == null || tilePath.Count == 0)
             {
                 Debug.LogWarning($"[Pathfinding] {name}: No tile path found from {startTile.Position} to {endTile.Position}");
-                return new List<Vector3> { end };
+                // Return empty list to indicate failure - caller should handle fallback
+                return new List<Vector3>();
             }
 
             // Convert tile path to world positions
@@ -861,96 +862,150 @@ namespace FaeMaze.Visitors
         private List<ForestMaze.WorldSpaceTile> FindTilePath(ForestMaze.WorldSpaceMazeData mazeData,
             ForestMaze.WorldSpaceTile startTile, ForestMaze.WorldSpaceTile endTile)
         {
-            if (startTile == endTile)
+            try
             {
-                return new List<ForestMaze.WorldSpaceTile> { startTile };
-            }
-
-            // BFS through tiles
-            var queue = new Queue<ForestMaze.WorldSpaceTile>();
-            var visited = new HashSet<ForestMaze.WorldSpaceTile>();
-            var parent = new Dictionary<ForestMaze.WorldSpaceTile, ForestMaze.WorldSpaceTile>();
-
-            queue.Enqueue(startTile);
-            visited.Add(startTile);
-            parent[startTile] = null;
-
-            // Tiles are placed at 1.0 unit intervals; diagonal neighbors are sqrt(2) ≈ 1.414 apart
-            // Use 1.5 to ensure we connect tiles even with slight positioning variations
-            float neighborRadius = mazeData.TileSize * 1.5f;
-
-            int iterations = 0;
-            int maxIterations = 50000; // Safety limit
-            bool loggedFirstIteration = false;
-
-            while (queue.Count > 0 && iterations < maxIterations)
-            {
-                iterations++;
-                var current = queue.Dequeue();
-
-                // Check if reached destination
-                float distToEnd = Vector2.Distance(current.Position, endTile.Position);
-                if (distToEnd < mazeData.TileSize * 0.5f || current == endTile)
+                if (startTile == endTile)
                 {
-                    // Reconstruct path
-                    var path = new List<ForestMaze.WorldSpaceTile>();
-                    var node = current;
-                    while (node != null)
-                    {
-                        path.Add(node);
-                        parent.TryGetValue(node, out node);
-                    }
-                    path.Reverse();
-
-                    Debug.Log($"[Pathfinding] {name}: BFS found path with {path.Count} tiles after {iterations} iterations");
-
-                    // Don't simplify - keep all tile positions to stay on walkable terrain
-                    return path;
+                    Debug.Log($"[Pathfinding] {name}: BFS - start equals end, returning single tile");
+                    return new List<ForestMaze.WorldSpaceTile> { startTile };
                 }
 
-                // Get neighboring walkable tiles
-                var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
+                // BFS through tiles
+                var queue = new Queue<ForestMaze.WorldSpaceTile>();
+                var visited = new HashSet<ForestMaze.WorldSpaceTile>();
+                var parent = new Dictionary<ForestMaze.WorldSpaceTile, ForestMaze.WorldSpaceTile>();
 
-                // Log first iteration details for debugging
-                if (!loggedFirstIteration)
+                queue.Enqueue(startTile);
+                visited.Add(startTile);
+                parent[startTile] = null;
+
+                // Tiles are placed at 1.0 unit intervals; diagonal neighbors are sqrt(2) ≈ 1.414 apart
+                // Use 1.5 to ensure we connect tiles even with slight positioning variations
+                float neighborRadius = mazeData.TileSize * 1.5f;
+
+                int iterations = 0;
+                int maxIterations = 50000; // Safety limit
+                bool loggedFirstIteration = false;
+
+                float startToEndDist = Vector2.Distance(startTile.Position, endTile.Position);
+                Debug.Log($"[Pathfinding] {name}: BFS starting - distance to target: {startToEndDist:F1} units");
+
+                while (queue.Count > 0 && iterations < maxIterations)
                 {
-                    loggedFirstIteration = true;
-                    int walkableNeighbors = 0;
-                    foreach (var n in neighbors)
+                    iterations++;
+                    var current = queue.Dequeue();
+
+                    // Check if reached destination
+                    float distToEnd = Vector2.Distance(current.Position, endTile.Position);
+                    if (distToEnd < mazeData.TileSize * 0.5f || current == endTile)
                     {
-                        if (n.Walkable)
+                        // Reconstruct path
+                        var path = new List<ForestMaze.WorldSpaceTile>();
+                        var node = current;
+                        while (node != null)
                         {
-                            float d = Vector2.Distance(current.Position, n.Position);
-                            if (d <= neighborRadius) walkableNeighbors++;
+                            path.Add(node);
+                            parent.TryGetValue(node, out node);
                         }
+                        path.Reverse();
+
+                        Debug.Log($"[Pathfinding] {name}: BFS SUCCESS - found path with {path.Count} tiles after {iterations} iterations");
+
+                        // Log each tile in the path (limited to first and last few)
+                        var pathPositions = new System.Text.StringBuilder();
+                        pathPositions.Append($"[Pathfinding] {name}: Path: ");
+                        int logCount = Mathf.Min(5, path.Count);
+                        for (int i = 0; i < logCount; i++)
+                        {
+                            pathPositions.Append($"({path[i].Position.x:F1},{path[i].Position.y:F1})");
+                            if (i < logCount - 1) pathPositions.Append(" -> ");
+                        }
+                        if (path.Count > 10)
+                        {
+                            pathPositions.Append($" ... ({path.Count - 10} more) ... ");
+                            for (int i = path.Count - 5; i < path.Count; i++)
+                            {
+                                pathPositions.Append($"({path[i].Position.x:F1},{path[i].Position.y:F1})");
+                                if (i < path.Count - 1) pathPositions.Append(" -> ");
+                            }
+                        }
+                        Debug.Log(pathPositions.ToString());
+
+                        // Don't simplify - keep all tile positions to stay on walkable terrain
+                        return path;
                     }
-                    Debug.Log($"[Pathfinding] {name}: BFS first iteration - {neighbors.Count} nearby tiles, {walkableNeighbors} walkable neighbors within radius {neighborRadius}");
+
+                    // Get neighboring walkable tiles
+                    var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
+
+                    // Log first iteration details for debugging
+                    if (!loggedFirstIteration)
+                    {
+                        loggedFirstIteration = true;
+                        int walkableNeighbors = 0;
+                        foreach (var n in neighbors)
+                        {
+                            if (n.Walkable)
+                            {
+                                float d = Vector2.Distance(current.Position, n.Position);
+                                if (d <= neighborRadius) walkableNeighbors++;
+                            }
+                        }
+                        Debug.Log($"[Pathfinding] {name}: BFS first iteration - {neighbors.Count} nearby tiles, {walkableNeighbors} walkable neighbors within radius {neighborRadius}");
+                    }
+
+                    foreach (var neighbor in neighbors)
+                    {
+                        if (!neighbor.Walkable) continue;
+                        if (visited.Contains(neighbor)) continue;
+
+                        // Must be within neighbor radius
+                        float dist = Vector2.Distance(current.Position, neighbor.Position);
+                        if (dist > neighborRadius) continue;
+
+                        visited.Add(neighbor);
+                        parent[neighbor] = current;
+                        queue.Enqueue(neighbor);
+                    }
                 }
 
-                foreach (var neighbor in neighbors)
+                // Find closest visited tile to end for diagnostic
+                float closestDistToEnd = float.MaxValue;
+                ForestMaze.WorldSpaceTile closestTile = null;
+                foreach (var v in visited)
                 {
-                    if (!neighbor.Walkable) continue;
-                    if (visited.Contains(neighbor)) continue;
-
-                    // Must be within neighbor radius
-                    float dist = Vector2.Distance(current.Position, neighbor.Position);
-                    if (dist > neighborRadius) continue;
-
-                    visited.Add(neighbor);
-                    parent[neighbor] = current;
-                    queue.Enqueue(neighbor);
+                    float d = Vector2.Distance(v.Position, endTile.Position);
+                    if (d < closestDistToEnd)
+                    {
+                        closestDistToEnd = d;
+                        closestTile = v;
+                    }
                 }
-            }
+                Debug.LogWarning($"[Pathfinding] {name}: BFS FAILED after {iterations} iterations (visited {visited.Count} tiles, closest to end: {closestDistToEnd:F1} units)");
 
-            // Find closest visited tile to end for diagnostic
-            float closestDistToEnd = float.MaxValue;
-            foreach (var v in visited)
-            {
-                float d = Vector2.Distance(v.Position, endTile.Position);
-                if (d < closestDistToEnd) closestDistToEnd = d;
+                // Log sample of visited tiles to understand the network
+                var visitedList = new List<ForestMaze.WorldSpaceTile>(visited);
+                var sampleTiles = new System.Text.StringBuilder();
+                sampleTiles.Append($"[Pathfinding] {name}: Sample visited tiles: ");
+                int sampleCount = Mathf.Min(10, visitedList.Count);
+                for (int i = 0; i < sampleCount; i++)
+                {
+                    sampleTiles.Append($"({visitedList[i].Position.x:F1},{visitedList[i].Position.y:F1})");
+                    if (i < sampleCount - 1) sampleTiles.Append(", ");
+                }
+                if (closestTile != null)
+                {
+                    sampleTiles.Append($" | Closest: ({closestTile.Position.x:F1},{closestTile.Position.y:F1})");
+                }
+                Debug.LogWarning(sampleTiles.ToString());
+
+                return null; // No path found
             }
-            Debug.LogWarning($"[Pathfinding] {name}: BFS failed after {iterations} iterations (visited {visited.Count} tiles, closest to end: {closestDistToEnd:F1} units)");
-            return null; // No path found
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[Pathfinding] {name}: BFS exception: {e.Message}\n{e.StackTrace}");
+                return null;
+            }
         }
 
         /// <summary>
