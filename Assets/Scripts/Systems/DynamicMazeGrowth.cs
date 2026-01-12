@@ -380,8 +380,10 @@ namespace FaeMaze.Systems
             // Create rotation: +X axis points toward the node center
             float zAngle = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;
 
-            // For portals on XY plane: Z rotation controls facing direction, X=-90 to lay flat
-            Quaternion rotation = Quaternion.Euler(-90f, 0f, zAngle);
+            // Apply Z rotation first (facing direction), then X=-90 to lay flat on XY plane
+            // Quaternion multiplication order: A * B applies B first, then A
+            // So Euler(0,0,zAngle) * Euler(-90,0,0) applies X=-90 first, then Z=zAngle in world space
+            Quaternion rotation = Quaternion.Euler(0f, 0f, zAngle) * Quaternion.Euler(-90f, 0f, 0f);
 
             // Create portal and set parent first, then set world position explicitly
             // This avoids SetParent worldPositionStays issues with non-identity parent transforms

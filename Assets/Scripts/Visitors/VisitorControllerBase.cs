@@ -936,14 +936,17 @@ namespace FaeMaze.Visitors
 
         protected void UpdateAnimatorDirection(Vector2 movement)
         {
-            // Apply rotation for model to face movement direction
+            // Apply smooth rotation for model to face movement direction
             // All rotation is around Z axis only (XY plane movement)
             if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
                 // Calculate Z rotation angle for model facing direction
-                // Model setup: forward = +X (model space), up = -Z (model space)
-                // At Z=0° rotation, model faces +X in world space
-                float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
+                // Model default (0° Z rotation) faces Down (-Y), so:
+                // - Down (-Y): 0°, Up (+Y): 180°, Left (-X): 90°, Right (+X): -90°
+                float angle = -Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg - 90f;
+
+                // Direction rotation is Z-axis only
+                Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
 
                 // Determine the target transform for rotation
                 Transform rotationTarget = null;
@@ -971,20 +974,27 @@ namespace FaeMaze.Visitors
 
                 if (rotationTarget != null)
                 {
-                    // Get current euler angles
-                    Vector3 currentEuler = rotationTarget.eulerAngles;
-
-                    // If we have a captured base rotation, preserve the X and Y components
+                    // Apply direction rotation on top of base rotation using quaternion multiplication
+                    // This properly preserves the model's X/Y orientation while adding Z rotation
                     if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
                     {
-                        Vector3 baseEuler = modelBaseRotation.eulerAngles;
-                        // Apply Z rotation on top of base X/Y rotation
-                        rotationTarget.eulerAngles = new Vector3(baseEuler.x, baseEuler.y, angle);
+                        Quaternion targetRotation = directionRotation * modelBaseRotation;
+                        rotationTarget.localRotation = Quaternion.Slerp(
+                            rotationTarget.localRotation,
+                            targetRotation,
+                            Time.deltaTime * 10f
+                        );
                     }
                     else
                     {
-                        // Apply Z rotation directly to the transform, preserving X/Y
-                        rotationTarget.eulerAngles = new Vector3(currentEuler.x, currentEuler.y, angle);
+                        // Fallback: apply Z rotation preserving current X/Y
+                        Vector3 currentEuler = rotationTarget.eulerAngles;
+                        Quaternion targetRotation = Quaternion.Euler(currentEuler.x, currentEuler.y, angle);
+                        rotationTarget.localRotation = Quaternion.Slerp(
+                            rotationTarget.localRotation,
+                            targetRotation,
+                            Time.deltaTime * 10f
+                        );
                     }
                 }
 
