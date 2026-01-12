@@ -130,6 +130,7 @@ namespace FaeMaze.Visitors
         protected GameObject modelInstance;
         protected Quaternion modelBaseRotation;
         protected bool modelBaseRotationCaptured;
+        private bool hasLoggedFirstRotation;
 
         // 3D physics
         protected Rigidbody rb3D;
@@ -945,17 +946,28 @@ namespace FaeMaze.Visitors
                 // Formula derived from discrete direction mappings
                 float angle = -Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg - 90f;
 
-                // Log rotation details periodically (every 60 frames to avoid spam)
-                if (Time.frameCount % 60 == 0)
-                {
-                    Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
-                        $"atan2={Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg:F1}°, angle={angle:F1}°, " +
-                        $"use3DModel={use3DModel}, modelInstance={(modelInstance != null ? "exists" : "null")}, " +
-                        $"baseRotCaptured={modelBaseRotationCaptured}");
-                }
-
                 // Direction rotation is Z-axis only
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
+
+                // Determine which code path will be used
+                string rotationTarget = "none";
+                if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
+                    rotationTarget = "modelInstance+baseRot";
+                else if (use3DModel && modelInstance != null)
+                    rotationTarget = "modelInstance";
+                else if (use3DModel)
+                    rotationTarget = "transform";
+                else if (animator != null)
+                    rotationTarget = "animator";
+
+                // Log rotation details on first movement and periodically
+                if (!hasLoggedFirstRotation || Time.frameCount % 300 == 0)
+                {
+                    hasLoggedFirstRotation = true;
+                    Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
+                        $"atan2={Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg:F1}°, targetAngle={angle:F1}°, " +
+                        $"rotationTarget={rotationTarget}, currentZ={transform.eulerAngles.z:F1}°");
+                }
 
                 if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
                 {

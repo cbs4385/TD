@@ -293,11 +293,12 @@ namespace FaeMaze.Systems
                     directionOutward = (endpointPos - connectedNode.Position).normalized;
                 }
 
-                // Wall is placed AT the endpoint (blocking the exit)
-                Vector3 wallWorldPos = endpointWorld;
+                // Wall is placed 0.5 units PAST the endpoint (away from node, to connect with surrounding walls)
+                Vector3 wallOffset = new Vector3(directionOutward.x, directionOutward.y, 0f) * 0.5f;
+                Vector3 wallWorldPos = endpointWorld + wallOffset;
 
-                // Portal is placed 1 unit INSIDE the path (toward the node, on the other side of the final tile)
-                Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 1.0f;
+                // Portal is placed 0.5 units INSIDE the path (toward node, at inside edge of final tile)
+                Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 0.5f;
                 Vector3 portalWorldPos = endpointWorld + portalOffset;
 
                 // Get next spawn ID
