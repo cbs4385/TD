@@ -52,6 +52,9 @@ namespace FaeMaze.Systems
         // Track portals at each spawn point
         private Dictionary<char, GameObject> spawnPointPortals = new Dictionary<char, GameObject>();
 
+        // Track portal wall objects (blocking walls at frontier endpoints)
+        private List<GameObject> portalWalls = new List<GameObject>();
+
         // Track available spawn IDs
         private char[] availableSpawnIds = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' };
         private int nextSpawnIdIndex = 0;
@@ -268,6 +271,16 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Clear ALL existing portal walls (blocking walls at frontier endpoints)
+            foreach (var wallObj in portalWalls)
+            {
+                if (wallObj != null)
+                {
+                    DestroyImmediate(wallObj);
+                }
+            }
+            portalWalls.Clear();
+
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
 
@@ -327,11 +340,15 @@ namespace FaeMaze.Systems
                 float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
 
                 // Create THREE walls PAST the portal to fully block the path exit (center, left, right)
+                // Track these walls so they can be removed when frontier changes
                 if (mazeRenderer != null)
                 {
-                    mazeRenderer.CreateWallAtPosition(wallWorldPos, orientationDegrees);
-                    mazeRenderer.CreateWallAtPosition(wallWorldPos + perpendicular * tileSize, orientationDegrees);
-                    mazeRenderer.CreateWallAtPosition(wallWorldPos - perpendicular * tileSize, orientationDegrees);
+                    var wall1 = mazeRenderer.CreateWallAtPosition(wallWorldPos, orientationDegrees);
+                    var wall2 = mazeRenderer.CreateWallAtPosition(wallWorldPos + perpendicular * tileSize, orientationDegrees);
+                    var wall3 = mazeRenderer.CreateWallAtPosition(wallWorldPos - perpendicular * tileSize, orientationDegrees);
+                    if (wall1 != null) portalWalls.Add(wall1);
+                    if (wall2 != null) portalWalls.Add(wall2);
+                    if (wall3 != null) portalWalls.Add(wall3);
                 }
 
                 // Mark wall positions as unwalkable in world-space data

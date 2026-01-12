@@ -712,6 +712,43 @@ namespace FaeMaze.Visitors
                     result.Add(worldPt);
                 }
             }
+            else
+            {
+                // Check if start is on a COMPLETE edge endpoint (happens after maze growth)
+                // When a partial edge becomes complete, visitors at the old endpoint need to follow the polyline
+                var startCompleteEdge = FindCompleteEdgeAtEndpoint(graphState, startPos2D);
+                if (startCompleteEdge != null && startCompleteEdge.PolylinePoints.Count > 0)
+                {
+                    // Determine which end of the polyline the visitor is at
+                    Vector2 firstPoint = startCompleteEdge.PolylinePoints[0];
+                    Vector2 lastPoint = startCompleteEdge.PolylinePoints[startCompleteEdge.PolylinePoints.Count - 1];
+                    float distToFirst = Vector2.Distance(startPos2D, firstPoint);
+                    float distToLast = Vector2.Distance(startPos2D, lastPoint);
+
+                    if (distToLast < distToFirst)
+                    {
+                        // Visitor is at the last point (former partial edge endpoint)
+                        // Add polyline points in reverse order toward first point
+                        for (int p = startCompleteEdge.PolylinePoints.Count - 2; p >= 0; p--)
+                        {
+                            var pt = startCompleteEdge.PolylinePoints[p];
+                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
+                            result.Add(worldPt);
+                        }
+                    }
+                    else
+                    {
+                        // Visitor is at the first point
+                        // Add polyline points in forward order toward last point
+                        for (int p = 1; p < startCompleteEdge.PolylinePoints.Count; p++)
+                        {
+                            var pt = startCompleteEdge.PolylinePoints[p];
+                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
+                            result.Add(worldPt);
+                        }
+                    }
+                }
+            }
 
             // For each pair of consecutive nodes, find the connecting edge and add its polyline points
             for (int i = 0; i < nodePath.Count - 1; i++)
@@ -889,6 +926,37 @@ namespace FaeMaze.Visitors
                 float distance = Vector2.Distance(endpoint, graphPosition);
 
                 if (distance < EndpointTolerance)
+                {
+                    return edge;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Finds a complete edge whose endpoint (either first or last polyline point) is near the given position.
+        /// Used to handle visitors at positions that were previously partial edge endpoints but became complete after growth.
+        /// </summary>
+        protected ForestMaze.PlanarForestMazeGenerator.Edge FindCompleteEdgeAtEndpoint(
+            ForestMaze.PlanarForestMazeGenerator.ForestMapState state, Vector2 graphPosition)
+        {
+            const float EndpointTolerance = 2.0f; // Graph units tolerance for matching
+
+            foreach (var edge in state.Edges)
+            {
+                // Only check complete edges (those with both NodeA and NodeB)
+                if (edge.Partial || !edge.NodeB.HasValue || edge.PolylinePoints.Count == 0)
+                    continue;
+
+                // Check if position matches either endpoint of this complete edge
+                Vector2 firstPoint = edge.PolylinePoints[0];
+                Vector2 lastPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+
+                float distToFirst = Vector2.Distance(firstPoint, graphPosition);
+                float distToLast = Vector2.Distance(lastPoint, graphPosition);
+
+                if (distToFirst < EndpointTolerance || distToLast < EndpointTolerance)
                 {
                     return edge;
                 }
