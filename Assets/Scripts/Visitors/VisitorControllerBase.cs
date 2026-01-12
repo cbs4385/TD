@@ -437,8 +437,8 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints;
-            if (spawnPoints == null || spawnPoints.Count == 0)
+            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
+            if (spawnPoints.Count == 0)
             {
                 Debug.Log($"[Pathfinding] {name}: RetargetToNearestSpawn - no spawn points available, falling back to heart");
                 RetargetToHeart();

@@ -194,15 +194,15 @@ namespace FaeMaze.Visitors
                 return Vector3.zero;
 
             var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
-            if (mazeData.SpawnPoints == null || mazeData.SpawnPoints.Count == 0)
+            if (mazeData.SpawnPointCount == 0)
                 return Vector3.zero;
 
             Vector3 nearestExit = Vector3.zero;
             float shortestDist = float.MaxValue;
             Vector3 currentPos = transform.position;
 
-            // Find nearest spawn point (portals/exits)
-            foreach (var kvp in mazeData.SpawnPoints)
+            // Find nearest spawn point (portals/exits) - positions queried real-time from transforms
+            foreach (var kvp in mazeData.GetSpawnPointPositions())
             {
                 Vector3 spawnWorldPos = kvp.Value;
 

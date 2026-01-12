@@ -299,10 +299,10 @@ namespace FaeMaze.Systems
             char spawnId = '\0';
 
             if (mazeGridBehaviour.WorldSpaceMazeData != null &&
-                mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints.Count > 0)
+                mazeGridBehaviour.WorldSpaceMazeData.SpawnPointCount > 0)
             {
-                // Get random spawn point from world-space data
-                var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints;
+                // Get random spawn point from world-space data (positions queried in real-time from transforms)
+                var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
                 var keys = new List<char>(spawnPoints.Keys);
                 int randomIndex = Random.Range(0, keys.Count);
                 spawnId = keys[randomIndex];
@@ -439,9 +439,9 @@ namespace FaeMaze.Systems
             Vector3 spawnWorldPos;
 
             if (mazeGridBehaviour.WorldSpaceMazeData != null &&
-                mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints.Count > 0)
+                mazeGridBehaviour.WorldSpaceMazeData.SpawnPointCount > 0)
             {
-                var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints;
+                var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
                 var keys = new List<char>(spawnPoints.Keys);
                 int randomIndex = Random.Range(0, keys.Count);
                 spawnWorldPos = spawnPoints[keys[randomIndex]];
@@ -647,7 +647,7 @@ namespace FaeMaze.Systems
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
                 return;
 
-            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.SpawnPoints;
+            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
             if (spawnPoints.Count == 0)
                 return;
 

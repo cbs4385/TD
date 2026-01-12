@@ -112,8 +112,8 @@ namespace ForestMaze
         /// <summary>Wall border depth in tiles</summary>
         public int WallBorderDepth = 3;
 
-        /// <summary>Spawn points mapped by their ID character to world position</summary>
-        public Dictionary<char, Vector3> SpawnPoints = new Dictionary<char, Vector3>();
+        /// <summary>Spawn points mapped by their ID character to portal transform (for real-time position)</summary>
+        public Dictionary<char, Transform> SpawnPointTransforms = new Dictionary<char, Transform>();
 
         /// <summary>Spatial lookup for quick tile access by position</summary>
         private Dictionary<Vector2Int, List<WorldSpaceTile>> _spatialGrid;
@@ -229,11 +229,11 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Registers a spawn point at a world position.
+        /// Registers a spawn point with its portal transform for real-time position access.
         /// </summary>
-        public void RegisterSpawnPoint(char spawnId, Vector3 worldPosition)
+        public void RegisterSpawnPoint(char spawnId, Transform portalTransform)
         {
-            SpawnPoints[spawnId] = worldPosition;
+            SpawnPointTransforms[spawnId] = portalTransform;
         }
 
         /// <summary>
@@ -241,7 +241,7 @@ namespace ForestMaze
         /// </summary>
         public void RemoveSpawnPoint(char spawnId)
         {
-            SpawnPoints.Remove(spawnId);
+            SpawnPointTransforms.Remove(spawnId);
         }
 
         /// <summary>
@@ -249,20 +249,48 @@ namespace ForestMaze
         /// </summary>
         public void ClearSpawnPoints()
         {
-            SpawnPoints.Clear();
+            SpawnPointTransforms.Clear();
         }
 
         /// <summary>
-        /// Gets a spawn point world position by ID.
+        /// Gets a spawn point world position by ID (queries real-time from transform).
         /// </summary>
         public Vector3? GetSpawnPointPosition(char spawnId)
         {
-            if (SpawnPoints.TryGetValue(spawnId, out var pos))
+            if (SpawnPointTransforms.TryGetValue(spawnId, out var transform) && transform != null)
             {
-                return pos;
+                // Return XY position, zeroing Z for 2D pathfinding
+                return new Vector3(transform.position.x, transform.position.y, 0f);
             }
             return null;
         }
+
+        /// <summary>
+        /// Gets all spawn point positions (queries real-time from transforms).
+        /// Returns dictionary for compatibility with existing iteration patterns.
+        /// </summary>
+        public Dictionary<char, Vector3> GetSpawnPointPositions()
+        {
+            var positions = new Dictionary<char, Vector3>();
+            foreach (var kvp in SpawnPointTransforms)
+            {
+                if (kvp.Value != null)
+                {
+                    positions[kvp.Key] = new Vector3(kvp.Value.position.x, kvp.Value.position.y, 0f);
+                }
+            }
+            return positions;
+        }
+
+        /// <summary>
+        /// Gets spawn point count.
+        /// </summary>
+        public int SpawnPointCount => SpawnPointTransforms.Count;
+
+        /// <summary>
+        /// Gets spawn point IDs.
+        /// </summary>
+        public IEnumerable<char> SpawnPointIds => SpawnPointTransforms.Keys;
 
         /// <summary>
         /// Recalculates the world bounds based on all tiles.

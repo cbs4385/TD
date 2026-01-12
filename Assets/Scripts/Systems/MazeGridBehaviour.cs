@@ -68,10 +68,11 @@ namespace FaeMaze.Systems
         {
             get
             {
-                if (worldSpaceMazeData != null && worldSpaceMazeData.SpawnPoints.Count > 0)
+                if (worldSpaceMazeData != null && worldSpaceMazeData.SpawnPointCount > 0)
                 {
-                    // Return the first spawn point as the entrance
-                    foreach (var kvp in worldSpaceMazeData.SpawnPoints)
+                    // Return the first spawn point as the entrance (real-time from transform)
+                    var positions = worldSpaceMazeData.GetSpawnPointPositions();
+                    foreach (var kvp in positions)
                     {
                         return kvp.Value;
                     }
@@ -350,7 +351,7 @@ namespace FaeMaze.Systems
             {
                 return new List<char>();
             }
-            return worldSpaceMazeData.SpawnPoints.Keys;
+            return worldSpaceMazeData.SpawnPointIds;
         }
 
         /// <summary>
@@ -362,7 +363,7 @@ namespace FaeMaze.Systems
             {
                 return 0;
             }
-            return worldSpaceMazeData.SpawnPoints.Count;
+            return worldSpaceMazeData.SpawnPointCount;
         }
 
         #endregion

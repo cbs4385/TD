@@ -245,15 +245,14 @@ namespace FaeMaze.Systems
             Debug.Log($"[DynamicGrowth] Added node {newNodeId}, {newEdges.Count} new/modified edges");
 
             // Capture old spawn point positions BEFORE regenerating WorldSpaceMazeData
-            // GenerateFromGraph creates a new object with empty SpawnPoints dictionary
+            // GenerateFromGraph creates a new object with empty spawn points
             var oldSpawnPositions = new List<Vector3>();
             var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
-            if (worldSpaceData != null && worldSpaceData.SpawnPoints != null)
+            if (worldSpaceData != null)
             {
-                foreach (var kvp in worldSpaceData.SpawnPoints)
-                {
-                    oldSpawnPositions.Add(kvp.Value);
-                }
+                // Query real-time positions from portal transforms
+                var positions = worldSpaceData.GetSpawnPointPositions();
+                oldSpawnPositions.AddRange(positions.Values);
             }
 
             // Regenerate world-space maze data from updated graph
@@ -478,24 +477,17 @@ namespace FaeMaze.Systems
                     if (wall3 != null) portalWalls.Add(wall3);
                 }
 
-                // Register spawn point (walls are visual only, don't mark tiles unwalkable
-                // as that blocks pathfinding through spawn points)
-                if (worldSpaceData != null)
-                {
-                    worldSpaceData.RegisterSpawnPoint(spawnId, portalWorldPos);
-                }
-
                 // Create portal at the frontier endpoint
-                // Pass a facing target along the path direction (into the maze), not the node center directly
-                // This ensures visitors face along the path, not toward the node
-                Vector3 facingTarget = portalWorldPos - new Vector3(directionOutward.x, directionOutward.y, 0f) * 2f;
-                CreatePortalAtWorldPosition(spawnId, portalWorldPos, facingTarget);
+                // Pass the direction INTO the maze (opposite of outward) for facing
+                Vector3 directionIntoMaze = new Vector3(-directionOutward.x, -directionOutward.y, 0f);
+                CreatePortalAtWorldPosition(spawnId, portalWorldPos, directionIntoMaze);
 
                 portalCount++;
             }
 
             // Log all registered spawn points before signaling visitors
-            var finalSpawnPoints = mazeGridBehaviour.WorldSpaceMazeData?.SpawnPoints;
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
+            var finalSpawnPoints = mazeData?.GetSpawnPointPositions();
             if (finalSpawnPoints != null)
             {
                 var spawnInfo = string.Join(", ", finalSpawnPoints.Select(kvp => $"{kvp.Key}:{kvp.Value:F1}"));
@@ -536,9 +528,13 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Creates a portal at a specific world-space position (no grid coordinates).
+        /// Creates a portal at a specific world-space position with a facing direction.
+        /// Also registers the spawn point at the portal's actual final position.
         /// </summary>
-        private void CreatePortalAtWorldPosition(char spawnId, Vector3 worldPos, Vector3 nodeCenterWorld)
+        /// <param name="spawnId">The spawn point ID</param>
+        /// <param name="worldPos">The base world position for the portal</param>
+        /// <param name="facingDirection">Normalized direction the portal should face (into the maze)</param>
+        private void CreatePortalAtWorldPosition(char spawnId, Vector3 worldPos, Vector3 facingDirection)
         {
             if (portalPrefab == null)
             {
@@ -552,27 +548,19 @@ namespace FaeMaze.Systems
                 RemovePortalAtSpawnPoint(spawnId);
             }
 
-            // Calculate direction from portal to node center (for facing)
-            Vector3 directionToNode = (nodeCenterWorld - worldPos).normalized;
-            if (directionToNode == Vector3.zero)
-            {
-                directionToNode = Vector3.right; // Default facing
-            }
+            // Use the facing direction directly (already normalized)
+            Vector3 direction = facingDirection.sqrMagnitude > 0.001f ? facingDirection.normalized : Vector3.right;
 
-            // Apply height offset (Z coordinate) and translate 0.6 units toward node center
+            // Apply height offset (Z coordinate) - no translation, portal stays at exact position
             Vector3 finalWorldPos = new Vector3(worldPos.x, worldPos.y, -portalHeightOffset);
-            finalWorldPos += new Vector3(directionToNode.x, directionToNode.y, 0f) * 0.6f;
 
-            // Create rotation: +X axis points toward the node center
-            float zAngle = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;
+            // Create rotation: +X axis points in the facing direction (into the maze)
+            float zAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
             // Apply Z rotation first (facing direction), then X=-90 to lay flat on XY plane
-            // Quaternion multiplication order: A * B applies B first, then A
-            // So Euler(0,0,zAngle) * Euler(-90,0,0) applies X=-90 first, then Z=zAngle in world space
             Quaternion rotation = Quaternion.Euler(0f, 0f, zAngle) * Quaternion.Euler(-90f, 0f, 0f);
 
             // Create portal and set parent first, then set world position explicitly
-            // This avoids SetParent worldPositionStays issues with non-identity parent transforms
             GameObject portal = Instantiate(portalPrefab);
             portal.name = $"Portal_{spawnId}";
 
@@ -588,8 +576,16 @@ namespace FaeMaze.Systems
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
+            // Register spawn point with the portal's transform - position is queried in real-time
+            var worldSpaceData = mazeGridBehaviour?.WorldSpaceMazeData;
+            if (worldSpaceData != null)
+            {
+                worldSpaceData.RegisterSpawnPoint(spawnId, portal.transform);
+                Debug.Log($"[DynamicGrowth] Registered spawn {spawnId} with portal transform at {portal.transform.position}");
+            }
+
             // Create debug visualization
-            CreateDebugColumn(worldPos, nodeCenterWorld, Color.blue, $"Portal_{spawnId}_ToNode");
+            CreateDebugColumn(worldPos, worldPos + direction * 2f, Color.blue, $"Portal_{spawnId}_FacingDir");
             CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
                 Color.red, $"Portal_{spawnId}_XAxis");
         }
