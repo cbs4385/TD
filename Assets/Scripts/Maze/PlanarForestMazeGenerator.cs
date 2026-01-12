@@ -800,7 +800,8 @@ namespace ForestMaze
                     float distStart = Vector2.Distance(edge.PolylinePoints[0], node.Position);
                     float distEnd = Vector2.Distance(edge.PolylinePoints[edge.PolylinePoints.Count - 1], node.Position);
 
-                    bool startsAtNode = distStart < distEnd && distStart < NODE_RADIUS + 2f;
+                    // Use <= for the closer check to handle equal distances
+                    bool startsAtNode = distStart <= distEnd && distStart < NODE_RADIUS + 2f;
                     bool endsAtNode = distEnd < distStart && distEnd < NODE_RADIUS + 2f;
 
                     if (startsAtNode)
@@ -819,7 +820,12 @@ namespace ForestMaze
                     }
                 }
 
-                if (connectedEdges.Count < 2) continue;
+                if (connectedEdges.Count < 2)
+                {
+                    continue;
+                }
+
+                Debug.Log($"[EdgeSpacing] Node {node.Id}: Found {connectedEdges.Count} connected edges");
 
                 // Sort by angle
                 connectedEdges.Sort((a, b) => a.angle.CompareTo(b.angle));
@@ -862,52 +868,64 @@ namespace ForestMaze
         /// <summary>
         /// Adjusts an edge's polyline to change its angle at a node.
         /// Rotates points near the node to achieve the new angle.
-        /// IMPORTANT: Never rotates the last 2 points of an edge that starts at the node,
-        /// or the first 2 points of an edge that ends at the node, to preserve portal orientation.
+        /// For edges with 4+ points: preserves last 2 points (frontier direction).
+        /// For edges with 3 points: rotates all to change angle (frontier direction may shift slightly).
         /// </summary>
         private static void AdjustEdgeAngleAtNode(Edge edge, bool startsAtNode, Vector2 nodePos, float oldAngle, float newAngle)
         {
             float angleDelta = newAngle - oldAngle;
             int count = edge.PolylinePoints.Count;
 
+            if (count < 3)
+            {
+                Debug.LogWarning($"[EdgeSpacing] Edge {edge.Id} has only {count} points, cannot adjust");
+                return;
+            }
+
             if (startsAtNode)
             {
-                // Edge starts at node, frontier is at end - don't touch last 2 points
-                int maxIndex = Mathf.Min(3, count - 2); // Never rotate last 2 points
+                // Edge starts at node, frontier is at end
+                // We MUST rotate at least points 0 and 1 to change the angle at the node
+                // (angle is determined by direction from node center to point 1)
+                // For 4+ points: preserve last 2 (frontier direction)
+                // For 3 points: rotate all (can't preserve frontier without breaking angle)
+                int maxIndex = count >= 4 ? 2 : count;
+
+                Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points 0 to {maxIndex-1} (count={count})");
+
                 for (int i = 0; i < maxIndex; i++)
                 {
                     Vector2 point = edge.PolylinePoints[i];
                     float dist = Vector2.Distance(point, nodePos);
 
-                    // Only rotate points within a reasonable distance of the node
-                    if (dist < NODE_RADIUS + 5f)
-                    {
-                        // Rotate around node center
-                        Vector2 offset = point - nodePos;
-                        float pointAngle = Mathf.Atan2(offset.y, offset.x);
-                        float newPointAngle = pointAngle + angleDelta;
-                        Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
-                        edge.PolylinePoints[i] = nodePos + newOffset;
-                    }
+                    // Rotate around node center
+                    Vector2 offset = point - nodePos;
+                    float pointAngle = Mathf.Atan2(offset.y, offset.x);
+                    float newPointAngle = pointAngle + angleDelta;
+                    Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
+                    edge.PolylinePoints[i] = nodePos + newOffset;
                 }
             }
             else
             {
-                // Edge ends at node, frontier is at start - don't touch first 2 points
-                int minIndex = Mathf.Max(count - 3, 2); // Never rotate first 2 points
+                // Edge ends at node, frontier is at start
+                // We MUST rotate at least the last 2 points to change the angle at the node
+                // For 4+ points: preserve first 2 (frontier direction)
+                // For 3 points: rotate all (can't preserve frontier without breaking angle)
+                int minIndex = count >= 4 ? count - 2 : 0;
+
+                Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points {minIndex} to {count-1} (count={count})");
+
                 for (int i = count - 1; i >= minIndex; i--)
                 {
                     Vector2 point = edge.PolylinePoints[i];
                     float dist = Vector2.Distance(point, nodePos);
 
-                    if (dist < NODE_RADIUS + 5f)
-                    {
-                        Vector2 offset = point - nodePos;
-                        float pointAngle = Mathf.Atan2(offset.y, offset.x);
-                        float newPointAngle = pointAngle + angleDelta;
-                        Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
-                        edge.PolylinePoints[i] = nodePos + newOffset;
-                    }
+                    Vector2 offset = point - nodePos;
+                    float pointAngle = Mathf.Atan2(offset.y, offset.x);
+                    float newPointAngle = pointAngle + angleDelta;
+                    Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
+                    edge.PolylinePoints[i] = nodePos + newOffset;
                 }
             }
         }
