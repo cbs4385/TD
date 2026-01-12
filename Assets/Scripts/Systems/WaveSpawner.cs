@@ -295,6 +295,7 @@ namespace FaeMaze.Systems
 
             // Get spawn position from world-space spawn points
             Vector3 spawnWorldPos;
+            Vector3 destinationWorldPos;
             char spawnId = '\0';
 
             if (mazeGridBehaviour.WorldSpaceMazeData != null &&
@@ -306,11 +307,15 @@ namespace FaeMaze.Systems
                 int randomIndex = Random.Range(0, keys.Count);
                 spawnId = keys[randomIndex];
                 spawnWorldPos = spawnPoints[spawnId];
+
+                // Find a different spawn point as destination
+                destinationWorldPos = FindDifferentSpawnPoint(spawnWorldPos, spawnPoints);
             }
             else
             {
                 // Fallback to heart position if no spawn points
                 spawnWorldPos = mazeGridBehaviour.HeartWorldPosition;
+                destinationWorldPos = spawnWorldPos;
             }
 
             // Spawn visitor
@@ -326,9 +331,8 @@ namespace FaeMaze.Systems
             // Initialize visitor with GameController reference
             spawnedVisitor.Initialize(GameController.Instance);
 
-            // Set destination to heart position
-            Vector3 heartPos = mazeGridBehaviour.HeartWorldPosition;
-            spawnedVisitor.SetWorldDestination(heartPos);
+            // Set destination to a different spawn point (not the heart)
+            spawnedVisitor.SetWorldDestination(destinationWorldPos);
 
             if (spawnedVisitor is VisitorController)
             {
@@ -380,6 +384,42 @@ namespace FaeMaze.Systems
             VisitorControllerBase spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.Euler(0, 0, 180));
 
             return spawnedVisitor;
+        }
+
+        /// <summary>
+        /// Finds a spawn point different from the origin spawn point.
+        /// Prefers the farthest spawn point to encourage longer paths through the maze.
+        /// Falls back to heart position if only one spawn point exists.
+        /// </summary>
+        private Vector3 FindDifferentSpawnPoint(Vector3 originPos, Dictionary<char, Vector3> spawnPoints)
+        {
+            if (spawnPoints == null || spawnPoints.Count <= 1)
+            {
+                // Only one spawn point or none - fall back to heart
+                return mazeGridBehaviour.HeartWorldPosition;
+            }
+
+            Vector3 farthestPoint = mazeGridBehaviour.HeartWorldPosition;
+            float maxDistance = 0f;
+
+            foreach (var kvp in spawnPoints)
+            {
+                Vector3 spawnPos = kvp.Value;
+
+                // Skip if too close to origin (same spawn point)
+                float distToOrigin = Vector3.Distance(spawnPos, originPos);
+                if (distToOrigin < 1f)
+                    continue;
+
+                // Find the farthest spawn point from origin for longer paths
+                if (distToOrigin > maxDistance)
+                {
+                    maxDistance = distToOrigin;
+                    farthestPoint = spawnPos;
+                }
+            }
+
+            return farthestPoint;
         }
 
         private void SpawnRedCap()
