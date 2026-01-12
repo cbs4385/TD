@@ -753,10 +753,7 @@ namespace ForestMaze
                     break;
             }
 
-            if (mergeCount > 0)
-            {
-                Debug.Log($"[PlanarForest] MergeNearbyEdges: Consolidated {mergeCount} point pairs into shared paths");
-            }
+            Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed");
         }
 
         /// <summary>
@@ -781,6 +778,8 @@ namespace ForestMaze
 
         private static bool TryMergeEdgeSegments(Edge edge1, Edge edge2, Vector2? sharedNodePos, ref int mergeCount)
         {
+            Debug.Log($"[EdgeMerge] Checking edge {edge1.Id} (nodes {edge1.NodeA}->{edge1.NodeB}) vs edge {edge2.Id} (nodes {edge2.NodeA}->{edge2.NodeB}), sharedNode={sharedNodePos}");
+
             // If edges share a node, try special shared-node merge first
             if (sharedNodePos.HasValue)
             {
@@ -802,7 +801,10 @@ namespace ForestMaze
         private static bool TryMergeEdgesFromSharedNode(Edge edge1, Edge edge2, Vector2 sharedNodePos, ref int mergeCount)
         {
             if (edge1.PolylinePoints.Count < 2 || edge2.PolylinePoints.Count < 2)
+            {
+                Debug.Log($"[EdgeMerge] SharedNode: SKIP - not enough points (e1={edge1.PolylinePoints.Count}, e2={edge2.PolylinePoints.Count})");
                 return false;
+            }
 
             // Determine which end of each edge is near the shared node
             float dist1Start = Vector2.Distance(edge1.PolylinePoints[0], sharedNodePos);
@@ -813,6 +815,8 @@ namespace ForestMaze
             bool edge1StartsAtNode = dist1Start < dist1End;
             bool edge2StartsAtNode = dist2Start < dist2End;
 
+            Debug.Log($"[EdgeMerge] SharedNode at {sharedNodePos}: e1 dist start={dist1Start:F2} end={dist1End:F2} (startsAtNode={edge1StartsAtNode}), e2 dist start={dist2Start:F2} end={dist2End:F2} (startsAtNode={edge2StartsAtNode})");
+
             // Get the polylines oriented from the shared node outward
             List<Vector2> poly1 = edge1StartsAtNode
                 ? new List<Vector2>(edge1.PolylinePoints)
@@ -820,6 +824,9 @@ namespace ForestMaze
             List<Vector2> poly2 = edge2StartsAtNode
                 ? new List<Vector2>(edge2.PolylinePoints)
                 : edge2.PolylinePoints.AsEnumerable().Reverse().ToList();
+
+            Debug.Log($"[EdgeMerge] Oriented poly1: {poly1.Count} pts from {poly1[0]} to {poly1[poly1.Count-1]}");
+            Debug.Log($"[EdgeMerge] Oriented poly2: {poly2.Count} pts from {poly2[0]} to {poly2[poly2.Count-1]}");
 
             // Check distances at each point of poly2 against poly1
             List<float> distances = new List<float>();
@@ -837,23 +844,32 @@ namespace ForestMaze
                 closestSegmentsOnPoly1.Add(segIdx);
             }
 
+            // Log all distances
+            string distStr = string.Join(", ", distances.Select(d => d.ToString("F2")));
+            Debug.Log($"[EdgeMerge] Distances poly2->poly1: [{distStr}] (MERGE_DISTANCE={MERGE_DISTANCE})");
+
             // Determine if this is a diverging case (close at start) or converging case (close at end)
             bool closeAtStart = distances.Count > 0 && distances[0] < MERGE_DISTANCE;
             bool closeAtEnd = distances.Count > 0 && distances[distances.Count - 1] < MERGE_DISTANCE;
 
+            Debug.Log($"[EdgeMerge] closeAtStart={closeAtStart}, closeAtEnd={closeAtEnd}");
+
             if (closeAtStart)
             {
+                Debug.Log($"[EdgeMerge] -> Trying DIVERGING merge");
                 // DIVERGING CASE: edges share path from node, then split
                 return TryMergeDivergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
             else if (closeAtEnd)
             {
+                Debug.Log($"[EdgeMerge] -> Trying CONVERGING merge");
                 // CONVERGING CASE: edges approach node from different directions, merge before node
                 return TryMergeConvergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
 
+            Debug.Log($"[EdgeMerge] SharedNode: NO MERGE - not close at start or end");
             return false;
         }
 
@@ -933,7 +949,7 @@ namespace ForestMaze
             edge2.PolylinePoints.AddRange(newPoly2);
 
             mergeCount++;
-            Debug.Log($"[PlanarForest] Merged diverging edges: lastClose={lastCloseIdx2}, diverge={divergeIdx2}");
+            Debug.Log($"[EdgeMerge] DIVERGING SUCCESS: merged at lastClose={lastCloseIdx2}, diverge={divergeIdx2}");
             return true;
         }
 
@@ -944,6 +960,8 @@ namespace ForestMaze
             List<Vector2> poly1, List<Vector2> poly2, List<float> distances,
             List<Vector2> closestPointsOnPoly1, List<int> closestSegmentsOnPoly1, ref int mergeCount)
         {
+            Debug.Log($"[EdgeMerge] CONVERGING: poly2 has {poly2.Count} pts, searching for convergence point...");
+
             // Find where they converge (searching from end toward start)
             // Find the first point (from the far end) that becomes close
             int firstCloseIdx2 = -1;
@@ -954,20 +972,30 @@ namespace ForestMaze
                 if (distances[i] < MERGE_DISTANCE)
                 {
                     firstCloseIdx2 = i;
+                    Debug.Log($"[EdgeMerge] CONVERGING: point {i} is close (dist={distances[i]:F2})");
                 }
                 else if (firstCloseIdx2 >= 0 && convergeIdx2 < 0)
                 {
                     convergeIdx2 = i;
+                    Debug.Log($"[EdgeMerge] CONVERGING: point {i} diverges (dist={distances[i]:F2}), convergeIdx2={convergeIdx2}");
                     break;
                 }
             }
 
+            Debug.Log($"[EdgeMerge] CONVERGING: firstCloseIdx2={firstCloseIdx2}, convergeIdx2={convergeIdx2}, poly2.Count={poly2.Count}");
+
             if (firstCloseIdx2 < 0 || firstCloseIdx2 >= poly2.Count - 1)
+            {
+                Debug.Log($"[EdgeMerge] CONVERGING: FAIL - firstCloseIdx2={firstCloseIdx2} invalid (need 0 <= x < {poly2.Count - 1})");
                 return false;
+            }
 
             // If no convergence point found, they're close throughout from some point
             if (convergeIdx2 < 0)
+            {
                 convergeIdx2 = 0;
+                Debug.Log($"[EdgeMerge] CONVERGING: No divergence found, using convergeIdx2=0");
+            }
 
             // Get merge point info - where poly2 should join poly1's path
             int targetSegment = closestSegmentsOnPoly1[firstCloseIdx2];
@@ -1015,7 +1043,7 @@ namespace ForestMaze
             edge2.PolylinePoints.AddRange(newPoly2);
 
             mergeCount++;
-            Debug.Log($"[PlanarForest] Merged converging edges: firstClose={firstCloseIdx2}, converge={convergeIdx2}");
+            Debug.Log($"[EdgeMerge] CONVERGING SUCCESS: merged at firstClose={firstCloseIdx2}, converge={convergeIdx2}, newPoly2 has {newPoly2.Count} pts");
             return true;
         }
 
