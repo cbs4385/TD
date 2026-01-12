@@ -83,6 +83,12 @@ namespace ForestMaze
             /// </summary>
             public List<(Vector2 start, Vector2 end)> AdjustmentFills = new List<(Vector2, Vector2)>();
 
+            /// <summary>
+            /// Edges that were modified during the last MergeNearbyEdges call.
+            /// These edges need their wall borders regenerated for incremental updates.
+            /// </summary>
+            public HashSet<Edge> MergedEdges = new HashSet<Edge>();
+
             // DEPRECATED - Legacy grid rasterization fields, kept for compatibility but unused
             // In world-space mode, graph positions ARE world positions (no transform needed)
             [System.Obsolete("No longer used - graph positions are world positions")]
@@ -714,6 +720,9 @@ namespace ForestMaze
         /// </summary>
         public static void MergeNearbyEdges(ForestMapState state)
         {
+            // Clear merged edges from previous calls
+            state.MergedEdges.Clear();
+
             if (state.Edges.Count < 2)
                 return;
 
@@ -757,6 +766,8 @@ namespace ForestMaze
                             if (TryMergeEdgesFromSharedNode(edge1, edge2, sharedNodePos.Value, ref mergeCount))
                             {
                                 anyMerged = true;
+                                // Track edge2 as modified (merge functions modify edge2's polyline)
+                                state.MergedEdges.Add(edge2);
                             }
                         }
                     }
@@ -774,7 +785,7 @@ namespace ForestMaze
                 Debug.LogWarning($"[EdgeMerge] Hit max passes limit ({MAX_PASSES})");
             }
 
-            Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed");
+            Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed, {state.MergedEdges.Count} edges modified");
 
             // Enforce minimum edge spacing at each node
             EnforceMinimumEdgeSpacing(state);

@@ -242,7 +242,18 @@ namespace FaeMaze.Systems
                 newEdges.Add(forestMapState.Edges[i]);
             }
 
-            Debug.Log($"[DynamicGrowth] Added node {newNodeId}, {newEdges.Count} new/modified edges");
+            // Add edges that were modified during merge operations
+            // These edges had their polylines changed and need wall borders regenerated
+            foreach (var mergedEdge in forestMapState.MergedEdges)
+            {
+                if (!newEdges.Contains(mergedEdge))
+                {
+                    newEdges.Add(mergedEdge);
+                    Debug.Log($"[DynamicGrowth] Including merged edge {forestMapState.Edges.IndexOf(mergedEdge)} for wall regeneration");
+                }
+            }
+
+            Debug.Log($"[DynamicGrowth] Added node {newNodeId}, {newEdges.Count} new/modified edges (including {forestMapState.MergedEdges.Count} merged)");
 
             // Capture old spawn point positions BEFORE regenerating WorldSpaceMazeData
             // GenerateFromGraph creates a new object with empty spawn points
