@@ -279,8 +279,19 @@ namespace FaeMaze.Systems
                 Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
                 Vector3 endpointWorld = new Vector3(endpointPos.x, endpointPos.y, 0f);
 
-                // Calculate direction from node toward endpoint (outward direction)
-                Vector2 directionOutward = (endpointPos - connectedNode.Position).normalized;
+                // Calculate the actual path direction at the endpoint (from second-to-last to last point)
+                // This handles curved edges correctly, unlike using the line from node center
+                Vector2 directionOutward;
+                if (edge.PolylinePoints.Count >= 2)
+                {
+                    Vector2 prevPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 2];
+                    directionOutward = (endpointPos - prevPoint).normalized;
+                }
+                else
+                {
+                    // Fallback to node-to-endpoint direction
+                    directionOutward = (endpointPos - connectedNode.Position).normalized;
+                }
 
                 // Portal is placed at the endpoint
                 Vector3 portalWorldPos = endpointWorld;
@@ -317,7 +328,7 @@ namespace FaeMaze.Systems
                 // Create portal at the frontier endpoint
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, nodeCenterWorld);
 
-                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), wall at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
+                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), wall at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), pathDir ({directionOutward.x:F2}, {directionOutward.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
 
                 portalCount++;
             }

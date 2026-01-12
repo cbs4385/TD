@@ -721,8 +721,8 @@ namespace FaeMaze.Systems
             float wallRadius = 0.65f / graphScale;
             // Path tile radius in graph units
             float pathRadius = 1.0f / graphScale;
-            // Combined radius for collision detection
-            float collisionRadius = (wallRadius + pathRadius) * 0.5f;
+            // Combined radius for collision detection - sum of both radii to prevent any overlap
+            float collisionRadius = wallRadius + pathRadius;
 
             Vector2 currentPos = wallGraphPos;
 

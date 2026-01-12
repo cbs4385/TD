@@ -128,6 +128,8 @@ namespace FaeMaze.Visitors
         // Rendering
         protected SpriteRenderer spriteRenderer;
         protected GameObject modelInstance;
+        protected Quaternion modelBaseRotation;
+        protected bool modelBaseRotationCaptured;
 
         // 3D physics
         protected Rigidbody rb3D;
@@ -934,29 +936,44 @@ namespace FaeMaze.Visitors
         protected void UpdateAnimatorDirection(Vector2 movement)
         {
             // Apply smooth rotation for any model (2D or 3D) to face movement direction
-            // All rotation is around Z axis only (top-down 2D view)
+            // All rotation is around Z axis only, applied on top of the model's base rotation
             if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
-                // Calculate angle in XY plane (0 = +X direction)
-                float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
+                // Calculate Z rotation angle for model facing direction
+                // Model default (0° Z rotation) faces Down (-Y), so:
+                // - Down (-Y): 0°, Up (+Y): 180°, Left (-X): 90°, Right (+X): -90°
+                // Formula derived from discrete direction mappings
+                float angle = -Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg - 90f;
 
-                // Z-axis only rotation for all modes
-                Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                // Direction rotation is Z-axis only
+                Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
 
-                if (use3DModel && modelInstance != null)
+                if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
                 {
-                    // Apply Z rotation to model instance
-                    modelInstance.transform.rotation = Quaternion.Slerp(
-                        modelInstance.transform.rotation,
+                    // Apply direction rotation on top of the model's base rotation (preserves X/Y orientation)
+                    Quaternion targetRotation = directionRotation * modelBaseRotation;
+                    modelInstance.transform.localRotation = Quaternion.Slerp(
+                        modelInstance.transform.localRotation,
+                        targetRotation,
+                        Time.deltaTime * 10f
+                    );
+                }
+                else if (use3DModel && modelInstance != null)
+                {
+                    // Fallback if base rotation not captured - apply Z rotation directly
+                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                    modelInstance.transform.localRotation = Quaternion.Slerp(
+                        modelInstance.transform.localRotation,
                         targetRotation,
                         Time.deltaTime * 10f
                     );
                 }
                 else if (use3DModel)
                 {
-                    // Apply Z rotation to visitor transform
-                    transform.rotation = Quaternion.Slerp(
-                        transform.rotation,
+                    // Apply Z rotation to visitor transform (no model instance)
+                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                    transform.localRotation = Quaternion.Slerp(
+                        transform.localRotation,
                         targetRotation,
                         Time.deltaTime * 10f
                     );
@@ -964,8 +981,9 @@ namespace FaeMaze.Visitors
                 else if (animator != null)
                 {
                     // Apply Z rotation to animator transform
-                    animator.transform.rotation = Quaternion.Slerp(
-                        animator.transform.rotation,
+                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                    animator.transform.localRotation = Quaternion.Slerp(
+                        animator.transform.localRotation,
                         targetRotation,
                         Time.deltaTime * 10f
                     );
@@ -1760,7 +1778,9 @@ namespace FaeMaze.Visitors
             modelInstance = Instantiate(modelPrefab, transform);
             modelInstance.transform.localPosition = Vector3.zero;
             // Keep prefab's original rotation (e.g., X:90 for models designed for XY plane)
-            // localRotation is preserved from the prefab, only Z will be modified for facing direction
+            // Capture base rotation so directional Z rotation can be applied on top of it
+            modelBaseRotation = modelInstance.transform.localRotation;
+            modelBaseRotationCaptured = true;
             modelInstance.transform.localScale = Vector3.one;
 
             // Look for Animator in the model (should be on root or child)
