@@ -796,9 +796,8 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Special merge handling for edges that share a starting node.
-        /// If the edges run close together from the shared node, merge them into a single
-        /// path until they diverge, then create a perpendicular branch.
+        /// Special merge handling for edges that share a node.
+        /// Handles both diverging edges (from shared node) and converging edges (toward shared node).
         /// </summary>
         private static bool TryMergeEdgesFromSharedNode(Edge edge1, Edge edge2, Vector2 sharedNodePos, ref int mergeCount)
         {
@@ -806,8 +805,13 @@ namespace ForestMaze
                 return false;
 
             // Determine which end of each edge is near the shared node
-            bool edge1StartsAtNode = Vector2.Distance(edge1.PolylinePoints[0], sharedNodePos) < NODE_RADIUS + 1f;
-            bool edge2StartsAtNode = Vector2.Distance(edge2.PolylinePoints[0], sharedNodePos) < NODE_RADIUS + 1f;
+            float dist1Start = Vector2.Distance(edge1.PolylinePoints[0], sharedNodePos);
+            float dist1End = Vector2.Distance(edge1.PolylinePoints[edge1.PolylinePoints.Count - 1], sharedNodePos);
+            float dist2Start = Vector2.Distance(edge2.PolylinePoints[0], sharedNodePos);
+            float dist2End = Vector2.Distance(edge2.PolylinePoints[edge2.PolylinePoints.Count - 1], sharedNodePos);
+
+            bool edge1StartsAtNode = dist1Start < dist1End;
+            bool edge2StartsAtNode = dist2Start < dist2End;
 
             // Get the polylines oriented from the shared node outward
             List<Vector2> poly1 = edge1StartsAtNode
@@ -817,9 +821,8 @@ namespace ForestMaze
                 ? new List<Vector2>(edge2.PolylinePoints)
                 : edge2.PolylinePoints.AsEnumerable().Reverse().ToList();
 
-            // Find where poly2 diverges from poly1 by checking each point against poly1's path
-            int divergeIdx2 = -1;
-            int lastCloseIdx2 = -1;
+            // Check distances at each point of poly2 against poly1
+            List<float> distances = new List<float>();
             List<Vector2> closestPointsOnPoly1 = new List<Vector2>();
             List<int> closestSegmentsOnPoly1 = new List<int>();
 
@@ -829,70 +832,90 @@ namespace ForestMaze
                 Vector2 closest = ClosestPointOnPolylineWithSegment(poly2[i], poly1, out segIdx);
                 float dist = Vector2.Distance(poly2[i], closest);
 
+                distances.Add(dist);
                 closestPointsOnPoly1.Add(closest);
                 closestSegmentsOnPoly1.Add(segIdx);
+            }
 
-                if (dist < MERGE_DISTANCE)
+            // Determine if this is a diverging case (close at start) or converging case (close at end)
+            bool closeAtStart = distances.Count > 0 && distances[0] < MERGE_DISTANCE;
+            bool closeAtEnd = distances.Count > 0 && distances[distances.Count - 1] < MERGE_DISTANCE;
+
+            if (closeAtStart)
+            {
+                // DIVERGING CASE: edges share path from node, then split
+                return TryMergeDivergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
+                    distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
+            }
+            else if (closeAtEnd)
+            {
+                // CONVERGING CASE: edges approach node from different directions, merge before node
+                return TryMergeConvergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
+                    distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Handles diverging edges that share a path from the node then split.
+        /// </summary>
+        private static bool TryMergeDivergingEdges(Edge edge1, Edge edge2, bool edge2StartsAtNode,
+            List<Vector2> poly1, List<Vector2> poly2, List<float> distances,
+            List<Vector2> closestPointsOnPoly1, List<int> closestSegmentsOnPoly1, ref int mergeCount)
+        {
+            // Find where they diverge (first point beyond MERGE_DISTANCE after being close)
+            int divergeIdx2 = -1;
+            int lastCloseIdx2 = -1;
+
+            for (int i = 0; i < distances.Count; i++)
+            {
+                if (distances[i] < MERGE_DISTANCE)
                 {
                     lastCloseIdx2 = i;
                 }
                 else if (lastCloseIdx2 >= 0 && divergeIdx2 < 0)
                 {
-                    // First point that diverges after being close
                     divergeIdx2 = i;
+                    break;
                 }
             }
 
-            // If nothing was close, no merge needed
             if (lastCloseIdx2 < 1)
                 return false;
 
-            // If no divergence found, edges are close throughout - no merge needed
-            // (they're essentially the same path)
             if (divergeIdx2 < 0)
             {
-                // But if poly2 is shorter and ends while still close, we might still need to merge
                 if (lastCloseIdx2 < poly2.Count - 1)
                     divergeIdx2 = lastCloseIdx2 + 1;
                 else
-                    return false; // Edges are close throughout their entire lengths
+                    return false;
             }
 
-            // Get the segment on poly1 where divergence happens
+            // Get merge point info
             int targetSegment = closestSegmentsOnPoly1[lastCloseIdx2];
             Vector2 closestOnPoly1 = closestPointsOnPoly1[lastCloseIdx2];
-
-            // Get direction of poly1 at the divergence point
             Vector2 targetDir = GetSegmentDirection(poly1, targetSegment);
-
-            // Create perpendicular intersection point for the diverging segment
             Vector2 perpPoint = CreatePerpendicularIntersection(poly2[divergeIdx2], closestOnPoly1, targetDir);
 
-            // Build new polyline for edge2:
-            // 1. Start with poly1's points from node up to the merge point
-            // 2. Add perpendicular junction point
-            // 3. Add remaining poly2 points from divergence onward
+            // Build new polyline: poly1 path from node to merge point, then perpendicular to poly2's remainder
             List<Vector2> newPoly2 = new List<Vector2>();
 
-            // Add poly1 points up to the merge segment
             for (int i = 0; i <= targetSegment && i < poly1.Count; i++)
             {
                 newPoly2.Add(poly1[i]);
             }
 
-            // Add the closest point on poly1 if different from last
             if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], closestOnPoly1) > 0.1f)
             {
                 newPoly2.Add(closestOnPoly1);
             }
 
-            // Add the perpendicular junction point if it's different from closestOnPoly1
             if (Vector2.Distance(perpPoint, closestOnPoly1) > 0.1f)
             {
                 newPoly2.Add(perpPoint);
             }
 
-            // Add remaining points from poly2 (from divergence onward)
             for (int i = divergeIdx2; i < poly2.Count; i++)
             {
                 if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], poly2[i]) > 0.1f)
@@ -901,18 +924,98 @@ namespace ForestMaze
                 }
             }
 
-            // If edge2 was reversed, reverse the new polyline back
             if (!edge2StartsAtNode)
             {
                 newPoly2.Reverse();
             }
 
-            // Apply the new polyline to edge2
             edge2.PolylinePoints.Clear();
             edge2.PolylinePoints.AddRange(newPoly2);
 
             mergeCount++;
-            Debug.Log($"[PlanarForest] Merged edges from shared node: lastClose={lastCloseIdx2}, diverge={divergeIdx2}");
+            Debug.Log($"[PlanarForest] Merged diverging edges: lastClose={lastCloseIdx2}, diverge={divergeIdx2}");
+            return true;
+        }
+
+        /// <summary>
+        /// Handles converging edges that approach the node from different directions and should merge before reaching it.
+        /// </summary>
+        private static bool TryMergeConvergingEdges(Edge edge1, Edge edge2, bool edge2StartsAtNode,
+            List<Vector2> poly1, List<Vector2> poly2, List<float> distances,
+            List<Vector2> closestPointsOnPoly1, List<int> closestSegmentsOnPoly1, ref int mergeCount)
+        {
+            // Find where they converge (searching from end toward start)
+            // Find the first point (from the far end) that becomes close
+            int firstCloseIdx2 = -1;
+            int convergeIdx2 = -1;
+
+            for (int i = distances.Count - 1; i >= 0; i--)
+            {
+                if (distances[i] < MERGE_DISTANCE)
+                {
+                    firstCloseIdx2 = i;
+                }
+                else if (firstCloseIdx2 >= 0 && convergeIdx2 < 0)
+                {
+                    convergeIdx2 = i;
+                    break;
+                }
+            }
+
+            if (firstCloseIdx2 < 0 || firstCloseIdx2 >= poly2.Count - 1)
+                return false;
+
+            // If no convergence point found, they're close throughout from some point
+            if (convergeIdx2 < 0)
+                convergeIdx2 = 0;
+
+            // Get merge point info - where poly2 should join poly1's path
+            int targetSegment = closestSegmentsOnPoly1[firstCloseIdx2];
+            Vector2 closestOnPoly1 = closestPointsOnPoly1[firstCloseIdx2];
+            Vector2 targetDir = GetSegmentDirection(poly1, targetSegment);
+            Vector2 perpPoint = CreatePerpendicularIntersection(poly2[convergeIdx2], closestOnPoly1, targetDir);
+
+            // Build new polyline: poly2's path up to convergence, perpendicular to poly1, then poly1's path to node
+            List<Vector2> newPoly2 = new List<Vector2>();
+
+            // Add poly2 points up to convergence
+            for (int i = 0; i <= convergeIdx2; i++)
+            {
+                newPoly2.Add(poly2[i]);
+            }
+
+            // Add perpendicular junction point
+            if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], perpPoint) > 0.1f)
+            {
+                newPoly2.Add(perpPoint);
+            }
+
+            // Add closest point on poly1
+            if (Vector2.Distance(perpPoint, closestOnPoly1) > 0.1f)
+            {
+                newPoly2.Add(closestOnPoly1);
+            }
+
+            // Add poly1's path from merge point to node (which is at the start of poly1)
+            // We need points from targetSegment down to 0
+            for (int i = targetSegment; i >= 0; i--)
+            {
+                if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], poly1[i]) > 0.1f)
+                {
+                    newPoly2.Add(poly1[i]);
+                }
+            }
+
+            if (!edge2StartsAtNode)
+            {
+                newPoly2.Reverse();
+            }
+
+            edge2.PolylinePoints.Clear();
+            edge2.PolylinePoints.AddRange(newPoly2);
+
+            mergeCount++;
+            Debug.Log($"[PlanarForest] Merged converging edges: firstClose={firstCloseIdx2}, converge={convergeIdx2}");
             return true;
         }
 
