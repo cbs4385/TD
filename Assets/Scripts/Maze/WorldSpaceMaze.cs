@@ -215,6 +215,14 @@ namespace ForestMaze
         }
 
         /// <summary>
+        /// Gets the number of cells in the spatial grid (for diagnostics).
+        /// </summary>
+        public int GetSpatialGridCellCount()
+        {
+            return _spatialGrid?.Count ?? 0;
+        }
+
+        /// <summary>
         /// Registers a spawn point at a world position.
         /// </summary>
         public void RegisterSpawnPoint(char spawnId, Vector3 worldPosition)
@@ -323,6 +331,11 @@ namespace ForestMaze
             }
 
             data.RecalculateBounds();
+
+            // Verify spatial grid is populated correctly
+            int gridCellCount = data.GetSpatialGridCellCount();
+            int walkableCount = data.Tiles.Count(t => t.Walkable);
+            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated {data.Tiles.Count} tiles ({walkableCount} walkable) in {gridCellCount} spatial grid cells");
 
             return data;
         }

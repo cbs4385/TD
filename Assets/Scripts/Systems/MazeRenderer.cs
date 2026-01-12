@@ -73,7 +73,7 @@ namespace FaeMaze.Systems
         [Header("Optimization Settings")]
         [SerializeField]
         [Tooltip("Enable mesh batching to combine tiles and reduce draw calls")]
-        private bool enableMeshBatching = true;
+        private bool enableMeshBatching = false;
 
         [SerializeField]
         [Tooltip("Maximum tiles per batch (to avoid meshes that are too large)")]
