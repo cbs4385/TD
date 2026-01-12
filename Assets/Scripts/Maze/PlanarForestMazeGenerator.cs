@@ -712,10 +712,13 @@ namespace ForestMaze
                 return;
 
             int mergeCount = 0;
+            int pass = 0;
+            const int MAX_PASSES = 20; // Safety limit to prevent infinite loops
 
-            // Multiple passes to handle cascading merges
-            for (int pass = 0; pass < 3; pass++)
+            // Loop until no more merges are needed
+            while (pass < MAX_PASSES)
             {
+                pass++;
                 bool anyMerged = false;
 
                 // For each edge, check against all other edges for potential merging
@@ -746,11 +749,25 @@ namespace ForestMaze
                         {
                             anyMerged = true;
                         }
+
+                        // Also check for parallel segments that are too close for walls
+                        if (TryMergeParallelSegments(edge1, edge2, sharedNodePos, ref mergeCount))
+                        {
+                            anyMerged = true;
+                        }
                     }
                 }
 
                 if (!anyMerged)
+                {
+                    Debug.Log($"[EdgeMerge] Converged after {pass} passes");
                     break;
+                }
+            }
+
+            if (pass >= MAX_PASSES)
+            {
+                Debug.LogWarning($"[EdgeMerge] Hit max passes limit ({MAX_PASSES})");
             }
 
             Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed");
@@ -1155,6 +1172,215 @@ namespace ForestMaze
             mergeCount++;
             Debug.Log($"[EdgeMerge] CONVERGING SUCCESS: merged at firstClose={firstCloseIdx2}, converge={convergeIdx2}, newPoly2 has {newPoly2.Count} pts");
             return true;
+        }
+
+        /// <summary>
+        /// Checks for parallel segments between two edges that are too close for wall tiles.
+        /// When found, merges one edge's path onto the other using perpendicular junctions.
+        /// </summary>
+        private static bool TryMergeParallelSegments(Edge edge1, Edge edge2, Vector2? sharedNodePos, ref int mergeCount)
+        {
+            if (edge1.PolylinePoints.Count < 2 || edge2.PolylinePoints.Count < 2)
+                return false;
+
+            // Check each segment of edge1 against each segment of edge2
+            for (int i = 0; i < edge1.PolylinePoints.Count - 1; i++)
+            {
+                Vector2 a1 = edge1.PolylinePoints[i];
+                Vector2 a2 = edge1.PolylinePoints[i + 1];
+
+                // Skip segments near shared node
+                if (sharedNodePos.HasValue)
+                {
+                    if (Vector2.Distance(a1, sharedNodePos.Value) < NODE_PROXIMITY_SKIP &&
+                        Vector2.Distance(a2, sharedNodePos.Value) < NODE_PROXIMITY_SKIP)
+                        continue;
+                }
+
+                for (int j = 0; j < edge2.PolylinePoints.Count - 1; j++)
+                {
+                    Vector2 b1 = edge2.PolylinePoints[j];
+                    Vector2 b2 = edge2.PolylinePoints[j + 1];
+
+                    // Skip segments near shared node
+                    if (sharedNodePos.HasValue)
+                    {
+                        if (Vector2.Distance(b1, sharedNodePos.Value) < NODE_PROXIMITY_SKIP &&
+                            Vector2.Distance(b2, sharedNodePos.Value) < NODE_PROXIMITY_SKIP)
+                            continue;
+                    }
+
+                    // Calculate minimum distance between the two segments
+                    float minDist = MinDistanceBetweenSegments(a1, a2, b1, b2);
+
+                    if (minDist < MERGE_DISTANCE && minDist > 0.01f)
+                    {
+                        // Found two segments that are too close - merge them
+                        Debug.Log($"[EdgeMerge] PARALLEL: edge {edge1.Id} seg {i} too close to edge {edge2.Id} seg {j} (dist={minDist:F2})");
+
+                        // Sample points along edge1's close segment and snap them to edge2
+                        // Then reroute edge1 to follow edge2 through this region
+                        if (MergeParallelRegion(edge1, edge2, i, j, ref mergeCount))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Calculates the minimum distance between two line segments.
+        /// </summary>
+        private static float MinDistanceBetweenSegments(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2)
+        {
+            // Check endpoints of each segment against the other segment
+            float d1 = DistanceToLineSegment(a1, b1, b2);
+            float d2 = DistanceToLineSegment(a2, b1, b2);
+            float d3 = DistanceToLineSegment(b1, a1, a2);
+            float d4 = DistanceToLineSegment(b2, a1, a2);
+
+            return Mathf.Min(Mathf.Min(d1, d2), Mathf.Min(d3, d4));
+        }
+
+        /// <summary>
+        /// Merges a region where edge1's segment i is parallel and close to edge2's segment j.
+        /// Reroutes edge1 to follow edge2's path through the close region.
+        /// </summary>
+        private static bool MergeParallelRegion(Edge edge1, Edge edge2, int seg1Idx, int seg2Idx, ref int mergeCount)
+        {
+            // Find the extent of the close region by checking neighboring segments
+            int startSeg1 = seg1Idx;
+            int endSeg1 = seg1Idx;
+
+            // Expand backwards
+            while (startSeg1 > 0)
+            {
+                Vector2 a1 = edge1.PolylinePoints[startSeg1 - 1];
+                Vector2 a2 = edge1.PolylinePoints[startSeg1];
+                float dist = MinDistancePointToPolyline(a1, edge2.PolylinePoints);
+                if (dist >= MERGE_DISTANCE)
+                    break;
+                startSeg1--;
+            }
+
+            // Expand forwards
+            while (endSeg1 < edge1.PolylinePoints.Count - 2)
+            {
+                Vector2 a1 = edge1.PolylinePoints[endSeg1 + 1];
+                Vector2 a2 = edge1.PolylinePoints[endSeg1 + 2];
+                float dist = MinDistancePointToPolyline(a2, edge2.PolylinePoints);
+                if (dist >= MERGE_DISTANCE)
+                    break;
+                endSeg1++;
+            }
+
+            // Get entry and exit points
+            Vector2 entryPoint = edge1.PolylinePoints[startSeg1];
+            Vector2 exitPoint = edge1.PolylinePoints[endSeg1 + 1];
+
+            // Find closest points on edge2 for entry and exit
+            int entrySegOnE2, exitSegOnE2;
+            Vector2 entryOnE2 = ClosestPointOnPolylineWithSegment(entryPoint, edge2.PolylinePoints, out entrySegOnE2);
+            Vector2 exitOnE2 = ClosestPointOnPolylineWithSegment(exitPoint, edge2.PolylinePoints, out exitSegOnE2);
+
+            // Build the new polyline for edge1
+            List<Vector2> newPoly = new List<Vector2>();
+
+            // Keep points before the close region
+            for (int i = 0; i < startSeg1; i++)
+            {
+                newPoly.Add(edge1.PolylinePoints[i]);
+            }
+
+            // Add entry point if different from last
+            if (newPoly.Count == 0 || Vector2.Distance(newPoly[newPoly.Count - 1], entryPoint) > 0.1f)
+            {
+                newPoly.Add(entryPoint);
+            }
+
+            // Add perpendicular junction to edge2's path
+            Vector2 entryDir = GetSegmentDirection(edge2.PolylinePoints, entrySegOnE2);
+            Vector2 perpEntry = CreatePerpendicularIntersection(entryPoint, entryOnE2, entryDir);
+            if (Vector2.Distance(perpEntry, newPoly[newPoly.Count - 1]) > 0.1f)
+            {
+                newPoly.Add(perpEntry);
+            }
+
+            // Add points along edge2's path between entry and exit
+            if (entrySegOnE2 <= exitSegOnE2)
+            {
+                for (int i = entrySegOnE2 + 1; i <= exitSegOnE2 && i < edge2.PolylinePoints.Count; i++)
+                {
+                    if (Vector2.Distance(edge2.PolylinePoints[i], newPoly[newPoly.Count - 1]) > 0.1f)
+                    {
+                        newPoly.Add(edge2.PolylinePoints[i]);
+                    }
+                }
+            }
+            else
+            {
+                // Reversed direction along edge2
+                for (int i = entrySegOnE2; i >= exitSegOnE2 + 1 && i < edge2.PolylinePoints.Count; i--)
+                {
+                    if (Vector2.Distance(edge2.PolylinePoints[i], newPoly[newPoly.Count - 1]) > 0.1f)
+                    {
+                        newPoly.Add(edge2.PolylinePoints[i]);
+                    }
+                }
+            }
+
+            // Add perpendicular junction back from edge2's path to exit point
+            Vector2 exitDir = GetSegmentDirection(edge2.PolylinePoints, exitSegOnE2);
+            Vector2 perpExit = CreatePerpendicularIntersection(exitPoint, exitOnE2, exitDir);
+            if (Vector2.Distance(perpExit, newPoly[newPoly.Count - 1]) > 0.1f)
+            {
+                newPoly.Add(perpExit);
+            }
+
+            // Add exit point
+            if (Vector2.Distance(exitPoint, newPoly[newPoly.Count - 1]) > 0.1f)
+            {
+                newPoly.Add(exitPoint);
+            }
+
+            // Add points after the close region
+            for (int i = endSeg1 + 2; i < edge1.PolylinePoints.Count; i++)
+            {
+                if (Vector2.Distance(edge1.PolylinePoints[i], newPoly[newPoly.Count - 1]) > 0.1f)
+                {
+                    newPoly.Add(edge1.PolylinePoints[i]);
+                }
+            }
+
+            // Update edge1's polyline
+            if (newPoly.Count >= 2)
+            {
+                edge1.PolylinePoints.Clear();
+                edge1.PolylinePoints.AddRange(newPoly);
+                mergeCount++;
+                Debug.Log($"[EdgeMerge] PARALLEL MERGE SUCCESS: edge {edge1.Id} rerouted through edge {edge2.Id}, new poly has {newPoly.Count} pts");
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Calculates minimum distance from a point to any segment of a polyline.
+        /// </summary>
+        private static float MinDistancePointToPolyline(Vector2 point, List<Vector2> polyline)
+        {
+            float minDist = float.MaxValue;
+            for (int i = 0; i < polyline.Count - 1; i++)
+            {
+                float dist = DistanceToLineSegment(point, polyline[i], polyline[i + 1]);
+                if (dist < minDist)
+                    minDist = dist;
+            }
+            return minDist;
         }
 
         /// <summary>
