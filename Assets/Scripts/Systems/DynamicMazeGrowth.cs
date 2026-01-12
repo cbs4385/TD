@@ -486,7 +486,10 @@ namespace FaeMaze.Systems
                 }
 
                 // Create portal at the frontier endpoint
-                CreatePortalAtWorldPosition(spawnId, portalWorldPos, nodeCenterWorld);
+                // Pass a facing target along the path direction (into the maze), not the node center directly
+                // This ensures visitors face along the path, not toward the node
+                Vector3 facingTarget = portalWorldPos - new Vector3(directionOutward.x, directionOutward.y, 0f) * 2f;
+                CreatePortalAtWorldPosition(spawnId, portalWorldPos, facingTarget);
 
                 portalCount++;
             }

@@ -825,6 +825,18 @@ namespace ForestMaze
                 ? new List<Vector2>(edge2.PolylinePoints)
                 : edge2.PolylinePoints.AsEnumerable().Reverse().ToList();
 
+            // Prepend the shared node position if the polylines don't start there
+            // This ensures both polylines start at the same point for proper merge detection
+            float nodeProximityThreshold = 1.0f;
+            if (poly1.Count == 0 || Vector2.Distance(poly1[0], sharedNodePos) > nodeProximityThreshold)
+            {
+                poly1.Insert(0, sharedNodePos);
+            }
+            if (poly2.Count == 0 || Vector2.Distance(poly2[0], sharedNodePos) > nodeProximityThreshold)
+            {
+                poly2.Insert(0, sharedNodePos);
+            }
+
             Debug.Log($"[EdgeMerge] Oriented poly1: {poly1.Count} pts from {poly1[0]} to {poly1[poly1.Count-1]}");
             Debug.Log($"[EdgeMerge] Oriented poly2: {poly2.Count} pts from {poly2[0]} to {poly2[poly2.Count-1]}");
 
