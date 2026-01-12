@@ -476,7 +476,7 @@ namespace ForestMaze
                 }
 
                 var polyline = BuildCurvedPolyline(state, newNode.Position, candidate.Position,
-                    new List<int> { newNode.Id, candidate.Id });
+                    new List<int> { newNode.Id, candidate.Id }, isCrossConnection: true);
 
                 if (polyline == null)
                 {
@@ -646,7 +646,7 @@ namespace ForestMaze
         private const int MAX_SEGMENTS = 5;
 
         private static List<Vector2> BuildCurvedPolyline(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
-            List<int> incidentNodes)
+            List<int> incidentNodes, bool isCrossConnection = false)
         {
             Vector2 overallDirection = (endCenter - startCenter).normalized;
             float totalDistance = Vector2.Distance(startCenter, endCenter);
@@ -667,7 +667,7 @@ namespace ForestMaze
 
             // Try to build a curved polyline
             var polyline = TryBuildCurvedPath(state, startBoundary, endBoundary, overallDirection,
-                corridorDistance, numSegments, incidentNodes);
+                corridorDistance, numSegments, incidentNodes, isCrossConnection);
 
             if (polyline != null)
                 return polyline;
@@ -676,21 +676,22 @@ namespace ForestMaze
             for (int segs = numSegments - 1; segs >= 2; segs--)
             {
                 polyline = TryBuildCurvedPath(state, startBoundary, endBoundary, overallDirection,
-                    corridorDistance, segs, incidentNodes);
+                    corridorDistance, segs, incidentNodes, isCrossConnection);
                 if (polyline != null)
                     return polyline;
             }
 
             // Final fallback: straight line
             var straightLine = new List<Vector2> { startBoundary, endBoundary };
-            if (IsPolylineValid(state, straightLine, incidentNodes))
+            if (IsPolylineValid(state, straightLine, incidentNodes, null, isCrossConnection))
                 return straightLine;
 
             return null;
         }
 
         private static List<Vector2> TryBuildCurvedPath(ForestMapState state, Vector2 start, Vector2 end,
-            Vector2 overallDirection, float corridorDistance, int numSegments, List<int> incidentNodes)
+            Vector2 overallDirection, float corridorDistance, int numSegments, List<int> incidentNodes,
+            bool isCrossConnection = false)
         {
             float baseSegmentLength = corridorDistance / numSegments;
 
@@ -704,7 +705,7 @@ namespace ForestMaze
                 var polyline = GenerateCurvedPolyline(state, start, end, overallDirection,
                     baseSegmentLength, numSegments, attempt);
 
-                if (polyline != null && IsPolylineValid(state, polyline, incidentNodes))
+                if (polyline != null && IsPolylineValid(state, polyline, incidentNodes, null, isCrossConnection))
                     return polyline;
             }
 
@@ -802,7 +803,7 @@ namespace ForestMaze
         }
 
         private static bool IsPolylineValid(ForestMapState state, List<Vector2> polyline,
-            List<int> incidentNodes, Vector2? ghostPos = null)
+            List<int> incidentNodes, Vector2? ghostPos = null, bool isCrossConnection = false)
         {
             if (polyline.Count < 2)
                 return false;
@@ -834,15 +835,16 @@ namespace ForestMaze
             }
 
             // Check against all existing edges
+            // For cross-connections, use a much smaller buffer since paths can share space
+            float edgeBuffer = isCrossConnection ? PATH_WIDTH * 0.3f : PATH_WIDTH * 0.8f + WALL_BUFFER;
             foreach (var edge in state.Edges)
             {
                 if (edge.PolylinePoints.Count < 2)
                     continue;
 
                 float dist = PolylineToPolylineDistance(polyline, edge.PolylinePoints);
-                float minRequired = PATH_WIDTH * 0.8f + WALL_BUFFER;
 
-                if (dist < minRequired - 1e-6f)
+                if (dist < edgeBuffer - 1e-6f)
                     return false;
             }
 
