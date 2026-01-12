@@ -267,16 +267,26 @@ namespace ForestMaze
             state.GhostCenters.RemoveAll(g => Vector2.Distance(g, edge.GhostCenter.Value) < 1e-6f);
             edge.GhostCenter = null;
 
-            // Fill new node's remaining capacity
+            // Ensure at least one edge connects to an existing node (besides the parent edge)
+            bool hasExistingConnection = false;
+            if (newNode.HasCapacity())
+            {
+                if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA, allowForceCapacity: true))
+                {
+                    Debug.Log($"[PlanarForest] Growth: Created required cross-connection from node {newNode.Id}");
+                    hasExistingConnection = true;
+                }
+            }
+
+            // Fill remaining capacity with partial edges (frontier)
             while (newNode.HasCapacity())
             {
-                // Try to connect to existing node (25% chance)
+                // Additional cross-connections still have 25% chance
                 if (state.Random.NextDouble() < CONNECT_PROB)
                 {
-                    // Allow forcing connection even to nodes at capacity during growth
                     if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA, allowForceCapacity: true))
                     {
-                        Debug.Log($"[PlanarForest] Growth: Created cross-connection from node {newNode.Id}");
+                        Debug.Log($"[PlanarForest] Growth: Created additional cross-connection from node {newNode.Id}");
                         continue;
                     }
                 }
@@ -284,6 +294,11 @@ namespace ForestMaze
                 // Otherwise add partial edge
                 if (!AddPartialEdge(state, newNode))
                     break;
+            }
+
+            if (!hasExistingConnection)
+            {
+                Debug.Log($"[PlanarForest] Growth: Node {newNode.Id} could not create cross-connection (no valid candidates)");
             }
 
             state.TurnCount++;
