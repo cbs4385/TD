@@ -882,9 +882,18 @@ namespace ForestMaze
 
                         Debug.Log($"[EdgeSpacing] Node {node.Id}: Adjusting edge {next.edge.Id} angle from {next.angle * Mathf.Rad2Deg:F1}° to {newAngle * Mathf.Rad2Deg:F1}° (was {angleDiff * Mathf.Rad2Deg:F1}° apart, need {minAngleSeparation * Mathf.Rad2Deg:F1}°)");
 
+                        // Save old polyline before adjustment (only if not already saved from a prior modification)
+                        if (next.edge.OldPolylinePoints == null)
+                        {
+                            next.edge.OldPolylinePoints = new List<Vector2>(next.edge.PolylinePoints);
+                        }
+
                         // Adjust the edge's polyline to use the new angle
                         // IMPORTANT: Preserve the last segment direction for portal orientation
                         AdjustEdgeAngleAtNode(next.edge, next.startsAtNode, node.Position, next.angle, newAngle, state);
+
+                        // Mark edge as needing wall regeneration
+                        next.edge.NeedsWallRegeneration = true;
 
                         // Update the angle in our list for subsequent comparisons
                         connectedEdges[nextIdx] = (next.edge, next.startsAtNode, newAngle);
