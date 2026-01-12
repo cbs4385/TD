@@ -936,67 +936,65 @@ namespace FaeMaze.Visitors
 
         protected void UpdateAnimatorDirection(Vector2 movement)
         {
-            // Apply smooth rotation for any model (2D or 3D) to face movement direction
-            // All rotation is around Z axis only, applied on top of the model's base rotation
+            // Apply rotation for model to face movement direction
+            // All rotation is around Z axis only (XY plane movement)
             if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
                 // Calculate Z rotation angle for model facing direction
                 // Model setup: forward = +X (model space), up = -Z (model space)
                 // At Z=0° rotation, model faces +X in world space
-                // Z rotation around world Z axis rotates model in XY plane
                 float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
 
-                // Direction rotation is Z-axis only
-                Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
+                // Determine the target transform for rotation
+                Transform rotationTarget = null;
+                string rotationTargetName = "none";
 
-                // Determine which code path will be used
-                string rotationTarget = "none";
-                if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
-                    rotationTarget = "modelInstance+baseRot";
-                else if (use3DModel && modelInstance != null)
-                    rotationTarget = "modelInstance";
-                else if (use3DModel)
-                    rotationTarget = "transform";
+                if (use3DModel && modelInstance != null)
+                {
+                    rotationTarget = modelInstance.transform;
+                    rotationTargetName = "modelInstance";
+                }
                 else if (animator != null)
-                    rotationTarget = "animator";
+                {
+                    rotationTarget = animator.transform;
+                    rotationTargetName = "animator";
+                }
+                else
+                {
+                    rotationTarget = transform;
+                    rotationTargetName = "transform";
+                }
 
                 // Log rotation details on first movement and periodically
                 bool shouldLog = !hasLoggedFirstRotation || Time.frameCount % 300 == 0;
-                float zBefore = transform.eulerAngles.z;
+                float zBefore = rotationTarget != null ? rotationTarget.eulerAngles.z : 0f;
 
-                // For all rotation paths: use immediate rotation, not slow Slerp
-                // Z rotation controls facing direction in the XY ground plane
-                Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                if (rotationTarget != null)
+                {
+                    // Get current euler angles
+                    Vector3 currentEuler = rotationTarget.eulerAngles;
 
-                if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
-                {
-                    // Apply direction rotation on top of the model's base rotation (preserves X/Y orientation)
-                    targetRotation = directionRotation * modelBaseRotation;
-                    modelInstance.transform.localRotation = targetRotation;
-                }
-                else if (use3DModel && modelInstance != null)
-                {
-                    // Fallback if base rotation not captured - apply Z rotation directly
-                    modelInstance.transform.localRotation = targetRotation;
-                }
-                else if (use3DModel)
-                {
-                    // Apply Z rotation to visitor transform (no model instance)
-                    transform.localRotation = targetRotation;
-                }
-                else if (animator != null)
-                {
-                    // Apply Z rotation to animator transform (which is the visitor transform)
-                    animator.transform.localRotation = targetRotation;
+                    // If we have a captured base rotation, preserve the X and Y components
+                    if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
+                    {
+                        Vector3 baseEuler = modelBaseRotation.eulerAngles;
+                        // Apply Z rotation on top of base X/Y rotation
+                        rotationTarget.eulerAngles = new Vector3(baseEuler.x, baseEuler.y, angle);
+                    }
+                    else
+                    {
+                        // Apply Z rotation directly to the transform, preserving X/Y
+                        rotationTarget.eulerAngles = new Vector3(currentEuler.x, currentEuler.y, angle);
+                    }
                 }
 
                 // Log after rotation applied
                 if (shouldLog)
                 {
                     hasLoggedFirstRotation = true;
-                    float zAfter = transform.eulerAngles.z;
+                    float zAfter = rotationTarget != null ? rotationTarget.eulerAngles.z : 0f;
                     Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
-                        $"targetAngle={angle:F1}°, rotationTarget={rotationTarget}, " +
+                        $"targetAngle={angle:F1}°, rotationTarget={rotationTargetName}, " +
                         $"zBefore={zBefore:F1}°, zAfter={zAfter:F1}°");
                 }
             }

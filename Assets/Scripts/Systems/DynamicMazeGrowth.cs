@@ -235,7 +235,14 @@ namespace FaeMaze.Systems
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return;
 
-            // No scale/offset/tileSize - graph positions ARE world positions
+            // Log parent transform info for debugging
+            if (portalsParent != null)
+            {
+                Debug.Log($"[PortalPlacement] portalsParent '{portalsParent.name}': " +
+                    $"worldPos=({portalsParent.position.x:F2}, {portalsParent.position.y:F2}, {portalsParent.position.z:F2}), " +
+                    $"localPos=({portalsParent.localPosition.x:F2}, {portalsParent.localPosition.y:F2}, {portalsParent.localPosition.z:F2}), " +
+                    $"scale=({portalsParent.lossyScale.x:F2}, {portalsParent.lossyScale.y:F2}, {portalsParent.lossyScale.z:F2})");
+            }
 
             // Clear ALL existing portals
             var portalsToRemove = new List<char>(spawnPointPortals.Keys);
@@ -263,6 +270,8 @@ namespace FaeMaze.Systems
 
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
+
+            Debug.Log($"[PortalPlacement] Processing {forestMapState.Frontier.Count} frontier edges");
 
             // Place portals at partial edge endpoints (the actual frontier)
             int portalCount = 0;
@@ -348,6 +357,7 @@ namespace FaeMaze.Systems
         {
             if (portalPrefab == null)
             {
+                Debug.LogWarning($"[DynamicGrowth] CreatePortalAtWorldPosition: portalPrefab is null, cannot create portal {spawnId}");
                 return;
             }
 
@@ -364,29 +374,40 @@ namespace FaeMaze.Systems
                 directionToNode = Vector3.right; // Default facing
             }
 
-            // Apply height offset
+            // Apply height offset (Z coordinate)
             Vector3 finalWorldPos = new Vector3(worldPos.x, worldPos.y, -portalHeightOffset);
 
             // Create rotation: +X axis points toward the node center
-            float angle = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;
-            Quaternion rotation = Quaternion.Euler(0f, 0f, angle);
+            float zAngle = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;
 
-            // Apply maze coordinate system rotation (-90 around X to match 2D plane)
-            rotation = rotation * Quaternion.Euler(-90f, 0f, 0f);
+            // For portals on XY plane: Z rotation controls facing direction, X=-90 to lay flat
+            Quaternion rotation = Quaternion.Euler(-90f, 0f, zAngle);
 
-            // Instantiate portal without parent first, then set parent while preserving world position
-            // This avoids the issue where passing parent to Instantiate treats world coords as local coords
-            GameObject portal = Instantiate(portalPrefab, finalWorldPos, rotation);
+            // Create portal and set parent first, then set world position explicitly
+            // This avoids SetParent worldPositionStays issues with non-identity parent transforms
+            GameObject portal = Instantiate(portalPrefab);
             portal.name = $"Portal_{spawnId}";
 
-            // Set parent while keeping world position
             if (portalsParent != null)
             {
-                portal.transform.SetParent(portalsParent, worldPositionStays: true);
+                portal.transform.SetParent(portalsParent, worldPositionStays: false);
             }
+
+            // Set world position and rotation explicitly AFTER parenting
+            portal.transform.position = finalWorldPos;
+            portal.transform.rotation = rotation;
 
             // Track portal
             spawnPointPortals[spawnId] = portal;
+
+            // Log detailed portal placement info
+            Debug.Log($"[PortalPlacement] Portal {spawnId}: " +
+                $"intended=({worldPos.x:F2}, {worldPos.y:F2}), " +
+                $"final=({finalWorldPos.x:F2}, {finalWorldPos.y:F2}, {finalWorldPos.z:F2}), " +
+                $"actual=({portal.transform.position.x:F2}, {portal.transform.position.y:F2}, {portal.transform.position.z:F2}), " +
+                $"rotation=({rotation.eulerAngles.x:F1}, {rotation.eulerAngles.y:F1}, {rotation.eulerAngles.z:F1}), " +
+                $"nodeCenter=({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2}), " +
+                $"dirToNode=({directionToNode.x:F2}, {directionToNode.y:F2})");
 
             // Create debug visualization
             CreateDebugColumn(worldPos, nodeCenterWorld, Color.blue, $"Portal_{spawnId}_ToNode");
