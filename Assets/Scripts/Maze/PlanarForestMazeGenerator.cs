@@ -267,7 +267,17 @@ namespace ForestMaze
             state.GhostCenters.RemoveAll(g => Vector2.Distance(g, edge.GhostCenter.Value) < 1e-6f);
             edge.GhostCenter = null;
 
-            // Ensure at least one edge connects to an existing node (besides the parent edge)
+            // First priority: Ensure at least one frontier edge for continued growth
+            bool hasFrontierEdge = false;
+            if (newNode.HasCapacity())
+            {
+                if (AddPartialEdge(state, newNode))
+                {
+                    hasFrontierEdge = true;
+                }
+            }
+
+            // Second priority: Ensure at least one cross-connection to existing node
             bool hasExistingConnection = false;
             if (newNode.HasCapacity())
             {
@@ -278,24 +288,17 @@ namespace ForestMaze
                 }
             }
 
-            // Fill remaining capacity with partial edges (frontier)
+            // Fill remaining capacity with partial edges (more frontier for growth)
             while (newNode.HasCapacity())
             {
-                // Additional cross-connections still have 25% chance
-                if (state.Random.NextDouble() < CONNECT_PROB)
-                {
-                    if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA, allowForceCapacity: true))
-                    {
-                        Debug.Log($"[PlanarForest] Growth: Created additional cross-connection from node {newNode.Id}");
-                        continue;
-                    }
-                }
-
-                // Otherwise add partial edge
                 if (!AddPartialEdge(state, newNode))
                     break;
             }
 
+            if (!hasFrontierEdge)
+            {
+                Debug.Log($"[PlanarForest] Growth: Node {newNode.Id} could not create frontier edge");
+            }
             if (!hasExistingConnection)
             {
                 Debug.Log($"[PlanarForest] Growth: Node {newNode.Id} could not create cross-connection (no valid candidates)");
