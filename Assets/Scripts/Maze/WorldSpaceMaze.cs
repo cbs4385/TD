@@ -348,6 +348,7 @@ namespace ForestMaze
 
         /// <summary>
         /// Generates path tiles along each edge, oriented in the direction of the edge.
+        /// Uses half-step intervals to ensure connectivity even on diagonal segments.
         /// </summary>
         private static void GenerateEdgeTiles(
             PlanarForestMazeGenerator.ForestMapState state,
@@ -355,6 +356,11 @@ namespace ForestMaze
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
         {
+            // Use half-step to ensure diagonal segments have connected tiles
+            // Without this, diagonal segments can have gaps where consecutive points
+            // round to the same grid position, leaving tiles >1.5 units apart
+            float stepSize = tileSize * 0.5f;
+
             foreach (var edge in state.Edges)
             {
                 if (edge.PolylinePoints.Count < 2) continue;
@@ -370,11 +376,11 @@ namespace ForestMaze
                     // Calculate orientation angle from direction
                     float orientation = Mathf.Atan2(direction.y, direction.x);
 
-                    // Place tiles along the segment
-                    int numTiles = Mathf.CeilToInt(segmentLength / tileSize);
-                    for (int j = 0; j <= numTiles; j++)
+                    // Place tiles along the segment at half-step intervals
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
+                    for (int j = 0; j <= numSteps; j++)
                     {
-                        float t = numTiles > 0 ? (float)j / numTiles : 0;
+                        float t = numSteps > 0 ? (float)j / numSteps : 0;
                         Vector2 position = Vector2.Lerp(start, end, t);
 
                         // Check if we already have a tile here (avoid duplicates)
@@ -384,7 +390,7 @@ namespace ForestMaze
                         var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
 
                         // Mark special tiles (spawn points on partial edges)
-                        if (edge.Partial && j == numTiles)
+                        if (edge.Partial && j == numSteps)
                         {
                             // This is an endpoint of a partial edge - mark as spawn
                             tile.Symbol = GetNextSpawnId(data);

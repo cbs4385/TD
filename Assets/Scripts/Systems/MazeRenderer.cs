@@ -7,7 +7,7 @@ namespace FaeMaze.Systems
 {
     /// <summary>
     /// Renders the maze visually using 3D meshes and prefabs.
-    /// Pure world-space mode - tiles are oriented along graph elements.
+    /// Pure world-space mode - tiles are oriented along maze elements.
     /// </summary>
     [RequireComponent(typeof(MazeGridBehaviour))]
     public class MazeRenderer : MonoBehaviour
@@ -165,8 +165,8 @@ namespace FaeMaze.Systems
         #region World-Space Rendering
 
         /// <summary>
-        /// Renders the maze using world-space coordinates from the planar forest graph.
-        /// Graph positions ARE world positions - no transforms needed.
+        /// Renders the maze using world-space coordinates from the planar forest maze.
+        /// All positions are in world space - no transforms needed.
         /// </summary>
         private void RenderWorldSpaceMaze()
         {
@@ -177,7 +177,7 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Pure world-space mode: graph positions ARE world positions
+            // Pure world-space mode
             tileSize = mazeGridBehaviour.WorldSpaceTileSize;
 
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
@@ -282,10 +282,10 @@ namespace FaeMaze.Systems
                 // Walk along each segment of the polyline
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 startGraph = edge.PolylinePoints[i];
-                    Vector2 endGraph = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (endGraph - startGraph).normalized;
-                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (segEnd - segStart).normalized;
+                    float segmentLength = Vector2.Distance(segStart, segEnd);
 
                     // Orientation in degrees
                     float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
@@ -300,21 +300,21 @@ namespace FaeMaze.Systems
 
                         // Use exact endpoint position for the last point of last segment
                         // This avoids floating-point precision issues with Lerp
-                        Vector2 graphPos;
+                        Vector2 pos2D;
                         bool isExactEndpoint = false;
                         if (isLastSegment && j == numSteps)
                         {
-                            graphPos = exactEndpoint;
+                            pos2D = exactEndpoint;
                             isExactEndpoint = true;
                         }
                         else
                         {
-                            graphPos = Vector2.Lerp(startGraph, endGraph, t);
+                            pos2D = Vector2.Lerp(segStart, segEnd, t);
                         }
 
                         // Check if position already occupied using quantized key
                         // For frontier endpoints, always place the tile (override occupation check)
-                        long posKey = GetQuantizedKey(graphPos);
+                        long posKey = GetQuantizedKey(pos2D);
                         bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
 
                         if (!forcePlace && occupiedPositions.Contains(posKey)) continue;
@@ -327,7 +327,7 @@ namespace FaeMaze.Systems
                             endpointTilePlaced = true;
                         }
 
-                        Vector3 worldPos = ToVector3(graphPos);
+                        Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(posKey);
                         tileCount++;
