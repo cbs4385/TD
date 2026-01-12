@@ -71,9 +71,8 @@ namespace FaeMaze.Systems
         private Transform tilesParent;
 
         [Header("Optimization Settings")]
-        [SerializeField]
-        [Tooltip("Enable mesh batching to combine tiles and reduce draw calls")]
-        private bool enableMeshBatching = false;
+        [Tooltip("Mesh batching disabled - individual tiles needed for pathfinding reference")]
+        private bool enableMeshBatching = false; // Removed [SerializeField] so scene value can't override
 
         [SerializeField]
         [Tooltip("Maximum tiles per batch (to avoid meshes that are too large)")]
