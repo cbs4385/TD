@@ -66,6 +66,12 @@ namespace ForestMaze
             /// </summary>
             public bool NeedsWallRegeneration = false;
 
+            /// <summary>
+            /// Stores the old polyline path before modification for wall removal.
+            /// Populated when NeedsWallRegeneration is set, cleared after wall regeneration.
+            /// </summary>
+            public List<Vector2> OldPolylinePoints = null;
+
             public bool IsComplete() => !Partial && NodeB.HasValue;
         }
 
@@ -760,11 +766,19 @@ namespace ForestMaze
                         // Parallel segment merging was too aggressive and caused cascading issues
                         if (sharedNodePos.HasValue)
                         {
+                            // Save old polyline before merge (merge modifies edge2)
+                            var oldPolyline = new List<Vector2>(edge2.PolylinePoints);
+
                             if (TryMergeEdgesFromSharedNode(edge1, edge2, sharedNodePos.Value, ref mergeCount))
                             {
                                 anyMerged = true;
                                 // Mark edge2 as needing wall regeneration (merge functions modify edge2's polyline)
                                 edge2.NeedsWallRegeneration = true;
+                                // Store old path for wall removal (only if not already stored from prior merge)
+                                if (edge2.OldPolylinePoints == null)
+                                {
+                                    edge2.OldPolylinePoints = oldPolyline;
+                                }
                             }
                         }
                     }
