@@ -374,8 +374,9 @@ namespace FaeMaze.Systems
                 directionToNode = Vector3.right; // Default facing
             }
 
-            // Apply height offset (Z coordinate)
+            // Apply height offset (Z coordinate) and translate 0.5 units toward node center
             Vector3 finalWorldPos = new Vector3(worldPos.x, worldPos.y, -portalHeightOffset);
+            finalWorldPos += new Vector3(directionToNode.x, directionToNode.y, 0f) * 0.5f;
 
             // Create rotation: +X axis points toward the node center
             float zAngle = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;

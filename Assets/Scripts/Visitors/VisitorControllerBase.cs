@@ -941,9 +941,9 @@ namespace FaeMaze.Visitors
             if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
                 // Calculate Z rotation angle for model facing direction
-                // Model default (0° Z rotation) faces Down (-Y), so:
-                // - Down (-Y): 0°, Up (+Y): 180°, Left (-X): 90°, Right (+X): -90°
-                float angle = -Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg - 90f;
+                // Model forward is +X axis (prefab rotated with forward=+X, up=-Z)
+                // So Z rotation directly maps to movement direction angle
+                float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
 
                 // Direction rotation is Z-axis only
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
@@ -1190,8 +1190,11 @@ namespace FaeMaze.Visitors
                 effectiveSpeed * Time.deltaTime
             );
 
-            Vector3 movementDelta = newPosition - transform.position;
-            UpdateAnimatorDirection(movementDelta);
+            // Use path direction (toward target waypoint) for facing, not frame movement delta
+            // This ensures correct orientation even when movement is small
+            Vector3 pathDirection = (targetWorldPos - transform.position).normalized;
+            Vector2 facingDirection = new Vector2(pathDirection.x, pathDirection.y);
+            UpdateAnimatorDirection(facingDirection);
 
             // Apply movement using 3D physics
             if (rb3D != null)
