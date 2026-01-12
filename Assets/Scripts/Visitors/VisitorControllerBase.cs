@@ -746,140 +746,208 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Builds a world-space path from start to end using graph edges.
-        /// Constructs path in 1-unit increments along walkable edge polylines.
-        /// Does NOT interpolate through unwalkable terrain - only follows edges.
+        /// Builds a world-space path from start to end using BFS through walkable tiles.
+        /// Uses actual tile positions from WorldSpaceMazeData to guarantee paths stay on walkable terrain.
         /// </summary>
         protected virtual List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
                 Debug.Log($"[Pathfinding] {name}: No maze data, using direct path to {end}");
                 return new List<Vector3> { end };
             }
 
-            var graphState = mazeGridBehaviour.ForestMapState;
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
             var result = new List<Vector3>();
 
             Vector2 startPos2D = new Vector2(start.x, start.y);
             Vector2 endPos2D = new Vector2(end.x, end.y);
 
-            // Find nearest point on any edge for both start and end
-            Vector2 nearestStartOnEdge;
-            ForestMaze.PlanarForestMazeGenerator.Edge startEdge;
-            int startEdgeSegmentIndex;
-            FindNearestPointOnAnyEdge(graphState, startPos2D, out nearestStartOnEdge, out startEdge, out startEdgeSegmentIndex);
+            Debug.Log($"[Pathfinding] {name}: Building tile-based path from {start} to {end}");
 
-            Vector2 nearestEndOnEdge;
-            ForestMaze.PlanarForestMazeGenerator.Edge endEdge;
-            int endEdgeSegmentIndex;
-            FindNearestPointOnAnyEdge(graphState, endPos2D, out nearestEndOnEdge, out endEdge, out endEdgeSegmentIndex);
-
-            Debug.Log($"[Pathfinding] {name}: Building path from {start} to {end}");
-
-            // Check distance from start to nearest edge point
-            float distToNearestEdge = Vector2.Distance(startPos2D, nearestStartOnEdge);
-
-            // Only add start position if we're close to the edge (within 2 units - on walkable terrain)
-            // Do NOT interpolate through potentially unwalkable terrain
-            if (distToNearestEdge < 2f)
+            // Find nearest walkable tile to start position
+            var startTile = FindNearestWalkableTile(mazeData, startPos2D);
+            if (startTile == null)
             {
-                // Close to edge - safe to start from current position
+                Debug.LogWarning($"[Pathfinding] {name}: No walkable tile near start {start}");
+                return new List<Vector3> { end };
+            }
+
+            // Find nearest walkable tile to end position
+            var endTile = FindNearestWalkableTile(mazeData, endPos2D);
+            if (endTile == null)
+            {
+                Debug.LogWarning($"[Pathfinding] {name}: No walkable tile near end {end}");
+                return new List<Vector3> { end };
+            }
+
+            Debug.Log($"[Pathfinding] {name}: Start tile at {startTile.Position}, End tile at {endTile.Position}");
+
+            // BFS through walkable tiles
+            var tilePath = FindTilePath(mazeData, startTile, endTile);
+
+            if (tilePath == null || tilePath.Count == 0)
+            {
+                Debug.LogWarning($"[Pathfinding] {name}: No tile path found from {startTile.Position} to {endTile.Position}");
+                return new List<Vector3> { end };
+            }
+
+            // Convert tile path to world positions
+            // Add current position first if close to start tile
+            float distToStartTile = Vector2.Distance(startPos2D, startTile.Position);
+            if (distToStartTile < 1.5f)
+            {
                 result.Add(start);
-                Debug.Log($"[Pathfinding] {name}: Start is close to edge (dist={distToNearestEdge:F1}), starting from current position");
-            }
-            else
-            {
-                // Far from edge - visitor is off the walkable path
-                // Start from the nearest edge point to avoid crossing walls
-                Debug.LogWarning($"[Pathfinding] {name}: Start is far from edge (dist={distToNearestEdge:F1}), snapping to nearest edge point {nearestStartOnEdge}");
-                result.Add(new Vector3(nearestStartOnEdge.x, nearestStartOnEdge.y, start.z));
             }
 
-            // Find nodes connected to start and end edges
-            int startNodeIndex = startEdge != null ? startEdge.NodeA : FindNearestNodeIndex(graphState, startPos2D);
-            int endNodeIndex = endEdge != null ? endEdge.NodeA : FindNearestNodeIndex(graphState, endPos2D);
-
-            // If on partial edge, the connected node is NodeA
-            if (startEdge != null && startEdge.Partial)
+            // Add all tile positions
+            foreach (var tile in tilePath)
             {
-                startNodeIndex = startEdge.NodeA;
-            }
-            if (endEdge != null && endEdge.Partial)
-            {
-                endNodeIndex = endEdge.NodeA;
+                result.Add(new Vector3(tile.Position.x, tile.Position.y, start.z));
             }
 
-            Debug.Log($"[Pathfinding] {name}: Start node: {startNodeIndex}, End node: {endNodeIndex}");
-
-            if (startNodeIndex < 0 || endNodeIndex < 0)
+            // Add final destination if close to end tile
+            float distFromLastTile = Vector2.Distance(endPos2D, endTile.Position);
+            if (distFromLastTile > 0.1f && distFromLastTile < 1.5f)
             {
-                Debug.LogWarning($"[Pathfinding] {name}: Invalid node indices, cannot build path");
-                return result;
+                result.Add(end);
             }
 
-            // If start is on a partial edge, follow it to the node first
-            if (startEdge != null && startEdge.Partial && startEdge.PolylinePoints.Count > 0)
+            Debug.Log($"[Pathfinding] {name}: Tile-based path has {result.Count} waypoints");
+            return result;
+        }
+
+        /// <summary>
+        /// Finds the nearest walkable tile to a position.
+        /// </summary>
+        private ForestMaze.WorldSpaceTile FindNearestWalkableTile(ForestMaze.WorldSpaceMazeData mazeData, Vector2 position)
+        {
+            float searchRadius = 5f;
+            float minDist = float.MaxValue;
+            ForestMaze.WorldSpaceTile nearest = null;
+
+            // Expand search radius if needed
+            for (int attempt = 0; attempt < 3 && nearest == null; attempt++)
             {
-                Debug.Log($"[Pathfinding] {name}: Following partial start edge to node {startEdge.NodeA}");
-                AddEdgePolylineToPath(result, startEdge, nearestStartOnEdge, true, start.z); // true = toward node
-            }
-
-            // BFS to find path through nodes
-            var nodePath = FindNodePath(graphState, startNodeIndex, endNodeIndex);
-
-            if (nodePath == null || nodePath.Count == 0)
-            {
-                Debug.LogWarning($"[Pathfinding] {name}: No node path found from node {startNodeIndex} to {endNodeIndex}");
-                // Don't interpolate through potentially unwalkable terrain
-                // Just end at the nearest edge point we found
-                return result;
-            }
-
-            Debug.Log($"[Pathfinding] {name}: Node path: [{string.Join(" -> ", nodePath)}]");
-
-            // Follow edges between consecutive nodes
-            for (int i = 0; i < nodePath.Count - 1; i++)
-            {
-                int nodeA = nodePath[i];
-                int nodeB = nodePath[i + 1];
-
-                var connectingEdge = FindConnectingEdge(graphState, nodeA, nodeB, out bool reverse);
-
-                if (connectingEdge != null && connectingEdge.PolylinePoints.Count > 0)
+                var nearbyTiles = mazeData.GetTilesNear(position, searchRadius);
+                foreach (var tile in nearbyTiles)
                 {
-                    AddEdgePolylineToPathBetweenNodes(result, connectingEdge, reverse, start.z);
+                    if (!tile.Walkable) continue;
+
+                    float dist = Vector2.Distance(position, tile.Position);
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        nearest = tile;
+                    }
+                }
+                searchRadius *= 2f;
+            }
+
+            return nearest;
+        }
+
+        /// <summary>
+        /// Finds a path through walkable tiles using BFS.
+        /// </summary>
+        private List<ForestMaze.WorldSpaceTile> FindTilePath(ForestMaze.WorldSpaceMazeData mazeData,
+            ForestMaze.WorldSpaceTile startTile, ForestMaze.WorldSpaceTile endTile)
+        {
+            if (startTile == endTile)
+            {
+                return new List<ForestMaze.WorldSpaceTile> { startTile };
+            }
+
+            // BFS through tiles
+            var queue = new Queue<ForestMaze.WorldSpaceTile>();
+            var visited = new HashSet<ForestMaze.WorldSpaceTile>();
+            var parent = new Dictionary<ForestMaze.WorldSpaceTile, ForestMaze.WorldSpaceTile>();
+
+            queue.Enqueue(startTile);
+            visited.Add(startTile);
+            parent[startTile] = null;
+
+            float neighborRadius = mazeData.TileSize * 1.5f; // Tiles within 1.5 tile-widths are neighbors
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+
+                // Check if reached destination
+                float distToEnd = Vector2.Distance(current.Position, endTile.Position);
+                if (distToEnd < mazeData.TileSize * 0.5f || current == endTile)
+                {
+                    // Reconstruct path
+                    var path = new List<ForestMaze.WorldSpaceTile>();
+                    var node = current;
+                    while (node != null)
+                    {
+                        path.Add(node);
+                        parent.TryGetValue(node, out node);
+                    }
+                    path.Reverse();
+
+                    // Simplify path by removing collinear points
+                    return SimplifyTilePath(path);
+                }
+
+                // Get neighboring walkable tiles
+                var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
+                foreach (var neighbor in neighbors)
+                {
+                    if (!neighbor.Walkable) continue;
+                    if (visited.Contains(neighbor)) continue;
+
+                    // Must be within neighbor radius
+                    float dist = Vector2.Distance(current.Position, neighbor.Position);
+                    if (dist > neighborRadius) continue;
+
+                    visited.Add(neighbor);
+                    parent[neighbor] = current;
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            return null; // No path found
+        }
+
+        /// <summary>
+        /// Simplifies a tile path by removing intermediate collinear points.
+        /// Keeps direction changes and samples at regular intervals for smooth movement.
+        /// </summary>
+        private List<ForestMaze.WorldSpaceTile> SimplifyTilePath(List<ForestMaze.WorldSpaceTile> path)
+        {
+            if (path == null || path.Count <= 2)
+                return path;
+
+            var simplified = new List<ForestMaze.WorldSpaceTile>();
+            simplified.Add(path[0]);
+
+            const float angleThreshold = 15f * Mathf.Deg2Rad; // Keep points where direction changes by more than 15 degrees
+            const int maxSkip = 5; // Don't skip more than 5 consecutive tiles
+
+            int skipCount = 0;
+            for (int i = 1; i < path.Count - 1; i++)
+            {
+                Vector2 dirPrev = (path[i].Position - path[i - 1].Position).normalized;
+                Vector2 dirNext = (path[i + 1].Position - path[i].Position).normalized;
+
+                float angle = Mathf.Acos(Mathf.Clamp(Vector2.Dot(dirPrev, dirNext), -1f, 1f));
+
+                // Keep this point if direction changes significantly or we've skipped too many
+                if (angle > angleThreshold || skipCount >= maxSkip)
+                {
+                    simplified.Add(path[i]);
+                    skipCount = 0;
                 }
                 else
                 {
-                    // No connecting edge found - this shouldn't happen in a valid graph
-                    Debug.LogWarning($"[Pathfinding] {name}: No connecting edge between nodes {nodeA} and {nodeB}");
+                    skipCount++;
                 }
             }
 
-            // If end is on a partial edge, follow from node to endpoint
-            if (endEdge != null && endEdge.Partial && endEdge.PolylinePoints.Count > 0)
-            {
-                Debug.Log($"[Pathfinding] {name}: Following partial end edge from node to destination");
-                AddEdgePolylineToPath(result, endEdge, nearestEndOnEdge, false, start.z); // false = away from node
-            }
-
-            // Only add final destination if it's close to our last path point (within 2 units - on walkable terrain)
-            // Do NOT interpolate through potentially unwalkable terrain
-            Vector3 lastPoint = result.Count > 0 ? result[result.Count - 1] : start;
-            float distToEnd = Vector3.Distance(lastPoint, end);
-            if (distToEnd > 0.1f && distToEnd < 2f)
-            {
-                // Close enough - safe to add as final waypoint
-                result.Add(end);
-            }
-            else if (distToEnd >= 2f)
-            {
-                Debug.LogWarning($"[Pathfinding] {name}: Final destination {end} is far from last path point {lastPoint} (dist={distToEnd:F1}), not interpolating through potential walls");
-            }
-
-            Debug.Log($"[Pathfinding] {name}: Final path has {result.Count} waypoints");
-            return result;
+            simplified.Add(path[path.Count - 1]);
+            return simplified;
         }
 
         /// <summary>
