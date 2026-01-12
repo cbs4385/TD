@@ -264,11 +264,13 @@ namespace FaeMaze.Systems
             }
 
             // Rebuild portals from frontier edges using world-space coordinates
-            // This also registers spawn points and signals visitors to retarget
+            // This also registers spawn points and signals affected visitors to retarget
+            // (only visitors whose destination was removed need to find new destinations)
             RebuildSpawnPointsFromFrontier();
 
-            // Trigger visitor path recalculation after spawn points are registered
-            TriggerVisitorPathRecalculation();
+            // Note: TriggerVisitorPathRecalculation removed - it was redundant because:
+            // 1. Affected visitors get new paths through SignalAffectedVisitorsToRetarget()
+            // 2. Unaffected visitors have valid destinations and paths (maze only expands)
 
             // Use INCREMENTAL rendering updates instead of full rebuild
             if (mazeRenderer != null)
@@ -327,8 +329,19 @@ namespace FaeMaze.Systems
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return;
 
-            // Clear spawn points in world-space data before registering new ones
+            // Capture existing spawn point positions BEFORE clearing them
+            // This allows us to identify which spawn points were removed
+            var oldSpawnPositions = new List<Vector3>();
             var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (worldSpaceData != null && worldSpaceData.SpawnPoints != null)
+            {
+                foreach (var kvp in worldSpaceData.SpawnPoints)
+                {
+                    oldSpawnPositions.Add(kvp.Value);
+                }
+            }
+
+            // Clear spawn points in world-space data before registering new ones
             if (worldSpaceData != null)
             {
                 worldSpaceData.ClearSpawnPoints();
@@ -458,8 +471,37 @@ namespace FaeMaze.Systems
                 Debug.Log($"[DynamicGrowth] Registered {finalSpawnPoints.Count} spawn points: [{spawnInfo}]");
             }
 
-            // Signal all visitors to recalculate paths based on the updated graph
-            SignalVisitorsToRetarget();
+            // Identify which spawn points were removed (old positions not present in new spawn points)
+            var removedSpawnPositions = new List<Vector3>();
+            var newSpawnPositions = finalSpawnPoints != null
+                ? new HashSet<Vector3>(finalSpawnPoints.Values)
+                : new HashSet<Vector3>();
+
+            foreach (var oldPos in oldSpawnPositions)
+            {
+                // Check if this old spawn position is still present (within tolerance)
+                bool stillExists = false;
+                foreach (var newPos in newSpawnPositions)
+                {
+                    if (Vector3.Distance(oldPos, newPos) < 2f)
+                    {
+                        stillExists = true;
+                        break;
+                    }
+                }
+                if (!stillExists)
+                {
+                    removedSpawnPositions.Add(oldPos);
+                }
+            }
+
+            if (removedSpawnPositions.Count > 0)
+            {
+                Debug.Log($"[DynamicGrowth] {removedSpawnPositions.Count} spawn points were removed, retargeting affected visitors only");
+            }
+
+            // Only signal visitors whose destination was at a removed spawn point
+            SignalAffectedVisitorsToRetarget(removedSpawnPositions);
         }
 
         /// <summary>
@@ -570,6 +612,60 @@ namespace FaeMaze.Systems
                 }
             }
 
+        }
+
+        /// <summary>
+        /// Signals only visitors whose destination was at a removed spawn point to retarget.
+        /// This avoids expensive pathfinding for visitors whose destinations are still valid.
+        /// </summary>
+        private void SignalAffectedVisitorsToRetarget(List<Vector3> removedSpawnPositions)
+        {
+            var allVisitors = FaeMaze.Visitors.VisitorRegistry.All;
+            if (allVisitors == null)
+            {
+                return;
+            }
+
+            // If no spawn points were removed, no visitors need to retarget
+            if (removedSpawnPositions == null || removedSpawnPositions.Count == 0)
+            {
+                Debug.Log($"[DynamicGrowth] No spawn points removed, skipping visitor retargeting");
+                return;
+            }
+
+            int retargetedCount = 0;
+            int skippedCount = 0;
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor == null) continue;
+
+                // Get visitor's current destination
+                Vector3 visitorDest = visitor.GetCurrentDestination();
+
+                // Check if visitor's destination was at one of the removed spawn points
+                bool destinationWasRemoved = false;
+                foreach (var removedPos in removedSpawnPositions)
+                {
+                    if (Vector3.Distance(visitorDest, removedPos) < 3f)
+                    {
+                        destinationWasRemoved = true;
+                        break;
+                    }
+                }
+
+                if (destinationWasRemoved)
+                {
+                    // Retarget to nearest spawn point by walking distance
+                    visitor.RetargetToNearestSpawn();
+                    retargetedCount++;
+                }
+                else
+                {
+                    skippedCount++;
+                }
+            }
+
+            Debug.Log($"[DynamicGrowth] Retargeted {retargetedCount} visitors with removed destinations, skipped {skippedCount} visitors with valid destinations");
         }
 
         #endregion

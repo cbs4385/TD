@@ -1859,6 +1859,15 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Gets the current destination position for this visitor.
+        /// Used by external systems to check if destination is still valid.
+        /// </summary>
+        public Vector3 GetCurrentDestination()
+        {
+            return worldDestination;
+        }
+
+        /// <summary>
         /// Recalculates the path to the current destination.
         /// </summary>
         public virtual void RecalculatePath()
