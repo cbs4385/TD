@@ -942,7 +942,14 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            Debug.LogWarning($"[Pathfinding] {name}: BFS failed after {iterations} iterations (visited {visited.Count} tiles, queue empty: {queue.Count == 0})");
+            // Find closest visited tile to end for diagnostic
+            float closestDistToEnd = float.MaxValue;
+            foreach (var v in visited)
+            {
+                float d = Vector2.Distance(v.Position, endTile.Position);
+                if (d < closestDistToEnd) closestDistToEnd = d;
+            }
+            Debug.LogWarning($"[Pathfinding] {name}: BFS failed after {iterations} iterations (visited {visited.Count} tiles, closest to end: {closestDistToEnd:F1} units)");
             return null; // No path found
         }
 
