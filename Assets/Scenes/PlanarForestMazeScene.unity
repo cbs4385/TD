@@ -681,8 +681,7 @@ MonoBehaviour:
   nodeTileRadius: 2.5
   wallBorderDepth: 3
   tilesParent: {fileID: 0}
-  enableMeshBatching: 0
-  batchChunkSize: 100
+  batchChunkSize: 1
 --- !u!114 &963194231
 MonoBehaviour:
   m_ObjectHideFlags: 0
