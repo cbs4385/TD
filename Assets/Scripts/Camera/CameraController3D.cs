@@ -665,7 +665,7 @@ namespace FaeMaze.Cameras
 
                 startRotation = Quaternion.LookRotation(facingDirection, mazeUp);
             }
-            else if (mazeGridBehaviour != null && mazeGridBehaviour.HeartWorldPosition != Vector3.zero)
+            else if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null)
             {
                 startPosition = mazeGridBehaviour.HeartWorldPosition;
                 startPosition.z = 0f;
