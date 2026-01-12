@@ -961,53 +961,43 @@ namespace FaeMaze.Visitors
                     rotationTarget = "animator";
 
                 // Log rotation details on first movement and periodically
-                if (!hasLoggedFirstRotation || Time.frameCount % 300 == 0)
-                {
-                    hasLoggedFirstRotation = true;
-                    Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
-                        $"atan2={Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg:F1}°, targetAngle={angle:F1}°, " +
-                        $"rotationTarget={rotationTarget}, currentZ={transform.eulerAngles.z:F1}°");
-                }
+                bool shouldLog = !hasLoggedFirstRotation || Time.frameCount % 300 == 0;
+                float zBefore = transform.eulerAngles.z;
+
+                // For all rotation paths: use immediate rotation, not slow Slerp
+                // Z rotation controls facing direction in the XY ground plane
+                Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
 
                 if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
                 {
                     // Apply direction rotation on top of the model's base rotation (preserves X/Y orientation)
-                    Quaternion targetRotation = directionRotation * modelBaseRotation;
-                    modelInstance.transform.localRotation = Quaternion.Slerp(
-                        modelInstance.transform.localRotation,
-                        targetRotation,
-                        Time.deltaTime * 10f
-                    );
+                    targetRotation = directionRotation * modelBaseRotation;
+                    modelInstance.transform.localRotation = targetRotation;
                 }
                 else if (use3DModel && modelInstance != null)
                 {
                     // Fallback if base rotation not captured - apply Z rotation directly
-                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
-                    modelInstance.transform.localRotation = Quaternion.Slerp(
-                        modelInstance.transform.localRotation,
-                        targetRotation,
-                        Time.deltaTime * 10f
-                    );
+                    modelInstance.transform.localRotation = targetRotation;
                 }
                 else if (use3DModel)
                 {
                     // Apply Z rotation to visitor transform (no model instance)
-                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
-                    transform.localRotation = Quaternion.Slerp(
-                        transform.localRotation,
-                        targetRotation,
-                        Time.deltaTime * 10f
-                    );
+                    transform.localRotation = targetRotation;
                 }
                 else if (animator != null)
                 {
-                    // Apply Z rotation to animator transform
-                    Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
-                    animator.transform.localRotation = Quaternion.Slerp(
-                        animator.transform.localRotation,
-                        targetRotation,
-                        Time.deltaTime * 10f
-                    );
+                    // Apply Z rotation to animator transform (which is the visitor transform)
+                    animator.transform.localRotation = targetRotation;
+                }
+
+                // Log after rotation applied
+                if (shouldLog)
+                {
+                    hasLoggedFirstRotation = true;
+                    float zAfter = transform.eulerAngles.z;
+                    Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
+                        $"targetAngle={angle:F1}°, rotationTarget={rotationTarget}, " +
+                        $"zBefore={zBefore:F1}°, zAfter={zAfter:F1}°");
                 }
             }
 
