@@ -422,14 +422,10 @@ namespace ForestMaze
                 return false;
             }
 
-            // Shuffle candidates
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                int j = state.Random.Next(i, candidates.Count);
-                var temp = candidates[i];
-                candidates[i] = candidates[j];
-                candidates[j] = temp;
-            }
+            // Sort candidates by distance to newNode (closest first)
+            candidates = candidates
+                .OrderBy(c => Vector2.Distance(c.Position, newNode.Position))
+                .ToList();
 
             int skippedAlreadyConnected = 0;
             int skippedNoValidAngles = 0;
