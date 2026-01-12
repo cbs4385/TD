@@ -77,6 +77,12 @@ namespace ForestMaze
             public string ValidationError = null;
             public bool HasCrossConnection = false; // Track if any non-parent connections exist
 
+            /// <summary>
+            /// Fill segments to cover gaps created by edge spacing adjustments.
+            /// Each segment is a pair of points (start, end) that should be rendered as path tiles.
+            /// </summary>
+            public List<(Vector2 start, Vector2 end)> AdjustmentFills = new List<(Vector2, Vector2)>();
+
             // DEPRECATED - Legacy grid rasterization fields, kept for compatibility but unused
             // In world-space mode, graph positions ARE world positions (no transform needed)
             [System.Obsolete("No longer used - graph positions are world positions")]
@@ -856,7 +862,7 @@ namespace ForestMaze
 
                         // Adjust the edge's polyline to use the new angle
                         // IMPORTANT: Preserve the last segment direction for portal orientation
-                        AdjustEdgeAngleAtNode(next.edge, next.startsAtNode, node.Position, next.angle, newAngle);
+                        AdjustEdgeAngleAtNode(next.edge, next.startsAtNode, node.Position, next.angle, newAngle, state);
 
                         // Update the angle in our list for subsequent comparisons
                         connectedEdges[nextIdx] = (next.edge, next.startsAtNode, newAngle);
@@ -871,7 +877,7 @@ namespace ForestMaze
         /// ALWAYS preserves the frontier endpoint (first or last point depending on direction).
         /// Rotates at most 2 points near the node to change the angle.
         /// </summary>
-        private static void AdjustEdgeAngleAtNode(Edge edge, bool startsAtNode, Vector2 nodePos, float oldAngle, float newAngle)
+        private static void AdjustEdgeAngleAtNode(Edge edge, bool startsAtNode, Vector2 nodePos, float oldAngle, float newAngle, ForestMapState state)
         {
             float angleDelta = newAngle - oldAngle;
             int count = edge.PolylinePoints.Count;
@@ -892,6 +898,14 @@ namespace ForestMaze
 
                 Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points 0 to {maxIndex-1} (count={count})");
 
+                // Store old positions for fill generation
+                List<Vector2> oldPositions = new List<Vector2>();
+                for (int i = 0; i < maxIndex; i++)
+                {
+                    oldPositions.Add(edge.PolylinePoints[i]);
+                }
+
+                // Rotate points
                 for (int i = 0; i < maxIndex; i++)
                 {
                     Vector2 point = edge.PolylinePoints[i];
@@ -904,6 +918,24 @@ namespace ForestMaze
                     Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
                     edge.PolylinePoints[i] = nodePos + newOffset;
                 }
+
+                // Add fill segments from old to new positions (covers the swept area)
+                for (int i = 0; i < maxIndex; i++)
+                {
+                    Vector2 oldPos = oldPositions[i];
+                    Vector2 newPos = edge.PolylinePoints[i];
+                    if (Vector2.Distance(oldPos, newPos) > 0.1f)
+                    {
+                        state.AdjustmentFills.Add((oldPos, newPos));
+                        Debug.Log($"[EdgeSpacing] Added fill segment from {oldPos} to {newPos}");
+                    }
+                }
+
+                // Also add fill between old point 1 and new point 0 to cover corner
+                if (maxIndex >= 2 && oldPositions.Count >= 2)
+                {
+                    state.AdjustmentFills.Add((oldPositions[1], edge.PolylinePoints[0]));
+                }
             }
             else
             {
@@ -914,6 +946,14 @@ namespace ForestMaze
 
                 Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points {minIndex} to {count-1} (count={count})");
 
+                // Store old positions for fill generation
+                List<Vector2> oldPositions = new List<Vector2>();
+                for (int i = minIndex; i < count; i++)
+                {
+                    oldPositions.Add(edge.PolylinePoints[i]);
+                }
+
+                // Rotate points
                 for (int i = count - 1; i >= minIndex; i--)
                 {
                     Vector2 point = edge.PolylinePoints[i];
@@ -924,6 +964,24 @@ namespace ForestMaze
                     float newPointAngle = pointAngle + angleDelta;
                     Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
                     edge.PolylinePoints[i] = nodePos + newOffset;
+                }
+
+                // Add fill segments from old to new positions (covers the swept area)
+                for (int i = 0; i < oldPositions.Count; i++)
+                {
+                    Vector2 oldPos = oldPositions[i];
+                    Vector2 newPos = edge.PolylinePoints[minIndex + i];
+                    if (Vector2.Distance(oldPos, newPos) > 0.1f)
+                    {
+                        state.AdjustmentFills.Add((oldPos, newPos));
+                        Debug.Log($"[EdgeSpacing] Added fill segment from {oldPos} to {newPos}");
+                    }
+                }
+
+                // Also add fill between old second-to-last and new last point to cover corner
+                if (oldPositions.Count >= 2)
+                {
+                    state.AdjustmentFills.Add((oldPositions[0], edge.PolylinePoints[count - 1]));
                 }
             }
         }

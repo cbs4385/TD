@@ -352,6 +352,9 @@ namespace ForestMaze
             // Step 1: Generate path tiles along edges (oriented along edge direction)
             GenerateEdgeTiles(state, data, walkableTilePositions, tileSize);
 
+            // Step 1b: Generate fill tiles for edge spacing adjustments
+            GenerateAdjustmentFillTiles(state, data, walkableTilePositions, tileSize);
+
             // Step 2: Generate node column tiles (circular, radius 3)
             GenerateNodeTiles(state, data, walkableTilePositions, tileSize);
 
@@ -429,6 +432,48 @@ namespace ForestMaze
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Generates path tiles along adjustment fill segments.
+        /// These fill gaps created when edges are rotated for minimum spacing.
+        /// </summary>
+        private static void GenerateAdjustmentFillTiles(
+            PlanarForestMazeGenerator.ForestMapState state,
+            WorldSpaceMazeData data,
+            HashSet<Vector2Int> walkablePositions,
+            float tileSize)
+        {
+            if (state.AdjustmentFills == null || state.AdjustmentFills.Count == 0)
+                return;
+
+            float stepSize = tileSize * 0.5f;
+
+            foreach (var (start, end) in state.AdjustmentFills)
+            {
+                Vector2 direction = (end - start).normalized;
+                float segmentLength = Vector2.Distance(start, end);
+
+                if (segmentLength < 0.1f) continue;
+
+                float orientation = Mathf.Atan2(direction.y, direction.x);
+
+                int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
+                for (int j = 0; j <= numSteps; j++)
+                {
+                    float t = numSteps > 0 ? (float)j / numSteps : 0;
+                    Vector2 position = Vector2.Lerp(start, end, t);
+
+                    Vector2Int gridPos = ToGridPosition(position, tileSize);
+                    if (walkablePositions.Contains(gridPos)) continue;
+
+                    var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
+                    data.AddTile(tile);
+                    walkablePositions.Add(gridPos);
+                }
+            }
+
+            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated tiles for {state.AdjustmentFills.Count} adjustment fill segments");
         }
 
         /// <summary>
