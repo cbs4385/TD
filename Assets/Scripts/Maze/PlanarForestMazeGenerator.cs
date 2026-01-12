@@ -732,8 +732,18 @@ namespace ForestMaze
         /// </summary>
         public static void MergeNearbyEdges(ForestMapState state, int firstNewEdgeIndex)
         {
+            Debug.Log($"[MERGE] MergeNearbyEdges: totalEdges={state.Edges.Count}, firstNewEdgeIndex={firstNewEdgeIndex}, newEdgeCount={state.Edges.Count - firstNewEdgeIndex}");
+
             if (state.Edges.Count < 2)
                 return;
+
+            // Log all edges for debugging
+            for (int i = 0; i < state.Edges.Count; i++)
+            {
+                var e = state.Edges[i];
+                string status = i >= firstNewEdgeIndex ? "NEW" : "EXISTING";
+                Debug.Log($"[MERGE] Edge {i} (id={e.Id}): {status}, nodes={e.NodeA}->{e.NodeB}, pts={e.PolylinePoints.Count}, partial={e.Partial}");
+            }
 
             int mergeCount = 0;
             int pass = 0;
@@ -776,9 +786,11 @@ namespace ForestMaze
                         // Only merge edges that share a node
                         if (sharedNodePos.HasValue)
                         {
+                            Debug.Log($"[MERGE] Checking newEdge {newEdgeIdx} vs otherEdge {otherIdx}, sharedNode={sharedNode}");
                             // newEdge is the one that will be modified to merge onto otherEdge
                             if (TryMergeNewEdgeOntoExisting(newEdge, otherEdge, sharedNodePos.Value, ref mergeCount))
                             {
+                                Debug.Log($"[MERGE] SUCCESS: newEdge {newEdgeIdx} merged onto otherEdge {otherIdx}");
                                 anyMerged = true;
                             }
                         }
@@ -787,9 +799,12 @@ namespace ForestMaze
 
                 if (!anyMerged)
                 {
+                    Debug.Log($"[MERGE] No merges in pass {pass}, stopping");
                     break;
                 }
             }
+
+            Debug.Log($"[MERGE] Complete: {mergeCount} merges performed");
 
             // Enforce minimum edge spacing at each node
             // Only modify new edges (index >= firstNewEdgeIndex)
@@ -1087,7 +1102,7 @@ namespace ForestMaze
             bool edge1StartsAtNode = dist1Start < dist1End;
             bool edge2StartsAtNode = dist2Start < dist2End;
 
-            // Debug.Log($"[EdgeMerge] SharedNode at {sharedNodePos}: e1 dist start={dist1Start:F2} end={dist1End:F2} (startsAtNode={edge1StartsAtNode}), e2 dist start={dist2Start:F2} end={dist2End:F2} (startsAtNode={edge2StartsAtNode})");
+            Debug.Log($"[MERGE] SharedNode: e1 startsAtNode={edge1StartsAtNode} (distStart={dist1Start:F1}, distEnd={dist1End:F1}), e2 startsAtNode={edge2StartsAtNode} (distStart={dist2Start:F1}, distEnd={dist2End:F1})");
 
             // Get the polylines oriented from the shared node outward
             List<Vector2> poly1 = edge1StartsAtNode
@@ -1109,9 +1124,6 @@ namespace ForestMaze
                 poly2.Insert(0, sharedNodePos);
             }
 
-            // Debug.Log($"[EdgeMerge] Oriented poly1: {poly1.Count} pts from {poly1[0]} to {poly1[poly1.Count-1]}");
-            // Debug.Log($"[EdgeMerge] Oriented poly2: {poly2.Count} pts from {poly2[0]} to {poly2[poly2.Count-1]}");
-
             // Check distances at each point of poly2 against poly1
             List<float> distances = new List<float>();
             List<Vector2> closestPointsOnPoly1 = new List<Vector2>();
@@ -1129,31 +1141,31 @@ namespace ForestMaze
             }
 
             // Log all distances
-            string distStr = string.Join(", ", distances.Select(d => d.ToString("F2")));
-            // Debug.Log($"[EdgeMerge] Distances poly2->poly1: [{distStr}] (MERGE_DISTANCE={MERGE_DISTANCE})");
+            string distStr = string.Join(", ", distances.Select(d => d.ToString("F1")));
+            Debug.Log($"[MERGE] Distances poly2->poly1: [{distStr}] (MERGE_DISTANCE={MERGE_DISTANCE})");
 
             // Determine if this is a diverging case (close at start) or converging case (close at end)
             bool closeAtStart = distances.Count > 0 && distances[0] < MERGE_DISTANCE;
             bool closeAtEnd = distances.Count > 0 && distances[distances.Count - 1] < MERGE_DISTANCE;
 
-            // Debug.Log($"[EdgeMerge] closeAtStart={closeAtStart}, closeAtEnd={closeAtEnd}");
+            Debug.Log($"[MERGE] closeAtStart={closeAtStart}, closeAtEnd={closeAtEnd}");
 
             if (closeAtStart)
             {
-                // Debug.Log($"[EdgeMerge] -> Trying DIVERGING merge");
+                Debug.Log($"[MERGE] -> Trying DIVERGING merge");
                 // DIVERGING CASE: edges share path from node, then split
                 return TryMergeDivergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
             else if (closeAtEnd)
             {
-                // Debug.Log($"[EdgeMerge] -> Trying CONVERGING merge");
+                Debug.Log($"[MERGE] -> Trying CONVERGING merge");
                 // CONVERGING CASE: edges approach node from different directions, merge before node
                 return TryMergeConvergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
 
-            // Debug.Log($"[EdgeMerge] SharedNode: NO MERGE - not close at start or end");
+            Debug.Log($"[MERGE] NO MERGE - not close at start ({distances[0]:F1}) or end ({distances[distances.Count-1]:F1}), threshold={MERGE_DISTANCE}");
             return false;
         }
 
