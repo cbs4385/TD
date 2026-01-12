@@ -186,6 +186,7 @@ namespace FaeMaze.Visitors
 
         // World-space navigation
         protected Vector3 worldDestination;
+        protected Vector3 originalSpawnPosition; // Where the visitor spawned from (to avoid returning there)
         protected List<Vector3> worldPath;
         protected int worldPathIndex;
 
@@ -414,8 +415,18 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Sets the original spawn position for this visitor.
+        /// Used to prevent visitors from retargeting back to where they spawned.
+        /// </summary>
+        public void SetOriginalSpawnPosition(Vector3 position)
+        {
+            originalSpawnPosition = position;
+        }
+
+        /// <summary>
         /// Retargets visitor to the nearest spawn point by walking distance.
-        /// If no spawn points are available, falls back to the heart.
+        /// Excludes the original spawn point to prevent visitors from going backwards.
+        /// If no valid spawn points are available, falls back to the heart.
         /// </summary>
         public void RetargetToNearestSpawn()
         {
@@ -433,12 +444,24 @@ namespace FaeMaze.Visitors
             }
 
             Vector3 currentPos = transform.position;
-            Vector3 bestSpawn = mazeGridBehaviour.HeartWorldPosition;
+            Vector3 bestSpawn = Vector3.zero;
             float shortestWalkingDist = float.MaxValue;
+            int validSpawnsConsidered = 0;
 
             foreach (var kvp in spawnPoints)
             {
                 Vector3 spawnPos = kvp.Value;
+
+                // Skip spawn points too close to original spawn position (prevent going backwards)
+                if (originalSpawnPosition != Vector3.zero)
+                {
+                    float distToOriginal = Vector3.Distance(spawnPos, originalSpawnPosition);
+                    if (distToOriginal < 2f)
+                    {
+                        Debug.Log($"[Pathfinding] {name}: Skipping spawn {kvp.Key} at {spawnPos} - too close to original spawn {originalSpawnPosition}");
+                        continue;
+                    }
+                }
 
                 // Calculate walking distance by building a path
                 var testPath = BuildWorldPath(currentPos, spawnPos);
@@ -454,6 +477,7 @@ namespace FaeMaze.Visitors
                     prevPoint = point;
                 }
 
+                validSpawnsConsidered++;
                 if (pathLength < shortestWalkingDist)
                 {
                     shortestWalkingDist = pathLength;
@@ -461,7 +485,15 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            Debug.Log($"[Pathfinding] {name}: Retargeting to nearest spawn at {bestSpawn} (walking dist: {shortestWalkingDist:F1})");
+            // If no valid spawn found (all too close to origin), fall back to heart
+            if (bestSpawn == Vector3.zero || validSpawnsConsidered == 0)
+            {
+                Debug.Log($"[Pathfinding] {name}: No valid spawn points found (excluding origin), falling back to heart");
+                RetargetToHeart();
+                return;
+            }
+
+            Debug.Log($"[Pathfinding] {name}: Retargeting to nearest spawn at {bestSpawn} (walking dist: {shortestWalkingDist:F1}, considered {validSpawnsConsidered} spawns)");
             SetWorldDestination(bestSpawn);
         }
 
@@ -710,6 +742,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Builds a world-space path from start to end using graph edges.
         /// Constructs path in 1-unit increments along walkable edge polylines.
+        /// Does NOT interpolate through unwalkable terrain - only follows edges.
         /// </summary>
         protected virtual List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
@@ -737,10 +770,25 @@ namespace FaeMaze.Visitors
             FindNearestPointOnAnyEdge(graphState, endPos2D, out nearestEndOnEdge, out endEdge, out endEdgeSegmentIndex);
 
             Debug.Log($"[Pathfinding] {name}: Building path from {start} to {end}");
-            Debug.Log($"[Pathfinding] {name}: Start nearest edge point: {nearestStartOnEdge}, End nearest edge point: {nearestEndOnEdge}");
 
-            // Add interpolated path from start to nearest edge point (1-unit steps)
-            AddInterpolatedPath(result, start, new Vector3(nearestStartOnEdge.x, nearestStartOnEdge.y, start.z), 1f);
+            // Check distance from start to nearest edge point
+            float distToNearestEdge = Vector2.Distance(startPos2D, nearestStartOnEdge);
+
+            // Only add start position if we're close to the edge (within 2 units - on walkable terrain)
+            // Do NOT interpolate through potentially unwalkable terrain
+            if (distToNearestEdge < 2f)
+            {
+                // Close to edge - safe to start from current position
+                result.Add(start);
+                Debug.Log($"[Pathfinding] {name}: Start is close to edge (dist={distToNearestEdge:F1}), starting from current position");
+            }
+            else
+            {
+                // Far from edge - visitor is off the walkable path
+                // Start from the nearest edge point to avoid crossing walls
+                Debug.LogWarning($"[Pathfinding] {name}: Start is far from edge (dist={distToNearestEdge:F1}), snapping to nearest edge point {nearestStartOnEdge}");
+                result.Add(new Vector3(nearestStartOnEdge.x, nearestStartOnEdge.y, start.z));
+            }
 
             // Find nodes connected to start and end edges
             int startNodeIndex = startEdge != null ? startEdge.NodeA : FindNearestNodeIndex(graphState, startPos2D);
@@ -760,8 +808,7 @@ namespace FaeMaze.Visitors
 
             if (startNodeIndex < 0 || endNodeIndex < 0)
             {
-                Debug.Log($"[Pathfinding] {name}: Invalid node indices, using direct path");
-                AddInterpolatedPath(result, result.Count > 0 ? result[result.Count - 1] : start, end, 1f);
+                Debug.LogWarning($"[Pathfinding] {name}: Invalid node indices, cannot build path");
                 return result;
             }
 
@@ -777,8 +824,9 @@ namespace FaeMaze.Visitors
 
             if (nodePath == null || nodePath.Count == 0)
             {
-                Debug.Log($"[Pathfinding] {name}: No node path found, using direct interpolated path");
-                AddInterpolatedPath(result, result.Count > 0 ? result[result.Count - 1] : start, end, 1f);
+                Debug.LogWarning($"[Pathfinding] {name}: No node path found from node {startNodeIndex} to {endNodeIndex}");
+                // Don't interpolate through potentially unwalkable terrain
+                // Just end at the nearest edge point we found
                 return result;
             }
 
@@ -798,11 +846,8 @@ namespace FaeMaze.Visitors
                 }
                 else
                 {
-                    // Fallback: interpolate directly to next node
-                    var node = graphState.Nodes[nodeB];
-                    Vector3 nodePos = new Vector3(node.Position.x, node.Position.y, start.z);
-                    Vector3 fromPos = result.Count > 0 ? result[result.Count - 1] : start;
-                    AddInterpolatedPath(result, fromPos, nodePos, 1f);
+                    // No connecting edge found - this shouldn't happen in a valid graph
+                    Debug.LogWarning($"[Pathfinding] {name}: No connecting edge between nodes {nodeA} and {nodeB}");
                 }
             }
 
@@ -813,11 +858,18 @@ namespace FaeMaze.Visitors
                 AddEdgePolylineToPath(result, endEdge, nearestEndOnEdge, false, start.z); // false = away from node
             }
 
-            // Final interpolation to exact destination
+            // Only add final destination if it's close to our last path point (within 2 units - on walkable terrain)
+            // Do NOT interpolate through potentially unwalkable terrain
             Vector3 lastPoint = result.Count > 0 ? result[result.Count - 1] : start;
-            if (Vector3.Distance(lastPoint, end) > 0.1f)
+            float distToEnd = Vector3.Distance(lastPoint, end);
+            if (distToEnd > 0.1f && distToEnd < 2f)
             {
-                AddInterpolatedPath(result, lastPoint, end, 1f);
+                // Close enough - safe to add as final waypoint
+                result.Add(end);
+            }
+            else if (distToEnd >= 2f)
+            {
+                Debug.LogWarning($"[Pathfinding] {name}: Final destination {end} is far from last path point {lastPoint} (dist={distToEnd:F1}), not interpolating through potential walls");
             }
 
             Debug.Log($"[Pathfinding] {name}: Final path has {result.Count} waypoints");

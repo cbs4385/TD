@@ -333,8 +333,11 @@ namespace FaeMaze.Systems
             // Initialize visitor with GameController reference
             spawnedVisitor.Initialize(GameController.Instance);
 
+            // Track where visitor spawned from (to prevent retargeting back to origin)
+            spawnedVisitor.SetOriginalSpawnPosition(spawnWorldPos);
+
             // Set destination to a different spawn point (not the heart)
-            Debug.Log($"[Pathfinding] WaveSpawner: Setting {visitorObject.name} destination to {destinationWorldPos}");
+            Debug.Log($"[Pathfinding] WaveSpawner: Setting {visitorObject.name} destination to {destinationWorldPos}, spawn origin {spawnWorldPos}");
             spawnedVisitor.SetWorldDestination(destinationWorldPos);
 
             if (spawnedVisitor is VisitorController)
