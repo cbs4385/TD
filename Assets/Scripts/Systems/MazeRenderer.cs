@@ -388,10 +388,10 @@ namespace FaeMaze.Systems
                         // Check if within circular radius (use smaller nodeTileRadius)
                         if (distance > nodeTileRadius) continue;
 
-                        Vector2 graphPos = node.Position + offsetFromNode;
+                        Vector2 pos2D = node.Position + offsetFromNode;
 
                         // Check if position already occupied using quantized key
-                        long posKey = GetQuantizedKey(graphPos);
+                        long posKey = GetQuantizedKey(pos2D);
                         if (occupiedPositions.Contains(posKey)) continue;
 
                         // Orientation: tiles face outward radially from node center
@@ -409,7 +409,7 @@ namespace FaeMaze.Systems
                             symbol = node.Kind == "root" ? 'H' : 'N';
                         }
 
-                        Vector3 worldPos = ToVector3(graphPos);
+                        Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(posKey);
                         tileCount++;
@@ -493,11 +493,11 @@ namespace FaeMaze.Systems
 
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 startGraph = edge.PolylinePoints[i];
-                    Vector2 endGraph = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (endGraph - startGraph).normalized;
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (segEnd - segStart).normalized;
                     Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+                    float segmentLength = Vector2.Distance(segStart, segEnd);
 
                     bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
                     bool isFrontierEdge = edge.Partial;
@@ -507,7 +507,7 @@ namespace FaeMaze.Systems
                     for (int j = 0; j <= numSteps; j++)
                     {
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
-                        Vector2 centerGraphPos = Vector2.Lerp(startGraph, endGraph, t);
+                        Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
                         // Project walls perpendicular to edge at multiple layers
                         for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
@@ -517,11 +517,11 @@ namespace FaeMaze.Systems
                             // Both sides of the edge
                             foreach (float side in new[] { 1f, -1f })
                             {
-                                Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
+                                Vector2 wallPos = centerPos + perpendicular * side * offset;
                                 Vector2 pushDir = perpendicular * side; // Push direction: away from edge
 
                                 // Get adjusted position (translates away from intersections)
-                                Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                                Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, occupiedWallPositions);
                                 if (!adjustedPos.HasValue)
                                     continue;
 
@@ -541,7 +541,7 @@ namespace FaeMaze.Systems
                     // Add end cap walls for frontier edges (along the long axis at the end)
                     if (isLastSegment && isFrontierEdge)
                     {
-                        tileCount += RenderEdgeEndCap(endGraph, direction, perpendicular, forestState,
+                        tileCount += RenderEdgeEndCap(segEnd, direction, perpendicular, forestState,
                             occupiedWallPositions, mazeOrigin, stepSize);
                     }
                 }
@@ -563,10 +563,10 @@ namespace FaeMaze.Systems
                     {
                         float angle = (float)a / angularSteps * 2 * Mathf.PI;
                         Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                        Vector2 wallGraphPos = node.Position + radialDir * r;
+                        Vector2 wallPos = node.Position + radialDir * r;
 
                         // Get adjusted position (translates away from intersections)
-                        Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, radialDir, forestState, occupiedWallPositions);
+                        Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radialDir, forestState, occupiedWallPositions);
                         if (!adjustedPos.HasValue)
                             continue;
 
@@ -696,7 +696,7 @@ namespace FaeMaze.Systems
         /// If the original position intersects, translates it along the shortest vector toward void.
         /// Returns null if no valid position can be found.
         /// </summary>
-        private Vector2? GetAdjustedWallPosition(Vector2 wallGraphPos, Vector2 pushDirection,
+        private Vector2? GetAdjustedWallPosition(Vector2 wallPos, Vector2 pushDirection,
             PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions)
         {
             // Use half-unit steps for finer adjustment precision
@@ -711,7 +711,7 @@ namespace FaeMaze.Systems
             // Combined radius for collision detection - sum of both radii to prevent any overlap
             float collisionRadius = wallRadius + pathRadius;
 
-            Vector2 currentPos = wallGraphPos;
+            Vector2 currentPos = wallPos;
 
             for (int iter = 0; iter < maxIterations; iter++)
             {
@@ -829,19 +829,19 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Simple check if a wall position is valid (for cases where we don't want translation).
         /// </summary>
-        private bool IsWallPositionValid(Vector2 wallGraphPos, PlanarForestMazeGenerator.ForestMapState forestState,
+        private bool IsWallPositionValid(Vector2 wallPos, PlanarForestMazeGenerator.ForestMapState forestState,
             HashSet<long> occupiedWallPositions)
         {
             float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
 
             // Check if already occupied by path tiles (wall overlap is allowed)
-            long wallKey = GetQuantizedKey(wallGraphPos);
+            long wallKey = GetQuantizedKey(wallPos);
             if (occupiedPositions.Contains(wallKey)) return false;
 
             // Check if inside any node column
             foreach (var node in forestState.Nodes)
             {
-                float distToNode = Vector2.Distance(wallGraphPos, node.Position);
+                float distToNode = Vector2.Distance(wallPos, node.Position);
                 if (distToNode < nodeRadius + nodeBuffer)
                     return false;
             }
@@ -870,13 +870,13 @@ namespace FaeMaze.Systems
                 for (int perpLayer = -Mathf.CeilToInt(wallBorderDepth); perpLayer <= Mathf.CeilToInt(wallBorderDepth); perpLayer++)
                 {
                     float perpOffset = perpLayer * stepSize;
-                    Vector2 wallGraphPos = capCenterPos + perpendicular * perpOffset;
+                    Vector2 wallPos = capCenterPos + perpendicular * perpOffset;
 
                     // Push direction is forward (along edge direction) for end caps
                     Vector2 pushDir = direction;
 
                     // Get adjusted position (translates away from intersections)
-                    Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, occupiedWallPositions);
                     if (!adjustedPos.HasValue)
                         continue;
 
@@ -1200,8 +1200,8 @@ namespace FaeMaze.Systems
                     float distance = offsetFromNode.magnitude;
                     if (distance > nodeTileRadius) continue;
 
-                    Vector2 graphPos = newNode.Position + offsetFromNode;
-                    long posKey = GetQuantizedKey(graphPos);
+                    Vector2 pos2D = newNode.Position + offsetFromNode;
+                    long posKey = GetQuantizedKey(pos2D);
                     if (occupiedPositions.Contains(posKey)) continue;
 
                     float orientationDegrees = 0f;
@@ -1213,7 +1213,7 @@ namespace FaeMaze.Systems
 
                     char symbol = (dx == 0 && dy == 0) ? 'N' : '.';
 
-                    Vector3 worldPos = ToVector3(graphPos);
+                    Vector3 worldPos = ToVector3(pos2D);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                     occupiedPositions.Add(posKey);
                     tilesCreated++;
@@ -1269,10 +1269,10 @@ namespace FaeMaze.Systems
                 // Place path tiles along the edge
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 startGraph = edge.PolylinePoints[i];
-                    Vector2 endGraph = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (endGraph - startGraph).normalized;
-                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (segEnd - segStart).normalized;
+                    float segmentLength = Vector2.Distance(segStart, segEnd);
                     float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
                     bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
 
@@ -1281,19 +1281,19 @@ namespace FaeMaze.Systems
                     {
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
 
-                        Vector2 graphPos;
+                        Vector2 pos2D;
                         bool isExactEndpoint = false;
                         if (isLastSegment && j == numSteps)
                         {
-                            graphPos = exactEndpoint;
+                            pos2D = exactEndpoint;
                             isExactEndpoint = true;
                         }
                         else
                         {
-                            graphPos = Vector2.Lerp(startGraph, endGraph, t);
+                            pos2D = Vector2.Lerp(segStart, segEnd, t);
                         }
 
-                        long posKey = GetQuantizedKey(graphPos);
+                        long posKey = GetQuantizedKey(pos2D);
                         bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
 
                         if (!forcePlace && occupiedPositions.Contains(posKey))
@@ -1306,7 +1306,7 @@ namespace FaeMaze.Systems
                             endpointTilePlaced = true;
                         }
 
-                        Vector3 worldPos = ToVector3(graphPos);
+                        Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(posKey);
                         tilesCreated++;
@@ -1343,17 +1343,17 @@ namespace FaeMaze.Systems
 
                     for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                     {
-                        Vector2 startGraph = edge.PolylinePoints[i];
-                        Vector2 endGraph = edge.PolylinePoints[i + 1];
-                        Vector2 direction = (endGraph - startGraph).normalized;
+                        Vector2 segStart = edge.PolylinePoints[i];
+                        Vector2 segEnd = edge.PolylinePoints[i + 1];
+                        Vector2 direction = (segEnd - segStart).normalized;
                         Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-                        float segmentLength = Vector2.Distance(startGraph, endGraph);
+                        float segmentLength = Vector2.Distance(segStart, segEnd);
 
                         int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
                         for (int j = 0; j <= numSteps; j++)
                         {
                             float t = numSteps > 0 ? (float)j / numSteps : 0;
-                            Vector2 centerGraphPos = Vector2.Lerp(startGraph, endGraph, t);
+                            Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
                             for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
                             {
@@ -1361,10 +1361,10 @@ namespace FaeMaze.Systems
 
                                 foreach (float side in new[] { 1f, -1f })
                                 {
-                                    Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
+                                    Vector2 wallPos = centerPos + perpendicular * side * offset;
                                     Vector2 pushDir = perpendicular * side;
 
-                                    Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, occupiedWallPositions);
                                     if (!adjustedPos.HasValue)
                                         continue;
 
@@ -1396,9 +1396,9 @@ namespace FaeMaze.Systems
                     {
                         float angle = (float)a / angularSteps * 2 * Mathf.PI;
                         Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                        Vector2 wallGraphPos = newNode.Position + radialDir * r;
+                        Vector2 wallPos = newNode.Position + radialDir * r;
 
-                        Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, radialDir, forestState, occupiedWallPositions);
+                        Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radialDir, forestState, occupiedWallPositions);
                         if (!adjustedPos.HasValue)
                             continue;
 
@@ -1412,7 +1412,12 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles");
+            // Gap-filling pass - use the same logic as initial rendering to ensure complete borders
+            // This is critical for matching the quality of initial wall generation
+            int gapsFilled = FillInnerEdgeGaps(forestState, occupiedWallPositions, mazeOrigin, stepSize);
+            wallsCreated += gapsFilled;
+
+            Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles ({gapsFilled} gap fills)");
         }
 
         /// <summary>
@@ -1442,8 +1447,8 @@ namespace FaeMaze.Systems
             foreach (var t in toRemove)
             {
                 // Remove from occupied positions if tracking
-                Vector2 graphPos = new Vector2(t.position.x, t.position.y);
-                long posKey = GetQuantizedKey(graphPos);
+                Vector2 pos2D = new Vector2(t.position.x, t.position.y);
+                long posKey = GetQuantizedKey(pos2D);
                 occupiedPositions?.Remove(posKey);
 
                 Destroy(t.gameObject);
@@ -1523,8 +1528,8 @@ namespace FaeMaze.Systems
                         float distance = offsetFromNode.magnitude;
                         if (distance > nodeTileRadius) continue;
 
-                        Vector2 graphPos = node.Position + offsetFromNode;
-                        long posKey = GetQuantizedKey(graphPos);
+                        Vector2 pos2D = node.Position + offsetFromNode;
+                        long posKey = GetQuantizedKey(pos2D);
                         if (occupiedPositions.Contains(posKey)) continue;
 
                         float orientationDegrees = 0f;
@@ -1540,7 +1545,7 @@ namespace FaeMaze.Systems
                             symbol = node.Kind == "root" ? 'H' : 'N';
                         }
 
-                        Vector3 worldPos = ToVector3(graphPos);
+                        Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(posKey);
                         tilesCreated++;
@@ -1570,10 +1575,10 @@ namespace FaeMaze.Systems
 
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 startGraph = edge.PolylinePoints[i];
-                    Vector2 endGraph = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (endGraph - startGraph).normalized;
-                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (segEnd - segStart).normalized;
+                    float segmentLength = Vector2.Distance(segStart, segEnd);
                     float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
                     bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
 
@@ -1582,19 +1587,19 @@ namespace FaeMaze.Systems
                     {
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
 
-                        Vector2 graphPos;
+                        Vector2 pos2D;
                         bool isExactEndpoint = false;
                         if (isLastSegment && j == numSteps)
                         {
-                            graphPos = exactEndpoint;
+                            pos2D = exactEndpoint;
                             isExactEndpoint = true;
                         }
                         else
                         {
-                            graphPos = Vector2.Lerp(startGraph, endGraph, t);
+                            pos2D = Vector2.Lerp(segStart, segEnd, t);
                         }
 
-                        long posKey = GetQuantizedKey(graphPos);
+                        long posKey = GetQuantizedKey(pos2D);
                         bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
 
                         if (!forcePlace && occupiedPositions.Contains(posKey)) continue;
@@ -1606,7 +1611,7 @@ namespace FaeMaze.Systems
                             endpointTilePlaced = true;
                         }
 
-                        Vector3 worldPos = ToVector3(graphPos);
+                        Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(posKey);
                         tilesCreated++;
@@ -1633,17 +1638,17 @@ namespace FaeMaze.Systems
 
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
-                    Vector2 startGraph = edge.PolylinePoints[i];
-                    Vector2 endGraph = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (endGraph - startGraph).normalized;
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (segEnd - segStart).normalized;
                     Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+                    float segmentLength = Vector2.Distance(segStart, segEnd);
 
                     int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / wallStepSize));
                     for (int j = 0; j <= numSteps; j++)
                     {
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
-                        Vector2 centerGraphPos = Vector2.Lerp(startGraph, endGraph, t);
+                        Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
                         for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
                         {
@@ -1651,10 +1656,10 @@ namespace FaeMaze.Systems
 
                             foreach (float side in new[] { 1f, -1f })
                             {
-                                Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
+                                Vector2 wallPos = centerPos + perpendicular * side * offset;
                                 Vector2 pushDir = perpendicular * side;
 
-                                Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                                Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, occupiedWallPositions);
                                 if (!adjustedPos.HasValue) continue;
 
                                 occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
