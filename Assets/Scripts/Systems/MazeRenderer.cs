@@ -917,7 +917,7 @@ namespace FaeMaze.Systems
             // Check distance to each edge segment
             foreach (var seg in allEdgeSegments)
             {
-                float dist = DistanceToLineSegment(graphPos, seg.Start, seg.End);
+                float dist = DistanceToLineSegment(pos, seg.Start, seg.End);
                 if (dist < minDist)
                 {
                     minDist = dist;
@@ -928,12 +928,12 @@ namespace FaeMaze.Systems
             // Check distance to each node center
             foreach (var node in forestState.Nodes)
             {
-                float dist = Vector2.Distance(graphPos, node.Position);
+                float dist = Vector2.Distance(pos, node.Position);
                 if (dist < minDist)
                 {
                     minDist = dist;
                     // For nodes, perpendicular points radially outward
-                    Vector2 radial = (graphPos - node.Position).normalized;
+                    Vector2 radial = (pos - node.Position).normalized;
                     if (radial.sqrMagnitude > 0.001f)
                         nearestPerpendicular = radial;
                 }
@@ -1255,8 +1255,8 @@ namespace FaeMaze.Systems
 
                     allEdgeSegments.Add(new EdgeSegmentData
                     {
-                        StartGraph = start,
-                        EndGraph = end,
+                        Start = start,
+                        End = end,
                         Direction = dir,
                         Perpendicular = new Vector2(-dir.y, dir.x)
                     });
