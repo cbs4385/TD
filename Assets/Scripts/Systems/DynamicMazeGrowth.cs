@@ -175,22 +175,26 @@ namespace FaeMaze.Systems
         /// </summary>
         private void GrowMazeWorldSpace(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
         {
-            // Track frontier edges before the step to identify consumed spawn point
-            // Frontier is a HashSet<Edge>, so we copy it directly
-            var frontierBefore = new HashSet<ForestMaze.PlanarForestMazeGenerator.Edge>(forestMapState.Frontier);
+            // Track frontier edge indices before the step to identify consumed spawn point
+            // Frontier is a HashSet<int> containing edge indices
+            var frontierIndicesBefore = new HashSet<int>(forestMapState.Frontier);
             int nodeCountBefore = forestMapState.Nodes.Count;
             int edgeCountBefore = forestMapState.Edges.Count;
 
             // Find the consumed spawn point position BEFORE the step
             Vector3 consumedSpawnPos = Vector3.zero;
-            foreach (var edge in frontierBefore)
+            foreach (int edgeIndex in frontierIndicesBefore)
             {
-                if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
+                if (edgeIndex >= 0 && edgeIndex < forestMapState.Edges.Count)
                 {
-                    // The endpoint of a partial edge is the spawn point
-                    var endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-                    consumedSpawnPos = new Vector3(endpoint.x, endpoint.y, 0);
-                    break; // Step will consume one of the frontier edges
+                    var edge = forestMapState.Edges[edgeIndex];
+                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
+                    {
+                        // The endpoint of a partial edge is the spawn point
+                        var endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                        consumedSpawnPos = new Vector3(endpoint.x, endpoint.y, 0);
+                        break; // Step will consume one of the frontier edges
+                    }
                 }
             }
 
@@ -218,18 +222,22 @@ namespace FaeMaze.Systems
                     newEdges.Add(edge);
                 }
                 // Or edges that were in frontier before but now completed
-                else if (frontierBefore.Contains(edge) && !forestMapState.Frontier.Contains(edge))
+                else if (frontierIndicesBefore.Contains(i) && !forestMapState.Frontier.Contains(i))
                 {
                     newEdges.Add(edge);
                 }
             }
 
             // Also add the new partial edges (current frontier edges that weren't there before)
-            foreach (var edge in forestMapState.Frontier)
+            foreach (int edgeIndex in forestMapState.Frontier)
             {
-                if (!frontierBefore.Contains(edge) && !newEdges.Contains(edge))
+                if (!frontierIndicesBefore.Contains(edgeIndex) && edgeIndex < forestMapState.Edges.Count)
                 {
-                    newEdges.Add(edge);
+                    var edge = forestMapState.Edges[edgeIndex];
+                    if (!newEdges.Contains(edge))
+                    {
+                        newEdges.Add(edge);
+                    }
                 }
             }
 
