@@ -769,6 +769,141 @@ namespace ForestMaze
             }
 
             Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed");
+
+            // Enforce minimum edge spacing at each node
+            EnforceMinimumEdgeSpacing(state);
+        }
+
+        /// <summary>
+        /// Minimum arc length between edge intersection points on node circumference.
+        /// Edges closer than this will have wall voids between them.
+        /// </summary>
+        private const float MIN_EDGE_SPACING = 1.5f;
+
+        /// <summary>
+        /// Enforces minimum spacing between edges at each node.
+        /// When edges connect to a node too close together on the circumference,
+        /// adjusts their starting points to ensure at least MIN_EDGE_SPACING units apart.
+        /// </summary>
+        private static void EnforceMinimumEdgeSpacing(ForestMapState state)
+        {
+            foreach (var node in state.Nodes)
+            {
+                // Find all edges connected to this node
+                List<(Edge edge, bool startsAtNode, float angle)> connectedEdges = new List<(Edge, bool, float)>();
+
+                foreach (var edge in state.Edges)
+                {
+                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                    float distStart = Vector2.Distance(edge.PolylinePoints[0], node.Position);
+                    float distEnd = Vector2.Distance(edge.PolylinePoints[edge.PolylinePoints.Count - 1], node.Position);
+
+                    bool startsAtNode = distStart < distEnd && distStart < NODE_RADIUS + 2f;
+                    bool endsAtNode = distEnd < distStart && distEnd < NODE_RADIUS + 2f;
+
+                    if (startsAtNode)
+                    {
+                        // Edge starts at this node - get direction toward second point
+                        Vector2 dir = (edge.PolylinePoints[1] - node.Position).normalized;
+                        float angle = Mathf.Atan2(dir.y, dir.x);
+                        connectedEdges.Add((edge, true, angle));
+                    }
+                    else if (endsAtNode)
+                    {
+                        // Edge ends at this node - get direction toward second-to-last point
+                        Vector2 dir = (edge.PolylinePoints[edge.PolylinePoints.Count - 2] - node.Position).normalized;
+                        float angle = Mathf.Atan2(dir.y, dir.x);
+                        connectedEdges.Add((edge, false, angle));
+                    }
+                }
+
+                if (connectedEdges.Count < 2) continue;
+
+                // Sort by angle
+                connectedEdges.Sort((a, b) => a.angle.CompareTo(b.angle));
+
+                // Calculate minimum angular separation for MIN_EDGE_SPACING arc length
+                float minAngleSeparation = MIN_EDGE_SPACING / NODE_RADIUS; // radians
+
+                // Check each consecutive pair (including wrap-around)
+                for (int i = 0; i < connectedEdges.Count; i++)
+                {
+                    int nextIdx = (i + 1) % connectedEdges.Count;
+                    var current = connectedEdges[i];
+                    var next = connectedEdges[nextIdx];
+
+                    float angleDiff = next.angle - current.angle;
+                    if (i == connectedEdges.Count - 1) // Wrap-around case
+                    {
+                        angleDiff = (next.angle + 2 * Mathf.PI) - current.angle;
+                    }
+
+                    // If too close, adjust the second edge outward
+                    if (angleDiff < minAngleSeparation && angleDiff > 0.01f)
+                    {
+                        float adjustment = minAngleSeparation - angleDiff;
+                        float newAngle = next.angle + adjustment;
+
+                        Debug.Log($"[EdgeSpacing] Node {node.Id}: Adjusting edge {next.edge.Id} angle from {next.angle * Mathf.Rad2Deg:F1}° to {newAngle * Mathf.Rad2Deg:F1}° (was {angleDiff * Mathf.Rad2Deg:F1}° apart, need {minAngleSeparation * Mathf.Rad2Deg:F1}°)");
+
+                        // Adjust the edge's polyline to use the new angle
+                        AdjustEdgeAngleAtNode(next.edge, next.startsAtNode, node.Position, next.angle, newAngle);
+
+                        // Update the angle in our list for subsequent comparisons
+                        connectedEdges[nextIdx] = (next.edge, next.startsAtNode, newAngle);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adjusts an edge's polyline to change its angle at a node.
+        /// Rotates the first segment around the node to achieve the new angle.
+        /// </summary>
+        private static void AdjustEdgeAngleAtNode(Edge edge, bool startsAtNode, Vector2 nodePos, float oldAngle, float newAngle)
+        {
+            float angleDelta = newAngle - oldAngle;
+
+            if (startsAtNode)
+            {
+                // Rotate points near the node
+                for (int i = 0; i < edge.PolylinePoints.Count && i < 3; i++)
+                {
+                    Vector2 point = edge.PolylinePoints[i];
+                    float dist = Vector2.Distance(point, nodePos);
+
+                    // Only rotate points within a reasonable distance of the node
+                    if (dist < NODE_RADIUS + 5f)
+                    {
+                        // Rotate around node center
+                        Vector2 offset = point - nodePos;
+                        float pointAngle = Mathf.Atan2(offset.y, offset.x);
+                        float newPointAngle = pointAngle + angleDelta;
+                        Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
+                        edge.PolylinePoints[i] = nodePos + newOffset;
+                    }
+                }
+            }
+            else
+            {
+                // Edge ends at node - rotate points near the end
+                int count = edge.PolylinePoints.Count;
+                for (int i = count - 1; i >= 0 && i >= count - 3; i--)
+                {
+                    Vector2 point = edge.PolylinePoints[i];
+                    float dist = Vector2.Distance(point, nodePos);
+
+                    if (dist < NODE_RADIUS + 5f)
+                    {
+                        Vector2 offset = point - nodePos;
+                        float pointAngle = Mathf.Atan2(offset.y, offset.x);
+                        float newPointAngle = pointAngle + angleDelta;
+                        Vector2 newOffset = new Vector2(Mathf.Cos(newPointAngle), Mathf.Sin(newPointAngle)) * dist;
+                        edge.PolylinePoints[i] = nodePos + newOffset;
+                    }
+                }
+            }
         }
 
         /// <summary>
