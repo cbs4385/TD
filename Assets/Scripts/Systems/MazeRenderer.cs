@@ -512,7 +512,9 @@ namespace FaeMaze.Systems
                         Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
                         // Project walls perpendicular to edge at multiple layers
-                        for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+                        // Calculate number of layers needed to reach wallBorderDepth
+                        int numLayers = Mathf.CeilToInt(wallBorderDepth / stepSize);
+                        for (int layer = 1; layer <= numLayers; layer++)
                         {
                             float offset = layer * stepSize;
 
@@ -840,10 +842,6 @@ namespace FaeMaze.Systems
 
             // Wall model radius (wall prefab is scaled to 0.65 * tileSize)
             float wallRadius = 0.65f;
-            // Path tile radius
-            float pathRadius = 1.0f;
-            // Combined radius for collision detection - sum of both radii to prevent any overlap
-            float collisionRadius = wallRadius + pathRadius;
 
             Vector2 currentPos = wallPos;
 
@@ -894,27 +892,8 @@ namespace FaeMaze.Systems
                     }
                 }
 
-                // Check if intersecting any edge path (line segment check)
-                if (!needsAdjustment)
-                {
-                    foreach (var seg in allEdgeSegments)
-                    {
-                        float distToEdge = DistanceToLineSegment(currentPos, seg.Start, seg.End);
-                        float minDist = collisionRadius; // Use collision radius
-
-                        if (distToEdge < minDist)
-                        {
-                            // Push perpendicular to the edge, in the direction we're already going
-                            float pushDist = minDist - distToEdge + stepSize * 0.25f;
-                            Vector2 pushDir = Vector2.Dot(pushDirection, seg.Perpendicular) >= 0
-                                ? seg.Perpendicular
-                                : -seg.Perpendicular;
-                            adjustmentVector = pushDir * pushDist;
-                            needsAdjustment = true;
-                            break;
-                        }
-                    }
-                }
+                // Only reject walls for path tiles and node columns (edge path check removed)
+                // Wall placement is allowed anywhere else - walls can overlap each other
 
                 if (!needsAdjustment)
                 {
@@ -995,13 +974,14 @@ namespace FaeMaze.Systems
 
             // Place walls perpendicular to the edge direction to close off the end
             // Walls are positioned along the perpendicular axis at the endpoint
-            for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+            int numLayers = Mathf.CeilToInt(wallBorderDepth / stepSize);
+            for (int layer = 1; layer <= numLayers; layer++)
             {
                 float forwardOffset = layer * stepSize;
                 Vector2 capCenterPos = endPoint + direction * forwardOffset;
 
                 // Place walls across the perpendicular width at this forward position
-                for (int perpLayer = -Mathf.CeilToInt(wallBorderDepth); perpLayer <= Mathf.CeilToInt(wallBorderDepth); perpLayer++)
+                for (int perpLayer = -numLayers; perpLayer <= numLayers; perpLayer++)
                 {
                     float perpOffset = perpLayer * stepSize;
                     Vector2 wallPos = capCenterPos + perpendicular * perpOffset;
@@ -1495,7 +1475,8 @@ namespace FaeMaze.Systems
                             float t = numSteps > 0 ? (float)j / numSteps : 0;
                             Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
-                            for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+                            int numWallLayers = Mathf.CeilToInt(wallBorderDepth / stepSize);
+                            for (int layer = 1; layer <= numWallLayers; layer++)
                             {
                                 float offset = layer * stepSize;
 
@@ -1791,7 +1772,8 @@ namespace FaeMaze.Systems
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
                         Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
-                        for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+                        int numWallLayers = Mathf.CeilToInt(wallBorderDepth / wallStepSize);
+                        for (int layer = 1; layer <= numWallLayers; layer++)
                         {
                             float offset = layer * wallStepSize;
 

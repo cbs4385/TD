@@ -698,7 +698,7 @@ namespace ForestMaze
         }
 
         // Edge merging parameters
-        private const float MERGE_DISTANCE = 6.0f; // Distance below which edges should merge (2 * wallBorderDepth to avoid gaps)
+        private const float MERGE_DISTANCE = 3.0f; // Distance below which edges should merge (walls can overlap beyond this)
         private const float NODE_PROXIMITY_SKIP = NODE_RADIUS + 1.0f; // Don't merge points this close to shared nodes
 
         /// <summary>
