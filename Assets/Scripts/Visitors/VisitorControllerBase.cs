@@ -904,74 +904,35 @@ namespace FaeMaze.Visitors
         protected void UpdateAnimatorDirection(Vector2 movement)
         {
             // Apply smooth rotation for model to face movement direction
-            // All rotation is around Z axis only (XY plane movement)
+            // All rotation is around world Z axis only (XY plane movement)
+            // IMPORTANT: Rotate the game object (parent), not the model child.
+            // The model has its own local rotation that orients it correctly;
+            // rotating the model's local Z would rotate around the model's tilted Z axis, not world Z.
             if (movement.sqrMagnitude > MovementEpsilonSqr)
             {
-                // Calculate Z rotation angle for model facing direction
-                // Model forward is +X axis (prefab rotated with forward=+X, up=-Z)
-                // So Z rotation directly maps to movement direction angle
+                // Calculate Z rotation angle for facing direction in world space
                 float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
-
-                // Direction rotation is Z-axis only
-                Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
-
-                // Determine the target transform for rotation
-                Transform rotationTarget = null;
-                string rotationTargetName = "none";
-
-                if (use3DModel && modelInstance != null)
-                {
-                    rotationTarget = modelInstance.transform;
-                    rotationTargetName = "modelInstance";
-                }
-                else if (animator != null)
-                {
-                    rotationTarget = animator.transform;
-                    rotationTargetName = "animator";
-                }
-                else
-                {
-                    rotationTarget = transform;
-                    rotationTargetName = "transform";
-                }
 
                 // Log rotation details on first movement and periodically
                 bool shouldLog = !hasLoggedFirstRotation || Time.frameCount % 300 == 0;
-                float zBefore = rotationTarget != null ? rotationTarget.eulerAngles.z : 0f;
+                float zBefore = transform.eulerAngles.z;
 
-                if (rotationTarget != null)
-                {
-                    // Apply direction rotation on top of base rotation using quaternion multiplication
-                    // This properly preserves the model's X/Y orientation while adding Z rotation
-                    if (use3DModel && modelInstance != null && modelBaseRotationCaptured)
-                    {
-                        Quaternion targetRotation = directionRotation * modelBaseRotation;
-                        rotationTarget.localRotation = Quaternion.Slerp(
-                            rotationTarget.localRotation,
-                            targetRotation,
-                            Time.deltaTime * 10f
-                        );
-                    }
-                    else
-                    {
-                        // Fallback: apply Z rotation preserving current X/Y
-                        Vector3 currentEuler = rotationTarget.eulerAngles;
-                        Quaternion targetRotation = Quaternion.Euler(currentEuler.x, currentEuler.y, angle);
-                        rotationTarget.localRotation = Quaternion.Slerp(
-                            rotationTarget.localRotation,
-                            targetRotation,
-                            Time.deltaTime * 10f
-                        );
-                    }
-                }
+                // Apply Z rotation to the game object (this visitor's transform)
+                // This rotates around world Z, making the model face the direction of travel
+                Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle);
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation,
+                    targetRotation,
+                    Time.deltaTime * 10f
+                );
 
                 // Log after rotation applied
                 if (shouldLog)
                 {
                     hasLoggedFirstRotation = true;
-                    float zAfter = rotationTarget != null ? rotationTarget.eulerAngles.z : 0f;
+                    float zAfter = transform.eulerAngles.z;
                     Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
-                        $"targetAngle={angle:F1}°, rotationTarget={rotationTargetName}, " +
+                        $"targetAngle={angle:F1}°, rotationTarget=gameObject, " +
                         $"zBefore={zBefore:F1}°, zAfter={zAfter:F1}°");
                 }
             }
