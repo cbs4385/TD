@@ -457,20 +457,28 @@ namespace ForestMaze
                     continue;
                 }
 
-                // Try to find valid angles by rotating around the direct path
-                Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
-                float directAngle = Mathf.Atan2(directDirection.y, directDirection.x);
-                directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
-
-                // Try the direct angle first, then rotations up to ±60 degrees
-                float[] angleOffsets = { 0f, 15f, -15f, 30f, -30f, 45f, -45f, 60f, -60f };
+                // Find any valid angle pair by searching all possible angles on source node
+                // For each valid source angle, check if the corresponding target angle is also valid
                 bool foundValidAngles = false;
                 float validSourceAngle = 0f;
                 float validTargetAngle = 0f;
 
-                foreach (float offsetDeg in angleOffsets)
+                // Calculate direction to candidate for preference ordering
+                Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
+                float directAngle = Mathf.Atan2(directDirection.y, directDirection.x);
+                directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
+
+                // Try angles in 10-degree increments around the full circle
+                // Order by proximity to direct angle for more natural-looking connections
+                float angleStep = 10f * Mathf.Deg2Rad;
+                int numSteps = Mathf.CeilToInt(2 * Mathf.PI / angleStep);
+
+                for (int i = 0; i < numSteps && !foundValidAngles; i++)
                 {
-                    float offset = offsetDeg * Mathf.Deg2Rad;
+                    // Alternate between positive and negative offsets from direct angle
+                    float offset = (i / 2 + 1) * angleStep * (i % 2 == 0 ? 1 : -1);
+                    if (i == 0) offset = 0; // Try direct angle first
+
                     float testSourceAngle = (directAngle + offset + 2 * Mathf.PI) % (2 * Mathf.PI);
                     float testTargetAngle = (testSourceAngle + Mathf.PI) % (2 * Mathf.PI);
 
@@ -479,7 +487,6 @@ namespace ForestMaze
                         foundValidAngles = true;
                         validSourceAngle = testSourceAngle;
                         validTargetAngle = testTargetAngle;
-                        break;
                     }
                 }
 
@@ -531,7 +538,7 @@ namespace ForestMaze
             // Log why connection failed
             if (candidates.Count > 0)
             {
-                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedNoValidAngles} no valid angles (tried ±60°), {skippedPolyline} polyline failed");
+                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedNoValidAngles} no valid angles (tried full circle), {skippedPolyline} polyline failed");
             }
 
             return false;
