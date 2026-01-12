@@ -781,7 +781,15 @@ namespace FaeMaze.Visitors
                 return new List<Vector3> { end };
             }
 
+            // Debug: count walkable tiles
+            int totalTiles = mazeData.Tiles.Count;
+            int walkableTiles = 0;
+            foreach (var t in mazeData.Tiles)
+            {
+                if (t.Walkable) walkableTiles++;
+            }
             Debug.Log($"[Pathfinding] {name}: Start tile at {startTile.Position}, End tile at {endTile.Position}");
+            Debug.Log($"[Pathfinding] {name}: MazeData has {totalTiles} tiles ({walkableTiles} walkable)");
 
             // BFS through walkable tiles
             var tilePath = FindTilePath(mazeData, startTile, endTile);
@@ -873,6 +881,7 @@ namespace FaeMaze.Visitors
 
             int iterations = 0;
             int maxIterations = 50000; // Safety limit
+            bool loggedFirstIteration = false;
 
             while (queue.Count > 0 && iterations < maxIterations)
             {
@@ -901,6 +910,23 @@ namespace FaeMaze.Visitors
 
                 // Get neighboring walkable tiles
                 var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
+
+                // Log first iteration details for debugging
+                if (!loggedFirstIteration)
+                {
+                    loggedFirstIteration = true;
+                    int walkableNeighbors = 0;
+                    foreach (var n in neighbors)
+                    {
+                        if (n.Walkable)
+                        {
+                            float d = Vector2.Distance(current.Position, n.Position);
+                            if (d <= neighborRadius) walkableNeighbors++;
+                        }
+                    }
+                    Debug.Log($"[Pathfinding] {name}: BFS first iteration - {neighbors.Count} nearby tiles, {walkableNeighbors} walkable neighbors within radius {neighborRadius}");
+                }
+
                 foreach (var neighbor in neighbors)
                 {
                     if (!neighbor.Walkable) continue;
