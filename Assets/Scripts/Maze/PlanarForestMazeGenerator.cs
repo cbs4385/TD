@@ -167,7 +167,7 @@ namespace ForestMaze
                 Mathf.Sin(angle) * distance
             );
 
-            int maxDegree = state.Random.Next(2, 5); // 2-4
+            int maxDegree = state.Random.Next(3, 5); // 3-4 (need capacity for parent+frontier+cross-connection)
             var node1 = new Node
             {
                 Id = state.NextNodeId++,
@@ -222,6 +222,9 @@ namespace ForestMaze
                 if (!AddPartialEdge(state, node1))
                     break;
             }
+
+            // Merge nearby edges that are too close together
+            MergeNearbyEdges(state);
         }
 
         /// <summary>
@@ -240,7 +243,7 @@ namespace ForestMaze
                 return false;
 
             // Create new node at ghost position
-            int maxDegree = state.Random.Next(2, 5); // 2-4
+            int maxDegree = state.Random.Next(3, 5); // 3-4 (need capacity for parent+frontier+cross-connection)
             var newNode = new Node
             {
                 Id = state.NextNodeId++,
@@ -318,6 +321,9 @@ namespace ForestMaze
             }
 
             Debug.Log($"[PlanarForest] ===== STEP COMPLETE: Node {newNode.Id} - frontier={hasFrontierEdge}, crossConnect={hasExistingConnection}, finalEdges={newNode.IncidentEdges.Count}/{newNode.MaxDegree} =====");
+
+            // Merge nearby edges that are too close together
+            MergeNearbyEdges(state);
 
             state.TurnCount++;
             return true;
@@ -689,6 +695,128 @@ namespace ForestMaze
             }
 
             return connected;
+        }
+
+        // Edge merging parameters
+        private const float MERGE_DISTANCE = 1.0f; // Distance below which parallel edges should merge
+        private const float PARALLEL_THRESHOLD = 0.85f; // Dot product threshold for considering segments parallel
+
+        /// <summary>
+        /// Merges nearby edge segments that are too close together to fit wall tiles between them.
+        /// When two edge polyline segments are within MERGE_DISTANCE and running roughly parallel,
+        /// one edge's segment is adjusted to follow the other's path.
+        /// </summary>
+        public static void MergeNearbyEdges(ForestMapState state)
+        {
+            if (state.Edges.Count < 2)
+                return;
+
+            int mergeCount = 0;
+
+            // For each edge, check against all other edges for potential merging
+            for (int i = 0; i < state.Edges.Count; i++)
+            {
+                var edge1 = state.Edges[i];
+                if (edge1.PolylinePoints.Count < 2)
+                    continue;
+
+                for (int j = i + 1; j < state.Edges.Count; j++)
+                {
+                    var edge2 = state.Edges[j];
+                    if (edge2.PolylinePoints.Count < 2)
+                        continue;
+
+                    // Skip edges that share a node (they should diverge from node, not merge)
+                    if (EdgesShareNode(edge1, edge2))
+                        continue;
+
+                    // Check each segment pair for merge opportunity
+                    if (TryMergeEdgeSegments(edge1, edge2, ref mergeCount))
+                    {
+                        // Edges were modified, continue checking
+                    }
+                }
+            }
+
+            if (mergeCount > 0)
+            {
+                Debug.Log($"[PlanarForest] MergeNearbyEdges: Merged {mergeCount} segment pairs");
+            }
+        }
+
+        private static bool EdgesShareNode(Edge edge1, Edge edge2)
+        {
+            if (edge1.NodeA == edge2.NodeA || edge1.NodeA == edge2.NodeB)
+                return true;
+            if (edge1.NodeB.HasValue && (edge1.NodeB.Value == edge2.NodeA || edge1.NodeB.Value == edge2.NodeB))
+                return true;
+            return false;
+        }
+
+        private static bool TryMergeEdgeSegments(Edge edge1, Edge edge2, ref int mergeCount)
+        {
+            bool merged = false;
+
+            // Sample along edge1's polyline and check distance to edge2's segments
+            for (int i = 0; i < edge1.PolylinePoints.Count - 1; i++)
+            {
+                Vector2 a1 = edge1.PolylinePoints[i];
+                Vector2 a2 = edge1.PolylinePoints[i + 1];
+                Vector2 dir1 = (a2 - a1).normalized;
+
+                for (int j = 0; j < edge2.PolylinePoints.Count - 1; j++)
+                {
+                    Vector2 b1 = edge2.PolylinePoints[j];
+                    Vector2 b2 = edge2.PolylinePoints[j + 1];
+                    Vector2 dir2 = (b2 - b1).normalized;
+
+                    // Check if segments are roughly parallel (either direction)
+                    float dot = Mathf.Abs(Vector2.Dot(dir1, dir2));
+                    if (dot < PARALLEL_THRESHOLD)
+                        continue;
+
+                    // Check distance between segments
+                    float dist = SegmentToSegmentDistance(a1, a2, b1, b2);
+                    if (dist >= MERGE_DISTANCE)
+                        continue;
+
+                    // Segments are close and parallel - merge edge2's segment toward edge1
+                    // Find the closest points on both segments
+                    Vector2 midA = (a1 + a2) * 0.5f;
+                    Vector2 closestOnB = ClosestPointOnSegment(midA, b1, b2);
+                    Vector2 mergeDir = (midA - closestOnB).normalized;
+
+                    // Adjust edge2's points toward edge1's path
+                    float adjustment = (MERGE_DISTANCE - dist) * 0.6f + 0.1f;
+
+                    // Only adjust intermediate points, not endpoints connected to nodes
+                    if (j > 0)
+                    {
+                        edge2.PolylinePoints[j] = b1 + mergeDir * adjustment;
+                    }
+                    if (j < edge2.PolylinePoints.Count - 2)
+                    {
+                        edge2.PolylinePoints[j + 1] = b2 + mergeDir * adjustment;
+                    }
+
+                    merged = true;
+                    mergeCount++;
+                }
+            }
+
+            return merged;
+        }
+
+        private static Vector2 ClosestPointOnSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            Vector2 ap = p - a;
+
+            if (ab.sqrMagnitude < 1e-9f)
+                return a;
+
+            float t = Mathf.Clamp01(Vector2.Dot(ap, ab) / ab.sqrMagnitude);
+            return a + ab * t;
         }
 
         // Curved polyline parameters
