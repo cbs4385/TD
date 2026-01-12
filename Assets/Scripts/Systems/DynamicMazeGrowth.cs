@@ -322,24 +322,32 @@ namespace FaeMaze.Systems
                 // Add 90 degrees to rotate from along-path to across-path orientation
                 float orientationDegrees = Mathf.Atan2(directionOutward.y, directionOutward.x) * Mathf.Rad2Deg + 90f;
 
-                // Create wall PAST the portal to block the path exit
+                // Calculate perpendicular direction for three-tile-wide wall section
+                Vector3 perpendicular = new Vector3(-directionOutward.y, directionOutward.x, 0f);
+                float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
+
+                // Create THREE walls PAST the portal to fully block the path exit (center, left, right)
                 if (mazeRenderer != null)
                 {
                     mazeRenderer.CreateWallAtPosition(wallWorldPos, orientationDegrees);
+                    mazeRenderer.CreateWallAtPosition(wallWorldPos + perpendicular * tileSize, orientationDegrees);
+                    mazeRenderer.CreateWallAtPosition(wallWorldPos - perpendicular * tileSize, orientationDegrees);
                 }
 
-                // Mark wall position as unwalkable in world-space data
+                // Mark wall positions as unwalkable in world-space data
                 var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
                 if (worldSpaceData != null)
                 {
                     worldSpaceData.MarkUnwalkable(new Vector2(wallWorldPos.x, wallWorldPos.y));
+                    worldSpaceData.MarkUnwalkable(new Vector2((wallWorldPos + perpendicular * tileSize).x, (wallWorldPos + perpendicular * tileSize).y));
+                    worldSpaceData.MarkUnwalkable(new Vector2((wallWorldPos - perpendicular * tileSize).x, (wallWorldPos - perpendicular * tileSize).y));
                     worldSpaceData.RegisterSpawnPoint(spawnId, portalWorldPos);
                 }
 
                 // Create portal at the frontier endpoint
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, nodeCenterWorld);
 
-                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), portal at ({portalWorldPos.x:F2}, {portalWorldPos.y:F2}), wall at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), pathDir ({directionOutward.x:F2}, {directionOutward.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
+                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), portal at ({portalWorldPos.x:F2}, {portalWorldPos.y:F2}), 3-wide wall centered at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), pathDir ({directionOutward.x:F2}, {directionOutward.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
 
                 portalCount++;
             }
