@@ -931,8 +931,24 @@ namespace ForestMaze
                     branchPoint = testPoint;
                 }
 
-                // Create perpendicular junction from branch point to poly2's path
-                Vector2 branchPerpPoint = CreatePerpendicularIntersection(poly2[1], branchPoint, poly1Dir);
+                // Find the closest point on poly2's first segment to branchPoint
+                Vector2 junctionOnPoly2 = ClosestPointOnSegment(branchPoint, poly2[0], poly2[1]);
+
+                // Ensure junctionOnPoly2 is not too close to the shared start (would create backtracking)
+                float distFromStart = Vector2.Distance(junctionOnPoly2, sharedStart);
+                float distFromBranch = Vector2.Distance(junctionOnPoly2, branchPoint);
+
+                // If junction is too close to start or to branchPoint, find a better point
+                if (distFromStart < MERGE_DISTANCE * 0.5f || distFromBranch < 0.1f)
+                {
+                    // Use a point along poly2's first segment that is at a reasonable distance
+                    Vector2 poly2Dir = GetSegmentDirection(poly2, 0);
+                    float targetDist = Vector2.Distance(branchPoint, sharedStart);
+                    if (targetDist < MERGE_DISTANCE) targetDist = MERGE_DISTANCE;
+                    junctionOnPoly2 = sharedStart + poly2Dir * targetDist;
+                }
+
+                Debug.Log($"[EdgeMerge] BOUNDARY: branchPoint={branchPoint}, junctionOnPoly2={junctionOnPoly2}, distFromStart={distFromStart:F2}");
 
                 List<Vector2> boundaryNewPoly = new List<Vector2>();
                 boundaryNewPoly.Add(sharedStart);
@@ -943,15 +959,17 @@ namespace ForestMaze
                     boundaryNewPoly.Add(branchPoint);
                 }
 
-                // Add perpendicular point if different from branch point
-                if (Vector2.Distance(branchPerpPoint, branchPoint) > 0.1f)
+                // Add junction point on poly2's path if different from branch point
+                if (Vector2.Distance(junctionOnPoly2, branchPoint) > 0.1f)
                 {
-                    boundaryNewPoly.Add(branchPerpPoint);
+                    boundaryNewPoly.Add(junctionOnPoly2);
                 }
 
-                // Add remaining poly2 points
+                // Add remaining poly2 points starting from poly2[1]
+                // Skip poly2[0] since that's the shared node
                 for (int i = 1; i < poly2.Count; i++)
                 {
+                    // Only add if it's meaningfully different from the last point
                     if (Vector2.Distance(boundaryNewPoly[boundaryNewPoly.Count - 1], poly2[i]) > 0.1f)
                     {
                         boundaryNewPoly.Add(poly2[i]);
