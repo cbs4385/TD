@@ -293,12 +293,12 @@ namespace FaeMaze.Systems
                     directionOutward = (endpointPos - connectedNode.Position).normalized;
                 }
 
-                // Portal is placed at the endpoint
-                Vector3 portalWorldPos = endpointWorld;
+                // Wall is placed AT the endpoint (blocking the exit)
+                Vector3 wallWorldPos = endpointWorld;
 
-                // Wall is placed 0.5 units PAST the endpoint (away from node, blocking the outside)
-                Vector3 wallOffset = new Vector3(directionOutward.x, directionOutward.y, 0f) * 0.5f;
-                Vector3 wallWorldPos = endpointWorld + wallOffset;
+                // Portal is placed 1 unit INSIDE the path (toward the node, on the other side of the final tile)
+                Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 1.0f;
+                Vector3 portalWorldPos = endpointWorld + portalOffset;
 
                 // Get next spawn ID
                 char spawnId = GetNextAvailableSpawnId();
@@ -328,7 +328,7 @@ namespace FaeMaze.Systems
                 // Create portal at the frontier endpoint
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, nodeCenterWorld);
 
-                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), wall at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), pathDir ({directionOutward.x:F2}, {directionOutward.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
+                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), portal at ({portalWorldPos.x:F2}, {portalWorldPos.y:F2}), wall at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), pathDir ({directionOutward.x:F2}, {directionOutward.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
 
                 portalCount++;
             }

@@ -945,6 +945,15 @@ namespace FaeMaze.Visitors
                 // Formula derived from discrete direction mappings
                 float angle = -Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg - 90f;
 
+                // Log rotation details periodically (every 60 frames to avoid spam)
+                if (Time.frameCount % 60 == 0)
+                {
+                    Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
+                        $"atan2={Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg:F1}°, angle={angle:F1}°, " +
+                        $"use3DModel={use3DModel}, modelInstance={(modelInstance != null ? "exists" : "null")}, " +
+                        $"baseRotCaptured={modelBaseRotationCaptured}");
+                }
+
                 // Direction rotation is Z-axis only
                 Quaternion directionRotation = Quaternion.Euler(0f, 0f, angle);
 
@@ -1771,6 +1780,7 @@ namespace FaeMaze.Visitors
         {
             if (modelPrefab == null)
             {
+                Debug.Log($"[VisitorSetup] {gameObject.name}: modelPrefab is null, skipping 3D model setup");
                 return;
             }
 
@@ -1782,6 +1792,8 @@ namespace FaeMaze.Visitors
             modelBaseRotation = modelInstance.transform.localRotation;
             modelBaseRotationCaptured = true;
             modelInstance.transform.localScale = Vector3.one;
+
+            Debug.Log($"[VisitorSetup] {gameObject.name}: created modelInstance, baseRotation={modelBaseRotation.eulerAngles}");
 
             // Look for Animator in the model (should be on root or child)
             if (animator == null)
