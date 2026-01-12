@@ -432,8 +432,7 @@ namespace ForestMaze
             }
 
             int skippedAlreadyConnected = 0;
-            int skippedSourceAngle = 0;
-            int skippedTargetAngle = 0;
+            int skippedNoValidAngles = 0;
             int skippedPolyline = 0;
 
             foreach (var candidate in candidates)
@@ -444,20 +443,35 @@ namespace ForestMaze
                     continue;
                 }
 
-                Vector2 direction = (candidate.Position - newNode.Position).normalized;
-                float angle = Mathf.Atan2(direction.y, direction.x);
-                angle = (angle + 2 * Mathf.PI) % (2 * Mathf.PI);
+                // Try to find valid angles by rotating around the direct path
+                Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
+                float directAngle = Mathf.Atan2(directDirection.y, directDirection.x);
+                directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
-                if (!IsAngleValid(newNode, angle))
+                // Try the direct angle first, then rotations up to ±60 degrees
+                float[] angleOffsets = { 0f, 15f, -15f, 30f, -30f, 45f, -45f, 60f, -60f };
+                bool foundValidAngles = false;
+                float validSourceAngle = 0f;
+                float validTargetAngle = 0f;
+
+                foreach (float offsetDeg in angleOffsets)
                 {
-                    skippedSourceAngle++;
-                    continue;
+                    float offset = offsetDeg * Mathf.Deg2Rad;
+                    float testSourceAngle = (directAngle + offset + 2 * Mathf.PI) % (2 * Mathf.PI);
+                    float testTargetAngle = (testSourceAngle + Mathf.PI) % (2 * Mathf.PI);
+
+                    if (IsAngleValid(newNode, testSourceAngle) && IsAngleValid(candidate, testTargetAngle))
+                    {
+                        foundValidAngles = true;
+                        validSourceAngle = testSourceAngle;
+                        validTargetAngle = testTargetAngle;
+                        break;
+                    }
                 }
 
-                float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
-                if (!IsAngleValid(candidate, reverseAngle))
+                if (!foundValidAngles)
                 {
-                    skippedTargetAngle++;
+                    skippedNoValidAngles++;
                     continue;
                 }
 
@@ -488,8 +502,8 @@ namespace ForestMaze
                 };
 
                 state.Edges.Add(edge);
-                newNode.AddEdge(edge.Id, angle);
-                candidate.AddEdge(edge.Id, reverseAngle);
+                newNode.AddEdge(edge.Id, validSourceAngle);
+                candidate.AddEdge(edge.Id, validTargetAngle);
 
                 // Mark as cross-connection if connecting to non-parent node
                 if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
@@ -503,7 +517,7 @@ namespace ForestMaze
             // Log why connection failed
             if (candidates.Count > 0)
             {
-                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedSourceAngle} source angle invalid, {skippedTargetAngle} target angle invalid, {skippedPolyline} polyline failed");
+                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedNoValidAngles} no valid angles (tried ±60°), {skippedPolyline} polyline failed");
             }
 
             return false;
