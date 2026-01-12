@@ -309,8 +309,9 @@ namespace FaeMaze.Systems
                     break;
                 }
 
-                // Calculate orientation for wall (perpendicular to path direction)
-                float orientationDegrees = Mathf.Atan2(directionOutward.y, directionOutward.x) * Mathf.Rad2Deg;
+                // Calculate orientation for wall (perpendicular to path direction to block the path)
+                // Add 90 degrees to rotate from along-path to across-path orientation
+                float orientationDegrees = Mathf.Atan2(directionOutward.y, directionOutward.x) * Mathf.Rad2Deg + 90f;
 
                 // Create wall PAST the portal to block the path exit
                 if (mazeRenderer != null)
