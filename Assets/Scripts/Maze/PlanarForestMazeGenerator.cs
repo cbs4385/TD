@@ -757,6 +757,9 @@ namespace ForestMaze
         {
             bool merged = false;
 
+            // Track which points in edge2 need to be merged (excluding endpoints connected to nodes)
+            HashSet<int> pointsToMerge = new HashSet<int>();
+
             // Sample along edge1's polyline and check distance to edge2's segments
             for (int i = 0; i < edge1.PolylinePoints.Count - 1; i++)
             {
@@ -780,31 +783,52 @@ namespace ForestMaze
                     if (dist >= MERGE_DISTANCE)
                         continue;
 
-                    // Segments are close and parallel - merge edge2's segment toward edge1
-                    // Find the closest points on both segments
-                    Vector2 midA = (a1 + a2) * 0.5f;
-                    Vector2 closestOnB = ClosestPointOnSegment(midA, b1, b2);
-                    Vector2 mergeDir = (midA - closestOnB).normalized;
-
-                    // Adjust edge2's points toward edge1's path
-                    float adjustment = (MERGE_DISTANCE - dist) * 0.6f + 0.1f;
-
-                    // Only adjust intermediate points, not endpoints connected to nodes
+                    // Mark intermediate points for merging (not endpoints connected to nodes)
                     if (j > 0)
-                    {
-                        edge2.PolylinePoints[j] = b1 + mergeDir * adjustment;
-                    }
-                    if (j < edge2.PolylinePoints.Count - 2)
-                    {
-                        edge2.PolylinePoints[j + 1] = b2 + mergeDir * adjustment;
-                    }
-
-                    merged = true;
-                    mergeCount++;
+                        pointsToMerge.Add(j);
+                    if (j + 1 < edge2.PolylinePoints.Count - 1)
+                        pointsToMerge.Add(j + 1);
                 }
             }
 
+            // Now project all marked points onto the closest point on edge1's full polyline
+            foreach (int idx in pointsToMerge)
+            {
+                Vector2 point = edge2.PolylinePoints[idx];
+                Vector2 closest = ClosestPointOnPolyline(point, edge1.PolylinePoints);
+                edge2.PolylinePoints[idx] = closest;
+                merged = true;
+                mergeCount++;
+            }
+
             return merged;
+        }
+
+        /// <summary>
+        /// Find the closest point on a polyline to a given point.
+        /// </summary>
+        private static Vector2 ClosestPointOnPolyline(Vector2 point, List<Vector2> polyline)
+        {
+            if (polyline.Count == 0)
+                return point;
+            if (polyline.Count == 1)
+                return polyline[0];
+
+            Vector2 closestPoint = polyline[0];
+            float closestDistSq = float.MaxValue;
+
+            for (int i = 0; i < polyline.Count - 1; i++)
+            {
+                Vector2 segmentClosest = ClosestPointOnSegment(point, polyline[i], polyline[i + 1]);
+                float distSq = (point - segmentClosest).sqrMagnitude;
+                if (distSq < closestDistSq)
+                {
+                    closestDistSq = distSq;
+                    closestPoint = segmentClosest;
+                }
+            }
+
+            return closestPoint;
         }
 
         private static Vector2 ClosestPointOnSegment(Vector2 p, Vector2 a, Vector2 b)
