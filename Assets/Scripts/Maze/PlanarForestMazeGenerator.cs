@@ -60,6 +60,12 @@ namespace ForestMaze
             public bool Partial = true;
             public Vector2? GhostCenter; // Reserved position for future node
 
+            /// <summary>
+            /// Flag indicating this edge's polyline was modified and needs wall regeneration.
+            /// Set by merge operations, cleared after wall regeneration.
+            /// </summary>
+            public bool NeedsWallRegeneration = false;
+
             public bool IsComplete() => !Partial && NodeB.HasValue;
         }
 
@@ -82,12 +88,6 @@ namespace ForestMaze
             /// Each segment is a pair of points (start, end) that should be rendered as path tiles.
             /// </summary>
             public List<(Vector2 start, Vector2 end)> AdjustmentFills = new List<(Vector2, Vector2)>();
-
-            /// <summary>
-            /// Edges that were modified during the last MergeNearbyEdges call.
-            /// These edges need their wall borders regenerated for incremental updates.
-            /// </summary>
-            public HashSet<Edge> MergedEdges = new HashSet<Edge>();
 
             // DEPRECATED - Legacy grid rasterization fields, kept for compatibility but unused
             // In world-space mode, graph positions ARE world positions (no transform needed)
@@ -720,9 +720,6 @@ namespace ForestMaze
         /// </summary>
         public static void MergeNearbyEdges(ForestMapState state)
         {
-            // Clear merged edges from previous calls
-            state.MergedEdges.Clear();
-
             if (state.Edges.Count < 2)
                 return;
 
@@ -766,8 +763,8 @@ namespace ForestMaze
                             if (TryMergeEdgesFromSharedNode(edge1, edge2, sharedNodePos.Value, ref mergeCount))
                             {
                                 anyMerged = true;
-                                // Track edge2 as modified (merge functions modify edge2's polyline)
-                                state.MergedEdges.Add(edge2);
+                                // Mark edge2 as needing wall regeneration (merge functions modify edge2's polyline)
+                                edge2.NeedsWallRegeneration = true;
                             }
                         }
                     }
@@ -785,7 +782,7 @@ namespace ForestMaze
                 Debug.LogWarning($"[EdgeMerge] Hit max passes limit ({MAX_PASSES})");
             }
 
-            Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed, {state.MergedEdges.Count} edges modified");
+            Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed");
 
             // Enforce minimum edge spacing at each node
             EnforceMinimumEdgeSpacing(state);
