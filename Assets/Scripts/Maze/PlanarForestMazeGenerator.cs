@@ -431,10 +431,16 @@ namespace ForestMaze
                 candidates[j] = temp;
             }
 
+            int skippedAlreadyConnected = 0;
+            int skippedSourceAngle = 0;
+            int skippedTargetAngle = 0;
+            int skippedPolyline = 0;
+
             foreach (var candidate in candidates)
             {
                 if (connectedNodeIds.Contains(candidate.Id))
                 {
+                    skippedAlreadyConnected++;
                     continue;
                 }
 
@@ -444,12 +450,14 @@ namespace ForestMaze
 
                 if (!IsAngleValid(newNode, angle))
                 {
+                    skippedSourceAngle++;
                     continue;
                 }
 
                 float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
                 if (!IsAngleValid(candidate, reverseAngle))
                 {
+                    skippedTargetAngle++;
                     continue;
                 }
 
@@ -458,6 +466,7 @@ namespace ForestMaze
 
                 if (polyline == null)
                 {
+                    skippedPolyline++;
                     continue;
                 }
 
@@ -491,6 +500,12 @@ namespace ForestMaze
                 return true;
             }
 
+            // Log why connection failed
+            if (candidates.Count > 0)
+            {
+                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedSourceAngle} source angle invalid, {skippedTargetAngle} target angle invalid, {skippedPolyline} polyline failed");
+            }
+
             return false;
         }
 
@@ -501,10 +516,18 @@ namespace ForestMaze
         /// </summary>
         private static void EnsureCrossConnection(ForestMapState state)
         {
-            if (state.HasCrossConnection || state.Nodes.Count < 3)
+            if (state.HasCrossConnection)
             {
-                return; // Already has cross-connection or too few nodes
+                Debug.Log($"[PlanarForest] EnsureCrossConnection: Already has cross-connection, skipping");
+                return;
             }
+            if (state.Nodes.Count < 3)
+            {
+                Debug.Log($"[PlanarForest] EnsureCrossConnection: Only {state.Nodes.Count} nodes, need at least 3");
+                return;
+            }
+
+            Debug.Log($"[PlanarForest] EnsureCrossConnection: Attempting to create cross-connection with {state.Nodes.Count} nodes");
 
             // First try nodes that already have capacity
             var nodesWithCapacity = state.Nodes.OrderByDescending(n => n.Id)
