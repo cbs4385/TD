@@ -778,6 +778,7 @@ namespace ForestMaze
                                 if (edge2.OldPolylinePoints == null)
                                 {
                                     edge2.OldPolylinePoints = oldPolyline;
+                                    Debug.Log($"[WALLREGEN] Edge {edge2.Id} MERGED: flagged for regen, saved {oldPolyline.Count} old points, now has {edge2.PolylinePoints.Count} new points");
                                 }
                             }
                         }
@@ -786,17 +787,9 @@ namespace ForestMaze
 
                 if (!anyMerged)
                 {
-                    Debug.Log($"[EdgeMerge] Converged after {pass} passes");
                     break;
                 }
             }
-
-            if (pass >= MAX_PASSES)
-            {
-                Debug.LogWarning($"[EdgeMerge] Hit max passes limit ({MAX_PASSES})");
-            }
-
-            Debug.Log($"[EdgeMerge] MergeNearbyEdges complete: {mergeCount} merges performed");
 
             // Enforce minimum edge spacing at each node
             EnforceMinimumEdgeSpacing(state);
@@ -880,12 +873,12 @@ namespace ForestMaze
                         float adjustment = minAngleSeparation - angleDiff;
                         float newAngle = next.angle + adjustment;
 
-                        Debug.Log($"[EdgeSpacing] Node {node.Id}: Adjusting edge {next.edge.Id} angle from {next.angle * Mathf.Rad2Deg:F1}° to {newAngle * Mathf.Rad2Deg:F1}° (was {angleDiff * Mathf.Rad2Deg:F1}° apart, need {minAngleSeparation * Mathf.Rad2Deg:F1}°)");
-
                         // Save old polyline before adjustment (only if not already saved from a prior modification)
+                        bool savedOldPath = false;
                         if (next.edge.OldPolylinePoints == null)
                         {
                             next.edge.OldPolylinePoints = new List<Vector2>(next.edge.PolylinePoints);
+                            savedOldPath = true;
                         }
 
                         // Adjust the edge's polyline to use the new angle
@@ -894,6 +887,8 @@ namespace ForestMaze
 
                         // Mark edge as needing wall regeneration
                         next.edge.NeedsWallRegeneration = true;
+
+                        Debug.Log($"[WALLREGEN] Edge {next.edge.Id} SPACING: flagged for regen at node {node.Id}, savedOldPath={savedOldPath}, oldPts={next.edge.OldPolylinePoints?.Count}, newPts={next.edge.PolylinePoints.Count}");
 
                         // Update the angle in our list for subsequent comparisons
                         connectedEdges[nextIdx] = (next.edge, next.startsAtNode, newAngle);
