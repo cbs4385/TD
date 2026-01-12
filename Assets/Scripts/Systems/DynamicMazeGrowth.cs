@@ -271,16 +271,33 @@ namespace FaeMaze.Systems
                 // 1. Remove walls near the consumed spawn point (to open the passage)
                 if (consumedSpawnPos != Vector3.zero)
                 {
-                    mazeRenderer.RemoveWallsNearPosition(consumedSpawnPos, 3f);
+                    mazeRenderer.RemoveWallsNearPosition(consumedSpawnPos, 4f);
                 }
 
-                // 2. Add tiles for the new node
+                // 2. Remove walls at the new node position (node radius + buffer)
+                Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
+                mazeRenderer.RemoveWallsNearPosition(newNodeWorldPos, 5f); // Node radius is ~3, plus border
+
+                // 3. Remove walls along all new edge paths
+                foreach (var edge in newEdges)
+                {
+                    if (edge.PolylinePoints != null)
+                    {
+                        foreach (var point in edge.PolylinePoints)
+                        {
+                            Vector3 pointWorldPos = new Vector3(point.x, point.y, 0);
+                            mazeRenderer.RemoveWallsNearPosition(pointWorldPos, 2f);
+                        }
+                    }
+                }
+
+                // 4. Add tiles for the new node
                 mazeRenderer.AddNodeTilesIncremental(newNode);
 
-                // 3. Add tiles for new/modified edges
+                // 5. Add tiles for new/modified edges
                 mazeRenderer.AddEdgeTilesIncremental(newEdges);
 
-                // 4. Add walls around the new elements
+                // 6. Add walls around the new elements
                 mazeRenderer.AddWallsIncremental(newEdges, newNode);
             }
         }

@@ -1050,6 +1050,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Adds edge polyline points to the path directly without interpolation.
         /// Uses exact polyline vertices which are guaranteed to be on walkable terrain.
+        /// Also adds interpolated points along each segment for smooth movement.
         /// </summary>
         private void AddEdgePolylineToPath(List<Vector3> path, ForestMaze.PlanarForestMazeGenerator.Edge edge,
             Vector2 startPoint, bool towardNode, float z)
@@ -1071,30 +1072,54 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            float stepSize = 1f; // Interpolation step size in world units
+
             if (towardNode)
             {
                 // Go from startPoint toward polyline[0] (the node)
-                // Add each polyline vertex directly - these are on the walkable path
-                for (int i = startSegment; i >= 0; i--)
+                // Iterate through segments in reverse, adding interpolated points
+                Vector3 lastPoint = path.Count > 0 ? path[path.Count - 1] : new Vector3(startPoint.x, startPoint.y, z);
+
+                for (int seg = startSegment; seg >= 0; seg--)
                 {
-                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    path.Add(pt);
+                    Vector2 segStart = edge.PolylinePoints[seg + 1]; // Going in reverse
+                    Vector2 segEnd = edge.PolylinePoints[seg];
+
+                    float segLength = Vector2.Distance(segStart, segEnd);
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segLength / stepSize));
+
+                    for (int j = 1; j <= numSteps; j++)
+                    {
+                        float t = (float)j / numSteps;
+                        Vector2 interpPoint = Vector2.Lerp(segStart, segEnd, t);
+                        path.Add(new Vector3(interpPoint.x, interpPoint.y, z));
+                    }
                 }
             }
             else
             {
                 // Go from startPoint toward polyline[Count-1] (the endpoint)
-                for (int i = startSegment + 1; i < edge.PolylinePoints.Count; i++)
+                for (int seg = startSegment; seg < edge.PolylinePoints.Count - 1; seg++)
                 {
-                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    path.Add(pt);
+                    Vector2 segStart = edge.PolylinePoints[seg];
+                    Vector2 segEnd = edge.PolylinePoints[seg + 1];
+
+                    float segLength = Vector2.Distance(segStart, segEnd);
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segLength / stepSize));
+
+                    for (int j = 1; j <= numSteps; j++)
+                    {
+                        float t = (float)j / numSteps;
+                        Vector2 interpPoint = Vector2.Lerp(segStart, segEnd, t);
+                        path.Add(new Vector3(interpPoint.x, interpPoint.y, z));
+                    }
                 }
             }
         }
 
         /// <summary>
-        /// Adds edge polyline points between two nodes directly without interpolation.
-        /// Uses exact polyline vertices which are guaranteed to be on walkable terrain.
+        /// Adds edge polyline points between two nodes with interpolation.
+        /// Uses interpolated points along polyline segments for smooth movement.
         /// </summary>
         private void AddEdgePolylineToPathBetweenNodes(List<Vector3> path, ForestMaze.PlanarForestMazeGenerator.Edge edge,
             bool reverse, float z)
@@ -1102,22 +1127,46 @@ namespace FaeMaze.Visitors
             if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                 return;
 
+            float stepSize = 1f; // Interpolation step size in world units
+
             if (reverse)
             {
                 // Go from last point to first (skip last since that's where we came from)
-                for (int i = edge.PolylinePoints.Count - 2; i >= 0; i--)
+                for (int seg = edge.PolylinePoints.Count - 2; seg >= 0; seg--)
                 {
-                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    path.Add(pt);
+                    Vector2 segStart = edge.PolylinePoints[seg + 1];
+                    Vector2 segEnd = edge.PolylinePoints[seg];
+
+                    float segLength = Vector2.Distance(segStart, segEnd);
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segLength / stepSize));
+
+                    for (int j = 1; j <= numSteps; j++)
+                    {
+                        float t = (float)j / numSteps;
+                        Vector2 interpPoint = Vector2.Lerp(segStart, segEnd, t);
+                        path.Add(new Vector3(interpPoint.x, interpPoint.y, z));
+                    }
                 }
             }
             else
             {
                 // Go from first to last (skip first since that's where we came from)
-                for (int i = 1; i < edge.PolylinePoints.Count; i++)
+                for (int seg = 0; seg < edge.PolylinePoints.Count - 1; seg++)
                 {
-                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    path.Add(pt);
+                    Vector2 segStart = edge.PolylinePoints[seg];
+                    Vector2 segEnd = edge.PolylinePoints[seg + 1];
+
+                    float segLength = Vector2.Distance(segStart, segEnd);
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segLength / stepSize));
+
+                    // Skip first point on first segment since we're already there
+                    int startJ = (seg == 0) ? 1 : 0;
+                    for (int j = startJ; j <= numSteps; j++)
+                    {
+                        float t = (float)j / numSteps;
+                        Vector2 interpPoint = Vector2.Lerp(segStart, segEnd, t);
+                        path.Add(new Vector3(interpPoint.x, interpPoint.y, z));
+                    }
                 }
             }
         }
