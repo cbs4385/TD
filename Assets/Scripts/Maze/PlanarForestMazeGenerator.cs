@@ -1154,14 +1154,14 @@ namespace ForestMaze
             {
                 Debug.Log($"[MERGE] -> Trying DIVERGING merge");
                 // DIVERGING CASE: edges share path from node, then split
-                return TryMergeDivergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
+                return TryMergeDivergingEdges(edge1, edge2, edge1StartsAtNode, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
             else if (closeAtEnd)
             {
                 Debug.Log($"[MERGE] -> Trying CONVERGING merge");
                 // CONVERGING CASE: edges approach node from different directions, merge before node
-                return TryMergeConvergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
+                return TryMergeConvergingEdges(edge1, edge2, edge1StartsAtNode, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
 
@@ -1171,8 +1171,9 @@ namespace ForestMaze
 
         /// <summary>
         /// Handles diverging edges that share a path from the node then split.
+        /// CRITICAL: Copies exact world space coordinates from edge1.PolylinePoints, never synthetic points.
         /// </summary>
-        private static bool TryMergeDivergingEdges(Edge edge1, Edge edge2, bool edge2StartsAtNode,
+        private static bool TryMergeDivergingEdges(Edge edge1, Edge edge2, bool edge1StartsAtNode, bool edge2StartsAtNode,
             List<Vector2> poly1, List<Vector2> poly2, List<float> distances,
             List<Vector2> closestPointsOnPoly1, List<int> closestSegmentsOnPoly1, ref int mergeCount)
         {
@@ -1196,24 +1197,33 @@ namespace ForestMaze
             // Debug.Log($"[EdgeMerge] DIVERGING: lastCloseIdx2={lastCloseIdx2}, divergeIdx2={divergeIdx2}");
 
             // Special case: only point 0 is close (edges meet at node but immediately diverge)
-            // We need to extend the shared path along poly1 until the paths are MERGE_DISTANCE apart
+            // We need to extend the shared path along edge1 until the paths are MERGE_DISTANCE apart
             if (lastCloseIdx2 == 0 && distances.Count > 1 && distances[1] >= MERGE_DISTANCE)
             {
                 // Debug.Log($"[EdgeMerge] DIVERGING: Special case - only point 0 close, extending shared path");
 
-                // Find a point along poly1's first segment where distance to poly2[1] equals MERGE_DISTANCE
-                // This is where we should branch off
-                Vector2 sharedStart = poly1[0];
-                Vector2 poly1Dir = GetSegmentDirection(poly1, 0);
+                // Get the first point from edge1's ACTUAL polyline (exact coordinates)
+                Vector2 edge1StartPoint = edge1StartsAtNode ? edge1.PolylinePoints[0] : edge1.PolylinePoints[edge1.PolylinePoints.Count - 1];
+                Vector2 edge1SecondPoint = edge1StartsAtNode ? edge1.PolylinePoints[Math.Min(1, edge1.PolylinePoints.Count - 1)]
+                    : edge1.PolylinePoints[Math.Max(0, edge1.PolylinePoints.Count - 2)];
 
-                // Walk along poly1 until we're MERGE_DISTANCE from the line to poly2[1]
+                Vector2 edge1Dir = (edge1SecondPoint - edge1StartPoint).normalized;
+                if (edge1Dir.magnitude < 0.01f && edge1.PolylinePoints.Count > 2)
+                {
+                    // Points are too close, use next segment
+                    edge1SecondPoint = edge1StartsAtNode ? edge1.PolylinePoints[Math.Min(2, edge1.PolylinePoints.Count - 1)]
+                        : edge1.PolylinePoints[Math.Max(0, edge1.PolylinePoints.Count - 3)];
+                    edge1Dir = (edge1SecondPoint - edge1StartPoint).normalized;
+                }
+
+                // Walk along edge1 direction until we're MERGE_DISTANCE from the line to poly2[1]
                 float stepSize = 0.5f;
-                float maxDist = poly1.Count > 1 ? Vector2.Distance(poly1[0], poly1[1]) : 5f;
-                Vector2 branchPoint = sharedStart;
+                float maxDist = Vector2.Distance(edge1StartPoint, edge1SecondPoint);
+                Vector2 branchPoint = edge1StartPoint;
 
                 for (float d = 0; d < maxDist; d += stepSize)
                 {
-                    Vector2 testPoint = sharedStart + poly1Dir * d;
+                    Vector2 testPoint = edge1StartPoint + edge1Dir * d;
                     float distToPoly2 = Vector2.Distance(testPoint, poly2[1]);
 
                     // Also check distance to the line segment poly2[0]->poly2[1]
@@ -1231,7 +1241,7 @@ namespace ForestMaze
                 Vector2 junctionOnPoly2 = ClosestPointOnSegment(branchPoint, poly2[0], poly2[1]);
 
                 // Ensure junctionOnPoly2 is not too close to the shared start (would create backtracking)
-                float distFromStart = Vector2.Distance(junctionOnPoly2, sharedStart);
+                float distFromStart = Vector2.Distance(junctionOnPoly2, edge1StartPoint);
                 float distFromBranch = Vector2.Distance(junctionOnPoly2, branchPoint);
 
                 // If junction is too close to start or to branchPoint, find a better point
@@ -1239,18 +1249,19 @@ namespace ForestMaze
                 {
                     // Use a point along poly2's first segment that is at a reasonable distance
                     Vector2 poly2Dir = GetSegmentDirection(poly2, 0);
-                    float targetDist = Vector2.Distance(branchPoint, sharedStart);
+                    float targetDist = Vector2.Distance(branchPoint, edge1StartPoint);
                     if (targetDist < MERGE_DISTANCE) targetDist = MERGE_DISTANCE;
-                    junctionOnPoly2 = sharedStart + poly2Dir * targetDist;
+                    junctionOnPoly2 = edge1StartPoint + poly2Dir * targetDist;
                 }
 
                 // Debug.Log($"[EdgeMerge] BOUNDARY: branchPoint={branchPoint}, junctionOnPoly2={junctionOnPoly2}, distFromStart={distFromStart:F2}");
 
                 List<Vector2> boundaryNewPoly = new List<Vector2>();
-                boundaryNewPoly.Add(sharedStart);
+                // Start with the EXACT coordinate from edge1
+                boundaryNewPoly.Add(edge1StartPoint);
 
                 // Add branch point if different from start
-                if (Vector2.Distance(branchPoint, sharedStart) > 0.1f)
+                if (Vector2.Distance(branchPoint, edge1StartPoint) > 0.1f)
                 {
                     boundaryNewPoly.Add(branchPoint);
                 }
@@ -1308,24 +1319,64 @@ namespace ForestMaze
             Vector2 targetDir = GetSegmentDirection(poly1, targetSegment);
             Vector2 perpPoint = CreatePerpendicularIntersection(poly2[divergeIdx2], closestOnPoly1, targetDir);
 
-            // Build new polyline: poly1 path from node to merge point, then perpendicular to poly2's remainder
+            // Build new polyline using EXACT coordinates from edge1.PolylinePoints
+            // poly1 may have synthetic points and be reoriented - we need the actual edge coordinates
             List<Vector2> newPoly2 = new List<Vector2>();
 
-            for (int i = 0; i <= targetSegment && i < poly1.Count; i++)
+            // Copy exact points from edge1's actual polyline up to the merge point
+            // targetSegment is indexed into poly1 which is oriented from shared node outward
+            // We need to translate this to edge1.PolylinePoints indices
+            int edge1Count = edge1.PolylinePoints.Count;
+
+            if (edge1StartsAtNode)
             {
-                newPoly2.Add(poly1[i]);
+                // edge1 starts at the shared node - copy points 0, 1, 2, ... up to targetSegment
+                // poly1 may have had a synthetic point prepended, so we need to check
+                // poly1[0] might be sharedNodePos (synthetic) or edge1.PolylinePoints[0]
+                // We use edge1.PolylinePoints directly to get exact coordinates
+
+                // Find how many edge1 points to copy by matching to targetSegment
+                // targetSegment in poly1 corresponds to segment in edge1
+                // If poly1 had synthetic point at 0, targetSegment in edge1 is targetSegment-1
+                bool poly1HasSyntheticStart = poly1.Count > edge1Count;
+                int edge1TargetSegment = poly1HasSyntheticStart ? Math.Max(0, targetSegment - 1) : targetSegment;
+
+                for (int i = 0; i <= edge1TargetSegment && i < edge1Count; i++)
+                {
+                    newPoly2.Add(edge1.PolylinePoints[i]);
+                }
+            }
+            else
+            {
+                // edge1 ends at the shared node - poly1 is reversed
+                // poly1[i] corresponds to edge1.PolylinePoints[edge1Count - 1 - i]
+                // Copy from the end of edge1 toward the start
+                bool poly1HasSyntheticStart = poly1.Count > edge1Count;
+                int edge1TargetSegment = poly1HasSyntheticStart ? Math.Max(0, targetSegment - 1) : targetSegment;
+
+                for (int i = 0; i <= edge1TargetSegment; i++)
+                {
+                    int edge1Idx = edge1Count - 1 - i;
+                    if (edge1Idx >= 0 && edge1Idx < edge1Count)
+                    {
+                        newPoly2.Add(edge1.PolylinePoints[edge1Idx]);
+                    }
+                }
             }
 
+            // Add the closest point on the path (may be between vertices)
             if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], closestOnPoly1) > 0.1f)
             {
                 newPoly2.Add(closestOnPoly1);
             }
 
+            // Add perpendicular junction point
             if (Vector2.Distance(perpPoint, closestOnPoly1) > 0.1f)
             {
                 newPoly2.Add(perpPoint);
             }
 
+            // Add remaining poly2 points from the divergence point
             for (int i = divergeIdx2; i < poly2.Count; i++)
             {
                 if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], poly2[i]) > 0.1f)
@@ -1349,8 +1400,9 @@ namespace ForestMaze
 
         /// <summary>
         /// Handles converging edges that approach the node from different directions and should merge before reaching it.
+        /// CRITICAL: Copies exact world space coordinates from edge1.PolylinePoints, never synthetic points.
         /// </summary>
-        private static bool TryMergeConvergingEdges(Edge edge1, Edge edge2, bool edge2StartsAtNode,
+        private static bool TryMergeConvergingEdges(Edge edge1, Edge edge2, bool edge1StartsAtNode, bool edge2StartsAtNode,
             List<Vector2> poly1, List<Vector2> poly2, List<float> distances,
             List<Vector2> closestPointsOnPoly1, List<int> closestSegmentsOnPoly1, ref int mergeCount)
         {
@@ -1412,19 +1464,52 @@ namespace ForestMaze
                 newPoly2.Add(perpPoint);
             }
 
-            // Add closest point on poly1
+            // Add closest point on poly1 (may be between vertices)
             if (Vector2.Distance(perpPoint, closestOnPoly1) > 0.1f)
             {
                 newPoly2.Add(closestOnPoly1);
             }
 
-            // Add poly1's path from merge point to node (which is at the start of poly1)
-            // We need points from targetSegment down to 0
-            for (int i = targetSegment; i >= 0; i--)
+            // Add poly1's path from merge point to node using EXACT coordinates from edge1.PolylinePoints
+            // poly1 is oriented from shared node outward, so we need to add points from targetSegment down to 0
+            // But we must use edge1.PolylinePoints (exact coordinates) rather than poly1 (may have synthetic points)
+            int edge1Count = edge1.PolylinePoints.Count;
+            bool poly1HasSyntheticStart = poly1.Count > edge1Count;
+            int edge1TargetSegment = poly1HasSyntheticStart ? Math.Max(0, targetSegment - 1) : targetSegment;
+
+            if (edge1StartsAtNode)
             {
-                if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], poly1[i]) > 0.1f)
+                // edge1 starts at the shared node
+                // poly1 is in same order as edge1, we need to add points from targetSegment down to 0
+                // In edge1 terms: add points from edge1TargetSegment down to 0
+                for (int i = edge1TargetSegment; i >= 0; i--)
                 {
-                    newPoly2.Add(poly1[i]);
+                    if (i < edge1Count)
+                    {
+                        if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], edge1.PolylinePoints[i]) > 0.1f)
+                        {
+                            newPoly2.Add(edge1.PolylinePoints[i]);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // edge1 ends at the shared node - poly1 is reversed
+                // poly1[i] corresponds to edge1.PolylinePoints[edge1Count - 1 - i]
+                // We want to add points toward the node (which is at end of edge1)
+                // From poly1 perspective: targetSegment down to 0
+                // In edge1 terms: (edge1Count-1-targetSegment) up to (edge1Count-1)
+                int startIdx = edge1Count - 1 - edge1TargetSegment;
+                for (int i = startIdx; i < edge1Count; i++)
+                {
+                    if (i >= 0)
+                    {
+                        if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], edge1.PolylinePoints[i]) > 0.1f)
+                        {
+                            newPoly2.Add(edge1.PolylinePoints[i]);
+                        }
+                    }
                 }
             }
 
