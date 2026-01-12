@@ -267,42 +267,57 @@ namespace ForestMaze
             state.GhostCenters.RemoveAll(g => Vector2.Distance(g, edge.GhostCenter.Value) < 1e-6f);
             edge.GhostCenter = null;
 
+            Debug.Log($"[PlanarForest] ===== STEP: Created node {newNode.Id} at {newNode.Position}, capacity={newNode.MaxDegree}, parent edge from node {edge.NodeA} =====");
+
             // First priority: Ensure at least one frontier edge for continued growth
             bool hasFrontierEdge = false;
             if (newNode.HasCapacity())
             {
+                Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting to add frontier edge...");
                 if (AddPartialEdge(state, newNode))
                 {
                     hasFrontierEdge = true;
+                    Debug.Log($"[PlanarForest] Step {newNode.Id}: Frontier edge added successfully");
                 }
+                else
+                {
+                    Debug.Log($"[PlanarForest] Step {newNode.Id}: FAILED to add frontier edge");
+                }
+            }
+            else
+            {
+                Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for frontier edge (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
             }
 
             // Second priority: Ensure at least one cross-connection to existing node
             bool hasExistingConnection = false;
             if (newNode.HasCapacity())
             {
+                Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting cross-connection (excluding parent node {edge.NodeA})...");
                 if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA, allowForceCapacity: true))
                 {
-                    Debug.Log($"[PlanarForest] Growth: Created required cross-connection from node {newNode.Id}");
                     hasExistingConnection = true;
                 }
             }
+            else
+            {
+                Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for cross-connection (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
+            }
 
             // Fill remaining capacity with partial edges (more frontier for growth)
+            int additionalFrontier = 0;
             while (newNode.HasCapacity())
             {
                 if (!AddPartialEdge(state, newNode))
                     break;
+                additionalFrontier++;
+            }
+            if (additionalFrontier > 0)
+            {
+                Debug.Log($"[PlanarForest] Step {newNode.Id}: Added {additionalFrontier} additional frontier edges");
             }
 
-            if (!hasFrontierEdge)
-            {
-                Debug.Log($"[PlanarForest] Growth: Node {newNode.Id} could not create frontier edge");
-            }
-            if (!hasExistingConnection)
-            {
-                Debug.Log($"[PlanarForest] Growth: Node {newNode.Id} could not create cross-connection (no valid candidates)");
-            }
+            Debug.Log($"[PlanarForest] ===== STEP COMPLETE: Node {newNode.Id} - frontier={hasFrontierEdge}, crossConnect={hasExistingConnection}, finalEdges={newNode.IncidentEdges.Count}/{newNode.MaxDegree} =====");
 
             state.TurnCount++;
             return true;
@@ -418,12 +433,18 @@ namespace ForestMaze
         {
             var connectedNodeIds = GetConnectedNodeIds(state, newNode.Id);
 
+            // Log new node state for debugging
+            string newNodeAngles = string.Join(", ", newNode.UsedAngles.Select(a => $"{a * Mathf.Rad2Deg:F0}°"));
+            Debug.Log($"[PlanarForest] TryConnect for node {newNode.Id} at {newNode.Position}, edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree}, usedAngles=[{newNodeAngles}]");
+
             // First try nodes with capacity
             var candidates = state.Nodes
                 .Where(n => n.Id != newNode.Id && n.HasCapacity())
                 .Where(n => !prohibitedNodeId.HasValue || n.Id != prohibitedNodeId.Value)
                 .Where(n => !connectedNodeIds.Contains(n.Id))
                 .ToList();
+
+            int candidatesWithCapacity = candidates.Count;
 
             // If no candidates with capacity and we're allowed to force, include nodes at capacity
             if (candidates.Count == 0 && allowForceCapacity)
@@ -437,6 +458,11 @@ namespace ForestMaze
 
             if (candidates.Count == 0)
             {
+                int totalNodes = state.Nodes.Count;
+                int excludedSelf = 1;
+                int excludedProhibited = prohibitedNodeId.HasValue ? 1 : 0;
+                int excludedConnected = connectedNodeIds.Count;
+                Debug.Log($"[PlanarForest] TryConnect FAILED: 0 candidates. Total nodes={totalNodes}, excluded: self=1, prohibited={excludedProhibited}, alreadyConnected={excludedConnected}");
                 return false;
             }
 
@@ -445,20 +471,21 @@ namespace ForestMaze
                 .OrderBy(c => Vector2.Distance(c.Position, newNode.Position))
                 .ToList();
 
-            int skippedAlreadyConnected = 0;
-            int skippedNoValidAngles = 0;
-            int skippedPolyline = 0;
+            Debug.Log($"[PlanarForest] TryConnect: {candidates.Count} candidates ({candidatesWithCapacity} with capacity, allowForce={allowForceCapacity})");
 
             foreach (var candidate in candidates)
             {
+                float dist = Vector2.Distance(newNode.Position, candidate.Position);
+                string candAngles = string.Join(", ", candidate.UsedAngles.Select(a => $"{a * Mathf.Rad2Deg:F0}°"));
+                Debug.Log($"[PlanarForest] Trying candidate {candidate.Id} at dist={dist:F1}, edges={candidate.IncidentEdges.Count}/{candidate.MaxDegree}, usedAngles=[{candAngles}]");
+
                 if (connectedNodeIds.Contains(candidate.Id))
                 {
-                    skippedAlreadyConnected++;
+                    Debug.Log($"[PlanarForest]   -> SKIP: Already connected to node {candidate.Id}");
                     continue;
                 }
 
                 // Find any valid angle pair by searching all possible angles on source node
-                // For each valid source angle, check if the corresponding target angle is also valid
                 bool foundValidAngles = false;
                 float validSourceAngle = 0f;
                 float validTargetAngle = 0f;
@@ -469,20 +496,26 @@ namespace ForestMaze
                 directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
                 // Try angles in 10-degree increments around the full circle
-                // Order by proximity to direct angle for more natural-looking connections
                 float angleStep = 10f * Mathf.Deg2Rad;
                 int numSteps = Mathf.CeilToInt(2 * Mathf.PI / angleStep);
+                int sourceAngleBlocked = 0;
+                int targetAngleBlocked = 0;
 
                 for (int i = 0; i < numSteps && !foundValidAngles; i++)
                 {
-                    // Alternate between positive and negative offsets from direct angle
                     float offset = (i / 2 + 1) * angleStep * (i % 2 == 0 ? 1 : -1);
-                    if (i == 0) offset = 0; // Try direct angle first
+                    if (i == 0) offset = 0;
 
                     float testSourceAngle = (directAngle + offset + 2 * Mathf.PI) % (2 * Mathf.PI);
                     float testTargetAngle = (testSourceAngle + Mathf.PI) % (2 * Mathf.PI);
 
-                    if (IsAngleValid(newNode, testSourceAngle) && IsAngleValid(candidate, testTargetAngle))
+                    bool sourceValid = IsAngleValid(newNode, testSourceAngle);
+                    bool targetValid = IsAngleValid(candidate, testTargetAngle);
+
+                    if (!sourceValid) sourceAngleBlocked++;
+                    if (!targetValid) targetAngleBlocked++;
+
+                    if (sourceValid && targetValid)
                     {
                         foundValidAngles = true;
                         validSourceAngle = testSourceAngle;
@@ -492,16 +525,18 @@ namespace ForestMaze
 
                 if (!foundValidAngles)
                 {
-                    skippedNoValidAngles++;
+                    Debug.Log($"[PlanarForest]   -> SKIP: No valid angles. Tested {numSteps} angles: {sourceAngleBlocked} blocked on source, {targetAngleBlocked} blocked on target");
                     continue;
                 }
+
+                Debug.Log($"[PlanarForest]   -> Found valid angles: source={validSourceAngle * Mathf.Rad2Deg:F0}°, target={validTargetAngle * Mathf.Rad2Deg:F0}°");
 
                 var polyline = BuildCurvedPolyline(state, newNode.Position, candidate.Position,
                     new List<int> { newNode.Id, candidate.Id }, isCrossConnection: true);
 
                 if (polyline == null)
                 {
-                    skippedPolyline++;
+                    Debug.Log($"[PlanarForest]   -> SKIP: Polyline generation failed");
                     continue;
                 }
 
@@ -509,7 +544,7 @@ namespace ForestMaze
                 if (!candidate.HasCapacity())
                 {
                     candidate.MaxDegree++;
-                    Debug.Log($"[PlanarForest] Expanded node {candidate.Id} capacity to {candidate.MaxDegree} for cross-connection");
+                    Debug.Log($"[PlanarForest]   -> Expanded node {candidate.Id} capacity to {candidate.MaxDegree}");
                 }
 
                 var edge = new Edge
@@ -526,6 +561,8 @@ namespace ForestMaze
                 newNode.AddEdge(edge.Id, validSourceAngle);
                 candidate.AddEdge(edge.Id, validTargetAngle);
 
+                Debug.Log($"[PlanarForest]   -> SUCCESS: Created edge {edge.Id} from node {newNode.Id} to node {candidate.Id}");
+
                 // Mark as cross-connection if connecting to non-parent node
                 if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
                 {
@@ -535,12 +572,7 @@ namespace ForestMaze
                 return true;
             }
 
-            // Log why connection failed
-            if (candidates.Count > 0)
-            {
-                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedNoValidAngles} no valid angles (tried full circle), {skippedPolyline} polyline failed");
-            }
-
+            Debug.Log($"[PlanarForest] TryConnect FAILED: All {candidates.Count} candidates exhausted for node {newNode.Id}");
             return false;
         }
 
