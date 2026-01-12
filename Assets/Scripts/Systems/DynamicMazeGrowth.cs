@@ -161,7 +161,6 @@ namespace FaeMaze.Systems
 
             if (forestMapState.Frontier.Count == 0)
             {
-                Debug.Log("[DynamicGrowth] No frontier edges available for growth");
                 return;
             }
 
@@ -238,15 +237,6 @@ namespace FaeMaze.Systems
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null) return;
 
-            // Log parent transform info for debugging
-            if (portalsParent != null)
-            {
-                Debug.Log($"[PortalPlacement] portalsParent '{portalsParent.name}': " +
-                    $"worldPos=({portalsParent.position.x:F2}, {portalsParent.position.y:F2}, {portalsParent.position.z:F2}), " +
-                    $"localPos=({portalsParent.localPosition.x:F2}, {portalsParent.localPosition.y:F2}, {portalsParent.localPosition.z:F2}), " +
-                    $"scale=({portalsParent.lossyScale.x:F2}, {portalsParent.lossyScale.y:F2}, {portalsParent.lossyScale.z:F2})");
-            }
-
             // Clear ALL existing portals
             var portalsToRemove = new List<char>(spawnPointPortals.Keys);
             foreach (char spawnId in portalsToRemove)
@@ -283,8 +273,6 @@ namespace FaeMaze.Systems
 
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
-
-            Debug.Log($"[PortalPlacement] Processing {forestMapState.Frontier.Count} frontier edges");
 
             // Place portals at partial edge endpoints (the actual frontier)
             int portalCount = 0;
@@ -364,12 +352,8 @@ namespace FaeMaze.Systems
                 // Create portal at the frontier endpoint
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, nodeCenterWorld);
 
-                Debug.Log($"[DynamicGrowth] Portal {spawnId}: edge {edgeId}, endpoint ({endpointPos.x:F2}, {endpointPos.y:F2}), portal at ({portalWorldPos.x:F2}, {portalWorldPos.y:F2}), 3-wide wall centered at ({wallWorldPos.x:F2}, {wallWorldPos.y:F2}), pathDir ({directionOutward.x:F2}, {directionOutward.y:F2}), node at ({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2})");
-
                 portalCount++;
             }
-
-            Debug.Log($"[DynamicGrowth] Created {portalCount} portals for {forestMapState.Frontier.Count} frontier edges");
 
             // Signal all visitors to recalculate paths based on the updated graph
             SignalVisitorsToRetarget();
@@ -427,15 +411,6 @@ namespace FaeMaze.Systems
 
             // Track portal
             spawnPointPortals[spawnId] = portal;
-
-            // Log detailed portal placement info
-            Debug.Log($"[PortalPlacement] Portal {spawnId}: " +
-                $"intended=({worldPos.x:F2}, {worldPos.y:F2}), " +
-                $"final=({finalWorldPos.x:F2}, {finalWorldPos.y:F2}, {finalWorldPos.z:F2}), " +
-                $"actual=({portal.transform.position.x:F2}, {portal.transform.position.y:F2}, {portal.transform.position.z:F2}), " +
-                $"rotation=({rotation.eulerAngles.x:F1}, {rotation.eulerAngles.y:F1}, {rotation.eulerAngles.z:F1}), " +
-                $"nodeCenter=({nodeCenterWorld.x:F2}, {nodeCenterWorld.y:F2}), " +
-                $"dirToNode=({directionToNode.x:F2}, {directionToNode.y:F2})");
 
             // Create debug visualization
             CreateDebugColumn(worldPos, nodeCenterWorld, Color.blue, $"Portal_{spawnId}_ToNode");

@@ -409,7 +409,6 @@ namespace FaeMaze.Visitors
         {
             if (mazeGridBehaviour != null)
             {
-                Debug.Log($"[{name}] Retargeting to heart");
                 SetWorldDestination(mazeGridBehaviour.HeartWorldPosition);
             }
         }
@@ -462,7 +461,7 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            Debug.Log($"[{name}] Retargeting to nearest spawn at {bestSpawn} (walking dist: {shortestWalkingDist:F1})");
+            Debug.Log($"[Pathfinding] {name}: Retargeting to nearest spawn at {bestSpawn} (walking dist: {shortestWalkingDist:F1})");
             SetWorldDestination(bestSpawn);
         }
 
@@ -672,6 +671,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual void SetWorldDestination(Vector3 destination)
         {
+            Debug.Log($"[Pathfinding] {name}: SetWorldDestination called with destination {destination}");
+
             worldDestination = destination;
             originalDestination = destination;
             worldPathIndex = 0;
@@ -708,33 +709,67 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Builds a world-space path from start to end using graph edges.
-        /// Returns a list of world positions to traverse.
+        /// Constructs path in 1-unit increments along walkable edge polylines.
         /// </summary>
         protected virtual List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
             {
-                // Fallback: direct path
+                Debug.Log($"[Pathfinding] {name}: No maze data, using direct path to {end}");
                 return new List<Vector3> { end };
             }
 
             var graphState = mazeGridBehaviour.ForestMapState;
             var result = new List<Vector3>();
 
-            // Convert Vector3 to Vector2 for node lookup (positions are already in world space)
             Vector2 startPos2D = new Vector2(start.x, start.y);
             Vector2 endPos2D = new Vector2(end.x, end.y);
 
-            // Find nearest node to start
-            int startNodeIndex = FindNearestNodeIndex(graphState, startPos2D);
+            // Find nearest point on any edge for both start and end
+            Vector2 nearestStartOnEdge;
+            ForestMaze.PlanarForestMazeGenerator.Edge startEdge;
+            int startEdgeSegmentIndex;
+            FindNearestPointOnAnyEdge(graphState, startPos2D, out nearestStartOnEdge, out startEdge, out startEdgeSegmentIndex);
 
-            // Find nearest node to end (usually the heart at index 0)
-            int endNodeIndex = FindNearestNodeIndex(graphState, endPos2D);
+            Vector2 nearestEndOnEdge;
+            ForestMaze.PlanarForestMazeGenerator.Edge endEdge;
+            int endEdgeSegmentIndex;
+            FindNearestPointOnAnyEdge(graphState, endPos2D, out nearestEndOnEdge, out endEdge, out endEdgeSegmentIndex);
+
+            Debug.Log($"[Pathfinding] {name}: Building path from {start} to {end}");
+            Debug.Log($"[Pathfinding] {name}: Start nearest edge point: {nearestStartOnEdge}, End nearest edge point: {nearestEndOnEdge}");
+
+            // Add interpolated path from start to nearest edge point (1-unit steps)
+            AddInterpolatedPath(result, start, new Vector3(nearestStartOnEdge.x, nearestStartOnEdge.y, start.z), 1f);
+
+            // Find nodes connected to start and end edges
+            int startNodeIndex = startEdge != null ? startEdge.NodeA : FindNearestNodeIndex(graphState, startPos2D);
+            int endNodeIndex = endEdge != null ? endEdge.NodeA : FindNearestNodeIndex(graphState, endPos2D);
+
+            // If on partial edge, the connected node is NodeA
+            if (startEdge != null && startEdge.Partial)
+            {
+                startNodeIndex = startEdge.NodeA;
+            }
+            if (endEdge != null && endEdge.Partial)
+            {
+                endNodeIndex = endEdge.NodeA;
+            }
+
+            Debug.Log($"[Pathfinding] {name}: Start node: {startNodeIndex}, End node: {endNodeIndex}");
 
             if (startNodeIndex < 0 || endNodeIndex < 0)
             {
-                // Fallback: direct path
-                return new List<Vector3> { end };
+                Debug.Log($"[Pathfinding] {name}: Invalid node indices, using direct path");
+                AddInterpolatedPath(result, result.Count > 0 ? result[result.Count - 1] : start, end, 1f);
+                return result;
+            }
+
+            // If start is on a partial edge, follow it to the node first
+            if (startEdge != null && startEdge.Partial && startEdge.PolylinePoints.Count > 0)
+            {
+                Debug.Log($"[Pathfinding] {name}: Following partial start edge to node {startEdge.NodeA}");
+                AddEdgePolylineToPath(result, startEdge, nearestStartOnEdge, true, start.z); // true = toward node
             }
 
             // BFS to find path through nodes
@@ -742,136 +777,236 @@ namespace FaeMaze.Visitors
 
             if (nodePath == null || nodePath.Count == 0)
             {
-                // Fallback: direct path
-                return new List<Vector3> { end };
+                Debug.Log($"[Pathfinding] {name}: No node path found, using direct interpolated path");
+                AddInterpolatedPath(result, result.Count > 0 ? result[result.Count - 1] : start, end, 1f);
+                return result;
             }
 
-            // Convert node path to world positions following edge polylines
-            // Add start position first
-            result.Add(start);
+            Debug.Log($"[Pathfinding] {name}: Node path: [{string.Join(" -> ", nodePath)}]");
 
-            // Check if start is on a partial edge endpoint (spawn point)
-            // If so, add that partial edge's polyline (reversed from endpoint toward connected node)
-            ForestMaze.PlanarForestMazeGenerator.Edge startPartialEdge = FindPartialEdgeAtPosition(graphState, startPos2D);
-            if (startPartialEdge != null && startPartialEdge.PolylinePoints.Count > 0)
-            {
-                // Add polyline points from endpoint toward connected node (reversed order)
-                // Polyline points are already in world space
-                for (int p = startPartialEdge.PolylinePoints.Count - 2; p >= 0; p--)
-                {
-                    var pt = startPartialEdge.PolylinePoints[p];
-                    Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
-                    result.Add(worldPt);
-                }
-            }
-            else
-            {
-                // Check if start is on a COMPLETE edge endpoint (happens after maze growth)
-                // When a partial edge becomes complete, visitors at the old endpoint need to follow the polyline
-                var startCompleteEdge = FindCompleteEdgeAtEndpoint(graphState, startPos2D);
-                if (startCompleteEdge != null && startCompleteEdge.PolylinePoints.Count > 0)
-                {
-                    // Determine which end of the polyline the visitor is at
-                    Vector2 firstPoint = startCompleteEdge.PolylinePoints[0];
-                    Vector2 lastPoint = startCompleteEdge.PolylinePoints[startCompleteEdge.PolylinePoints.Count - 1];
-                    float distToFirst = Vector2.Distance(startPos2D, firstPoint);
-                    float distToLast = Vector2.Distance(startPos2D, lastPoint);
-
-                    if (distToLast < distToFirst)
-                    {
-                        // Visitor is at the last point (former partial edge endpoint)
-                        // Add polyline points in reverse order toward first point
-                        for (int p = startCompleteEdge.PolylinePoints.Count - 2; p >= 0; p--)
-                        {
-                            var pt = startCompleteEdge.PolylinePoints[p];
-                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
-                            result.Add(worldPt);
-                        }
-                    }
-                    else
-                    {
-                        // Visitor is at the first point
-                        // Add polyline points in forward order toward last point
-                        for (int p = 1; p < startCompleteEdge.PolylinePoints.Count; p++)
-                        {
-                            var pt = startCompleteEdge.PolylinePoints[p];
-                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
-                            result.Add(worldPt);
-                        }
-                    }
-                }
-            }
-
-            // For each pair of consecutive nodes, find the connecting edge and add its polyline points
+            // Follow edges between consecutive nodes
             for (int i = 0; i < nodePath.Count - 1; i++)
             {
                 int nodeA = nodePath[i];
                 int nodeB = nodePath[i + 1];
 
-                // Find the edge connecting these nodes
-                ForestMaze.PlanarForestMazeGenerator.Edge connectingEdge = null;
-                bool reversePolyline = false;
-
-                foreach (var edge in graphState.Edges)
-                {
-                    if (!edge.Partial && edge.NodeB.HasValue)
-                    {
-                        if (edge.NodeA == nodeA && edge.NodeB.Value == nodeB)
-                        {
-                            connectingEdge = edge;
-                            reversePolyline = false;
-                            break;
-                        }
-                        else if (edge.NodeA == nodeB && edge.NodeB.Value == nodeA)
-                        {
-                            connectingEdge = edge;
-                            reversePolyline = true;
-                            break;
-                        }
-                    }
-                }
+                var connectingEdge = FindConnectingEdge(graphState, nodeA, nodeB, out bool reverse);
 
                 if (connectingEdge != null && connectingEdge.PolylinePoints.Count > 0)
                 {
-                    // Add polyline points in correct order (already in world space)
-                    // Skip the first point (node we came from) to avoid duplicates and node-center paths
-                    if (reversePolyline)
-                    {
-                        // Reversed: skip the last point (index Count-1) which is the node we came from
-                        for (int p = connectingEdge.PolylinePoints.Count - 2; p >= 0; p--)
-                        {
-                            var pt = connectingEdge.PolylinePoints[p];
-                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
-                            result.Add(worldPt);
-                        }
-                    }
-                    else
-                    {
-                        // Forward: skip the first point (index 0) which is the node we came from
-                        for (int p = 1; p < connectingEdge.PolylinePoints.Count; p++)
-                        {
-                            var pt = connectingEdge.PolylinePoints[p];
-                            Vector3 worldPt = new Vector3(pt.x, pt.y, start.z);
-                            result.Add(worldPt);
-                        }
-                    }
+                    AddEdgePolylineToPathBetweenNodes(result, connectingEdge, reverse, start.z);
                 }
                 else
                 {
-                    // Fallback: add node position directly (already in world space)
+                    // Fallback: interpolate directly to next node
                     var node = graphState.Nodes[nodeB];
-                    Vector3 worldPt = new Vector3(node.Position.x, node.Position.y, start.z);
-                    result.Add(worldPt);
+                    Vector3 nodePos = new Vector3(node.Position.x, node.Position.y, start.z);
+                    Vector3 fromPos = result.Count > 0 ? result[result.Count - 1] : start;
+                    AddInterpolatedPath(result, fromPos, nodePos, 1f);
                 }
             }
 
-            // Ensure we end exactly at the destination
-            if (result.Count > 0 && Vector3.Distance(result[result.Count - 1], end) > 0.1f)
+            // If end is on a partial edge, follow from node to endpoint
+            if (endEdge != null && endEdge.Partial && endEdge.PolylinePoints.Count > 0)
             {
-                result.Add(end);
+                Debug.Log($"[Pathfinding] {name}: Following partial end edge from node to destination");
+                AddEdgePolylineToPath(result, endEdge, nearestEndOnEdge, false, start.z); // false = away from node
             }
 
+            // Final interpolation to exact destination
+            Vector3 lastPoint = result.Count > 0 ? result[result.Count - 1] : start;
+            if (Vector3.Distance(lastPoint, end) > 0.1f)
+            {
+                AddInterpolatedPath(result, lastPoint, end, 1f);
+            }
+
+            Debug.Log($"[Pathfinding] {name}: Final path has {result.Count} waypoints");
             return result;
+        }
+
+        /// <summary>
+        /// Finds the nearest point on any edge polyline to the given position.
+        /// </summary>
+        private void FindNearestPointOnAnyEdge(ForestMaze.PlanarForestMazeGenerator.ForestMapState state,
+            Vector2 position, out Vector2 nearestPoint, out ForestMaze.PlanarForestMazeGenerator.Edge nearestEdge,
+            out int segmentIndex)
+        {
+            nearestPoint = position;
+            nearestEdge = null;
+            segmentIndex = -1;
+            float minDist = float.MaxValue;
+
+            foreach (var edge in state.Edges)
+            {
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                    continue;
+
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+                    Vector2 closest = ClosestPointOnSegment(position, segStart, segEnd);
+                    float dist = Vector2.Distance(position, closest);
+
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        nearestPoint = closest;
+                        nearestEdge = edge;
+                        segmentIndex = i;
+                    }
+                }
+            }
+
+            // Also check node positions (visitor might be at a node)
+            foreach (var node in state.Nodes)
+            {
+                float dist = Vector2.Distance(position, node.Position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    nearestPoint = node.Position;
+                    // Keep nearestEdge as null to indicate we're at a node
+                }
+            }
+        }
+
+        /// <summary>
+        /// Finds the closest point on a line segment to a given point.
+        /// </summary>
+        private Vector2 ClosestPointOnSegment(Vector2 point, Vector2 segStart, Vector2 segEnd)
+        {
+            Vector2 seg = segEnd - segStart;
+            float segLengthSq = seg.sqrMagnitude;
+            if (segLengthSq < 0.0001f)
+                return segStart;
+
+            float t = Mathf.Clamp01(Vector2.Dot(point - segStart, seg) / segLengthSq);
+            return segStart + t * seg;
+        }
+
+        /// <summary>
+        /// Adds interpolated points along a straight line at specified intervals.
+        /// </summary>
+        private void AddInterpolatedPath(List<Vector3> path, Vector3 from, Vector3 to, float stepSize)
+        {
+            float dist = Vector3.Distance(from, to);
+            if (dist < 0.1f)
+                return;
+
+            int steps = Mathf.CeilToInt(dist / stepSize);
+            for (int i = 1; i <= steps; i++)
+            {
+                float t = (float)i / steps;
+                Vector3 point = Vector3.Lerp(from, to, t);
+                path.Add(point);
+            }
+        }
+
+        /// <summary>
+        /// Finds the edge connecting two nodes.
+        /// </summary>
+        private ForestMaze.PlanarForestMazeGenerator.Edge FindConnectingEdge(
+            ForestMaze.PlanarForestMazeGenerator.ForestMapState state, int nodeA, int nodeB, out bool reverse)
+        {
+            reverse = false;
+            foreach (var edge in state.Edges)
+            {
+                if (!edge.Partial && edge.NodeB.HasValue)
+                {
+                    if (edge.NodeA == nodeA && edge.NodeB.Value == nodeB)
+                    {
+                        reverse = false;
+                        return edge;
+                    }
+                    else if (edge.NodeA == nodeB && edge.NodeB.Value == nodeA)
+                    {
+                        reverse = true;
+                        return edge;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Adds edge polyline points to the path, interpolated at 1-unit intervals.
+        /// </summary>
+        private void AddEdgePolylineToPath(List<Vector3> path, ForestMaze.PlanarForestMazeGenerator.Edge edge,
+            Vector2 startPoint, bool towardNode, float z)
+        {
+            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                return;
+
+            // Find which segment contains the start point
+            int startSegment = 0;
+            float minDist = float.MaxValue;
+            for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+            {
+                Vector2 closest = ClosestPointOnSegment(startPoint, edge.PolylinePoints[i], edge.PolylinePoints[i + 1]);
+                float dist = Vector2.Distance(startPoint, closest);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    startSegment = i;
+                }
+            }
+
+            Vector3 lastPoint = path.Count > 0 ? path[path.Count - 1] : new Vector3(startPoint.x, startPoint.y, z);
+
+            if (towardNode)
+            {
+                // Go from startPoint toward polyline[0] (the node)
+                for (int i = startSegment; i >= 0; i--)
+                {
+                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
+                    AddInterpolatedPath(path, lastPoint, pt, 1f);
+                    lastPoint = pt;
+                }
+            }
+            else
+            {
+                // Go from startPoint toward polyline[Count-1] (the endpoint)
+                for (int i = startSegment + 1; i < edge.PolylinePoints.Count; i++)
+                {
+                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
+                    AddInterpolatedPath(path, lastPoint, pt, 1f);
+                    lastPoint = pt;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adds edge polyline points between two nodes, interpolated at 1-unit intervals.
+        /// </summary>
+        private void AddEdgePolylineToPathBetweenNodes(List<Vector3> path, ForestMaze.PlanarForestMazeGenerator.Edge edge,
+            bool reverse, float z)
+        {
+            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                return;
+
+            Vector3 lastPoint = path.Count > 0 ? path[path.Count - 1] : Vector3.zero;
+
+            if (reverse)
+            {
+                // Go from last point to first (skip last since that's where we came from)
+                for (int i = edge.PolylinePoints.Count - 2; i >= 0; i--)
+                {
+                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
+                    AddInterpolatedPath(path, lastPoint, pt, 1f);
+                    lastPoint = pt;
+                }
+            }
+            else
+            {
+                // Go from first to last (skip first since that's where we came from)
+                for (int i = 1; i < edge.PolylinePoints.Count; i++)
+                {
+                    Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
+                    AddInterpolatedPath(path, lastPoint, pt, 1f);
+                    lastPoint = pt;
+                }
+            }
         }
 
         /// <summary>
@@ -1049,14 +1184,9 @@ namespace FaeMaze.Visitors
                     Time.deltaTime * 10f
                 );
 
-                // Log after rotation applied
                 if (shouldLog)
                 {
                     hasLoggedFirstRotation = true;
-                    float zAfter = transform.eulerAngles.z;
-                    Debug.Log($"[VisitorRotation] {gameObject.name}: movement=({movement.x:F2}, {movement.y:F2}), " +
-                        $"targetAngle={angle:F1}°, rotationTarget=gameObject, " +
-                        $"zBefore={zBefore:F1}°, zAfter={zAfter:F1}°");
                 }
             }
         }
@@ -1341,10 +1471,16 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Gets the destination for the current visitor state.
+        /// Returns the originally set destination, not the heart.
         /// </summary>
         protected virtual Vector3 GetDestinationForCurrentState()
         {
-            // Default to heart as destination
+            // Return the world destination that was set via SetWorldDestination
+            // Only fall back to heart if no destination was ever set
+            if (worldDestination != Vector3.zero)
+            {
+                return worldDestination;
+            }
             if (mazeGridBehaviour != null)
             {
                 return mazeGridBehaviour.HeartWorldPosition;
@@ -1707,7 +1843,6 @@ namespace FaeMaze.Visitors
         {
             if (modelPrefab == null)
             {
-                Debug.Log($"[VisitorSetup] {gameObject.name}: modelPrefab is null, skipping 3D model setup");
                 return;
             }
 
@@ -1719,8 +1854,6 @@ namespace FaeMaze.Visitors
             modelBaseRotation = modelInstance.transform.localRotation;
             modelBaseRotationCaptured = true;
             modelInstance.transform.localScale = Vector3.one;
-
-            Debug.Log($"[VisitorSetup] {gameObject.name}: created modelInstance, baseRotation={modelBaseRotation.eulerAngles}");
 
             // Look for Animator in the model (should be on root or child)
             if (animator == null)
