@@ -514,7 +514,10 @@ namespace ForestMaze
             foreach (var node in nodesWithCapacity)
             {
                 if (TryForceConnection(state, node))
+                {
+                    Debug.Log($"[PlanarForest] EnsureCrossConnection: Created cross-connection from node {node.Id}");
                     return; // Success!
+                }
             }
 
             // If no nodes have capacity, temporarily increase capacity for pairs of nodes
@@ -547,6 +550,7 @@ namespace ForestMaze
 
                     if (TryForceConnection(state, sourceNode))
                     {
+                        Debug.Log($"[PlanarForest] EnsureCrossConnection: Created cross-connection from node {sourceNode.Id} (expanded capacity)");
                         return; // Success! Keep both increased capacities
                     }
 
@@ -570,7 +574,8 @@ namespace ForestMaze
             int? parentNodeId = parentEdge?.NodeA;
 
             // Try to force a connection to any existing node except parent
-            return TryConnectToExisting(state, node, parentNodeId, parentNodeId);
+            // Use allowForceCapacity to expand target node capacity if needed
+            return TryConnectToExisting(state, node, parentNodeId, parentNodeId, allowForceCapacity: true);
         }
 
         private static HashSet<int> GetConnectedNodeIds(ForestMapState state, int nodeId)
