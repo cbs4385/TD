@@ -457,88 +457,112 @@ namespace ForestMaze
                     continue;
                 }
 
-                // Find any valid angle pair by searching all possible angles on source node
-                // For each valid source angle, check if the corresponding target angle is also valid
-                bool foundValidAngles = false;
-                float validSourceAngle = 0f;
-                float validTargetAngle = 0f;
+                // Generate from EXISTING node (candidate) to NEW node
+                // This allows us to adjust the new node's position if needed
 
-                // Calculate direction to candidate for preference ordering
-                Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
-                float directAngle = Mathf.Atan2(directDirection.y, directDirection.x);
+                // First, find a valid angle on the existing node (candidate)
+                // Try angles in 10-degree increments, starting from angle toward new node
+                Vector2 dirToNewNode = (newNode.Position - candidate.Position).normalized;
+                float directAngle = Mathf.Atan2(dirToNewNode.y, dirToNewNode.x);
                 directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
-                // Try angles in 10-degree increments around the full circle
-                // Order by proximity to direct angle for more natural-looking connections
                 float angleStep = 10f * Mathf.Deg2Rad;
                 int numSteps = Mathf.CeilToInt(2 * Mathf.PI / angleStep);
 
-                for (int i = 0; i < numSteps && !foundValidAngles; i++)
+                bool foundConnection = false;
+                for (int i = 0; i < numSteps && !foundConnection; i++)
                 {
                     // Alternate between positive and negative offsets from direct angle
                     float offset = (i / 2 + 1) * angleStep * (i % 2 == 0 ? 1 : -1);
                     if (i == 0) offset = 0; // Try direct angle first
 
-                    float testSourceAngle = (directAngle + offset + 2 * Mathf.PI) % (2 * Mathf.PI);
-                    float testTargetAngle = (testSourceAngle + Mathf.PI) % (2 * Mathf.PI);
+                    float candidateAngle = (directAngle + offset + 2 * Mathf.PI) % (2 * Mathf.PI);
 
-                    if (IsAngleValid(newNode, testSourceAngle) && IsAngleValid(candidate, testTargetAngle))
+                    if (!IsAngleValid(candidate, candidateAngle))
+                        continue;
+
+                    // Calculate where the new node would be if connected at this angle
+                    // Use the current distance between nodes
+                    float distance = Vector2.Distance(candidate.Position, newNode.Position);
+                    Vector2 direction = new Vector2(Mathf.Cos(candidateAngle), Mathf.Sin(candidateAngle));
+                    Vector2 adjustedNewNodePos = candidate.Position + direction * distance;
+
+                    // Check if the adjusted position is valid (not too close to other nodes)
+                    bool positionValid = true;
+                    foreach (var otherNode in state.Nodes)
                     {
-                        foundValidAngles = true;
-                        validSourceAngle = testSourceAngle;
-                        validTargetAngle = testTargetAngle;
+                        if (otherNode.Id == newNode.Id || otherNode.Id == candidate.Id)
+                            continue;
+                        if (Vector2.Distance(adjustedNewNodePos, otherNode.Position) < 2 * R_KEEP)
+                        {
+                            positionValid = false;
+                            break;
+                        }
                     }
+                    if (!positionValid)
+                        continue;
+
+                    // Calculate the receiving angle on the new node
+                    float newNodeAngle = (candidateAngle + Mathf.PI) % (2 * Mathf.PI);
+
+                    // Check if this angle is valid on the new node
+                    if (!IsAngleValid(newNode, newNodeAngle))
+                        continue;
+
+                    // Try to build polyline from candidate to adjusted new node position
+                    var polyline = BuildCurvedPolyline(state, candidate.Position, adjustedNewNodePos,
+                        new List<int> { candidate.Id, newNode.Id }, isCrossConnection: true);
+
+                    if (polyline == null)
+                        continue;
+
+                    // Success! Update new node position if it changed
+                    if (Vector2.Distance(newNode.Position, adjustedNewNodePos) > 0.01f)
+                    {
+                        Debug.Log($"[PlanarForest] Adjusted node {newNode.Id} position from {newNode.Position} to {adjustedNewNodePos} for cross-connection");
+                        newNode.Position = adjustedNewNodePos;
+                    }
+
+                    // Expand candidate's capacity if needed
+                    if (!candidate.HasCapacity())
+                    {
+                        candidate.MaxDegree++;
+                        Debug.Log($"[PlanarForest] Expanded node {candidate.Id} capacity to {candidate.MaxDegree} for cross-connection");
+                    }
+
+                    var edge = new Edge
+                    {
+                        Id = state.NextEdgeId++,
+                        NodeA = candidate.Id,
+                        NodeB = newNode.Id,
+                        PolylinePoints = polyline,
+                        Partial = false,
+                        GhostCenter = null
+                    };
+
+                    state.Edges.Add(edge);
+                    candidate.AddEdge(edge.Id, candidateAngle);
+                    newNode.AddEdge(edge.Id, newNodeAngle);
+
+                    // Mark as cross-connection if connecting to non-parent node
+                    if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
+                    {
+                        state.HasCrossConnection = true;
+                    }
+
+                    foundConnection = true;
                 }
 
-                if (!foundValidAngles)
-                {
-                    skippedNoValidAngles++;
-                    continue;
-                }
+                if (foundConnection)
+                    return true;
 
-                var polyline = BuildCurvedPolyline(state, newNode.Position, candidate.Position,
-                    new List<int> { newNode.Id, candidate.Id }, isCrossConnection: true);
-
-                if (polyline == null)
-                {
-                    skippedPolyline++;
-                    continue;
-                }
-
-                // Expand candidate's capacity if needed (when allowForceCapacity is true)
-                if (!candidate.HasCapacity())
-                {
-                    candidate.MaxDegree++;
-                    Debug.Log($"[PlanarForest] Expanded node {candidate.Id} capacity to {candidate.MaxDegree} for cross-connection");
-                }
-
-                var edge = new Edge
-                {
-                    Id = state.NextEdgeId++,
-                    NodeA = newNode.Id,
-                    NodeB = candidate.Id,
-                    PolylinePoints = polyline,
-                    Partial = false,
-                    GhostCenter = null
-                };
-
-                state.Edges.Add(edge);
-                newNode.AddEdge(edge.Id, validSourceAngle);
-                candidate.AddEdge(edge.Id, validTargetAngle);
-
-                // Mark as cross-connection if connecting to non-parent node
-                if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
-                {
-                    state.HasCrossConnection = true;
-                }
-
-                return true;
+                skippedNoValidAngles++;
             }
 
             // Log why connection failed
             if (candidates.Count > 0)
             {
-                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedNoValidAngles} no valid angles (tried full circle), {skippedPolyline} polyline failed");
+                Debug.Log($"[PlanarForest] TryConnectToExisting failed for node {newNode.Id}: {candidates.Count} candidates, skipped: {skippedAlreadyConnected} already connected, {skippedNoValidAngles} no valid config, {skippedPolyline} polyline failed");
             }
 
             return false;
