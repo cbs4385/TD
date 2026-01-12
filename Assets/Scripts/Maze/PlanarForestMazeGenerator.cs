@@ -172,7 +172,7 @@ namespace ForestMaze
                 Mathf.Sin(angle) * distance
             );
 
-            int maxDegree = state.Random.Next(1, 5); // 1-4
+            int maxDegree = state.Random.Next(2, 5); // 2-4
             var node1 = new Node
             {
                 Id = state.NextNodeId++,
@@ -252,7 +252,7 @@ namespace ForestMaze
                 return false;
 
             // Create new node at ghost position
-            int maxDegree = state.Random.Next(1, 5);
+            int maxDegree = state.Random.Next(2, 5); // 2-4
             var newNode = new Node
             {
                 Id = state.NextNodeId++,
