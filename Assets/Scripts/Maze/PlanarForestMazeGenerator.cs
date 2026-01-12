@@ -26,7 +26,7 @@ namespace ForestMaze
         private const float CENTER_BIAS = 0.75f;
         private const float BIAS_POWER = 2.0f;
         private const float BIAS_FLOOR = 0.1f;
-        private const float ANGLE_MIN_SEPARATION = 20.0f; // degrees
+        private const float ANGLE_MIN_SEPARATION = 45.0f; // degrees - ensures ~2.4 units arc between edges at node boundary for wall tiles
         private const float CURVE_STRENGTH = 0.25f;
         private const float ROTATE_STEP = 6.0f; // degrees
         private const float SHORTEN_STEP = 0.3f;
