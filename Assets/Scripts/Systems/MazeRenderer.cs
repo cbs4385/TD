@@ -1184,6 +1184,293 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Incrementally adds tiles for a newly added node.
+        /// Much faster than full refresh - only adds the delta.
+        /// </summary>
+        public void AddNodeTilesIncremental(ForestMaze.PlanarForestMazeGenerator.Node newNode)
+        {
+            if (mazeGridBehaviour == null || tilesParent == null)
+                return;
+
+            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
+
+            // Ensure state is initialized
+            if (occupiedPositions == null)
+                occupiedPositions = new HashSet<long>();
+
+            // Create node cylinder
+            CreateNodeColumnCylinder(newNode, mazeOrigin);
+
+            // Create tiles for the node
+            float graphStepSize = 1.0f / graphScale;
+            int tilesRadius = Mathf.CeilToInt(nodeTileRadius / graphStepSize);
+            int tilesCreated = 0;
+
+            for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
+            {
+                for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
+                {
+                    Vector2 offsetFromNode = new Vector2(dx * graphStepSize, dy * graphStepSize);
+                    float distance = offsetFromNode.magnitude;
+                    if (distance > nodeTileRadius) continue;
+
+                    Vector2 graphPos = newNode.Position + offsetFromNode;
+                    long posKey = GetQuantizedKey(graphPos);
+                    if (occupiedPositions.Contains(posKey)) continue;
+
+                    float orientationDegrees = 0f;
+                    if (distance > 0.01f)
+                    {
+                        Vector2 radial = offsetFromNode.normalized;
+                        orientationDegrees = Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg;
+                    }
+
+                    char symbol = (dx == 0 && dy == 0) ? 'N' : '.';
+
+                    Vector3 worldPos = GraphToWorldPos(graphPos);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                    occupiedPositions.Add(posKey);
+                    tilesCreated++;
+                }
+            }
+
+            Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} node tiles for node {newNode.Id}");
+        }
+
+        /// <summary>
+        /// Incrementally adds tiles for newly added/modified edges.
+        /// </summary>
+        public void AddEdgeTilesIncremental(List<ForestMaze.PlanarForestMazeGenerator.Edge> newEdges)
+        {
+            if (mazeGridBehaviour == null || tilesParent == null || newEdges == null)
+                return;
+
+            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
+
+            if (occupiedPositions == null)
+                occupiedPositions = new HashSet<long>();
+            if (allEdgeSegments == null)
+                allEdgeSegments = new List<EdgeSegmentData>();
+
+            float graphStepSize = 0.5f / graphScale;
+            int tilesCreated = 0;
+
+            foreach (var edge in newEdges)
+            {
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                    continue;
+
+                // Collect edge segments for this edge
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 start = edge.PolylinePoints[i];
+                    Vector2 end = edge.PolylinePoints[i + 1];
+                    Vector2 dir = (end - start).normalized;
+
+                    allEdgeSegments.Add(new EdgeSegmentData
+                    {
+                        StartGraph = start,
+                        EndGraph = end,
+                        Direction = dir,
+                        Perpendicular = new Vector2(-dir.y, dir.x)
+                    });
+                }
+
+                bool isPartialEdge = edge.Partial;
+                Vector2 exactEndpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                bool endpointTilePlaced = false;
+
+                // Place path tiles along the edge
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 startGraph = edge.PolylinePoints[i];
+                    Vector2 endGraph = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (endGraph - startGraph).normalized;
+                    float segmentLength = Vector2.Distance(startGraph, endGraph);
+                    float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
+
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / graphStepSize));
+                    for (int j = 0; j <= numSteps; j++)
+                    {
+                        float t = numSteps > 0 ? (float)j / numSteps : 0;
+
+                        Vector2 graphPos;
+                        bool isExactEndpoint = false;
+                        if (isLastSegment && j == numSteps)
+                        {
+                            graphPos = exactEndpoint;
+                            isExactEndpoint = true;
+                        }
+                        else
+                        {
+                            graphPos = Vector2.Lerp(startGraph, endGraph, t);
+                        }
+
+                        long posKey = GetQuantizedKey(graphPos);
+                        bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
+
+                        if (!forcePlace && occupiedPositions.Contains(posKey))
+                            continue;
+
+                        char symbol = '.';
+                        if (isPartialEdge && isExactEndpoint)
+                        {
+                            symbol = GetNextSpawnSymbol();
+                            endpointTilePlaced = true;
+                        }
+
+                        Vector3 worldPos = GraphToWorldPos(graphPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
+                        occupiedPositions.Add(posKey);
+                        tilesCreated++;
+                    }
+                }
+            }
+
+            Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} edge tiles for {newEdges.Count} edges");
+        }
+
+        /// <summary>
+        /// Adds wall tiles around newly added path tiles.
+        /// </summary>
+        public void AddWallsIncremental(List<ForestMaze.PlanarForestMazeGenerator.Edge> newEdges,
+            ForestMaze.PlanarForestMazeGenerator.Node newNode)
+        {
+            if (mazeGridBehaviour == null || tilesParent == null)
+                return;
+
+            var forestState = mazeGridBehaviour.ForestMapState;
+            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
+
+            var occupiedWallPositions = new HashSet<long>();
+            float graphStepSize = 0.5f / graphScale;
+            int wallsCreated = 0;
+
+            // Add walls around new edges
+            if (newEdges != null)
+            {
+                foreach (var edge in newEdges)
+                {
+                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                        continue;
+
+                    for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                    {
+                        Vector2 startGraph = edge.PolylinePoints[i];
+                        Vector2 endGraph = edge.PolylinePoints[i + 1];
+                        Vector2 direction = (endGraph - startGraph).normalized;
+                        Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+                        float segmentLength = Vector2.Distance(startGraph, endGraph);
+
+                        int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / graphStepSize));
+                        for (int j = 0; j <= numSteps; j++)
+                        {
+                            float t = numSteps > 0 ? (float)j / numSteps : 0;
+                            Vector2 centerGraphPos = Vector2.Lerp(startGraph, endGraph, t);
+
+                            for (int layer = 1; layer <= Mathf.CeilToInt(wallBorderDepth); layer++)
+                            {
+                                float offset = layer * graphStepSize;
+
+                                foreach (float side in new[] { 1f, -1f })
+                                {
+                                    Vector2 wallGraphPos = centerGraphPos + perpendicular * side * offset;
+                                    Vector2 pushDir = perpendicular * side;
+
+                                    Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, pushDir, forestState, occupiedWallPositions);
+                                    if (!adjustedPos.HasValue)
+                                        continue;
+
+                                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+
+                                    float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                                    if (side < 0) orientationDegrees += 180f;
+
+                                    Vector3 worldPos = GraphToWorldPos(adjustedPos.Value);
+                                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                    wallsCreated++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add walls around new node
+            if (newNode != null)
+            {
+                float startRadius = nodeRadius;
+                float endRadius = nodeRadius + wallBorderDepth;
+                int angularSteps = Mathf.CeilToInt(2 * Mathf.PI * endRadius / graphStepSize);
+
+                for (float r = startRadius; r <= endRadius; r += graphStepSize)
+                {
+                    for (int a = 0; a < angularSteps; a++)
+                    {
+                        float angle = (float)a / angularSteps * 2 * Mathf.PI;
+                        Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                        Vector2 wallGraphPos = newNode.Position + radialDir * r;
+
+                        Vector2? adjustedPos = GetAdjustedWallPosition(wallGraphPos, radialDir, forestState, occupiedWallPositions);
+                        if (!adjustedPos.HasValue)
+                            continue;
+
+                        occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                        float orientationDegrees = angle * Mathf.Rad2Deg;
+
+                        Vector3 worldPos = GraphToWorldPos(adjustedPos.Value);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                        wallsCreated++;
+                    }
+                }
+            }
+
+            Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles");
+        }
+
+        /// <summary>
+        /// Removes wall tiles near a consumed spawn point position.
+        /// Called when a frontier edge is consumed and walls blocking it should be removed.
+        /// </summary>
+        public void RemoveWallsNearPosition(Vector3 position, float radius)
+        {
+            if (tilesParent == null)
+                return;
+
+            int removedCount = 0;
+            List<Transform> toRemove = new List<Transform>();
+
+            foreach (Transform child in tilesParent)
+            {
+                if (child.name.StartsWith("WorldTile_#") || child.name.StartsWith("Wall_"))
+                {
+                    float dist = Vector3.Distance(child.position, position);
+                    if (dist < radius)
+                    {
+                        toRemove.Add(child);
+                    }
+                }
+            }
+
+            foreach (var t in toRemove)
+            {
+                // Remove from occupied positions if tracking
+                Vector2 graphPos = new Vector2(t.position.x, t.position.y);
+                long posKey = GetQuantizedKey(graphPos);
+                occupiedPositions?.Remove(posKey);
+
+                Destroy(t.gameObject);
+                removedCount++;
+            }
+
+            if (removedCount > 0)
+            {
+                Debug.Log($"[MazeRenderer] Removed {removedCount} wall tiles near {position}");
+            }
+        }
+
+        /// <summary>
         /// Coroutine that builds tiles in batches over multiple frames.
         /// Creates tiles invisibly, then swaps the entire container at once.
         /// </summary>

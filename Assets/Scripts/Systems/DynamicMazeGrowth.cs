@@ -171,11 +171,29 @@ namespace FaeMaze.Systems
         /// <summary>
         /// World-space version of GrowMaze.
         /// Works directly with world-space coordinates without any grid-based operations.
+        /// Uses incremental rendering updates to avoid rebuilding the entire maze.
         /// </summary>
         private void GrowMazeWorldSpace(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
         {
-            // Use the same Step() method as initial generation to add a new node
+            // Track frontier edges before the step to identify consumed spawn point
+            var frontierBefore = new HashSet<int>(forestMapState.Frontier.Select(e => forestMapState.Edges.IndexOf(e)));
             int nodeCountBefore = forestMapState.Nodes.Count;
+            int edgeCountBefore = forestMapState.Edges.Count;
+
+            // Find the consumed spawn point position BEFORE the step
+            Vector3 consumedSpawnPos = Vector3.zero;
+            foreach (var edge in forestMapState.Frontier)
+            {
+                if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
+                {
+                    // The endpoint of a partial edge is the spawn point
+                    var endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                    consumedSpawnPos = new Vector3(endpoint.x, endpoint.y, 0);
+                    break; // Step will consume one of the frontier edges
+                }
+            }
+
+            // Use the same Step() method as initial generation to add a new node
             bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
 
             if (!success)
@@ -188,14 +206,36 @@ namespace FaeMaze.Systems
             int newNodeId = nodeCountBefore;
             var newNode = forestMapState.Nodes[newNodeId];
 
+            // Find new/modified edges (edges added after the step)
+            var newEdges = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
+            for (int i = 0; i < forestMapState.Edges.Count; i++)
+            {
+                var edge = forestMapState.Edges[i];
+                // New edges or edges that changed from partial to complete
+                if (i >= edgeCountBefore || (frontierBefore.Contains(i) && !forestMapState.Frontier.Contains(edge)))
+                {
+                    newEdges.Add(edge);
+                }
+            }
+
+            // Also add the new partial edges (frontier edges)
+            foreach (var edge in forestMapState.Frontier)
+            {
+                if (!newEdges.Contains(edge))
+                {
+                    newEdges.Add(edge);
+                }
+            }
+
+            Debug.Log($"[DynamicGrowth] Added node {newNodeId}, {newEdges.Count} new/modified edges");
+
             // Regenerate world-space maze data from updated graph
+            // This is needed for pathfinding to work correctly
             var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
             if (worldSpaceData != null)
             {
-                // Update world-space data from the graph
                 worldSpaceData = ForestMaze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, mazeGridBehaviour.WorldSpaceTileSize);
 
-                // Update the reference in MazeGridBehaviour using reflection
                 var worldSpaceDataField = typeof(MazeGridBehaviour).GetField("worldSpaceMazeData",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 if (worldSpaceDataField != null)
@@ -211,11 +251,23 @@ namespace FaeMaze.Systems
             // Trigger visitor path recalculation after spawn points are registered
             TriggerVisitorPathRecalculation();
 
-            // Refresh the maze renderer asynchronously to avoid lag
-            // This runs in the background while visitors navigate
+            // Use INCREMENTAL rendering updates instead of full rebuild
             if (mazeRenderer != null)
             {
-                mazeRenderer.RefreshMazeAsync();
+                // 1. Remove walls near the consumed spawn point (to open the passage)
+                if (consumedSpawnPos != Vector3.zero)
+                {
+                    mazeRenderer.RemoveWallsNearPosition(consumedSpawnPos, 3f);
+                }
+
+                // 2. Add tiles for the new node
+                mazeRenderer.AddNodeTilesIncremental(newNode);
+
+                // 3. Add tiles for new/modified edges
+                mazeRenderer.AddEdgeTilesIncremental(newEdges);
+
+                // 4. Add walls around the new elements
+                mazeRenderer.AddWallsIncremental(newEdges, newNode);
             }
         }
 

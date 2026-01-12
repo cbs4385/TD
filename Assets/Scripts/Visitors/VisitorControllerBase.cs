@@ -944,21 +944,81 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Adds interpolated points along a straight line at specified intervals.
+        /// Adds interpolated points along the ACTUAL edge polyline segment.
+        /// Unlike straight-line interpolation, this follows the actual walkable path.
         /// </summary>
-        private void AddInterpolatedPath(List<Vector3> path, Vector3 from, Vector3 to, float stepSize)
+        private void AddInterpolatedPathAlongEdge(List<Vector3> path, Vector3 from, Vector3 to, float stepSize, float z,
+            ForestMaze.PlanarForestMazeGenerator.ForestMapState graphState)
         {
-            float dist = Vector3.Distance(from, to);
-            if (dist < 0.1f)
-                return;
+            // Find the edge that contains both from and to points
+            Vector2 from2D = new Vector2(from.x, from.y);
+            Vector2 to2D = new Vector2(to.x, to.y);
 
-            int steps = Mathf.CeilToInt(dist / stepSize);
-            for (int i = 1; i <= steps; i++)
+            foreach (var edge in graphState.Edges)
             {
-                float t = (float)i / steps;
-                Vector3 point = Vector3.Lerp(from, to, t);
-                path.Add(point);
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                    continue;
+
+                // Check if both points are on this edge
+                bool fromOnEdge = false;
+                bool toOnEdge = false;
+                int fromSegment = -1;
+                int toSegment = -1;
+
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    float distFrom = DistanceToSegment(from2D, edge.PolylinePoints[i], edge.PolylinePoints[i + 1]);
+                    float distTo = DistanceToSegment(to2D, edge.PolylinePoints[i], edge.PolylinePoints[i + 1]);
+
+                    if (distFrom < 1.5f && !fromOnEdge)
+                    {
+                        fromOnEdge = true;
+                        fromSegment = i;
+                    }
+                    if (distTo < 1.5f && !toOnEdge)
+                    {
+                        toOnEdge = true;
+                        toSegment = i;
+                    }
+                }
+
+                if (fromOnEdge && toOnEdge && fromSegment >= 0 && toSegment >= 0)
+                {
+                    // Both points on same edge - follow the polyline between them
+                    if (fromSegment <= toSegment)
+                    {
+                        for (int i = fromSegment + 1; i <= toSegment + 1 && i < edge.PolylinePoints.Count; i++)
+                        {
+                            path.Add(new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z));
+                        }
+                    }
+                    else
+                    {
+                        for (int i = fromSegment; i >= toSegment && i >= 0; i--)
+                        {
+                            path.Add(new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z));
+                        }
+                    }
+                    return;
+                }
             }
+
+            // Fallback: just add the target point directly (should rarely happen)
+            path.Add(to);
+        }
+
+        /// <summary>
+        /// Distance from point to line segment.
+        /// </summary>
+        private float DistanceToSegment(Vector2 point, Vector2 segStart, Vector2 segEnd)
+        {
+            Vector2 seg = segEnd - segStart;
+            float segLengthSq = seg.sqrMagnitude;
+            if (segLengthSq < 0.0001f)
+                return Vector2.Distance(point, segStart);
+            float t = Mathf.Clamp01(Vector2.Dot(point - segStart, seg) / segLengthSq);
+            Vector2 projection = segStart + t * seg;
+            return Vector2.Distance(point, projection);
         }
 
         /// <summary>
@@ -988,7 +1048,8 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Adds edge polyline points to the path, interpolated at 1-unit intervals.
+        /// Adds edge polyline points to the path directly without interpolation.
+        /// Uses exact polyline vertices which are guaranteed to be on walkable terrain.
         /// </summary>
         private void AddEdgePolylineToPath(List<Vector3> path, ForestMaze.PlanarForestMazeGenerator.Edge edge,
             Vector2 startPoint, bool towardNode, float z)
@@ -1010,16 +1071,14 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            Vector3 lastPoint = path.Count > 0 ? path[path.Count - 1] : new Vector3(startPoint.x, startPoint.y, z);
-
             if (towardNode)
             {
                 // Go from startPoint toward polyline[0] (the node)
+                // Add each polyline vertex directly - these are on the walkable path
                 for (int i = startSegment; i >= 0; i--)
                 {
                     Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    AddInterpolatedPath(path, lastPoint, pt, 1f);
-                    lastPoint = pt;
+                    path.Add(pt);
                 }
             }
             else
@@ -1028,14 +1087,14 @@ namespace FaeMaze.Visitors
                 for (int i = startSegment + 1; i < edge.PolylinePoints.Count; i++)
                 {
                     Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    AddInterpolatedPath(path, lastPoint, pt, 1f);
-                    lastPoint = pt;
+                    path.Add(pt);
                 }
             }
         }
 
         /// <summary>
-        /// Adds edge polyline points between two nodes, interpolated at 1-unit intervals.
+        /// Adds edge polyline points between two nodes directly without interpolation.
+        /// Uses exact polyline vertices which are guaranteed to be on walkable terrain.
         /// </summary>
         private void AddEdgePolylineToPathBetweenNodes(List<Vector3> path, ForestMaze.PlanarForestMazeGenerator.Edge edge,
             bool reverse, float z)
@@ -1043,16 +1102,13 @@ namespace FaeMaze.Visitors
             if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                 return;
 
-            Vector3 lastPoint = path.Count > 0 ? path[path.Count - 1] : Vector3.zero;
-
             if (reverse)
             {
                 // Go from last point to first (skip last since that's where we came from)
                 for (int i = edge.PolylinePoints.Count - 2; i >= 0; i--)
                 {
                     Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    AddInterpolatedPath(path, lastPoint, pt, 1f);
-                    lastPoint = pt;
+                    path.Add(pt);
                 }
             }
             else
@@ -1061,8 +1117,7 @@ namespace FaeMaze.Visitors
                 for (int i = 1; i < edge.PolylinePoints.Count; i++)
                 {
                     Vector3 pt = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, z);
-                    AddInterpolatedPath(path, lastPoint, pt, 1f);
-                    lastPoint = pt;
+                    path.Add(pt);
                 }
             }
         }
