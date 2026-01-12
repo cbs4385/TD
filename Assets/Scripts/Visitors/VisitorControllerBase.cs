@@ -904,6 +904,16 @@ namespace FaeMaze.Visitors
 
                     Debug.Log($"[Pathfinding] {name}: BFS found path with {path.Count} tiles after {iterations} iterations");
 
+                    // Log each tile in the path
+                    var pathPositions = new System.Text.StringBuilder();
+                    pathPositions.Append($"[Pathfinding] {name}: Path tiles: ");
+                    for (int i = 0; i < path.Count; i++)
+                    {
+                        pathPositions.Append($"({path[i].Position.x:F1},{path[i].Position.y:F1})");
+                        if (i < path.Count - 1) pathPositions.Append(" -> ");
+                    }
+                    Debug.Log(pathPositions.ToString());
+
                     // Don't simplify - keep all tile positions to stay on walkable terrain
                     return path;
                 }
@@ -944,12 +954,34 @@ namespace FaeMaze.Visitors
 
             // Find closest visited tile to end for diagnostic
             float closestDistToEnd = float.MaxValue;
+            ForestMaze.WorldSpaceTile closestTile = null;
             foreach (var v in visited)
             {
                 float d = Vector2.Distance(v.Position, endTile.Position);
-                if (d < closestDistToEnd) closestDistToEnd = d;
+                if (d < closestDistToEnd)
+                {
+                    closestDistToEnd = d;
+                    closestTile = v;
+                }
             }
             Debug.LogWarning($"[Pathfinding] {name}: BFS failed after {iterations} iterations (visited {visited.Count} tiles, closest to end: {closestDistToEnd:F1} units)");
+
+            // Log sample of visited tiles to understand the network
+            var visitedList = new List<ForestMaze.WorldSpaceTile>(visited);
+            var sampleTiles = new System.Text.StringBuilder();
+            sampleTiles.Append($"[Pathfinding] {name}: Sample visited tiles: ");
+            int sampleCount = Mathf.Min(10, visitedList.Count);
+            for (int i = 0; i < sampleCount; i++)
+            {
+                sampleTiles.Append($"({visitedList[i].Position.x:F1},{visitedList[i].Position.y:F1})");
+                if (i < sampleCount - 1) sampleTiles.Append(", ");
+            }
+            if (closestTile != null)
+            {
+                sampleTiles.Append($" | Closest: ({closestTile.Position.x:F1},{closestTile.Position.y:F1})");
+            }
+            Debug.LogWarning(sampleTiles.ToString());
+
             return null; // No path found
         }
 
