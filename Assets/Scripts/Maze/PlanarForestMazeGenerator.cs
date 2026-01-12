@@ -900,24 +900,56 @@ namespace ForestMaze
             Debug.Log($"[EdgeMerge] DIVERGING: lastCloseIdx2={lastCloseIdx2}, divergeIdx2={divergeIdx2}");
 
             // Special case: only point 0 is close (edges meet at node but immediately diverge)
-            // This creates a gap right at the node boundary - we need to merge at that point
+            // We need to extend the shared path along poly1 until the paths are MERGE_DISTANCE apart
             if (lastCloseIdx2 == 0 && distances.Count > 1 && distances[1] >= MERGE_DISTANCE)
             {
-                Debug.Log($"[EdgeMerge] DIVERGING: Special case - only point 0 close, creating junction at node boundary");
+                Debug.Log($"[EdgeMerge] DIVERGING: Special case - only point 0 close, extending shared path");
 
-                // Make poly2 start from poly1's starting point, then add perpendicular to poly2's point 1
+                // Find a point along poly1's first segment where distance to poly2[1] equals MERGE_DISTANCE
+                // This is where we should branch off
                 Vector2 sharedStart = poly1[0];
-                Vector2 boundaryDir = GetSegmentDirection(poly1, 0);
-                Vector2 boundaryPerpPoint = CreatePerpendicularIntersection(poly2[1], sharedStart, boundaryDir);
+                Vector2 poly1Dir = GetSegmentDirection(poly1, 0);
+
+                // Walk along poly1 until we're MERGE_DISTANCE from the line to poly2[1]
+                float stepSize = 0.5f;
+                float maxDist = poly1.Count > 1 ? Vector2.Distance(poly1[0], poly1[1]) : 5f;
+                Vector2 branchPoint = sharedStart;
+
+                for (float d = 0; d < maxDist; d += stepSize)
+                {
+                    Vector2 testPoint = sharedStart + poly1Dir * d;
+                    float distToPoly2 = Vector2.Distance(testPoint, poly2[1]);
+
+                    // Also check distance to the line segment poly2[0]->poly2[1]
+                    float distToSegment = DistanceToLineSegment(testPoint, poly2[0], poly2[1]);
+
+                    if (distToSegment >= MERGE_DISTANCE || distToPoly2 >= MERGE_DISTANCE * 2)
+                    {
+                        branchPoint = testPoint;
+                        break;
+                    }
+                    branchPoint = testPoint;
+                }
+
+                // Create perpendicular junction from branch point to poly2's path
+                Vector2 perpPoint = CreatePerpendicularIntersection(poly2[1], branchPoint, poly1Dir);
 
                 List<Vector2> boundaryNewPoly = new List<Vector2>();
                 boundaryNewPoly.Add(sharedStart);
 
-                if (Vector2.Distance(boundaryPerpPoint, sharedStart) > 0.1f)
+                // Add branch point if different from start
+                if (Vector2.Distance(branchPoint, sharedStart) > 0.1f)
                 {
-                    boundaryNewPoly.Add(boundaryPerpPoint);
+                    boundaryNewPoly.Add(branchPoint);
                 }
 
+                // Add perpendicular point if different from branch point
+                if (Vector2.Distance(perpPoint, branchPoint) > 0.1f)
+                {
+                    boundaryNewPoly.Add(perpPoint);
+                }
+
+                // Add remaining poly2 points
                 for (int i = 1; i < poly2.Count; i++)
                 {
                     if (Vector2.Distance(boundaryNewPoly[boundaryNewPoly.Count - 1], poly2[i]) > 0.1f)
@@ -935,7 +967,7 @@ namespace ForestMaze
                 edge2.PolylinePoints.AddRange(boundaryNewPoly);
 
                 mergeCount++;
-                Debug.Log($"[EdgeMerge] DIVERGING SUCCESS (boundary case): boundaryNewPoly has {boundaryNewPoly.Count} pts");
+                Debug.Log($"[EdgeMerge] DIVERGING SUCCESS (boundary case): extended to {branchPoint}, newPoly has {boundaryNewPoly.Count} pts");
                 return true;
             }
 
@@ -1370,6 +1402,12 @@ namespace ForestMaze
 
             float t = Mathf.Clamp01(Vector2.Dot(ap, ab) / ab.sqrMagnitude);
             return a + ab * t;
+        }
+
+        private static float DistanceToLineSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 closest = ClosestPointOnSegment(p, a, b);
+            return Vector2.Distance(p, closest);
         }
 
         // Curved polyline parameters
