@@ -868,8 +868,8 @@ namespace ForestMaze
         /// <summary>
         /// Adjusts an edge's polyline to change its angle at a node.
         /// Rotates points near the node to achieve the new angle.
-        /// For edges with 4+ points: preserves last 2 points (frontier direction).
-        /// For edges with 3 points: rotates all to change angle (frontier direction may shift slightly).
+        /// ALWAYS preserves the frontier endpoint (first or last point depending on direction).
+        /// Rotates at most 2 points near the node to change the angle.
         /// </summary>
         private static void AdjustEdgeAngleAtNode(Edge edge, bool startsAtNode, Vector2 nodePos, float oldAngle, float newAngle)
         {
@@ -884,12 +884,11 @@ namespace ForestMaze
 
             if (startsAtNode)
             {
-                // Edge starts at node, frontier is at end
+                // Edge starts at node, frontier is at end (last point)
                 // We MUST rotate at least points 0 and 1 to change the angle at the node
                 // (angle is determined by direction from node center to point 1)
-                // For 4+ points: preserve last 2 (frontier direction)
-                // For 3 points: rotate all (can't preserve frontier without breaking angle)
-                int maxIndex = count >= 4 ? 2 : count;
+                // NEVER rotate the frontier endpoint (last point) - it must stay fixed for wall placement
+                int maxIndex = Mathf.Min(2, count - 1);  // Rotate at most 2 points, never the last
 
                 Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points 0 to {maxIndex-1} (count={count})");
 
@@ -908,11 +907,10 @@ namespace ForestMaze
             }
             else
             {
-                // Edge ends at node, frontier is at start
+                // Edge ends at node, frontier is at start (first point)
                 // We MUST rotate at least the last 2 points to change the angle at the node
-                // For 4+ points: preserve first 2 (frontier direction)
-                // For 3 points: rotate all (can't preserve frontier without breaking angle)
-                int minIndex = count >= 4 ? count - 2 : 0;
+                // NEVER rotate the frontier endpoint (first point) - it must stay fixed for wall placement
+                int minIndex = Mathf.Max(count - 2, 1);  // Rotate at most last 2 points, never the first
 
                 Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points {minIndex} to {count-1} (count={count})");
 
