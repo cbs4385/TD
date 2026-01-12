@@ -176,13 +176,14 @@ namespace FaeMaze.Systems
         private void GrowMazeWorldSpace(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
         {
             // Track frontier edges before the step to identify consumed spawn point
-            var frontierBefore = new HashSet<int>(forestMapState.Frontier.Select(e => forestMapState.Edges.IndexOf(e)));
+            // Frontier is a HashSet<Edge>, so we copy it directly
+            var frontierBefore = new HashSet<ForestMaze.PlanarForestMazeGenerator.Edge>(forestMapState.Frontier);
             int nodeCountBefore = forestMapState.Nodes.Count;
             int edgeCountBefore = forestMapState.Edges.Count;
 
             // Find the consumed spawn point position BEFORE the step
             Vector3 consumedSpawnPos = Vector3.zero;
-            foreach (var edge in forestMapState.Frontier)
+            foreach (var edge in frontierBefore)
             {
                 if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
                 {
@@ -206,22 +207,27 @@ namespace FaeMaze.Systems
             int newNodeId = nodeCountBefore;
             var newNode = forestMapState.Nodes[newNodeId];
 
-            // Find new/modified edges (edges added after the step)
+            // Find new/modified edges (edges added after the step or changed from partial to complete)
             var newEdges = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
             for (int i = 0; i < forestMapState.Edges.Count; i++)
             {
                 var edge = forestMapState.Edges[i];
-                // New edges or edges that changed from partial to complete
-                if (i >= edgeCountBefore || (frontierBefore.Contains(i) && !forestMapState.Frontier.Contains(edge)))
+                // New edges (index >= edgeCountBefore)
+                if (i >= edgeCountBefore)
+                {
+                    newEdges.Add(edge);
+                }
+                // Or edges that were in frontier before but now completed
+                else if (frontierBefore.Contains(edge) && !forestMapState.Frontier.Contains(edge))
                 {
                     newEdges.Add(edge);
                 }
             }
 
-            // Also add the new partial edges (frontier edges)
+            // Also add the new partial edges (current frontier edges that weren't there before)
             foreach (var edge in forestMapState.Frontier)
             {
-                if (!newEdges.Contains(edge))
+                if (!frontierBefore.Contains(edge) && !newEdges.Contains(edge))
                 {
                     newEdges.Add(edge);
                 }
