@@ -1135,40 +1135,28 @@ namespace ForestMaze
                 return null;
 
             Vector2 rootPos = state.Nodes[0].Position;
-            var weights = new List<float>();
+            int? closestEdgeId = null;
+            float closestDist = float.MaxValue;
 
             foreach (int edgeId in state.Frontier)
             {
                 var edge = state.Edges[edgeId];
                 if (!edge.GhostCenter.HasValue)
-                {
-                    weights.Add(0.0f);
                     continue;
-                }
 
                 float dist = Vector2.Distance(edge.GhostCenter.Value, rootPos);
-                float baseWeight = 1.0f / Mathf.Pow(dist + 1e-6f, BIAS_POWER);
-                float weight = (1.0f - CENTER_BIAS) + CENTER_BIAS * baseWeight;
-                weight = Mathf.Max(weight, BIAS_FLOOR);
-
-                weights.Add(weight);
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closestEdgeId = edgeId;
+                }
             }
 
-            float totalWeight = weights.Sum();
-            if (totalWeight < 1e-9f)
+            // Fallback to random if no valid ghost centers found
+            if (!closestEdgeId.HasValue)
                 return state.Frontier[state.Random.Next(state.Frontier.Count)];
 
-            float r = (float)(state.Random.NextDouble() * totalWeight);
-            float cumulative = 0.0f;
-
-            for (int i = 0; i < weights.Count; i++)
-            {
-                cumulative += weights[i];
-                if (r <= cumulative)
-                    return state.Frontier[i];
-            }
-
-            return state.Frontier[state.Frontier.Count - 1];
+            return closestEdgeId.Value;
         }
 
         private static float PolylineToNodeDistance(List<Vector2> polyline, Vector2 center, bool isIncident)

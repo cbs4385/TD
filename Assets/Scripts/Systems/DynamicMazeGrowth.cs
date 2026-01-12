@@ -296,15 +296,27 @@ namespace FaeMaze.Systems
                 Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
                 mazeRenderer.RemoveWallsNearPosition(newNodeWorldPos, 5f); // Node radius is ~3, plus border
 
-                // 3. Remove walls along all new edge paths
+                // 3. Remove walls along all new edge paths (sample along segments, not just control points)
+                float wallRemovalStepSize = 1.0f; // Sample every 1 unit along the path
+                float wallRemovalRadius = 2.5f; // Slightly larger than path width + buffer
                 foreach (var edge in newEdges)
                 {
-                    if (edge.PolylinePoints != null)
+                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
                     {
-                        foreach (var point in edge.PolylinePoints)
+                        for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                         {
-                            Vector3 pointWorldPos = new Vector3(point.x, point.y, 0);
-                            mazeRenderer.RemoveWallsNearPosition(pointWorldPos, 2f);
+                            Vector2 start = edge.PolylinePoints[i];
+                            Vector2 end = edge.PolylinePoints[i + 1];
+                            float segmentLength = Vector2.Distance(start, end);
+                            int numSamples = Mathf.Max(2, Mathf.CeilToInt(segmentLength / wallRemovalStepSize));
+
+                            for (int j = 0; j <= numSamples; j++)
+                            {
+                                float t = (float)j / numSamples;
+                                Vector2 samplePoint = Vector2.Lerp(start, end, t);
+                                Vector3 pointWorldPos = new Vector3(samplePoint.x, samplePoint.y, 0);
+                                mazeRenderer.RemoveWallsNearPosition(pointWorldPos, wallRemovalRadius);
+                            }
                         }
                     }
                 }
