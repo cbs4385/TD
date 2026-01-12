@@ -692,6 +692,138 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Fills gaps only around newly added edges and node.
+        /// This is a localized version of FillInnerEdgeGaps for incremental updates.
+        /// Much faster than the full gap-filling pass since it only processes new elements.
+        /// </summary>
+        private int FillGapsAroundNewElements(List<PlanarForestMazeGenerator.Edge> newEdges,
+            PlanarForestMazeGenerator.Node newNode,
+            PlanarForestMazeGenerator.ForestMapState forestState,
+            HashSet<long> occupiedWallPositions, Transform mazeOrigin, float stepSize)
+        {
+            int tileCount = 0;
+            float wallRadius = 0.65f;
+
+            // 8 directions to check for gaps
+            Vector2[] directions = new Vector2[]
+            {
+                new Vector2(1, 0), new Vector2(-1, 0), new Vector2(0, 1), new Vector2(0, -1),
+                new Vector2(1, 1).normalized, new Vector2(1, -1).normalized,
+                new Vector2(-1, 1).normalized, new Vector2(-1, -1).normalized
+            };
+
+            // Fill gaps around new edges only
+            if (newEdges != null)
+            {
+                foreach (var edge in newEdges)
+                {
+                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                        continue;
+
+                    for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                    {
+                        Vector2 segStart = edge.PolylinePoints[i];
+                        Vector2 segEnd = edge.PolylinePoints[i + 1];
+                        Vector2 direction = (segEnd - segStart).normalized;
+                        Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+                        float segmentLength = Vector2.Distance(segStart, segEnd);
+
+                        int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / (stepSize * 0.5f)));
+
+                        for (int j = 0; j <= numSteps; j++)
+                        {
+                            float t = numSteps > 0 ? (float)j / numSteps : 0;
+                            Vector2 pathPos = Vector2.Lerp(segStart, segEnd, t);
+
+                            // Check positions perpendicular to the edge throughout the wall border depth
+                            for (float dist = stepSize; dist <= wallBorderDepth + stepSize; dist += stepSize * 0.5f)
+                            {
+                                foreach (float side in new[] { 1f, -1f })
+                                {
+                                    Vector2 checkPos = pathPos + perpendicular * side * dist;
+                                    long checkKey = GetQuantizedKey(checkPos);
+
+                                    // Skip if already occupied by path
+                                    if (occupiedPositions.Contains(checkKey)) continue;
+
+                                    // Skip if inside a node column
+                                    bool insideNode = false;
+                                    foreach (var node in forestState.Nodes)
+                                    {
+                                        if (Vector2.Distance(checkPos, node.Position) < nodeRadius)
+                                        {
+                                            insideNode = true;
+                                            break;
+                                        }
+                                    }
+                                    if (insideNode) continue;
+
+                                    // Check if wall would intersect path
+                                    Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
+                                    if (intersection.HasValue) continue;
+
+                                    // Found a gap - fill it
+                                    occupiedWallPositions.Add(checkKey);
+                                    float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                                    if (side < 0) orientationDegrees += 180f;
+
+                                    Vector3 worldPos = ToVector3(checkPos);
+                                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                    tileCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fill gaps around new node
+            if (newNode != null)
+            {
+                int angularSteps = 72; // Fine angular resolution
+                for (float r = nodeRadius; r <= nodeRadius + wallBorderDepth + stepSize; r += stepSize * 0.5f)
+                {
+                    for (int a = 0; a < angularSteps; a++)
+                    {
+                        float angle = (float)a / angularSteps * 2 * Mathf.PI;
+                        Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                        Vector2 checkPos = newNode.Position + radialDir * r;
+                        long checkKey = GetQuantizedKey(checkPos);
+
+                        // Skip if already occupied by path
+                        if (occupiedPositions.Contains(checkKey)) continue;
+
+                        // Skip if inside any node column
+                        bool insideNode = false;
+                        foreach (var node in forestState.Nodes)
+                        {
+                            if (Vector2.Distance(checkPos, node.Position) < nodeRadius)
+                            {
+                                insideNode = true;
+                                break;
+                            }
+                        }
+                        if (insideNode) continue;
+
+                        // Check if wall would intersect path
+                        Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
+                        if (intersection.HasValue) continue;
+
+                        // Found a gap - fill it
+                        occupiedWallPositions.Add(checkKey);
+                        float orientationDegrees = angle * Mathf.Rad2Deg;
+
+                        Vector3 worldPos = ToVector3(checkPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                        tileCount++;
+                    }
+                }
+            }
+
+            return tileCount;
+        }
+
+        /// <summary>
         /// Gets an adjusted wall position that doesn't intersect node columns or path tiles.
         /// If the original position intersects, translates it along the shortest vector toward void.
         /// Returns null if no valid position can be found.
@@ -1412,9 +1544,9 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Gap-filling pass - use the same logic as initial rendering to ensure complete borders
-            // This is critical for matching the quality of initial wall generation
-            int gapsFilled = FillInnerEdgeGaps(forestState, occupiedWallPositions, mazeOrigin, stepSize);
+            // Localized gap-filling pass - only fill gaps around the new edges and node
+            // This is much faster than FillInnerEdgeGaps which iterates over ALL edges
+            int gapsFilled = FillGapsAroundNewElements(newEdges, newNode, forestState, occupiedWallPositions, mazeOrigin, stepSize);
             wallsCreated += gapsFilled;
 
             Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles ({gapsFilled} gap fills)");
