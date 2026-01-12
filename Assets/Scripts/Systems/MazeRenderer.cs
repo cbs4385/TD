@@ -548,6 +548,15 @@ namespace FaeMaze.Systems
                         tileCount += RenderEdgeEndCap(segEnd, direction, perpendicular, forestState,
                             occupiedWallPositions, mazeOrigin, stepSize);
                     }
+
+                    // Fill corner at bend vertices (where two segments meet at an angle)
+                    if (i < edge.PolylinePoints.Count - 2)
+                    {
+                        Vector2 nextSegEnd = edge.PolylinePoints[i + 2];
+                        Vector2 nextDirection = (nextSegEnd - segEnd).normalized;
+                        tileCount += FillBendCorner(segEnd, direction, nextDirection, forestState,
+                            occupiedWallPositions, mazeOrigin, stepSize);
+                    }
                 }
             }
 
@@ -960,6 +969,83 @@ namespace FaeMaze.Systems
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Fills the outer corner at a bend vertex where two edge segments meet at an angle.
+        /// Places wall tiles to cover the triangular gap on the outside of the bend.
+        /// </summary>
+        private int FillBendCorner(Vector2 bendVertex, Vector2 incomingDir, Vector2 outgoingDir,
+            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions,
+            Transform mazeOrigin, float stepSize)
+        {
+            int tileCount = 0;
+
+            // Calculate perpendiculars for both segments
+            Vector2 incomingPerp = new Vector2(-incomingDir.y, incomingDir.x);
+            Vector2 outgoingPerp = new Vector2(-outgoingDir.y, outgoingDir.x);
+
+            // Calculate the turn angle (cross product sign determines turn direction)
+            float cross = incomingDir.x * outgoingDir.y - incomingDir.y * outgoingDir.x;
+
+            // Determine outer side based on turn direction
+            // If turning left (cross > 0), the outer corner is on the right (-perp direction)
+            // If turning right (cross < 0), the outer corner is on the left (+perp direction)
+            float outerSide = cross > 0 ? -1f : 1f;
+
+            // Skip very shallow bends (nearly straight lines) - no corner gap to fill
+            float dot = Vector2.Dot(incomingDir, outgoingDir);
+            if (dot > 0.95f) return 0; // Less than ~18 degrees bend
+
+            // Calculate the corner fill region by sweeping between the two perpendicular directions
+            // Start from the incoming perpendicular and rotate toward the outgoing perpendicular
+            Vector2 cornerPerpStart = incomingPerp * outerSide;
+            Vector2 cornerPerpEnd = outgoingPerp * outerSide;
+
+            // Calculate angle between the two perpendiculars
+            float startAngle = Mathf.Atan2(cornerPerpStart.y, cornerPerpStart.x);
+            float endAngle = Mathf.Atan2(cornerPerpEnd.y, cornerPerpEnd.x);
+
+            // Normalize the angle difference to sweep the correct direction
+            float angleDiff = endAngle - startAngle;
+            if (angleDiff > Mathf.PI) angleDiff -= 2 * Mathf.PI;
+            if (angleDiff < -Mathf.PI) angleDiff += 2 * Mathf.PI;
+
+            // Number of angular steps based on bend sharpness
+            int angularSteps = Mathf.Max(3, Mathf.CeilToInt(Mathf.Abs(angleDiff) / (Mathf.PI / 8f)));
+
+            // Fill walls in the corner region at multiple layers
+            int numLayers = Mathf.CeilToInt(wallBorderDepth / stepSize);
+
+            for (int layer = 1; layer <= numLayers; layer++)
+            {
+                float offset = layer * stepSize;
+
+                for (int a = 0; a <= angularSteps; a++)
+                {
+                    float t = angularSteps > 0 ? (float)a / angularSteps : 0;
+                    float currentAngle = startAngle + angleDiff * t;
+                    Vector2 radiusDir = new Vector2(Mathf.Cos(currentAngle), Mathf.Sin(currentAngle));
+
+                    Vector2 wallPos = bendVertex + radiusDir * offset;
+
+                    // Get adjusted position
+                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radiusDir, forestState, occupiedWallPositions);
+                    if (!adjustedPos.HasValue)
+                        continue;
+
+                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+
+                    // Orientation facing outward from the bend
+                    float orientationDegrees = currentAngle * Mathf.Rad2Deg;
+
+                    Vector3 worldPos = ToVector3(adjustedPos.Value);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    tileCount++;
+                }
+            }
+
+            return tileCount;
         }
 
         /// <summary>
