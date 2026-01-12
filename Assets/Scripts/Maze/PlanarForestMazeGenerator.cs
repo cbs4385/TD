@@ -897,15 +897,63 @@ namespace ForestMaze
                 }
             }
 
+            Debug.Log($"[EdgeMerge] DIVERGING: lastCloseIdx2={lastCloseIdx2}, divergeIdx2={divergeIdx2}");
+
+            // Special case: only point 0 is close (edges meet at node but immediately diverge)
+            // This creates a gap right at the node boundary - we need to merge at that point
+            if (lastCloseIdx2 == 0 && distances.Count > 1 && distances[1] >= MERGE_DISTANCE)
+            {
+                Debug.Log($"[EdgeMerge] DIVERGING: Special case - only point 0 close, creating junction at node boundary");
+
+                // Make poly2 start from poly1's starting point, then add perpendicular to poly2's point 1
+                Vector2 sharedStart = poly1[0];
+                Vector2 targetDir = GetSegmentDirection(poly1, 0);
+                Vector2 perpPoint = CreatePerpendicularIntersection(poly2[1], sharedStart, targetDir);
+
+                List<Vector2> newPoly2 = new List<Vector2>();
+                newPoly2.Add(sharedStart);
+
+                if (Vector2.Distance(perpPoint, sharedStart) > 0.1f)
+                {
+                    newPoly2.Add(perpPoint);
+                }
+
+                for (int i = 1; i < poly2.Count; i++)
+                {
+                    if (Vector2.Distance(newPoly2[newPoly2.Count - 1], poly2[i]) > 0.1f)
+                    {
+                        newPoly2.Add(poly2[i]);
+                    }
+                }
+
+                if (!edge2StartsAtNode)
+                {
+                    newPoly2.Reverse();
+                }
+
+                edge2.PolylinePoints.Clear();
+                edge2.PolylinePoints.AddRange(newPoly2);
+
+                mergeCount++;
+                Debug.Log($"[EdgeMerge] DIVERGING SUCCESS (boundary case): newPoly2 has {newPoly2.Count} pts");
+                return true;
+            }
+
             if (lastCloseIdx2 < 1)
+            {
+                Debug.Log($"[EdgeMerge] DIVERGING: FAIL - lastCloseIdx2={lastCloseIdx2} < 1");
                 return false;
+            }
 
             if (divergeIdx2 < 0)
             {
                 if (lastCloseIdx2 < poly2.Count - 1)
                     divergeIdx2 = lastCloseIdx2 + 1;
                 else
+                {
+                    Debug.Log($"[EdgeMerge] DIVERGING: FAIL - no divergence found");
                     return false;
+                }
             }
 
             // Get merge point info
