@@ -350,7 +350,7 @@ namespace FaeMaze.Systems
                 }
 
                 // Mark wall positions as unwalkable in world-space data
-                var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+                // (worldSpaceData already defined in outer scope)
                 if (worldSpaceData != null)
                 {
                     worldSpaceData.MarkUnwalkable(new Vector2(wallWorldPos.x, wallWorldPos.y));
