@@ -636,9 +636,8 @@ namespace FaeMaze.Systems
                             Vector2 checkPos = pathPos + seg.Perpendicular * side * dist;
                             long checkKey = GetQuantizedKey(checkPos);
 
-                            // Skip if already occupied by path or wall
+                            // Skip if already occupied by path (wall overlap is allowed)
                             if (occupiedPositions.Contains(checkKey)) continue;
-                            if (occupiedWallPositions.Contains(checkKey)) continue;
 
                             // Skip if inside a node column
                             bool insideNode = false;
@@ -682,9 +681,8 @@ namespace FaeMaze.Systems
                         Vector2 checkPos = node.Position + radialDir * r;
                         long checkKey = GetQuantizedKey(checkPos);
 
-                        // Skip if already occupied
+                        // Skip if already occupied by path (wall overlap is allowed)
                         if (occupiedPositions.Contains(checkKey)) continue;
-                        if (occupiedWallPositions.Contains(checkKey)) continue;
 
                         // Check if wall would intersect path
                         Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
@@ -731,12 +729,8 @@ namespace FaeMaze.Systems
                 bool needsAdjustment = false;
                 Vector2 adjustmentVector = Vector2.zero;
 
-                // Check if already has a wall at this position
-                long wallKey = GetQuantizedKey(currentPos);
-                if (occupiedWallPositions.Contains(wallKey))
-                {
-                    return null; // Don't duplicate walls
-                }
+                // Wall overlap is allowed - multiple walls can share the same position
+                // to ensure complete border coverage
 
                 // Check if wall model would intersect any path tile (check multiple sample points)
                 if (!needsAdjustment)
@@ -851,12 +845,9 @@ namespace FaeMaze.Systems
         {
             float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
 
-            // Check if already occupied by path tiles
+            // Check if already occupied by path tiles (wall overlap is allowed)
             long wallKey = GetQuantizedKey(wallGraphPos);
             if (occupiedPositions.Contains(wallKey)) return false;
-
-            // Check if already has a wall
-            if (occupiedWallPositions.Contains(wallKey)) return false;
 
             // Check if inside any node column
             foreach (var node in forestState.Nodes)

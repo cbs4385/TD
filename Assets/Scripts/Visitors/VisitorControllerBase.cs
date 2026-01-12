@@ -153,15 +153,9 @@ namespace FaeMaze.Visitors
 
         protected Vector3 initialScale;
 
-        protected const string DirectionParameter = "Direction";
-        protected const int IdleDirection = 0;
         protected const float MovementEpsilonSqr = 0.0001f;
         protected const float StallLoggingDelaySeconds = 0.35f;
         protected const float StallRouteLogDumpDelaySeconds = 10f;
-
-        // Cached direction to prevent animation flickering when movement delta is small
-        protected int lastDirection = IdleDirection;
-        protected int currentAnimatorDirection = IdleDirection;
 
         protected int waypointsTraversedSinceSpawn;
         protected int lastLoggedWaypointIndex = -1;
@@ -258,11 +252,6 @@ namespace FaeMaze.Visitors
 
             SetupPhysics();
 
-            // Initialize animator direction if animator is present
-            if (animator != null)
-            {
-                SetAnimatorDirection(IdleDirection);
-            }
 
             stalledDuration = 0f;
             hasLoggedCurrentStall = false;
@@ -354,7 +343,6 @@ namespace FaeMaze.Visitors
             if (isFascinated && hasReachedLantern && fascinationTimer > 0)
             {
                 fascinationTimer -= Time.deltaTime;
-                SetAnimatorDirection(IdleDirection);
                 return; // Don't move while fascinated timer is active
             }
 
@@ -451,27 +439,6 @@ namespace FaeMaze.Visitors
 
         private bool ShouldLogVisitorPath()
         {
-            return false;
-        }
-
-        /// <summary>
-        /// Checks if the animator has a parameter with the given name.
-        /// </summary>
-        private bool HasAnimatorParameter(string parameterName)
-        {
-            if (animator == null || animator.runtimeAnimatorController == null || string.IsNullOrEmpty(parameterName))
-            {
-                return false;
-            }
-
-            foreach (var param in animator.parameters)
-            {
-                if (param.name == parameterName)
-                {
-                    return true;
-                }
-            }
-
             return false;
         }
 
@@ -1008,8 +975,6 @@ namespace FaeMaze.Visitors
                         $"zBefore={zBefore:F1}°, zAfter={zAfter:F1}°");
                 }
             }
-
-            SetAnimatorDirection(GetDirectionFromMovement(movement));
         }
 
         /// <summary>
@@ -1021,139 +986,6 @@ namespace FaeMaze.Visitors
             UpdateAnimatorDirection(movement);
         }
 
-        protected void SetAnimatorDirection(int direction)
-        {
-            if (animator == null)
-            {
-                return;
-            }
-
-            // For 3D models with humanoid rigs, use Speed parameter instead of Direction
-            if (use3DModel)
-            {
-                // Set Speed parameter for blend trees (common in humanoid animations)
-                // 0 = idle, 1 = walking/running
-                float speed = direction == IdleDirection ? 0f : 1f;
-
-                // Check if the animator has the Speed parameter
-                if (HasAnimatorParameter("Speed"))
-                {
-                    animator.SetFloat("Speed", speed);
-                }
-
-                // Also set Direction parameter if it exists (for compatibility)
-                if (currentAnimatorDirection != direction && HasAnimatorParameter(DirectionParameter))
-                {
-                    animator.SetInteger(DirectionParameter, direction);
-                    currentAnimatorDirection = direction;
-                }
-
-                // Rotation is handled in UpdateAnimatorDirection for smooth 3D rotation
-                return;
-            }
-
-            // 2D sprite-based animation with Direction parameter
-            if (currentAnimatorDirection != direction && HasAnimatorParameter(DirectionParameter))
-            {
-                animator.SetInteger(DirectionParameter, direction);
-                currentAnimatorDirection = direction;
-            }
-
-            // Rotate the visual model to face the correct direction (2D sprites only)
-            // Only rotate if not using procedural sprites and not using 3D model
-            // (3D model rotation is handled in UpdateAnimatorDirection with smooth angle-based rotation)
-            // Apply rotation every frame to ensure it's set (handles initialization and state changes)
-            if (!useProceduralSprite && !use3DModel && animator != null)
-            {
-                // For Idle state, use the last movement direction to maintain facing
-                int rotationDirection = direction;
-                if (rotationDirection == IdleDirection && lastDirection != IdleDirection)
-                {
-                    rotationDirection = lastDirection;
-                }
-                // If still idle (never moved), default to facing down
-                if (rotationDirection == IdleDirection)
-                {
-                    rotationDirection = 2; // Down
-                }
-
-                float zRotation = 0f;
-                switch (rotationDirection)
-                {
-                    case 1: // Up (+Y) - swapped with Down due to Blender animation orientation
-                        zRotation = 180f;
-                        break;
-                    case 2: // Down (-Y) - swapped with Up due to Blender animation orientation
-                        zRotation = 0f;
-                        break;
-                    case 3: // Left (-X)
-                        zRotation = -90f;
-                        break;
-                    case 4: // Right (+X)
-                        zRotation = 90f;
-                        break;
-                }
-
-                // Apply rotation to the animator's transform (the child visual object)
-                // Only rotate around Z axis to point forward axis towards movement direction
-                Quaternion directionRotation = Quaternion.Euler(0f, 0f, zRotation);
-                animator.transform.localRotation = directionRotation;
-            }
-        }
-
-        protected int GetDirectionFromMovement(Vector2 movement)
-        {
-            // Use a higher threshold based on movement speed to avoid flickering
-            float movementThreshold = moveSpeed * Time.deltaTime * 0.1f;
-            float movementThresholdSqr = movementThreshold * movementThreshold;
-
-            // If movement is below threshold but we're walking, retain the last direction
-            if (movement.sqrMagnitude <= movementThresholdSqr)
-            {
-                // Only return idle if we're actually stopped (not in an active movement state)
-                if (!IsMovementState(state))
-                {
-                    return IdleDirection;
-                }
-
-                // While walking with small movement delta, retain last direction
-                return lastDirection;
-            }
-
-            // Movement is significant - calculate new direction
-            float absX = Mathf.Abs(movement.x);
-            float absY = Mathf.Abs(movement.y);
-
-            // Require a clear dominant axis to prevent flickering when values are close
-            float axisDifference = Mathf.Abs(absX - absY);
-            float axisMin = Mathf.Min(absX, absY);
-
-            if (axisDifference < axisMin * 0.2f && lastDirection != IdleDirection)
-            {
-                // Axes are too close - retain last direction to prevent flickering
-                return lastDirection;
-            }
-
-            int newDirection;
-            if (absY >= absX)
-            {
-                // Vertical movement dominant
-                newDirection = movement.y > 0f ? 1 : 2; // 1 = Up, 2 = Down
-            }
-            else
-            {
-                // Horizontal movement dominant
-                newDirection = movement.x < 0f ? 3 : 4; // 3 = Left, 4 = Right
-            }
-
-            // Update cached direction (only cache non-idle directions)
-            if (newDirection != IdleDirection)
-            {
-                lastDirection = newDirection;
-            }
-
-            return newDirection;
-        }
 
         protected virtual void UpdateWalking()
         {
@@ -1170,7 +1002,6 @@ namespace FaeMaze.Visitors
             if (worldPath == null || worldPath.Count == 0)
             {
                 state = VisitorState.Idle;
-                SetAnimatorDirection(IdleDirection);
                 return;
             }
 
@@ -1402,7 +1233,6 @@ namespace FaeMaze.Visitors
         public virtual void Stop()
         {
             state = VisitorState.Idle;
-            SetAnimatorDirection(IdleDirection);
         }
 
         /// <summary>
@@ -1619,7 +1449,6 @@ namespace FaeMaze.Visitors
         public virtual void ForceEscape()
         {
             state = VisitorState.Escaping;
-            SetAnimatorDirection(IdleDirection);
 
             isFascinated = false;
             hasReachedLantern = false;
