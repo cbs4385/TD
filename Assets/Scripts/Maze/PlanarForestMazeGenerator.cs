@@ -907,35 +907,35 @@ namespace ForestMaze
 
                 // Make poly2 start from poly1's starting point, then add perpendicular to poly2's point 1
                 Vector2 sharedStart = poly1[0];
-                Vector2 targetDir = GetSegmentDirection(poly1, 0);
-                Vector2 perpPoint = CreatePerpendicularIntersection(poly2[1], sharedStart, targetDir);
+                Vector2 boundaryDir = GetSegmentDirection(poly1, 0);
+                Vector2 boundaryPerpPoint = CreatePerpendicularIntersection(poly2[1], sharedStart, boundaryDir);
 
-                List<Vector2> newPoly2 = new List<Vector2>();
-                newPoly2.Add(sharedStart);
+                List<Vector2> boundaryNewPoly = new List<Vector2>();
+                boundaryNewPoly.Add(sharedStart);
 
-                if (Vector2.Distance(perpPoint, sharedStart) > 0.1f)
+                if (Vector2.Distance(boundaryPerpPoint, sharedStart) > 0.1f)
                 {
-                    newPoly2.Add(perpPoint);
+                    boundaryNewPoly.Add(boundaryPerpPoint);
                 }
 
                 for (int i = 1; i < poly2.Count; i++)
                 {
-                    if (Vector2.Distance(newPoly2[newPoly2.Count - 1], poly2[i]) > 0.1f)
+                    if (Vector2.Distance(boundaryNewPoly[boundaryNewPoly.Count - 1], poly2[i]) > 0.1f)
                     {
-                        newPoly2.Add(poly2[i]);
+                        boundaryNewPoly.Add(poly2[i]);
                     }
                 }
 
                 if (!edge2StartsAtNode)
                 {
-                    newPoly2.Reverse();
+                    boundaryNewPoly.Reverse();
                 }
 
                 edge2.PolylinePoints.Clear();
-                edge2.PolylinePoints.AddRange(newPoly2);
+                edge2.PolylinePoints.AddRange(boundaryNewPoly);
 
                 mergeCount++;
-                Debug.Log($"[EdgeMerge] DIVERGING SUCCESS (boundary case): newPoly2 has {newPoly2.Count} pts");
+                Debug.Log($"[EdgeMerge] DIVERGING SUCCESS (boundary case): boundaryNewPoly has {boundaryNewPoly.Count} pts");
                 return true;
             }
 
