@@ -93,7 +93,8 @@ namespace FaeMaze.Systems
 
         // World-space rendering state
         private float tileSize;
-        private HashSet<long> occupiedPositions; // All occupied positions using quantized keys
+        private HashSet<long> occupiedPositions; // All occupied path positions using quantized keys
+        private HashSet<long> occupiedWallPositions; // All occupied wall positions using quantized keys
         private List<EdgeSegmentData> allEdgeSegments;
 
         private struct EdgeSegmentData
@@ -194,6 +195,7 @@ namespace FaeMaze.Systems
 
             // Track all occupied positions using quantized keys for consistent overlap detection
             occupiedPositions = new HashSet<long>();
+            occupiedWallPositions = new HashSet<long>();
             allEdgeSegments = new List<EdgeSegmentData>();
 
             int renderedTiles = 0;
@@ -483,8 +485,8 @@ namespace FaeMaze.Systems
             // Use half-unit steps along edges to ensure at least one wall per 0.5 units
             float stepSize = 0.5f;
 
-            // Track occupied positions to avoid overlap (use quantized keys for floating-point positions)
-            var occupiedWallPositions = new HashSet<long>();
+            // Use the class-level occupiedWallPositions to track all wall positions
+            // This allows incremental updates to check against existing walls
 
             // Project walls from edges (perpendicular to edge direction)
             foreach (var edge in forestState.Edges)
@@ -1367,6 +1369,8 @@ namespace FaeMaze.Systems
 
             if (occupiedPositions == null)
                 occupiedPositions = new HashSet<long>();
+            if (occupiedWallPositions == null)
+                occupiedWallPositions = new HashSet<long>();
             if (allEdgeSegments == null)
                 allEdgeSegments = new List<EdgeSegmentData>();
 
@@ -1461,7 +1465,10 @@ namespace FaeMaze.Systems
             var forestState = mazeGridBehaviour.ForestMapState;
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
-            var occupiedWallPositions = new HashSet<long>();
+            // Use class-level occupiedWallPositions to avoid duplicating existing walls
+            if (occupiedWallPositions == null)
+                occupiedWallPositions = new HashSet<long>();
+
             float stepSize = 0.5f;
             int wallsCreated = 0;
 
@@ -1634,6 +1641,7 @@ namespace FaeMaze.Systems
             }
 
             occupiedPositions = new HashSet<long>();
+            occupiedWallPositions = new HashSet<long>();
             allEdgeSegments = new List<EdgeSegmentData>();
 
             int tilesCreated = 0;
@@ -1760,8 +1768,8 @@ namespace FaeMaze.Systems
             yield return null;
 
             // Step 4: Render wall border (simplified - fewer walls during async for speed)
+            // Use class-level occupiedWallPositions for consistency
             int wallTilesStart = tilesCreated;
-            var occupiedWallPositions = new HashSet<long>();
             float wallStepSize = 0.5f;
 
             foreach (var edge in forestState.Edges)
