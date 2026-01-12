@@ -148,7 +148,7 @@ namespace ForestMaze
             // Ensure at least one cross-connection exists after initial growth
             EnsureCrossConnection(state);
 
-            Debug.Log($"[PlanarForest] Generated graph with {state.Nodes.Count} nodes, {state.Edges.Count} edges, {state.Frontier.Count} frontier edges");
+            // Debug.Log($"[PlanarForest] Generated graph with {state.Nodes.Count} nodes, {state.Edges.Count} edges, {state.Frontier.Count} frontier edges");
 
             // Return empty string for legacy compatibility - no rasterization in world-space mode
             // Graph positions ARE world positions
@@ -231,7 +231,7 @@ namespace ForestMaze
                 {
                     if (TryConnectToExisting(state, node1, root.Id, root.Id, allowForceCapacity: true))
                     {
-                        Debug.Log($"[PlanarForest] Init: Created cross-connection from node {node1.Id}");
+                        // Debug.Log($"[PlanarForest] Init: Created cross-connection from node {node1.Id}");
                         continue;
                     }
                 }
@@ -288,33 +288,33 @@ namespace ForestMaze
             state.GhostCenters.RemoveAll(g => Vector2.Distance(g, edge.GhostCenter.Value) < 1e-6f);
             edge.GhostCenter = null;
 
-            Debug.Log($"[PlanarForest] ===== STEP: Created node {newNode.Id} at {newNode.Position}, capacity={newNode.MaxDegree}, parent edge from node {edge.NodeA} =====");
+            // Debug.Log($"[PlanarForest] ===== STEP: Created node {newNode.Id} at {newNode.Position}, capacity={newNode.MaxDegree}, parent edge from node {edge.NodeA} =====");
 
             // First priority: Ensure at least one frontier edge for continued growth
             bool hasFrontierEdge = false;
             if (newNode.HasCapacity())
             {
-                Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting to add frontier edge...");
+                // Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting to add frontier edge...");
                 if (AddPartialEdge(state, newNode))
                 {
                     hasFrontierEdge = true;
-                    Debug.Log($"[PlanarForest] Step {newNode.Id}: Frontier edge added successfully");
+                    // Debug.Log($"[PlanarForest] Step {newNode.Id}: Frontier edge added successfully");
                 }
                 else
                 {
-                    Debug.Log($"[PlanarForest] Step {newNode.Id}: FAILED to add frontier edge");
+                    // Debug.Log($"[PlanarForest] Step {newNode.Id}: FAILED to add frontier edge");
                 }
             }
             else
             {
-                Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for frontier edge (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
+                // Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for frontier edge (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
             }
 
             // Second priority: Ensure at least one cross-connection to existing node
             bool hasExistingConnection = false;
             if (newNode.HasCapacity())
             {
-                Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting cross-connection (excluding parent node {edge.NodeA})...");
+                // Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting cross-connection (excluding parent node {edge.NodeA})...");
                 if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA, allowForceCapacity: true))
                 {
                     hasExistingConnection = true;
@@ -322,7 +322,7 @@ namespace ForestMaze
             }
             else
             {
-                Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for cross-connection (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
+                // Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for cross-connection (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
             }
 
             // Fill remaining capacity with partial edges (more frontier for growth)
@@ -335,10 +335,10 @@ namespace ForestMaze
             }
             if (additionalFrontier > 0)
             {
-                Debug.Log($"[PlanarForest] Step {newNode.Id}: Added {additionalFrontier} additional frontier edges");
+                // Debug.Log($"[PlanarForest] Step {newNode.Id}: Added {additionalFrontier} additional frontier edges");
             }
 
-            Debug.Log($"[PlanarForest] ===== STEP COMPLETE: Node {newNode.Id} - frontier={hasFrontierEdge}, crossConnect={hasExistingConnection}, finalEdges={newNode.IncidentEdges.Count}/{newNode.MaxDegree} =====");
+            // Debug.Log($"[PlanarForest] ===== STEP COMPLETE: Node {newNode.Id} - frontier={hasFrontierEdge}, crossConnect={hasExistingConnection}, finalEdges={newNode.IncidentEdges.Count}/{newNode.MaxDegree} =====");
 
             // Merge nearby edges that are too close together
             MergeNearbyEdges(state);
@@ -459,7 +459,7 @@ namespace ForestMaze
 
             // Log new node state for debugging
             string newNodeAngles = string.Join(", ", newNode.UsedAngles.Select(a => $"{a * Mathf.Rad2Deg:F0}°"));
-            Debug.Log($"[PlanarForest] TryConnect for node {newNode.Id} at {newNode.Position}, edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree}, usedAngles=[{newNodeAngles}]");
+            // Debug.Log($"[PlanarForest] TryConnect for node {newNode.Id} at {newNode.Position}, edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree}, usedAngles=[{newNodeAngles}]");
 
             // First try nodes with capacity
             var candidates = state.Nodes
@@ -486,7 +486,7 @@ namespace ForestMaze
                 int excludedSelf = 1;
                 int excludedProhibited = prohibitedNodeId.HasValue ? 1 : 0;
                 int excludedConnected = connectedNodeIds.Count;
-                Debug.Log($"[PlanarForest] TryConnect FAILED: 0 candidates. Total nodes={totalNodes}, excluded: self=1, prohibited={excludedProhibited}, alreadyConnected={excludedConnected}");
+                // Debug.Log($"[PlanarForest] TryConnect FAILED: 0 candidates. Total nodes={totalNodes}, excluded: self=1, prohibited={excludedProhibited}, alreadyConnected={excludedConnected}");
                 return false;
             }
 
@@ -495,17 +495,17 @@ namespace ForestMaze
                 .OrderBy(c => Vector2.Distance(c.Position, newNode.Position))
                 .ToList();
 
-            Debug.Log($"[PlanarForest] TryConnect: {candidates.Count} candidates ({candidatesWithCapacity} with capacity, allowForce={allowForceCapacity})");
+            // Debug.Log($"[PlanarForest] TryConnect: {candidates.Count} candidates ({candidatesWithCapacity} with capacity, allowForce={allowForceCapacity})");
 
             foreach (var candidate in candidates)
             {
                 float dist = Vector2.Distance(newNode.Position, candidate.Position);
                 string candAngles = string.Join(", ", candidate.UsedAngles.Select(a => $"{a * Mathf.Rad2Deg:F0}°"));
-                Debug.Log($"[PlanarForest] Trying candidate {candidate.Id} at dist={dist:F1}, edges={candidate.IncidentEdges.Count}/{candidate.MaxDegree}, usedAngles=[{candAngles}]");
+                // Debug.Log($"[PlanarForest] Trying candidate {candidate.Id} at dist={dist:F1}, edges={candidate.IncidentEdges.Count}/{candidate.MaxDegree}, usedAngles=[{candAngles}]");
 
                 if (connectedNodeIds.Contains(candidate.Id))
                 {
-                    Debug.Log($"[PlanarForest]   -> SKIP: Already connected to node {candidate.Id}");
+                    // Debug.Log($"[PlanarForest]   -> SKIP: Already connected to node {candidate.Id}");
                     continue;
                 }
 
@@ -549,18 +549,18 @@ namespace ForestMaze
 
                 if (!foundValidAngles)
                 {
-                    Debug.Log($"[PlanarForest]   -> SKIP: No valid angles. Tested {numSteps} angles: {sourceAngleBlocked} blocked on source, {targetAngleBlocked} blocked on target");
+                    // Debug.Log($"[PlanarForest]   -> SKIP: No valid angles. Tested {numSteps} angles: {sourceAngleBlocked} blocked on source, {targetAngleBlocked} blocked on target");
                     continue;
                 }
 
-                Debug.Log($"[PlanarForest]   -> Found valid angles: source={validSourceAngle * Mathf.Rad2Deg:F0}°, target={validTargetAngle * Mathf.Rad2Deg:F0}°");
+                // Debug.Log($"[PlanarForest]   -> Found valid angles: source={validSourceAngle * Mathf.Rad2Deg:F0}°, target={validTargetAngle * Mathf.Rad2Deg:F0}°");
 
                 var polyline = BuildCurvedPolyline(state, newNode.Position, candidate.Position,
                     new List<int> { newNode.Id, candidate.Id }, isCrossConnection: true);
 
                 if (polyline == null)
                 {
-                    Debug.Log($"[PlanarForest]   -> SKIP: Polyline generation failed");
+                    // Debug.Log($"[PlanarForest]   -> SKIP: Polyline generation failed");
                     continue;
                 }
 
@@ -568,7 +568,7 @@ namespace ForestMaze
                 if (!candidate.HasCapacity())
                 {
                     candidate.MaxDegree++;
-                    Debug.Log($"[PlanarForest]   -> Expanded node {candidate.Id} capacity to {candidate.MaxDegree}");
+                    // Debug.Log($"[PlanarForest]   -> Expanded node {candidate.Id} capacity to {candidate.MaxDegree}");
                 }
 
                 var edge = new Edge
@@ -585,7 +585,7 @@ namespace ForestMaze
                 newNode.AddEdge(edge.Id, validSourceAngle);
                 candidate.AddEdge(edge.Id, validTargetAngle);
 
-                Debug.Log($"[PlanarForest]   -> SUCCESS: Created edge {edge.Id} from node {newNode.Id} to node {candidate.Id}");
+                // Debug.Log($"[PlanarForest]   -> SUCCESS: Created edge {edge.Id} from node {newNode.Id} to node {candidate.Id}");
 
                 // Mark as cross-connection if connecting to non-parent node
                 if (!parentNodeId.HasValue || candidate.Id != parentNodeId.Value)
@@ -596,7 +596,7 @@ namespace ForestMaze
                 return true;
             }
 
-            Debug.Log($"[PlanarForest] TryConnect FAILED: All {candidates.Count} candidates exhausted for node {newNode.Id}");
+            // Debug.Log($"[PlanarForest] TryConnect FAILED: All {candidates.Count} candidates exhausted for node {newNode.Id}");
             return false;
         }
 
@@ -609,16 +609,16 @@ namespace ForestMaze
         {
             if (state.HasCrossConnection)
             {
-                Debug.Log($"[PlanarForest] EnsureCrossConnection: Already has cross-connection, skipping");
+                // Debug.Log($"[PlanarForest] EnsureCrossConnection: Already has cross-connection, skipping");
                 return;
             }
             if (state.Nodes.Count < 3)
             {
-                Debug.Log($"[PlanarForest] EnsureCrossConnection: Only {state.Nodes.Count} nodes, need at least 3");
+                // Debug.Log($"[PlanarForest] EnsureCrossConnection: Only {state.Nodes.Count} nodes, need at least 3");
                 return;
             }
 
-            Debug.Log($"[PlanarForest] EnsureCrossConnection: Attempting to create cross-connection with {state.Nodes.Count} nodes");
+            // Debug.Log($"[PlanarForest] EnsureCrossConnection: Attempting to create cross-connection with {state.Nodes.Count} nodes");
 
             // First try nodes that already have capacity
             var nodesWithCapacity = state.Nodes.OrderByDescending(n => n.Id)
@@ -629,7 +629,7 @@ namespace ForestMaze
             {
                 if (TryForceConnection(state, node))
                 {
-                    Debug.Log($"[PlanarForest] EnsureCrossConnection: Created cross-connection from node {node.Id}");
+                    // Debug.Log($"[PlanarForest] EnsureCrossConnection: Created cross-connection from node {node.Id}");
                     return; // Success!
                 }
             }
@@ -664,7 +664,7 @@ namespace ForestMaze
 
                     if (TryForceConnection(state, sourceNode))
                     {
-                        Debug.Log($"[PlanarForest] EnsureCrossConnection: Created cross-connection from node {sourceNode.Id} (expanded capacity)");
+                        // Debug.Log($"[PlanarForest] EnsureCrossConnection: Created cross-connection from node {sourceNode.Id} (expanded capacity)");
                         return; // Success! Keep both increased capacities
                     }
 
@@ -676,7 +676,7 @@ namespace ForestMaze
                 sourceNode.MaxDegree = origSourceCapacity;
             }
 
-            Debug.LogWarning($"[PlanarForest] Could not force cross-connection even with increased capacity");
+            // Debug.LogWarning($"[PlanarForest] Could not force cross-connection even with increased capacity");
         }
 
         private static bool TryForceConnection(ForestMapState state, Node node)
@@ -846,7 +846,7 @@ namespace ForestMaze
                     continue;
                 }
 
-                Debug.Log($"[EdgeSpacing] Node {node.Id}: Found {connectedEdges.Count} connected edges");
+                // Debug.Log($"[EdgeSpacing] Node {node.Id}: Found {connectedEdges.Count} connected edges");
 
                 // Sort by angle
                 connectedEdges.Sort((a, b) => a.angle.CompareTo(b.angle));
@@ -910,7 +910,7 @@ namespace ForestMaze
 
             if (count < 3)
             {
-                Debug.LogWarning($"[EdgeSpacing] Edge {edge.Id} has only {count} points, cannot adjust");
+                // Debug.LogWarning($"[EdgeSpacing] Edge {edge.Id} has only {count} points, cannot adjust");
                 return;
             }
 
@@ -922,7 +922,7 @@ namespace ForestMaze
                 // NEVER rotate the frontier endpoint (last point) - it must stay fixed for wall placement
                 int maxIndex = Mathf.Min(2, count - 1);  // Rotate at most 2 points, never the last
 
-                Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points 0 to {maxIndex-1} (count={count})");
+                // Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points 0 to {maxIndex-1} (count={count})");
 
                 // Store old positions for fill generation
                 List<Vector2> oldPositions = new List<Vector2>();
@@ -953,7 +953,7 @@ namespace ForestMaze
                     if (Vector2.Distance(oldPos, newPos) > 0.1f)
                     {
                         state.AdjustmentFills.Add((oldPos, newPos));
-                        Debug.Log($"[EdgeSpacing] Added fill segment from {oldPos} to {newPos}");
+                        // Debug.Log($"[EdgeSpacing] Added fill segment from {oldPos} to {newPos}");
                     }
                 }
 
@@ -970,7 +970,7 @@ namespace ForestMaze
                 // NEVER rotate the frontier endpoint (first point) - it must stay fixed for wall placement
                 int minIndex = Mathf.Max(count - 2, 1);  // Rotate at most last 2 points, never the first
 
-                Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points {minIndex} to {count-1} (count={count})");
+                // Debug.Log($"[EdgeSpacing] Edge {edge.Id}: rotating points {minIndex} to {count-1} (count={count})");
 
                 // Store old positions for fill generation
                 List<Vector2> oldPositions = new List<Vector2>();
@@ -1000,7 +1000,7 @@ namespace ForestMaze
                     if (Vector2.Distance(oldPos, newPos) > 0.1f)
                     {
                         state.AdjustmentFills.Add((oldPos, newPos));
-                        Debug.Log($"[EdgeSpacing] Added fill segment from {oldPos} to {newPos}");
+                        // Debug.Log($"[EdgeSpacing] Added fill segment from {oldPos} to {newPos}");
                     }
                 }
 
@@ -1034,7 +1034,7 @@ namespace ForestMaze
 
         private static bool TryMergeEdgeSegments(Edge edge1, Edge edge2, Vector2? sharedNodePos, ref int mergeCount)
         {
-            Debug.Log($"[EdgeMerge] Checking edge {edge1.Id} (nodes {edge1.NodeA}->{edge1.NodeB}) vs edge {edge2.Id} (nodes {edge2.NodeA}->{edge2.NodeB}), sharedNode={sharedNodePos}");
+            // Debug.Log($"[EdgeMerge] Checking edge {edge1.Id} (nodes {edge1.NodeA}->{edge1.NodeB}) vs edge {edge2.Id} (nodes {edge2.NodeA}->{edge2.NodeB}), sharedNode={sharedNodePos}");
 
             // If edges share a node, try special shared-node merge first
             if (sharedNodePos.HasValue)
@@ -1058,7 +1058,7 @@ namespace ForestMaze
         {
             if (edge1.PolylinePoints.Count < 2 || edge2.PolylinePoints.Count < 2)
             {
-                Debug.Log($"[EdgeMerge] SharedNode: SKIP - not enough points (e1={edge1.PolylinePoints.Count}, e2={edge2.PolylinePoints.Count})");
+                // Debug.Log($"[EdgeMerge] SharedNode: SKIP - not enough points (e1={edge1.PolylinePoints.Count}, e2={edge2.PolylinePoints.Count})");
                 return false;
             }
 
@@ -1071,7 +1071,7 @@ namespace ForestMaze
             bool edge1StartsAtNode = dist1Start < dist1End;
             bool edge2StartsAtNode = dist2Start < dist2End;
 
-            Debug.Log($"[EdgeMerge] SharedNode at {sharedNodePos}: e1 dist start={dist1Start:F2} end={dist1End:F2} (startsAtNode={edge1StartsAtNode}), e2 dist start={dist2Start:F2} end={dist2End:F2} (startsAtNode={edge2StartsAtNode})");
+            // Debug.Log($"[EdgeMerge] SharedNode at {sharedNodePos}: e1 dist start={dist1Start:F2} end={dist1End:F2} (startsAtNode={edge1StartsAtNode}), e2 dist start={dist2Start:F2} end={dist2End:F2} (startsAtNode={edge2StartsAtNode})");
 
             // Get the polylines oriented from the shared node outward
             List<Vector2> poly1 = edge1StartsAtNode
@@ -1093,8 +1093,8 @@ namespace ForestMaze
                 poly2.Insert(0, sharedNodePos);
             }
 
-            Debug.Log($"[EdgeMerge] Oriented poly1: {poly1.Count} pts from {poly1[0]} to {poly1[poly1.Count-1]}");
-            Debug.Log($"[EdgeMerge] Oriented poly2: {poly2.Count} pts from {poly2[0]} to {poly2[poly2.Count-1]}");
+            // Debug.Log($"[EdgeMerge] Oriented poly1: {poly1.Count} pts from {poly1[0]} to {poly1[poly1.Count-1]}");
+            // Debug.Log($"[EdgeMerge] Oriented poly2: {poly2.Count} pts from {poly2[0]} to {poly2[poly2.Count-1]}");
 
             // Check distances at each point of poly2 against poly1
             List<float> distances = new List<float>();
@@ -1114,30 +1114,30 @@ namespace ForestMaze
 
             // Log all distances
             string distStr = string.Join(", ", distances.Select(d => d.ToString("F2")));
-            Debug.Log($"[EdgeMerge] Distances poly2->poly1: [{distStr}] (MERGE_DISTANCE={MERGE_DISTANCE})");
+            // Debug.Log($"[EdgeMerge] Distances poly2->poly1: [{distStr}] (MERGE_DISTANCE={MERGE_DISTANCE})");
 
             // Determine if this is a diverging case (close at start) or converging case (close at end)
             bool closeAtStart = distances.Count > 0 && distances[0] < MERGE_DISTANCE;
             bool closeAtEnd = distances.Count > 0 && distances[distances.Count - 1] < MERGE_DISTANCE;
 
-            Debug.Log($"[EdgeMerge] closeAtStart={closeAtStart}, closeAtEnd={closeAtEnd}");
+            // Debug.Log($"[EdgeMerge] closeAtStart={closeAtStart}, closeAtEnd={closeAtEnd}");
 
             if (closeAtStart)
             {
-                Debug.Log($"[EdgeMerge] -> Trying DIVERGING merge");
+                // Debug.Log($"[EdgeMerge] -> Trying DIVERGING merge");
                 // DIVERGING CASE: edges share path from node, then split
                 return TryMergeDivergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
             else if (closeAtEnd)
             {
-                Debug.Log($"[EdgeMerge] -> Trying CONVERGING merge");
+                // Debug.Log($"[EdgeMerge] -> Trying CONVERGING merge");
                 // CONVERGING CASE: edges approach node from different directions, merge before node
                 return TryMergeConvergingEdges(edge1, edge2, edge2StartsAtNode, poly1, poly2,
                     distances, closestPointsOnPoly1, closestSegmentsOnPoly1, ref mergeCount);
             }
 
-            Debug.Log($"[EdgeMerge] SharedNode: NO MERGE - not close at start or end");
+            // Debug.Log($"[EdgeMerge] SharedNode: NO MERGE - not close at start or end");
             return false;
         }
 
@@ -1165,13 +1165,13 @@ namespace ForestMaze
                 }
             }
 
-            Debug.Log($"[EdgeMerge] DIVERGING: lastCloseIdx2={lastCloseIdx2}, divergeIdx2={divergeIdx2}");
+            // Debug.Log($"[EdgeMerge] DIVERGING: lastCloseIdx2={lastCloseIdx2}, divergeIdx2={divergeIdx2}");
 
             // Special case: only point 0 is close (edges meet at node but immediately diverge)
             // We need to extend the shared path along poly1 until the paths are MERGE_DISTANCE apart
             if (lastCloseIdx2 == 0 && distances.Count > 1 && distances[1] >= MERGE_DISTANCE)
             {
-                Debug.Log($"[EdgeMerge] DIVERGING: Special case - only point 0 close, extending shared path");
+                // Debug.Log($"[EdgeMerge] DIVERGING: Special case - only point 0 close, extending shared path");
 
                 // Find a point along poly1's first segment where distance to poly2[1] equals MERGE_DISTANCE
                 // This is where we should branch off
@@ -1216,7 +1216,7 @@ namespace ForestMaze
                     junctionOnPoly2 = sharedStart + poly2Dir * targetDist;
                 }
 
-                Debug.Log($"[EdgeMerge] BOUNDARY: branchPoint={branchPoint}, junctionOnPoly2={junctionOnPoly2}, distFromStart={distFromStart:F2}");
+                // Debug.Log($"[EdgeMerge] BOUNDARY: branchPoint={branchPoint}, junctionOnPoly2={junctionOnPoly2}, distFromStart={distFromStart:F2}");
 
                 List<Vector2> boundaryNewPoly = new List<Vector2>();
                 boundaryNewPoly.Add(sharedStart);
@@ -1253,13 +1253,13 @@ namespace ForestMaze
                 edge2.PolylinePoints.AddRange(boundaryNewPoly);
 
                 mergeCount++;
-                Debug.Log($"[EdgeMerge] DIVERGING SUCCESS (boundary case): extended to {branchPoint}, newPoly has {boundaryNewPoly.Count} pts");
+                // Debug.Log($"[EdgeMerge] DIVERGING SUCCESS (boundary case): extended to {branchPoint}, newPoly has {boundaryNewPoly.Count} pts");
                 return true;
             }
 
             if (lastCloseIdx2 < 1)
             {
-                Debug.Log($"[EdgeMerge] DIVERGING: FAIL - lastCloseIdx2={lastCloseIdx2} < 1");
+                // Debug.Log($"[EdgeMerge] DIVERGING: FAIL - lastCloseIdx2={lastCloseIdx2} < 1");
                 return false;
             }
 
@@ -1269,7 +1269,7 @@ namespace ForestMaze
                     divergeIdx2 = lastCloseIdx2 + 1;
                 else
                 {
-                    Debug.Log($"[EdgeMerge] DIVERGING: FAIL - no divergence found");
+                    // Debug.Log($"[EdgeMerge] DIVERGING: FAIL - no divergence found");
                     return false;
                 }
             }
@@ -1315,7 +1315,7 @@ namespace ForestMaze
             edge2.PolylinePoints.AddRange(newPoly2);
 
             mergeCount++;
-            Debug.Log($"[EdgeMerge] DIVERGING SUCCESS: merged at lastClose={lastCloseIdx2}, diverge={divergeIdx2}");
+            // Debug.Log($"[EdgeMerge] DIVERGING SUCCESS: merged at lastClose={lastCloseIdx2}, diverge={divergeIdx2}");
             return true;
         }
 
@@ -1326,7 +1326,7 @@ namespace ForestMaze
             List<Vector2> poly1, List<Vector2> poly2, List<float> distances,
             List<Vector2> closestPointsOnPoly1, List<int> closestSegmentsOnPoly1, ref int mergeCount)
         {
-            Debug.Log($"[EdgeMerge] CONVERGING: poly2 has {poly2.Count} pts, searching for convergence point...");
+            // Debug.Log($"[EdgeMerge] CONVERGING: poly2 has {poly2.Count} pts, searching for convergence point...");
 
             // Find where they converge (searching from end toward start)
             // Find the first point (from the far end) that becomes close
@@ -1338,21 +1338,21 @@ namespace ForestMaze
                 if (distances[i] < MERGE_DISTANCE)
                 {
                     firstCloseIdx2 = i;
-                    Debug.Log($"[EdgeMerge] CONVERGING: point {i} is close (dist={distances[i]:F2})");
+                    // Debug.Log($"[EdgeMerge] CONVERGING: point {i} is close (dist={distances[i]:F2})");
                 }
                 else if (firstCloseIdx2 >= 0 && convergeIdx2 < 0)
                 {
                     convergeIdx2 = i;
-                    Debug.Log($"[EdgeMerge] CONVERGING: point {i} diverges (dist={distances[i]:F2}), convergeIdx2={convergeIdx2}");
+                    // Debug.Log($"[EdgeMerge] CONVERGING: point {i} diverges (dist={distances[i]:F2}), convergeIdx2={convergeIdx2}");
                     break;
                 }
             }
 
-            Debug.Log($"[EdgeMerge] CONVERGING: firstCloseIdx2={firstCloseIdx2}, convergeIdx2={convergeIdx2}, poly2.Count={poly2.Count}");
+            // Debug.Log($"[EdgeMerge] CONVERGING: firstCloseIdx2={firstCloseIdx2}, convergeIdx2={convergeIdx2}, poly2.Count={poly2.Count}");
 
             if (firstCloseIdx2 < 0 || firstCloseIdx2 >= poly2.Count - 1)
             {
-                Debug.Log($"[EdgeMerge] CONVERGING: FAIL - firstCloseIdx2={firstCloseIdx2} invalid (need 0 <= x < {poly2.Count - 1})");
+                // Debug.Log($"[EdgeMerge] CONVERGING: FAIL - firstCloseIdx2={firstCloseIdx2} invalid (need 0 <= x < {poly2.Count - 1})");
                 return false;
             }
 
@@ -1360,7 +1360,7 @@ namespace ForestMaze
             if (convergeIdx2 < 0)
             {
                 convergeIdx2 = 0;
-                Debug.Log($"[EdgeMerge] CONVERGING: No divergence found, using convergeIdx2=0");
+                // Debug.Log($"[EdgeMerge] CONVERGING: No divergence found, using convergeIdx2=0");
             }
 
             // Get merge point info - where poly2 should join poly1's path
@@ -1409,7 +1409,7 @@ namespace ForestMaze
             edge2.PolylinePoints.AddRange(newPoly2);
 
             mergeCount++;
-            Debug.Log($"[EdgeMerge] CONVERGING SUCCESS: merged at firstClose={firstCloseIdx2}, converge={convergeIdx2}, newPoly2 has {newPoly2.Count} pts");
+            // Debug.Log($"[EdgeMerge] CONVERGING SUCCESS: merged at firstClose={firstCloseIdx2}, converge={convergeIdx2}, newPoly2 has {newPoly2.Count} pts");
             return true;
         }
 
@@ -1455,7 +1455,7 @@ namespace ForestMaze
                     if (minDist < MERGE_DISTANCE && minDist > 0.01f)
                     {
                         // Found two segments that are too close - merge them
-                        Debug.Log($"[EdgeMerge] PARALLEL: edge {edge1.Id} seg {i} too close to edge {edge2.Id} seg {j} (dist={minDist:F2})");
+                        // Debug.Log($"[EdgeMerge] PARALLEL: edge {edge1.Id} seg {i} too close to edge {edge2.Id} seg {j} (dist={minDist:F2})");
 
                         // Sample points along edge1's close segment and snap them to edge2
                         // Then reroute edge1 to follow edge2 through this region
@@ -1600,7 +1600,7 @@ namespace ForestMaze
                 edge1.PolylinePoints.Clear();
                 edge1.PolylinePoints.AddRange(newPoly);
                 mergeCount++;
-                Debug.Log($"[EdgeMerge] PARALLEL MERGE SUCCESS: edge {edge1.Id} rerouted through edge {edge2.Id}, new poly has {newPoly.Count} pts");
+                // Debug.Log($"[EdgeMerge] PARALLEL MERGE SUCCESS: edge {edge1.Id} rerouted through edge {edge2.Id}, new poly has {newPoly.Count} pts");
                 return true;
             }
 
@@ -2755,12 +2755,12 @@ namespace ForestMaze
 
             if (!validation.IsValid)
             {
-                Debug.LogWarning($"Maze validation failed: {validation.ErrorMessage}");
+                // Debug.LogWarning($"Maze validation failed: {validation.ErrorMessage}");
                 // Return grid anyway, GenerateMaze will handle retry
             }
             else
             {
-                Debug.Log($"Maze validation passed: {state.Nodes.Count} nodes, {validation.DetectedConnections.Count} connections");
+                // Debug.Log($"Maze validation passed: {state.Nodes.Count} nodes, {validation.DetectedConnections.Count} connections");
 
                 // Backfill state with actual grid positions
                 BackfillStateFromGrid(state, validation, scale, offset);
@@ -3233,12 +3233,12 @@ namespace ForestMaze
             // Skip if start or end is out of bounds
             if (start.x < 0 || start.x >= width || start.y < 0 || start.y >= height)
             {
-                Debug.LogWarning($"[EnsureDirectPath] Start position ({start.x},{start.y}) is out of bounds (grid: {width}x{height})");
+                // Debug.LogWarning($"[EnsureDirectPath] Start position ({start.x},{start.y}) is out of bounds (grid: {width}x{height})");
                 return;
             }
             if (end.x < 0 || end.x >= width || end.y < 0 || end.y >= height)
             {
-                Debug.LogWarning($"[EnsureDirectPath] End position ({end.x},{end.y}) is out of bounds (grid: {width}x{height})");
+                // Debug.LogWarning($"[EnsureDirectPath] End position ({end.x},{end.y}) is out of bounds (grid: {width}x{height})");
                 return;
             }
 

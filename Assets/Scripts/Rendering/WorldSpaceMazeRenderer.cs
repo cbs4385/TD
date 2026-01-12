@@ -103,7 +103,7 @@ namespace FaeMaze.Systems
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("[WorldSpaceMazeRenderer] MazeGridBehaviour component not found!");
+                // Debug.LogError("[WorldSpaceMazeRenderer] MazeGridBehaviour component not found!");
                 return;
             }
 
@@ -111,7 +111,7 @@ namespace FaeMaze.Systems
             var forestState = mazeGridBehaviour.ForestMapState;
             if (forestState == null)
             {
-                Debug.LogWarning("[WorldSpaceMazeRenderer] No ForestMapState available. " +
+                // Debug.LogWarning("[WorldSpaceMazeRenderer] No ForestMapState available. " +
                     "Ensure usePlanarGenerator is enabled on MazeGridBehaviour.");
                 return;
             }
@@ -135,7 +135,7 @@ namespace FaeMaze.Systems
             WorldSpaceMazeGenerator.ResetSpawnIdCounter();
             mazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestState, tileSize);
 
-            Debug.Log($"[WorldSpaceMazeRenderer] Generated {mazeData.Tiles.Count} tiles from graph with " +
+            // Debug.Log($"[WorldSpaceMazeRenderer] Generated {mazeData.Tiles.Count} tiles from graph with " +
                 $"{forestState.Nodes.Count} nodes and {forestState.Edges.Count} edges");
         }
 
@@ -150,7 +150,7 @@ namespace FaeMaze.Systems
         {
             if (mazeData == null || mazeData.Tiles.Count == 0)
             {
-                Debug.LogWarning("[WorldSpaceMazeRenderer] No maze data to render.");
+                // Debug.LogWarning("[WorldSpaceMazeRenderer] No maze data to render.");
                 return;
             }
 
@@ -189,7 +189,7 @@ namespace FaeMaze.Systems
                 PerformMeshBatching();
             }
 
-            Debug.Log($"[WorldSpaceMazeRenderer] Rendered {renderedCount} tiles.");
+            // Debug.Log($"[WorldSpaceMazeRenderer] Rendered {renderedCount} tiles.");
         }
 
         /// <summary>
@@ -365,7 +365,7 @@ namespace FaeMaze.Systems
                 totalBatches += batches.Count;
             }
 
-            Debug.Log($"[WorldSpaceMazeRenderer] Created {totalBatches} batched meshes.");
+            // Debug.Log($"[WorldSpaceMazeRenderer] Created {totalBatches} batched meshes.");
         }
 
         #endregion

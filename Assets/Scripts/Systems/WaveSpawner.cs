@@ -310,14 +310,14 @@ namespace FaeMaze.Systems
 
                 // Find a different spawn point as destination
                 destinationWorldPos = FindDifferentSpawnPoint(spawnWorldPos, spawnPoints);
-                Debug.Log($"[Pathfinding] WaveSpawner: Spawning at {spawnWorldPos} ({spawnId}), destination {destinationWorldPos}");
+                // Debug.Log($"[Pathfinding] WaveSpawner: Spawning at {spawnWorldPos} ({spawnId}), destination {destinationWorldPos}");
             }
             else
             {
                 // Fallback to heart position if no spawn points
                 spawnWorldPos = mazeGridBehaviour.HeartWorldPosition;
                 destinationWorldPos = spawnWorldPos;
-                Debug.Log($"[Pathfinding] WaveSpawner: No spawn points, spawning at heart {spawnWorldPos}");
+                // Debug.Log($"[Pathfinding] WaveSpawner: No spawn points, spawning at heart {spawnWorldPos}");
             }
 
             // Spawn visitor
@@ -337,7 +337,7 @@ namespace FaeMaze.Systems
             spawnedVisitor.SetOriginalSpawnPosition(spawnWorldPos);
 
             // Set destination to a different spawn point (not the heart)
-            Debug.Log($"[Pathfinding] WaveSpawner: Setting {visitorObject.name} destination to {destinationWorldPos}, spawn origin {spawnWorldPos}");
+            // Debug.Log($"[Pathfinding] WaveSpawner: Setting {visitorObject.name} destination to {destinationWorldPos}, spawn origin {spawnWorldPos}");
             spawnedVisitor.SetWorldDestination(destinationWorldPos);
 
             if (spawnedVisitor is VisitorController)

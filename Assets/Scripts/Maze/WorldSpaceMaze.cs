@@ -197,7 +197,7 @@ namespace ForestMaze
                     {
                         tile.Walkable = false;
                         markedCount++;
-                        UnityEngine.Debug.Log($"[WorldSpaceMazeData] Marked tile at {tile.Position} (category: {tile.Category}) as unwalkable");
+                        // UnityEngine.Debug.Log($"[WorldSpaceMazeData] Marked tile at {tile.Position} (category: {tile.Category}) as unwalkable");
                     }
                 }
             }
@@ -372,7 +372,7 @@ namespace ForestMaze
             // Verify spatial grid is populated correctly
             int gridCellCount = data.GetSpatialGridCellCount();
             int walkableCount = data.Tiles.Count(t => t.Walkable);
-            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated {data.Tiles.Count} tiles ({walkableCount} walkable) in {gridCellCount} spatial grid cells");
+            // UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated {data.Tiles.Count} tiles ({walkableCount} walkable) in {gridCellCount} spatial grid cells");
 
             return data;
         }
@@ -473,7 +473,7 @@ namespace ForestMaze
                 }
             }
 
-            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated tiles for {state.AdjustmentFills.Count} adjustment fill segments");
+            // UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated tiles for {state.AdjustmentFills.Count} adjustment fill segments");
         }
 
         /// <summary>

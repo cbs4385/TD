@@ -127,7 +127,7 @@ namespace FaeMaze.Systems
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null || forestMapState.Frontier.Count == 0)
             {
-                Debug.LogWarning("[DynamicGrowth] No ForestMapState or frontier edges - skipping spawn point initialization");
+                // Debug.LogWarning("[DynamicGrowth] No ForestMapState or frontier edges - skipping spawn point initialization");
                 return;
             }
 
@@ -148,14 +148,14 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour == null)
             {
-                Debug.LogWarning("[DynamicGrowth] MazeGridBehaviour is null");
+                // Debug.LogWarning("[DynamicGrowth] MazeGridBehaviour is null");
                 return;
             }
 
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null)
             {
-                Debug.LogWarning("[DynamicGrowth] ForestMapState is null - make sure planar generator is being used");
+                // Debug.LogWarning("[DynamicGrowth] ForestMapState is null - make sure planar generator is being used");
                 return;
             }
 
@@ -201,7 +201,7 @@ namespace FaeMaze.Systems
 
             if (!success)
             {
-                Debug.LogWarning("[DynamicGrowth] Step() failed - no valid placement found");
+                // Debug.LogWarning("[DynamicGrowth] Step() failed - no valid placement found");
                 return;
             }
 
@@ -221,7 +221,7 @@ namespace FaeMaze.Systems
                     if (frontierEndpoints.TryGetValue(edgeIndex, out Vector3 endpoint))
                     {
                         consumedSpawnPos = endpoint;
-                        Debug.Log($"[DynamicGrowth] Consumed spawn at edge {edgeIndex}, position {consumedSpawnPos}");
+                        // Debug.Log($"[DynamicGrowth] Consumed spawn at edge {edgeIndex}, position {consumedSpawnPos}");
                     }
                     break;
                 }
@@ -300,7 +300,7 @@ namespace FaeMaze.Systems
                 }
 
                 int walkableCount = worldSpaceData.Tiles.Count(t => t.Walkable);
-                Debug.Log($"[DynamicGrowth] Regenerated WorldSpaceMazeData: {oldTileCount} -> {worldSpaceData.Tiles.Count} tiles ({walkableCount} walkable)");
+                // Debug.Log($"[DynamicGrowth] Regenerated WorldSpaceMazeData: {oldTileCount} -> {worldSpaceData.Tiles.Count} tiles ({walkableCount} walkable)");
             }
 
             // Rebuild portals from frontier edges using world-space coordinates
@@ -426,7 +426,7 @@ namespace FaeMaze.Systems
             if (worldSpaceData != null)
             {
                 worldSpaceData.ClearSpawnPoints();
-                Debug.Log($"[DynamicGrowth] Cleared spawn points, frontier has {forestMapState.Frontier.Count} edges");
+                // Debug.Log($"[DynamicGrowth] Cleared spawn points, frontier has {forestMapState.Frontier.Count} edges");
             }
 
             // Clear ALL existing portals
@@ -507,7 +507,7 @@ namespace FaeMaze.Systems
                 char spawnId = GetNextAvailableSpawnId();
                 if (spawnId == '\0')
                 {
-                    Debug.LogWarning("[DynamicGrowth] No more spawn IDs available");
+                    // Debug.LogWarning("[DynamicGrowth] No more spawn IDs available");
                     break;
                 }
 
@@ -545,7 +545,7 @@ namespace FaeMaze.Systems
             if (finalSpawnPoints != null)
             {
                 var spawnInfo = string.Join(", ", finalSpawnPoints.Select(kvp => $"{kvp.Key}:{kvp.Value:F1}"));
-                Debug.Log($"[DynamicGrowth] Registered {finalSpawnPoints.Count} spawn points: [{spawnInfo}]");
+                // Debug.Log($"[DynamicGrowth] Registered {finalSpawnPoints.Count} spawn points: [{spawnInfo}]");
             }
 
             // Identify which spawn points were removed (old positions not present in new spawn points)
@@ -574,7 +574,7 @@ namespace FaeMaze.Systems
 
             if (removedSpawnPositions.Count > 0)
             {
-                Debug.Log($"[DynamicGrowth] {removedSpawnPositions.Count} spawn points were removed, retargeting affected visitors only");
+                // Debug.Log($"[DynamicGrowth] {removedSpawnPositions.Count} spawn points were removed, retargeting affected visitors only");
             }
 
             // Only signal visitors whose destination was at a removed spawn point
@@ -592,7 +592,7 @@ namespace FaeMaze.Systems
         {
             if (portalPrefab == null)
             {
-                Debug.LogWarning($"[DynamicGrowth] CreatePortalAtWorldPosition: portalPrefab is null, cannot create portal {spawnId}");
+                // Debug.LogWarning($"[DynamicGrowth] CreatePortalAtWorldPosition: portalPrefab is null, cannot create portal {spawnId}");
                 return;
             }
 
@@ -635,7 +635,7 @@ namespace FaeMaze.Systems
             if (worldSpaceData != null)
             {
                 worldSpaceData.RegisterSpawnPoint(spawnId, portal.transform);
-                Debug.Log($"[DynamicGrowth] Registered spawn {spawnId} with portal transform at {portal.transform.position}");
+                // Debug.Log($"[DynamicGrowth] Registered spawn {spawnId} with portal transform at {portal.transform.position}");
             }
 
             // Create debug visualization
@@ -710,7 +710,7 @@ namespace FaeMaze.Systems
             // If no spawn points were removed, no visitors need to retarget
             if (removedSpawnPositions == null || removedSpawnPositions.Count == 0)
             {
-                Debug.Log($"[DynamicGrowth] No spawn points removed, skipping visitor retargeting");
+                // Debug.Log($"[DynamicGrowth] No spawn points removed, skipping visitor retargeting");
                 return;
             }
 
@@ -746,7 +746,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[DynamicGrowth] Retargeted {retargetedCount} visitors with removed destinations, skipped {skippedCount} visitors with valid destinations");
+            // Debug.Log($"[DynamicGrowth] Retargeted {retargetedCount} visitors with removed destinations, skipped {skippedCount} visitors with valid destinations");
         }
 
         #endregion
@@ -833,7 +833,7 @@ namespace FaeMaze.Systems
             }
             else
             {
-                Debug.LogWarning($"[DynamicGrowth] Attempted to remove portal '{spawnId}' but it was not found in dictionary");
+                // Debug.LogWarning($"[DynamicGrowth] Attempted to remove portal '{spawnId}' but it was not found in dictionary");
             }
         }
 

@@ -124,7 +124,7 @@ namespace FaeMaze.Systems
         {
             if (wallPrefab == null)
             {
-                Debug.LogWarning("[MazeRenderer] Cannot create wall - wallPrefab is null");
+                // Debug.LogWarning("[MazeRenderer] Cannot create wall - wallPrefab is null");
                 return null;
             }
 
@@ -134,7 +134,7 @@ namespace FaeMaze.Systems
             wallObj.transform.rotation = Quaternion.Euler(0f, 0f, orientationDegrees);
             wallObj.name = $"Wall_Portal_{worldPos.x:F1}_{worldPos.y:F1}";
 
-            Debug.Log($"[MazeRenderer] Created wall at portal position {worldPos}");
+            // Debug.Log($"[MazeRenderer] Created wall at portal position {worldPos}");
             return wallObj;
         }
 
@@ -174,7 +174,7 @@ namespace FaeMaze.Systems
             var forestState = mazeGridBehaviour.ForestMapState;
             if (forestState == null)
             {
-                Debug.LogError("[MazeRenderer] No ForestMapState available for world-space rendering.");
+                // Debug.LogError("[MazeRenderer] No ForestMapState available for world-space rendering.");
                 return;
             }
 
@@ -207,19 +207,19 @@ namespace FaeMaze.Systems
             // This ensures node columns take priority over edges
             int nodeColumnTiles = RenderNodeColumns(forestState, mazeOrigin);
             renderedTiles += nodeColumnTiles;
-            Debug.Log($"[MazeRenderer] Rendered {nodeColumnTiles} node column tiles");
+            // Debug.Log($"[MazeRenderer] Rendered {nodeColumnTiles} node column tiles");
 
             // Step 3: Render path tiles along edges (oriented along edge direction)
             int edgeTiles = RenderEdgePaths(forestState, mazeOrigin);
             renderedTiles += edgeTiles;
-            Debug.Log($"[MazeRenderer] Rendered {edgeTiles} edge path tiles");
+            // Debug.Log($"[MazeRenderer] Rendered {edgeTiles} edge path tiles");
 
             // Step 4: Render wall border (walls cannot overlap path/node tiles)
             int wallTileCount = RenderWallBorder(forestState, mazeOrigin);
             renderedTiles += wallTileCount;
-            Debug.Log($"[MazeRenderer] Rendered {wallTileCount} wall tiles");
+            // Debug.Log($"[MazeRenderer] Rendered {wallTileCount} wall tiles");
 
-            Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +
+            // Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +
                 $"({forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges)");
 
             if (enableMeshBatching)
@@ -349,12 +349,12 @@ namespace FaeMaze.Systems
                     CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                     occupiedPositions.Add(GetQuantizedKey(exactEndpoint));
                     tileCount++;
-                    Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at world {worldPos}");
+                    // Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at world {worldPos}");
                 }
                 else if (isPartialEdge)
                 {
                     // Log successful endpoint placement for diagnostics
-                    Debug.Log($"[MazeRenderer] Partial edge {edge.Id}: endpoint tile placed at world {ToVector3(exactEndpoint)}");
+                    // Debug.Log($"[MazeRenderer] Partial edge {edge.Id}: endpoint tile placed at world {ToVector3(exactEndpoint)}");
                 }
             }
 
@@ -1425,7 +1425,7 @@ namespace FaeMaze.Systems
             if (pathTiles?.Count > 0)
                 totalBatches += MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, true).Count;
 
-            Debug.Log($"[MazeRenderer] Created {totalBatches} batched meshes.");
+            // Debug.Log($"[MazeRenderer] Created {totalBatches} batched meshes.");
         }
 
         private Material CreatePBRMaterialForSymbol(char symbol, Color color)
@@ -1553,7 +1553,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} node tiles for node {newNode.Id}");
+            // Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} node tiles for node {newNode.Id}");
         }
 
         /// <summary>
@@ -1649,7 +1649,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} edge tiles for {newEdges.Count} edges");
+            // Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} edge tiles for {newEdges.Count} edges");
         }
 
         /// <summary>
@@ -1756,7 +1756,7 @@ namespace FaeMaze.Systems
             int gapsFilled = FillGapsAroundNewElements(newEdges, newNode, forestState, occupiedWallPositions, mazeOrigin, stepSize);
             wallsCreated += gapsFilled;
 
-            Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles ({gapsFilled} gap fills)");
+            // Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles ({gapsFilled} gap fills)");
         }
 
         /// <summary>
@@ -1796,7 +1796,7 @@ namespace FaeMaze.Systems
 
             if (removedCount > 0)
             {
-                Debug.Log($"[MazeRenderer] Removed {removedCount} wall tiles near {position}");
+                // Debug.Log($"[MazeRenderer] Removed {removedCount} wall tiles near {position}");
             }
         }
 
@@ -1812,7 +1812,7 @@ namespace FaeMaze.Systems
             }
 
             var forestState = mazeGridBehaviour.ForestMapState;
-            Debug.Log($"[MazeRenderer] Starting async refresh with {forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges");
+            // Debug.Log($"[MazeRenderer] Starting async refresh with {forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges");
 
             // Create a temporary container for new tiles (invisible at first)
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
@@ -1898,7 +1898,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[MazeRenderer] Async: Created {tilesCreated} node tiles");
+            // Debug.Log($"[MazeRenderer] Async: Created {tilesCreated} node tiles");
             yield return null;
 
             // Step 3: Render edge paths
@@ -1964,7 +1964,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - edgeTilesStart} edge tiles");
+            // Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - edgeTilesStart} edge tiles");
             yield return null;
 
             // Step 4: Render wall border (simplified - fewer walls during async for speed)
@@ -2022,7 +2022,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - wallTilesStart} wall tiles");
+            // Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - wallTilesStart} wall tiles");
             yield return null;
 
             // Step 5: Perform mesh batching
@@ -2042,7 +2042,7 @@ namespace FaeMaze.Systems
                 StartCoroutine(DestroyOldTilesGradually(oldTilesParent.gameObject));
             }
 
-            Debug.Log($"[MazeRenderer] Async refresh complete: {tilesCreated} total tiles");
+            // Debug.Log($"[MazeRenderer] Async refresh complete: {tilesCreated} total tiles");
         }
 
         /// <summary>
@@ -2075,7 +2075,7 @@ namespace FaeMaze.Systems
 
             // Finally destroy the empty container
             Destroy(oldContainer);
-            Debug.Log($"[MazeRenderer] Destroyed {destroyed} old tiles");
+            // Debug.Log($"[MazeRenderer] Destroyed {destroyed} old tiles");
         }
 
         #endregion
