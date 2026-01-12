@@ -677,8 +677,11 @@ MonoBehaviour:
   undergrowthColor: {r: 0.5, g: 0, b: 0.5, a: 1}
   waterColor: {r: 1, g: 0, b: 1, a: 1}
   heartColor: {r: 0.9, g: 0.35, b: 0.35, a: 1}
+  nodeRadius: 3
+  nodeTileRadius: 2.5
+  wallBorderDepth: 3
   tilesParent: {fileID: 0}
-  enableMeshBatching: 1
+  enableMeshBatching: 0
   batchChunkSize: 100
 --- !u!114 &963194231
 MonoBehaviour:
@@ -692,27 +695,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6b9c4e2a8d1f5c7e3a9b6d4f8c2e5a7d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeGridBehaviour
-  useRuntimeGeneration: 1
-  mazeFile: {fileID: 0}
-  usePlanarGenerator: 1
-  generatorConfig:
-    width: 30
-    height: 30
-    numEntrances: 4
-    minPathWidth: 1
-    maxPathWidth: 1
-    waterCoverage: 0.15
-    randomSeed: 0
   planarGeneratorConfig:
     gridWidth: 60
     gridHeight: 60
     growthTurns: 25
     randomSeed: 0
   mazeOrigin: {fileID: 330585546}
-  tileSize: 1
-  reflectThroughXYPlane: 1
-  drawGridGizmos: 1
-  drawAttractionHeatmap: 1
+  worldSpaceTileSize: 1
+  drawGizmos: 1
 --- !u!114 &963194232
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -817,8 +807,6 @@ MonoBehaviour:
   waryWayfarerVisitorPrefab: {fileID: 6000000003, guid: 2ad749bec494848408ae087122a2a286, type: 3}
   sleepwalkingVisitorPrefab: {fileID: 5000000003, guid: fcf1ccc101e3d2f4da955bc0eea16b81, type: 3}
   redCapPrefab: {fileID: 5000000003, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
-  entrance: {fileID: 0}
-  heart: {fileID: 0}
   visitorsPerWave: 10
   spawnInterval: 3
   enableRedCap: 1
@@ -852,7 +840,7 @@ MonoBehaviour:
       glow
     maxPerMaze: 0
     minDistanceBetweenProps: 0
-    requiresPathTile: 0
+    requiresWalkable: 1
     previewSprite: {fileID: 0}
     previewColor: {r: 1, g: 0.8, b: 0.2, a: 0.5}
   - id: FairyRing
@@ -862,7 +850,7 @@ MonoBehaviour:
     description: An enchanted ring that entrances and slows visitors passing through
     maxPerMaze: 0
     minDistanceBetweenProps: 0
-    requiresPathTile: 0
+    requiresWalkable: 1
     previewSprite: {fileID: 0}
     previewColor: {r: 0.8, g: 0.2, b: 0.8, a: 0.5}
   - id: WillowTheWisp
@@ -873,9 +861,10 @@ MonoBehaviour:
       heart
     maxPerMaze: 0
     minDistanceBetweenProps: 0
-    requiresPathTile: 0
+    requiresWalkable: 1
     previewSprite: {fileID: 0}
     previewColor: {r: 0.9, g: 1, b: 0.4, a: 0.5}
+  occupancyRadius: 0.5
   previewRoot: {fileID: 0}
   invalidPlacementColor: {r: 1, g: 0.3, b: 0.3, a: 0.5}
   buildModeState: 1
