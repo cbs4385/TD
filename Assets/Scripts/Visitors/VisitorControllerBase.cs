@@ -993,6 +993,11 @@ namespace FaeMaze.Visitors
                         float stepDist = Vector2.Distance(current.Position, neighbor.Position);
                         if (stepDist > neighborRadius) continue;
 
+                        // Line-of-sight check: verify the path between tiles doesn't cross unwalkable area
+                        // Sample points along the line and ensure each is near a walkable tile
+                        if (!HasLineOfSight(mazeData, current.Position, neighbor.Position))
+                            continue;
+
                         // Calculate tentative gScore (actual distance traveled)
                         float tentativeG = currentG + stepDist;
 
@@ -1049,6 +1054,48 @@ namespace FaeMaze.Visitors
                 Debug.LogError($"[Pathfinding] {name}: A* exception: {e.Message}\n{e.StackTrace}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Checks if there's a clear line-of-sight between two positions through walkable tiles.
+        /// Samples points along the line and verifies each is near a walkable tile.
+        /// </summary>
+        private bool HasLineOfSight(ForestMaze.WorldSpaceMazeData mazeData, Vector2 from, Vector2 to)
+        {
+            float distance = Vector2.Distance(from, to);
+            if (distance < 0.1f) return true; // Same position
+
+            // Sample at intervals smaller than tile size to catch walls
+            float sampleInterval = mazeData.TileSize * 0.4f;
+            int numSamples = Mathf.CeilToInt(distance / sampleInterval);
+            numSamples = Mathf.Max(numSamples, 2); // At least check midpoint
+
+            float checkRadius = mazeData.TileSize * 0.6f; // Slightly smaller than tile to be strict
+
+            for (int i = 1; i < numSamples; i++) // Skip start point (i=0), we know it's walkable
+            {
+                float t = (float)i / numSamples;
+                Vector2 samplePos = Vector2.Lerp(from, to, t);
+
+                // Check if this sample point is near a walkable tile
+                var nearbyTiles = mazeData.GetTilesNear(samplePos, checkRadius);
+                bool foundWalkable = false;
+                foreach (var tile in nearbyTiles)
+                {
+                    if (tile.Walkable && Vector2.Distance(samplePos, tile.Position) <= checkRadius)
+                    {
+                        foundWalkable = true;
+                        break;
+                    }
+                }
+
+                if (!foundWalkable)
+                {
+                    return false; // Path crosses unwalkable area
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
