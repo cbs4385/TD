@@ -744,16 +744,14 @@ namespace ForestMaze
                                 sharedNodePos = node.Position;
                         }
 
-                        // Check each segment pair for merge opportunity
-                        if (TryMergeEdgeSegments(edge1, edge2, sharedNodePos, ref mergeCount))
+                        // Only merge edges that share a node
+                        // Parallel segment merging was too aggressive and caused cascading issues
+                        if (sharedNodePos.HasValue)
                         {
-                            anyMerged = true;
-                        }
-
-                        // Also check for parallel segments that are too close for walls
-                        if (TryMergeParallelSegments(edge1, edge2, sharedNodePos, ref mergeCount))
-                        {
-                            anyMerged = true;
+                            if (TryMergeEdgesFromSharedNode(edge1, edge2, sharedNodePos.Value, ref mergeCount))
+                            {
+                                anyMerged = true;
+                            }
                         }
                     }
                 }
