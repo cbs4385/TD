@@ -306,8 +306,8 @@ namespace FaeMaze.Systems
                 Vector3 wallOffset = new Vector3(directionOutward.x, directionOutward.y, 0f) * 0.5f;
                 Vector3 wallWorldPos = endpointWorld + wallOffset;
 
-                // Portal is placed 0.5 units INSIDE the path (toward node, at inside edge of final tile)
-                Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 0.5f;
+                // Portal is placed 0.7 units INSIDE the path (toward node, at inside edge of final tile)
+                Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 0.7f;
                 Vector3 portalWorldPos = endpointWorld + portalOffset;
 
                 // Get next spawn ID
@@ -374,9 +374,9 @@ namespace FaeMaze.Systems
                 directionToNode = Vector3.right; // Default facing
             }
 
-            // Apply height offset (Z coordinate) and translate 0.5 units toward node center
+            // Apply height offset (Z coordinate) and translate 0.7 units toward node center
             Vector3 finalWorldPos = new Vector3(worldPos.x, worldPos.y, -portalHeightOffset);
-            finalWorldPos += new Vector3(directionToNode.x, directionToNode.y, 0f) * 0.5f;
+            finalWorldPos += new Vector3(directionToNode.x, directionToNode.y, 0f) * 0.7f;
 
             // Create rotation: +X axis points toward the node center
             float zAngle = Mathf.Atan2(directionToNode.y, directionToNode.x) * Mathf.Rad2Deg;

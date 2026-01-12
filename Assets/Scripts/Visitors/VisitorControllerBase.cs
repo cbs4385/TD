@@ -1060,9 +1060,10 @@ namespace FaeMaze.Visitors
             }
 
             // Rotate the visual model to face the correct direction (2D sprites only)
-            // Only rotate if not using procedural sprites
+            // Only rotate if not using procedural sprites and not using 3D model
+            // (3D model rotation is handled in UpdateAnimatorDirection with smooth angle-based rotation)
             // Apply rotation every frame to ensure it's set (handles initialization and state changes)
-            if (!useProceduralSprite && animator != null)
+            if (!useProceduralSprite && !use3DModel && animator != null)
             {
                 // For Idle state, use the last movement direction to maintain facing
                 int rotationDirection = direction;
