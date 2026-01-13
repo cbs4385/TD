@@ -61,10 +61,10 @@ namespace ForestMaze
             public Vector2? GhostCenter; // Reserved position for future node
 
             /// <summary>
-            /// The simple S-curve representing this edge's path.
+            /// The Bezier curve representing this edge's path.
             /// PolylinePoints is generated from this curve for backward compatibility.
             /// </summary>
-            public SimpleSCurve Curve = null;
+            public BezierCurve Curve = null;
 
             /// <summary>
             /// Flag indicating this edge's polyline was modified and needs wall regeneration.
@@ -214,9 +214,12 @@ namespace ForestMaze
             Vector2 startBoundary = root.Position + direction * (NODE_RADIUS - 0.5f);
             Vector2 endBoundary = ghostCenter - direction * (NODE_RADIUS - 0.5f);
 
-            // Create a simple S-curve with subtle offset
-            float amplitude = ((float)state.Random.NextDouble() - 0.5f) * 0.6f; // ±0.3 max
-            var curve = new SimpleSCurve(startBoundary, endBoundary, amplitude);
+            // Create a nearly-straight quadratic Bezier with tiny offset at midpoint
+            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+            float offset = ((float)state.Random.NextDouble() - 0.5f) * 0.4f; // ±0.2 max
+            Vector2 control = midpoint + perpendicular * offset;
+            var curve = new BezierCurve(startBoundary, control, endBoundary);
 
             List<Vector2> polyline;
             if (curve != null)
@@ -553,9 +556,9 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Builds a simple S-curve for connecting two nodes.
+        /// Builds a nearly-straight Bezier curve for connecting two nodes.
         /// </summary>
-        private static SimpleSCurve BuildCurveForConnection(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
+        private static BezierCurve BuildCurveForConnection(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
             List<int> incidentNodes)
         {
             Vector2 overallDirection = (endCenter - startCenter).normalized;
@@ -569,9 +572,12 @@ namespace ForestMaze
             Vector2 startBoundary = startCenter + overallDirection * (NODE_RADIUS - 0.5f);
             Vector2 endBoundary = endCenter - overallDirection * (NODE_RADIUS - 0.5f);
 
-            // Create simple S-curve with subtle offset
-            float amplitude = ((float)state.Random.NextDouble() - 0.5f) * 0.6f; // ±0.3 max
-            return new SimpleSCurve(startBoundary, endBoundary, amplitude);
+            // Create nearly-straight quadratic Bezier with tiny offset
+            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
+            Vector2 perpendicular = new Vector2(-overallDirection.y, overallDirection.x);
+            float offset = ((float)state.Random.NextDouble() - 0.5f) * 0.4f; // ±0.2 max
+            Vector2 control = midpoint + perpendicular * offset;
+            return new BezierCurve(startBoundary, control, endBoundary);
         }
 
         /// <summary>
@@ -729,9 +735,9 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Builds a simple S-curve from a node to a ghost (frontier) position.
+        /// Builds a nearly-straight Bezier curve from a node to a ghost (frontier) position.
         /// </summary>
-        private static SimpleSCurve BuildCurveToGhost(ForestMapState state, Vector2 nodeCenter, Vector2 ghostCenter,
+        private static BezierCurve BuildCurveToGhost(ForestMapState state, Vector2 nodeCenter, Vector2 ghostCenter,
             List<int> incidentNodes)
         {
             Vector2 overallDirection = (ghostCenter - nodeCenter).normalized;
@@ -740,9 +746,12 @@ namespace ForestMaze
             Vector2 startBoundary = nodeCenter + overallDirection * NODE_RADIUS;
             Vector2 endBoundary = ghostCenter - overallDirection * NODE_RADIUS;
 
-            // Create simple S-curve with subtle offset
-            float amplitude = ((float)state.Random.NextDouble() - 0.5f) * 0.6f; // ±0.3 max
-            return new SimpleSCurve(startBoundary, endBoundary, amplitude);
+            // Create nearly-straight quadratic Bezier with tiny offset
+            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
+            Vector2 perpendicular = new Vector2(-overallDirection.y, overallDirection.x);
+            float offset = ((float)state.Random.NextDouble() - 0.5f) * 0.4f; // ±0.2 max
+            Vector2 control = midpoint + perpendicular * offset;
+            return new BezierCurve(startBoundary, control, endBoundary);
         }
 
         private static bool AddPartialEdge(ForestMapState state, Node node)
