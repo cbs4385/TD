@@ -546,7 +546,24 @@ namespace FaeMaze.Systems
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
-                        // Walls can overlap freely - no collision checks needed
+                        // Skip if wall would be ON the edge path (within path radius of centerline)
+                        bool onEdgePath = false;
+                        foreach (var edge in forestState.Edges)
+                        {
+                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
+                            {
+                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
+                                if (distToSeg < pathHalfWidth) // On the path itself
+                                {
+                                    onEdgePath = true;
+                                    break;
+                                }
+                            }
+                            if (onEdgePath) break;
+                        }
+                        if (onEdgePath) continue;
+
                         float orientationDegrees = angle * Mathf.Rad2Deg;
                         Vector3 worldPos = ToVector3(wallPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
@@ -1616,7 +1633,24 @@ namespace FaeMaze.Systems
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = newNode.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
-                        // Walls can overlap freely - no collision checks needed
+                        // Skip if wall would be ON the edge path (within path radius of centerline)
+                        bool onEdgePath = false;
+                        foreach (var edge in forestState.Edges)
+                        {
+                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
+                            {
+                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
+                                if (distToSeg < pathHalfWidth) // On the path itself
+                                {
+                                    onEdgePath = true;
+                                    break;
+                                }
+                            }
+                            if (onEdgePath) break;
+                        }
+                        if (onEdgePath) continue;
+
                         float orientationDegrees = angle * Mathf.Rad2Deg;
                         Vector3 worldPos = ToVector3(wallPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
