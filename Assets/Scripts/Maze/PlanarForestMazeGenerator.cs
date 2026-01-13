@@ -724,6 +724,8 @@ namespace ForestMaze
         // Edge merging parameters
         private const float MERGE_DISTANCE = 3.0f; // Distance below which edges should merge (walls can overlap beyond this)
         private const float NODE_PROXIMITY_SKIP = NODE_RADIUS + 1.0f; // Don't merge points this close to shared nodes
+        private const float MAX_DIVERGENCE_ANGLE = 30.0f; // Maximum angle (degrees) at any turn during divergence
+        private const float DIVERGENCE_SEGMENT_LENGTH = 2.0f; // Length of segments when building divergence path
 
         /// <summary>
         /// Merges nearby edge segments that are too close together to fit wall/tree models between them.
@@ -1237,24 +1239,7 @@ namespace ForestMaze
                     branchPoint = testPoint;
                 }
 
-                // Find the closest point on poly2's first segment to branchPoint
-                Vector2 junctionOnPoly2 = ClosestPointOnSegment(branchPoint, poly2[0], poly2[1]);
-
-                // Ensure junctionOnPoly2 is not too close to the shared start (would create backtracking)
-                float distFromStart = Vector2.Distance(junctionOnPoly2, edge1StartPoint);
-                float distFromBranch = Vector2.Distance(junctionOnPoly2, branchPoint);
-
-                // If junction is too close to start or to branchPoint, find a better point
-                if (distFromStart < MERGE_DISTANCE * 0.5f || distFromBranch < 0.1f)
-                {
-                    // Use a point along poly2's first segment that is at a reasonable distance
-                    Vector2 poly2Dir = GetSegmentDirection(poly2, 0);
-                    float targetDist = Vector2.Distance(branchPoint, edge1StartPoint);
-                    if (targetDist < MERGE_DISTANCE) targetDist = MERGE_DISTANCE;
-                    junctionOnPoly2 = edge1StartPoint + poly2Dir * targetDist;
-                }
-
-                // Debug.Log($"[EdgeMerge] BOUNDARY: branchPoint={branchPoint}, junctionOnPoly2={junctionOnPoly2}, distFromStart={distFromStart:F2}");
+                // Debug.Log($"[EdgeMerge] BOUNDARY: branchPoint={branchPoint}");
 
                 List<Vector2> boundaryNewPoly = new List<Vector2>();
                 // Start with the EXACT coordinate from edge1
@@ -1266,15 +1251,25 @@ namespace ForestMaze
                     boundaryNewPoly.Add(branchPoint);
                 }
 
-                // Add junction point on poly2's path if different from branch point
-                if (Vector2.Distance(junctionOnPoly2, branchPoint) > 0.1f)
+                // Build smooth path from branchPoint to poly2[1] with max 30-degree turns
+                // instead of using a perpendicular junction
+                Vector2 divergeTarget = poly2[1];
+                float distToDiverge = Vector2.Distance(branchPoint, divergeTarget);
+
+                if (distToDiverge > 0.5f)
                 {
-                    boundaryNewPoly.Add(junctionOnPoly2);
+                    var smoothPath = BuildSmoothDivergencePath(branchPoint, edge1Dir, divergeTarget);
+                    foreach (var pt in smoothPath)
+                    {
+                        if (boundaryNewPoly.Count == 0 || Vector2.Distance(boundaryNewPoly[boundaryNewPoly.Count - 1], pt) > 0.1f)
+                        {
+                            boundaryNewPoly.Add(pt);
+                        }
+                    }
                 }
 
-                // Add remaining poly2 points starting from poly2[1]
-                // Skip poly2[0] since that's the shared node
-                for (int i = 1; i < poly2.Count; i++)
+                // Add remaining poly2 points starting from poly2[2] (we already included poly2[1] via smoothPath)
+                for (int i = 2; i < poly2.Count; i++)
                 {
                     // Only add if it's meaningfully different from the last point
                     if (Vector2.Distance(boundaryNewPoly[boundaryNewPoly.Count - 1], poly2[i]) > 0.1f)
@@ -1317,7 +1312,6 @@ namespace ForestMaze
             int targetSegment = closestSegmentsOnPoly1[lastCloseIdx2];
             Vector2 closestOnPoly1 = closestPointsOnPoly1[lastCloseIdx2];
             Vector2 targetDir = GetSegmentDirection(poly1, targetSegment);
-            Vector2 perpPoint = CreatePerpendicularIntersection(poly2[divergeIdx2], closestOnPoly1, targetDir);
 
             // Build new polyline using EXACT coordinates from edge1.PolylinePoints
             // poly1 may have synthetic points and be reoriented - we need the actual edge coordinates
@@ -1370,14 +1364,31 @@ namespace ForestMaze
                 newPoly2.Add(closestOnPoly1);
             }
 
-            // Add perpendicular junction point
-            if (Vector2.Distance(perpPoint, closestOnPoly1) > 0.1f)
+            // Build a smooth divergence path from closestOnPoly1 to poly2[divergeIdx2]
+            // instead of using a perpendicular junction which creates sharp angles
+            Vector2 divergeTarget = poly2[divergeIdx2];
+            float distToDiverge = Vector2.Distance(closestOnPoly1, divergeTarget);
+
+            if (distToDiverge > 0.5f)
             {
-                newPoly2.Add(perpPoint);
+                // Get the current direction (along edge1's path)
+                Vector2 currentDir = targetDir;
+
+                // Build smooth path with max 30-degree turns
+                var smoothPath = BuildSmoothDivergencePath(closestOnPoly1, currentDir, divergeTarget);
+
+                // Add smooth path points (excluding first which is closestOnPoly1, including divergeTarget)
+                foreach (var pt in smoothPath)
+                {
+                    if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], pt) > 0.1f)
+                    {
+                        newPoly2.Add(pt);
+                    }
+                }
             }
 
-            // Add remaining poly2 points from the divergence point
-            for (int i = divergeIdx2; i < poly2.Count; i++)
+            // Add remaining poly2 points after the divergence point
+            for (int i = divergeIdx2 + 1; i < poly2.Count; i++)
             {
                 if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], poly2[i]) > 0.1f)
                 {
@@ -1447,27 +1458,53 @@ namespace ForestMaze
             int targetSegment = closestSegmentsOnPoly1[firstCloseIdx2];
             Vector2 closestOnPoly1 = closestPointsOnPoly1[firstCloseIdx2];
             Vector2 targetDir = GetSegmentDirection(poly1, targetSegment);
-            Vector2 perpPoint = CreatePerpendicularIntersection(poly2[convergeIdx2], closestOnPoly1, targetDir);
 
-            // Build new polyline: poly2's path up to convergence, perpendicular to poly1, then poly1's path to node
+            // Build new polyline: poly2's path up to convergence, smooth curve to poly1, then poly1's path to node
             List<Vector2> newPoly2 = new List<Vector2>();
 
-            // Add poly2 points up to convergence
-            for (int i = 0; i <= convergeIdx2; i++)
+            // Add poly2 points up to (but not including) convergence point
+            for (int i = 0; i < convergeIdx2; i++)
             {
                 newPoly2.Add(poly2[i]);
             }
 
-            // Add perpendicular junction point
-            if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], perpPoint) > 0.1f)
-            {
-                newPoly2.Add(perpPoint);
-            }
+            // Get direction of poly2 at the convergence point
+            Vector2 poly2Dir = convergeIdx2 > 0
+                ? (poly2[convergeIdx2] - poly2[convergeIdx2 - 1]).normalized
+                : (poly2[1] - poly2[0]).normalized;
 
-            // Add closest point on poly1 (may be between vertices)
-            if (Vector2.Distance(perpPoint, closestOnPoly1) > 0.1f)
+            // Build smooth path from poly2[convergeIdx2] to closestOnPoly1 with max 30-degree turns
+            Vector2 convergeStart = poly2[convergeIdx2];
+            float distToMerge = Vector2.Distance(convergeStart, closestOnPoly1);
+
+            if (distToMerge > 0.5f)
             {
-                newPoly2.Add(closestOnPoly1);
+                // Add the convergence start point
+                if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], convergeStart) > 0.1f)
+                {
+                    newPoly2.Add(convergeStart);
+                }
+
+                var smoothPath = BuildSmoothDivergencePath(convergeStart, poly2Dir, closestOnPoly1);
+                foreach (var pt in smoothPath)
+                {
+                    if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], pt) > 0.1f)
+                    {
+                        newPoly2.Add(pt);
+                    }
+                }
+            }
+            else
+            {
+                // Points are very close, just add them directly
+                if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], convergeStart) > 0.1f)
+                {
+                    newPoly2.Add(convergeStart);
+                }
+                if (newPoly2.Count == 0 || Vector2.Distance(newPoly2[newPoly2.Count - 1], closestOnPoly1) > 0.1f)
+                {
+                    newPoly2.Add(closestOnPoly1);
+                }
             }
 
             // Add poly1's path from merge point to node using EXACT coordinates from edge1.PolylinePoints
@@ -1901,6 +1938,88 @@ namespace ForestMaze
             Vector2 toSource = sourcePoint - targetPoint;
             float projection = Vector2.Dot(toSource, targetDir);
             return targetPoint + targetDir * projection;
+        }
+
+        /// <summary>
+        /// Builds a smooth divergence path from startPoint to endPoint, where the path starts
+        /// heading in startDirection and each turn is limited to MAX_DIVERGENCE_ANGLE degrees.
+        /// Returns a list of intermediate points (not including start, but including end).
+        /// </summary>
+        private static List<Vector2> BuildSmoothDivergencePath(Vector2 startPoint, Vector2 startDirection, Vector2 endPoint)
+        {
+            var result = new List<Vector2>();
+            float maxAngleRad = MAX_DIVERGENCE_ANGLE * Mathf.Deg2Rad;
+
+            Vector2 currentPos = startPoint;
+            Vector2 currentDir = startDirection.normalized;
+            Vector2 toEnd = endPoint - currentPos;
+            float remainingDist = toEnd.magnitude;
+
+            // Safety limit to prevent infinite loops
+            int maxIterations = 20;
+            int iteration = 0;
+
+            while (remainingDist > 0.5f && iteration < maxIterations)
+            {
+                iteration++;
+                toEnd = endPoint - currentPos;
+                remainingDist = toEnd.magnitude;
+                Vector2 desiredDir = toEnd.normalized;
+
+                // Calculate angle between current direction and desired direction
+                float dot = Mathf.Clamp(Vector2.Dot(currentDir, desiredDir), -1f, 1f);
+                float angleToTarget = Mathf.Acos(dot);
+
+                // If we're already pointed close enough to the target, go straight there
+                if (angleToTarget <= maxAngleRad && remainingDist <= DIVERGENCE_SEGMENT_LENGTH * 2f)
+                {
+                    result.Add(endPoint);
+                    break;
+                }
+
+                // Determine turn direction (cross product sign)
+                float cross = currentDir.x * desiredDir.y - currentDir.y * desiredDir.x;
+                float turnSign = cross >= 0 ? 1f : -1f;
+
+                // Limit the turn angle
+                float turnAngle = Mathf.Min(angleToTarget, maxAngleRad) * turnSign;
+
+                // Rotate current direction
+                float cos = Mathf.Cos(turnAngle);
+                float sin = Mathf.Sin(turnAngle);
+                Vector2 newDir = new Vector2(
+                    currentDir.x * cos - currentDir.y * sin,
+                    currentDir.x * sin + currentDir.y * cos
+                ).normalized;
+
+                // Calculate segment length - shorter segments near the end for smoother approach
+                float segLength = Mathf.Min(DIVERGENCE_SEGMENT_LENGTH, remainingDist * 0.5f);
+                segLength = Mathf.Max(segLength, 0.5f);
+
+                // Move to next point
+                Vector2 nextPos = currentPos + newDir * segLength;
+                result.Add(nextPos);
+
+                currentPos = nextPos;
+                currentDir = newDir;
+            }
+
+            // Ensure we end at the target
+            if (result.Count == 0 || Vector2.Distance(result[result.Count - 1], endPoint) > 0.1f)
+            {
+                result.Add(endPoint);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Calculates the angle in degrees between two direction vectors.
+        /// </summary>
+        private static float AngleBetweenDirections(Vector2 dir1, Vector2 dir2)
+        {
+            float dot = Mathf.Clamp(Vector2.Dot(dir1.normalized, dir2.normalized), -1f, 1f);
+            return Mathf.Acos(dot) * Mathf.Rad2Deg;
         }
 
         /// <summary>
