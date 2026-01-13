@@ -542,7 +542,8 @@ namespace FaeMaze.Systems
             {
                 for (int layer = 0; layer < wallDepth; layer++)
                 {
-                    float ringRadius = nodeRadius + pathHalfWidth + wallSpacing * (layer + 1);
+                    // Walls start right at node edge (no pathHalfWidth offset for nodes)
+                    float ringRadius = nodeRadius + wallSpacing * (layer + 0.5f);
                     // Dense wall placement around rings - enough to ensure no gaps > 0.3 units
                     int numWalls = Mathf.Max(24, (int)(ringRadius * 2f * Mathf.PI / stepSize));
 
