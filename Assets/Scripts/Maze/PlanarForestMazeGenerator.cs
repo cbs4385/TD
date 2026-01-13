@@ -2737,7 +2737,10 @@ namespace ForestMaze
                     : R_KEEP + PATH_RADIUS - 0.4f + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
+                {
+                    Debug.Log($"[IsPolylineValid] REJECTED: too close to node {node.Id} at {node.Position}, dist={dist:F2}, required={minRequired:F2}, isIncident={isIncident}");
                     return false;
+                }
             }
 
             // Check against ghost centers
@@ -2750,7 +2753,10 @@ namespace ForestMaze
                 float minRequired = R_KEEP + PATH_RADIUS - 0.4f + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
+                {
+                    Debug.Log($"[IsPolylineValid] REJECTED: too close to ghost at {ghost}, dist={dist:F2}, required={minRequired:F2}");
                     return false;
+                }
             }
 
             // Check against all existing edges
@@ -2790,7 +2796,10 @@ namespace ForestMaze
                     float dist = PolylineToPolylineDistance(polyline, edge.PolylinePoints);
 
                     if (dist < edgeBuffer - 1e-6f)
+                    {
+                        Debug.Log($"[IsPolylineValid] REJECTED: too close to edge {edge.Id} (NodeA={edge.NodeA}, NodeB={edge.NodeB}), dist={dist:F2}, required={edgeBuffer:F2}");
                         return false;
+                    }
                 }
             }
 
