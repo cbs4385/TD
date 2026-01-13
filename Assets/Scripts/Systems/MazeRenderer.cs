@@ -100,6 +100,14 @@ namespace FaeMaze.Systems
         // Overlap detection threshold - positions closer than this are considered overlapping
         private const float OVERLAP_THRESHOLD = 0.4f;
 
+        // Wall generation constants - shared between initial render and incremental updates
+        private const float WALL_STEP_SIZE = 0.2f;
+        private const float PATH_HALF_WIDTH = 0.5f;
+        private const int WALL_DEPTH = 3;
+        private const float WALL_SPACING = 0.3f;
+        private const float EDGE_END_SKIP = 1.0f;
+        private const float EDGE_ANGLE_CLEARANCE_DEG = 10.0f;
+
         private struct EdgeSegmentData
         {
             public Vector2 Start; // World space position
@@ -458,182 +466,14 @@ namespace FaeMaze.Systems
         private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
-            // Step size along the edge for wall placement - dense to avoid gaps
-            float stepSize = 0.2f;
-            // Path is 1 unit wide, so edges are at 0.5 from center
-            float pathHalfWidth = 0.5f;
-            int wallDepth = 3; // 3 layers of walls on each side
-            float wallSpacing = 0.3f; // Tight spacing - walls can overlap
 
-            // Project walls from edges (perpendicular to edge direction)
-            // Skip first and last 1 unit of each edge to handle intersections
-            float edgeEndSkip = 1.0f;
+            // Render walls along all edges (includes frontier end caps)
+            tileCount += RenderEdgeWalls(forestState.Edges, forestState.Nodes, mazeOrigin);
 
-            foreach (var edge in forestState.Edges)
-            {
-                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                // Calculate total edge length and get start/end points
-                Vector2 edgeStart = edge.PolylinePoints[0];
-                Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-
-                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
-                {
-                    Vector2 segStart = edge.PolylinePoints[i];
-                    Vector2 segEnd = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (segEnd - segStart).normalized;
-                    Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-                    float segmentLength = Vector2.Distance(segStart, segEnd);
-
-                    // Walk along the segment
-                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
-                    for (int j = 0; j <= numSteps; j++)
-                    {
-                        float t = numSteps > 0 ? (float)j / numSteps : 0;
-                        Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
-
-                        // Skip first and last 1 unit of edge for intersection handling
-                        float distFromStart = Vector2.Distance(centerPos, edgeStart);
-                        float distFromEnd = Vector2.Distance(centerPos, edgeEnd);
-                        if (distFromStart < edgeEndSkip || distFromEnd < edgeEndSkip)
-                            continue;
-
-                        // Skip positions inside nodes
-                        bool insideNode = false;
-                        foreach (var node in forestState.Nodes)
-                        {
-                            if (Vector2.Distance(centerPos, node.Position) < nodeRadius + 0.5f)
-                            {
-                                insideNode = true;
-                                break;
-                            }
-                        }
-                        if (insideNode) continue;
-
-                        // Place 3 layers of walls on each side
-                        foreach (float side in new[] { 1f, -1f })
-                        {
-                            for (int layer = 0; layer < wallDepth; layer++)
-                            {
-                                // Start at edge of path (pathHalfWidth) and go outward
-                                float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
-                                Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
-
-                                // Skip if inside a node
-                                bool wallInsideNode = false;
-                                foreach (var node in forestState.Nodes)
-                                {
-                                    if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
-                                    {
-                                        wallInsideNode = true;
-                                        break;
-                                    }
-                                }
-                                if (wallInsideNode) continue;
-
-                                float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                                if (side < 0) orientationDegrees += 180f;
-
-                                Vector3 worldPos = ToVector3(wallPos);
-                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                                tileCount++;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Add side walls at frontier edge ends to connect edge walls to portal walls
-            foreach (var edge in forestState.Edges)
-            {
-                if (!edge.Partial || edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
-                    continue;
-
-                int lastIdx = edge.PolylinePoints.Count - 1;
-                Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
-                Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
-
-                tileCount += RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
-                    stepSize, pathHalfWidth, wallDepth, wallSpacing, edgeEndSkip);
-            }
-
-            // Add walls around nodes (3 rings at nodeRadius + offset)
-            // First create complete rings, then remove walls at edge intersections
-            float edgeAngleClearance = 10.0f * Mathf.Deg2Rad;
-
+            // Render walls around all nodes
             foreach (var node in forestState.Nodes)
             {
-                // First, create all wall positions for this node
-                var nodeWalls = new List<(Vector2 pos, float angle)>();
-
-                for (int layer = 0; layer < wallDepth; layer++)
-                {
-                    float ringRadius = nodeRadius + wallSpacing * (layer + 0.5f);
-                    int numWalls = Mathf.Max(32, (int)(ringRadius * 2f * Mathf.PI / stepSize));
-
-                    for (int i = 0; i < numWalls; i++)
-                    {
-                        float angle = (float)i / numWalls * 2f * Mathf.PI;
-                        Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
-                        nodeWalls.Add((wallPos, angle));
-                    }
-                }
-
-                // Now find all edge angles for this node (normalized to [0, 2π])
-                var edgeAngles = new List<float>();
-                foreach (var edge in forestState.Edges)
-                {
-                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                    bool isNodeA = (edge.NodeA == node.Id);
-                    bool isNodeB = (edge.NodeB.HasValue && edge.NodeB.Value == node.Id);
-
-                    if (isNodeA || isNodeB)
-                    {
-                        // Get the edge tangent direction at this node
-                        Vector2 direction;
-                        if (isNodeA)
-                        {
-                            direction = (edge.PolylinePoints[1] - edge.PolylinePoints[0]).normalized;
-                        }
-                        else
-                        {
-                            int last = edge.PolylinePoints.Count - 1;
-                            direction = (edge.PolylinePoints[last] - edge.PolylinePoints[last - 1]).normalized;
-                        }
-
-                        float edgeAngle = Mathf.Atan2(direction.y, direction.x);
-                        // Normalize to [0, 2π]
-                        if (edgeAngle < 0) edgeAngle += 2f * Mathf.PI;
-                        edgeAngles.Add(edgeAngle);
-                    }
-                }
-
-                // Create walls, skipping those within ±9.5° of any edge angle
-                foreach (var (wallPos, wallAngle) in nodeWalls)
-                {
-                    bool inClearance = false;
-                    foreach (float edgeAngle in edgeAngles)
-                    {
-                        float angleDiff = Mathf.Abs(wallAngle - edgeAngle);
-                        if (angleDiff > Mathf.PI)
-                            angleDiff = 2f * Mathf.PI - angleDiff;
-
-                        if (angleDiff < edgeAngleClearance)
-                        {
-                            inClearance = true;
-                            break;
-                        }
-                    }
-
-                    if (!inClearance)
-                    {
-                        float orientationDegrees = wallAngle * Mathf.Rad2Deg;
-                        Vector3 worldPos = ToVector3(wallPos);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        tileCount++;
-                    }
-                }
+                tileCount += RenderNodeWalls(node, forestState.Edges, mazeOrigin);
             }
 
             return tileCount;
@@ -1193,6 +1033,182 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Renders walls along edges (perpendicular to edge direction).
+        /// Shared helper used by both initial render and incremental updates.
+        /// </summary>
+        private int RenderEdgeWalls(IEnumerable<PlanarForestMazeGenerator.Edge> edges,
+            IEnumerable<PlanarForestMazeGenerator.Node> allNodes, Transform mazeOrigin)
+        {
+            int tileCount = 0;
+
+            foreach (var edge in edges)
+            {
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                Vector2 edgeStart = edge.PolylinePoints[0];
+                Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+                    Vector2 direction = (segEnd - segStart).normalized;
+                    Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+                    float segmentLength = Vector2.Distance(segStart, segEnd);
+
+                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / WALL_STEP_SIZE));
+                    for (int j = 0; j <= numSteps; j++)
+                    {
+                        float t = numSteps > 0 ? (float)j / numSteps : 0;
+                        Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
+
+                        // Skip first and last units of edge for intersection handling
+                        float distFromStart = Vector2.Distance(centerPos, edgeStart);
+                        float distFromEnd = Vector2.Distance(centerPos, edgeEnd);
+                        if (distFromStart < EDGE_END_SKIP || distFromEnd < EDGE_END_SKIP)
+                            continue;
+
+                        // Skip positions inside nodes
+                        bool insideNode = false;
+                        foreach (var node in allNodes)
+                        {
+                            if (Vector2.Distance(centerPos, node.Position) < nodeRadius + 0.5f)
+                            {
+                                insideNode = true;
+                                break;
+                            }
+                        }
+                        if (insideNode) continue;
+
+                        // Place wall layers on each side
+                        foreach (float side in new[] { 1f, -1f })
+                        {
+                            for (int layer = 0; layer < WALL_DEPTH; layer++)
+                            {
+                                float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
+                                Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
+
+                                // Skip if inside a node
+                                bool wallInsideNode = false;
+                                foreach (var node in allNodes)
+                                {
+                                    if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
+                                    {
+                                        wallInsideNode = true;
+                                        break;
+                                    }
+                                }
+                                if (wallInsideNode) continue;
+
+                                float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                                if (side < 0) orientationDegrees += 180f;
+
+                                Vector3 worldPos = ToVector3(wallPos);
+                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                tileCount++;
+                            }
+                        }
+                    }
+                }
+
+                // Add frontier end cap if this is a partial edge
+                if (edge.Partial)
+                {
+                    int lastIdx = edge.PolylinePoints.Count - 1;
+                    Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
+                    Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
+
+                    tileCount += RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
+                        WALL_STEP_SIZE, PATH_HALF_WIDTH, WALL_DEPTH, WALL_SPACING, EDGE_END_SKIP);
+                }
+            }
+
+            return tileCount;
+        }
+
+        /// <summary>
+        /// Renders wall rings around a single node, with clearance for edge intersections.
+        /// Shared helper used by both initial render and incremental updates.
+        /// </summary>
+        private int RenderNodeWalls(PlanarForestMazeGenerator.Node node,
+            IEnumerable<PlanarForestMazeGenerator.Edge> allEdges, Transform mazeOrigin)
+        {
+            int tileCount = 0;
+            float edgeAngleClearance = EDGE_ANGLE_CLEARANCE_DEG * Mathf.Deg2Rad;
+
+            // Create all wall positions for this node
+            var nodeWalls = new List<(Vector2 pos, float angle)>();
+            for (int layer = 0; layer < WALL_DEPTH; layer++)
+            {
+                float ringRadius = nodeRadius + WALL_SPACING * (layer + 0.5f);
+                int numWalls = Mathf.Max(32, (int)(ringRadius * 2f * Mathf.PI / WALL_STEP_SIZE));
+
+                for (int i = 0; i < numWalls; i++)
+                {
+                    float angle = (float)i / numWalls * 2f * Mathf.PI;
+                    Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
+                    nodeWalls.Add((wallPos, angle));
+                }
+            }
+
+            // Find all edge angles for this node (normalized to [0, 2π])
+            var edgeAngles = new List<float>();
+            foreach (var edge in allEdges)
+            {
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                bool isNodeA = (edge.NodeA == node.Id);
+                bool isNodeB = (edge.NodeB.HasValue && edge.NodeB.Value == node.Id);
+
+                if (isNodeA || isNodeB)
+                {
+                    Vector2 direction;
+                    if (isNodeA)
+                    {
+                        direction = (edge.PolylinePoints[1] - edge.PolylinePoints[0]).normalized;
+                    }
+                    else
+                    {
+                        int last = edge.PolylinePoints.Count - 1;
+                        direction = (edge.PolylinePoints[last] - edge.PolylinePoints[last - 1]).normalized;
+                    }
+
+                    float edgeAngle = Mathf.Atan2(direction.y, direction.x);
+                    if (edgeAngle < 0) edgeAngle += 2f * Mathf.PI;
+                    edgeAngles.Add(edgeAngle);
+                }
+            }
+
+            // Create walls, skipping those within clearance of any edge angle
+            foreach (var (wallPos, wallAngle) in nodeWalls)
+            {
+                bool inClearance = false;
+                foreach (float edgeAngle in edgeAngles)
+                {
+                    float angleDiff = Mathf.Abs(wallAngle - edgeAngle);
+                    if (angleDiff > Mathf.PI)
+                        angleDiff = 2f * Mathf.PI - angleDiff;
+
+                    if (angleDiff < edgeAngleClearance)
+                    {
+                        inClearance = true;
+                        break;
+                    }
+                }
+
+                if (!inClearance)
+                {
+                    float orientationDegrees = wallAngle * Mathf.Rad2Deg;
+                    Vector3 worldPos = ToVector3(wallPos);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    tileCount++;
+                }
+            }
+
+            return tileCount;
+        }
+
+        /// <summary>
         /// Checks if a position is already occupied by checking distance to all existing positions.
         /// Returns true if the position overlaps with an existing one.
         /// </summary>
@@ -1606,7 +1622,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Adds wall tiles around newly added path tiles.
-        /// Uses same parameters as RenderWallBorder for consistency.
+        /// Uses shared helpers for consistency with initial render.
         /// </summary>
         public void AddWallsIncremental(List<ForestMaze.PlanarForestMazeGenerator.Edge> newEdges,
             ForestMaze.PlanarForestMazeGenerator.Node newNode)
@@ -1617,192 +1633,17 @@ namespace FaeMaze.Systems
             var forestState = mazeGridBehaviour.ForestMapState;
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
-            // Use class-level occupiedWallPositions to avoid duplicating existing walls
-            if (occupiedWallPositions == null)
-                occupiedWallPositions = new List<Vector2>();
-
-            // Match RenderWallBorder parameters exactly
-            float stepSize = 0.2f;
-            float pathHalfWidth = 0.5f;
-            int wallDepth = 3;
-            float wallSpacing = 0.3f; // Tight spacing - walls can overlap
-            int wallsCreated = 0;
-
-            // Add walls around new edges
-            // Skip first and last 1 unit of each edge to handle intersections
-            float edgeEndSkip = 1.0f;
-
-            if (newEdges != null)
+            // Render walls along new edges (includes frontier end caps)
+            if (newEdges != null && newEdges.Count > 0)
             {
-                foreach (var edge in newEdges)
-                {
-                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
-                        continue;
-
-                    // Get edge start/end points
-                    Vector2 edgeStart = edge.PolylinePoints[0];
-                    Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-
-                    for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
-                    {
-                        Vector2 segStart = edge.PolylinePoints[i];
-                        Vector2 segEnd = edge.PolylinePoints[i + 1];
-                        Vector2 direction = (segEnd - segStart).normalized;
-                        Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-                        float segmentLength = Vector2.Distance(segStart, segEnd);
-
-                        int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
-                        for (int j = 0; j <= numSteps; j++)
-                        {
-                            float t = numSteps > 0 ? (float)j / numSteps : 0;
-                            Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
-
-                            // Skip first and last 1 unit of edge for intersection handling
-                            float distFromStart = Vector2.Distance(centerPos, edgeStart);
-                            float distFromEnd = Vector2.Distance(centerPos, edgeEnd);
-                            if (distFromStart < edgeEndSkip || distFromEnd < edgeEndSkip)
-                                continue;
-
-                            // Skip positions inside nodes
-                            bool insideNode = false;
-                            foreach (var node in forestState.Nodes)
-                            {
-                                if (Vector2.Distance(centerPos, node.Position) < nodeRadius + 0.5f)
-                                {
-                                    insideNode = true;
-                                    break;
-                                }
-                            }
-                            if (insideNode) continue;
-
-                            // Place 3 layers of walls on each side
-                            foreach (float side in new[] { 1f, -1f })
-                            {
-                                for (int layer = 0; layer < wallDepth; layer++)
-                                {
-                                    float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
-                                    Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
-
-                                    // Skip if inside a node
-                                    bool wallInsideNode = false;
-                                    foreach (var node in forestState.Nodes)
-                                    {
-                                        if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
-                                        {
-                                            wallInsideNode = true;
-                                            break;
-                                        }
-                                    }
-                                    if (wallInsideNode) continue;
-
-                                    float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                                    if (side < 0) orientationDegrees += 180f;
-
-                                    Vector3 worldPos = ToVector3(wallPos);
-                                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                                    wallsCreated++;
-                                }
-                            }
-                        }
-                    }
-                }
+                RenderEdgeWalls(newEdges, forestState.Nodes, mazeOrigin);
             }
 
-            // Add side walls at frontier edge ends to connect edge walls to portal walls
-            if (newEdges != null)
-            {
-                foreach (var edge in newEdges)
-                {
-                    if (!edge.Partial || edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
-                        continue;
-
-                    int lastIdx = edge.PolylinePoints.Count - 1;
-                    Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
-                    Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
-
-                    wallsCreated += RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
-                        stepSize, pathHalfWidth, wallDepth, wallSpacing, edgeEndSkip);
-                }
-            }
-
-            // Add walls around the new node (3 rings)
-            // First create all wall positions, then skip those at edge intersections
+            // Render walls around the new node
             if (newNode != null)
             {
-                float edgeAngleClearance = 10.0f * Mathf.Deg2Rad;
-
-                // Create all wall positions for this node
-                var nodeWalls = new List<(Vector2 pos, float angle)>();
-                for (int layer = 0; layer < wallDepth; layer++)
-                {
-                    float ringRadius = nodeRadius + wallSpacing * (layer + 0.5f);
-                    int numWalls = Mathf.Max(32, (int)(ringRadius * 2f * Mathf.PI / stepSize));
-
-                    for (int i = 0; i < numWalls; i++)
-                    {
-                        float angle = (float)i / numWalls * 2f * Mathf.PI;
-                        Vector2 wallPos = newNode.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
-                        nodeWalls.Add((wallPos, angle));
-                    }
-                }
-
-                // Find all edge angles for this node (normalized to [0, 2π])
-                var edgeAngles = new List<float>();
-                foreach (var edge in forestState.Edges)
-                {
-                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                    bool isNodeA = (edge.NodeA == newNode.Id);
-                    bool isNodeB = (edge.NodeB.HasValue && edge.NodeB.Value == newNode.Id);
-
-                    if (isNodeA || isNodeB)
-                    {
-                        Vector2 direction;
-                        if (isNodeA)
-                        {
-                            direction = (edge.PolylinePoints[1] - edge.PolylinePoints[0]).normalized;
-                        }
-                        else
-                        {
-                            int last = edge.PolylinePoints.Count - 1;
-                            direction = (edge.PolylinePoints[last] - edge.PolylinePoints[last - 1]).normalized;
-                        }
-
-                        float edgeAngle = Mathf.Atan2(direction.y, direction.x);
-                        // Normalize to [0, 2π]
-                        if (edgeAngle < 0) edgeAngle += 2f * Mathf.PI;
-                        edgeAngles.Add(edgeAngle);
-                    }
-                }
-
-                // Create walls, skipping those within ±9.5° of any edge angle
-                foreach (var (wallPos, wallAngle) in nodeWalls)
-                {
-                    bool inClearance = false;
-                    foreach (float edgeAngle in edgeAngles)
-                    {
-                        float angleDiff = Mathf.Abs(wallAngle - edgeAngle);
-                        if (angleDiff > Mathf.PI)
-                            angleDiff = 2f * Mathf.PI - angleDiff;
-
-                        if (angleDiff < edgeAngleClearance)
-                        {
-                            inClearance = true;
-                            break;
-                        }
-                    }
-
-                    if (!inClearance)
-                    {
-                        float orientationDegrees = wallAngle * Mathf.Rad2Deg;
-                        Vector3 worldPos = ToVector3(wallPos);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        wallsCreated++;
-                    }
-                }
+                RenderNodeWalls(newNode, forestState.Edges, mazeOrigin);
             }
-
-            // Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles");
         }
 
         /// <summary>
