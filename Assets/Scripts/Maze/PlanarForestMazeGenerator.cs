@@ -1253,12 +1253,12 @@ namespace ForestMaze
 
                 // Build smooth path from branchPoint to poly2[1] with max 30-degree turns
                 // instead of using a perpendicular junction
-                Vector2 divergeTarget = poly2[1];
-                float distToDiverge = Vector2.Distance(branchPoint, divergeTarget);
+                Vector2 boundaryTarget = poly2[1];
+                float boundaryDist = Vector2.Distance(branchPoint, boundaryTarget);
 
-                if (distToDiverge > 0.5f)
+                if (boundaryDist > 0.5f)
                 {
-                    var smoothPath = BuildSmoothDivergencePath(branchPoint, edge1Dir, divergeTarget);
+                    var smoothPath = BuildSmoothDivergencePath(branchPoint, edge1Dir, boundaryTarget);
                     foreach (var pt in smoothPath)
                     {
                         if (boundaryNewPoly.Count == 0 || Vector2.Distance(boundaryNewPoly[boundaryNewPoly.Count - 1], pt) > 0.1f)
