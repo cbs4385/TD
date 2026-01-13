@@ -552,6 +552,24 @@ namespace FaeMaze.Systems
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
+                        // Skip if wall would be on top of edge path (within edge corridor)
+                        bool onEdgePath = false;
+                        foreach (var edge in forestState.Edges)
+                        {
+                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
+                            {
+                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
+                                if (distToSeg < pathHalfWidth + 0.1f) // Within edge corridor
+                                {
+                                    onEdgePath = true;
+                                    break;
+                                }
+                            }
+                            if (onEdgePath) break;
+                        }
+                        if (onEdgePath) continue;
+
                         // Skip only if nearly identical position (walls can overlap)
                         if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
                             continue;
@@ -1632,6 +1650,24 @@ namespace FaeMaze.Systems
                     {
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = newNode.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
+
+                        // Skip if wall would be on top of edge path (within edge corridor)
+                        bool onEdgePath = false;
+                        foreach (var edge in forestState.Edges)
+                        {
+                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
+                            {
+                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
+                                if (distToSeg < pathHalfWidth + 0.1f) // Within edge corridor
+                                {
+                                    onEdgePath = true;
+                                    break;
+                                }
+                            }
+                            if (onEdgePath) break;
+                        }
+                        if (onEdgePath) continue;
 
                         // Skip only if nearly identical position (walls can overlap)
                         if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
