@@ -458,12 +458,13 @@ namespace FaeMaze.Systems
         private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
-            // Step size along the edge for wall placement
-            float stepSize = 1.0f;
+            // Step size along the edge for wall placement - must be small enough for no gaps > 0.3 units
+            float stepSize = 0.25f;
             // Path is 1 unit wide, so edges are at 0.5 from center
             // Wall layers start at edge of path and go outward
             float pathHalfWidth = 0.5f;
             int wallDepth = 3; // 3 layers of walls on each side
+            float wallSpacing = 0.5f; // Spacing between wall tiles (overlapping)
 
             // Project walls from edges (perpendicular to edge direction)
             foreach (var edge in forestState.Edges)
@@ -503,11 +504,11 @@ namespace FaeMaze.Systems
                             for (int layer = 0; layer < wallDepth; layer++)
                             {
                                 // Start at edge of path (pathHalfWidth) and go outward
-                                float wallOffset = pathHalfWidth + 0.5f + layer * 1.0f;
+                                float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
                                 Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
 
-                                // Skip if too close to existing wall
-                                if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.8f))
+                                // Skip if too close to existing wall - use tight spacing for dense coverage
+                                if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.4f))
                                     continue;
 
                                 // Skip if inside a node
@@ -541,8 +542,9 @@ namespace FaeMaze.Systems
             {
                 for (int layer = 0; layer < wallDepth; layer++)
                 {
-                    float ringRadius = nodeRadius + pathHalfWidth + 0.5f + layer * 1.0f;
-                    int numWalls = Mathf.Max(12, (int)(ringRadius * 4)); // More walls for larger rings
+                    float ringRadius = nodeRadius + pathHalfWidth + wallSpacing * (layer + 1);
+                    // Dense wall placement around rings - enough to ensure no gaps > 0.3 units
+                    int numWalls = Mathf.Max(24, (int)(ringRadius * 2f * Mathf.PI / stepSize));
 
                     for (int i = 0; i < numWalls; i++)
                     {
@@ -572,7 +574,7 @@ namespace FaeMaze.Systems
                         if (nearEdge) continue;
 
                         // Skip if too close to existing wall
-                        if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.8f))
+                        if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.4f))
                             continue;
 
                         occupiedWallPositions.Add(wallPos);

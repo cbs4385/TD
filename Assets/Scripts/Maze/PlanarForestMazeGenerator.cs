@@ -214,7 +214,7 @@ namespace ForestMaze
                 return; // Too short, shouldn't happen for seed
 
             var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
-            var polyline = curve.ToPolyline(8);
+            var polyline = GenerateSCurvePolyline(boundaries.Value.start, boundaries.Value.end, state.Random);
 
             var edge = new Edge
             {
@@ -274,7 +274,7 @@ namespace ForestMaze
             if (initialBoundaries.HasValue)
             {
                 initialCurve = CreateSimpleCurve(initialBoundaries.Value.start, initialBoundaries.Value.end, state.Random);
-                initialPolyline = initialCurve.ToPolyline(8);
+                initialPolyline = GenerateSCurvePolyline(initialBoundaries.Value.start, initialBoundaries.Value.end, state.Random);
             }
             else
             {
@@ -282,7 +282,7 @@ namespace ForestMaze
                 Vector2 direction = (node1Pos - root.Position).normalized;
                 Vector2 startBoundary = root.Position + direction * (NODE_RADIUS - 0.5f);
                 Vector2 endBoundary = node1Pos - direction * (NODE_RADIUS - 0.5f);
-                initialPolyline = new List<Vector2> { startBoundary, endBoundary };
+                initialPolyline = GenerateSCurvePolyline(startBoundary, endBoundary, state.Random);
             }
 
             var edge = new Edge
@@ -478,7 +478,7 @@ namespace ForestMaze
                     continue;
 
                 var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
-                var polyline = curve.ToPolyline(8);
+                var polyline = GenerateSCurvePolyline(boundaries.Value.start, boundaries.Value.end, state.Random);
                 if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
                     continue;
 
@@ -528,37 +528,60 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Creates a gentle S-curve between two boundary points.
-        /// This is the ONLY curve creation method - all edges use this.
-        /// Uses cubic Bezier with control points on opposite sides to create a subtle wave.
+        /// Creates a gentle S-curve polyline between two boundary points.
+        /// Uses sine wave to create 2-3 visible inflection points.
+        /// </summary>
+        private static List<Vector2> GenerateSCurvePolyline(Vector2 start, Vector2 end, System.Random random)
+        {
+            var polyline = new List<Vector2>();
+
+            Vector2 direction = (end - start).normalized;
+            float length = Vector2.Distance(start, end);
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+
+            // Number of sample points along the curve (more = smoother)
+            int numPoints = Mathf.Max(8, Mathf.CeilToInt(length / 0.25f)); // Max 0.25 unit spacing
+
+            // Wave parameters for visible S-curve with 2-3 inflection points
+            // Amplitude: 5-10% of length, minimum 0.3 units for visibility
+            float amplitude = Mathf.Max(0.3f, length * 0.08f);
+            // Frequency: 1.5 to 2.5 periods along the length = 2-3 inflection points
+            float frequency = 1.5f + (float)random.NextDouble() * 1.0f;
+            // Random phase offset for variety
+            float phase = (float)random.NextDouble() * Mathf.PI * 2f;
+            // Random direction
+            int side = random.Next(2) == 0 ? 1 : -1;
+
+            for (int i = 0; i <= numPoints; i++)
+            {
+                float t = (float)i / numPoints;
+
+                // Base position along the straight line
+                Vector2 basePos = Vector2.Lerp(start, end, t);
+
+                // Sine wave offset perpendicular to direction
+                // Use sin that starts and ends at 0 for smooth connection to nodes
+                float waveT = t * Mathf.PI * frequency;
+                float envelope = Mathf.Sin(t * Mathf.PI); // Fade in/out at endpoints
+                float waveOffset = Mathf.Sin(waveT + phase) * amplitude * envelope * side;
+
+                Vector2 point = basePos + perpendicular * waveOffset;
+                polyline.Add(point);
+            }
+
+            return polyline;
+        }
+
+        /// <summary>
+        /// Creates a BezierCurve object for API compatibility.
+        /// Note: The actual path shape comes from GenerateSCurvePolyline, not this curve.
         /// </summary>
         private static BezierCurve CreateSimpleCurve(Vector2 start, Vector2 end, System.Random random)
         {
-            Vector2 direction = (end - start).normalized;
-            float length = Vector2.Distance(start, end);
-
-            // Perpendicular direction for S-curve offset
-            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-
-            // Gentle offset for S-curve - subtle wave without spiraling
-            // Max offset is small fraction of length (4% of length, capped at 0.4 units)
-            float maxOffset = Mathf.Min(0.4f, length * 0.04f);
-            float offset = maxOffset * (0.6f + (float)random.NextDouble() * 0.4f);
-
-            // Random side for first control point (creates variety in curve direction)
-            int side = random.Next(2) == 0 ? 1 : -1;
-
-            // Control points at 1/3 and 2/3 positions, on OPPOSITE sides for S-curve shape
-            Vector2 p1Base = Vector2.Lerp(start, end, 1f / 3f);
-            Vector2 p2Base = Vector2.Lerp(start, end, 2f / 3f);
-
-            Vector2 control1 = p1Base + perpendicular * offset * side;
-            Vector2 control2 = p2Base + perpendicular * offset * (-side);
-
-            // Create cubic Bezier with full 4-point constructor
-            var curve = new BezierCurve(start, control1, control2, end);
-
-            return curve;
+            // Create a simple curve for API compatibility
+            // The actual polyline is generated separately by GenerateSCurvePolyline
+            Vector2 midpoint = (start + end) * 0.5f;
+            return new BezierCurve(start, midpoint, end);
         }
 
         /// <summary>
@@ -652,7 +675,7 @@ namespace ForestMaze
                     if (boundaries.HasValue)
                     {
                         var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
-                        var polyline = curve.ToPolyline(8);
+                        var polyline = GenerateSCurvePolyline(boundaries.Value.start, boundaries.Value.end, state.Random);
                         if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
                         {
                             // Success! Create the partial edge
@@ -782,7 +805,7 @@ namespace ForestMaze
                     if (boundaries.HasValue)
                     {
                         var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
-                        var polyline = curve.ToPolyline(8);
+                        var polyline = GenerateSCurvePolyline(boundaries.Value.start, boundaries.Value.end, state.Random);
                         if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
                         {
                             // Success! Create the partial edge
@@ -962,7 +985,7 @@ namespace ForestMaze
                 }
 
                 var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
-                var polyline = curve.ToPolyline(8);
+                var polyline = GenerateSCurvePolyline(boundaries.Value.start, boundaries.Value.end, state.Random);
                 if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
                 {
                     // Debug.Log($"[PlanarForest]   -> SKIP: Polyline validation failed");
