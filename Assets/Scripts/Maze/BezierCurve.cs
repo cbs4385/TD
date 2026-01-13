@@ -171,10 +171,16 @@ namespace ForestMaze
             float actualSpacing = Mathf.Min(spacing, maxGap);
             int numSamples = Mathf.Max(2, Mathf.CeilToInt(length / actualSpacing) + 1);
 
+            // DEBUG
+            Debug.Log($"[SampleWithOrientations] P0={P0}, P1={P1}, P2={P2}, P3={P3}");
+            Debug.Log($"[SampleWithOrientations] length={length}, spacing={actualSpacing}, numSamples={numSamples}");
+
             for (int i = 0; i <= numSamples; i++)
             {
                 float t = (float)i / numSamples;
-                samples.Add(new CurveSample(Evaluate(t), Tangent(t), Normal(t)));
+                var pos = Evaluate(t);
+                samples.Add(new CurveSample(pos, Tangent(t), Normal(t)));
+                Debug.Log($"[SampleWithOrientations] t={t:F3} -> pos={pos}");
             }
 
             return samples;

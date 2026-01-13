@@ -547,7 +547,21 @@ namespace ForestMaze
         {
             // Control point exactly at midpoint = perfectly straight line
             Vector2 midpoint = (start + end) * 0.5f;
-            return new BezierCurve(start, midpoint, end);
+            var curve = new BezierCurve(start, midpoint, end);
+
+            // DEBUG: Log curve creation
+            UnityEngine.Debug.Log($"[CreateSimpleCurve] start={start}, mid={midpoint}, end={end}");
+            UnityEngine.Debug.Log($"[CreateSimpleCurve] Curve P0={curve.P0}, P1={curve.P1}, P2={curve.P2}, P3={curve.P3}");
+
+            // DEBUG: Log polyline points
+            var polyline = curve.ToPolyline(8);
+            UnityEngine.Debug.Log($"[CreateSimpleCurve] Polyline ({polyline.Count} points):");
+            for (int i = 0; i < polyline.Count; i++)
+            {
+                UnityEngine.Debug.Log($"  [{i}] = {polyline[i]}");
+            }
+
+            return curve;
         }
 
         /// <summary>

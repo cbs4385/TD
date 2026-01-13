@@ -420,9 +420,15 @@ namespace ForestMaze
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
         {
+            // DEBUG
+            UnityEngine.Debug.Log($"[GenerateTilesFromCurve] Edge {edge.Id}: Curve P0={edge.Curve.P0}, P3={edge.Curve.P3}");
+
             // Sample the curve with orientations at max 0.25 unit gaps
             var samples = edge.Curve.SampleWithOrientations(tileSize * 0.5f, MAX_TILE_GAP);
 
+            UnityEngine.Debug.Log($"[GenerateTilesFromCurve] Edge {edge.Id}: Got {samples.Count} samples");
+
+            int tilesAdded = 0;
             for (int i = 0; i < samples.Count; i++)
             {
                 Vector2 position = samples[i].Position;
@@ -444,7 +450,10 @@ namespace ForestMaze
 
                 data.AddTile(tile);
                 walkablePositions.Add(gridPos);
+                tilesAdded++;
             }
+
+            UnityEngine.Debug.Log($"[GenerateTilesFromCurve] Edge {edge.Id}: Added {tilesAdded} tiles");
         }
 
         /// <summary>
