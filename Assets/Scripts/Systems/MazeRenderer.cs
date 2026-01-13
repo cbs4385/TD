@@ -562,14 +562,21 @@ namespace FaeMaze.Systems
 
                     if (isNodeA || isNodeB)
                     {
-                        // Get the edge direction from this node's perspective
-                        Vector2 edgePoint;
+                        // Get the edge tangent direction at this node (not radial direction)
+                        // Use the actual edge direction vector, not position relative to node center
+                        Vector2 direction;
                         if (isNodeA)
-                            edgePoint = edge.PolylinePoints[0]; // Start of edge
+                        {
+                            // Edge leaves this node: direction from first to second point
+                            direction = (edge.PolylinePoints[1] - edge.PolylinePoints[0]).normalized;
+                        }
                         else
-                            edgePoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1]; // End of edge
+                        {
+                            // Edge arrives at this node: direction from second-to-last to last point
+                            int last = edge.PolylinePoints.Count - 1;
+                            direction = (edge.PolylinePoints[last] - edge.PolylinePoints[last - 1]).normalized;
+                        }
 
-                        Vector2 direction = (edgePoint - node.Position).normalized;
                         float edgeAngle = Mathf.Atan2(direction.y, direction.x);
                         edgeAngles.Add(edgeAngle);
                     }
@@ -1685,13 +1692,20 @@ namespace FaeMaze.Systems
 
                     if (isNodeA || isNodeB)
                     {
-                        Vector2 edgePoint;
+                        // Get the edge tangent direction at this node
+                        Vector2 direction;
                         if (isNodeA)
-                            edgePoint = edge.PolylinePoints[0];
+                        {
+                            // Edge leaves this node: direction from first to second point
+                            direction = (edge.PolylinePoints[1] - edge.PolylinePoints[0]).normalized;
+                        }
                         else
-                            edgePoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                        {
+                            // Edge arrives at this node: direction from second-to-last to last point
+                            int last = edge.PolylinePoints.Count - 1;
+                            direction = (edge.PolylinePoints[last] - edge.PolylinePoints[last - 1]).normalized;
+                        }
 
-                        Vector2 direction = (edgePoint - newNode.Position).normalized;
                         float edgeAngle = Mathf.Atan2(direction.y, direction.x);
                         edgeAngles.Add(edgeAngle);
                     }
