@@ -208,28 +208,13 @@ namespace ForestMaze
             Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             Vector2 ghostCenter = root.Position + direction * (2 * NODE_RADIUS + length);
 
-            // Build Bezier curve from root to ghost position
-            // Start slightly inside node boundary (0.5 units) to ensure edge tiles overlap with node tiles
-            // This prevents gaps at the node-edge junction due to grid alignment
-            Vector2 startBoundary = root.Position + direction * (NODE_RADIUS - 0.5f);
-            Vector2 endBoundary = ghostCenter - direction * (NODE_RADIUS - 0.5f);
+            // Build edge curve: node to ghost (start is node, end is ghost)
+            var boundaries = GetEdgeBoundaries(root.Position, ghostCenter, startIsNode: true, endIsNode: true);
+            if (!boundaries.HasValue)
+                return; // Too short, shouldn't happen for seed
 
-            // Create a nearly-straight quadratic Bezier with tiny offset at midpoint
-            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
-            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-            float offset = ((float)state.Random.NextDouble() - 0.5f) * 0.4f; // ±0.2 max
-            Vector2 control = midpoint + perpendicular * offset;
-            var curve = new BezierCurve(startBoundary, control, endBoundary);
-
-            List<Vector2> polyline;
-            if (curve != null)
-            {
-                polyline = curve.ToPolyline(8);
-            }
-            else
-            {
-                polyline = new List<Vector2> { startBoundary, endBoundary };
-            }
+            var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
+            var polyline = curve.ToPolyline(8);
 
             var edge = new Edge
             {
@@ -281,19 +266,19 @@ namespace ForestMaze
             };
             state.Nodes.Add(node1);
 
-            // Create edge between root and node1 with Bezier curve
-            var initialCurve = BuildCurveForConnection(state, root.Position, node1Pos,
-                new List<int> { root.Id, node1.Id });
-
+            // Create edge between root and node1 (node-to-node)
+            var initialBoundaries = GetEdgeBoundaries(root.Position, node1Pos, startIsNode: true, endIsNode: true);
+            BezierCurve initialCurve = null;
             List<Vector2> initialPolyline;
-            if (initialCurve != null)
+
+            if (initialBoundaries.HasValue)
             {
+                initialCurve = CreateSimpleCurve(initialBoundaries.Value.start, initialBoundaries.Value.end, state.Random);
                 initialPolyline = initialCurve.ToPolyline(8);
             }
             else
             {
-                // Fallback to straight line if curve generation fails
-                // Start/end slightly inside node boundaries to ensure tile overlap
+                // Fallback for too-short edge
                 Vector2 direction = (node1Pos - root.Position).normalized;
                 Vector2 startBoundary = root.Position + direction * (NODE_RADIUS - 0.5f);
                 Vector2 endBoundary = node1Pos - direction * (NODE_RADIUS - 0.5f);
@@ -498,14 +483,12 @@ namespace ForestMaze
                 if (!IsAngleValid(newNode, directAngle) || !IsAngleValid(candidate, reverseAngle))
                     continue;
 
-                // Build a Bezier curve for this connection
-                var curve = BuildCurveForConnection(state, newNode.Position, candidate.Position,
-                    new List<int> { newNode.Id, candidate.Id });
-
-                if (curve == null)
+                // Build edge curve (node-to-node)
+                var boundaries = GetEdgeBoundaries(newNode.Position, candidate.Position, startIsNode: true, endIsNode: true);
+                if (!boundaries.HasValue)
                     continue;
 
-                // Validate the curve doesn't violate any constraints
+                var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
                 var polyline = curve.ToPolyline(8);
                 if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
                     continue;
@@ -556,28 +539,44 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Builds a nearly-straight Bezier curve for connecting two nodes.
+        /// Creates a simple nearly-straight curve between two boundary points.
+        /// This is the ONLY curve creation method - all edges use this.
         /// </summary>
-        private static BezierCurve BuildCurveForConnection(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
-            List<int> incidentNodes)
+        private static BezierCurve CreateSimpleCurve(Vector2 start, Vector2 end, System.Random random)
         {
-            Vector2 overallDirection = (endCenter - startCenter).normalized;
-            float totalDistance = Vector2.Distance(startCenter, endCenter);
-            float corridorDistance = totalDistance - 2 * NODE_RADIUS;
+            Vector2 direction = (end - start).normalized;
+            Vector2 midpoint = (start + end) * 0.5f;
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
 
-            if (corridorDistance < MIN_CORRIDOR_LENGTH)
+            // Tiny random offset for subtle curve (±0.2 max)
+            float offset = ((float)random.NextDouble() - 0.5f) * 0.4f;
+            Vector2 control = midpoint + perpendicular * offset;
+
+            return new BezierCurve(start, control, end);
+        }
+
+        /// <summary>
+        /// Calculates edge boundary points based on edge type.
+        /// Returns null if edge is too short.
+        /// </summary>
+        private static (Vector2 start, Vector2 end)? GetEdgeBoundaries(
+            Vector2 startCenter, Vector2 endCenter, bool startIsNode, bool endIsNode)
+        {
+            Vector2 direction = (endCenter - startCenter).normalized;
+            float distance = Vector2.Distance(startCenter, endCenter);
+
+            // Calculate boundaries based on what's at each end
+            float startOffset = startIsNode ? (NODE_RADIUS - 0.5f) : 0f;
+            float endOffset = endIsNode ? (NODE_RADIUS - 0.5f) : 0f;
+
+            float corridorLength = distance - startOffset - endOffset;
+            if (corridorLength < MIN_CORRIDOR_LENGTH)
                 return null;
 
-            // Start/end slightly inside node boundaries to ensure tile overlap
-            Vector2 startBoundary = startCenter + overallDirection * (NODE_RADIUS - 0.5f);
-            Vector2 endBoundary = endCenter - overallDirection * (NODE_RADIUS - 0.5f);
+            Vector2 start = startCenter + direction * startOffset;
+            Vector2 end = endCenter - direction * endOffset;
 
-            // Create nearly-straight quadratic Bezier with tiny offset
-            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
-            Vector2 perpendicular = new Vector2(-overallDirection.y, overallDirection.x);
-            float offset = ((float)state.Random.NextDouble() - 0.5f) * 0.4f; // ±0.2 max
-            Vector2 control = midpoint + perpendicular * offset;
-            return new BezierCurve(startBoundary, control, endBoundary);
+            return (start, end);
         }
 
         /// <summary>
@@ -642,11 +641,11 @@ namespace ForestMaze
                         continue;
                     }
 
-                    // Build a Bezier curve to the ghost position
-                    var curve = BuildCurveToGhost(state, node.Position, ghostCenter, new List<int> { node.Id });
-
-                    if (curve != null)
+                    // Build edge curve (node to ghost)
+                    var boundaries = GetEdgeBoundaries(node.Position, ghostCenter, startIsNode: true, endIsNode: true);
+                    if (boundaries.HasValue)
                     {
+                        var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
                         var polyline = curve.ToPolyline(8);
                         if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
                         {
@@ -734,26 +733,6 @@ namespace ForestMaze
             return true;
         }
 
-        /// <summary>
-        /// Builds a nearly-straight Bezier curve from a node to a ghost (frontier) position.
-        /// </summary>
-        private static BezierCurve BuildCurveToGhost(ForestMapState state, Vector2 nodeCenter, Vector2 ghostCenter,
-            List<int> incidentNodes)
-        {
-            Vector2 overallDirection = (ghostCenter - nodeCenter).normalized;
-
-            // Start at node boundary, end at ghost boundary
-            Vector2 startBoundary = nodeCenter + overallDirection * NODE_RADIUS;
-            Vector2 endBoundary = ghostCenter - overallDirection * NODE_RADIUS;
-
-            // Create nearly-straight quadratic Bezier with tiny offset
-            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
-            Vector2 perpendicular = new Vector2(-overallDirection.y, overallDirection.x);
-            float offset = ((float)state.Random.NextDouble() - 0.5f) * 0.4f; // ±0.2 max
-            Vector2 control = midpoint + perpendicular * offset;
-            return new BezierCurve(startBoundary, control, endBoundary);
-        }
-
         private static bool AddPartialEdge(ForestMapState state, Node node)
         {
             if (!node.HasCapacity())
@@ -792,16 +771,15 @@ namespace ForestMaze
                         continue;
                     }
 
-                    // Try to build a Bezier curve to the ghost position
-                    var curve = BuildCurveToGhost(state, node.Position, ghostCenter,
-                        new List<int> { node.Id });
-
-                    if (curve != null)
+                    // Build edge curve (node to ghost)
+                    var boundaries = GetEdgeBoundaries(node.Position, ghostCenter, startIsNode: true, endIsNode: true);
+                    if (boundaries.HasValue)
                     {
+                        var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
                         var polyline = curve.ToPolyline(8);
                         if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
                         {
-                            // Success! Create the partial edge with Bezier curve
+                            // Success! Create the partial edge
                             var edge = new Edge
                             {
                                 Id = state.NextEdgeId++,
@@ -969,16 +947,15 @@ namespace ForestMaze
 
                 // Debug.Log($"[PlanarForest]   -> Found valid angles: source={validSourceAngle * Mathf.Rad2Deg:F0}°, target={validTargetAngle * Mathf.Rad2Deg:F0}°");
 
-                // Build Bezier curve for the connection
-                var curve = BuildCurveForConnection(state, newNode.Position, candidate.Position,
-                    new List<int> { newNode.Id, candidate.Id });
-
-                if (curve == null)
+                // Build edge curve (node-to-node)
+                var boundaries = GetEdgeBoundaries(newNode.Position, candidate.Position, startIsNode: true, endIsNode: true);
+                if (!boundaries.HasValue)
                 {
-                    // Debug.Log($"[PlanarForest]   -> SKIP: Curve generation failed");
+                    // Debug.Log($"[PlanarForest]   -> SKIP: Edge too short");
                     continue;
                 }
 
+                var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
                 var polyline = curve.ToPolyline(8);
                 if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
                 {
