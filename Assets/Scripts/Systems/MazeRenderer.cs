@@ -453,15 +453,17 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders wall border by projecting outward from edges in world space.
-        /// Simple: one layer of walls on each side of each edge at coarse intervals.
+        /// Creates 3 layers of walls on each side of the path.
         /// </summary>
         private int RenderWallBorder(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
-            // Use coarse step size for simple wall placement
-            float stepSize = 1.5f;
-            // Single wall layer at fixed distance from edge center
-            float wallOffset = 1.5f;
+            // Step size along the edge for wall placement
+            float stepSize = 1.0f;
+            // Path is 1 unit wide, so edges are at 0.5 from center
+            // Wall layers start at edge of path and go outward
+            float pathHalfWidth = 0.5f;
+            int wallDepth = 3; // 3 layers of walls on each side
 
             // Project walls from edges (perpendicular to edge direction)
             foreach (var edge in forestState.Edges)
@@ -476,18 +478,7 @@ namespace FaeMaze.Systems
                     Vector2 perpendicular = new Vector2(-direction.y, direction.x);
                     float segmentLength = Vector2.Distance(segStart, segEnd);
 
-                    // Skip segments that start inside a node (walls not needed there)
-                    bool startsInNode = false;
-                    foreach (var node in forestState.Nodes)
-                    {
-                        if (Vector2.Distance(segStart, node.Position) < nodeRadius)
-                        {
-                            startsInNode = true;
-                            break;
-                        }
-                    }
-
-                    // Walk along the segment at coarse intervals
+                    // Walk along the segment
                     int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
                     for (int j = 0; j <= numSteps; j++)
                     {
@@ -506,83 +497,91 @@ namespace FaeMaze.Systems
                         }
                         if (insideNode) continue;
 
-                        // Place one wall on each side
+                        // Place 3 layers of walls on each side
                         foreach (float side in new[] { 1f, -1f })
                         {
-                            Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
-
-                            // Skip if too close to existing wall
-                            if (IsPositionOccupied(wallPos, occupiedWallPositions, 1.0f))
-                                continue;
-
-                            // Skip if inside a node
-                            bool wallInsideNode = false;
-                            foreach (var node in forestState.Nodes)
+                            for (int layer = 0; layer < wallDepth; layer++)
                             {
-                                if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
+                                // Start at edge of path (pathHalfWidth) and go outward
+                                float wallOffset = pathHalfWidth + 0.5f + layer * 1.0f;
+                                Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
+
+                                // Skip if too close to existing wall
+                                if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.8f))
+                                    continue;
+
+                                // Skip if inside a node
+                                bool wallInsideNode = false;
+                                foreach (var node in forestState.Nodes)
                                 {
-                                    wallInsideNode = true;
-                                    break;
+                                    if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
+                                    {
+                                        wallInsideNode = true;
+                                        break;
+                                    }
                                 }
+                                if (wallInsideNode) continue;
+
+                                occupiedWallPositions.Add(wallPos);
+
+                                float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                                if (side < 0) orientationDegrees += 180f;
+
+                                Vector3 worldPos = ToVector3(wallPos);
+                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                tileCount++;
                             }
-                            if (wallInsideNode) continue;
-
-                            occupiedWallPositions.Add(wallPos);
-
-                            float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                            if (side < 0) orientationDegrees += 180f;
-
-                            Vector3 worldPos = ToVector3(wallPos);
-                            CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                            tileCount++;
                         }
                     }
                 }
             }
 
-            // Add simple walls around nodes (one ring at nodeRadius + wallOffset)
+            // Add walls around nodes (3 rings at nodeRadius + offset)
             foreach (var node in forestState.Nodes)
             {
-                float ringRadius = nodeRadius + wallOffset;
-                int numWalls = 12; // 12 walls around the node = 30 degree spacing
-
-                for (int i = 0; i < numWalls; i++)
+                for (int layer = 0; layer < wallDepth; layer++)
                 {
-                    float angle = (float)i / numWalls * 2f * Mathf.PI;
-                    Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
+                    float ringRadius = nodeRadius + pathHalfWidth + 0.5f + layer * 1.0f;
+                    int numWalls = Mathf.Max(12, (int)(ringRadius * 4)); // More walls for larger rings
 
-                    // Skip if this position is along an edge (edge walls will cover it)
-                    bool nearEdge = false;
-                    foreach (var edge in forestState.Edges)
+                    for (int i = 0; i < numWalls; i++)
                     {
-                        if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+                        float angle = (float)i / numWalls * 2f * Mathf.PI;
+                        Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
-                        // Check if wall is near any edge segment
-                        for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
+                        // Skip if this position is along an edge (edge walls will cover it)
+                        bool nearEdge = false;
+                        foreach (var edge in forestState.Edges)
                         {
-                            Vector2 segStart = edge.PolylinePoints[j];
-                            Vector2 segEnd = edge.PolylinePoints[j + 1];
-                            float distToSeg = DistanceToLineSegment(wallPos, segStart, segEnd);
-                            if (distToSeg < 2.0f)
+                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                            // Check if wall is near any edge segment
+                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
                             {
-                                nearEdge = true;
-                                break;
+                                Vector2 segStart = edge.PolylinePoints[j];
+                                Vector2 segEnd = edge.PolylinePoints[j + 1];
+                                float distToSeg = DistanceToLineSegment(wallPos, segStart, segEnd);
+                                if (distToSeg < 2.0f)
+                                {
+                                    nearEdge = true;
+                                    break;
+                                }
                             }
+                            if (nearEdge) break;
                         }
-                        if (nearEdge) break;
+                        if (nearEdge) continue;
+
+                        // Skip if too close to existing wall
+                        if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.8f))
+                            continue;
+
+                        occupiedWallPositions.Add(wallPos);
+
+                        float orientationDegrees = angle * Mathf.Rad2Deg;
+                        Vector3 worldPos = ToVector3(wallPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                        tileCount++;
                     }
-                    if (nearEdge) continue;
-
-                    // Skip if too close to existing wall
-                    if (IsPositionOccupied(wallPos, occupiedWallPositions, 1.0f))
-                        continue;
-
-                    occupiedWallPositions.Add(wallPos);
-
-                    float orientationDegrees = angle * Mathf.Rad2Deg;
-                    Vector3 worldPos = ToVector3(wallPos);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                    tileCount++;
                 }
             }
 
