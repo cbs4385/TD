@@ -431,9 +431,9 @@ namespace ForestMaze
                 }
             }
 
-            // Merge nearby edges that are too close together
+            // DISABLED FOR DEBUG: Merge nearby edges that are too close together
             // Only modify edges created during this step (index >= edgeCountBeforeStep)
-            MergeNearbyEdges(state, edgeCountBeforeStep);
+            // MergeNearbyEdges(state, edgeCountBeforeStep);
 
             state.TurnCount++;
             return true;
