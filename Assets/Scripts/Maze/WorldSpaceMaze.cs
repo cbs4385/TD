@@ -398,10 +398,10 @@ namespace ForestMaze
             {
                 if (edge.PolylinePoints.Count < 2) continue;
 
-                // If edge has a Bezier curve, sample it directly for smooth orientation
+                // If edge has a curve, sample it directly for smooth orientation
                 if (edge.Curve != null)
                 {
-                    GenerateTilesFromBezierCurve(edge, data, walkablePositions, tileSize);
+                    GenerateTilesFromCurve(edge, data, walkablePositions, tileSize);
                 }
                 else
                 {
@@ -412,9 +412,9 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Generates tiles by sampling a Bezier curve with proper tangent orientation.
+        /// Generates tiles by sampling a curve with proper tangent orientation.
         /// </summary>
-        private static void GenerateTilesFromBezierCurve(
+        private static void GenerateTilesFromCurve(
             PlanarForestMazeGenerator.Edge edge,
             WorldSpaceMazeData data,
             HashSet<Vector2Int> walkablePositions,
@@ -448,7 +448,7 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Generates tiles by walking along a polyline (fallback for edges without Bezier curves).
+        /// Generates tiles by walking along a polyline (fallback for edges without curves).
         /// </summary>
         private static void GenerateTilesFromPolyline(
             PlanarForestMazeGenerator.Edge edge,
