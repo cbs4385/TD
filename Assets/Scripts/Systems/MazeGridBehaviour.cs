@@ -125,15 +125,18 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Initializes the maze directly from the graph state in pure world-space.
         /// Graph positions ARE world positions - no transforms needed.
+        /// Starts with just the seed (root + one frontier edge) for step-by-step growth debugging.
         /// </summary>
         private void InitializeFromGraph()
         {
-            // Generate the graph - positions are directly in world space
+            // Generate the graph - start with seed only for step-by-step debugging
+            // Dynamic growth will handle adding nodes one at a time
             var result = PlanarForestMazeGenerator.GenerateMazeWithState(
                 planarGeneratorConfig.gridWidth,
                 planarGeneratorConfig.gridHeight,
-                planarGeneratorConfig.growthTurns,
-                planarGeneratorConfig.randomSeed);
+                0, // Start with 0 turns (seed only)
+                planarGeneratorConfig.randomSeed,
+                seedOnly: true);
 
             forestMapState = result.state;
 

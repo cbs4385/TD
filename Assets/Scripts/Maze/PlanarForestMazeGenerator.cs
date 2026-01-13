@@ -138,11 +138,10 @@ namespace ForestMaze
         /// <param name="gridHeight">Ignored - legacy parameter kept for API compatibility</param>
         /// <param name="turns">Number of growth turns (more turns = more nodes)</param>
         /// <param name="seed">Random seed</param>
+        /// <param name="seedOnly">If true, only create seed node with one frontier edge (for step-by-step debugging)</param>
         /// <returns>Tuple of (empty string for legacy compatibility, generation state with world-space positions)</returns>
-        public static (string maze, ForestMapState state) GenerateMazeWithState(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
+        public static (string maze, ForestMapState state) GenerateMazeWithState(int gridWidth, int gridHeight, int turns = 20, int? seed = null, bool seedOnly = false)
         {
-            const int minNodeCount = 6; // Root + at least 5 normal nodes
-            const int minOpenEndpoints = 5; // Preserve at least 5 open endpoints for spawn points
             int baseSeed = seed.HasValue ? seed.Value : System.Environment.TickCount;
 
             var state = new ForestMapState
@@ -151,10 +150,17 @@ namespace ForestMaze
                 ValidationPassed = true // Always valid in world-space mode
             };
 
-            // Initialize with root and first node
-            Initialize(state);
+            // Initialize with root and first edge (seed only mode)
+            InitializeSeed(state);
 
-            // Grow until we have minimum nodes (using turns as TOTAL step limit)
+            // If seed only, return immediately without any growth
+            if (seedOnly || turns <= 0)
+            {
+                return ("", state);
+            }
+
+            // Grow for the specified number of turns
+            const int minNodeCount = 6; // Root + at least 5 normal nodes
             int totalSteps = 0;
             while (totalSteps < turns && state.Nodes.Count < minNodeCount)
             {
@@ -165,8 +171,6 @@ namespace ForestMaze
 
             // Ensure at least one cross-connection exists after initial growth
             EnsureCrossConnection(state);
-
-            // Debug.Log($"[PlanarForest] Generated graph with {state.Nodes.Count} nodes, {state.Edges.Count} edges, {state.Frontier.Count} frontier edges");
 
             // Return empty string for legacy compatibility - no rasterization in world-space mode
             // Graph positions ARE world positions
@@ -179,6 +183,61 @@ namespace ForestMaze
         public static string GenerateMaze(int gridWidth, int gridHeight, int turns = 20, int? seed = null)
         {
             return GenerateMazeWithState(gridWidth, gridHeight, turns, seed).maze;
+        }
+
+        /// <summary>
+        /// Initializes the seed: root node at origin with one frontier edge radiating outward.
+        /// This is the minimal starting point for step-by-step graph growth.
+        /// </summary>
+        private static void InitializeSeed(ForestMapState state)
+        {
+            // Create root node at origin
+            var root = new Node
+            {
+                Id = state.NextNodeId++,
+                Position = Vector2.zero,
+                Kind = "root",
+                MaxDegree = 1
+            };
+            state.Nodes.Add(root);
+
+            // Create one frontier edge at random orientation
+            float angle = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
+            float length = (float)(state.Random.NextDouble() * 15.0 + 12.0);
+
+            Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            Vector2 ghostCenter = root.Position + direction * (2 * NODE_RADIUS + length);
+
+            // Build Bezier curve from root to ghost position
+            Vector2 startBoundary = root.Position + direction * NODE_RADIUS;
+            Vector2 endBoundary = ghostCenter - direction * NODE_RADIUS;
+            var curve = BezierCurveFactory.CreateGentleCurve(startBoundary, endBoundary, state.Random, 2);
+
+            List<Vector2> polyline;
+            if (curve != null)
+            {
+                polyline = curve.ToPolyline(8);
+            }
+            else
+            {
+                polyline = new List<Vector2> { startBoundary, endBoundary };
+            }
+
+            var edge = new Edge
+            {
+                Id = state.NextEdgeId++,
+                NodeA = root.Id,
+                NodeB = null,
+                Curve = curve,
+                PolylinePoints = polyline,
+                Partial = true,
+                GhostCenter = ghostCenter
+            };
+
+            state.Edges.Add(edge);
+            state.Frontier.Add(edge.Id);
+            state.GhostCenters.Add(ghostCenter);
+            root.AddEdge(edge.Id, angle);
         }
 
         private static void Initialize(ForestMapState state)
