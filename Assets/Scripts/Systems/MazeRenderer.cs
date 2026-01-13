@@ -106,7 +106,7 @@ namespace FaeMaze.Systems
         private const int WALL_DEPTH = 3;
         private const float WALL_SPACING = 0.3f;
         private const float EDGE_END_SKIP = 1.0f;
-        private const float EDGE_ANGLE_CLEARANCE_DEG = 10.0f;
+        private const float EDGE_ANGLE_CLEARANCE_DEG = 12.0f;
 
         private struct EdgeSegmentData
         {
@@ -974,49 +974,50 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders complete end cap walls at the end of a frontier edge.
-        /// Places side walls from where edge walls stop to past the frontier end,
-        /// plus front cap walls perpendicular to the edge.
+        /// Creates a U-shape around the portal with rear wall and side walls.
+        /// Portal at origin, frontierDir is +Y direction (into unexplored area).
+        /// Only renders LEFT side wall to avoid intersection at narrow frontier ends.
         /// </summary>
         private int RenderFrontierEndCap(Vector2 frontierEnd, Vector2 frontierDir, Transform mazeOrigin,
             float stepSize, float pathHalfWidth, int wallDepth, float wallSpacing, float edgeEndSkip)
         {
             int tileCount = 0;
+            // perpendicular: +X is to the right when facing frontierDir
             Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-            // Side walls - blocks centered at 1.5 units perpendicular from portal
-            // Long axis of wall models parallel to edge, depth layers perpendicular to edge
-            const float sideBlockCenter = 1.5f;
-            foreach (float side in new[] { 1f, -1f })
+            // Wall positions relative to portal (frontierEnd):
+            // - frontierDir is +Y (into unexplored)
+            // - perpendicular is +X (right side)
+            // - Portal faces -Y (back toward node)
+
+            // Rear wall segments: Y=1, X from -1 to 1 (5 segments)
+            float[] rearX = { -1f, -0.5f, 0f, 0.5f, 1f };
+            foreach (float x in rearX)
             {
-                for (int depthLayer = 0; depthLayer < wallDepth; depthLayer++)
-                {
-                    // 3 layers centered at 1.5: gives 1.2, 1.5, 1.8 for layers 0, 1, 2
-                    float perpOffset = sideBlockCenter + wallSpacing * (depthLayer - 1);
-                    Vector2 wallPos = frontierEnd + perpendicular * side * perpOffset;
-                    // Orient walls with long axis parallel to edge direction
-                    float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
-                    Vector3 worldPos = ToVector3(wallPos);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                    tileCount++;
-                }
+                Vector2 wallPos = frontierEnd + frontierDir * 1f + perpendicular * x;
+                Vector3 worldPos = ToVector3(wallPos);
+                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                tileCount++;
             }
 
-            // DISABLED FOR DEBUGGING - Front cap
-            // float capWidth = pathHalfWidth + wallDepth * wallSpacing;
-            // for (int layer = 0; layer < wallDepth; layer++)
-            // {
-            //     float forwardOffset = wallSpacing * layer;
-            //     Vector2 capCenter = frontierEnd + frontierDir * forwardOffset;
-            //     int numPerpWalls = Mathf.CeilToInt(capWidth / wallSpacing);
-            //     for (int perpIdx = -numPerpWalls; perpIdx <= numPerpWalls; perpIdx++)
-            //     {
-            //         Vector2 wallPos = capCenter + perpendicular * perpIdx * wallSpacing;
-            //         float orientationDegrees = Mathf.Atan2(-frontierDir.y, -frontierDir.x) * Mathf.Rad2Deg;
-            //         Vector3 worldPos = ToVector3(wallPos);
-            //         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-            //         tileCount++;
-            //     }
-            // }
+            // Left wall segments: X=-1, Y from 1 to -1 (5 segments)
+            float[] sideY = { 1f, 0.5f, 0f, -0.5f, -1f };
+            foreach (float y in sideY)
+            {
+                Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * -1f;
+                Vector3 worldPos = ToVector3(wallPos);
+                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                tileCount++;
+            }
+
+            // Right wall segments: X=1, Y from 1 to -1 (5 segments)
+            foreach (float y in sideY)
+            {
+                Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * 1f;
+                Vector3 worldPos = ToVector3(wallPos);
+                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                tileCount++;
+            }
 
             return tileCount;
         }
@@ -1069,30 +1070,28 @@ namespace FaeMaze.Systems
                         }
                         if (insideNode) continue;
 
-                        // DISABLED FOR DEBUGGING - Edge side walls
-                        // foreach (float side in new[] { 1f, -1f })
-                        // {
-                        //     for (int layer = 0; layer < WALL_DEPTH; layer++)
-                        //     {
-                        //         float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
-                        //         Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
-                        //         bool wallInsideNode = false;
-                        //         foreach (var node in allNodes)
-                        //         {
-                        //             if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
-                        //             {
-                        //                 wallInsideNode = true;
-                        //                 break;
-                        //             }
-                        //         }
-                        //         if (wallInsideNode) continue;
-                        //         float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                        //         if (side < 0) orientationDegrees += 180f;
-                        //         Vector3 worldPos = ToVector3(wallPos);
-                        //         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        //         tileCount++;
-                        //     }
-                        // }
+                        // Edge side walls
+                        foreach (float side in new[] { 1f, -1f })
+                        {
+                            for (int layer = 0; layer < WALL_DEPTH; layer++)
+                            {
+                                float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
+                                Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
+                                bool wallInsideNode = false;
+                                foreach (var node in allNodes)
+                                {
+                                    if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
+                                    {
+                                        wallInsideNode = true;
+                                        break;
+                                    }
+                                }
+                                if (wallInsideNode) continue;
+                                Vector3 worldPos = ToVector3(wallPos);
+                                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                                tileCount++;
+                            }
+                        }
                     }
                 }
 
@@ -1147,15 +1146,18 @@ namespace FaeMaze.Systems
 
                 if (isNodeA || isNodeB)
                 {
+                    // Direction should point AWAY from the node (outward along the edge)
                     Vector2 direction;
                     if (isNodeA)
                     {
+                        // NodeA is at start of polyline, direction goes from node toward edge
                         direction = (edge.PolylinePoints[1] - edge.PolylinePoints[0]).normalized;
                     }
                     else
                     {
+                        // NodeB is at end of polyline, direction goes from node toward edge (reverse)
                         int last = edge.PolylinePoints.Count - 1;
-                        direction = (edge.PolylinePoints[last] - edge.PolylinePoints[last - 1]).normalized;
+                        direction = (edge.PolylinePoints[last - 1] - edge.PolylinePoints[last]).normalized;
                     }
 
                     float edgeAngle = Mathf.Atan2(direction.y, direction.x);
@@ -1265,10 +1267,6 @@ namespace FaeMaze.Systems
             // For flat tiles on XY plane, rotate only around Z axis
             Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
 
-            // For wall prefabs (trees): rotate around Z axis to face perpendicular to graph
-            // Trees stay upright (Y-up) but rotate to face the direction of orientationDegrees
-            Quaternion wallPrefabRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
-
             // For other prefabs designed Y-up that need to lie flat
             Quaternion flatPrefabRotation = Quaternion.Euler(-90f, 0f, orientationDegrees);
 
@@ -1287,7 +1285,7 @@ namespace FaeMaze.Systems
             {
                 tileObj = Instantiate(wallPrefab, tilesParent);
                 tileObj.transform.position = worldPos;
-                tileObj.transform.rotation = wallPrefabRotation; // Rotate around Z to face perpendicular
+                // Wall models are always oriented perpendicular to graph elements (no rotation)
                 tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
                 wallTiles?.Add(tileObj);
             }

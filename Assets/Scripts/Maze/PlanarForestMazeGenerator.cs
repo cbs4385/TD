@@ -547,43 +547,75 @@ namespace ForestMaze
         /// <summary>
         /// Creates a gentle S-curve polyline between two boundary points.
         /// Uses sine wave to create 2-3 visible inflection points.
+        /// Adds straight segments at start and end to ensure 90-degree intersection with nodes.
         /// </summary>
         private static List<Vector2> GenerateSCurvePolyline(Vector2 start, Vector2 end, System.Random random)
         {
             var polyline = new List<Vector2>();
 
             Vector2 direction = (end - start).normalized;
-            float length = Vector2.Distance(start, end);
+            float totalLength = Vector2.Distance(start, end);
             Vector2 perpendicular = new Vector2(-direction.y, direction.x);
 
-            // Number of sample points along the curve (more = smoother)
-            int numPoints = Mathf.Max(8, Mathf.CeilToInt(length / 0.25f)); // Max 0.25 unit spacing
+            // Straight segment length at each end (ensures 90-degree node intersection)
+            const float straightLength = 2f;
+
+            // If edge is too short for straight segments + curve, just make it straight
+            if (totalLength <= straightLength * 2.5f)
+            {
+                int numPoints = Mathf.Max(4, Mathf.CeilToInt(totalLength / 0.5f));
+                for (int i = 0; i <= numPoints; i++)
+                {
+                    float t = (float)i / numPoints;
+                    polyline.Add(Vector2.Lerp(start, end, t));
+                }
+                return polyline;
+            }
+
+            // Calculate curve segment boundaries
+            Vector2 curveStart = start + direction * straightLength;
+            Vector2 curveEnd = end - direction * straightLength;
+            float curveLength = Vector2.Distance(curveStart, curveEnd);
+
+            // Add straight segment at start
+            int startPoints = Mathf.Max(2, Mathf.CeilToInt(straightLength / 0.5f));
+            for (int i = 0; i < startPoints; i++)
+            {
+                float t = (float)i / startPoints;
+                polyline.Add(Vector2.Lerp(start, curveStart, t));
+            }
+
+            // Number of sample points for curved section
+            int curvePoints = Mathf.Max(8, Mathf.CeilToInt(curveLength / 0.25f));
 
             // Wave parameters for visible S-curve with 2-3 inflection points
-            // Amplitude: 5-10% of length, minimum 0.3 units for visibility
-            float amplitude = Mathf.Max(0.3f, length * 0.08f);
-            // Frequency: 1.5 to 2.5 periods along the length = 2-3 inflection points
+            float amplitude = Mathf.Max(0.3f, curveLength * 0.08f);
             float frequency = 1.5f + (float)random.NextDouble() * 1.0f;
-            // Random phase offset for variety
             float phase = (float)random.NextDouble() * Mathf.PI * 2f;
-            // Random direction
             int side = random.Next(2) == 0 ? 1 : -1;
 
-            for (int i = 0; i <= numPoints; i++)
+            for (int i = 0; i <= curvePoints; i++)
             {
-                float t = (float)i / numPoints;
+                float t = (float)i / curvePoints;
 
-                // Base position along the straight line
-                Vector2 basePos = Vector2.Lerp(start, end, t);
+                // Base position along the curve segment
+                Vector2 basePos = Vector2.Lerp(curveStart, curveEnd, t);
 
                 // Sine wave offset perpendicular to direction
-                // Use sin that starts and ends at 0 for smooth connection to nodes
                 float waveT = t * Mathf.PI * frequency;
                 float envelope = Mathf.Sin(t * Mathf.PI); // Fade in/out at endpoints
                 float waveOffset = Mathf.Sin(waveT + phase) * amplitude * envelope * side;
 
                 Vector2 point = basePos + perpendicular * waveOffset;
                 polyline.Add(point);
+            }
+
+            // Add straight segment at end
+            int endPoints = Mathf.Max(2, Mathf.CeilToInt(straightLength / 0.5f));
+            for (int i = 1; i <= endPoints; i++)
+            {
+                float t = (float)i / endPoints;
+                polyline.Add(Vector2.Lerp(curveEnd, end, t));
             }
 
             return polyline;

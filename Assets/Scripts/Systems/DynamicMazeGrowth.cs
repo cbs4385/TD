@@ -286,10 +286,10 @@ namespace FaeMaze.Systems
             if (mazeRenderer != null)
             {
                 // 1. Remove walls near the consumed spawn point (to open the passage)
-                // Use smaller radius (2f) to avoid removing node walls too far from the passage
+                // Radius needs to cover end cap walls which extend up to 1 unit beyond portal
                 if (consumedSpawnPos != Vector3.zero)
                 {
-                    mazeRenderer.RemoveWallsNearPosition(consumedSpawnPos, 2f);
+                    mazeRenderer.RemoveWallsNearPosition(consumedSpawnPos, 3f);
                 }
 
                 // 2. Remove walls and path tiles at the new node position (node radius + buffer)
