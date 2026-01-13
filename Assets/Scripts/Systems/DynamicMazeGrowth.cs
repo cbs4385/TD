@@ -300,13 +300,18 @@ namespace FaeMaze.Systems
                 // 3. Remove walls along all new edge paths (sample along segments, not just control points)
                 // Only remove walls that are ON the walkable path - not the wall borders
                 float wallRemovalStepSize = 0.5f; // Sample every 0.5 units for dense coverage
-                float wallRemovalRadius = 0.7f; // Just slightly larger than pathHalfWidth (0.5) to clear the path
+                float wallRemovalRadius = 1.5f; // Large enough to clear node border walls (3 layers at 0.3 spacing)
                 float nodeBorderProtectionRadius = 4.5f; // nodeRadius (3) + wallBorder (3 * 0.3 = 0.9) + buffer
 
                 foreach (var edge in newEdges)
                 {
                     if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
                     {
+                        // Get nodes this edge connects to - these should NOT be protected
+                        // because we need to clear walls where the edge enters them
+                        int edgeNodeA = edge.NodeA;
+                        int? edgeNodeB = edge.NodeB;
+
                         for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                         {
                             Vector2 start = edge.PolylinePoints[i];
@@ -319,24 +324,26 @@ namespace FaeMaze.Systems
                                 float t = (float)j / numSamples;
                                 Vector2 samplePoint = Vector2.Lerp(start, end, t);
 
-                                // Skip wall removal if this point is near any existing node's border ring
-                                // to protect existing node walls from being removed
-                                bool nearExistingNode = false;
+                                // Skip wall removal if this point is near a node's border ring
+                                // EXCEPT: don't protect nodes this edge connects to (we need to clear entry points)
+                                bool nearProtectedNode = false;
                                 foreach (var node in forestMapState.Nodes)
                                 {
-                                    // Protect all nodes except the new one (whose walls will be added fresh)
-                                    if (node.Id != newNode.Id)
+                                    // Don't protect: new node, or nodes this edge connects to
+                                    bool isConnectedNode = (node.Id == edgeNodeA) ||
+                                                          (edgeNodeB.HasValue && node.Id == edgeNodeB.Value);
+                                    if (node.Id == newNode.Id || isConnectedNode)
+                                        continue;
+
+                                    float distToNode = Vector2.Distance(samplePoint, node.Position);
+                                    if (distToNode < nodeBorderProtectionRadius)
                                     {
-                                        float distToNode = Vector2.Distance(samplePoint, node.Position);
-                                        if (distToNode < nodeBorderProtectionRadius)
-                                        {
-                                            nearExistingNode = true;
-                                            break;
-                                        }
+                                        nearProtectedNode = true;
+                                        break;
                                     }
                                 }
 
-                                if (nearExistingNode)
+                                if (nearProtectedNode)
                                     continue;
 
                                 Vector3 pointWorldPos = new Vector3(samplePoint.x, samplePoint.y, 0);
