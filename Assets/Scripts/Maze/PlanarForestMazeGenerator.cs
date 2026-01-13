@@ -2334,8 +2334,9 @@ namespace ForestMaze
             }
 
             // Check against all existing edges
-            // For cross-connections, use a much smaller buffer since paths can share space
-            float edgeBuffer = isCrossConnection ? PATH_WIDTH * 0.3f : PATH_WIDTH * 0.8f + WALL_BUFFER;
+            // Use MERGE_DISTANCE as minimum spacing to ensure walls can fit between edges
+            // For cross-connections, use smaller buffer since they intentionally intersect
+            float edgeBuffer = isCrossConnection ? PATH_WIDTH * 0.3f : MERGE_DISTANCE;
             foreach (var edge in state.Edges)
             {
                 if (edge.PolylinePoints.Count < 2)
