@@ -549,59 +549,12 @@ namespace FaeMaze.Systems
                 if (!edge.Partial || edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                     continue;
 
-                // Get the frontier end position and direction
                 int lastIdx = edge.PolylinePoints.Count - 1;
                 Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
                 Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
-                Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-                // Place side walls from where edge walls stop (edgeEndSkip) to past the frontier end
-                // This fills the entire gap and caps off around the portal tile
-                float capStart = -edgeEndSkip; // Start from where edge walls stopped
-                float capEnd = 0.5f; // Extend slightly past frontier end to cap portal
-                int capSteps = Mathf.CeilToInt((capEnd - capStart) / stepSize);
-
-                for (int step = 0; step <= capSteps; step++)
-                {
-                    float t = capStart + step * stepSize;
-                    Vector2 capPos = frontierEnd + frontierDir * t;
-
-                    foreach (float side in new[] { 1f, -1f })
-                    {
-                        for (int layer = 0; layer < wallDepth; layer++)
-                        {
-                            float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
-                            Vector2 wallPos = capPos + perpendicular * side * wallOffset;
-
-                            float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                            if (side < 0) orientationDegrees += 180f;
-
-                            Vector3 worldPos = ToVector3(wallPos);
-                            CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                            tileCount++;
-                        }
-                    }
-                }
-
-                // Also add front cap walls (perpendicular to edge at the portal)
-                for (int layer = 0; layer < wallDepth; layer++)
-                {
-                    float forwardOffset = pathHalfWidth + wallSpacing * (layer + 1);
-                    Vector2 capCenter = frontierEnd + frontierDir * forwardOffset;
-
-                    // Place walls across the perpendicular at this forward position
-                    int perpSteps = Mathf.CeilToInt((pathHalfWidth + wallBorderDepth) / stepSize);
-                    for (int perpStep = -perpSteps; perpStep <= perpSteps; perpStep++)
-                    {
-                        Vector2 wallPos = capCenter + perpendicular * perpStep * stepSize;
-
-                        float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
-
-                        Vector3 worldPos = ToVector3(wallPos);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        tileCount++;
-                    }
-                }
+                tileCount += RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
+                    stepSize, pathHalfWidth, wallDepth, wallSpacing, edgeEndSkip);
             }
 
             // Add walls around nodes (3 rings at nodeRadius + offset)
@@ -1180,44 +1133,57 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Renders end cap walls at the end of a frontier edge, aligned along the edge direction.
-        /// Walls are placed perpendicular to the edge to close off the open end.
+        /// Renders complete end cap walls at the end of a frontier edge.
+        /// Places side walls from where edge walls stop to past the frontier end,
+        /// plus front cap walls perpendicular to the edge.
         /// </summary>
-        private int RenderEdgeEndCap(Vector2 endPoint, Vector2 direction, Vector2 perpendicular,
-            PlanarForestMazeGenerator.ForestMapState forestState, List<Vector2> wallPositions,
-            Transform mazeOrigin, float stepSize)
+        private int RenderFrontierEndCap(Vector2 frontierEnd, Vector2 frontierDir, Transform mazeOrigin,
+            float stepSize, float pathHalfWidth, int wallDepth, float wallSpacing, float edgeEndSkip)
         {
             int tileCount = 0;
+            Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-            // Place walls perpendicular to the edge direction to close off the end
-            // Walls are positioned along the perpendicular axis at the endpoint
-            int numLayers = Mathf.CeilToInt(wallBorderDepth / stepSize);
-            for (int layer = 1; layer <= numLayers; layer++)
+            // Place side walls from where edge walls stop (edgeEndSkip) to past the frontier end
+            float capStart = -edgeEndSkip;
+            float capEnd = 0.5f;
+            int capSteps = Mathf.CeilToInt((capEnd - capStart) / stepSize);
+
+            for (int step = 0; step <= capSteps; step++)
             {
-                float forwardOffset = layer * stepSize;
-                Vector2 capCenterPos = endPoint + direction * forwardOffset;
+                float t = capStart + step * stepSize;
+                Vector2 capPos = frontierEnd + frontierDir * t;
 
-                // Place walls across the perpendicular width at this forward position
-                for (int perpLayer = -numLayers; perpLayer <= numLayers; perpLayer++)
+                foreach (float side in new[] { 1f, -1f })
                 {
-                    float perpOffset = perpLayer * stepSize;
-                    Vector2 wallPos = capCenterPos + perpendicular * perpOffset;
+                    for (int layer = 0; layer < wallDepth; layer++)
+                    {
+                        float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
+                        Vector2 wallPos = capPos + perpendicular * side * wallOffset;
 
-                    // Push direction is forward (along edge direction) for end caps
-                    Vector2 pushDir = direction;
+                        float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                        if (side < 0) orientationDegrees += 180f;
 
-                    // Get adjusted position (translates away from intersections)
-                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, wallPositions);
-                    if (!adjustedPos.HasValue)
-                        continue;
+                        Vector3 worldPos = ToVector3(wallPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                        tileCount++;
+                    }
+                }
+            }
 
-                    wallPositions.Add(adjustedPos.Value);
+            // Also add front cap walls (perpendicular to edge at the portal)
+            for (int layer = 0; layer < wallDepth; layer++)
+            {
+                float forwardOffset = pathHalfWidth + wallSpacing * (layer + 1);
+                Vector2 capCenter = frontierEnd + frontierDir * forwardOffset;
 
-                    // Orientation: aligned along the edge direction (toward connected end)
-                    // This makes walls face perpendicular to the edge, closing off the path
-                    float orientationDegrees = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+                int perpSteps = Mathf.CeilToInt((pathHalfWidth + wallBorderDepth) / stepSize);
+                for (int perpStep = -perpSteps; perpStep <= perpSteps; perpStep++)
+                {
+                    Vector2 wallPos = capCenter + perpendicular * perpStep * stepSize;
 
-                    Vector3 worldPos = ToVector3(adjustedPos.Value);
+                    float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
+
+                    Vector3 worldPos = ToVector3(wallPos);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                     tileCount++;
                 }
@@ -1750,57 +1716,12 @@ namespace FaeMaze.Systems
                     if (!edge.Partial || edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                         continue;
 
-                    // Get the frontier end position and direction
                     int lastIdx = edge.PolylinePoints.Count - 1;
                     Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
                     Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
-                    Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-                    // Place side walls from where edge walls stop (edgeEndSkip) to past the frontier end
-                    float capStart = -edgeEndSkip;
-                    float capEnd = 0.5f;
-                    int capSteps = Mathf.CeilToInt((capEnd - capStart) / stepSize);
-
-                    for (int step = 0; step <= capSteps; step++)
-                    {
-                        float t = capStart + step * stepSize;
-                        Vector2 capPos = frontierEnd + frontierDir * t;
-
-                        foreach (float side in new[] { 1f, -1f })
-                        {
-                            for (int layer = 0; layer < wallDepth; layer++)
-                            {
-                                float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
-                                Vector2 wallPos = capPos + perpendicular * side * wallOffset;
-
-                                float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                                if (side < 0) orientationDegrees += 180f;
-
-                                Vector3 worldPos = ToVector3(wallPos);
-                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                                wallsCreated++;
-                            }
-                        }
-                    }
-
-                    // Also add front cap walls (perpendicular to edge at the portal)
-                    for (int layer = 0; layer < wallDepth; layer++)
-                    {
-                        float forwardOffset = pathHalfWidth + wallSpacing * (layer + 1);
-                        Vector2 capCenter = frontierEnd + frontierDir * forwardOffset;
-
-                        int perpSteps = Mathf.CeilToInt((pathHalfWidth + wallBorderDepth) / stepSize);
-                        for (int perpStep = -perpSteps; perpStep <= perpSteps; perpStep++)
-                        {
-                            Vector2 wallPos = capCenter + perpendicular * perpStep * stepSize;
-
-                            float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
-
-                            Vector3 worldPos = ToVector3(wallPos);
-                            CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                            wallsCreated++;
-                        }
-                    }
+                    wallsCreated += RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
+                        stepSize, pathHalfWidth, wallDepth, wallSpacing, edgeEndSkip);
                 }
             }
 
