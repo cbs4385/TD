@@ -17,7 +17,7 @@ namespace FaeMaze.Systems
         [Header("Growth Settings")]
         [SerializeField]
         [Tooltip("Time in seconds between maze growth cycles")]
-        private float growthInterval = 10f;
+        private float growthInterval = 30f;
 
         [SerializeField]
         [Tooltip("Enable automatic maze growth")]
@@ -327,8 +327,8 @@ namespace FaeMaze.Systems
                 // 5. Add tiles for new edges
                 mazeRenderer.AddEdgeTilesIncremental(newEdges);
 
-                // 6. Add walls around the new elements
-                mazeRenderer.AddWallsIncremental(newEdges, newNode);
+                // 6. Add walls around the new elements (DISABLED FOR DEBUGGING)
+                // mazeRenderer.AddWallsIncremental(newEdges, newNode);
             }
         }
 
