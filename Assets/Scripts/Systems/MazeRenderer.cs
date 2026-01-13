@@ -985,7 +985,10 @@ namespace FaeMaze.Systems
 
             // Place side walls to form the sides of the U
             // - perpLayer: distance from edge center, starting at edge of path
-            // - edgeLayer: position along edge extending BACK from frontier end
+            // - edgeLayer: position along edge extending BACK from frontier end to meet edge walls
+            // Calculate how many edge layers needed to cover the gap from frontier to where edge walls stop
+            int edgeLayers = Mathf.CeilToInt(edgeEndSkip / wallSpacing) + 1;
+
             foreach (float side in new[] { 1f, -1f })
             {
                 for (int perpLayer = 0; perpLayer < wallDepth; perpLayer++)
@@ -993,7 +996,7 @@ namespace FaeMaze.Systems
                     // Start at edge of path (pathHalfWidth), not further out
                     float wallPerpOffset = pathHalfWidth + wallSpacing * perpLayer;
 
-                    for (int edgeLayer = 0; edgeLayer < wallDepth; edgeLayer++)
+                    for (int edgeLayer = 0; edgeLayer < edgeLayers; edgeLayer++)
                     {
                         // Position along edge: extend BACK from frontier end towards node
                         float edgeOffset = -wallSpacing * edgeLayer;
