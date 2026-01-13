@@ -213,7 +213,13 @@ namespace ForestMaze
             // This prevents gaps at the node-edge junction due to grid alignment
             Vector2 startBoundary = root.Position + direction * (NODE_RADIUS - 0.5f);
             Vector2 endBoundary = ghostCenter - direction * (NODE_RADIUS - 0.5f);
-            var curve = BezierCurveFactory.CreateGentleCurve(startBoundary, endBoundary, state.Random, 2);
+
+            // Create a nearly-straight path with very slight curve
+            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+            float offsetAmount = ((float)state.Random.NextDouble() - 0.5f) * 1.0f;
+            Vector2 controlPoint = midpoint + perpendicular * offsetAmount;
+            var curve = new BezierCurve(startBoundary, controlPoint, endBoundary);
 
             List<Vector2> polyline;
             if (curve != null)
@@ -567,18 +573,15 @@ namespace ForestMaze
             Vector2 startBoundary = startCenter + overallDirection * (NODE_RADIUS - 0.5f);
             Vector2 endBoundary = endCenter - overallDirection * (NODE_RADIUS - 0.5f);
 
-            // Collect positions to avoid
-            var avoidPositions = state.Nodes
-                .Where(n => !incidentNodes.Contains(n.Id))
-                .Select(n => n.Position)
-                .ToList();
-            avoidPositions.AddRange(state.GhostCenters);
+            // Create a nearly-straight path with very slight S-curve
+            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
+            Vector2 perpendicular = new Vector2(-overallDirection.y, overallDirection.x);
 
-            // Create curve avoiding other nodes
-            int numControlPoints = state.Random.Next(2) == 0 ? 2 : 3;
-            return BezierCurveFactory.CreateCurveAvoidingPositions(
-                startBoundary, endBoundary, state.Random,
-                avoidPositions, NODE_RADIUS + PATH_RADIUS);
+            // Very small random offset (max 0.5 units) for subtle curve
+            float offsetAmount = ((float)state.Random.NextDouble() - 0.5f) * 1.0f;
+            Vector2 controlPoint = midpoint + perpendicular * offsetAmount;
+
+            return new BezierCurve(startBoundary, controlPoint, endBoundary);
         }
 
         /// <summary>
@@ -743,34 +746,21 @@ namespace ForestMaze
         {
             Vector2 overallDirection = (ghostCenter - nodeCenter).normalized;
             float totalDistance = Vector2.Distance(nodeCenter, ghostCenter);
-            float corridorDistance = totalDistance - 2 * NODE_RADIUS;
 
-            if (corridorDistance < MIN_SEGMENT_LENGTH)
-            {
-                // Too short for curved path, create minimal curve
-                // Start/end slightly inside node boundaries to ensure tile overlap
-                Vector2 start = nodeCenter + overallDirection * (NODE_RADIUS - 0.5f);
-                Vector2 end = ghostCenter - overallDirection * (NODE_RADIUS - 0.5f);
-                Vector2 mid = (start + end) * 0.5f;
-                return new BezierCurve(start, mid, end);
-            }
+            // Start at node boundary, end at ghost boundary
+            Vector2 startBoundary = nodeCenter + overallDirection * NODE_RADIUS;
+            Vector2 endBoundary = ghostCenter - overallDirection * NODE_RADIUS;
 
-            // Start/end slightly inside node boundaries to ensure tile overlap
-            Vector2 startBoundary = nodeCenter + overallDirection * (NODE_RADIUS - 0.5f);
-            Vector2 endBoundary = ghostCenter - overallDirection * (NODE_RADIUS - 0.5f);
+            // Create a nearly-straight path with very slight S-curve
+            // Just use a simple quadratic curve with midpoint slightly offset
+            Vector2 midpoint = (startBoundary + endBoundary) * 0.5f;
+            Vector2 perpendicular = new Vector2(-overallDirection.y, overallDirection.x);
 
-            // Collect positions to avoid
-            var avoidPositions = state.Nodes
-                .Where(n => !incidentNodes.Contains(n.Id))
-                .Select(n => n.Position)
-                .ToList();
-            avoidPositions.AddRange(state.GhostCenters.Where(g => Vector2.Distance(g, ghostCenter) > 1e-6f));
+            // Very small random offset (max 0.5 units) for subtle curve
+            float offsetAmount = ((float)state.Random.NextDouble() - 0.5f) * 1.0f;
+            Vector2 controlPoint = midpoint + perpendicular * offsetAmount;
 
-            // Create gentle curve
-            int numControlPoints = state.Random.Next(2) == 0 ? 2 : 3;
-            return BezierCurveFactory.CreateCurveAvoidingPositions(
-                startBoundary, endBoundary, state.Random,
-                avoidPositions, NODE_RADIUS + PATH_RADIUS);
+            return new BezierCurve(startBoundary, controlPoint, endBoundary);
         }
 
         private static bool AddPartialEdge(ForestMapState state, Node node)
