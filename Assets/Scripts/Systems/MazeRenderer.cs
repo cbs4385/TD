@@ -983,32 +983,26 @@ namespace FaeMaze.Systems
             int tileCount = 0;
             Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-            // Place side walls to form the sides of the U
-            // - perpLayer: distance from edge center, starting at edge of path
-            // - edgeLayer: position along edge extending BACK from frontier end to meet edge walls
-            // Calculate how many edge layers needed to cover the gap from frontier to where edge walls stop
-            int edgeLayers = Mathf.CeilToInt(edgeEndSkip / wallSpacing) + 1;
+            // Place side walls - blocks centered at 1.5 units perpendicular from portal
+            // Long axis of wall models parallel to edge, depth layers perpendicular to edge
+            const float sideBlockCenter = 1.5f;
 
             foreach (float side in new[] { 1f, -1f })
             {
-                for (int perpLayer = 0; perpLayer < wallDepth; perpLayer++)
+                for (int depthLayer = 0; depthLayer < wallDepth; depthLayer++)
                 {
-                    // Start at edge of path (pathHalfWidth), not further out
-                    float wallPerpOffset = pathHalfWidth + wallSpacing * perpLayer;
+                    // 3 layers centered at 1.5: gives 1.2, 1.5, 1.8 for layers 0, 1, 2
+                    float perpOffset = sideBlockCenter + wallSpacing * (depthLayer - 1);
 
-                    for (int edgeLayer = 0; edgeLayer < edgeLayers; edgeLayer++)
-                    {
-                        // Position along edge: extend BACK from frontier end towards node
-                        float edgeOffset = -wallSpacing * edgeLayer;
-                        Vector2 wallPos = frontierEnd + frontierDir * edgeOffset + perpendicular * side * wallPerpOffset;
+                    // Position at the portal (frontier end)
+                    Vector2 wallPos = frontierEnd + perpendicular * side * perpOffset;
 
-                        // Orient walls along edge direction
-                        float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
+                    // Orient walls with long axis parallel to edge direction
+                    float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
 
-                        Vector3 worldPos = ToVector3(wallPos);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        tileCount++;
-                    }
+                    Vector3 worldPos = ToVector3(wallPos);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    tileCount++;
                 }
             }
 
