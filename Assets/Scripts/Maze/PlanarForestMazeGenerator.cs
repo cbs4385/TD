@@ -401,9 +401,13 @@ namespace ForestMaze
             int numNewEdges = state.Random.Next(MIN_NEW_EDGES, MAX_NEW_EDGES + 1);
             int frontierEdgesAdded = 0;
 
+            Debug.Log($"[Step] Creating {numNewEdges} frontier edges from node {newNode.Id} at {newNode.Position}, HasCapacity={newNode.HasCapacity()}, MaxDegree={newNode.MaxDegree}, IncidentEdges={newNode.IncidentEdges.Count}");
+
             for (int i = 0; i < numNewEdges && newNode.HasCapacity(); i++)
             {
-                if (AddPartialEdgeWithNodeExclusion(state, newNode))
+                bool success = AddPartialEdgeWithNodeExclusion(state, newNode);
+                Debug.Log($"[Step] AddPartialEdgeWithNodeExclusion attempt {i}: {(success ? "SUCCESS" : "FAILED")}");
+                if (success)
                 {
                     frontierEdgesAdded++;
                 }
@@ -414,7 +418,9 @@ namespace ForestMaze
             while (frontierEdgesAdded < MIN_NEW_EDGES && newNode.IncidentEdges.Count < 6)
             {
                 newNode.MaxDegree++;
-                if (AddPartialEdge(state, newNode))
+                bool success = AddPartialEdge(state, newNode);
+                Debug.Log($"[Step] AddPartialEdge fallback: {(success ? "SUCCESS" : "FAILED")}");
+                if (success)
                 {
                     frontierEdgesAdded++;
                 }
@@ -424,6 +430,7 @@ namespace ForestMaze
                 }
             }
 
+            Debug.Log($"[Step] Total frontier edges added: {frontierEdgesAdded}, Frontier count: {state.Frontier.Count}");
             state.TurnCount++;
             return true;
         }
@@ -615,7 +622,10 @@ namespace ForestMaze
         private static bool AddPartialEdgeWithNodeExclusion(ForestMapState state, Node node)
         {
             if (!node.HasCapacity())
+            {
+                Debug.Log($"[AddPartialEdgeWithNodeExclusion] Node {node.Id} has no capacity");
                 return false;
+            }
 
             // Calculate forbidden angles (within ±15° toward existing nodes)
             var forbiddenAngles = new List<(float center, float halfWidth)>();
@@ -703,6 +713,7 @@ namespace ForestMaze
                 }
             }
 
+            Debug.Log($"[AddPartialEdgeWithNodeExclusion] FAILED for node {node.Id} after {(int)(180 / ROTATE_STEP)} rotation attempts");
             return false;
         }
 
