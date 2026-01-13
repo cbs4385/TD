@@ -291,9 +291,10 @@ namespace FaeMaze.Systems
                     mazeRenderer.RemoveWallsNearPosition(consumedSpawnPos, 4f);
                 }
 
-                // 2. Remove walls at the new node position (node radius + buffer)
+                // 2. Remove walls and path tiles at the new node position (node radius + buffer)
                 Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
                 mazeRenderer.RemoveWallsNearPosition(newNodeWorldPos, 5f); // Node radius is ~3, plus border
+                mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f); // Clear edge tiles to make room for node tiles
 
                 // 3. Remove walls along all new edge paths (sample along segments, not just control points)
                 float wallRemovalStepSize = 1.0f; // Sample every 1 unit along the path

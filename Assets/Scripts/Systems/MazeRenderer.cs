@@ -1801,6 +1801,49 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Removes path tiles (non-wall tiles) within a radius of a position.
+        /// Used before adding node tiles to clear edge tiles that would block node tile placement.
+        /// </summary>
+        public void RemovePathTilesNearPosition(Vector3 position, float radius)
+        {
+            if (tilesParent == null)
+                return;
+
+            int removedCount = 0;
+            List<Transform> toRemove = new List<Transform>();
+
+            foreach (Transform child in tilesParent)
+            {
+                // Remove path tiles (not walls, not node cylinders)
+                // Path tiles have names like "WorldTile_.", "WorldTile_H", "WorldTile_N", etc.
+                if (child.name.StartsWith("WorldTile_") && !child.name.StartsWith("WorldTile_#"))
+                {
+                    float dist = Vector3.Distance(child.position, position);
+                    if (dist < radius)
+                    {
+                        toRemove.Add(child);
+                    }
+                }
+            }
+
+            foreach (var t in toRemove)
+            {
+                // Remove from occupied positions
+                Vector2 pos2D = new Vector2(t.position.x, t.position.y);
+                long posKey = GetQuantizedKey(pos2D);
+                occupiedPositions?.Remove(posKey);
+
+                Destroy(t.gameObject);
+                removedCount++;
+            }
+
+            if (removedCount > 0)
+            {
+                // Debug.Log($"[MazeRenderer] Removed {removedCount} path tiles near {position}");
+            }
+        }
+
+        /// <summary>
         /// Coroutine that builds tiles in batches over multiple frames.
         /// Creates tiles invisibly, then swaps the entire container at once.
         /// </summary>
