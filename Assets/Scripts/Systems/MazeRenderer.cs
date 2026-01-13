@@ -217,10 +217,9 @@ namespace FaeMaze.Systems
             renderedTiles += edgeTiles;
             // Debug.Log($"[MazeRenderer] Rendered {edgeTiles} edge path tiles");
 
-            // Step 4: Render wall border (DISABLED FOR DEBUGGING)
-            // int wallTileCount = RenderWallBorder(forestState, mazeOrigin);
-            // renderedTiles += wallTileCount;
-            int wallTileCount = 0;
+            // Step 4: Render wall border
+            int wallTileCount = RenderWallBorder(forestState, mazeOrigin);
+            renderedTiles += wallTileCount;
             // Debug.Log($"[MazeRenderer] Rendered {wallTileCount} wall tiles");
 
             // Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +

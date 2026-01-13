@@ -17,7 +17,7 @@ namespace FaeMaze.Systems
         [Header("Growth Settings")]
         [SerializeField]
         [Tooltip("Time in seconds between maze growth cycles")]
-        private float growthInterval = 30f;
+        private float growthInterval = 10f;
 
         [SerializeField]
         [Tooltip("Enable automatic maze growth")]

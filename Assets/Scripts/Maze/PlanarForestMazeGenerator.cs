@@ -327,9 +327,6 @@ namespace ForestMaze
                 }
             }
 
-            // Merge nearby edges that are too close together
-            // During initial generation, all edges are new so pass 0
-            MergeNearbyEdges(state, 0);
         }
 
         /// <summary>
@@ -345,10 +342,6 @@ namespace ForestMaze
         /// </summary>
         public static bool Step(ForestMapState state)
         {
-            // Track edge count before step - edges created during this step are "new"
-            // and can be modified by merge/spacing. Existing edges should never be modified.
-            int edgeCountBeforeStep = state.Edges.Count;
-
             // Select a frontier edge (closest to seed/root)
             int? edgeId = SelectFrontierEdgeBiased(state);
             if (!edgeId.HasValue)
@@ -430,10 +423,6 @@ namespace ForestMaze
                     break; // No more valid positions
                 }
             }
-
-            // DISABLED FOR DEBUG: Merge nearby edges that are too close together
-            // Only modify edges created during this step (index >= edgeCountBeforeStep)
-            // MergeNearbyEdges(state, edgeCountBeforeStep);
 
             state.TurnCount++;
             return true;
@@ -545,13 +534,29 @@ namespace ForestMaze
         /// </summary>
         private static BezierCurve CreateSimpleCurve(Vector2 start, Vector2 end, System.Random random)
         {
-            // TEMPORARY: Create perfectly straight line to debug visual loops
-            // If loops persist, the issue is NOT in curve generation
-            Vector2 midpoint = (start + end) * 0.5f;
+            Vector2 direction = (end - start).normalized;
+            float length = Vector2.Distance(start, end);
 
-            // Use quadratic Bezier constructor (converts to cubic internally)
-            // With midpoint as control = straight line
-            var curve = new BezierCurve(start, midpoint, end);
+            // Perpendicular direction for S-curve offset
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+
+            // Gentle offset for S-curve - subtle wave without spiraling
+            // Max offset is small fraction of length (4% of length, capped at 0.4 units)
+            float maxOffset = Mathf.Min(0.4f, length * 0.04f);
+            float offset = maxOffset * (0.6f + (float)random.NextDouble() * 0.4f);
+
+            // Random side for first control point (creates variety in curve direction)
+            int side = random.Next(2) == 0 ? 1 : -1;
+
+            // Control points at 1/3 and 2/3 positions, on OPPOSITE sides for S-curve shape
+            Vector2 p1Base = Vector2.Lerp(start, end, 1f / 3f);
+            Vector2 p2Base = Vector2.Lerp(start, end, 2f / 3f);
+
+            Vector2 control1 = p1Base + perpendicular * offset * side;
+            Vector2 control2 = p2Base + perpendicular * offset * (-side);
+
+            // Create cubic Bezier with full 4-point constructor
+            var curve = new BezierCurve(start, control1, control2, end);
 
             return curve;
         }
