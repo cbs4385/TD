@@ -26,6 +26,7 @@ namespace FaeMaze.Visitors
             Mesmerized,    // New: entranced/hypnotized state
             Lost,          // New: wandering aimlessly state
             Lured,         // New: drawn toward the Heart by Murmuring Paths
+            Dazed,         // Stunned from witnessing maze growth
             Consumed,
             Escaping
         }
@@ -177,6 +178,7 @@ namespace FaeMaze.Visitors
         protected bool isLost;
         protected bool isFrightened;
         protected bool isLured;
+        protected bool isDazed;
 
         // Red Cap detection tracking
         protected float redCapDetectionTimer;
@@ -608,7 +610,12 @@ namespace FaeMaze.Visitors
             }
 
             // Timed states take priority (in order of precedence)
-            if (isMesmerized)
+            // Dazed has highest priority - visitor is stunned and cannot act
+            if (isDazed)
+            {
+                state = VisitorState.Dazed;
+            }
+            else if (isMesmerized)
             {
                 state = VisitorState.Mesmerized;
             }
@@ -1505,6 +1512,35 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Checks if the visitor is currently at or near a node (intersection).
+        /// Nodes are where paths meet and visitors can make wrong turn decisions.
+        /// </summary>
+        /// <param name="nodeProximityThreshold">Distance threshold to consider "at" a node (default 2.5 units)</param>
+        /// <returns>True if visitor is near a node</returns>
+        protected bool IsAtNode(float nodeProximityThreshold = 2.5f)
+        {
+            if (mazeGridBehaviour == null)
+                return false;
+
+            var graphState = mazeGridBehaviour.ForestMapState;
+            if (graphState == null || graphState.Nodes.Count == 0)
+                return false;
+
+            Vector2 currentPos = new Vector2(transform.position.x, transform.position.y);
+
+            foreach (var node in graphState.Nodes)
+            {
+                float dist = Vector2.Distance(node.Position, currentPos);
+                if (dist <= nodeProximityThreshold)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Finds a path through nodes using BFS.
         /// </summary>
         protected List<int> FindNodePath(ForestMaze.PlanarForestMazeGenerator.ForestMapState state, int startNode, int endNode)
@@ -2142,6 +2178,26 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Called when the visitor witnesses maze growth.
+        /// Sets the visitor to Dazed state for a duration, stopping movement.
+        /// </summary>
+        /// <param name="duration">How long the visitor remains dazed (default 15 seconds)</param>
+        public virtual void OnWitnessMazeGrowth(float duration = 15f)
+        {
+            // Don't daze if already in a terminal state
+            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
+            {
+                return;
+            }
+
+            isDazed = true;
+            SetTimedState(VisitorState.Dazed, duration);
+            RefreshStateFromFlags();
+
+            Debug.Log($"[Visitor] {name} witnessed maze growth and is now dazed for {duration}s");
+        }
+
+        /// <summary>
         /// Checks for nearby Red Caps and triggers frightened state if detected.
         /// </summary>
         protected virtual void CheckForNearbyRedCaps()
@@ -2193,6 +2249,9 @@ namespace FaeMaze.Visitors
                     break;
                 case VisitorState.Frightened:
                     isFrightened = false;
+                    break;
+                case VisitorState.Dazed:
+                    isDazed = false;
                     break;
             }
 
@@ -2431,6 +2490,148 @@ namespace FaeMaze.Visitors
             float roll = Random.value;
             bool recover = roll <= 0.5f;
             isConfused = !recover;
+        }
+
+        /// <summary>
+        /// Builds a confusion detour path that visits at least 2 random nodes before
+        /// returning to the correct path toward the destination.
+        /// </summary>
+        /// <param name="minDetourNodes">Minimum number of random nodes to visit (default 2)</param>
+        /// <returns>True if a detour path was successfully built</returns>
+        protected bool BuildConfusionDetourPath(int minDetourNodes = 2)
+        {
+            if (mazeGridBehaviour == null)
+                return false;
+
+            var graphState = mazeGridBehaviour.ForestMapState;
+            if (graphState == null || graphState.Nodes.Count < 3)
+                return false;
+
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (mazeData == null)
+                return false;
+
+            // Find the nearest node to our current position
+            Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+            int nearestNodeId = FindNearestNodeIndex(graphState, currentPos2D);
+            if (nearestNodeId < 0)
+                return false;
+
+            // Build a list of detour nodes by randomly walking the graph
+            var detourNodeIds = new List<int>();
+            var visitedNodeIds = new HashSet<int>();
+            int currentNodeId = nearestNodeId;
+            visitedNodeIds.Add(currentNodeId);
+
+            // Walk randomly through the graph for at least minDetourNodes steps
+            for (int i = 0; i < minDetourNodes + Random.Range(0, 2); i++)
+            {
+                var currentNode = graphState.Nodes[currentNodeId];
+
+                // Get connected nodes via incident edges
+                var connectedNodeIds = new List<int>();
+                foreach (int edgeId in currentNode.IncidentEdges)
+                {
+                    if (edgeId < 0 || edgeId >= graphState.Edges.Count)
+                        continue;
+
+                    var edge = graphState.Edges[edgeId];
+
+                    // Get the other node of this edge
+                    int otherNodeId = -1;
+                    if (edge.NodeA == currentNodeId && edge.NodeB.HasValue)
+                        otherNodeId = edge.NodeB.Value;
+                    else if (edge.NodeB.HasValue && edge.NodeB.Value == currentNodeId)
+                        otherNodeId = edge.NodeA;
+
+                    if (otherNodeId >= 0 && !visitedNodeIds.Contains(otherNodeId))
+                    {
+                        connectedNodeIds.Add(otherNodeId);
+                    }
+                }
+
+                if (connectedNodeIds.Count == 0)
+                {
+                    // No unvisited neighbors - allow revisiting
+                    foreach (int edgeId in currentNode.IncidentEdges)
+                    {
+                        if (edgeId < 0 || edgeId >= graphState.Edges.Count)
+                            continue;
+
+                        var edge = graphState.Edges[edgeId];
+                        int otherNodeId = -1;
+                        if (edge.NodeA == currentNodeId && edge.NodeB.HasValue)
+                            otherNodeId = edge.NodeB.Value;
+                        else if (edge.NodeB.HasValue && edge.NodeB.Value == currentNodeId)
+                            otherNodeId = edge.NodeA;
+
+                        if (otherNodeId >= 0)
+                            connectedNodeIds.Add(otherNodeId);
+                    }
+                }
+
+                if (connectedNodeIds.Count == 0)
+                    break;
+
+                // Pick a random connected node
+                int randomIndex = Random.Range(0, connectedNodeIds.Count);
+                int nextNodeId = connectedNodeIds[randomIndex];
+
+                detourNodeIds.Add(nextNodeId);
+                visitedNodeIds.Add(nextNodeId);
+                currentNodeId = nextNodeId;
+            }
+
+            if (detourNodeIds.Count < minDetourNodes)
+                return false;
+
+            // Build path: current position -> each detour node -> final destination
+            var fullPath = new List<Vector3>();
+            Vector3 pathStart = transform.position;
+
+            // Path to each detour node
+            foreach (int nodeId in detourNodeIds)
+            {
+                var node = graphState.Nodes[nodeId];
+                Vector3 nodeWorldPos = new Vector3(node.Position.x, node.Position.y, 0);
+
+                var segmentPath = BuildWorldPath(pathStart, nodeWorldPos);
+                if (segmentPath != null && segmentPath.Count > 0)
+                {
+                    // Skip first point if it's too close to last point in fullPath (avoid duplicates)
+                    int startIdx = (fullPath.Count > 0 && segmentPath.Count > 0 &&
+                                   Vector3.Distance(fullPath[fullPath.Count - 1], segmentPath[0]) < 0.5f) ? 1 : 0;
+
+                    for (int i = startIdx; i < segmentPath.Count; i++)
+                    {
+                        fullPath.Add(segmentPath[i]);
+                    }
+                }
+                pathStart = nodeWorldPos;
+            }
+
+            // Finally, path from last detour node to destination
+            var finalSegment = BuildWorldPath(pathStart, worldDestination);
+            if (finalSegment != null && finalSegment.Count > 0)
+            {
+                int startIdx = (fullPath.Count > 0 && finalSegment.Count > 0 &&
+                               Vector3.Distance(fullPath[fullPath.Count - 1], finalSegment[0]) < 0.5f) ? 1 : 0;
+
+                for (int i = startIdx; i < finalSegment.Count; i++)
+                {
+                    fullPath.Add(finalSegment[i]);
+                }
+            }
+
+            if (fullPath.Count == 0)
+                return false;
+
+            // Set the new detour path
+            worldPath = fullPath;
+            worldPathIndex = 0;
+
+            Debug.Log($"[Confusion] {name} taking detour through {detourNodeIds.Count} nodes before reaching destination");
+            return true;
         }
 
         #endregion

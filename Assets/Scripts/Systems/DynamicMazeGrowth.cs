@@ -613,6 +613,10 @@ namespace FaeMaze.Systems
             float postRenderTime = Time.realtimeSinceStartup;
             Debug.Log($"[Timing] Incremental rendering: {(postRenderTime - lastTime) * 1000:F2}ms");
 
+            // Notify visitors who can see the growth location
+            Vector3 growthPosition = new Vector3(newNode.Position.x, newNode.Position.y, 0);
+            DazeVisitorsWhoCanSeeGrowth(growthPosition);
+
             float endTime = Time.realtimeSinceStartup;
             Debug.Log($"[DynamicGrowth] Growth step END at {endTime:F4}s (duration: {(endTime - startTime) * 1000:F2}ms)");
             yield break;
@@ -945,6 +949,55 @@ namespace FaeMaze.Systems
                     // not from where they currently are
                     visitor.RetargetToNearestSpawnFrom(visitorDest);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Dazes visitors who can see the maze growth location.
+        /// Uses a simple visibility check based on distance and line of sight.
+        /// </summary>
+        /// <param name="growthPosition">The world position where maze growth occurred</param>
+        /// <param name="maxViewDistance">Maximum distance at which visitors can see growth (default 25 units)</param>
+        /// <param name="dazeDuration">How long visitors remain dazed (default 15 seconds)</param>
+        private void DazeVisitorsWhoCanSeeGrowth(Vector3 growthPosition, float maxViewDistance = 25f, float dazeDuration = 15f)
+        {
+            var allVisitors = FaeMaze.Visitors.VisitorRegistry.All;
+            if (allVisitors == null)
+            {
+                return;
+            }
+
+            int dazedCount = 0;
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor == null) continue;
+
+                Vector3 visitorPos = visitor.transform.position;
+                float distance = Vector3.Distance(visitorPos, growthPosition);
+
+                // Check if within view distance
+                if (distance > maxViewDistance)
+                    continue;
+
+                // Simple line-of-sight check using raycast
+                // Cast from visitor toward growth position
+                Vector3 direction = (growthPosition - visitorPos).normalized;
+                float rayDistance = distance;
+
+                // Use a layermask to only check against walls/obstacles
+                // If the ray reaches the growth position without hitting a wall, the visitor can see it
+                int wallLayer = LayerMask.GetMask("Wall", "Obstacle");
+                if (!Physics.Raycast(visitorPos, direction, rayDistance, wallLayer))
+                {
+                    // Visitor can see the growth - daze them
+                    visitor.OnWitnessMazeGrowth(dazeDuration);
+                    dazedCount++;
+                }
+            }
+
+            if (dazedCount > 0)
+            {
+                Debug.Log($"[DynamicMazeGrowth] {dazedCount} visitors witnessed maze growth and are now dazed");
             }
         }
 

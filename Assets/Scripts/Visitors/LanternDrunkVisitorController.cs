@@ -145,23 +145,30 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Confused state: high chance to recalculate path at each waypoint
+            // Confused state: high chance to take a wrong turn at nodes (intersections)
+            // Only check confusion when at a node - getting lost mid-path makes no sense
             if (state == VisitorState.Confused && isConfused && confusionEnabled)
             {
-                // Prevent confusion for first 10 waypoints
-                if (waypointsTraversedSinceSpawn >= 10 && worldPath != null && worldPathIndex < worldPath.Count - 1)
+                // Prevent confusion for first 10 waypoints, and only trigger at nodes
+                if (waypointsTraversedSinceSpawn >= 10 && worldPath != null && worldPathIndex < worldPath.Count - 1 && IsAtNode())
                 {
                     // Use archetype-specific confusion chance (HIGH for LanternDrunks)
                     float confusionChance = GetConfusionChance();
                     if (Random.value <= confusionChance)
                     {
-                        // Confused! Recalculate path
-                        RecalculatePath();
-
-                        // 50% chance to recover from confusion
-                        DecideRecoveryFromConfusion();
-                        RefreshStateFromFlags();
-                        return;
+                        // Confused at intersection! Build a detour path through at least 2 random nodes
+                        if (BuildConfusionDetourPath(2))
+                        {
+                            // 50% chance to recover from confusion after taking the wrong turn
+                            DecideRecoveryFromConfusion();
+                            RefreshStateFromFlags();
+                            return;
+                        }
+                        else
+                        {
+                            // Couldn't build detour, just recalculate normal path
+                            RecalculatePath();
+                        }
                     }
                 }
             }
