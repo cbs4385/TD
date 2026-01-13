@@ -298,8 +298,11 @@ namespace FaeMaze.Systems
                 mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f); // Clear edge tiles to make room for node tiles
 
                 // 3. Remove walls along all new edge paths (sample along segments, not just control points)
+                // Skip wall removal near existing nodes to protect their border rings
                 float wallRemovalStepSize = 1.0f; // Sample every 1 unit along the path
                 float wallRemovalRadius = 2.5f; // Slightly larger than path width + buffer
+                float nodeBorderProtectionRadius = 4.5f; // nodeRadius (3) + wallBorder (3 * 0.3 = 0.9) + buffer
+
                 foreach (var edge in newEdges)
                 {
                     if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
@@ -315,6 +318,27 @@ namespace FaeMaze.Systems
                             {
                                 float t = (float)j / numSamples;
                                 Vector2 samplePoint = Vector2.Lerp(start, end, t);
+
+                                // Skip wall removal if this point is near any existing node's border ring
+                                // to protect existing node walls from being removed
+                                bool nearExistingNode = false;
+                                foreach (var node in forestState.Nodes)
+                                {
+                                    // Protect all nodes except the new one (whose walls will be added fresh)
+                                    if (node.Id != newNode.Id)
+                                    {
+                                        float distToNode = Vector2.Distance(samplePoint, node.Position);
+                                        if (distToNode < nodeBorderProtectionRadius)
+                                        {
+                                            nearExistingNode = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (nearExistingNode)
+                                    continue;
+
                                 Vector3 pointWorldPos = new Vector3(samplePoint.x, samplePoint.y, 0);
                                 mazeRenderer.RemoveWallsNearPosition(pointWorldPos, wallRemovalRadius);
                             }

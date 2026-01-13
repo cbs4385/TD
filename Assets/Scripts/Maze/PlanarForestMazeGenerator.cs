@@ -481,14 +481,17 @@ namespace ForestMaze
 
                 float reverseAngle = (directAngle + Mathf.PI) % (2 * Mathf.PI);
 
-                if (!IsAngleValid(newNode, directAngle))
+                // For cross-connections, use relaxed angle constraints (30° instead of 60°)
+                // since the S-curve will diverge from the existing edge
+                const float crossConnectMinAngle = 30.0f;
+                if (!IsAngleValid(newNode, directAngle, crossConnectMinAngle))
                 {
-                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on new node");
+                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on new node (min {crossConnectMinAngle}°)");
                     continue;
                 }
-                if (!IsAngleValid(candidate, reverseAngle))
+                if (!IsAngleValid(candidate, reverseAngle, crossConnectMinAngle))
                 {
-                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on candidate");
+                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on candidate (min {crossConnectMinAngle}°)");
                     continue;
                 }
 
@@ -2919,7 +2922,12 @@ namespace ForestMaze
 
         private static bool IsAngleValid(Node node, float angle)
         {
-            float minSeparation = ANGLE_MIN_SEPARATION * Mathf.Deg2Rad;
+            return IsAngleValid(node, angle, ANGLE_MIN_SEPARATION);
+        }
+
+        private static bool IsAngleValid(Node node, float angle, float minSeparationDegrees)
+        {
+            float minSeparation = minSeparationDegrees * Mathf.Deg2Rad;
             foreach (float usedAngle in node.UsedAngles)
             {
                 float diff = Mathf.Abs(angle - usedAngle);
