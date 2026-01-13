@@ -466,9 +466,16 @@ namespace FaeMaze.Systems
             float wallSpacing = 0.3f; // Tight spacing - walls can overlap
 
             // Project walls from edges (perpendicular to edge direction)
+            // Skip first and last 1 unit of each edge to handle intersections
+            float edgeEndSkip = 1.0f;
+
             foreach (var edge in forestState.Edges)
             {
                 if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                // Calculate total edge length and get start/end points
+                Vector2 edgeStart = edge.PolylinePoints[0];
+                Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
 
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
@@ -484,6 +491,12 @@ namespace FaeMaze.Systems
                     {
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
                         Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
+
+                        // Skip first and last 1 unit of edge for intersection handling
+                        float distFromStart = Vector2.Distance(centerPos, edgeStart);
+                        float distFromEnd = Vector2.Distance(centerPos, edgeEnd);
+                        if (distFromStart < edgeEndSkip || distFromEnd < edgeEndSkip)
+                            continue;
 
                         // Skip positions inside nodes
                         bool insideNode = false;
@@ -1576,12 +1589,19 @@ namespace FaeMaze.Systems
             int wallsCreated = 0;
 
             // Add walls around new edges
+            // Skip first and last 1 unit of each edge to handle intersections
+            float edgeEndSkip = 1.0f;
+
             if (newEdges != null)
             {
                 foreach (var edge in newEdges)
                 {
                     if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                         continue;
+
+                    // Get edge start/end points
+                    Vector2 edgeStart = edge.PolylinePoints[0];
+                    Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
 
                     for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                     {
@@ -1596,6 +1616,12 @@ namespace FaeMaze.Systems
                         {
                             float t = numSteps > 0 ? (float)j / numSteps : 0;
                             Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
+
+                            // Skip first and last 1 unit of edge for intersection handling
+                            float distFromStart = Vector2.Distance(centerPos, edgeStart);
+                            float distFromEnd = Vector2.Distance(centerPos, edgeEnd);
+                            if (distFromStart < edgeEndSkip || distFromEnd < edgeEndSkip)
+                                continue;
 
                             // Skip positions inside nodes
                             bool insideNode = false;
