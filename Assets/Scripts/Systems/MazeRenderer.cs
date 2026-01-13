@@ -983,24 +983,23 @@ namespace FaeMaze.Systems
             int tileCount = 0;
             Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-            // Place side walls from where edge walls stop (edgeEndSkip) to past the frontier end
-            float capStart = -edgeEndSkip;
-            float capEnd = 0.5f;
-            int capSteps = Mathf.CeilToInt((capEnd - capStart) / stepSize);
-
-            for (int step = 0; step <= capSteps; step++)
+            // Place side walls as blocks with long axis along edge direction
+            // For each side, create a grid where:
+            // - perpLayer: distance from edge center (perpendicular direction)
+            // - edgeLayer: position along edge (the long axis of the 1x3 block)
+            foreach (float side in new[] { 1f, -1f })
             {
-                float t = capStart + step * stepSize;
-                Vector2 capPos = frontierEnd + frontierDir * t;
-
-                foreach (float side in new[] { 1f, -1f })
+                for (int perpLayer = 0; perpLayer < wallDepth; perpLayer++)
                 {
-                    for (int layer = 0; layer < wallDepth; layer++)
-                    {
-                        float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
-                        Vector2 wallPos = capPos + perpendicular * side * wallOffset;
+                    float wallPerpOffset = pathHalfWidth + wallSpacing * (perpLayer + 1);
 
-                        // Orient walls along edge direction (rotated 90° from perpendicular)
+                    for (int edgeLayer = 0; edgeLayer < wallDepth; edgeLayer++)
+                    {
+                        // Position along edge: 3 tiles centered around frontier end
+                        float edgeOffset = wallSpacing * (edgeLayer - 1);
+                        Vector2 wallPos = frontierEnd + frontierDir * edgeOffset + perpendicular * side * wallPerpOffset;
+
+                        // Orient walls along edge direction
                         float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
 
                         Vector3 worldPos = ToVector3(wallPos);
