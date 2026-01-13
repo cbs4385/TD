@@ -1000,8 +1000,8 @@ namespace FaeMaze.Systems
                         float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
                         Vector2 wallPos = capPos + perpendicular * side * wallOffset;
 
-                        float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                        if (side < 0) orientationDegrees += 180f;
+                        // Orient walls along edge direction (rotated 90° from perpendicular)
+                        float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
 
                         Vector3 worldPos = ToVector3(wallPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
