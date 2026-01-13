@@ -2731,14 +2731,17 @@ namespace ForestMaze
             foreach (var node in state.Nodes)
             {
                 bool isIncident = incidentNodes.Contains(node.Id);
-                float dist = PolylineToNodeDistance(polyline, node.Position, isIncident);
-                float minRequired = isIncident
-                    ? NODE_RADIUS + PATH_RADIUS
-                    : R_KEEP + PATH_RADIUS - 0.4f + WALL_BUFFER;
+
+                // Skip proximity check for incident nodes entirely - edges start from them by definition
+                if (isIncident)
+                    continue;
+
+                float dist = PolylineToNodeDistance(polyline, node.Position, false);
+                float minRequired = R_KEEP + PATH_RADIUS - 0.4f + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
                 {
-                    Debug.Log($"[IsPolylineValid] REJECTED: too close to node {node.Id} at {node.Position}, dist={dist:F2}, required={minRequired:F2}, isIncident={isIncident}");
+                    Debug.Log($"[IsPolylineValid] REJECTED: too close to node {node.Id} at {node.Position}, dist={dist:F2}, required={minRequired:F2}");
                     return false;
                 }
             }
