@@ -698,11 +698,16 @@ namespace FaeMaze.Systems
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
 
+            int frontierCount = forestMapState.Frontier.Count;
+            int partialEdgeCount = 0;
+
             // Place portals at partial edge endpoints (the actual frontier)
             foreach (int edgeId in forestMapState.Frontier)
             {
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
+
+                partialEdgeCount++;
 
                 // Get the connected node (already in world space)
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
@@ -764,6 +769,8 @@ namespace FaeMaze.Systems
                 Vector3 directionIntoMaze = new Vector3(-directionOutward.x, -directionOutward.y, 0f);
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, directionIntoMaze);
             }
+
+            Debug.Log($"[DynamicMazeGrowth] RebuildSpawnPoints: {frontierCount} frontier edges, {partialEdgeCount} partial edges, {spawnPointPortals.Count} portals created");
 
             var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
             var finalSpawnPoints = mazeData?.GetSpawnPointPositions();

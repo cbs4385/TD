@@ -310,7 +310,7 @@ namespace FaeMaze.Systems
 
                 // Find a different spawn point as destination
                 destinationWorldPos = FindDifferentSpawnPoint(spawnWorldPos, spawnPoints);
-                // Debug.Log($"[Pathfinding] WaveSpawner: Spawning at {spawnWorldPos} ({spawnId}), destination {destinationWorldPos}");
+                Debug.Log($"[WaveSpawner] {spawnPoints.Count} spawn points available. Spawning at '{spawnId}' {spawnWorldPos}, destination {destinationWorldPos}");
             }
             else
             {
@@ -393,8 +393,8 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Finds a spawn point different from the origin spawn point.
-        /// Prefers the farthest spawn point to encourage longer paths through the maze.
+        /// Finds a random spawn point different from the origin spawn point.
+        /// Randomizes destinations so visitors path through all parts of the graph.
         /// Falls back to heart position if only one spawn point exists.
         /// </summary>
         private Vector3 FindDifferentSpawnPoint(Vector3 originPos, Dictionary<char, Vector3> spawnPoints)
@@ -405,9 +405,8 @@ namespace FaeMaze.Systems
                 return mazeGridBehaviour.HeartWorldPosition;
             }
 
-            Vector3 farthestPoint = mazeGridBehaviour.HeartWorldPosition;
-            float maxDistance = 0f;
-
+            // Collect all spawn points that aren't the origin
+            var validDestinations = new List<Vector3>();
             foreach (var kvp in spawnPoints)
             {
                 Vector3 spawnPos = kvp.Value;
@@ -417,15 +416,17 @@ namespace FaeMaze.Systems
                 if (distToOrigin < 1f)
                     continue;
 
-                // Find the farthest spawn point from origin for longer paths
-                if (distToOrigin > maxDistance)
-                {
-                    maxDistance = distToOrigin;
-                    farthestPoint = spawnPos;
-                }
+                validDestinations.Add(spawnPos);
             }
 
-            return farthestPoint;
+            if (validDestinations.Count == 0)
+            {
+                return mazeGridBehaviour.HeartWorldPosition;
+            }
+
+            // Select a random destination from valid spawn points
+            int randomIndex = Random.Range(0, validDestinations.Count);
+            return validDestinations[randomIndex];
         }
 
         private void SpawnRedCap()
