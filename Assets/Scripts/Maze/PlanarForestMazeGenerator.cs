@@ -539,27 +539,36 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Creates a simple straight-line curve between two boundary points.
+        /// Creates a gentle S-curve between two boundary points.
         /// This is the ONLY curve creation method - all edges use this.
-        /// Control point is exactly at midpoint = perfectly straight line.
+        /// Uses cubic Bezier with control points on opposite sides to create a subtle wave.
         /// </summary>
         private static BezierCurve CreateSimpleCurve(Vector2 start, Vector2 end, System.Random random)
         {
-            // Control point exactly at midpoint = perfectly straight line
-            Vector2 midpoint = (start + end) * 0.5f;
-            var curve = new BezierCurve(start, midpoint, end);
+            Vector2 direction = (end - start).normalized;
+            float length = Vector2.Distance(start, end);
 
-            // DEBUG: Log curve creation
-            UnityEngine.Debug.Log($"[CreateSimpleCurve] start={start}, mid={midpoint}, end={end}");
-            UnityEngine.Debug.Log($"[CreateSimpleCurve] Curve P0={curve.P0}, P1={curve.P1}, P2={curve.P2}, P3={curve.P3}");
+            // Perpendicular direction for S-curve offset
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
 
-            // DEBUG: Log polyline points
-            var polyline = curve.ToPolyline(8);
-            UnityEngine.Debug.Log($"[CreateSimpleCurve] Polyline ({polyline.Count} points):");
-            for (int i = 0; i < polyline.Count; i++)
-            {
-                UnityEngine.Debug.Log($"  [{i}] = {polyline[i]}");
-            }
+            // Gentle offset for S-curve - subtle wave without spiraling
+            // Max offset is small fraction of length (3-5% of length, capped at 0.4 units)
+            float maxOffset = Mathf.Min(0.4f, length * 0.04f);
+            float offset = maxOffset * (0.6f + (float)random.NextDouble() * 0.4f);
+
+            // Random side for first control point (creates variety in curve direction)
+            int side = random.Next(2) == 0 ? 1 : -1;
+
+            // Control points at 1/3 and 2/3 positions, on OPPOSITE sides for S-curve shape
+            // This creates 1 inflection point at the midpoint
+            Vector2 p1Base = Vector2.Lerp(start, end, 1f / 3f);
+            Vector2 p2Base = Vector2.Lerp(start, end, 2f / 3f);
+
+            Vector2 control1 = p1Base + perpendicular * offset * side;
+            Vector2 control2 = p2Base + perpendicular * offset * (-side);
+
+            // Create cubic Bezier with full 4-point constructor
+            var curve = new BezierCurve(start, control1, control2, end);
 
             return curve;
         }

@@ -1455,8 +1455,6 @@ namespace FaeMaze.Systems
             if (mazeGridBehaviour == null || tilesParent == null || newEdges == null)
                 return;
 
-            Debug.Log($"[AddEdgeTilesIncremental] Processing {newEdges.Count} edges");
-
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
             if (occupiedPositions == null)
@@ -1473,12 +1471,6 @@ namespace FaeMaze.Systems
             {
                 if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                     continue;
-
-                Debug.Log($"[AddEdgeTilesIncremental] Edge {edge.Id}: {edge.PolylinePoints.Count} polyline points");
-                for (int p = 0; p < edge.PolylinePoints.Count; p++)
-                {
-                    Debug.Log($"  Polyline[{p}] = {edge.PolylinePoints[p]}");
-                }
 
                 // Collect edge segments for this edge
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
