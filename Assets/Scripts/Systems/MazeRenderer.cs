@@ -1011,9 +1011,10 @@ namespace FaeMaze.Systems
             }
 
             // Also add front cap walls (perpendicular to edge at the portal)
+            // Position moved 1 unit back to create proper U-shape at frontier end
             for (int layer = 0; layer < wallDepth; layer++)
             {
-                float forwardOffset = pathHalfWidth + wallSpacing * (layer + 1);
+                float forwardOffset = wallSpacing * (layer + 1) - pathHalfWidth;
                 Vector2 capCenter = frontierEnd + frontierDir * forwardOffset;
 
                 int perpSteps = Mathf.CeilToInt((pathHalfWidth + wallBorderDepth) / stepSize);
