@@ -58,8 +58,8 @@ namespace FaeMaze.Systems
         private float nodeRadius = 3.0f;
 
         [SerializeField]
-        [Tooltip("Node tile placement radius in world units (smaller to avoid cardinal axis overflow)")]
-        private float nodeTileRadius = 2.5f;
+        [Tooltip("Node tile placement radius in world units (should match NODE_RADIUS=3.0 in generator)")]
+        private float nodeTileRadius = 3.0f;
 
         [SerializeField]
         [Tooltip("Wall border depth in world units")]
