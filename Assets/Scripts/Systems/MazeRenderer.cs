@@ -93,9 +93,12 @@ namespace FaeMaze.Systems
 
         // World-space rendering state
         private float tileSize;
-        private HashSet<long> occupiedPositions; // All occupied path positions using quantized keys
-        private HashSet<long> occupiedWallPositions; // All occupied wall positions using quantized keys
+        private List<Vector2> occupiedPositions; // All occupied path positions in world space
+        private List<Vector2> occupiedWallPositions; // All occupied wall positions in world space
         private List<EdgeSegmentData> allEdgeSegments;
+
+        // Overlap detection threshold - positions closer than this are considered overlapping
+        private const float OVERLAP_THRESHOLD = 0.4f;
 
         private struct EdgeSegmentData
         {
@@ -193,9 +196,9 @@ namespace FaeMaze.Systems
                 pathTiles = new List<GameObject>();
             }
 
-            // Track all occupied positions using quantized keys for consistent overlap detection
-            occupiedPositions = new HashSet<long>();
-            occupiedWallPositions = new HashSet<long>();
+            // Track all occupied positions using world-space coordinates with distance-based overlap detection
+            occupiedPositions = new List<Vector2>();
+            occupiedWallPositions = new List<Vector2>();
             allEdgeSegments = new List<EdgeSegmentData>();
 
             int renderedTiles = 0;
@@ -294,7 +297,7 @@ namespace FaeMaze.Systems
 
                     bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
 
-                    // Place tiles along the segment
+                    // Place tiles along the segment using world-space coordinates
                     int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
                     for (int j = 0; j <= numSteps; j++)
                     {
@@ -314,12 +317,11 @@ namespace FaeMaze.Systems
                             pos2D = Vector2.Lerp(segStart, segEnd, t);
                         }
 
-                        // Check if position already occupied using quantized key
+                        // Check if position already occupied using distance-based check
                         // For frontier endpoints, always place the tile (override occupation check)
-                        long posKey = GetQuantizedKey(pos2D);
                         bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
 
-                        if (!forcePlace && occupiedPositions.Contains(posKey)) continue;
+                        if (!forcePlace && IsPositionOccupied(pos2D, occupiedPositions)) continue;
 
                         // Determine symbol
                         char symbol = '.';
@@ -331,7 +333,7 @@ namespace FaeMaze.Systems
 
                         Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedPositions.Add(posKey);
+                        occupiedPositions.Add(pos2D);
                         tileCount++;
                     }
                 }
@@ -347,7 +349,7 @@ namespace FaeMaze.Systems
                     Vector3 worldPos = ToVector3(exactEndpoint);
                     char symbol = GetNextSpawnSymbol();
                     CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                    occupiedPositions.Add(GetQuantizedKey(exactEndpoint));
+                    occupiedPositions.Add(exactEndpoint);
                     tileCount++;
                     // Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at world {worldPos}");
                 }
@@ -363,57 +365,58 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders circular node columns centered on each node.
+        /// Uses radial/polar sampling with world-space coordinates for seamless coverage.
         /// Creates both a solid 3D cylinder (radius=nodeRadius) and individual tiles (radius=nodeTileRadius).
         /// </summary>
         private int RenderNodeColumns(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
             int tileCount = 0;
 
-            // Use 1.0 step size for tile placement
-            float stepSize = 1.0f;
-            // Use smaller nodeTileRadius for tile placement to avoid cardinal axis overflow
-            int tilesRadius = Mathf.CeilToInt(nodeTileRadius / stepSize);
+            // Use radial sampling for world-space positioning
+            float stepSize = 0.5f; // Distance between tiles
+            int numRadialLayers = Mathf.CeilToInt(nodeTileRadius / stepSize);
 
             foreach (var node in forestState.Nodes)
             {
                 // Create a solid 3D cylinder at the node center to fill gaps (uses larger nodeRadius)
                 CreateNodeColumnCylinder(node, mazeOrigin);
 
-                for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
+                // Place center tile first
+                if (!IsPositionOccupied(node.Position, occupiedPositions))
                 {
-                    for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
+                    char centerSymbol = node.Kind == "root" ? 'H' : 'N';
+                    Vector3 centerWorldPos = ToVector3(node.Position);
+                    CreateWorldSpaceTile(centerWorldPos, 0f, centerSymbol, mazeOrigin, isWall: false);
+                    occupiedPositions.Add(node.Position);
+                    tileCount++;
+                }
+
+                // Place tiles in concentric rings using polar coordinates
+                for (int layer = 1; layer <= numRadialLayers; layer++)
+                {
+                    float radius = layer * stepSize;
+                    if (radius > nodeTileRadius) break;
+
+                    // Calculate number of tiles in this ring to ensure coverage
+                    // Circumference / stepSize gives us approximately the number of tiles needed
+                    float circumference = 2f * Mathf.PI * radius;
+                    int numTilesInRing = Mathf.Max(8, Mathf.CeilToInt(circumference / stepSize));
+
+                    for (int i = 0; i < numTilesInRing; i++)
                     {
-                        // Offset from node center
-                        Vector2 offsetFromNode = new Vector2(dx * stepSize, dy * stepSize);
-                        float distance = offsetFromNode.magnitude;
+                        float angle = (float)i / numTilesInRing * 2f * Mathf.PI;
+                        Vector2 offset = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+                        Vector2 pos2D = node.Position + offset;
 
-                        // Check if within circular radius (use smaller nodeTileRadius)
-                        if (distance > nodeTileRadius) continue;
-
-                        Vector2 pos2D = node.Position + offsetFromNode;
-
-                        // Check if position already occupied using quantized key
-                        long posKey = GetQuantizedKey(pos2D);
-                        if (occupiedPositions.Contains(posKey)) continue;
+                        // Check if position already occupied using distance-based check
+                        if (IsPositionOccupied(pos2D, occupiedPositions)) continue;
 
                         // Orientation: tiles face outward radially from node center
-                        float orientationDegrees = 0f;
-                        if (distance > 0.01f)
-                        {
-                            Vector2 radial = offsetFromNode.normalized;
-                            orientationDegrees = Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg;
-                        }
-
-                        // Determine symbol
-                        char symbol = '.';
-                        if (dx == 0 && dy == 0)
-                        {
-                            symbol = node.Kind == "root" ? 'H' : 'N';
-                        }
+                        float orientationDegrees = angle * Mathf.Rad2Deg;
 
                         Vector3 worldPos = ToVector3(pos2D);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedPositions.Add(posKey);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '.', mazeOrigin, isWall: false);
+                        occupiedPositions.Add(pos2D);
                         tileCount++;
                     }
                 }
@@ -529,7 +532,7 @@ namespace FaeMaze.Systems
                                 if (!adjustedPos.HasValue)
                                     continue;
 
-                                occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                                occupiedWallPositions.Add(adjustedPos.Value);
 
                                 // Orientation perpendicular to edge
                                 float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
@@ -583,7 +586,7 @@ namespace FaeMaze.Systems
                         if (!adjustedPos.HasValue)
                             continue;
 
-                        occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                        occupiedWallPositions.Add(adjustedPos.Value);
 
                         // Orientation: facing outward radially
                         float orientationDegrees = angle * Mathf.Rad2Deg;
@@ -608,18 +611,10 @@ namespace FaeMaze.Systems
         /// Fills gaps along the inner edge of the wall buffer by checking positions adjacent to path tiles.
         /// </summary>
         private int FillInnerEdgeGaps(PlanarForestMazeGenerator.ForestMapState forestState,
-            HashSet<long> occupiedWallPositions, Transform mazeOrigin, float stepSize)
+            List<Vector2> wallPositions, Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
             float wallRadius = 0.65f;
-
-            // 8 directions to check for gaps
-            Vector2[] directions = new Vector2[]
-            {
-                new Vector2(1, 0), new Vector2(-1, 0), new Vector2(0, 1), new Vector2(0, -1),
-                new Vector2(1, 1).normalized, new Vector2(1, -1).normalized,
-                new Vector2(-1, 1).normalized, new Vector2(-1, -1).normalized
-            };
 
             // Walk along each edge segment and check for gaps perpendicular to the path
             foreach (var seg in allEdgeSegments)
@@ -638,10 +633,9 @@ namespace FaeMaze.Systems
                         foreach (float side in new[] { 1f, -1f })
                         {
                             Vector2 checkPos = pathPos + seg.Perpendicular * side * dist;
-                            long checkKey = GetQuantizedKey(checkPos);
 
-                            // Skip if already occupied by path (wall overlap is allowed)
-                            if (occupiedPositions.Contains(checkKey)) continue;
+                            // Skip if already occupied by path
+                            if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
 
                             // Skip if inside a node column
                             bool insideNode = false;
@@ -660,7 +654,7 @@ namespace FaeMaze.Systems
                             if (intersection.HasValue) continue;
 
                             // Found a gap - fill it
-                            occupiedWallPositions.Add(checkKey);
+                            wallPositions.Add(checkPos);
                             float orientationDegrees = Mathf.Atan2(seg.Perpendicular.y, seg.Perpendicular.x) * Mathf.Rad2Deg;
                             if (side < 0) orientationDegrees += 180f;
 
@@ -683,17 +677,16 @@ namespace FaeMaze.Systems
                         float angle = (float)a / angularSteps * 2 * Mathf.PI;
                         Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
                         Vector2 checkPos = node.Position + radialDir * r;
-                        long checkKey = GetQuantizedKey(checkPos);
 
-                        // Skip if already occupied by path (wall overlap is allowed)
-                        if (occupiedPositions.Contains(checkKey)) continue;
+                        // Skip if already occupied by path
+                        if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
 
                         // Check if wall would intersect path
                         Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
                         if (intersection.HasValue) continue;
 
                         // Found a gap - fill it
-                        occupiedWallPositions.Add(checkKey);
+                        wallPositions.Add(checkPos);
                         float orientationDegrees = angle * Mathf.Rad2Deg;
 
                         Vector3 worldPos = ToVector3(checkPos);
@@ -702,7 +695,6 @@ namespace FaeMaze.Systems
                     }
                 }
             }
-
 
             return tileCount;
         }
@@ -715,18 +707,10 @@ namespace FaeMaze.Systems
         private int FillGapsAroundNewElements(List<PlanarForestMazeGenerator.Edge> newEdges,
             PlanarForestMazeGenerator.Node newNode,
             PlanarForestMazeGenerator.ForestMapState forestState,
-            HashSet<long> occupiedWallPositions, Transform mazeOrigin, float stepSize)
+            List<Vector2> wallPositions, Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
             float wallRadius = 0.65f;
-
-            // 8 directions to check for gaps
-            Vector2[] directions = new Vector2[]
-            {
-                new Vector2(1, 0), new Vector2(-1, 0), new Vector2(0, 1), new Vector2(0, -1),
-                new Vector2(1, 1).normalized, new Vector2(1, -1).normalized,
-                new Vector2(-1, 1).normalized, new Vector2(-1, -1).normalized
-            };
 
             // Fill gaps around new edges only
             if (newEdges != null)
@@ -757,10 +741,9 @@ namespace FaeMaze.Systems
                                 foreach (float side in new[] { 1f, -1f })
                                 {
                                     Vector2 checkPos = pathPos + perpendicular * side * dist;
-                                    long checkKey = GetQuantizedKey(checkPos);
 
                                     // Skip if already occupied by path
-                                    if (occupiedPositions.Contains(checkKey)) continue;
+                                    if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
 
                                     // Skip if inside a node column
                                     bool insideNode = false;
@@ -779,7 +762,7 @@ namespace FaeMaze.Systems
                                     if (intersection.HasValue) continue;
 
                                     // Found a gap - fill it
-                                    occupiedWallPositions.Add(checkKey);
+                                    wallPositions.Add(checkPos);
                                     float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                     if (side < 0) orientationDegrees += 180f;
 
@@ -804,10 +787,9 @@ namespace FaeMaze.Systems
                         float angle = (float)a / angularSteps * 2 * Mathf.PI;
                         Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
                         Vector2 checkPos = newNode.Position + radialDir * r;
-                        long checkKey = GetQuantizedKey(checkPos);
 
                         // Skip if already occupied by path
-                        if (occupiedPositions.Contains(checkKey)) continue;
+                        if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
 
                         // Skip if inside any node column
                         bool insideNode = false;
@@ -826,7 +808,7 @@ namespace FaeMaze.Systems
                         if (intersection.HasValue) continue;
 
                         // Found a gap - fill it
-                        occupiedWallPositions.Add(checkKey);
+                        wallPositions.Add(checkPos);
                         float orientationDegrees = angle * Mathf.Rad2Deg;
 
                         Vector3 worldPos = ToVector3(checkPos);
@@ -845,7 +827,7 @@ namespace FaeMaze.Systems
         /// Returns null if no valid position can be found.
         /// </summary>
         private Vector2? GetAdjustedWallPosition(Vector2 wallPos, Vector2 pushDirection,
-            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions)
+            PlanarForestMazeGenerator.ForestMapState forestState, List<Vector2> wallPositions)
         {
             // Use half-unit steps for finer adjustment precision
             float stepSize = 0.5f;
@@ -923,28 +905,19 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Checks if a wall at the given position would intersect any path tile.
-        /// Samples multiple points around the wall to account for model size.
+        /// Uses distance-based check against all occupied path positions.
         /// Returns the position of the intersecting path tile, or null if no intersection.
         /// </summary>
         private Vector2? CheckWallPathIntersection(Vector2 wallPos, float wallRadius)
         {
-            float sampleStep = 0.25f;
-
-            // Sample points in a grid around the wall position
-            for (float dx = -wallRadius; dx <= wallRadius; dx += sampleStep)
+            // Check if any occupied path position is within wallRadius of this wall position
+            for (int i = 0; i < occupiedPositions.Count; i++)
             {
-                for (float dy = -wallRadius; dy <= wallRadius; dy += sampleStep)
+                Vector2 pathPos = occupiedPositions[i];
+                float dist = Vector2.Distance(wallPos, pathPos);
+                if (dist < wallRadius)
                 {
-                    // Only check points within the circular radius
-                    if (dx * dx + dy * dy > wallRadius * wallRadius) continue;
-
-                    Vector2 samplePos = wallPos + new Vector2(dx, dy);
-                    long sampleKey = GetQuantizedKey(samplePos);
-
-                    if (occupiedPositions.Contains(sampleKey))
-                    {
-                        return samplePos; // Found intersection
-                    }
+                    return pathPos; // Found intersection
                 }
             }
 
@@ -955,13 +928,12 @@ namespace FaeMaze.Systems
         /// Simple check if a wall position is valid (for cases where we don't want translation).
         /// </summary>
         private bool IsWallPositionValid(Vector2 wallPos, PlanarForestMazeGenerator.ForestMapState forestState,
-            HashSet<long> occupiedWallPositions)
+            List<Vector2> wallPositions)
         {
             float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
 
-            // Check if already occupied by path tiles (wall overlap is allowed)
-            long wallKey = GetQuantizedKey(wallPos);
-            if (occupiedPositions.Contains(wallKey)) return false;
+            // Check if already occupied by path tiles
+            if (IsPositionOccupied(wallPos, occupiedPositions)) return false;
 
             // Check if inside any node column
             foreach (var node in forestState.Nodes)
@@ -979,7 +951,7 @@ namespace FaeMaze.Systems
         /// Places wall tiles to cover the triangular gap on the outside of the bend.
         /// </summary>
         private int FillBendCorner(Vector2 bendVertex, Vector2 incomingDir, Vector2 outgoingDir,
-            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions,
+            PlanarForestMazeGenerator.ForestMapState forestState, List<Vector2> wallPositions,
             Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
@@ -1033,11 +1005,11 @@ namespace FaeMaze.Systems
                     Vector2 wallPos = bendVertex + radiusDir * offset;
 
                     // Get adjusted position
-                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radiusDir, forestState, occupiedWallPositions);
+                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radiusDir, forestState, wallPositions);
                     if (!adjustedPos.HasValue)
                         continue;
 
-                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                    wallPositions.Add(adjustedPos.Value);
 
                     // Orientation facing outward from the bend
                     float orientationDegrees = currentAngle * Mathf.Rad2Deg;
@@ -1057,7 +1029,7 @@ namespace FaeMaze.Systems
         /// walls can't be placed because they'd collide with the other edge's path.
         /// </summary>
         private int FillDivergingEdgeGap(Vector2 nodePos, Vector2 dir1, Vector2 dir2,
-            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions,
+            PlanarForestMazeGenerator.ForestMapState forestState, List<Vector2> wallPositions,
             Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
@@ -1097,11 +1069,11 @@ namespace FaeMaze.Systems
                     Vector2 wallPos = nodePos + radiusDir * r;
 
                     // Get adjusted position
-                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radiusDir, forestState, occupiedWallPositions);
+                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radiusDir, forestState, wallPositions);
                     if (!adjustedPos.HasValue)
                         continue;
 
-                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                    wallPositions.Add(adjustedPos.Value);
 
                     // Orientation facing outward from node
                     float orientationDegrees = currentAngle * Mathf.Rad2Deg;
@@ -1119,7 +1091,7 @@ namespace FaeMaze.Systems
         /// Fills gaps between all pairs of diverging edges at each node.
         /// </summary>
         private int FillAllDivergingEdgeGaps(PlanarForestMazeGenerator.ForestMapState forestState,
-            HashSet<long> occupiedWallPositions, Transform mazeOrigin, float stepSize)
+            List<Vector2> wallPositions, Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
 
@@ -1172,7 +1144,7 @@ namespace FaeMaze.Systems
                     {
                         int nextIdx = (i + 1) % edgeDirections.Count;
                         tileCount += FillDivergingEdgeGap(node.Position, edgeDirections[i], edgeDirections[nextIdx],
-                            forestState, occupiedWallPositions, mazeOrigin, stepSize);
+                            forestState, wallPositions, mazeOrigin, stepSize);
                     }
                 }
             }
@@ -1185,7 +1157,7 @@ namespace FaeMaze.Systems
         /// Walls are placed perpendicular to the edge to close off the open end.
         /// </summary>
         private int RenderEdgeEndCap(Vector2 endPoint, Vector2 direction, Vector2 perpendicular,
-            PlanarForestMazeGenerator.ForestMapState forestState, HashSet<long> occupiedWallPositions,
+            PlanarForestMazeGenerator.ForestMapState forestState, List<Vector2> wallPositions,
             Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
@@ -1208,11 +1180,11 @@ namespace FaeMaze.Systems
                     Vector2 pushDir = direction;
 
                     // Get adjusted position (translates away from intersections)
-                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, occupiedWallPositions);
+                    Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, wallPositions);
                     if (!adjustedPos.HasValue)
                         continue;
 
-                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                    wallPositions.Add(adjustedPos.Value);
 
                     // Orientation: aligned along the edge direction (toward connected end)
                     // This makes walls face perpendicular to the edge, closing off the path
@@ -1228,15 +1200,31 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets a quantized key for floating-point positions to detect overlap.
+        /// Checks if a position is already occupied by checking distance to all existing positions.
+        /// Returns true if the position overlaps with an existing one.
         /// </summary>
-        private long GetQuantizedKey(Vector2 pos)
+        private bool IsPositionOccupied(Vector2 pos, List<Vector2> positions, float threshold = OVERLAP_THRESHOLD)
         {
-            // Quantize to half-step resolution for overlap detection
-            float quantizeStep = 0.5f;
-            int qx = Mathf.RoundToInt(pos.x / quantizeStep);
-            int qy = Mathf.RoundToInt(pos.y / quantizeStep);
-            return ((long)qx << 32) | ((long)qy & 0xFFFFFFFFL);
+            // For performance with large lists, we could use a spatial hash here,
+            // but for now we do a linear search which is correct
+            for (int i = 0; i < positions.Count; i++)
+            {
+                if (Vector2.Distance(positions[i], pos) < threshold)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Adds a position to the occupied list if not already occupied.
+        /// Returns true if added, false if already occupied.
+        /// </summary>
+        private bool TryAddOccupiedPosition(Vector2 pos, List<Vector2> positions, float threshold = OVERLAP_THRESHOLD)
+        {
+            if (IsPositionOccupied(pos, positions, threshold))
+                return false;
+            positions.Add(pos);
+            return true;
         }
 
         /// <summary>
@@ -1504,6 +1492,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Incrementally adds tiles for a newly added node.
+        /// Uses radial/polar sampling with world-space coordinates for seamless coverage.
         /// Much faster than full refresh - only adds the delta.
         /// </summary>
         public void AddNodeTilesIncremental(ForestMaze.PlanarForestMazeGenerator.Node newNode)
@@ -1515,40 +1504,48 @@ namespace FaeMaze.Systems
 
             // Ensure state is initialized
             if (occupiedPositions == null)
-                occupiedPositions = new HashSet<long>();
+                occupiedPositions = new List<Vector2>();
 
             // Create node cylinder
             CreateNodeColumnCylinder(newNode, mazeOrigin);
 
-            // Create tiles for the node
-            float stepSize = 1.0f;
-            int tilesRadius = Mathf.CeilToInt(nodeTileRadius / stepSize);
+            // Create tiles for the node using radial sampling
+            float stepSize = 0.5f;
+            int numRadialLayers = Mathf.CeilToInt(nodeTileRadius / stepSize);
             int tilesCreated = 0;
 
-            for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
+            // Place center tile first
+            if (!IsPositionOccupied(newNode.Position, occupiedPositions))
             {
-                for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
+                char centerSymbol = newNode.Kind == "root" ? 'H' : 'N';
+                Vector3 centerWorldPos = ToVector3(newNode.Position);
+                CreateWorldSpaceTile(centerWorldPos, 0f, centerSymbol, mazeOrigin, isWall: false);
+                occupiedPositions.Add(newNode.Position);
+                tilesCreated++;
+            }
+
+            // Place tiles in concentric rings using polar coordinates
+            for (int layer = 1; layer <= numRadialLayers; layer++)
+            {
+                float radius = layer * stepSize;
+                if (radius > nodeTileRadius) break;
+
+                float circumference = 2f * Mathf.PI * radius;
+                int numTilesInRing = Mathf.Max(8, Mathf.CeilToInt(circumference / stepSize));
+
+                for (int i = 0; i < numTilesInRing; i++)
                 {
-                    Vector2 offsetFromNode = new Vector2(dx * stepSize, dy * stepSize);
-                    float distance = offsetFromNode.magnitude;
-                    if (distance > nodeTileRadius) continue;
+                    float angle = (float)i / numTilesInRing * 2f * Mathf.PI;
+                    Vector2 offset = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+                    Vector2 pos2D = newNode.Position + offset;
 
-                    Vector2 pos2D = newNode.Position + offsetFromNode;
-                    long posKey = GetQuantizedKey(pos2D);
-                    if (occupiedPositions.Contains(posKey)) continue;
+                    if (IsPositionOccupied(pos2D, occupiedPositions)) continue;
 
-                    float orientationDegrees = 0f;
-                    if (distance > 0.01f)
-                    {
-                        Vector2 radial = offsetFromNode.normalized;
-                        orientationDegrees = Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg;
-                    }
-
-                    char symbol = (dx == 0 && dy == 0) ? 'N' : '.';
+                    float orientationDegrees = angle * Mathf.Rad2Deg;
 
                     Vector3 worldPos = ToVector3(pos2D);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                    occupiedPositions.Add(posKey);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '.', mazeOrigin, isWall: false);
+                    occupiedPositions.Add(pos2D);
                     tilesCreated++;
                 }
             }
@@ -1558,6 +1555,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Incrementally adds tiles for newly added/modified edges.
+        /// Uses world-space coordinates with distance-based overlap detection.
         /// </summary>
         public void AddEdgeTilesIncremental(List<ForestMaze.PlanarForestMazeGenerator.Edge> newEdges)
         {
@@ -1567,9 +1565,9 @@ namespace FaeMaze.Systems
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
             if (occupiedPositions == null)
-                occupiedPositions = new HashSet<long>();
+                occupiedPositions = new List<Vector2>();
             if (occupiedWallPositions == null)
-                occupiedWallPositions = new HashSet<long>();
+                occupiedWallPositions = new List<Vector2>();
             if (allEdgeSegments == null)
                 allEdgeSegments = new List<EdgeSegmentData>();
 
@@ -1628,10 +1626,9 @@ namespace FaeMaze.Systems
                             pos2D = Vector2.Lerp(segStart, segEnd, t);
                         }
 
-                        long posKey = GetQuantizedKey(pos2D);
                         bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
 
-                        if (!forcePlace && occupiedPositions.Contains(posKey))
+                        if (!forcePlace && IsPositionOccupied(pos2D, occupiedPositions))
                             continue;
 
                         char symbol = '.';
@@ -1643,7 +1640,7 @@ namespace FaeMaze.Systems
 
                         Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedPositions.Add(posKey);
+                        occupiedPositions.Add(pos2D);
                         tilesCreated++;
                     }
                 }
@@ -1654,6 +1651,7 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Adds wall tiles around newly added path tiles.
+        /// Uses world-space coordinates with distance-based overlap detection.
         /// </summary>
         public void AddWallsIncremental(List<ForestMaze.PlanarForestMazeGenerator.Edge> newEdges,
             ForestMaze.PlanarForestMazeGenerator.Node newNode)
@@ -1666,7 +1664,7 @@ namespace FaeMaze.Systems
 
             // Use class-level occupiedWallPositions to avoid duplicating existing walls
             if (occupiedWallPositions == null)
-                occupiedWallPositions = new HashSet<long>();
+                occupiedWallPositions = new List<Vector2>();
 
             float stepSize = 0.5f;
             int wallsCreated = 0;
@@ -1707,7 +1705,7 @@ namespace FaeMaze.Systems
                                     if (!adjustedPos.HasValue)
                                         continue;
 
-                                    occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                                    occupiedWallPositions.Add(adjustedPos.Value);
 
                                     float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                     if (side < 0) orientationDegrees += 180f;
@@ -1741,7 +1739,7 @@ namespace FaeMaze.Systems
                         if (!adjustedPos.HasValue)
                             continue;
 
-                        occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                        occupiedWallPositions.Add(adjustedPos.Value);
                         float orientationDegrees = angle * Mathf.Rad2Deg;
 
                         Vector3 worldPos = ToVector3(adjustedPos.Value);
@@ -1785,10 +1783,20 @@ namespace FaeMaze.Systems
 
             foreach (var t in toRemove)
             {
-                // Remove from occupied positions if tracking
+                // Remove from occupied wall positions if tracking
                 Vector2 pos2D = new Vector2(t.position.x, t.position.y);
-                long posKey = GetQuantizedKey(pos2D);
-                occupiedPositions?.Remove(posKey);
+                if (occupiedWallPositions != null)
+                {
+                    // Find and remove the position from the list (distance-based)
+                    for (int i = occupiedWallPositions.Count - 1; i >= 0; i--)
+                    {
+                        if (Vector2.Distance(occupiedWallPositions[i], pos2D) < OVERLAP_THRESHOLD)
+                        {
+                            occupiedWallPositions.RemoveAt(i);
+                            break;
+                        }
+                    }
+                }
 
                 Destroy(t.gameObject);
                 removedCount++;
@@ -1830,8 +1838,18 @@ namespace FaeMaze.Systems
             {
                 // Remove from occupied positions
                 Vector2 pos2D = new Vector2(t.position.x, t.position.y);
-                long posKey = GetQuantizedKey(pos2D);
-                occupiedPositions?.Remove(posKey);
+                if (occupiedPositions != null)
+                {
+                    // Find and remove the position from the list (distance-based)
+                    for (int i = occupiedPositions.Count - 1; i >= 0; i--)
+                    {
+                        if (Vector2.Distance(occupiedPositions[i], pos2D) < OVERLAP_THRESHOLD)
+                        {
+                            occupiedPositions.RemoveAt(i);
+                            break;
+                        }
+                    }
+                }
 
                 Destroy(t.gameObject);
                 removedCount++;
@@ -1883,8 +1901,8 @@ namespace FaeMaze.Systems
                 pathTiles = new List<GameObject>();
             }
 
-            occupiedPositions = new HashSet<long>();
-            occupiedWallPositions = new HashSet<long>();
+            occupiedPositions = new List<Vector2>();
+            occupiedWallPositions = new List<Vector2>();
             allEdgeSegments = new List<EdgeSegmentData>();
 
             int tilesCreated = 0;
@@ -1894,43 +1912,47 @@ namespace FaeMaze.Systems
             CollectEdgeSegments(forestState);
             yield return null; // Yield after collecting edges
 
-            // Step 2: Render node columns
+            // Step 2: Render node columns using radial sampling
+            float nodeStepSize = 0.5f;
+            int numRadialLayers = Mathf.CeilToInt(nodeTileRadius / nodeStepSize);
+
             foreach (var node in forestState.Nodes)
             {
                 // Create node cylinder
                 CreateNodeColumnCylinder(node, mazeOrigin);
 
-                float stepSize = 1.0f;
-                int tilesRadius = Mathf.CeilToInt(nodeTileRadius / stepSize);
-
-                for (int dx = -tilesRadius; dx <= tilesRadius; dx++)
+                // Place center tile first
+                if (!IsPositionOccupied(node.Position, occupiedPositions))
                 {
-                    for (int dy = -tilesRadius; dy <= tilesRadius; dy++)
+                    char centerSymbol = node.Kind == "root" ? 'H' : 'N';
+                    Vector3 centerWorldPos = ToVector3(node.Position);
+                    CreateWorldSpaceTile(centerWorldPos, 0f, centerSymbol, mazeOrigin, isWall: false);
+                    occupiedPositions.Add(node.Position);
+                    tilesCreated++;
+                }
+
+                // Place tiles in concentric rings using polar coordinates
+                for (int layer = 1; layer <= numRadialLayers; layer++)
+                {
+                    float radius = layer * nodeStepSize;
+                    if (radius > nodeTileRadius) break;
+
+                    float circumference = 2f * Mathf.PI * radius;
+                    int numTilesInRing = Mathf.Max(8, Mathf.CeilToInt(circumference / nodeStepSize));
+
+                    for (int i = 0; i < numTilesInRing; i++)
                     {
-                        Vector2 offsetFromNode = new Vector2(dx * stepSize, dy * stepSize);
-                        float distance = offsetFromNode.magnitude;
-                        if (distance > nodeTileRadius) continue;
+                        float angle = (float)i / numTilesInRing * 2f * Mathf.PI;
+                        Vector2 offset = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+                        Vector2 pos2D = node.Position + offset;
 
-                        Vector2 pos2D = node.Position + offsetFromNode;
-                        long posKey = GetQuantizedKey(pos2D);
-                        if (occupiedPositions.Contains(posKey)) continue;
+                        if (IsPositionOccupied(pos2D, occupiedPositions)) continue;
 
-                        float orientationDegrees = 0f;
-                        if (distance > 0.01f)
-                        {
-                            Vector2 radial = offsetFromNode.normalized;
-                            orientationDegrees = Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg;
-                        }
-
-                        char symbol = '.';
-                        if (dx == 0 && dy == 0)
-                        {
-                            symbol = node.Kind == "root" ? 'H' : 'N';
-                        }
+                        float orientationDegrees = angle * Mathf.Rad2Deg;
 
                         Vector3 worldPos = ToVector3(pos2D);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedPositions.Add(posKey);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '.', mazeOrigin, isWall: false);
+                        occupiedPositions.Add(pos2D);
                         tilesCreated++;
 
                         if (tilesCreated % batchSize == 0)
@@ -1982,10 +2004,9 @@ namespace FaeMaze.Systems
                             pos2D = Vector2.Lerp(segStart, segEnd, t);
                         }
 
-                        long posKey = GetQuantizedKey(pos2D);
                         bool forcePlace = isPartialEdge && isExactEndpoint && !endpointTilePlaced;
 
-                        if (!forcePlace && occupiedPositions.Contains(posKey)) continue;
+                        if (!forcePlace && IsPositionOccupied(pos2D, occupiedPositions)) continue;
 
                         char symbol = '.';
                         if (isPartialEdge && isExactEndpoint)
@@ -1996,7 +2017,7 @@ namespace FaeMaze.Systems
 
                         Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
-                        occupiedPositions.Add(posKey);
+                        occupiedPositions.Add(pos2D);
                         tilesCreated++;
 
                         if (tilesCreated % batchSize == 0)
@@ -2046,7 +2067,7 @@ namespace FaeMaze.Systems
                                 Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, pushDir, forestState, occupiedWallPositions);
                                 if (!adjustedPos.HasValue) continue;
 
-                                occupiedWallPositions.Add(GetQuantizedKey(adjustedPos.Value));
+                                occupiedWallPositions.Add(adjustedPos.Value);
 
                                 float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                 if (side < 0) orientationDegrees += 180f;

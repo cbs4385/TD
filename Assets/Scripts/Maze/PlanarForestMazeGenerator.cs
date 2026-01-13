@@ -209,8 +209,10 @@ namespace ForestMaze
             Vector2 ghostCenter = root.Position + direction * (2 * NODE_RADIUS + length);
 
             // Build Bezier curve from root to ghost position
-            Vector2 startBoundary = root.Position + direction * NODE_RADIUS;
-            Vector2 endBoundary = ghostCenter - direction * NODE_RADIUS;
+            // Start slightly inside node boundary (0.5 units) to ensure edge tiles overlap with node tiles
+            // This prevents gaps at the node-edge junction due to grid alignment
+            Vector2 startBoundary = root.Position + direction * (NODE_RADIUS - 0.5f);
+            Vector2 endBoundary = ghostCenter - direction * (NODE_RADIUS - 0.5f);
             var curve = BezierCurveFactory.CreateGentleCurve(startBoundary, endBoundary, state.Random, 2);
 
             List<Vector2> polyline;
@@ -285,9 +287,10 @@ namespace ForestMaze
             else
             {
                 // Fallback to straight line if curve generation fails
+                // Start/end slightly inside node boundaries to ensure tile overlap
                 Vector2 direction = (node1Pos - root.Position).normalized;
-                Vector2 startBoundary = root.Position + direction * NODE_RADIUS;
-                Vector2 endBoundary = node1Pos - direction * NODE_RADIUS;
+                Vector2 startBoundary = root.Position + direction * (NODE_RADIUS - 0.5f);
+                Vector2 endBoundary = node1Pos - direction * (NODE_RADIUS - 0.5f);
                 initialPolyline = new List<Vector2> { startBoundary, endBoundary };
             }
 
@@ -560,8 +563,9 @@ namespace ForestMaze
             if (corridorDistance < MIN_CORRIDOR_LENGTH)
                 return null;
 
-            Vector2 startBoundary = startCenter + overallDirection * NODE_RADIUS;
-            Vector2 endBoundary = endCenter - overallDirection * NODE_RADIUS;
+            // Start/end slightly inside node boundaries to ensure tile overlap
+            Vector2 startBoundary = startCenter + overallDirection * (NODE_RADIUS - 0.5f);
+            Vector2 endBoundary = endCenter - overallDirection * (NODE_RADIUS - 0.5f);
 
             // Collect positions to avoid
             var avoidPositions = state.Nodes
@@ -744,14 +748,16 @@ namespace ForestMaze
             if (corridorDistance < MIN_SEGMENT_LENGTH)
             {
                 // Too short for curved path, create minimal curve
-                Vector2 start = nodeCenter + overallDirection * NODE_RADIUS;
-                Vector2 end = ghostCenter - overallDirection * NODE_RADIUS;
+                // Start/end slightly inside node boundaries to ensure tile overlap
+                Vector2 start = nodeCenter + overallDirection * (NODE_RADIUS - 0.5f);
+                Vector2 end = ghostCenter - overallDirection * (NODE_RADIUS - 0.5f);
                 Vector2 mid = (start + end) * 0.5f;
                 return new BezierCurve(start, mid, end);
             }
 
-            Vector2 startBoundary = nodeCenter + overallDirection * NODE_RADIUS;
-            Vector2 endBoundary = ghostCenter - overallDirection * NODE_RADIUS;
+            // Start/end slightly inside node boundaries to ensure tile overlap
+            Vector2 startBoundary = nodeCenter + overallDirection * (NODE_RADIUS - 0.5f);
+            Vector2 endBoundary = ghostCenter - overallDirection * (NODE_RADIUS - 0.5f);
 
             // Collect positions to avoid
             var avoidPositions = state.Nodes
@@ -852,13 +858,15 @@ namespace ForestMaze
             if (corridorDistance < MIN_SEGMENT_LENGTH)
             {
                 // Too short for curved path, use straight line
-                Vector2 start = nodeCenter + overallDirection * NODE_RADIUS;
-                Vector2 end = ghostCenter - overallDirection * NODE_RADIUS;
+                // Start/end slightly inside node boundaries to ensure tile overlap
+                Vector2 start = nodeCenter + overallDirection * (NODE_RADIUS - 0.5f);
+                Vector2 end = ghostCenter - overallDirection * (NODE_RADIUS - 0.5f);
                 return new List<Vector2> { start, end };
             }
 
-            Vector2 startBoundary = nodeCenter + overallDirection * NODE_RADIUS;
-            Vector2 endBoundary = ghostCenter - overallDirection * NODE_RADIUS;
+            // Start/end slightly inside node boundaries to ensure tile overlap
+            Vector2 startBoundary = nodeCenter + overallDirection * (NODE_RADIUS - 0.5f);
+            Vector2 endBoundary = ghostCenter - overallDirection * (NODE_RADIUS - 0.5f);
 
             // Determine number of segments
             int numSegments = Mathf.Clamp(
