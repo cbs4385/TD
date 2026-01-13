@@ -20,18 +20,18 @@ namespace ForestMaze
         private const float R_KEEP = NODE_RADIUS + NODE_PADDING; // 3.7
         private const float PATH_WIDTH = 1.0f;
         private const float PATH_RADIUS = PATH_WIDTH / 2.0f; // 0.5
+        private const float EXCLUSION_ZONE = NODE_RADIUS + 2.0f; // 5.0 - minimum distance for frontier endpoints from nodes
 
         // Tunable parameters
-        private const float CONNECT_PROB = 0.25f;
-        private const float CENTER_BIAS = 0.75f;
-        private const float BIAS_POWER = 2.0f;
-        private const float BIAS_FLOOR = 0.1f;
         private const float ANGLE_MIN_SEPARATION = 60.0f; // degrees - ensures ~3.14 units arc between edges at node boundary for 3 wall tiles (1x1 each)
-        private const float CURVE_STRENGTH = 0.25f;
+        private const float ANGLE_EXCLUSION_TOWARD_NODES = 15.0f; // degrees - exclude orientations within this angle toward existing nodes
         private const float ROTATE_STEP = 6.0f; // degrees
         private const float SHORTEN_STEP = 0.3f;
         private const float MIN_CORRIDOR_LENGTH = 0.3f;
         private const float WALL_BUFFER = 1.0f; // Minimum wall buffer (in world units) between elements
+        private const float MAX_CROSSING_GAP = 0.25f; // Maximum triangular gap area at edge crossings (sq units)
+        private const int MIN_NEW_EDGES = 2; // Minimum new frontier edges per growth step
+        private const int MAX_NEW_EDGES = 3; // Maximum new frontier edges per growth step
 
         public class Node
         {
@@ -61,6 +61,12 @@ namespace ForestMaze
             public Vector2? GhostCenter; // Reserved position for future node
 
             /// <summary>
+            /// The Bezier curve representing this edge's path.
+            /// PolylinePoints is generated from this curve for backward compatibility.
+            /// </summary>
+            public BezierCurve Curve = null;
+
+            /// <summary>
             /// Flag indicating this edge's polyline was modified and needs wall regeneration.
             /// Set by merge operations, cleared after wall regeneration.
             /// </summary>
@@ -73,6 +79,18 @@ namespace ForestMaze
             public List<Vector2> OldPolylinePoints = null;
 
             public bool IsComplete() => !Partial && NodeB.HasValue;
+
+            /// <summary>
+            /// Regenerates the polyline from the Bezier curve.
+            /// Call this after modifying the curve.
+            /// </summary>
+            public void RegeneratePolylineFromCurve(int segments = 8)
+            {
+                if (Curve != null)
+                {
+                    PolylinePoints = Curve.ToPolyline(segments);
+                }
+            }
         }
 
         public class ForestMapState
@@ -175,7 +193,7 @@ namespace ForestMaze
             };
             state.Nodes.Add(root);
 
-            // Create first normal node
+            // Create first normal node at random orientation
             float angle = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
             float length = (float)(state.Random.NextDouble() * 7.0 + 3.0);
             float distance = 2 * NODE_RADIUS + length;
@@ -185,7 +203,8 @@ namespace ForestMaze
                 Mathf.Sin(angle) * distance
             );
 
-            int maxDegree = state.Random.Next(3, 5); // 3-4 (need capacity for parent+frontier+cross-connection)
+            // Max degree = 1 (parent) + 2-3 (new edges) = 3-4
+            int maxDegree = MIN_NEW_EDGES + 1;
             var node1 = new Node
             {
                 Id = state.NextNodeId++,
@@ -195,13 +214,18 @@ namespace ForestMaze
             };
             state.Nodes.Add(node1);
 
-            // Create edge between root and node1 with curved polyline
-            var initialPolyline = BuildCurvedPolyline(state, root.Position, node1Pos,
+            // Create edge between root and node1 with Bezier curve
+            var initialCurve = BuildBezierCurveForConnection(state, root.Position, node1Pos,
                 new List<int> { root.Id, node1.Id });
 
-            // Fallback to straight line if curved path fails
-            if (initialPolyline == null)
+            List<Vector2> initialPolyline;
+            if (initialCurve != null)
             {
+                initialPolyline = initialCurve.ToPolyline(8);
+            }
+            else
+            {
+                // Fallback to straight line if curve generation fails
                 Vector2 direction = (node1Pos - root.Position).normalized;
                 Vector2 startBoundary = root.Position + direction * NODE_RADIUS;
                 Vector2 endBoundary = node1Pos - direction * NODE_RADIUS;
@@ -213,6 +237,7 @@ namespace ForestMaze
                 Id = state.NextEdgeId++,
                 NodeA = root.Id,
                 NodeB = node1.Id,
+                Curve = initialCurve,
                 PolylinePoints = initialPolyline,
                 Partial = false,
                 GhostCenter = null
@@ -223,22 +248,30 @@ namespace ForestMaze
             float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
             node1.AddEdge(edge.Id, reverseAngle);
 
-            // Fill node1's remaining capacity with edges
-            while (node1.HasCapacity())
-            {
-                // Try to connect to existing node (25% chance, allow forcing capacity)
-                if (state.Random.NextDouble() < CONNECT_PROB)
-                {
-                    if (TryConnectToExisting(state, node1, root.Id, root.Id, allowForceCapacity: true))
-                    {
-                        // Debug.Log($"[PlanarForest] Init: Created cross-connection from node {node1.Id}");
-                        continue;
-                    }
-                }
+            // Add 2-3 frontier edges from node1 (as per spec: always 2-3 new edges)
+            int numNewEdges = state.Random.Next(MIN_NEW_EDGES, MAX_NEW_EDGES + 1);
+            int frontierEdgesAdded = 0;
 
-                // Otherwise add partial edge
-                if (!AddPartialEdge(state, node1))
+            for (int i = 0; i < numNewEdges && node1.HasCapacity(); i++)
+            {
+                if (AddPartialEdgeWithNodeExclusion(state, node1))
+                {
+                    frontierEdgesAdded++;
+                }
+            }
+
+            // Ensure at least MIN_NEW_EDGES frontier edges
+            while (frontierEdgesAdded < MIN_NEW_EDGES && node1.IncidentEdges.Count < 6)
+            {
+                node1.MaxDegree++;
+                if (AddPartialEdge(state, node1))
+                {
+                    frontierEdgesAdded++;
+                }
+                else
+                {
                     break;
+                }
             }
 
             // Merge nearby edges that are too close together
@@ -249,6 +282,13 @@ namespace ForestMaze
         /// <summary>
         /// Executes one growth step: selects a frontier edge and creates a new node.
         /// This is used by both initial generation and dynamic growth.
+        ///
+        /// Growth rules:
+        /// - Remove closest-to-seed frontier portal, replace with new node
+        /// - On even steps with >2 existing nodes: create connection to existing node
+        ///   (select from 3 closest, prefer fewest connections)
+        /// - Always spawn 2-3 new frontier edges at random orientations
+        ///   (excluding ±15° toward existing nodes)
         /// </summary>
         public static bool Step(ForestMapState state)
         {
@@ -256,7 +296,7 @@ namespace ForestMaze
             // and can be modified by merge/spacing. Existing edges should never be modified.
             int edgeCountBeforeStep = state.Edges.Count;
 
-            // Select a frontier edge using center-biased selection
+            // Select a frontier edge (closest to seed/root)
             int? edgeId = SelectFrontierEdgeBiased(state);
             if (!edgeId.HasValue)
                 return false;
@@ -265,8 +305,9 @@ namespace ForestMaze
             if (!edge.GhostCenter.HasValue)
                 return false;
 
-            // Create new node at ghost position
-            int maxDegree = state.Random.Next(3, 5); // 3-4 (need capacity for parent+frontier+cross-connection)
+            // Create new node at ghost position (portal location)
+            // Max degree is 1 (parent) + connection (if even step) + 2-3 new edges = 4-5
+            int maxDegree = MIN_NEW_EDGES + 2; // Parent + potential connection + min new edges
             var newNode = new Node
             {
                 Id = state.NextNodeId++,
@@ -293,57 +334,49 @@ namespace ForestMaze
             state.GhostCenters.RemoveAll(g => Vector2.Distance(g, edge.GhostCenter.Value) < 1e-6f);
             edge.GhostCenter = null;
 
-            // Debug.Log($"[PlanarForest] ===== STEP: Created node {newNode.Id} at {newNode.Position}, capacity={newNode.MaxDegree}, parent edge from node {edge.NodeA} =====");
+            // Cross-connection: only on even steps when we have more than 2 other nodes
+            bool isEvenStep = (state.TurnCount % 2) == 0;
+            int otherNodesCount = state.Nodes.Count - 1; // Exclude the new node we just added
+            bool hasExistingConnection = false;
 
-            // First priority: Ensure at least one frontier edge for continued growth
-            bool hasFrontierEdge = false;
-            if (newNode.HasCapacity())
+            if (isEvenStep && otherNodesCount > 2)
             {
-                // Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting to add frontier edge...");
+                // Try to connect to existing node using new selection criteria:
+                // Pick from 3 closest, prefer the one with fewest connections
+                if (TryConnectToExistingWithCriteria(state, newNode, edge.NodeA))
+                {
+                    hasExistingConnection = true;
+                    state.HasCrossConnection = true;
+                }
+            }
+
+            // Always add 2-3 new frontier edges at random orientations
+            // Exclude orientations within ±15° toward existing nodes
+            int numNewEdges = state.Random.Next(MIN_NEW_EDGES, MAX_NEW_EDGES + 1);
+            int frontierEdgesAdded = 0;
+
+            for (int i = 0; i < numNewEdges && newNode.HasCapacity(); i++)
+            {
+                if (AddPartialEdgeWithNodeExclusion(state, newNode))
+                {
+                    frontierEdgesAdded++;
+                }
+            }
+
+            // If we couldn't add enough frontier edges due to space constraints,
+            // expand capacity and try with standard method
+            while (frontierEdgesAdded < MIN_NEW_EDGES && newNode.IncidentEdges.Count < 6)
+            {
+                newNode.MaxDegree++;
                 if (AddPartialEdge(state, newNode))
                 {
-                    hasFrontierEdge = true;
-                    // Debug.Log($"[PlanarForest] Step {newNode.Id}: Frontier edge added successfully");
+                    frontierEdgesAdded++;
                 }
                 else
                 {
-                    // Debug.Log($"[PlanarForest] Step {newNode.Id}: FAILED to add frontier edge");
+                    break; // No more valid positions
                 }
             }
-            else
-            {
-                // Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for frontier edge (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
-            }
-
-            // Second priority: Ensure at least one cross-connection to existing node
-            bool hasExistingConnection = false;
-            if (newNode.HasCapacity())
-            {
-                // Debug.Log($"[PlanarForest] Step {newNode.Id}: Attempting cross-connection (excluding parent node {edge.NodeA})...");
-                if (TryConnectToExisting(state, newNode, edge.NodeA, edge.NodeA, allowForceCapacity: true))
-                {
-                    hasExistingConnection = true;
-                }
-            }
-            else
-            {
-                // Debug.Log($"[PlanarForest] Step {newNode.Id}: No capacity for cross-connection (edges={newNode.IncidentEdges.Count}/{newNode.MaxDegree})");
-            }
-
-            // Fill remaining capacity with partial edges (more frontier for growth)
-            int additionalFrontier = 0;
-            while (newNode.HasCapacity())
-            {
-                if (!AddPartialEdge(state, newNode))
-                    break;
-                additionalFrontier++;
-            }
-            if (additionalFrontier > 0)
-            {
-                // Debug.Log($"[PlanarForest] Step {newNode.Id}: Added {additionalFrontier} additional frontier edges");
-            }
-
-            // Debug.Log($"[PlanarForest] ===== STEP COMPLETE: Node {newNode.Id} - frontier={hasFrontierEdge}, crossConnect={hasExistingConnection}, finalEdges={newNode.IncidentEdges.Count}/{newNode.MaxDegree} =====");
 
             // Merge nearby edges that are too close together
             // Only modify edges created during this step (index >= edgeCountBeforeStep)
@@ -351,6 +384,328 @@ namespace ForestMaze
 
             state.TurnCount++;
             return true;
+        }
+
+        /// <summary>
+        /// Tries to connect to an existing node using new criteria:
+        /// - Select from 3 closest potential nodes
+        /// - Prefer the node with the fewest existing connections
+        /// - Ensure the connecting edge doesn't cross through any nodes
+        /// </summary>
+        private static bool TryConnectToExistingWithCriteria(ForestMapState state, Node newNode, int parentNodeId)
+        {
+            var connectedNodeIds = GetConnectedNodeIds(state, newNode.Id);
+
+            // Find candidate nodes (excluding self, parent, and already-connected)
+            var candidates = state.Nodes
+                .Where(n => n.Id != newNode.Id)
+                .Where(n => n.Id != parentNodeId)
+                .Where(n => !connectedNodeIds.Contains(n.Id))
+                .OrderBy(n => Vector2.Distance(n.Position, newNode.Position))
+                .Take(3) // Select 3 closest
+                .ToList();
+
+            if (candidates.Count == 0)
+                return false;
+
+            // Sort by fewest connections (prefer less-connected nodes)
+            candidates = candidates
+                .OrderBy(n => n.IncidentEdges.Count)
+                .ThenBy(n => Vector2.Distance(n.Position, newNode.Position))
+                .ToList();
+
+            foreach (var candidate in candidates)
+            {
+                // Check if connection would cross through any other node
+                if (WouldEdgeCrossNode(state, newNode.Position, candidate.Position, newNode.Id, candidate.Id))
+                    continue;
+
+                // Find valid angles for both nodes
+                Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
+                float directAngle = Mathf.Atan2(directDirection.y, directDirection.x);
+                directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
+
+                float reverseAngle = (directAngle + Mathf.PI) % (2 * Mathf.PI);
+
+                if (!IsAngleValid(newNode, directAngle) || !IsAngleValid(candidate, reverseAngle))
+                    continue;
+
+                // Build a Bezier curve for this connection
+                var curve = BuildBezierCurveForConnection(state, newNode.Position, candidate.Position,
+                    new List<int> { newNode.Id, candidate.Id });
+
+                if (curve == null)
+                    continue;
+
+                // Validate the curve doesn't violate any constraints
+                var polyline = curve.ToPolyline(8);
+                if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
+                    continue;
+
+                // Expand candidate's capacity if needed
+                if (!candidate.HasCapacity())
+                {
+                    candidate.MaxDegree++;
+                }
+
+                var newEdge = new Edge
+                {
+                    Id = state.NextEdgeId++,
+                    NodeA = newNode.Id,
+                    NodeB = candidate.Id,
+                    Curve = curve,
+                    PolylinePoints = polyline,
+                    Partial = false,
+                    GhostCenter = null
+                };
+
+                state.Edges.Add(newEdge);
+                newNode.AddEdge(newEdge.Id, directAngle);
+                candidate.AddEdge(newEdge.Id, reverseAngle);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if a straight-line edge between two positions would cross through any node.
+        /// </summary>
+        private static bool WouldEdgeCrossNode(ForestMapState state, Vector2 start, Vector2 end, int excludeNode1, int excludeNode2)
+        {
+            foreach (var node in state.Nodes)
+            {
+                if (node.Id == excludeNode1 || node.Id == excludeNode2)
+                    continue;
+
+                // Check distance from node center to the line segment
+                float dist = PointToSegmentDistance(node.Position, start, end);
+                if (dist < NODE_RADIUS + PATH_RADIUS)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Builds a Bezier curve for connecting two nodes.
+        /// Uses gentle curves with 2-3 control points.
+        /// </summary>
+        private static BezierCurve BuildBezierCurveForConnection(ForestMapState state, Vector2 startCenter, Vector2 endCenter,
+            List<int> incidentNodes)
+        {
+            Vector2 overallDirection = (endCenter - startCenter).normalized;
+            float totalDistance = Vector2.Distance(startCenter, endCenter);
+            float corridorDistance = totalDistance - 2 * NODE_RADIUS;
+
+            if (corridorDistance < MIN_CORRIDOR_LENGTH)
+                return null;
+
+            Vector2 startBoundary = startCenter + overallDirection * NODE_RADIUS;
+            Vector2 endBoundary = endCenter - overallDirection * NODE_RADIUS;
+
+            // Collect positions to avoid
+            var avoidPositions = state.Nodes
+                .Where(n => !incidentNodes.Contains(n.Id))
+                .Select(n => n.Position)
+                .ToList();
+            avoidPositions.AddRange(state.GhostCenters);
+
+            // Create curve avoiding other nodes
+            int numControlPoints = state.Random.Next(2) == 0 ? 2 : 3;
+            return BezierCurveFactory.CreateCurveAvoidingPositions(
+                startBoundary, endBoundary, state.Random,
+                avoidPositions, NODE_RADIUS + PATH_RADIUS);
+        }
+
+        /// <summary>
+        /// Adds a partial (frontier) edge with orientation exclusion toward existing nodes.
+        /// Excludes angles within ±15° of directions toward existing nodes.
+        /// </summary>
+        private static bool AddPartialEdgeWithNodeExclusion(ForestMapState state, Node node)
+        {
+            if (!node.HasCapacity())
+                return false;
+
+            // Calculate forbidden angles (within ±15° toward existing nodes)
+            var forbiddenAngles = new List<(float center, float halfWidth)>();
+            float exclusionHalfWidth = ANGLE_EXCLUSION_TOWARD_NODES * Mathf.Deg2Rad;
+
+            foreach (var otherNode in state.Nodes)
+            {
+                if (otherNode.Id == node.Id)
+                    continue;
+
+                Vector2 toNode = (otherNode.Position - node.Position).normalized;
+                float angle = Mathf.Atan2(toNode.y, toNode.x);
+                angle = (angle + 2 * Mathf.PI) % (2 * Mathf.PI);
+                forbiddenAngles.Add((angle, exclusionHalfWidth));
+            }
+
+            // Try random angles, excluding forbidden zones
+            float theta0 = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
+            float length0 = (float)(state.Random.NextDouble() * 15.0 + 12.0);
+
+            int maxRotations = (int)(180 / ROTATE_STEP);
+
+            for (int rotStep = 0; rotStep < maxRotations; rotStep++)
+            {
+                float theta;
+                if (rotStep == 0)
+                    theta = theta0;
+                else if (rotStep % 2 == 1)
+                    theta = theta0 + (rotStep / 2 + 1) * ROTATE_STEP * Mathf.Deg2Rad;
+                else
+                    theta = theta0 - (rotStep / 2) * ROTATE_STEP * Mathf.Deg2Rad;
+
+                theta = ((theta % (2 * Mathf.PI)) + 2 * Mathf.PI) % (2 * Mathf.PI);
+
+                // Check if angle is in forbidden zone
+                if (IsAngleInForbiddenZone(theta, forbiddenAngles))
+                    continue;
+
+                if (!IsAngleValid(node, theta))
+                    continue;
+
+                float length = length0;
+                while (length >= MIN_SEGMENT_LENGTH * 2)
+                {
+                    Vector2 direction = new Vector2(Mathf.Cos(theta), Mathf.Sin(theta));
+                    Vector2 ghostCenter = node.Position + direction * (2 * NODE_RADIUS + length);
+
+                    // Use EXCLUSION_ZONE for ghost position validation
+                    if (!IsGhostPositionValidWithExclusionZone(state, ghostCenter, node.Id))
+                    {
+                        length -= SHORTEN_STEP * 2;
+                        continue;
+                    }
+
+                    // Build a Bezier curve to the ghost position
+                    var curve = BuildBezierCurveToGhost(state, node.Position, ghostCenter, new List<int> { node.Id });
+
+                    if (curve != null)
+                    {
+                        var polyline = curve.ToPolyline(8);
+                        if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
+                        {
+                            // Success! Create the partial edge
+                            var newEdge = new Edge
+                            {
+                                Id = state.NextEdgeId++,
+                                NodeA = node.Id,
+                                NodeB = null,
+                                Curve = curve,
+                                PolylinePoints = polyline,
+                                Partial = true,
+                                GhostCenter = ghostCenter
+                            };
+
+                            state.Edges.Add(newEdge);
+                            state.Frontier.Add(newEdge.Id);
+                            state.GhostCenters.Add(ghostCenter);
+                            node.AddEdge(newEdge.Id, theta);
+
+                            return true;
+                        }
+                    }
+
+                    length -= SHORTEN_STEP * 2;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if an angle falls within any forbidden zone.
+        /// </summary>
+        private static bool IsAngleInForbiddenZone(float angle, List<(float center, float halfWidth)> forbiddenAngles)
+        {
+            foreach (var (center, halfWidth) in forbiddenAngles)
+            {
+                float diff = Mathf.Abs(angle - center);
+                diff = Mathf.Min(diff, 2 * Mathf.PI - diff);
+                if (diff < halfWidth)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Validates ghost position with the new exclusion zone (radius + 2 = 5 units).
+        /// </summary>
+        private static bool IsGhostPositionValidWithExclusionZone(ForestMapState state, Vector2 ghostPos, int sourceNodeId)
+        {
+            // Check against all existing nodes with exclusion zone
+            foreach (var node in state.Nodes)
+            {
+                if (node.Id == sourceNodeId)
+                    continue;
+
+                if (Vector2.Distance(node.Position, ghostPos) < 2 * EXCLUSION_ZONE)
+                    return false;
+            }
+
+            // Check against other ghost centers
+            foreach (var ghost in state.GhostCenters)
+            {
+                if (Vector2.Distance(ghost, ghostPos) < 2 * EXCLUSION_ZONE)
+                    return false;
+            }
+
+            // Check against existing edges
+            foreach (var edge in state.Edges)
+            {
+                if (edge.PolylinePoints.Count < 2)
+                    continue;
+
+                if (edge.NodeA == sourceNodeId || (edge.NodeB.HasValue && edge.NodeB.Value == sourceNodeId))
+                    continue;
+
+                float dist = PolylineToNodeDistance(edge.PolylinePoints, ghostPos, false);
+                float minRequired = NODE_RADIUS + PATH_RADIUS + WALL_BUFFER;
+
+                if (dist < minRequired - 1e-6f)
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Builds a Bezier curve from a node to a ghost (frontier) position.
+        /// </summary>
+        private static BezierCurve BuildBezierCurveToGhost(ForestMapState state, Vector2 nodeCenter, Vector2 ghostCenter,
+            List<int> incidentNodes)
+        {
+            Vector2 overallDirection = (ghostCenter - nodeCenter).normalized;
+            float totalDistance = Vector2.Distance(nodeCenter, ghostCenter);
+            float corridorDistance = totalDistance - 2 * NODE_RADIUS;
+
+            if (corridorDistance < MIN_SEGMENT_LENGTH)
+            {
+                // Too short for curved path, create minimal curve
+                Vector2 start = nodeCenter + overallDirection * NODE_RADIUS;
+                Vector2 end = ghostCenter - overallDirection * NODE_RADIUS;
+                Vector2 mid = (start + end) * 0.5f;
+                return new BezierCurve(start, mid, end);
+            }
+
+            Vector2 startBoundary = nodeCenter + overallDirection * NODE_RADIUS;
+            Vector2 endBoundary = ghostCenter - overallDirection * NODE_RADIUS;
+
+            // Collect positions to avoid
+            var avoidPositions = state.Nodes
+                .Where(n => !incidentNodes.Contains(n.Id))
+                .Select(n => n.Position)
+                .ToList();
+            avoidPositions.AddRange(state.GhostCenters.Where(g => Vector2.Distance(g, ghostCenter) > 1e-6f));
+
+            // Create gentle curve
+            int numControlPoints = state.Random.Next(2) == 0 ? 2 : 3;
+            return BezierCurveFactory.CreateCurveAvoidingPositions(
+                startBoundary, endBoundary, state.Random,
+                avoidPositions, NODE_RADIUS + PATH_RADIUS);
         }
 
         private static bool AddPartialEdge(ForestMapState state, Node node)
@@ -374,7 +729,7 @@ namespace ForestMaze
                 else
                     theta = theta0 - (rotStep / 2) * ROTATE_STEP * Mathf.Deg2Rad;
 
-                theta = theta % (2 * Mathf.PI);
+                theta = ((theta % (2 * Mathf.PI)) + 2 * Mathf.PI) % (2 * Mathf.PI);
 
                 if (!IsAngleValid(node, theta))
                     continue;
@@ -385,35 +740,40 @@ namespace ForestMaze
                     Vector2 direction = new Vector2(Mathf.Cos(theta), Mathf.Sin(theta));
                     Vector2 ghostCenter = node.Position + direction * (2 * NODE_RADIUS + length);
 
-                    if (!IsGhostPositionValid(state, ghostCenter, node.Id))
+                    if (!IsGhostPositionValidWithExclusionZone(state, ghostCenter, node.Id))
                     {
                         length -= SHORTEN_STEP * 2;
                         continue;
                     }
 
-                    // Try to build a curved polyline to the ghost position
-                    var polyline = BuildCurvedPolylineToGhost(state, node.Position, ghostCenter,
+                    // Try to build a Bezier curve to the ghost position
+                    var curve = BuildBezierCurveToGhost(state, node.Position, ghostCenter,
                         new List<int> { node.Id });
 
-                    if (polyline != null && IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
+                    if (curve != null)
                     {
-                        // Success! Create the partial edge
-                        var edge = new Edge
+                        var polyline = curve.ToPolyline(8);
+                        if (IsPolylineValid(state, polyline, new List<int> { node.Id }, ghostCenter))
                         {
-                            Id = state.NextEdgeId++,
-                            NodeA = node.Id,
-                            NodeB = null,
-                            PolylinePoints = polyline,
-                            Partial = true,
-                            GhostCenter = ghostCenter
-                        };
+                            // Success! Create the partial edge with Bezier curve
+                            var edge = new Edge
+                            {
+                                Id = state.NextEdgeId++,
+                                NodeA = node.Id,
+                                NodeB = null,
+                                Curve = curve,
+                                PolylinePoints = polyline,
+                                Partial = true,
+                                GhostCenter = ghostCenter
+                            };
 
-                        state.Edges.Add(edge);
-                        state.Frontier.Add(edge.Id);
-                        state.GhostCenters.Add(ghostCenter);
-                        node.AddEdge(edge.Id, theta);
+                            state.Edges.Add(edge);
+                            state.Frontier.Add(edge.Id);
+                            state.GhostCenters.Add(ghostCenter);
+                            node.AddEdge(edge.Id, theta);
 
-                        return true;
+                            return true;
+                        }
                     }
 
                     length -= SHORTEN_STEP * 2;
@@ -561,12 +921,20 @@ namespace ForestMaze
 
                 // Debug.Log($"[PlanarForest]   -> Found valid angles: source={validSourceAngle * Mathf.Rad2Deg:F0}°, target={validTargetAngle * Mathf.Rad2Deg:F0}°");
 
-                var polyline = BuildCurvedPolyline(state, newNode.Position, candidate.Position,
-                    new List<int> { newNode.Id, candidate.Id }, isCrossConnection: true);
+                // Build Bezier curve for the connection
+                var curve = BuildBezierCurveForConnection(state, newNode.Position, candidate.Position,
+                    new List<int> { newNode.Id, candidate.Id });
 
-                if (polyline == null)
+                if (curve == null)
                 {
-                    // Debug.Log($"[PlanarForest]   -> SKIP: Polyline generation failed");
+                    // Debug.Log($"[PlanarForest]   -> SKIP: Curve generation failed");
+                    continue;
+                }
+
+                var polyline = curve.ToPolyline(8);
+                if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
+                {
+                    // Debug.Log($"[PlanarForest]   -> SKIP: Polyline validation failed");
                     continue;
                 }
 
@@ -582,6 +950,7 @@ namespace ForestMaze
                     Id = state.NextEdgeId++,
                     NodeA = newNode.Id,
                     NodeB = candidate.Id,
+                    Curve = curve,
                     PolylinePoints = polyline,
                     Partial = false,
                     GhostCenter = null
@@ -2308,21 +2677,129 @@ namespace ForestMaze
             }
 
             // Check against all existing edges
-            // Use MERGE_DISTANCE as minimum spacing to ensure walls can fit between edges
-            // For cross-connections, use smaller buffer since they intentionally intersect
-            float edgeBuffer = isCrossConnection ? PATH_WIDTH * 0.3f : MERGE_DISTANCE;
+            // Edges CAN cross, but must do so at a steep enough angle
             foreach (var edge in state.Edges)
             {
                 if (edge.PolylinePoints.Count < 2)
                     continue;
 
-                float dist = PolylineToPolylineDistance(polyline, edge.PolylinePoints);
+                // Check for intersections and validate crossing angles
+                var crossings = FindPolylineCrossings(polyline, edge.PolylinePoints);
 
-                if (dist < edgeBuffer - 1e-6f)
-                    return false;
+                if (crossings.Count > 0)
+                {
+                    // Crossings are allowed - validate each crossing angle
+                    foreach (var crossing in crossings)
+                    {
+                        if (!IsCrossingAngleValid(crossing.angle))
+                        {
+                            // Crossing angle too shallow - would create gap > MAX_CROSSING_GAP
+                            return false;
+                        }
+                    }
+                }
+                else
+                {
+                    // No crossing - check parallel proximity
+                    // Use MERGE_DISTANCE for non-cross-connections, smaller buffer for intentional cross-connections
+                    float edgeBuffer = isCrossConnection ? PATH_WIDTH * 0.3f : MERGE_DISTANCE;
+                    float dist = PolylineToPolylineDistance(polyline, edge.PolylinePoints);
+
+                    if (dist < edgeBuffer - 1e-6f)
+                        return false;
+                }
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Represents a crossing between two polylines.
+        /// </summary>
+        private struct PolylineCrossing
+        {
+            public Vector2 point;
+            public float angle; // Crossing angle in degrees (0-90)
+            public int segment1Index;
+            public int segment2Index;
+        }
+
+        /// <summary>
+        /// Finds all crossing points between two polylines and their crossing angles.
+        /// </summary>
+        private static List<PolylineCrossing> FindPolylineCrossings(List<Vector2> poly1, List<Vector2> poly2)
+        {
+            var crossings = new List<PolylineCrossing>();
+
+            for (int i = 0; i < poly1.Count - 1; i++)
+            {
+                Vector2 a1 = poly1[i];
+                Vector2 a2 = poly1[i + 1];
+                Vector2 dir1 = (a2 - a1).normalized;
+
+                for (int j = 0; j < poly2.Count - 1; j++)
+                {
+                    Vector2 b1 = poly2[j];
+                    Vector2 b2 = poly2[j + 1];
+                    Vector2 dir2 = (b2 - b1).normalized;
+
+                    Vector2? intersection = GetSegmentIntersection(a1, a2, b1, b2);
+                    if (intersection.HasValue)
+                    {
+                        // Calculate crossing angle (0-90 degrees)
+                        float dot = Mathf.Abs(Vector2.Dot(dir1, dir2));
+                        float angle = Mathf.Acos(Mathf.Clamp(dot, 0, 1)) * Mathf.Rad2Deg;
+                        // Convert to acute angle (0-90)
+                        if (angle > 90f) angle = 180f - angle;
+
+                        crossings.Add(new PolylineCrossing
+                        {
+                            point = intersection.Value,
+                            angle = angle,
+                            segment1Index = i,
+                            segment2Index = j
+                        });
+                    }
+                }
+            }
+
+            return crossings;
+        }
+
+        /// <summary>
+        /// Gets the intersection point of two line segments, or null if they don't intersect.
+        /// </summary>
+        private static Vector2? GetSegmentIntersection(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2)
+        {
+            Vector2 d1 = a2 - a1;
+            Vector2 d2 = b2 - b1;
+
+            float cross = d1.x * d2.y - d1.y * d2.x;
+            if (Mathf.Abs(cross) < 1e-6f)
+                return null; // Parallel
+
+            Vector2 d3 = b1 - a1;
+            float t = (d3.x * d2.y - d3.y * d2.x) / cross;
+            float u = (d3.x * d1.y - d3.y * d1.x) / cross;
+
+            if (t >= 0 && t <= 1 && u >= 0 && u <= 1)
+            {
+                return a1 + d1 * t;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Checks if a crossing angle is steep enough to keep the gap under MAX_CROSSING_GAP.
+        /// The triangular gap area at a crossing is approximately:
+        /// A = (edgeWidth/2)² / tan(angle/2)
+        /// We want A <= MAX_CROSSING_GAP, so angle >= 2*atan((edgeWidth/2)² / MAX_CROSSING_GAP)
+        /// </summary>
+        private static bool IsCrossingAngleValid(float angleDegrees)
+        {
+            float minAngle = BezierCurveFactory.MinCrossingAngleForGap(PATH_WIDTH, MAX_CROSSING_GAP);
+            return angleDegrees >= minAngle;
         }
 
         private static bool IsAngleValid(Node node, float angle)

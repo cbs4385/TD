@@ -378,8 +378,15 @@ namespace ForestMaze
         }
 
         /// <summary>
+        /// Maximum gap between tiles along edges (in world units).
+        /// Ensures wall coverage has no holes larger than this.
+        /// </summary>
+        private const float MAX_TILE_GAP = 0.25f;
+
+        /// <summary>
         /// Generates path tiles along each edge, oriented in the direction of the edge.
-        /// Uses half-step intervals to ensure connectivity even on diagonal segments.
+        /// Uses Bezier curve sampling when available for smooth curves with proper tangent orientation.
+        /// Ensures maximum gap of 0.25 units between tiles.
         /// </summary>
         private static void GenerateEdgeTiles(
             PlanarForestMazeGenerator.ForestMapState state,
@@ -387,49 +394,102 @@ namespace ForestMaze
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
         {
-            // Use half-step to ensure diagonal segments have connected tiles
-            // Without this, diagonal segments can have gaps where consecutive points
-            // round to the same grid position, leaving tiles >1.5 units apart
-            float stepSize = tileSize * 0.5f;
-
             foreach (var edge in state.Edges)
             {
                 if (edge.PolylinePoints.Count < 2) continue;
 
-                // Walk along each segment of the polyline
-                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                // If edge has a Bezier curve, sample it directly for smooth orientation
+                if (edge.Curve != null)
                 {
-                    Vector2 start = edge.PolylinePoints[i];
-                    Vector2 end = edge.PolylinePoints[i + 1];
-                    Vector2 direction = (end - start).normalized;
-                    float segmentLength = Vector2.Distance(start, end);
+                    GenerateTilesFromBezierCurve(edge, data, walkablePositions, tileSize);
+                }
+                else
+                {
+                    // Fallback to polyline-based generation
+                    GenerateTilesFromPolyline(edge, data, walkablePositions, tileSize);
+                }
+            }
+        }
 
-                    // Calculate orientation angle from direction
-                    float orientation = Mathf.Atan2(direction.y, direction.x);
+        /// <summary>
+        /// Generates tiles by sampling a Bezier curve with proper tangent orientation.
+        /// </summary>
+        private static void GenerateTilesFromBezierCurve(
+            PlanarForestMazeGenerator.Edge edge,
+            WorldSpaceMazeData data,
+            HashSet<Vector2Int> walkablePositions,
+            float tileSize)
+        {
+            // Sample the curve with orientations at max 0.25 unit gaps
+            var samples = edge.Curve.SampleWithOrientations(tileSize * 0.5f, MAX_TILE_GAP);
 
-                    // Place tiles along the segment at half-step intervals
-                    int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
-                    for (int j = 0; j <= numSteps; j++)
+            for (int i = 0; i < samples.Count; i++)
+            {
+                var (position, tangent, normal) = samples[i];
+
+                // Calculate orientation from tangent
+                float orientation = Mathf.Atan2(tangent.y, tangent.x);
+
+                Vector2Int gridPos = ToGridPosition(position, tileSize);
+                if (walkablePositions.Contains(gridPos)) continue;
+
+                var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
+
+                // Mark special tiles (spawn points on partial edges at endpoint)
+                if (edge.Partial && i == samples.Count - 1)
+                {
+                    tile.Symbol = GetNextSpawnId(data);
+                }
+
+                data.AddTile(tile);
+                walkablePositions.Add(gridPos);
+            }
+        }
+
+        /// <summary>
+        /// Generates tiles by walking along a polyline (fallback for edges without Bezier curves).
+        /// </summary>
+        private static void GenerateTilesFromPolyline(
+            PlanarForestMazeGenerator.Edge edge,
+            WorldSpaceMazeData data,
+            HashSet<Vector2Int> walkablePositions,
+            float tileSize)
+        {
+            // Use small step size to ensure no gaps larger than MAX_TILE_GAP
+            float stepSize = Mathf.Min(tileSize * 0.5f, MAX_TILE_GAP);
+
+            for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+            {
+                Vector2 start = edge.PolylinePoints[i];
+                Vector2 end = edge.PolylinePoints[i + 1];
+                Vector2 direction = (end - start).normalized;
+                float segmentLength = Vector2.Distance(start, end);
+
+                // Calculate orientation angle from direction
+                float orientation = Mathf.Atan2(direction.y, direction.x);
+
+                // Place tiles along the segment at step intervals
+                int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / stepSize));
+                for (int j = 0; j <= numSteps; j++)
+                {
+                    float t = numSteps > 0 ? (float)j / numSteps : 0;
+                    Vector2 position = Vector2.Lerp(start, end, t);
+
+                    Vector2Int gridPos = ToGridPosition(position, tileSize);
+                    if (walkablePositions.Contains(gridPos)) continue;
+
+                    var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
+
+                    // Mark special tiles (spawn points on partial edges)
+                    bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
+                    bool isLastPoint = (j == numSteps);
+                    if (edge.Partial && isLastSegment && isLastPoint)
                     {
-                        float t = numSteps > 0 ? (float)j / numSteps : 0;
-                        Vector2 position = Vector2.Lerp(start, end, t);
-
-                        // Check if we already have a tile here (avoid duplicates)
-                        Vector2Int gridPos = ToGridPosition(position, tileSize);
-                        if (walkablePositions.Contains(gridPos)) continue;
-
-                        var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
-
-                        // Mark special tiles (spawn points on partial edges)
-                        if (edge.Partial && j == numSteps)
-                        {
-                            // This is an endpoint of a partial edge - mark as spawn
-                            tile.Symbol = GetNextSpawnId(data);
-                        }
-
-                        data.AddTile(tile);
-                        walkablePositions.Add(gridPos);
+                        tile.Symbol = GetNextSpawnId(data);
                     }
+
+                    data.AddTile(tile);
+                    walkablePositions.Add(gridPos);
                 }
             }
         }
