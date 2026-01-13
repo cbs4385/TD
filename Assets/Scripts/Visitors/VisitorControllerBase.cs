@@ -353,6 +353,14 @@ namespace FaeMaze.Visitors
                 {
                     UpdateWalking();
                 }
+                else
+                {
+                    Debug.Log($"[Pathfinding] {name}: Skipping UpdateWalking - isCalculatingPath={isCalculatingPath}");
+                }
+            }
+            else if (Time.frameCount % 60 == 0) // Log once per second
+            {
+                Debug.Log($"[Pathfinding] {name}: Not in movement state. state={state}, worldPath={(worldPath != null ? worldPath.Count.ToString() : "null")} waypoints");
             }
         }
 
@@ -689,6 +697,8 @@ namespace FaeMaze.Visitors
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
             }
+
+            Debug.Log($"[Pathfinding] {name}: Initialize called. mazeGridBehaviour={mazeGridBehaviour != null}, WorldSpaceMazeData={mazeGridBehaviour?.WorldSpaceMazeData != null}");
         }
 
         /// <summary>
@@ -709,7 +719,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual void SetWorldDestination(Vector3 destination)
         {
-            // Debug.Log($"[Pathfinding] {name}: SetWorldDestination called with destination {destination}");
+            Debug.Log($"[Pathfinding] {name}: SetWorldDestination called with destination {destination}");
 
             worldDestination = destination;
             originalDestination = destination;
@@ -727,20 +737,18 @@ namespace FaeMaze.Visitors
             previousState = state;
 
             // Build world-space path from current position to destination
+            Debug.Log($"[Pathfinding] {name}: About to call BuildWorldPath. mazeGridBehaviour={mazeGridBehaviour != null}, WorldSpaceMazeData={mazeGridBehaviour?.WorldSpaceMazeData != null}");
             worldPath = BuildWorldPath(transform.position, destination);
+            Debug.Log($"[Pathfinding] {name}: BuildWorldPath returned {(worldPath != null ? worldPath.Count.ToString() : "null")} waypoints");
 
             if (worldPath != null && worldPath.Count > 0)
             {
                 state = VisitorState.Walking;
-
-                if (ShouldLogVisitorPath())
-                {
-                    LogVisitorPath($"SetWorldDestination to {destination}. Path has {worldPath.Count} waypoints.");
-                }
+                Debug.Log($"[Pathfinding] {name}: Path built with {worldPath.Count} waypoints. State set to Walking.");
             }
             else
             {
-                // Debug.LogWarning($"[{name}] SetWorldDestination: No path found from {transform.position} to {destination}");
+                Debug.LogWarning($"[Pathfinding] {name}: No path found from {transform.position} to {destination}");
                 state = VisitorState.Idle;
             }
         }
@@ -753,7 +761,7 @@ namespace FaeMaze.Visitors
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
-                // Debug.Log($"[Pathfinding] {name}: No maze data, using direct path to {end}");
+                Debug.LogWarning($"[Pathfinding] {name}: No maze data available (mazeGridBehaviour={mazeGridBehaviour != null}, WorldSpaceMazeData={mazeGridBehaviour?.WorldSpaceMazeData != null})");
                 return new List<Vector3> { end };
             }
 
@@ -763,13 +771,13 @@ namespace FaeMaze.Visitors
             Vector2 startPos2D = new Vector2(start.x, start.y);
             Vector2 endPos2D = new Vector2(end.x, end.y);
 
-            // Debug.Log($"[Pathfinding] {name}: Building tile-based path from {start} to {end}");
+            Debug.Log($"[Pathfinding] {name}: Building tile-based path from {start} to {end}");
 
             // Find nearest walkable tile to start position
             var startTile = FindNearestWalkableTile(mazeData, startPos2D);
             if (startTile == null)
             {
-                // Debug.LogWarning($"[Pathfinding] {name}: No walkable tile near start {start}");
+                Debug.LogWarning($"[Pathfinding] {name}: No walkable tile near start {start}");
                 return new List<Vector3> { end };
             }
 
@@ -777,26 +785,60 @@ namespace FaeMaze.Visitors
             var endTile = FindNearestWalkableTile(mazeData, endPos2D);
             if (endTile == null)
             {
-                // Debug.LogWarning($"[Pathfinding] {name}: No walkable tile near end {end}");
+                Debug.LogWarning($"[Pathfinding] {name}: No walkable tile near end {end}");
                 return new List<Vector3> { end };
             }
 
-            // Debug: count walkable tiles
+            // Debug: count walkable tiles and analyze tile distribution
             int totalTiles = mazeData.Tiles.Count;
             int walkableTiles = 0;
+            int edgeTiles = 0;
+            int nodeTiles = 0;
             foreach (var t in mazeData.Tiles)
             {
-                if (t.Walkable) walkableTiles++;
+                if (t.Walkable)
+                {
+                    walkableTiles++;
+                    if (t.EdgeIndex >= 0) edgeTiles++;
+                    if (t.NodeIndex >= 0) nodeTiles++;
+                }
             }
-            // Debug.Log($"[Pathfinding] {name}: Start tile at {startTile.Position}, End tile at {endTile.Position}");
-            // Debug.Log($"[Pathfinding] {name}: MazeData has {totalTiles} tiles ({walkableTiles} walkable)");
+            Debug.Log($"[Pathfinding] {name}: Start tile at {startTile.Position} (edge={startTile.EdgeIndex}, node={startTile.NodeIndex})");
+            Debug.Log($"[Pathfinding] {name}: End tile at {endTile.Position} (edge={endTile.EdgeIndex}, node={endTile.NodeIndex})");
+            Debug.Log($"[Pathfinding] {name}: MazeData has {totalTiles} tiles ({walkableTiles} walkable: {edgeTiles} edge, {nodeTiles} node)");
+
+            // Log edge-to-node connections for start edge
+            if (startTile.EdgeIndex >= 0 && mazeData.EdgeToNodes.TryGetValue(startTile.EdgeIndex, out var startEdgeNodes))
+            {
+                Debug.Log($"[Pathfinding] {name}: Edge {startTile.EdgeIndex} connects to nodes: [{string.Join(", ", startEdgeNodes)}]");
+
+                // Find the nearest node tile to start position to check distance
+                float nearestNodeTileDist = float.MaxValue;
+                ForestMaze.WorldSpaceTile nearestNodeTile = null;
+                foreach (var t in mazeData.Tiles)
+                {
+                    if (t.NodeIndex >= 0 && startEdgeNodes.Contains(t.NodeIndex))
+                    {
+                        float dist = Vector2.Distance(startTile.Position, t.Position);
+                        if (dist < nearestNodeTileDist)
+                        {
+                            nearestNodeTileDist = dist;
+                            nearestNodeTile = t;
+                        }
+                    }
+                }
+                if (nearestNodeTile != null)
+                {
+                    Debug.Log($"[Pathfinding] {name}: Nearest connected node tile is {nearestNodeTileDist:F2} units away at {nearestNodeTile.Position} (node={nearestNodeTile.NodeIndex})");
+                }
+            }
 
             // BFS through walkable tiles
             var tilePath = FindTilePath(mazeData, startTile, endTile);
 
             if (tilePath == null || tilePath.Count == 0)
             {
-                // Debug.LogWarning($"[Pathfinding] {name}: No tile path found from {startTile.Position} to {endTile.Position}");
+                Debug.LogWarning($"[Pathfinding] {name}: No tile path found from {startTile.Position} to {endTile.Position}");
                 // Return empty list to indicate failure - caller should handle fallback
                 return new List<Vector3>();
             }
@@ -866,6 +908,9 @@ namespace FaeMaze.Visitors
         {
             try
             {
+                // Reset connectivity logging for this pathfinding session
+                ForestMaze.WorldSpaceMazeData.ResetConnectivityLogCount();
+
                 if (startTile == endTile)
                 {
                     // Debug.Log($"[Pathfinding] {name}: A* - start equals end, returning single tile");
@@ -890,16 +935,16 @@ namespace FaeMaze.Visitors
                 openSet.Add(startTile);
                 parent[startTile] = null;
 
-                // Tiles are placed at 1.0 unit intervals; diagonal neighbors are sqrt(2) ≈ 1.414 apart
-                // Use 1.5 to ensure we connect tiles even with slight positioning variations
-                float neighborRadius = mazeData.TileSize * 1.5f;
+                // Tiles are placed at ~0.5 unit intervals along curves and 1.0 in nodes
+                // Use 1.42 (sqrt(2)) to connect diagonal neighbors but not jump across paths
+                float neighborRadius = mazeData.TileSize * 1.42f;
 
                 int iterations = 0;
                 int maxIterations = 50000; // Safety limit
                 bool loggedFirstIteration = false;
 
                 float startToEndDist = Vector2.Distance(startTile.Position, endTile.Position);
-                // Debug.Log($"[Pathfinding] {name}: A* starting - distance to target: {startToEndDist:F1} units");
+                Debug.Log($"[Pathfinding] {name}: A* starting - distance to target: {startToEndDist:F1} units, neighborRadius: {neighborRadius}");
 
                 while (openSet.Count > 0 && iterations < maxIterations)
                 {
@@ -979,7 +1024,7 @@ namespace FaeMaze.Visitors
                                 if (d <= neighborRadius) walkableNeighbors++;
                             }
                         }
-                        // Debug.Log($"[Pathfinding] {name}: A* first iteration - {neighbors.Count} nearby tiles, {walkableNeighbors} walkable neighbors within radius {neighborRadius}");
+                        Debug.Log($"[Pathfinding] {name}: A* first iteration - {neighbors.Count} nearby tiles, {walkableNeighbors} walkable neighbors within radius {neighborRadius}");
                     }
 
                     float currentG = gScore.TryGetValue(current, out float cg) ? cg : float.MaxValue;
@@ -989,13 +1034,13 @@ namespace FaeMaze.Visitors
                         if (!neighbor.Walkable) continue;
                         if (closedSet.Contains(neighbor)) continue;
 
-                        // Must be within neighbor radius
+                        // Must be within neighbor radius (world-space distance)
                         float stepDist = Vector2.Distance(current.Position, neighbor.Position);
                         if (stepDist > neighborRadius) continue;
 
-                        // Line-of-sight check: verify the path between tiles doesn't cross unwalkable area
-                        // Sample points along the line and ensure each is near a walkable tile
-                        if (!HasLineOfSight(mazeData, current.Position, neighbor.Position))
+                        // Topology check: verify tiles are connected through graph structure
+                        // This prevents jumping between parallel paths that happen to be close
+                        if (!mazeData.AreTilesConnected(current, neighbor))
                             continue;
 
                         // Calculate tentative gScore (actual distance traveled)
@@ -1029,7 +1074,7 @@ namespace FaeMaze.Visitors
                         closestTile = v;
                     }
                 }
-                // Debug.LogWarning($"[Pathfinding] {name}: A* FAILED after {iterations} iterations (visited {closedSet.Count} tiles, closest to end: {closestDistToEnd:F1} units)");
+                Debug.LogWarning($"[Pathfinding] {name}: A* FAILED after {iterations} iterations (visited {closedSet.Count} tiles, closest to end: {closestDistToEnd:F1} units, openSet remaining: {openSet.Count})");
 
                 // Log sample of visited tiles to understand the network
                 var visitedList = new List<ForestMaze.WorldSpaceTile>(closedSet);
@@ -1045,7 +1090,7 @@ namespace FaeMaze.Visitors
                 {
                     sampleTiles.Append($" | Closest: ({closestTile.Position.x:F1},{closestTile.Position.y:F1})");
                 }
-                // Debug.LogWarning(sampleTiles.ToString());
+                Debug.LogWarning(sampleTiles.ToString());
 
                 return null; // No path found
             }
@@ -1691,7 +1736,20 @@ namespace FaeMaze.Visitors
             // Default: just advance to next waypoint
             if (worldPath != null && worldPathIndex < worldPath.Count)
             {
+                Vector3 completedWaypoint = worldPath[worldPathIndex];
                 worldPathIndex++;
+
+                // Log tile crossing with world-space coordinates
+                if (worldPathIndex < worldPath.Count)
+                {
+                    Vector3 nextWaypoint = worldPath[worldPathIndex];
+                    Debug.Log($"[PathCrossing] {name}: Crossed tile at ({completedWaypoint.x:F2}, {completedWaypoint.y:F2}) -> next: ({nextWaypoint.x:F2}, {nextWaypoint.y:F2}), progress: {worldPathIndex}/{worldPath.Count}");
+                }
+                else
+                {
+                    Debug.Log($"[PathCrossing] {name}: Crossed final tile at ({completedWaypoint.x:F2}, {completedWaypoint.y:F2}), path complete");
+                }
+
                 if (worldPathIndex >= worldPath.Count)
                 {
                     OnPathCompleted();
@@ -1729,10 +1787,54 @@ namespace FaeMaze.Visitors
                     OnConsumedByHeart();
                     return;
                 }
+
+                // Check if at a portal (destination spawn point) - visitor exits the maze
+                if (IsAtPortal())
+                {
+                    state = VisitorState.Escaping;
+                    OnExitedThroughPortal();
+                    return;
+                }
             }
 
             // Otherwise, just become idle
             state = VisitorState.Idle;
+        }
+
+        /// <summary>
+        /// Checks if the visitor is at a portal (spawn point) position.
+        /// </summary>
+        protected virtual bool IsAtPortal()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+                return false;
+
+            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
+            Vector3 currentPos = transform.position;
+
+            foreach (var kvp in spawnPoints)
+            {
+                float distToSpawn = Vector3.Distance(currentPos, kvp.Value);
+                if (distToSpawn < 3f) // Within 3 units of a portal
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Called when a visitor successfully exits the maze through a portal.
+        /// The visitor leaves the game without awarding essence to the player.
+        /// </summary>
+        protected virtual void OnExitedThroughPortal()
+        {
+            // Visitor escaped - no essence reward for the player
+            // Visual feedback could be added here (particle effect, sound, etc.)
+
+            // Destroy the visitor
+            Destroy(gameObject, 0.1f);
         }
 
         /// <summary>
@@ -2325,22 +2427,50 @@ namespace FaeMaze.Visitors
 
         protected virtual void OnDrawGizmos()
         {
-            // Draw world-space path
+            // Draw world-space path with waypoint spheres
             if (worldPath != null && worldPath.Count > 0)
             {
+                // Draw path lines in cyan
                 Gizmos.color = Color.cyan;
-
                 for (int i = 0; i < worldPath.Count - 1; i++)
                 {
                     Gizmos.DrawLine(worldPath[i], worldPath[i + 1]);
                 }
 
-                // Draw current target
-                if (IsMovementState(state) && worldPathIndex < worldPath.Count)
+                // Draw every waypoint as a small sphere
+                // Already traversed waypoints in gray
+                // Upcoming waypoints in magenta
+                // Current target in yellow (larger)
+                for (int i = 0; i < worldPath.Count; i++)
                 {
-                    Gizmos.color = Color.yellow;
-                    Gizmos.DrawWireSphere(worldPath[worldPathIndex], 0.3f);
+                    if (i < worldPathIndex)
+                    {
+                        // Already passed - gray
+                        Gizmos.color = Color.gray;
+                        Gizmos.DrawWireSphere(worldPath[i], 0.15f);
+                    }
+                    else if (i == worldPathIndex && IsMovementState(state))
+                    {
+                        // Current target - yellow (larger)
+                        Gizmos.color = Color.yellow;
+                        Gizmos.DrawWireSphere(worldPath[i], 0.4f);
+                        Gizmos.DrawSphere(worldPath[i], 0.2f);
+                    }
+                    else
+                    {
+                        // Upcoming waypoints - magenta
+                        Gizmos.color = Color.magenta;
+                        Gizmos.DrawWireSphere(worldPath[i], 0.2f);
+                    }
                 }
+
+                // Draw waypoint indices as text labels (every 10th waypoint for clarity)
+                #if UNITY_EDITOR
+                for (int i = 0; i < worldPath.Count; i += 10)
+                {
+                    UnityEditor.Handles.Label(worldPath[i] + Vector3.up * 0.5f, i.ToString());
+                }
+                #endif
             }
 
             // Draw destination
@@ -2349,6 +2479,10 @@ namespace FaeMaze.Visitors
                 Gizmos.color = Color.green;
                 Gizmos.DrawWireSphere(originalDestination, 0.5f);
             }
+
+            // Draw visitor position and direction
+            Gizmos.color = Color.white;
+            Gizmos.DrawWireSphere(transform.position, 0.25f);
         }
 
         #endregion

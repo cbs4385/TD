@@ -36,6 +36,10 @@ namespace FaeMaze.Systems
         [SerializeField]
         private bool drawGizmos = true;
 
+        [SerializeField]
+        [Tooltip("Draw individual tiles with their edge/node connectivity info")]
+        private bool drawTileConnectivity = false;
+
         #endregion
 
         #region Private Fields
@@ -263,7 +267,79 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Draw tile connectivity info if enabled
+            if (drawTileConnectivity)
+            {
+                DrawTileConnectivityGizmos();
+            }
+
             Gizmos.color = originalColor;
+        }
+
+        /// <summary>
+        /// Draws gizmos showing tile connectivity information for debugging pathfinding.
+        /// Edge tiles: orange, Node tiles: green, with lines showing which tiles connect.
+        /// </summary>
+        private void DrawTileConnectivityGizmos()
+        {
+            if (worldSpaceMazeData == null) return;
+
+            float neighborRadius = worldSpaceMazeData.TileSize * 1.42f;
+
+            foreach (var tile in worldSpaceMazeData.Tiles)
+            {
+                if (!tile.Walkable) continue;
+
+                Vector3 pos = new Vector3(tile.Position.x, tile.Position.y, 0f);
+
+                // Color based on tile type
+                if (tile.EdgeIndex >= 0)
+                {
+                    // Edge tile - orange with different hues per edge
+                    float hue = (tile.EdgeIndex * 0.137f) % 1f; // Golden ratio for distinct colors
+                    Gizmos.color = Color.HSVToRGB(hue, 0.8f, 0.9f);
+                    Gizmos.DrawWireCube(pos, Vector3.one * 0.3f);
+                }
+                else if (tile.NodeIndex >= 0)
+                {
+                    // Node tile - green with different hues per node
+                    float hue = (tile.NodeIndex * 0.137f + 0.33f) % 1f;
+                    Gizmos.color = Color.HSVToRGB(hue, 0.6f, 0.9f);
+                    Gizmos.DrawWireSphere(pos, 0.2f);
+                }
+
+                // Draw connections to nearby tiles within neighbor radius
+                var neighbors = worldSpaceMazeData.GetTilesNear(tile.Position, neighborRadius);
+                foreach (var neighbor in neighbors)
+                {
+                    if (!neighbor.Walkable || neighbor == tile) continue;
+
+                    float dist = Vector2.Distance(tile.Position, neighbor.Position);
+                    if (dist > neighborRadius) continue;
+
+                    // Only draw if topologically connected
+                    if (worldSpaceMazeData.AreTilesConnected(tile, neighbor))
+                    {
+                        Vector3 neighborPos = new Vector3(neighbor.Position.x, neighbor.Position.y, 0f);
+
+                        // Different colors for same-edge, same-node, or edge-to-node
+                        if (tile.EdgeIndex >= 0 && tile.EdgeIndex == neighbor.EdgeIndex)
+                        {
+                            Gizmos.color = new Color(1f, 0.5f, 0f, 0.3f); // Orange for same edge
+                        }
+                        else if (tile.NodeIndex >= 0 && tile.NodeIndex == neighbor.NodeIndex)
+                        {
+                            Gizmos.color = new Color(0f, 1f, 0.5f, 0.3f); // Green for same node
+                        }
+                        else
+                        {
+                            Gizmos.color = new Color(1f, 1f, 0f, 0.5f); // Yellow for edge-to-node
+                        }
+
+                        Gizmos.DrawLine(pos, neighborPos);
+                    }
+                }
+            }
         }
 
         #endregion

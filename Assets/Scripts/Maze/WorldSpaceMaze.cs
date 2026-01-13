@@ -33,6 +33,20 @@ namespace ForestMaze
         /// <summary>Size of the tile in world units</summary>
         public float Size;
 
+        /// <summary>
+        /// For path tiles: the index of the edge this tile belongs to.
+        /// For node tiles: -1.
+        /// Used for pathfinding to ensure tiles are properly connected.
+        /// </summary>
+        public int EdgeIndex = -1;
+
+        /// <summary>
+        /// For node tiles: the index of the node this tile belongs to.
+        /// For path tiles: -1.
+        /// Used for pathfinding to connect edges through nodes.
+        /// </summary>
+        public int NodeIndex = -1;
+
         public enum TileCategory
         {
             Path,       // Walkable path along edges
@@ -114,6 +128,12 @@ namespace ForestMaze
 
         /// <summary>Spawn points mapped by their ID character to portal transform (for real-time position)</summary>
         public Dictionary<char, Transform> SpawnPointTransforms = new Dictionary<char, Transform>();
+
+        /// <summary>
+        /// Maps edge index to the set of node indices it connects to.
+        /// Used by pathfinding to verify tile connectivity through graph topology.
+        /// </summary>
+        public Dictionary<int, HashSet<int>> EdgeToNodes = new Dictionary<int, HashSet<int>>();
 
         /// <summary>Spatial lookup for quick tile access by position</summary>
         private Dictionary<Vector2Int, List<WorldSpaceTile>> _spatialGrid;
@@ -319,6 +339,77 @@ namespace ForestMaze
             Vector3 size = new Vector3(maxX - minX, maxY - minY, 1);
             WorldBounds = new Bounds(center, size);
         }
+
+        /// <summary>
+        /// Checks if two tiles are topologically connected through the graph.
+        /// Tiles are connected if:
+        /// - Both are on the same edge (same EdgeIndex)
+        /// - Both are in the same node (same NodeIndex)
+        /// - One is on an edge and other is in a node that the edge connects to
+        /// </summary>
+        public bool AreTilesConnected(WorldSpaceTile tileA, WorldSpaceTile tileB)
+        {
+            // Debug: Log connectivity check for first few calls
+            bool shouldLog = _connectivityLogCount < 20;
+            if (shouldLog)
+            {
+                _connectivityLogCount++;
+                UnityEngine.Debug.Log($"[TileConnect] Checking: A(edge={tileA.EdgeIndex}, node={tileA.NodeIndex}, pos={tileA.Position}) vs B(edge={tileB.EdgeIndex}, node={tileB.NodeIndex}, pos={tileB.Position})");
+            }
+
+            // Same edge - connected
+            if (tileA.EdgeIndex >= 0 && tileA.EdgeIndex == tileB.EdgeIndex)
+            {
+                if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: same edge {tileA.EdgeIndex}");
+                return true;
+            }
+
+            // Same node - connected
+            if (tileA.NodeIndex >= 0 && tileA.NodeIndex == tileB.NodeIndex)
+            {
+                if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: same node {tileA.NodeIndex}");
+                return true;
+            }
+
+            // Edge tile to node tile - check if edge connects to that node
+            if (tileA.EdgeIndex >= 0 && tileB.NodeIndex >= 0)
+            {
+                if (EdgeToNodes.TryGetValue(tileA.EdgeIndex, out var connectedNodes))
+                {
+                    if (connectedNodes.Contains(tileB.NodeIndex))
+                    {
+                        if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: edge {tileA.EdgeIndex} connects to node {tileB.NodeIndex}");
+                        return true;
+                    }
+                }
+            }
+
+            // Node tile to edge tile - check if edge connects to that node
+            if (tileA.NodeIndex >= 0 && tileB.EdgeIndex >= 0)
+            {
+                if (EdgeToNodes.TryGetValue(tileB.EdgeIndex, out var connectedNodes))
+                {
+                    if (connectedNodes.Contains(tileA.NodeIndex))
+                    {
+                        if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: node {tileA.NodeIndex} connects to edge {tileB.EdgeIndex}");
+                        return true;
+                    }
+                }
+            }
+
+            if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> NOT CONNECTED");
+            return false;
+        }
+
+        private static int _connectivityLogCount = 0;
+
+        /// <summary>
+        /// Resets the connectivity log counter (call when starting new pathfinding).
+        /// </summary>
+        public static void ResetConnectivityLogCount()
+        {
+            _connectivityLogCount = 0;
+        }
     }
 
     /// <summary>
@@ -349,6 +440,9 @@ namespace ForestMaze
             // Track which positions have walkable tiles for wall generation
             var walkableTilePositions = new HashSet<Vector2Int>();
 
+            // Build edge-to-node connectivity map for pathfinding
+            BuildEdgeToNodeMap(state, data);
+
             // Step 1: Generate path tiles along edges (oriented along edge direction)
             GenerateEdgeTiles(state, data, walkableTilePositions, tileSize);
 
@@ -372,7 +466,57 @@ namespace ForestMaze
             // Verify spatial grid is populated correctly
             int gridCellCount = data.GetSpatialGridCellCount();
             int walkableCount = data.Tiles.Count(t => t.Walkable);
-            // UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated {data.Tiles.Count} tiles ({walkableCount} walkable) in {gridCellCount} spatial grid cells");
+            int pathCount = data.Tiles.Count(t => t.Category == WorldSpaceTile.TileCategory.Path);
+            int nodeCount = data.Tiles.Count(t => t.Category == WorldSpaceTile.TileCategory.Node);
+            int wallCount = data.Tiles.Count(t => t.Category == WorldSpaceTile.TileCategory.Wall);
+
+            // Debug: Check edge-to-node connectivity
+            int edgeTilesWithNodeConnection = 0;
+            int nodeTilesWithEdgeConnection = 0;
+            float neighborRadius = tileSize * 1.42f;
+
+            foreach (var tile in data.Tiles)
+            {
+                if (!tile.Walkable) continue;
+
+                if (tile.EdgeIndex >= 0)
+                {
+                    // Check if this edge tile has a nearby node tile
+                    var nearby = data.GetTilesNear(tile.Position, neighborRadius);
+                    foreach (var neighbor in nearby)
+                    {
+                        if (neighbor.NodeIndex >= 0 && neighbor.Walkable)
+                        {
+                            float dist = Vector2.Distance(tile.Position, neighbor.Position);
+                            if (dist <= neighborRadius && data.AreTilesConnected(tile, neighbor))
+                            {
+                                edgeTilesWithNodeConnection++;
+                                break;
+                            }
+                        }
+                    }
+                }
+                else if (tile.NodeIndex >= 0)
+                {
+                    // Check if this node tile has a nearby edge tile
+                    var nearby = data.GetTilesNear(tile.Position, neighborRadius);
+                    foreach (var neighbor in nearby)
+                    {
+                        if (neighbor.EdgeIndex >= 0 && neighbor.Walkable)
+                        {
+                            float dist = Vector2.Distance(tile.Position, neighbor.Position);
+                            if (dist <= neighborRadius && data.AreTilesConnected(tile, neighbor))
+                            {
+                                nodeTilesWithEdgeConnection++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated {data.Tiles.Count} tiles ({walkableCount} walkable: {pathCount} path, {nodeCount} node) + {wallCount} walls in {gridCellCount} spatial grid cells");
+            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Edge-node connectivity: {edgeTilesWithNodeConnection}/{pathCount} edge tiles connect to nodes, {nodeTilesWithEdgeConnection}/{nodeCount} node tiles connect to edges");
 
             return data;
         }
@@ -384,8 +528,37 @@ namespace ForestMaze
         private const float MAX_TILE_GAP = 0.25f;
 
         /// <summary>
+        /// Builds the edge-to-node connectivity map from the graph state.
+        /// Maps each edge index to the node indices it connects.
+        /// </summary>
+        private static void BuildEdgeToNodeMap(
+            PlanarForestMazeGenerator.ForestMapState state,
+            WorldSpaceMazeData data)
+        {
+            data.EdgeToNodes.Clear();
+
+            for (int edgeIndex = 0; edgeIndex < state.Edges.Count; edgeIndex++)
+            {
+                var edge = state.Edges[edgeIndex];
+                var connectedNodes = new HashSet<int>();
+
+                // NodeA is always set
+                connectedNodes.Add(edge.NodeA);
+
+                // NodeB is set for complete edges (not partial/frontier)
+                if (edge.NodeB.HasValue)
+                {
+                    connectedNodes.Add(edge.NodeB.Value);
+                }
+
+                data.EdgeToNodes[edgeIndex] = connectedNodes;
+            }
+        }
+
+        /// <summary>
         /// Generates path tiles along each edge, oriented in the direction of the edge.
-        /// Uses Bezier curve sampling when available for smooth curves with proper tangent orientation.
+        /// Always uses the polyline points which represent the actual curved S-path.
+        /// (The BezierCurve on edges is simplified and doesn't match the actual path.)
         /// Ensures maximum gap of 0.25 units between tiles.
         /// </summary>
         private static void GenerateEdgeTiles(
@@ -394,20 +567,15 @@ namespace ForestMaze
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
         {
-            foreach (var edge in state.Edges)
+            for (int edgeIndex = 0; edgeIndex < state.Edges.Count; edgeIndex++)
             {
+                var edge = state.Edges[edgeIndex];
                 if (edge.PolylinePoints.Count < 2) continue;
 
-                // If edge has a curve, sample it directly for smooth orientation
-                if (edge.Curve != null)
-                {
-                    GenerateTilesFromCurve(edge, data, walkablePositions, tileSize);
-                }
-                else
-                {
-                    // Fallback to polyline-based generation
-                    GenerateTilesFromPolyline(edge, data, walkablePositions, tileSize);
-                }
+                // Always use polyline-based generation since PolylinePoints contains
+                // the actual S-curved path shape. The edge.Curve is a simplified Bezier
+                // that doesn't match the actual visual path.
+                GenerateTilesFromPolyline(edge, edgeIndex, data, walkablePositions, tileSize);
             }
         }
 
@@ -416,12 +584,16 @@ namespace ForestMaze
         /// </summary>
         private static void GenerateTilesFromCurve(
             PlanarForestMazeGenerator.Edge edge,
+            int edgeIndex,
             WorldSpaceMazeData data,
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
         {
             // Sample the curve with orientations at max 0.25 unit gaps
             var samples = edge.Curve.SampleWithOrientations(tileSize * 0.5f, MAX_TILE_GAP);
+
+            // Minimum distance for world-space deduplication (half tile size for dense coverage)
+            float minTileSpacing = tileSize * 0.3f;
 
             for (int i = 0; i < samples.Count; i++)
             {
@@ -431,10 +603,12 @@ namespace ForestMaze
                 // Calculate orientation from tangent
                 float orientation = Mathf.Atan2(tangent.y, tangent.x);
 
-                Vector2Int gridPos = ToGridPosition(position, tileSize);
-                if (walkablePositions.Contains(gridPos)) continue;
+                // Use world-space proximity check instead of grid snapping
+                // This ensures tiles along the actual path are kept even if they'd snap to the same grid cell
+                if (HasTileNearPosition(data, position, minTileSpacing)) continue;
 
                 var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
+                tile.EdgeIndex = edgeIndex;
 
                 // Mark special tiles (spawn points on partial edges at endpoint)
                 if (edge.Partial && i == samples.Count - 1)
@@ -443,7 +617,8 @@ namespace ForestMaze
                 }
 
                 data.AddTile(tile);
-                walkablePositions.Add(gridPos);
+                // Still track grid position for wall generation
+                walkablePositions.Add(ToGridPosition(position, tileSize));
             }
         }
 
@@ -452,12 +627,16 @@ namespace ForestMaze
         /// </summary>
         private static void GenerateTilesFromPolyline(
             PlanarForestMazeGenerator.Edge edge,
+            int edgeIndex,
             WorldSpaceMazeData data,
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
         {
             // Use small step size to ensure no gaps larger than MAX_TILE_GAP
             float stepSize = Mathf.Min(tileSize * 0.5f, MAX_TILE_GAP);
+
+            // Minimum distance for world-space deduplication
+            float minTileSpacing = tileSize * 0.3f;
 
             for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
             {
@@ -476,10 +655,11 @@ namespace ForestMaze
                     float t = numSteps > 0 ? (float)j / numSteps : 0;
                     Vector2 position = Vector2.Lerp(start, end, t);
 
-                    Vector2Int gridPos = ToGridPosition(position, tileSize);
-                    if (walkablePositions.Contains(gridPos)) continue;
+                    // Use world-space proximity check instead of grid snapping
+                    if (HasTileNearPosition(data, position, minTileSpacing)) continue;
 
                     var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
+                    tile.EdgeIndex = edgeIndex;
 
                     // Mark special tiles (spawn points on partial edges)
                     bool isLastSegment = (i == edge.PolylinePoints.Count - 2);
@@ -490,7 +670,8 @@ namespace ForestMaze
                     }
 
                     data.AddTile(tile);
-                    walkablePositions.Add(gridPos);
+                    // Still track grid position for wall generation
+                    walkablePositions.Add(ToGridPosition(position, tileSize));
                 }
             }
         }
@@ -509,6 +690,7 @@ namespace ForestMaze
                 return;
 
             float stepSize = tileSize * 0.5f;
+            float minTileSpacing = tileSize * 0.3f;
 
             foreach (var (start, end) in state.AdjustmentFills)
             {
@@ -525,12 +707,12 @@ namespace ForestMaze
                     float t = numSteps > 0 ? (float)j / numSteps : 0;
                     Vector2 position = Vector2.Lerp(start, end, t);
 
-                    Vector2Int gridPos = ToGridPosition(position, tileSize);
-                    if (walkablePositions.Contains(gridPos)) continue;
+                    // Use world-space proximity check instead of grid snapping
+                    if (HasTileNearPosition(data, position, minTileSpacing)) continue;
 
                     var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Path, tileSize);
                     data.AddTile(tile);
-                    walkablePositions.Add(gridPos);
+                    walkablePositions.Add(ToGridPosition(position, tileSize));
                 }
             }
 
@@ -546,8 +728,12 @@ namespace ForestMaze
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
         {
-            foreach (var node in state.Nodes)
+            // Use slightly smaller spacing for nodes since they overlap with edges at boundaries
+            float minTileSpacing = tileSize * 0.3f;
+
+            for (int nodeIndex = 0; nodeIndex < state.Nodes.Count; nodeIndex++)
             {
+                var node = state.Nodes[nodeIndex];
                 // Create a circular column of tiles with radius = NODE_RADIUS
                 // and same thickness as path (tileSize)
                 int tilesRadius = Mathf.CeilToInt(NODE_RADIUS / tileSize);
@@ -563,8 +749,9 @@ namespace ForestMaze
                         float distance = offset.magnitude;
                         if (distance > NODE_RADIUS) continue;
 
-                        Vector2Int gridPos = ToGridPosition(position, tileSize);
-                        if (walkablePositions.Contains(gridPos)) continue;
+                        // Use world-space proximity check - this ensures edge tiles near node boundary
+                        // don't get replaced by node tiles (edge tiles have connectivity info)
+                        if (HasTileNearPosition(data, position, minTileSpacing)) continue;
 
                         // Calculate orientation: radial from center (facing outward)
                         // For tiles at center, default to 0
@@ -576,6 +763,7 @@ namespace ForestMaze
                         }
 
                         var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Node, tileSize);
+                        tile.NodeIndex = nodeIndex;
 
                         // Mark special node tiles
                         if (dx == 0 && dy == 0)
@@ -591,7 +779,7 @@ namespace ForestMaze
                         }
 
                         data.AddTile(tile);
-                        walkablePositions.Add(gridPos);
+                        walkablePositions.Add(ToGridPosition(position, tileSize));
                     }
                 }
             }
@@ -668,6 +856,23 @@ namespace ForestMaze
                 Mathf.RoundToInt(worldPos.x / tileSize),
                 Mathf.RoundToInt(worldPos.y / tileSize)
             );
+        }
+
+        /// <summary>
+        /// Checks if a position is too close to an existing tile in the list.
+        /// Used for world-space proximity deduplication instead of grid snapping.
+        /// </summary>
+        private static bool HasTileNearPosition(WorldSpaceMazeData data, Vector2 position, float minDistance)
+        {
+            var nearbyTiles = data.GetTilesNear(position, minDistance);
+            foreach (var tile in nearbyTiles)
+            {
+                if (tile.Walkable && Vector2.Distance(tile.Position, position) < minDistance)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static Vector2 ToWorldPosition(Vector2Int gridPos, float tileSize)
