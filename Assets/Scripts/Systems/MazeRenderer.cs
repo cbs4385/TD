@@ -1195,21 +1195,6 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Distance from point to line segment.
-        /// </summary>
-        private float DistanceToLineSegment(Vector2 point, Vector2 start, Vector2 end)
-        {
-            Vector2 line = end - start;
-            float len2 = line.sqrMagnitude;
-
-            if (len2 < 0.0001f) return Vector2.Distance(point, start);
-
-            float t = Mathf.Clamp01(Vector2.Dot(point - start, line) / len2);
-            Vector2 projection = start + t * line;
-            return Vector2.Distance(point, projection);
-        }
-
-        /// <summary>
         /// Creates a tile at a world-space position with the given orientation.
         /// </summary>
         private void CreateWorldSpaceTile(Vector3 worldPos, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall)
