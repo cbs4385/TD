@@ -1,5 +1,5 @@
+using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using ForestMaze;
 
@@ -17,11 +17,15 @@ namespace FaeMaze.Systems
         [Header("Growth Settings")]
         [SerializeField]
         [Tooltip("Time in seconds between maze growth cycles")]
-        private float growthInterval = 10f;
+        private float growthInterval = 30f;
 
         [SerializeField]
         [Tooltip("Enable automatic maze growth")]
         private bool autoGrowth = true;
+
+        [SerializeField]
+        [Tooltip("Number of growth stages to complete before the game/UI starts")]
+        private int initialGrowthStages = 5;
 
         [Header("Portal Settings")]
         [SerializeField]
@@ -44,6 +48,8 @@ namespace FaeMaze.Systems
         private MazeGridBehaviour mazeGridBehaviour;
         private MazeRenderer mazeRenderer;
         private float nextGrowthTime;
+        private int completedInitialGrowthStages = 0;
+        private bool initialGrowthComplete = false;
 
         private const float NodeRadius = 3.0f;  // Logical radius (matches NODE_RADIUS in PlanarForestMazeGenerator)
         private const float PathRadius = 0.5f;  // Logical path radius
@@ -61,17 +67,43 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Events
+
+        /// <summary>
+        /// Event invoked when all initial growth stages have completed.
+        /// Subscribe to this event to know when the maze is ready for gameplay.
+        /// </summary>
+        public event System.Action OnInitialGrowthComplete;
+
+        #endregion
+
+        #region Properties
+
+        /// <summary>
+        /// Returns true when all initial growth stages have completed and the maze is ready for gameplay.
+        /// </summary>
+        public bool IsInitialGrowthComplete => initialGrowthComplete;
+
+        /// <summary>
+        /// Returns the number of initial growth stages that have been completed.
+        /// </summary>
+        public int CompletedInitialGrowthStages => completedInitialGrowthStages;
+
+        /// <summary>
+        /// Returns the total number of initial growth stages configured.
+        /// </summary>
+        public int TotalInitialGrowthStages => initialGrowthStages;
+
+        #endregion
+
         #region Unity Lifecycle
 
         private void Awake()
         {
             mazeGridBehaviour = GetComponent<MazeGridBehaviour>();
             mazeRenderer = GetComponent<MazeRenderer>();
-        }
 
-        private void Start()
-        {
-            // Create portals parent if not assigned
+            // Create portals parent early so it's available for initial growth
             if (portalsParent == null)
             {
                 GameObject portalsObj = new GameObject("Portals");
@@ -80,18 +112,199 @@ namespace FaeMaze.Systems
                 portalsParent = portalsObj.transform;
             }
 
+            // Run initial growth stages synchronously BEFORE the first frame renders
+            if (mazeGridBehaviour != null && mazeGridBehaviour.ForestMapState != null && initialGrowthStages > 0)
+            {
+                RunInitialGrowthStagesSynchronous();
+            }
+            else if (initialGrowthStages <= 0)
+            {
+                initialGrowthComplete = true;
+            }
+        }
+
+        private void Start()
+        {
             if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
             {
                 return;
             }
 
-            // Initialize portals at existing spawn points
+            // Initialize portals at existing spawn points (after initial growth is complete)
             InitializeSpawnPointPortals();
 
-            // Schedule first growth
+            // Fire the initial growth complete event (deferred to Start so listeners can subscribe in Awake)
+            if (initialGrowthComplete)
+            {
+                OnInitialGrowthComplete?.Invoke();
+            }
+
+            // Schedule regular auto-growth
             if (autoGrowth)
             {
                 nextGrowthTime = Time.time + growthInterval;
+            }
+        }
+
+        /// <summary>
+        /// Runs the configured number of initial growth stages SYNCHRONOUSLY before the first frame.
+        /// This ensures the maze is fully grown before anything is rendered.
+        /// </summary>
+        private void RunInitialGrowthStagesSynchronous()
+        {
+            Debug.Log($"[DynamicGrowth] Running {initialGrowthStages} initial growth stages synchronously...");
+
+            var forestMapState = mazeGridBehaviour.ForestMapState;
+
+            for (int i = 0; i < initialGrowthStages; i++)
+            {
+                if (forestMapState.Frontier.Count == 0)
+                {
+                    Debug.Log($"[DynamicGrowth] No more frontier edges at stage {i + 1}. Stopping early.");
+                    break;
+                }
+
+                Debug.Log($"[DynamicGrowth] Initial growth stage {i + 1}/{initialGrowthStages}");
+                GrowMazeSynchronous(forestMapState);
+                completedInitialGrowthStages = i + 1;
+            }
+
+            Debug.Log($"[DynamicGrowth] All {completedInitialGrowthStages} initial growth stages complete (synchronous).");
+            initialGrowthComplete = true;
+        }
+
+        /// <summary>
+        /// Synchronous version of maze growth for initial stages.
+        /// Runs all growth logic in a single frame without yielding.
+        /// </summary>
+        private void GrowMazeSynchronous(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
+        {
+            // Track state before step
+            var frontierIndicesBefore = new HashSet<int>(forestMapState.Frontier);
+            int nodeCountBefore = forestMapState.Nodes.Count;
+            int edgeCountBefore = forestMapState.Edges.Count;
+
+            // Store endpoint positions and frontier directions for all frontier edges BEFORE step
+            var frontierEndpoints = new Dictionary<int, Vector3>();
+            var frontierDirections = new Dictionary<int, Vector3>();
+            foreach (int edgeIndex in frontierIndicesBefore)
+            {
+                if (edgeIndex >= 0 && edgeIndex < forestMapState.Edges.Count)
+                {
+                    var edge = forestMapState.Edges[edgeIndex];
+                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
+                    {
+                        var endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                        var prevPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 2];
+                        frontierEndpoints[edgeIndex] = new Vector3(endpoint.x, endpoint.y, 0);
+                        Vector2 dir = (endpoint - prevPoint).normalized;
+                        frontierDirections[edgeIndex] = new Vector3(dir.x, dir.y, 0);
+                    }
+                }
+            }
+
+            // Step the graph
+            bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
+            if (!success)
+            {
+                Debug.Log("[DynamicGrowth] Synchronous growth step failed.");
+                return;
+            }
+
+            // Get the newly created node
+            int newNodeId = nodeCountBefore;
+            var newNode = forestMapState.Nodes[newNodeId];
+
+            // Find the CONSUMED spawn point
+            Vector3 consumedSpawnPos = Vector3.zero;
+            Vector3 consumedFrontierDir = Vector3.zero;
+            int consumedEdgeIndex = -1;
+            foreach (int edgeIndex in frontierIndicesBefore)
+            {
+                if (!forestMapState.Frontier.Contains(edgeIndex))
+                {
+                    consumedEdgeIndex = edgeIndex;
+                    if (frontierEndpoints.TryGetValue(edgeIndex, out Vector3 endpoint))
+                    {
+                        consumedSpawnPos = endpoint;
+                    }
+                    if (frontierDirections.TryGetValue(edgeIndex, out Vector3 dir))
+                    {
+                        consumedFrontierDir = dir;
+                    }
+                    break;
+                }
+            }
+
+            // Find new/modified edges
+            ForestMaze.PlanarForestMazeGenerator.Edge completedEdge = null;
+            var newEdges = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
+
+            if (consumedEdgeIndex >= 0 && consumedEdgeIndex < forestMapState.Edges.Count)
+            {
+                completedEdge = forestMapState.Edges[consumedEdgeIndex];
+            }
+
+            // Identify cross-connection target nodes
+            var crossConnectionTargetNodes = new List<ForestMaze.PlanarForestMazeGenerator.Node>();
+            for (int i = edgeCountBefore; i < forestMapState.Edges.Count; i++)
+            {
+                var edge = forestMapState.Edges[i];
+                newEdges.Add(edge);
+
+                if (!edge.Partial && edge.NodeB.HasValue && edge.NodeB.Value < nodeCountBefore)
+                {
+                    var targetNode = forestMapState.Nodes[edge.NodeB.Value];
+                    crossConnectionTargetNodes.Add(targetNode);
+                }
+            }
+
+            // All edges that need path tiles
+            var allEdgesForPathTiles = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
+            if (completedEdge != null) allEdgesForPathTiles.Add(completedEdge);
+            allEdgesForPathTiles.AddRange(newEdges);
+
+            // Regenerate world-space maze data
+            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
+            if (worldSpaceData != null)
+            {
+                worldSpaceData = ForestMaze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, mazeGridBehaviour.WorldSpaceTileSize);
+
+                var worldSpaceDataField = typeof(MazeGridBehaviour).GetField("worldSpaceMazeData",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (worldSpaceDataField != null)
+                {
+                    worldSpaceDataField.SetValue(mazeGridBehaviour, worldSpaceData);
+                }
+            }
+
+            // Render the new elements (synchronous)
+            if (mazeRenderer != null)
+            {
+                // Remove end cap walls
+                if (consumedSpawnPos != Vector3.zero && consumedFrontierDir != Vector3.zero)
+                {
+                    mazeRenderer.RemoveWallsPastEndpoint(consumedSpawnPos, consumedFrontierDir, 2.5f, -0.3f);
+                }
+
+                // Regenerate cross-connection walls
+                foreach (var targetNode in crossConnectionTargetNodes)
+                {
+                    mazeRenderer.RegenerateNodeWalls(targetNode, forestMapState.Edges);
+                }
+
+                // Remove path tiles around new node
+                Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
+                mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f);
+
+                // Add edge tiles
+                mazeRenderer.AddEdgeTilesIncremental(allEdgesForPathTiles);
+
+                // Add node tiles
+                mazeRenderer.AddNodeTilesIncremental(newNode);
+
+                // Add walls (synchronous version)
+                mazeRenderer.AddWallsIncremental(newEdges, newNode);
             }
         }
 
@@ -127,7 +340,6 @@ namespace FaeMaze.Systems
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null || forestMapState.Frontier.Count == 0)
             {
-                // Debug.LogWarning("[DynamicGrowth] No ForestMapState or frontier edges - skipping spawn point initialization");
                 return;
             }
 
@@ -148,14 +360,12 @@ namespace FaeMaze.Systems
         {
             if (mazeGridBehaviour == null)
             {
-                // Debug.LogWarning("[DynamicGrowth] MazeGridBehaviour is null");
                 return;
             }
 
             var forestMapState = mazeGridBehaviour.ForestMapState;
             if (forestMapState == null)
             {
-                // Debug.LogWarning("[DynamicGrowth] ForestMapState is null - make sure planar generator is being used");
                 return;
             }
 
@@ -165,44 +375,62 @@ namespace FaeMaze.Systems
             }
 
             // Pure world-space growth
-            GrowMazeWorldSpace(forestMapState);
+            StartCoroutine(GrowMazeWorldSpaceAsync(forestMapState));
         }
 
         /// <summary>
-        /// World-space version of GrowMaze.
+        /// World-space version of GrowMaze (coroutine-based for non-blocking execution).
         /// Works directly with world-space coordinates without any grid-based operations.
         /// Uses incremental rendering updates to avoid rebuilding the entire maze.
+        /// Spreads rendering work across multiple frames to prevent game lockup.
         /// </summary>
-        private void GrowMazeWorldSpace(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
+        private IEnumerator GrowMazeWorldSpaceAsync(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
         {
+            float startTime = Time.realtimeSinceStartup;
+            float lastTime = startTime;
+            Debug.Log($"[DynamicGrowth] Growth step START at {startTime:F4}s");
+
             // Track frontier edge indices before the step to identify consumed spawn point
             // Frontier is a HashSet<int> containing edge indices
             var frontierIndicesBefore = new HashSet<int>(forestMapState.Frontier);
             int nodeCountBefore = forestMapState.Nodes.Count;
             int edgeCountBefore = forestMapState.Edges.Count;
 
-            // Store endpoint positions for all frontier edges BEFORE step
+            // Store endpoint positions and frontier directions for all frontier edges BEFORE step
             var frontierEndpoints = new Dictionary<int, Vector3>();
+            var frontierDirections = new Dictionary<int, Vector3>();
             foreach (int edgeIndex in frontierIndicesBefore)
             {
                 if (edgeIndex >= 0 && edgeIndex < forestMapState.Edges.Count)
                 {
                     var edge = forestMapState.Edges[edgeIndex];
-                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
+                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
                     {
                         var endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+                        var prevPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 2];
                         frontierEndpoints[edgeIndex] = new Vector3(endpoint.x, endpoint.y, 0);
+                        Vector2 dir = (endpoint - prevPoint).normalized;
+                        frontierDirections[edgeIndex] = new Vector3(dir.x, dir.y, 0);
                     }
                 }
             }
 
+            float preStepTime = Time.realtimeSinceStartup;
+            Debug.Log($"[Timing] Pre-step setup: {(preStepTime - lastTime) * 1000:F2}ms");
+            lastTime = preStepTime;
+
             // Use the same Step() method as initial generation to add a new node
             bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
 
+            float postStepTime = Time.realtimeSinceStartup;
+            Debug.Log($"[Timing] Step(): {(postStepTime - lastTime) * 1000:F2}ms");
+            lastTime = postStepTime;
+
             if (!success)
             {
-                // Debug.LogWarning("[DynamicGrowth] Step() failed - no valid placement found");
-                return;
+                float failedEndTime = Time.realtimeSinceStartup;
+                Debug.Log($"[DynamicGrowth] Growth step END (failed) at {failedEndTime:F4}s (duration: {(failedEndTime - startTime) * 1000:F2}ms)");
+                yield break;
             }
 
             // Get the newly created node
@@ -211,38 +439,61 @@ namespace FaeMaze.Systems
 
             // Find the CONSUMED spawn point - the edge that was in frontier before but not after
             Vector3 consumedSpawnPos = Vector3.zero;
+            Vector3 consumedFrontierDir = Vector3.zero;
             int consumedEdgeIndex = -1;
             foreach (int edgeIndex in frontierIndicesBefore)
             {
                 if (!forestMapState.Frontier.Contains(edgeIndex))
                 {
-                    // This edge was consumed (removed from frontier)
                     consumedEdgeIndex = edgeIndex;
                     if (frontierEndpoints.TryGetValue(edgeIndex, out Vector3 endpoint))
                     {
                         consumedSpawnPos = endpoint;
-                        // Debug.Log($"[DynamicGrowth] Consumed spawn at edge {edgeIndex}, position {consumedSpawnPos}");
+                    }
+                    if (frontierDirections.TryGetValue(edgeIndex, out Vector3 dir))
+                    {
+                        consumedFrontierDir = dir;
                     }
                     break;
                 }
             }
 
-            // Find new/modified edges - ONLY the completed edge and new partial edges from this growth
+            // Find new/modified edges - separate completed edge from truly new edges
+            // The completed edge already has walls rendered - we only need to render path tiles for it
+            // Truly new edges need both path tiles AND walls
+            ForestMaze.PlanarForestMazeGenerator.Edge completedEdge = null;
             var newEdges = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
 
-            // Add the completed edge (was partial, now complete)
+            // The completed edge (was partial, now complete) - already has walls, just needs path tiles
             if (consumedEdgeIndex >= 0 && consumedEdgeIndex < forestMapState.Edges.Count)
             {
-                newEdges.Add(forestMapState.Edges[consumedEdgeIndex]);
+                completedEdge = forestMapState.Edges[consumedEdgeIndex];
             }
 
-            // Add truly new edges (index >= edgeCountBefore)
-            // Note: Merge and spacing operations now only modify these new edges,
-            // never existing edges. So we don't need special tracking for wall regeneration.
+            // Truly new edges (index >= edgeCountBefore) - need both path tiles AND walls
+            // Also identify cross-connection target nodes (existing nodes that receive a new edge)
+            var crossConnectionTargetNodes = new List<ForestMaze.PlanarForestMazeGenerator.Node>();
             for (int i = edgeCountBefore; i < forestMapState.Edges.Count; i++)
             {
-                newEdges.Add(forestMapState.Edges[i]);
+                var edge = forestMapState.Edges[i];
+                newEdges.Add(edge);
+
+                // Check if this is a cross-connection to an existing node
+                // Cross-connection: NodeB is an existing node (not the new node, not a partial edge)
+                if (!edge.Partial && edge.NodeB.HasValue && edge.NodeB.Value < nodeCountBefore)
+                {
+                    // This edge connects to an existing node - we need to regenerate that node's walls
+                    // The edge has already been added to NodeB's EdgeAngles by PlanarForestMazeGenerator
+                    var targetNode = forestMapState.Nodes[edge.NodeB.Value];
+                    crossConnectionTargetNodes.Add(targetNode);
+                    Debug.Log($"[CrossConnection] Edge {edge.Id}: NodeA={edge.NodeA} -> NodeB={edge.NodeB.Value} (existing). Will regenerate NodeB walls.");
+                }
             }
+
+            // All edges that need path tiles rendered (completed + new)
+            var allEdgesForPathTiles = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
+            if (completedEdge != null) allEdgesForPathTiles.Add(completedEdge);
+            allEdgesForPathTiles.AddRange(newEdges);
 
             // Capture old spawn point positions BEFORE regenerating WorldSpaceMazeData
             // GenerateFromGraph creates a new object with empty spawn points
@@ -259,7 +510,6 @@ namespace FaeMaze.Systems
             // This is needed for pathfinding to work correctly
             if (worldSpaceData != null)
             {
-                int oldTileCount = worldSpaceData.Tiles.Count;
                 worldSpaceData = ForestMaze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, mazeGridBehaviour.WorldSpaceTileSize);
 
                 var worldSpaceDataField = typeof(MazeGridBehaviour).GetField("worldSpaceMazeData",
@@ -268,72 +518,84 @@ namespace FaeMaze.Systems
                 {
                     worldSpaceDataField.SetValue(mazeGridBehaviour, worldSpaceData);
                 }
-
-                int walkableCount = worldSpaceData.Tiles.Count(t => t.Walkable);
-                // Debug.Log($"[DynamicGrowth] Regenerated WorldSpaceMazeData: {oldTileCount} -> {worldSpaceData.Tiles.Count} tiles ({walkableCount} walkable)");
             }
+
+            float postGenerateTime = Time.realtimeSinceStartup;
+            Debug.Log($"[Timing] GenerateFromGraph: {(postGenerateTime - lastTime) * 1000:F2}ms");
+            lastTime = postGenerateTime;
 
             // Rebuild portals from frontier edges using world-space coordinates
             // This also registers spawn points and signals affected visitors to retarget
             // Pass the captured old spawn positions since WorldSpaceMazeData was regenerated
             RebuildSpawnPointsFromFrontier(oldSpawnPositions);
 
-            // Note: TriggerVisitorPathRecalculation removed - it was redundant because:
-            // 1. Affected visitors get new paths through SignalAffectedVisitorsToRetarget()
-            // 2. Unaffected visitors have valid destinations and paths (maze only expands)
+            float postRebuildTime = Time.realtimeSinceStartup;
+            Debug.Log($"[Timing] RebuildSpawnPoints: {(postRebuildTime - lastTime) * 1000:F2}ms");
+            lastTime = postRebuildTime;
 
-            // Use INCREMENTAL rendering updates instead of full rebuild
+            // Yield after graph/portal setup to spread work across frames
+            yield return null;
+
+            // Use INCREMENTAL rendering updates (coroutine-based for non-blocking)
             if (mazeRenderer != null)
             {
-                // 1. Remove walls near the consumed spawn point (to open the passage)
-                // Radius needs to cover end cap walls which extend up to 1 unit beyond portal
-                if (consumedSpawnPos != Vector3.zero)
+                float renderStart = Time.realtimeSinceStartup;
+
+                // Only remove the portal end cap walls that are "past" the endpoint (in frontier direction)
+                // This preserves side walls along the path while removing the U-shaped end cap
+                if (consumedSpawnPos != Vector3.zero && consumedFrontierDir != Vector3.zero)
                 {
-                    mazeRenderer.RemoveWallsNearPosition(consumedSpawnPos, 3f);
+                    mazeRenderer.RemoveWallsPastEndpoint(consumedSpawnPos, consumedFrontierDir, 2.5f, -0.3f);
                 }
 
-                // 2. Remove walls and path tiles at the new node position (node radius + buffer)
+                // Regenerate walls for cross-connection target nodes (existing nodes that received a new edge)
+                // This removes all walls around the node and re-renders them with proper edge angle clearance
+                Debug.Log($"[CrossConnection] Regenerating walls for {crossConnectionTargetNodes.Count} cross-connection target nodes");
+                foreach (var targetNode in crossConnectionTargetNodes)
+                {
+                    Debug.Log($"[CrossConnection] Regenerating walls for Node {targetNode.Id} at {targetNode.Position}");
+                    mazeRenderer.RegenerateNodeWalls(targetNode, forestMapState.Edges);
+                }
+
+                // Remove path tiles only around the NEW node center (to place cylinder)
                 Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
-                mazeRenderer.RemoveWallsNearPosition(newNodeWorldPos, 5f); // Node radius is ~3, plus border
-                mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f); // Clear edge tiles to make room for node tiles
+                mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f);
 
-                // 3. Remove walls along new edge paths
-                // Use small radius - just clear walls that block the walkable path
-                // Node border clearance is handled by angle-based rendering (±9.5° per edge)
-                float wallRemovalStepSize = 0.5f;
-                float wallRemovalRadius = 0.7f; // Just larger than pathHalfWidth (0.5)
+                float afterRemove = Time.realtimeSinceStartup;
+                Debug.Log($"[Timing]   End cap removal: {(afterRemove - renderStart) * 1000:F2}ms");
 
-                foreach (var edge in newEdges)
-                {
-                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
-                    {
-                        for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
-                        {
-                            Vector2 start = edge.PolylinePoints[i];
-                            Vector2 end = edge.PolylinePoints[i + 1];
-                            float segmentLength = Vector2.Distance(start, end);
-                            int numSamples = Mathf.Max(2, Mathf.CeilToInt(segmentLength / wallRemovalStepSize));
+                // Yield after removals
+                yield return null;
 
-                            for (int j = 0; j <= numSamples; j++)
-                            {
-                                float t = (float)j / numSamples;
-                                Vector2 samplePoint = Vector2.Lerp(start, end, t);
-                                Vector3 pointWorldPos = new Vector3(samplePoint.x, samplePoint.y, 0);
-                                mazeRenderer.RemoveWallsNearPosition(pointWorldPos, wallRemovalRadius);
-                            }
-                        }
-                    }
-                }
+                // Add edge tiles for ALL edges (completed + new) - completed edge needs path extended
+                mazeRenderer.AddEdgeTilesIncremental(allEdgesForPathTiles);
 
-                // 4. Add tiles for the new node
+                float afterAddEdges = Time.realtimeSinceStartup;
+                Debug.Log($"[Timing]   AddEdgeTilesIncremental: {(afterAddEdges - afterRemove) * 1000:F2}ms");
+
+                // Add tiles for the new node AFTER edges
+                // Node cylinder visually covers edge tiles, node area marks positions as occupied
                 mazeRenderer.AddNodeTilesIncremental(newNode);
 
-                // 5. Add tiles for new edges
-                mazeRenderer.AddEdgeTilesIncremental(newEdges);
+                float afterAddNode = Time.realtimeSinceStartup;
+                Debug.Log($"[Timing]   AddNodeTilesIncremental: {(afterAddNode - afterAddEdges) * 1000:F2}ms");
 
-                // 6. Add walls around the new elements
-                mazeRenderer.AddWallsIncremental(newEdges, newNode);
+                // Yield before wall generation (the slowest part)
+                yield return null;
+
+                // Add walls around the new elements (using async version)
+                yield return StartCoroutine(mazeRenderer.AddWallsIncrementalAsync(newEdges, newNode));
+
+                float afterAddWalls = Time.realtimeSinceStartup;
+                Debug.Log($"[Timing]   AddWallsIncrementalAsync: {(afterAddWalls - afterAddEdges) * 1000:F2}ms");
             }
+
+            float postRenderTime = Time.realtimeSinceStartup;
+            Debug.Log($"[Timing] Incremental rendering: {(postRenderTime - lastTime) * 1000:F2}ms");
+
+            float endTime = Time.realtimeSinceStartup;
+            Debug.Log($"[DynamicGrowth] Growth step END at {endTime:F4}s (duration: {(endTime - startTime) * 1000:F2}ms)");
+            yield break;
         }
 
         /// <summary>
@@ -377,7 +639,6 @@ namespace FaeMaze.Systems
             if (worldSpaceData != null)
             {
                 worldSpaceData.ClearSpawnPoints();
-                // Debug.Log($"[DynamicGrowth] Cleared spawn points, frontier has {forestMapState.Frontier.Count} edges");
             }
 
             // Clear ALL existing portals
@@ -418,15 +679,13 @@ namespace FaeMaze.Systems
             nextSpawnIdIndex = 0;
 
             // Place portals at partial edge endpoints (the actual frontier)
-            int portalCount = 0;
             foreach (int edgeId in forestMapState.Frontier)
             {
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
 
-                // Get the connected node center (already in world space)
+                // Get the connected node (already in world space)
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
-                Vector3 nodeCenterWorld = new Vector3(connectedNode.Position.x, connectedNode.Position.y, 0f);
 
                 // Use the LAST polyline point (the actual frontier endpoint, already in world space)
                 Vector2 endpointPos = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
@@ -458,7 +717,6 @@ namespace FaeMaze.Systems
                 char spawnId = GetNextAvailableSpawnId();
                 if (spawnId == '\0')
                 {
-                    // Debug.LogWarning("[DynamicGrowth] No more spawn IDs available");
                     break;
                 }
 
@@ -483,21 +741,12 @@ namespace FaeMaze.Systems
                 }
 
                 // Create portal at the frontier endpoint
-                // Pass the direction INTO the maze (opposite of outward) for facing
                 Vector3 directionIntoMaze = new Vector3(-directionOutward.x, -directionOutward.y, 0f);
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, directionIntoMaze);
-
-                portalCount++;
             }
 
-            // Log all registered spawn points before signaling visitors
             var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
             var finalSpawnPoints = mazeData?.GetSpawnPointPositions();
-            if (finalSpawnPoints != null)
-            {
-                var spawnInfo = string.Join(", ", finalSpawnPoints.Select(kvp => $"{kvp.Key}:{kvp.Value:F1}"));
-                // Debug.Log($"[DynamicGrowth] Registered {finalSpawnPoints.Count} spawn points: [{spawnInfo}]");
-            }
 
             // Identify which spawn points were removed (old positions not present in new spawn points)
             var removedSpawnPositions = new List<Vector3>();
@@ -523,12 +772,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            if (removedSpawnPositions.Count > 0)
-            {
-                // Debug.Log($"[DynamicGrowth] {removedSpawnPositions.Count} spawn points were removed, retargeting affected visitors only");
-            }
-
-            // Only signal visitors whose destination was at a removed spawn point
             SignalAffectedVisitorsToRetarget(removedSpawnPositions);
         }
 
@@ -543,7 +786,6 @@ namespace FaeMaze.Systems
         {
             if (portalPrefab == null)
             {
-                // Debug.LogWarning($"[DynamicGrowth] CreatePortalAtWorldPosition: portalPrefab is null, cannot create portal {spawnId}");
                 return;
             }
 
@@ -581,12 +823,10 @@ namespace FaeMaze.Systems
             // Track portal
             spawnPointPortals[spawnId] = portal;
 
-            // Register spawn point with the portal's transform - position is queried in real-time
             var worldSpaceData = mazeGridBehaviour?.WorldSpaceMazeData;
             if (worldSpaceData != null)
             {
                 worldSpaceData.RegisterSpawnPoint(spawnId, portal.transform);
-                // Debug.Log($"[DynamicGrowth] Registered spawn {spawnId} with portal transform at {portal.transform.position}");
             }
 
             // Create debug visualization
@@ -607,18 +847,13 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            int recalculatedCount = 0;
             foreach (var visitor in allVisitors)
             {
                 if (visitor != null)
                 {
-                    // Immediately recalculate paths instead of flagging
-                    // This prevents visitors from trying to move with stale paths
                     visitor.RecalculatePath();
-                    recalculatedCount++;
                 }
             }
-
         }
 
         /// <summary>
@@ -633,14 +868,11 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            int retargetedCount = 0;
             foreach (var visitor in allVisitors)
             {
                 if (visitor != null)
                 {
-                    // Retarget to nearest spawn point by walking distance
                     visitor.RetargetToNearestSpawn();
-                    retargetedCount++;
                 }
             }
 
@@ -658,23 +890,17 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // If no spawn points were removed, no visitors need to retarget
             if (removedSpawnPositions == null || removedSpawnPositions.Count == 0)
             {
-                // Debug.Log($"[DynamicGrowth] No spawn points removed, skipping visitor retargeting");
                 return;
             }
 
-            int retargetedCount = 0;
-            int skippedCount = 0;
             foreach (var visitor in allVisitors)
             {
                 if (visitor == null) continue;
 
-                // Get visitor's current destination
                 Vector3 visitorDest = visitor.GetCurrentDestination();
 
-                // Check if visitor's destination was at one of the removed spawn points
                 bool destinationWasRemoved = false;
                 foreach (var removedPos in removedSpawnPositions)
                 {
@@ -687,17 +913,9 @@ namespace FaeMaze.Systems
 
                 if (destinationWasRemoved)
                 {
-                    // Retarget to nearest spawn point by walking distance
                     visitor.RetargetToNearestSpawn();
-                    retargetedCount++;
-                }
-                else
-                {
-                    skippedCount++;
                 }
             }
-
-            // Debug.Log($"[DynamicGrowth] Retargeted {retargetedCount} visitors with removed destinations, skipped {skippedCount} visitors with valid destinations");
         }
 
         #endregion
@@ -781,10 +999,6 @@ namespace FaeMaze.Systems
                     DestroyImmediate(portal);
                 }
                 spawnPointPortals.Remove(spawnId);
-            }
-            else
-            {
-                // Debug.LogWarning($"[DynamicGrowth] Attempted to remove portal '{spawnId}' but it was not found in dictionary");
             }
         }
 

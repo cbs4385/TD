@@ -100,8 +100,12 @@ namespace FaeMaze.Systems
         // Overlap detection threshold - positions closer than this are considered overlapping
         private const float OVERLAP_THRESHOLD = 0.4f;
 
+        // Spatial hash for fast position lookups - stores actual positions per cell for distance checking
+        private Dictionary<long, List<Vector2>> occupiedPositionHash;
+        private const float POSITION_HASH_CELL_SIZE = 0.5f; // Should be >= OVERLAP_THRESHOLD
+
         // Wall generation constants - shared between initial render and incremental updates
-        private const float WALL_STEP_SIZE = 0.2f;
+        private const float WALL_STEP_SIZE = 0.8f; // 4x larger for 75% fewer walls
         private const float PATH_HALF_WIDTH = 0.5f;
         private const int WALL_DEPTH = 3;
         private const float WALL_SPACING = 0.3f;
@@ -208,22 +212,24 @@ namespace FaeMaze.Systems
             occupiedPositions = new List<Vector2>();
             occupiedWallPositions = new List<Vector2>();
             allEdgeSegments = new List<EdgeSegmentData>();
+            occupiedPositionHash = new Dictionary<long, List<Vector2>>();
 
             int renderedTiles = 0;
 
             // Step 1: Collect all edge segment data for wall orientation lookup
             CollectEdgeSegments(forestState);
 
-            // Step 2: Render node columns FIRST (circular, radius = nodeRadius)
-            // This ensures node columns take priority over edges
-            int nodeColumnTiles = RenderNodeColumns(forestState, mazeOrigin);
-            renderedTiles += nodeColumnTiles;
-            // Debug.Log($"[MazeRenderer] Rendered {nodeColumnTiles} node column tiles");
-
-            // Step 3: Render path tiles along edges (oriented along edge direction)
+            // Step 2: Render path tiles along edges FIRST
+            // This ensures edges extend fully into node areas before nodes mark them occupied
             int edgeTiles = RenderEdgePaths(forestState, mazeOrigin);
             renderedTiles += edgeTiles;
             // Debug.Log($"[MazeRenderer] Rendered {edgeTiles} edge path tiles");
+
+            // Step 3: Render node columns (circular, radius = nodeRadius)
+            // Node cylinders visually cover the edge tiles underneath
+            int nodeColumnTiles = RenderNodeColumns(forestState, mazeOrigin);
+            renderedTiles += nodeColumnTiles;
+            // Debug.Log($"[MazeRenderer] Rendered {nodeColumnTiles} node column tiles");
 
             // Step 4: Render wall border
             int wallTileCount = RenderWallBorder(forestState, mazeOrigin);
@@ -342,6 +348,7 @@ namespace FaeMaze.Systems
                         Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(pos2D);
+                        AddToPositionHash(pos2D);
                         tileCount++;
                     }
                 }
@@ -358,6 +365,7 @@ namespace FaeMaze.Systems
                     char symbol = GetNextSpawnSymbol();
                     CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                     occupiedPositions.Add(exactEndpoint);
+                    AddToPositionHash(exactEndpoint);
                     tileCount++;
                     // Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at world {worldPos}");
                 }
@@ -399,6 +407,7 @@ namespace FaeMaze.Systems
                         if (!IsPositionOccupied(pos2D, occupiedPositions))
                         {
                             occupiedPositions.Add(pos2D);
+                            AddToPositionHash(pos2D);
                         }
                     }
                 }
@@ -725,23 +734,54 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Checks if a wall at the given position would intersect any path tile.
-        /// Uses distance-based check against all occupied path positions.
+        /// Uses spatial hash for fast lookup.
         /// Returns the position of the intersecting path tile, or null if no intersection.
         /// </summary>
         private Vector2? CheckWallPathIntersection(Vector2 wallPos, float wallRadius)
         {
-            // Check if any occupied path position is within wallRadius of this wall position
+            // Use spatial hash for fast check - wall intersects if it's close to any path position
+            if (occupiedPositionHash != null && occupiedPositionHash.Count > 0)
+            {
+                // Check cells that could contain positions within wallRadius
+                int cellRadius = Mathf.CeilToInt(wallRadius / POSITION_HASH_CELL_SIZE) + 1;
+                int baseX = Mathf.FloorToInt(wallPos.x / POSITION_HASH_CELL_SIZE);
+                int baseY = Mathf.FloorToInt(wallPos.y / POSITION_HASH_CELL_SIZE);
+
+                for (int dx = -cellRadius; dx <= cellRadius; dx++)
+                {
+                    for (int dy = -cellRadius; dy <= cellRadius; dy++)
+                    {
+                        int x = baseX + dx;
+                        int y = baseY + dy;
+                        long key = ((long)x << 32) | (uint)y;
+                        if (occupiedPositionHash.TryGetValue(key, out var cellPositions))
+                        {
+                            // Check actual distances to positions in this cell
+                            foreach (var pathPos in cellPositions)
+                            {
+                                if (Vector2.Distance(wallPos, pathPos) < wallRadius)
+                                {
+                                    return pathPos;
+                                }
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+
+            // Fallback to linear search
             for (int i = 0; i < occupiedPositions.Count; i++)
             {
                 Vector2 pathPos = occupiedPositions[i];
                 float dist = Vector2.Distance(wallPos, pathPos);
                 if (dist < wallRadius)
                 {
-                    return pathPos; // Found intersection
+                    return pathPos;
                 }
             }
 
-            return null; // No intersection
+            return null;
         }
 
         /// <summary>
@@ -1031,9 +1071,34 @@ namespace FaeMaze.Systems
         {
             int tileCount = 0;
 
+            // Convert to list for indexed access (only once)
+            var nodesList = allNodes as List<PlanarForestMazeGenerator.Node> ?? new List<PlanarForestMazeGenerator.Node>(allNodes);
+
             foreach (var edge in edges)
             {
                 if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                // Pre-filter nodes that could possibly affect this edge (within max possible distance)
+                float maxWallOffset = PATH_HALF_WIDTH + WALL_SPACING * WALL_DEPTH + nodeRadius + 1f;
+                var nearbyNodes = new List<PlanarForestMazeGenerator.Node>();
+                foreach (var node in nodesList)
+                {
+                    // Check distance to edge bounding box with buffer
+                    float minX = float.MaxValue, maxX = float.MinValue;
+                    float minY = float.MaxValue, maxY = float.MinValue;
+                    foreach (var pt in edge.PolylinePoints)
+                    {
+                        if (pt.x < minX) minX = pt.x;
+                        if (pt.x > maxX) maxX = pt.x;
+                        if (pt.y < minY) minY = pt.y;
+                        if (pt.y > maxY) maxY = pt.y;
+                    }
+                    if (node.Position.x >= minX - maxWallOffset && node.Position.x <= maxX + maxWallOffset &&
+                        node.Position.y >= minY - maxWallOffset && node.Position.y <= maxY + maxWallOffset)
+                    {
+                        nearbyNodes.Add(node);
+                    }
+                }
 
                 Vector2 edgeStart = edge.PolylinePoints[0];
                 Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
@@ -1058,9 +1123,9 @@ namespace FaeMaze.Systems
                         if (distFromStart < EDGE_END_SKIP || distFromEnd < EDGE_END_SKIP)
                             continue;
 
-                        // Skip positions inside nodes
+                        // Skip positions inside nodes (check only nearby nodes)
                         bool insideNode = false;
-                        foreach (var node in allNodes)
+                        foreach (var node in nearbyNodes)
                         {
                             if (Vector2.Distance(centerPos, node.Position) < nodeRadius + 0.5f)
                             {
@@ -1078,7 +1143,7 @@ namespace FaeMaze.Systems
                                 float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
                                 Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
                                 bool wallInsideNode = false;
-                                foreach (var node in allNodes)
+                                foreach (var node in nearbyNodes)
                                 {
                                     if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
                                     {
@@ -1135,35 +1200,14 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Find all edge angles for this node (normalized to [0, 2π])
+            // Use the node's stored UsedAngles directly (much faster than iterating all edges)
+            // UsedAngles already contains the outgoing angles for all incident edges
             var edgeAngles = new List<float>();
-            foreach (var edge in allEdges)
+            foreach (var angle in node.UsedAngles)
             {
-                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                bool isNodeA = (edge.NodeA == node.Id);
-                bool isNodeB = (edge.NodeB.HasValue && edge.NodeB.Value == node.Id);
-
-                if (isNodeA || isNodeB)
-                {
-                    // Direction should point AWAY from the node (outward along the edge)
-                    Vector2 direction;
-                    if (isNodeA)
-                    {
-                        // NodeA is at start of polyline, direction goes from node toward edge
-                        direction = (edge.PolylinePoints[1] - edge.PolylinePoints[0]).normalized;
-                    }
-                    else
-                    {
-                        // NodeB is at end of polyline, direction goes from node toward edge (reverse)
-                        int last = edge.PolylinePoints.Count - 1;
-                        direction = (edge.PolylinePoints[last - 1] - edge.PolylinePoints[last]).normalized;
-                    }
-
-                    float edgeAngle = Mathf.Atan2(direction.y, direction.x);
-                    if (edgeAngle < 0) edgeAngle += 2f * Mathf.PI;
-                    edgeAngles.Add(edgeAngle);
-                }
+                float normalizedAngle = angle;
+                if (normalizedAngle < 0) normalizedAngle += 2f * Mathf.PI;
+                edgeAngles.Add(normalizedAngle);
             }
 
             // Create walls, skipping those within clearance of any edge angle
@@ -1196,13 +1240,111 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Checks if a position is already occupied by checking distance to all existing positions.
+        /// Regenerates walls around a specific node.
+        /// Removes existing walls within the node's wall radius and re-renders them,
+        /// respecting the node's current edge angles (with ±12° clearance).
+        /// Used when a cross-connection edge is added to an existing node.
+        /// </summary>
+        public void RegenerateNodeWalls(PlanarForestMazeGenerator.Node node, IEnumerable<PlanarForestMazeGenerator.Edge> allEdges)
+        {
+            if (tilesParent == null || node == null)
+            {
+                Debug.LogWarning($"[RegenerateNodeWalls] Skipping - tilesParent={tilesParent}, node={node}");
+                return;
+            }
+
+            // Calculate the wall ring radius (same as RenderNodeWalls)
+            float maxWallRadius = nodeRadius + WALL_SPACING * (WALL_DEPTH + 0.5f);
+            Debug.Log($"[RegenerateNodeWalls] Node {node.Id} at {node.Position}, maxWallRadius={maxWallRadius}, nodeRadius={nodeRadius}");
+
+            // Remove existing walls within the node's wall area
+            // Wall tiles are named "WorldTile_#_..." (using # symbol for walls)
+            List<Transform> toRemove = new List<Transform>();
+            foreach (Transform child in tilesParent)
+            {
+                if (child.name.StartsWith("WorldTile_#"))
+                {
+                    Vector2 wallPos = new Vector2(child.position.x, child.position.y);
+                    float dist = Vector2.Distance(wallPos, node.Position);
+                    if (dist < maxWallRadius)
+                    {
+                        toRemove.Add(child);
+                    }
+                }
+            }
+
+            Debug.Log($"[RegenerateNodeWalls] Removing {toRemove.Count} walls within radius {maxWallRadius}");
+            foreach (var t in toRemove)
+            {
+                Destroy(t.gameObject);
+            }
+
+            // Re-render walls for this node using the standard logic
+            // This will respect the node's EdgeAngles (including any newly added cross-connection)
+            Debug.Log($"[RegenerateNodeWalls] Node has {node.UsedAngles.Count} used angles: {string.Join(", ", node.UsedAngles)}");
+            int wallsCreated = RenderNodeWalls(node, allEdges, tilesParent);
+            Debug.Log($"[RegenerateNodeWalls] Created {wallsCreated} new walls");
+        }
+
+        /// <summary>
+        /// Computes a spatial hash key for fast position lookup.
+        /// </summary>
+        private long GetPositionHashKey(Vector2 pos)
+        {
+            int x = Mathf.FloorToInt(pos.x / POSITION_HASH_CELL_SIZE);
+            int y = Mathf.FloorToInt(pos.y / POSITION_HASH_CELL_SIZE);
+            return ((long)x << 32) | (uint)y;
+        }
+
+        /// <summary>
+        /// Adds a position to the spatial hash.
+        /// </summary>
+        private void AddToPositionHash(Vector2 pos)
+        {
+            if (occupiedPositionHash == null)
+                occupiedPositionHash = new Dictionary<long, List<Vector2>>();
+            long key = GetPositionHashKey(pos);
+            if (!occupiedPositionHash.TryGetValue(key, out var list))
+            {
+                list = new List<Vector2>();
+                occupiedPositionHash[key] = list;
+            }
+            list.Add(pos);
+        }
+
+        /// <summary>
+        /// Checks if a position is already occupied using spatial hash (O(1) average).
         /// Returns true if the position overlaps with an existing one.
         /// </summary>
         private bool IsPositionOccupied(Vector2 pos, List<Vector2> positions, float threshold = OVERLAP_THRESHOLD)
         {
-            // For performance with large lists, we could use a spatial hash here,
-            // but for now we do a linear search which is correct
+            // Use spatial hash for fast lookup if available
+            if (occupiedPositionHash != null && occupiedPositionHash.Count > 0)
+            {
+                // Check the cell and adjacent cells (3x3 neighborhood) because positions near cell boundaries
+                // might be in adjacent cells but still within threshold distance
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        int x = Mathf.FloorToInt(pos.x / POSITION_HASH_CELL_SIZE) + dx;
+                        int y = Mathf.FloorToInt(pos.y / POSITION_HASH_CELL_SIZE) + dy;
+                        long neighborKey = ((long)x << 32) | (uint)y;
+                        if (occupiedPositionHash.TryGetValue(neighborKey, out var cellPositions))
+                        {
+                            // Check actual distances to positions in this cell
+                            foreach (var existingPos in cellPositions)
+                            {
+                                if (Vector2.Distance(existingPos, pos) < threshold)
+                                    return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            // Fallback to linear search if hash not initialized
             for (int i = 0; i < positions.Count; i++)
             {
                 if (Vector2.Distance(positions[i], pos) < threshold)
@@ -1481,6 +1623,8 @@ namespace FaeMaze.Systems
             // Ensure state is initialized
             if (occupiedPositions == null)
                 occupiedPositions = new List<Vector2>();
+            if (occupiedPositionHash == null)
+                occupiedPositionHash = new Dictionary<long, List<Vector2>>();
 
             // Create the single node cylinder - this is the only visual object
             CreateNodeColumnCylinder(newNode, mazeOrigin);
@@ -1500,6 +1644,7 @@ namespace FaeMaze.Systems
                     if (!IsPositionOccupied(pos2D, occupiedPositions))
                     {
                         occupiedPositions.Add(pos2D);
+                        AddToPositionHash(pos2D);
                     }
                 }
             }
@@ -1524,6 +1669,8 @@ namespace FaeMaze.Systems
                 occupiedWallPositions = new List<Vector2>();
             if (allEdgeSegments == null)
                 allEdgeSegments = new List<EdgeSegmentData>();
+            if (occupiedPositionHash == null)
+                occupiedPositionHash = new Dictionary<long, List<Vector2>>();
 
             float stepSize = 0.5f;
             int tilesCreated = 0;
@@ -1595,6 +1742,7 @@ namespace FaeMaze.Systems
                         Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(pos2D);
+                        AddToPositionHash(pos2D);
                         tilesCreated++;
                     }
                 }
@@ -1630,6 +1778,211 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Async version of AddWallsIncremental that yields periodically to prevent frame lockup.
+        /// Spreads wall generation across multiple frames using a time budget per frame.
+        /// </summary>
+        public IEnumerator AddWallsIncrementalAsync(List<ForestMaze.PlanarForestMazeGenerator.Edge> newEdges,
+            ForestMaze.PlanarForestMazeGenerator.Node newNode)
+        {
+            if (mazeGridBehaviour == null || tilesParent == null)
+                yield break;
+
+            var forestState = mazeGridBehaviour.ForestMapState;
+            Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
+
+            // Time budget per frame (in seconds) - aim for 60fps means ~16ms per frame
+            // Use 8ms to leave headroom for other game logic
+            const float frameBudgetMs = 8f;
+            float frameStartTime = Time.realtimeSinceStartup;
+
+            // Render walls along new edges (includes frontier end caps)
+            if (newEdges != null && newEdges.Count > 0)
+            {
+                foreach (var edge in newEdges)
+                {
+                    yield return StartCoroutine(RenderEdgeWallsAsync(edge, forestState.Nodes, mazeOrigin, frameBudgetMs));
+                }
+            }
+
+            // Render walls around the new node
+            if (newNode != null)
+            {
+                yield return StartCoroutine(RenderNodeWallsAsync(newNode, forestState.Edges, mazeOrigin, frameBudgetMs));
+            }
+        }
+
+        /// <summary>
+        /// Async version of RenderEdgeWalls for a single edge.
+        /// </summary>
+        private IEnumerator RenderEdgeWallsAsync(PlanarForestMazeGenerator.Edge edge,
+            IList<PlanarForestMazeGenerator.Node> nodesList, Transform mazeOrigin, float frameBudgetMs)
+        {
+            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                yield break;
+
+            float frameStartTime = Time.realtimeSinceStartup;
+            int wallsCreated = 0;
+
+            // Pre-filter nodes that could possibly affect this edge
+            float maxWallOffset = PATH_HALF_WIDTH + WALL_SPACING * WALL_DEPTH + nodeRadius + 1f;
+            Vector2 boundsMin = edge.PolylinePoints[0];
+            Vector2 boundsMax = edge.PolylinePoints[0];
+            foreach (var pt in edge.PolylinePoints)
+            {
+                boundsMin = Vector2.Min(boundsMin, pt);
+                boundsMax = Vector2.Max(boundsMax, pt);
+            }
+            boundsMin -= Vector2.one * maxWallOffset;
+            boundsMax += Vector2.one * maxWallOffset;
+
+            var nearbyNodes = new List<PlanarForestMazeGenerator.Node>();
+            foreach (var node in nodesList)
+            {
+                if (node.Position.x >= boundsMin.x && node.Position.x <= boundsMax.x &&
+                    node.Position.y >= boundsMin.y && node.Position.y <= boundsMax.y)
+                {
+                    nearbyNodes.Add(node);
+                }
+            }
+
+            // Generate side walls along each segment
+            for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+            {
+                Vector2 segStart = edge.PolylinePoints[i];
+                Vector2 segEnd = edge.PolylinePoints[i + 1];
+                Vector2 direction = (segEnd - segStart).normalized;
+                Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+                float segmentLength = Vector2.Distance(segStart, segEnd);
+
+                float effectiveStart = (i == 0) ? EDGE_END_SKIP : 0f;
+                float effectiveEnd = (i == edge.PolylinePoints.Count - 2 && !edge.Partial) ?
+                    segmentLength - EDGE_END_SKIP : segmentLength;
+
+                int numSteps = Mathf.Max(1, Mathf.CeilToInt((effectiveEnd - effectiveStart) / WALL_STEP_SIZE));
+
+                for (int step = 0; step <= numSteps; step++)
+                {
+                    float t = effectiveStart + (effectiveEnd - effectiveStart) * ((float)step / numSteps);
+                    Vector2 centerPos = segStart + direction * t;
+
+                    foreach (int side in new[] { -1, 1 })
+                    {
+                        for (int layer = 0; layer < WALL_DEPTH; layer++)
+                        {
+                            float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
+                            Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
+
+                            bool wallInsideNode = false;
+                            foreach (var node in nearbyNodes)
+                            {
+                                if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
+                                {
+                                    wallInsideNode = true;
+                                    break;
+                                }
+                            }
+                            if (wallInsideNode) continue;
+
+                            Vector3 worldPos = ToVector3(wallPos);
+                            CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                            wallsCreated++;
+
+                            // Check time budget and yield if exceeded
+                            if (wallsCreated % 20 == 0)
+                            {
+                                float elapsed = (Time.realtimeSinceStartup - frameStartTime) * 1000f;
+                                if (elapsed >= frameBudgetMs)
+                                {
+                                    yield return null;
+                                    frameStartTime = Time.realtimeSinceStartup;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add frontier end cap if this is a partial edge
+            if (edge.Partial)
+            {
+                int lastIdx = edge.PolylinePoints.Count - 1;
+                Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
+                Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
+                RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
+                    WALL_STEP_SIZE, PATH_HALF_WIDTH, WALL_DEPTH, WALL_SPACING, EDGE_END_SKIP);
+            }
+        }
+
+        /// <summary>
+        /// Async version of RenderNodeWalls.
+        /// </summary>
+        private IEnumerator RenderNodeWallsAsync(PlanarForestMazeGenerator.Node node,
+            IEnumerable<PlanarForestMazeGenerator.Edge> allEdges, Transform mazeOrigin, float frameBudgetMs)
+        {
+            float frameStartTime = Time.realtimeSinceStartup;
+            int wallsCreated = 0;
+            float edgeAngleClearance = EDGE_ANGLE_CLEARANCE_DEG * Mathf.Deg2Rad;
+
+            // Create all wall positions for this node
+            var nodeWalls = new List<(Vector2 pos, float angle)>();
+            for (int layer = 0; layer < WALL_DEPTH; layer++)
+            {
+                float ringRadius = nodeRadius + WALL_SPACING * (layer + 0.5f);
+                int numWalls = Mathf.Max(32, (int)(ringRadius * 2f * Mathf.PI / WALL_STEP_SIZE));
+
+                for (int i = 0; i < numWalls; i++)
+                {
+                    float angle = (float)i / numWalls * 2f * Mathf.PI;
+                    Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
+                    nodeWalls.Add((wallPos, angle));
+                }
+            }
+
+            // Get edge angles from node's UsedAngles
+            var edgeAngles = new List<float>();
+            foreach (var angle in node.UsedAngles)
+            {
+                float normalizedAngle = angle;
+                if (normalizedAngle < 0) normalizedAngle += 2f * Mathf.PI;
+                edgeAngles.Add(normalizedAngle);
+            }
+
+            // Place walls, skipping positions near edge angles
+            foreach (var (wallPos, wallAngle) in nodeWalls)
+            {
+                bool tooCloseToEdge = false;
+                foreach (var edgeAngle in edgeAngles)
+                {
+                    float angleDiff = Mathf.Abs(wallAngle - edgeAngle);
+                    if (angleDiff > Mathf.PI) angleDiff = 2f * Mathf.PI - angleDiff;
+                    if (angleDiff < edgeAngleClearance)
+                    {
+                        tooCloseToEdge = true;
+                        break;
+                    }
+                }
+
+                if (!tooCloseToEdge)
+                {
+                    Vector3 worldPos = ToVector3(wallPos);
+                    CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                    wallsCreated++;
+
+                    // Check time budget and yield if exceeded
+                    if (wallsCreated % 20 == 0)
+                    {
+                        float elapsed = (Time.realtimeSinceStartup - frameStartTime) * 1000f;
+                        if (elapsed >= frameBudgetMs)
+                        {
+                            yield return null;
+                            frameStartTime = Time.realtimeSinceStartup;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Removes wall tiles near a consumed spawn point position.
         /// Called when a frontier edge is consumed and walls blocking it should be removed.
         /// </summary>
@@ -1638,7 +1991,6 @@ namespace FaeMaze.Systems
             if (tilesParent == null)
                 return;
 
-            int removedCount = 0;
             List<Transform> toRemove = new List<Transform>();
 
             foreach (Transform child in tilesParent)
@@ -1655,28 +2007,147 @@ namespace FaeMaze.Systems
 
             foreach (var t in toRemove)
             {
-                // Remove from occupied wall positions if tracking
-                Vector2 pos2D = new Vector2(t.position.x, t.position.y);
-                if (occupiedWallPositions != null)
+                Destroy(t.gameObject);
+            }
+        }
+
+        /// <summary>
+        /// Removes wall tiles near any of the given positions in a single pass.
+        /// Much more efficient than calling RemoveWallsNearPosition multiple times.
+        /// </summary>
+        public void RemoveWallsNearPositionsBatched(List<Vector3> positions, float radius)
+        {
+            if (tilesParent == null || positions == null || positions.Count == 0)
+                return;
+
+            // Build a spatial hash of removal positions for O(1) lookup
+            float cellSize = radius * 2f;
+            var removalCells = new HashSet<long>();
+            foreach (var pos in positions)
+            {
+                int cellX = Mathf.FloorToInt(pos.x / cellSize);
+                int cellY = Mathf.FloorToInt(pos.y / cellSize);
+                // Add the cell and its neighbors to cover boundary cases
+                for (int dx = -1; dx <= 1; dx++)
                 {
-                    // Find and remove the position from the list (distance-based)
-                    for (int i = occupiedWallPositions.Count - 1; i >= 0; i--)
+                    for (int dy = -1; dy <= 1; dy++)
                     {
-                        if (Vector2.Distance(occupiedWallPositions[i], pos2D) < OVERLAP_THRESHOLD)
+                        long key = ((long)(cellX + dx) << 32) | (uint)(cellY + dy);
+                        removalCells.Add(key);
+                    }
+                }
+            }
+
+            List<Transform> toRemove = new List<Transform>();
+
+            // Single pass through all children
+            foreach (Transform child in tilesParent)
+            {
+                if (child.name.StartsWith("WorldTile_#") || child.name.StartsWith("Wall_"))
+                {
+                    // Quick rejection using spatial hash
+                    int cellX = Mathf.FloorToInt(child.position.x / cellSize);
+                    int cellY = Mathf.FloorToInt(child.position.y / cellSize);
+                    long key = ((long)cellX << 32) | (uint)cellY;
+
+                    if (!removalCells.Contains(key))
+                        continue;
+
+                    // Detailed check against actual positions
+                    foreach (var pos in positions)
+                    {
+                        float dist = Vector3.Distance(child.position, pos);
+                        if (dist < radius)
                         {
-                            occupiedWallPositions.RemoveAt(i);
+                            toRemove.Add(child);
+                            break; // Found a match, no need to check other positions
+                        }
+                    }
+                }
+            }
+
+            foreach (var t in toRemove)
+            {
+                Destroy(t.gameObject);
+            }
+        }
+
+        /// <summary>
+        /// Removes wall tiles that are "past" the endpoint in the frontier direction.
+        /// Used to remove portal end cap walls while preserving side walls along the path.
+        /// Only removes walls where dot(wallPos - endpoint, frontierDir) > threshold.
+        /// </summary>
+        public void RemoveWallsPastEndpoint(Vector3 endpoint, Vector3 frontierDirection, float radius, float dirThreshold = -0.3f)
+        {
+            if (tilesParent == null)
+                return;
+
+            List<Transform> toRemove = new List<Transform>();
+
+            foreach (Transform child in tilesParent)
+            {
+                if (child.name.StartsWith("WorldTile_#") || child.name.StartsWith("Wall_"))
+                {
+                    Vector3 toWall = child.position - endpoint;
+                    float dist = toWall.magnitude;
+
+                    // Must be within radius
+                    if (dist > radius)
+                        continue;
+
+                    // Check if wall is "past" the endpoint (in the frontier direction)
+                    // dot > threshold means wall is in front of/past the endpoint
+                    float dot = Vector3.Dot(toWall.normalized, frontierDirection);
+                    if (dot > dirThreshold)
+                    {
+                        toRemove.Add(child);
+                    }
+                }
+            }
+
+            foreach (var t in toRemove)
+            {
+                Destroy(t.gameObject);
+            }
+        }
+
+        /// <summary>
+        /// Removes walls that intersect with a polyline path.
+        /// Used for cross-connections where we need to clear walls along the new edge's path
+        /// at an existing node, without clearing all walls around the node.
+        /// </summary>
+        public void RemoveWallsAlongPolyline(List<Vector2> polylinePoints, float pathWidth)
+        {
+            if (tilesParent == null || polylinePoints == null || polylinePoints.Count < 2)
+                return;
+
+            List<Transform> toRemove = new List<Transform>();
+
+            foreach (Transform child in tilesParent)
+            {
+                if (child.name.StartsWith("Wall_"))
+                {
+                    Vector2 wallPos = new Vector2(child.position.x, child.position.y);
+
+                    // Check distance to each line segment of the polyline
+                    for (int i = 0; i < polylinePoints.Count - 1; i++)
+                    {
+                        Vector2 segStart = polylinePoints[i];
+                        Vector2 segEnd = polylinePoints[i + 1];
+
+                        float dist = DistanceToLineSegment(wallPos, segStart, segEnd);
+                        if (dist < pathWidth)
+                        {
+                            toRemove.Add(child);
                             break;
                         }
                     }
                 }
-
-                Destroy(t.gameObject);
-                removedCount++;
             }
 
-            if (removedCount > 0)
+            foreach (var t in toRemove)
             {
-                // Debug.Log($"[MazeRenderer] Removed {removedCount} wall tiles near {position}");
+                Destroy(t.gameObject);
             }
         }
 
@@ -1776,6 +2247,7 @@ namespace FaeMaze.Systems
             occupiedPositions = new List<Vector2>();
             occupiedWallPositions = new List<Vector2>();
             allEdgeSegments = new List<EdgeSegmentData>();
+            occupiedPositionHash = new Dictionary<long, List<Vector2>>();
 
             int tilesCreated = 0;
             int batchSize = 50; // Number of tiles per frame
@@ -1806,6 +2278,7 @@ namespace FaeMaze.Systems
                         if (!IsPositionOccupied(pos2D, occupiedPositions))
                         {
                             occupiedPositions.Add(pos2D);
+                            AddToPositionHash(pos2D);
                         }
                     }
                 }
@@ -1866,6 +2339,7 @@ namespace FaeMaze.Systems
                         Vector3 worldPos = ToVector3(pos2D);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, symbol, mazeOrigin, isWall: false);
                         occupiedPositions.Add(pos2D);
+                        AddToPositionHash(pos2D);
                         tilesCreated++;
 
                         if (tilesCreated % batchSize == 0)

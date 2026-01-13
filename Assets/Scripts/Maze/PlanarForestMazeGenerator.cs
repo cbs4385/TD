@@ -79,6 +79,11 @@ namespace ForestMaze
             /// </summary>
             public List<Vector2> OldPolylinePoints = null;
 
+            // Cached bounding box for spatial indexing
+            private Vector2 _boundsMin;
+            private Vector2 _boundsMax;
+            private bool _boundsDirty = true;
+
             public bool IsComplete() => !Partial && NodeB.HasValue;
 
             /// <summary>
@@ -90,7 +95,243 @@ namespace ForestMaze
                 if (Curve != null)
                 {
                     PolylinePoints = Curve.ToPolyline(segments);
+                    _boundsDirty = true;
                 }
+            }
+
+            /// <summary>
+            /// Marks the bounding box as needing recalculation.
+            /// Call after modifying PolylinePoints directly.
+            /// </summary>
+            public void InvalidateBounds()
+            {
+                _boundsDirty = true;
+            }
+
+            /// <summary>
+            /// Gets the cached bounding box, recalculating if needed.
+            /// </summary>
+            public (Vector2 min, Vector2 max) GetBounds()
+            {
+                if (_boundsDirty)
+                {
+                    RecalculateBounds();
+                }
+                return (_boundsMin, _boundsMax);
+            }
+
+            private void RecalculateBounds()
+            {
+                if (PolylinePoints.Count == 0)
+                {
+                    _boundsMin = Vector2.zero;
+                    _boundsMax = Vector2.zero;
+                }
+                else
+                {
+                    _boundsMin = PolylinePoints[0];
+                    _boundsMax = PolylinePoints[0];
+                    for (int i = 1; i < PolylinePoints.Count; i++)
+                    {
+                        var p = PolylinePoints[i];
+                        if (p.x < _boundsMin.x) _boundsMin.x = p.x;
+                        if (p.y < _boundsMin.y) _boundsMin.y = p.y;
+                        if (p.x > _boundsMax.x) _boundsMax.x = p.x;
+                        if (p.y > _boundsMax.y) _boundsMax.y = p.y;
+                    }
+                }
+                _boundsDirty = false;
+            }
+        }
+
+        /// <summary>
+        /// Spatial index using a grid-based hash for fast proximity queries.
+        /// Reduces collision checks from O(n) to O(1) average case.
+        /// </summary>
+        public class SpatialIndex
+        {
+            private readonly float _cellSize;
+            private readonly Dictionary<long, List<int>> _nodeGrid = new Dictionary<long, List<int>>();
+            private readonly Dictionary<long, List<int>> _edgeGrid = new Dictionary<long, List<int>>();
+            private readonly Dictionary<long, List<Vector2>> _ghostGrid = new Dictionary<long, List<Vector2>>();
+
+            public SpatialIndex(float cellSize = 10f)
+            {
+                _cellSize = cellSize;
+            }
+
+            private long GetCellKey(float x, float y)
+            {
+                int cx = Mathf.FloorToInt(x / _cellSize);
+                int cy = Mathf.FloorToInt(y / _cellSize);
+                return ((long)cx << 32) | (uint)cy;
+            }
+
+            private long GetCellKey(Vector2 pos) => GetCellKey(pos.x, pos.y);
+
+            /// <summary>
+            /// Registers a node at its position.
+            /// </summary>
+            public void AddNode(int nodeId, Vector2 position)
+            {
+                long key = GetCellKey(position);
+                if (!_nodeGrid.TryGetValue(key, out var list))
+                {
+                    list = new List<int>();
+                    _nodeGrid[key] = list;
+                }
+                if (!list.Contains(nodeId))
+                    list.Add(nodeId);
+            }
+
+            /// <summary>
+            /// Registers an edge in all cells its bounding box overlaps.
+            /// </summary>
+            public void AddEdge(int edgeId, Vector2 boundsMin, Vector2 boundsMax)
+            {
+                int minCx = Mathf.FloorToInt(boundsMin.x / _cellSize);
+                int maxCx = Mathf.FloorToInt(boundsMax.x / _cellSize);
+                int minCy = Mathf.FloorToInt(boundsMin.y / _cellSize);
+                int maxCy = Mathf.FloorToInt(boundsMax.y / _cellSize);
+
+                for (int cx = minCx; cx <= maxCx; cx++)
+                {
+                    for (int cy = minCy; cy <= maxCy; cy++)
+                    {
+                        long key = ((long)cx << 32) | (uint)cy;
+                        if (!_edgeGrid.TryGetValue(key, out var list))
+                        {
+                            list = new List<int>();
+                            _edgeGrid[key] = list;
+                        }
+                        if (!list.Contains(edgeId))
+                            list.Add(edgeId);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Registers a ghost center position.
+            /// </summary>
+            public void AddGhost(Vector2 position)
+            {
+                long key = GetCellKey(position);
+                if (!_ghostGrid.TryGetValue(key, out var list))
+                {
+                    list = new List<Vector2>();
+                    _ghostGrid[key] = list;
+                }
+                list.Add(position);
+            }
+
+            /// <summary>
+            /// Removes a ghost center position from the spatial index.
+            /// </summary>
+            public void RemoveGhost(Vector2 position)
+            {
+                long key = GetCellKey(position);
+                if (_ghostGrid.TryGetValue(key, out var list))
+                {
+                    list.RemoveAll(g => Vector2.Distance(g, position) < 1e-6f);
+                }
+            }
+
+            /// <summary>
+            /// Gets all node IDs that might be near the given bounds (with buffer).
+            /// </summary>
+            public HashSet<int> GetNearbyNodeIds(Vector2 boundsMin, Vector2 boundsMax, float buffer = 5f)
+            {
+                var result = new HashSet<int>();
+                int minCx = Mathf.FloorToInt((boundsMin.x - buffer) / _cellSize);
+                int maxCx = Mathf.FloorToInt((boundsMax.x + buffer) / _cellSize);
+                int minCy = Mathf.FloorToInt((boundsMin.y - buffer) / _cellSize);
+                int maxCy = Mathf.FloorToInt((boundsMax.y + buffer) / _cellSize);
+
+                for (int cx = minCx; cx <= maxCx; cx++)
+                {
+                    for (int cy = minCy; cy <= maxCy; cy++)
+                    {
+                        long key = ((long)cx << 32) | (uint)cy;
+                        if (_nodeGrid.TryGetValue(key, out var list))
+                        {
+                            foreach (var id in list)
+                                result.Add(id);
+                        }
+                    }
+                }
+                return result;
+            }
+
+            /// <summary>
+            /// Gets all edge IDs that might overlap the given bounds (with buffer).
+            /// </summary>
+            public HashSet<int> GetNearbyEdgeIds(Vector2 boundsMin, Vector2 boundsMax, float buffer = 2f)
+            {
+                var result = new HashSet<int>();
+                int minCx = Mathf.FloorToInt((boundsMin.x - buffer) / _cellSize);
+                int maxCx = Mathf.FloorToInt((boundsMax.x + buffer) / _cellSize);
+                int minCy = Mathf.FloorToInt((boundsMin.y - buffer) / _cellSize);
+                int maxCy = Mathf.FloorToInt((boundsMax.y + buffer) / _cellSize);
+
+                for (int cx = minCx; cx <= maxCx; cx++)
+                {
+                    for (int cy = minCy; cy <= maxCy; cy++)
+                    {
+                        long key = ((long)cx << 32) | (uint)cy;
+                        if (_edgeGrid.TryGetValue(key, out var list))
+                        {
+                            foreach (var id in list)
+                                result.Add(id);
+                        }
+                    }
+                }
+                return result;
+            }
+
+            /// <summary>
+            /// Gets all ghost positions that might be near the given bounds (with buffer).
+            /// </summary>
+            public List<Vector2> GetNearbyGhosts(Vector2 boundsMin, Vector2 boundsMax, float buffer = 5f)
+            {
+                var result = new List<Vector2>();
+                int minCx = Mathf.FloorToInt((boundsMin.x - buffer) / _cellSize);
+                int maxCx = Mathf.FloorToInt((boundsMax.x + buffer) / _cellSize);
+                int minCy = Mathf.FloorToInt((boundsMin.y - buffer) / _cellSize);
+                int maxCy = Mathf.FloorToInt((boundsMax.y + buffer) / _cellSize);
+
+                for (int cx = minCx; cx <= maxCx; cx++)
+                {
+                    for (int cy = minCy; cy <= maxCy; cy++)
+                    {
+                        long key = ((long)cx << 32) | (uint)cy;
+                        if (_ghostGrid.TryGetValue(key, out var list))
+                        {
+                            result.AddRange(list);
+                        }
+                    }
+                }
+                return result;
+            }
+
+            /// <summary>
+            /// Removes an edge from the spatial index (for re-registration after modification).
+            /// </summary>
+            public void RemoveEdge(int edgeId)
+            {
+                foreach (var kvp in _edgeGrid)
+                {
+                    kvp.Value.Remove(edgeId);
+                }
+            }
+
+            /// <summary>
+            /// Clears all data from the spatial index.
+            /// </summary>
+            public void Clear()
+            {
+                _nodeGrid.Clear();
+                _edgeGrid.Clear();
+                _ghostGrid.Clear();
             }
         }
 
@@ -109,10 +350,58 @@ namespace ForestMaze
             public bool HasCrossConnection = false; // Track if any non-parent connections exist
 
             /// <summary>
+            /// Spatial index for fast proximity queries during validation.
+            /// </summary>
+            public SpatialIndex SpatialIndex = new SpatialIndex(15f);
+
+            /// <summary>
             /// Fill segments to cover gaps created by edge spacing adjustments.
             /// Each segment is a pair of points (start, end) that should be rendered as path tiles.
             /// </summary>
             public List<(Vector2 start, Vector2 end)> AdjustmentFills = new List<(Vector2, Vector2)>();
+
+            /// <summary>
+            /// Registers a node with the spatial index.
+            /// </summary>
+            public void RegisterNode(Node node)
+            {
+                SpatialIndex.AddNode(node.Id, node.Position);
+            }
+
+            /// <summary>
+            /// Registers an edge with the spatial index using its bounding box.
+            /// </summary>
+            public void RegisterEdge(Edge edge)
+            {
+                var bounds = edge.GetBounds();
+                SpatialIndex.AddEdge(edge.Id, bounds.min, bounds.max);
+            }
+
+            /// <summary>
+            /// Re-registers an edge after its polyline was modified.
+            /// </summary>
+            public void ReregisterEdge(Edge edge)
+            {
+                SpatialIndex.RemoveEdge(edge.Id);
+                edge.InvalidateBounds();
+                RegisterEdge(edge);
+            }
+
+            /// <summary>
+            /// Registers a ghost center with the spatial index.
+            /// </summary>
+            public void RegisterGhost(Vector2 position)
+            {
+                SpatialIndex.AddGhost(position);
+            }
+
+            /// <summary>
+            /// Unregisters a ghost center from the spatial index.
+            /// </summary>
+            public void UnregisterGhost(Vector2 position)
+            {
+                SpatialIndex.RemoveGhost(position);
+            }
 
             // DEPRECATED - Legacy grid rasterization fields, kept for compatibility but unused
             // In world-space mode, graph positions ARE world positions (no transform needed)
@@ -201,6 +490,7 @@ namespace ForestMaze
                 MaxDegree = 1
             };
             state.Nodes.Add(root);
+            state.RegisterNode(root);
 
             // Create one frontier edge at random orientation
             float angle = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
@@ -229,8 +519,10 @@ namespace ForestMaze
             };
 
             state.Edges.Add(edge);
+            state.RegisterEdge(edge);
             state.Frontier.Add(edge.Id);
             state.GhostCenters.Add(ghostCenter);
+            state.RegisterGhost(ghostCenter);
             root.AddEdge(edge.Id, angle);
         }
 
@@ -245,6 +537,7 @@ namespace ForestMaze
                 MaxDegree = 1
             };
             state.Nodes.Add(root);
+            state.RegisterNode(root);
 
             // Create first normal node at random orientation
             float angle = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
@@ -266,6 +559,7 @@ namespace ForestMaze
                 MaxDegree = maxDegree
             };
             state.Nodes.Add(node1);
+            state.RegisterNode(node1);
 
             // Create edge between root and node1 (node-to-node)
             var initialBoundaries = GetEdgeBoundaries(root.Position, node1Pos, startIsNode: true, endIsNode: true);
@@ -298,6 +592,7 @@ namespace ForestMaze
             };
 
             state.Edges.Add(edge);
+            state.RegisterEdge(edge);
             root.AddEdge(edge.Id, angle);
             float reverseAngle = (angle + Mathf.PI) % (2 * Mathf.PI);
             node1.AddEdge(edge.Id, reverseAngle);
@@ -363,10 +658,13 @@ namespace ForestMaze
                 MaxDegree = maxDegree
             };
             state.Nodes.Add(newNode);
+            state.RegisterNode(newNode);
 
             // Convert partial edge to complete
             edge.NodeB = newNode.Id;
             edge.Partial = false;
+            // Re-register edge since it's now complete (bounds might change slightly)
+            state.ReregisterEdge(edge);
 
             // Calculate reverse angle for new node
             var nodeA = state.Nodes[edge.NodeA];
@@ -376,16 +674,20 @@ namespace ForestMaze
 
             newNode.AddEdge(edgeId.Value, reverseAngle);
 
-            // Remove from frontier and ghost list
+            // Remove from frontier and ghost list (and spatial index)
             state.Frontier.Remove(edgeId.Value);
-            state.GhostCenters.RemoveAll(g => Vector2.Distance(g, edge.GhostCenter.Value) < 1e-6f);
+            Vector2 ghostToRemove = edge.GhostCenter.Value;
+            state.GhostCenters.RemoveAll(g => Vector2.Distance(g, ghostToRemove) < 1e-6f);
+            state.UnregisterGhost(ghostToRemove);
             edge.GhostCenter = null;
 
-            // Cross-connection: always try to connect to closest unconnected node
+            // Cross-connection: only on even steps with >2 existing nodes
+            // This creates occasional loops without over-connecting the graph
             bool hasExistingConnection = false;
             int otherNodesCount = state.Nodes.Count - 1; // Exclude the new node we just added
+            bool isEvenStep = (state.TurnCount % 2 == 0);
 
-            if (otherNodesCount >= 1)
+            if (isEvenStep && otherNodesCount >= 2)
             {
                 // Try to connect to existing node using new selection criteria:
                 // Pick from 3 closest, prefer the one with fewest connections
@@ -393,7 +695,6 @@ namespace ForestMaze
                 {
                     hasExistingConnection = true;
                     state.HasCrossConnection = true;
-                    Debug.Log($"[Step] Cross-connection created from node {newNode.Id}");
                 }
             }
 
@@ -402,12 +703,9 @@ namespace ForestMaze
             int numNewEdges = state.Random.Next(MIN_NEW_EDGES, MAX_NEW_EDGES + 1);
             int frontierEdgesAdded = 0;
 
-            Debug.Log($"[Step] Creating {numNewEdges} frontier edges from node {newNode.Id} at {newNode.Position}, HasCapacity={newNode.HasCapacity()}, MaxDegree={newNode.MaxDegree}, IncidentEdges={newNode.IncidentEdges.Count}");
-
             for (int i = 0; i < numNewEdges && newNode.HasCapacity(); i++)
             {
                 bool success = AddPartialEdgeWithNodeExclusion(state, newNode);
-                Debug.Log($"[Step] AddPartialEdgeWithNodeExclusion attempt {i}: {(success ? "SUCCESS" : "FAILED")}");
                 if (success)
                 {
                     frontierEdgesAdded++;
@@ -420,7 +718,6 @@ namespace ForestMaze
             {
                 newNode.MaxDegree++;
                 bool success = AddPartialEdge(state, newNode);
-                Debug.Log($"[Step] AddPartialEdge fallback: {(success ? "SUCCESS" : "FAILED")}");
                 if (success)
                 {
                     frontierEdgesAdded++;
@@ -431,7 +728,6 @@ namespace ForestMaze
                 }
             }
 
-            Debug.Log($"[Step] Total frontier edges added: {frontierEdgesAdded}, Frontier count: {state.Frontier.Count}");
             state.TurnCount++;
             return true;
         }
@@ -455,8 +751,6 @@ namespace ForestMaze
                 .Take(3) // Select 3 closest
                 .ToList();
 
-            Debug.Log($"[CrossConnect] Node {newNode.Id} trying cross-connect, candidates={candidates.Count}, parentId={parentNodeId}");
-
             if (candidates.Count == 0)
                 return false;
 
@@ -471,7 +765,6 @@ namespace ForestMaze
                 // Check if connection would cross through any other node
                 if (WouldEdgeCrossNode(state, newNode.Position, candidate.Position, newNode.Id, candidate.Id))
                 {
-                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: would cross node");
                     continue;
                 }
 
@@ -487,7 +780,6 @@ namespace ForestMaze
                 var boundaries = GetEdgeBoundaries(newNode.Position, candidate.Position, startIsNode: true, endIsNode: true);
                 if (!boundaries.HasValue)
                 {
-                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: boundaries null");
                     continue;
                 }
 
@@ -495,7 +787,6 @@ namespace ForestMaze
                 var polyline = GenerateSCurvePolyline(boundaries.Value.start, boundaries.Value.end, state.Random);
                 if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
                 {
-                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: polyline invalid");
                     continue;
                 }
 
@@ -517,6 +808,7 @@ namespace ForestMaze
                 };
 
                 state.Edges.Add(newEdge);
+                state.RegisterEdge(newEdge);
                 newNode.AddEdge(newEdge.Id, directAngle);
                 candidate.AddEdge(newEdge.Id, reverseAngle);
 
@@ -531,14 +823,22 @@ namespace ForestMaze
         /// </summary>
         private static bool WouldEdgeCrossNode(ForestMapState state, Vector2 start, Vector2 end, int excludeNode1, int excludeNode2)
         {
-            foreach (var node in state.Nodes)
+            // Calculate bounding box for the edge segment
+            Vector2 boundsMin = new Vector2(Mathf.Min(start.x, end.x), Mathf.Min(start.y, end.y));
+            Vector2 boundsMax = new Vector2(Mathf.Max(start.x, end.x), Mathf.Max(start.y, end.y));
+            float buffer = NODE_RADIUS + PATH_RADIUS;
+
+            // Use spatial index to get only nearby nodes
+            var nearbyNodeIds = state.SpatialIndex.GetNearbyNodeIds(boundsMin, boundsMax, buffer);
+            foreach (var nodeId in nearbyNodeIds)
             {
-                if (node.Id == excludeNode1 || node.Id == excludeNode2)
+                if (nodeId == excludeNode1 || nodeId == excludeNode2)
                     continue;
 
+                var node = state.Nodes[nodeId];
                 // Check distance from node center to the line segment
                 float dist = PointToSegmentDistance(node.Position, start, end);
-                if (dist < NODE_RADIUS + PATH_RADIUS)
+                if (dist < buffer)
                     return true;
             }
             return false;
@@ -665,7 +965,6 @@ namespace ForestMaze
         {
             if (!node.HasCapacity())
             {
-                Debug.Log($"[AddPartialEdgeWithNodeExclusion] Node {node.Id} has no capacity");
                 return false;
             }
 
@@ -689,7 +988,6 @@ namespace ForestMaze
             float length0 = (float)(state.Random.NextDouble() * 15.0 + 12.0);
 
             int maxRotations = (int)(180 / ROTATE_STEP);
-            int forbiddenCount = 0, angleInvalidCount = 0, ghostInvalidCount = 0, polylineInvalidCount = 0;
 
             for (int rotStep = 0; rotStep < maxRotations; rotStep++)
             {
@@ -706,13 +1004,11 @@ namespace ForestMaze
                 // Check if angle is in forbidden zone
                 if (IsAngleInForbiddenZone(theta, forbiddenAngles))
                 {
-                    forbiddenCount++;
                     continue;
                 }
 
                 if (!IsAngleValid(node, theta))
                 {
-                    angleInvalidCount++;
                     continue;
                 }
 
@@ -725,7 +1021,6 @@ namespace ForestMaze
                     // Use EXCLUSION_ZONE for ghost position validation
                     if (!IsGhostPositionValidWithExclusionZone(state, ghostCenter, node.Id))
                     {
-                        ghostInvalidCount++;
                         length -= SHORTEN_STEP * 2;
                         continue;
                     }
@@ -751,15 +1046,13 @@ namespace ForestMaze
                             };
 
                             state.Edges.Add(newEdge);
+                            state.RegisterEdge(newEdge);
                             state.Frontier.Add(newEdge.Id);
                             state.GhostCenters.Add(ghostCenter);
+                            state.RegisterGhost(ghostCenter);
                             node.AddEdge(newEdge.Id, theta);
 
                             return true;
-                        }
-                        else
-                        {
-                            polylineInvalidCount++;
                         }
                     }
 
@@ -767,7 +1060,6 @@ namespace ForestMaze
                 }
             }
 
-            Debug.Log($"[AddPartialEdgeWithNodeExclusion] FAILED for node {node.Id}: forbidden={forbiddenCount}, angleInvalid={angleInvalidCount}, ghostInvalid={ghostInvalidCount}, polylineInvalid={polylineInvalidCount}");
             return false;
         }
 
@@ -788,29 +1080,40 @@ namespace ForestMaze
 
         /// <summary>
         /// Validates ghost position with the new exclusion zone (radius + 2 = 5 units).
+        /// Uses spatial index for O(1) average-case lookups instead of O(n).
         /// </summary>
         private static bool IsGhostPositionValidWithExclusionZone(ForestMapState state, Vector2 ghostPos, int sourceNodeId)
         {
-            // Check against all existing nodes with exclusion zone
-            foreach (var node in state.Nodes)
+            float exclusionDist = 2 * EXCLUSION_ZONE;
+            Vector2 boundsMin = ghostPos - new Vector2(exclusionDist, exclusionDist);
+            Vector2 boundsMax = ghostPos + new Vector2(exclusionDist, exclusionDist);
+
+            // Check against nearby nodes using spatial index
+            var nearbyNodeIds = state.SpatialIndex.GetNearbyNodeIds(boundsMin, boundsMax, 0f);
+            foreach (var nodeId in nearbyNodeIds)
             {
-                if (node.Id == sourceNodeId)
+                if (nodeId == sourceNodeId)
                     continue;
 
-                if (Vector2.Distance(node.Position, ghostPos) < 2 * EXCLUSION_ZONE)
+                var node = state.Nodes[nodeId];
+                if (Vector2.Distance(node.Position, ghostPos) < exclusionDist)
                     return false;
             }
 
-            // Check against other ghost centers
-            foreach (var ghost in state.GhostCenters)
+            // Check against nearby ghost centers using spatial index
+            var nearbyGhosts = state.SpatialIndex.GetNearbyGhosts(boundsMin, boundsMax, 0f);
+            foreach (var ghost in nearbyGhosts)
             {
-                if (Vector2.Distance(ghost, ghostPos) < 2 * EXCLUSION_ZONE)
+                if (Vector2.Distance(ghost, ghostPos) < exclusionDist)
                     return false;
             }
 
-            // Check against existing edges
-            foreach (var edge in state.Edges)
+            // Check against nearby edges using spatial index
+            float edgeBuffer = NODE_RADIUS + PATH_RADIUS + WALL_BUFFER;
+            var nearbyEdgeIds = state.SpatialIndex.GetNearbyEdgeIds(boundsMin, boundsMax, edgeBuffer);
+            foreach (var edgeId in nearbyEdgeIds)
             {
+                var edge = state.Edges[edgeId];
                 if (edge.PolylinePoints.Count < 2)
                     continue;
 
@@ -818,9 +1121,7 @@ namespace ForestMaze
                     continue;
 
                 float dist = PolylineToNodeDistance(edge.PolylinePoints, ghostPos, false);
-                float minRequired = NODE_RADIUS + PATH_RADIUS + WALL_BUFFER;
-
-                if (dist < minRequired - 1e-6f)
+                if (dist < edgeBuffer - 1e-6f)
                     return false;
             }
 
@@ -886,8 +1187,10 @@ namespace ForestMaze
                             };
 
                             state.Edges.Add(edge);
+                            state.RegisterEdge(edge);
                             state.Frontier.Add(edge.Id);
                             state.GhostCenters.Add(ghostCenter);
+                            state.RegisterGhost(ghostCenter);
                             node.AddEdge(edge.Id, theta);
 
                             return true;
@@ -1076,6 +1379,7 @@ namespace ForestMaze
                 };
 
                 state.Edges.Add(edge);
+                state.RegisterEdge(edge);
                 newNode.AddEdge(edge.Id, validSourceAngle);
                 candidate.AddEdge(edge.Id, validTargetAngle);
 
@@ -2769,27 +3073,41 @@ namespace ForestMaze
             if (polyline.Count < 2)
                 return false;
 
-            // Check against all existing nodes
-            foreach (var node in state.Nodes)
+            // Calculate polyline bounding box for spatial culling
+            Vector2 polyMin = polyline[0];
+            Vector2 polyMax = polyline[0];
+            for (int i = 1; i < polyline.Count; i++)
             {
-                bool isIncident = incidentNodes.Contains(node.Id);
+                var p = polyline[i];
+                if (p.x < polyMin.x) polyMin.x = p.x;
+                if (p.y < polyMin.y) polyMin.y = p.y;
+                if (p.x > polyMax.x) polyMax.x = p.x;
+                if (p.y > polyMax.y) polyMax.y = p.y;
+            }
 
-                // Skip proximity check for incident nodes entirely - edges start from them by definition
-                if (isIncident)
+            // Buffer for node proximity checks (R_KEEP + PATH_RADIUS + WALL_BUFFER)
+            float nodeBuffer = R_KEEP + PATH_RADIUS + WALL_BUFFER;
+
+            // Use spatial index to get only nearby nodes
+            var nearbyNodeIds = state.SpatialIndex.GetNearbyNodeIds(polyMin, polyMax, nodeBuffer);
+            foreach (var nodeId in nearbyNodeIds)
+            {
+                if (incidentNodes.Contains(nodeId))
                     continue;
 
+                var node = state.Nodes[nodeId];
                 float dist = PolylineToNodeDistance(polyline, node.Position, false);
                 float minRequired = R_KEEP + PATH_RADIUS - 0.4f + WALL_BUFFER;
 
                 if (dist < minRequired - 1e-6f)
                 {
-                    Debug.Log($"[IsPolylineValid] REJECTED: too close to node {node.Id} at {node.Position}, dist={dist:F2}, required={minRequired:F2}");
                     return false;
                 }
             }
 
-            // Check against ghost centers
-            foreach (var ghost in state.GhostCenters)
+            // Use spatial index to get only nearby ghosts
+            var nearbyGhosts = state.SpatialIndex.GetNearbyGhosts(polyMin, polyMax, nodeBuffer);
+            foreach (var ghost in nearbyGhosts)
             {
                 if (ghostPos.HasValue && Vector2.Distance(ghost, ghostPos.Value) < 1e-6f)
                     continue;
@@ -2799,24 +3117,35 @@ namespace ForestMaze
 
                 if (dist < minRequired - 1e-6f)
                 {
-                    Debug.Log($"[IsPolylineValid] REJECTED: too close to ghost at {ghost}, dist={dist:F2}, required={minRequired:F2}");
                     return false;
                 }
             }
 
-            // Check against all existing edges
-            // Edges CAN cross, but must do so at a steep enough angle
-            foreach (var edge in state.Edges)
+            // Buffer for edge proximity checks
+            float edgeCheckBuffer = isCrossConnection ? PATH_WIDTH : MERGE_DISTANCE + 1f;
+
+            // Use spatial index to get only nearby edges
+            var nearbyEdgeIds = state.SpatialIndex.GetNearbyEdgeIds(polyMin, polyMax, edgeCheckBuffer);
+            foreach (var edgeId in nearbyEdgeIds)
             {
+                var edge = state.Edges[edgeId];
                 if (edge.PolylinePoints.Count < 2)
                     continue;
 
                 // Skip proximity check for edges incident to source nodes
-                // (new edges from a node naturally start close to existing edges from that node)
                 bool isIncidentEdge = incidentNodes.Contains(edge.NodeA) ||
                                       (edge.NodeB.HasValue && incidentNodes.Contains(edge.NodeB.Value));
                 if (isIncidentEdge)
                     continue;
+
+                // Quick bounding box rejection before expensive polyline checks
+                var edgeBounds = edge.GetBounds();
+                float buffer = isCrossConnection ? PATH_WIDTH * 0.3f : MERGE_DISTANCE;
+                if (polyMax.x < edgeBounds.min.x - buffer || polyMin.x > edgeBounds.max.x + buffer ||
+                    polyMax.y < edgeBounds.min.y - buffer || polyMin.y > edgeBounds.max.y + buffer)
+                {
+                    continue;
+                }
 
                 // Check for intersections and validate crossing angles
                 var crossings = FindPolylineCrossings(polyline, edge.PolylinePoints);
@@ -2828,7 +3157,6 @@ namespace ForestMaze
                     {
                         if (!IsCrossingAngleValid(crossing.angle))
                         {
-                            // Crossing angle too shallow - would create gap > MAX_CROSSING_GAP
                             return false;
                         }
                     }
@@ -2836,13 +3164,11 @@ namespace ForestMaze
                 else
                 {
                     // No crossing - check parallel proximity
-                    // Use MERGE_DISTANCE for non-cross-connections, smaller buffer for intentional cross-connections
                     float edgeBuffer = isCrossConnection ? PATH_WIDTH * 0.3f : MERGE_DISTANCE;
                     float dist = PolylineToPolylineDistance(polyline, edge.PolylinePoints);
 
                     if (dist < edgeBuffer - 1e-6f)
                     {
-                        Debug.Log($"[IsPolylineValid] REJECTED: too close to edge {edge.Id} (NodeA={edge.NodeA}, NodeB={edge.NodeB}), dist={dist:F2}, required={edgeBuffer:F2}");
                         return false;
                     }
                 }
