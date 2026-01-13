@@ -322,7 +322,7 @@ namespace FaeMaze.Systems
                                 // Skip wall removal if this point is near any existing node's border ring
                                 // to protect existing node walls from being removed
                                 bool nearExistingNode = false;
-                                foreach (var node in forestState.Nodes)
+                                foreach (var node in forestMapState.Nodes)
                                 {
                                     // Protect all nodes except the new one (whose walls will be added fresh)
                                     if (node.Id != newNode.Id)

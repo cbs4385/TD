@@ -23,7 +23,8 @@ namespace ForestMaze
         private const float EXCLUSION_ZONE = NODE_RADIUS + 2.0f; // 5.0 - minimum distance for frontier endpoints from nodes
 
         // Tunable parameters
-        private const float ANGLE_MIN_SEPARATION = 60.0f; // degrees - ensures ~3.14 units arc between edges at node boundary for 3 wall tiles (1x1 each)
+        private const float ANGLE_MIN_SEPARATION = 75.0f; // degrees - minimum separation between edges
+        private const float ANGLE_MAX_SEPARATION = 105.0f; // degrees - maximum separation between edges (for random interval)
         private const float ANGLE_EXCLUSION_TOWARD_NODES = 15.0f; // degrees - exclude orientations within this angle toward existing nodes
         private const float ROTATE_STEP = 6.0f; // degrees
         private const float SHORTEN_STEP = 0.3f;
@@ -474,26 +475,13 @@ namespace ForestMaze
                     continue;
                 }
 
-                // Find valid angles for both nodes
+                // Cross-connections are direct - no angle constraints
+                // The S-curve will handle diverging from existing edges
                 Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
                 float directAngle = Mathf.Atan2(directDirection.y, directDirection.x);
                 directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
                 float reverseAngle = (directAngle + Mathf.PI) % (2 * Mathf.PI);
-
-                // For cross-connections, use relaxed angle constraints (30° instead of 60°)
-                // since the S-curve will diverge from the existing edge
-                const float crossConnectMinAngle = 30.0f;
-                if (!IsAngleValid(newNode, directAngle, crossConnectMinAngle))
-                {
-                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on new node (min {crossConnectMinAngle}°)");
-                    continue;
-                }
-                if (!IsAngleValid(candidate, reverseAngle, crossConnectMinAngle))
-                {
-                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on candidate (min {crossConnectMinAngle}°)");
-                    continue;
-                }
 
                 // Build edge curve (node-to-node)
                 var boundaries = GetEdgeBoundaries(newNode.Position, candidate.Position, startIsNode: true, endIsNode: true);
@@ -2922,11 +2910,12 @@ namespace ForestMaze
 
         private static bool IsAngleValid(Node node, float angle)
         {
-            return IsAngleValid(node, angle, ANGLE_MIN_SEPARATION);
+            return IsAngleValidWithInterval(node, angle, ANGLE_MIN_SEPARATION, ANGLE_MAX_SEPARATION);
         }
 
         private static bool IsAngleValid(Node node, float angle, float minSeparationDegrees)
         {
+            // Simple minimum-only check (used for cross-connections)
             float minSeparation = minSeparationDegrees * Mathf.Deg2Rad;
             foreach (float usedAngle in node.UsedAngles)
             {
@@ -2935,6 +2924,36 @@ namespace ForestMaze
                 if (diff < minSeparation)
                     return false;
             }
+            return true;
+        }
+
+        private static bool IsAngleValidWithInterval(Node node, float angle, float minSepDegrees, float maxSepDegrees)
+        {
+            // Check angle is within 75-105° interval from existing edges
+            if (node.UsedAngles.Count == 0)
+                return true;
+
+            float minSeparation = minSepDegrees * Mathf.Deg2Rad;
+            float maxSeparation = maxSepDegrees * Mathf.Deg2Rad;
+
+            float minDistToAny = float.MaxValue;
+
+            foreach (float usedAngle in node.UsedAngles)
+            {
+                float diff = Mathf.Abs(angle - usedAngle);
+                diff = Mathf.Min(diff, 2 * Mathf.PI - diff);
+
+                // Must be at least minSeparation from ALL edges
+                if (diff < minSeparation)
+                    return false;
+
+                minDistToAny = Mathf.Min(minDistToAny, diff);
+            }
+
+            // Must be at most maxSeparation from at least one edge (nearest neighbor)
+            if (minDistToAny > maxSeparation)
+                return false;
+
             return true;
         }
 
