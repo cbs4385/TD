@@ -983,20 +983,20 @@ namespace FaeMaze.Systems
             int tileCount = 0;
             Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-            // Place side walls as blocks with long axis along edge direction
-            // For each side, create a grid where:
-            // - perpLayer: distance from edge center (perpendicular direction)
-            // - edgeLayer: position along edge (the long axis of the 1x3 block)
+            // Place side walls to form the sides of the U
+            // - perpLayer: distance from edge center, starting at edge of path
+            // - edgeLayer: position along edge extending BACK from frontier end
             foreach (float side in new[] { 1f, -1f })
             {
                 for (int perpLayer = 0; perpLayer < wallDepth; perpLayer++)
                 {
-                    float wallPerpOffset = pathHalfWidth + wallSpacing * (perpLayer + 1);
+                    // Start at edge of path (pathHalfWidth), not further out
+                    float wallPerpOffset = pathHalfWidth + wallSpacing * perpLayer;
 
                     for (int edgeLayer = 0; edgeLayer < wallDepth; edgeLayer++)
                     {
-                        // Position along edge: 3 tiles centered around frontier end
-                        float edgeOffset = wallSpacing * (edgeLayer - 1);
+                        // Position along edge: extend BACK from frontier end towards node
+                        float edgeOffset = -wallSpacing * edgeLayer;
                         Vector2 wallPos = frontierEnd + frontierDir * edgeOffset + perpendicular * side * wallPerpOffset;
 
                         // Orient walls along edge direction
