@@ -539,20 +539,15 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Creates a simple nearly-straight curve between two boundary points.
+        /// Creates a simple straight-line curve between two boundary points.
         /// This is the ONLY curve creation method - all edges use this.
+        /// Control point is exactly at midpoint = perfectly straight line.
         /// </summary>
         private static BezierCurve CreateSimpleCurve(Vector2 start, Vector2 end, System.Random random)
         {
-            Vector2 direction = (end - start).normalized;
+            // Control point exactly at midpoint = perfectly straight line
             Vector2 midpoint = (start + end) * 0.5f;
-            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
-
-            // Tiny random offset for subtle curve (±0.2 max)
-            float offset = ((float)random.NextDouble() - 0.5f) * 0.4f;
-            Vector2 control = midpoint + perpendicular * offset;
-
-            return new BezierCurve(start, control, end);
+            return new BezierCurve(start, midpoint, end);
         }
 
         /// <summary>
