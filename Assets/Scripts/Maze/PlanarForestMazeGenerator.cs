@@ -2760,6 +2760,13 @@ namespace ForestMaze
                 if (edge.PolylinePoints.Count < 2)
                     continue;
 
+                // Skip proximity check for edges incident to source nodes
+                // (new edges from a node naturally start close to existing edges from that node)
+                bool isIncidentEdge = incidentNodes.Contains(edge.NodeA) ||
+                                      (edge.NodeB.HasValue && incidentNodes.Contains(edge.NodeB.Value));
+                if (isIncidentEdge)
+                    continue;
+
                 // Check for intersections and validate crossing angles
                 var crossings = FindPolylineCrossings(polyline, edge.PolylinePoints);
 
