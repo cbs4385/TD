@@ -537,6 +537,7 @@ namespace FaeMaze.Systems
             }
 
             // Add walls around nodes (3 rings at nodeRadius + offset)
+            // Node walls go all the way around - they can overlap with edge walls at junctions
             foreach (var node in forestState.Nodes)
             {
                 for (int layer = 0; layer < wallDepth; layer++)
@@ -550,29 +551,6 @@ namespace FaeMaze.Systems
                     {
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
-
-                        // Skip if this position is along an edge (edge walls will cover it)
-                        // Use smaller threshold so node walls extend closer to edge junction
-                        bool nearEdge = false;
-                        foreach (var edge in forestState.Edges)
-                        {
-                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                            // Check if wall is near any edge segment
-                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
-                            {
-                                Vector2 segStart = edge.PolylinePoints[j];
-                                Vector2 segEnd = edge.PolylinePoints[j + 1];
-                                float distToSeg = DistanceToLineSegment(wallPos, segStart, segEnd);
-                                if (distToSeg < 1.2f)
-                                {
-                                    nearEdge = true;
-                                    break;
-                                }
-                            }
-                            if (nearEdge) break;
-                        }
-                        if (nearEdge) continue;
 
                         // Skip only if nearly identical position (walls can overlap)
                         if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
@@ -1641,6 +1619,7 @@ namespace FaeMaze.Systems
             }
 
             // Add walls around the new node (3 rings)
+            // Node walls go all the way around - they can overlap with edge walls at junctions
             if (newNode != null)
             {
                 for (int layer = 0; layer < wallDepth; layer++)
@@ -1653,28 +1632,6 @@ namespace FaeMaze.Systems
                     {
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = newNode.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
-
-                        // Skip if this position is along an edge (edge walls will cover it)
-                        // Use smaller threshold so node walls extend closer to edge junction
-                        bool nearEdge = false;
-                        foreach (var edge in forestState.Edges)
-                        {
-                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
-                            {
-                                Vector2 segStart = edge.PolylinePoints[j];
-                                Vector2 segEnd = edge.PolylinePoints[j + 1];
-                                float distToSeg = DistanceToLineSegment(wallPos, segStart, segEnd);
-                                if (distToSeg < 1.2f)
-                                {
-                                    nearEdge = true;
-                                    break;
-                                }
-                            }
-                            if (nearEdge) break;
-                        }
-                        if (nearEdge) continue;
 
                         // Skip only if nearly identical position (walls can overlap)
                         if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
