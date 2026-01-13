@@ -1063,11 +1063,41 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Checks if a position is too close to any edge polyline (within clearance distance).
+        /// Used to prevent walls from overlapping with existing paths.
+        /// </summary>
+        private bool IsPositionTooCloseToEdge(Vector2 position, PlanarForestMazeGenerator.Edge edgeToSkip,
+            IEnumerable<PlanarForestMazeGenerator.Edge> allEdges, float clearance)
+        {
+            foreach (var edge in allEdges)
+            {
+                // Skip the edge we're currently rendering walls for
+                if (edge == edgeToSkip) continue;
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                // Check distance to each segment of the edge polyline
+                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                {
+                    Vector2 segStart = edge.PolylinePoints[i];
+                    Vector2 segEnd = edge.PolylinePoints[i + 1];
+
+                    float distToSegment = DistanceToLineSegment(position, segStart, segEnd);
+                    if (distToSegment < clearance)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Renders walls along edges (perpendicular to edge direction).
         /// Shared helper used by both initial render and incremental updates.
         /// </summary>
         private int RenderEdgeWalls(IEnumerable<PlanarForestMazeGenerator.Edge> edges,
-            IEnumerable<PlanarForestMazeGenerator.Node> allNodes, Transform mazeOrigin)
+            IEnumerable<PlanarForestMazeGenerator.Node> allNodes, Transform mazeOrigin,
+            IEnumerable<PlanarForestMazeGenerator.Edge> allEdges = null)
         {
             int tileCount = 0;
 
@@ -1152,6 +1182,11 @@ namespace FaeMaze.Systems
                                     }
                                 }
                                 if (wallInsideNode) continue;
+
+                                // Skip walls that would overlap with other edge paths
+                                if (allEdges != null && IsPositionTooCloseToEdge(wallPos, edge, allEdges, PATH_HALF_WIDTH + 0.5f))
+                                    continue;
+
                                 Vector3 worldPos = ToVector3(wallPos);
                                 CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
                                 tileCount++;
@@ -1310,6 +1345,38 @@ namespace FaeMaze.Systems
                 occupiedPositionHash[key] = list;
             }
             list.Add(pos);
+        }
+
+        /// <summary>
+        /// Removes a position from the spatial hash (distance-based matching).
+        /// </summary>
+        private void RemoveFromPositionHash(Vector2 pos, float threshold = OVERLAP_THRESHOLD)
+        {
+            if (occupiedPositionHash == null || occupiedPositionHash.Count == 0)
+                return;
+
+            // Check the cell and adjacent cells for the position
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int x = Mathf.FloorToInt(pos.x / POSITION_HASH_CELL_SIZE) + dx;
+                    int y = Mathf.FloorToInt(pos.y / POSITION_HASH_CELL_SIZE) + dy;
+                    long neighborKey = ((long)x << 32) | (uint)y;
+
+                    if (occupiedPositionHash.TryGetValue(neighborKey, out var cellPositions))
+                    {
+                        for (int i = cellPositions.Count - 1; i >= 0; i--)
+                        {
+                            if (Vector2.Distance(cellPositions[i], pos) < threshold)
+                            {
+                                cellPositions.RemoveAt(i);
+                                return; // Found and removed
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -1765,9 +1832,10 @@ namespace FaeMaze.Systems
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
             // Render walls along new edges (includes frontier end caps)
+            // Pass all edges so new walls don't overlap existing edge paths
             if (newEdges != null && newEdges.Count > 0)
             {
-                RenderEdgeWalls(newEdges, forestState.Nodes, mazeOrigin);
+                RenderEdgeWalls(newEdges, forestState.Nodes, mazeOrigin, forestState.Edges);
             }
 
             // Render walls around the new node
@@ -1796,11 +1864,12 @@ namespace FaeMaze.Systems
             float frameStartTime = Time.realtimeSinceStartup;
 
             // Render walls along new edges (includes frontier end caps)
+            // Pass all edges so new walls don't overlap existing edge paths
             if (newEdges != null && newEdges.Count > 0)
             {
                 foreach (var edge in newEdges)
                 {
-                    yield return StartCoroutine(RenderEdgeWallsAsync(edge, forestState.Nodes, mazeOrigin, frameBudgetMs));
+                    yield return StartCoroutine(RenderEdgeWallsAsync(edge, forestState.Nodes, mazeOrigin, frameBudgetMs, forestState.Edges));
                 }
             }
 
@@ -1815,7 +1884,8 @@ namespace FaeMaze.Systems
         /// Async version of RenderEdgeWalls for a single edge.
         /// </summary>
         private IEnumerator RenderEdgeWallsAsync(PlanarForestMazeGenerator.Edge edge,
-            IList<PlanarForestMazeGenerator.Node> nodesList, Transform mazeOrigin, float frameBudgetMs)
+            IList<PlanarForestMazeGenerator.Node> nodesList, Transform mazeOrigin, float frameBudgetMs,
+            IEnumerable<PlanarForestMazeGenerator.Edge> allEdges = null)
         {
             if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                 yield break;
@@ -1882,6 +1952,10 @@ namespace FaeMaze.Systems
                                 }
                             }
                             if (wallInsideNode) continue;
+
+                            // Skip walls that would overlap with other edge paths
+                            if (allEdges != null && IsPositionTooCloseToEdge(wallPos, edge, allEdges, PATH_HALF_WIDTH + 0.5f))
+                                continue;
 
                             Vector3 worldPos = ToVector3(wallPos);
                             CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
@@ -2125,7 +2199,8 @@ namespace FaeMaze.Systems
 
             foreach (Transform child in tilesParent)
             {
-                if (child.name.StartsWith("Wall_"))
+                // Check both wall prefab instances and procedural wall tiles
+                if (child.name.StartsWith("Wall_") || child.name.StartsWith("WorldTile_#"))
                 {
                     Vector2 wallPos = new Vector2(child.position.x, child.position.y);
 
@@ -2179,7 +2254,7 @@ namespace FaeMaze.Systems
 
             foreach (var t in toRemove)
             {
-                // Remove from occupied positions
+                // Remove from occupied positions (both list and hash)
                 Vector2 pos2D = new Vector2(t.position.x, t.position.y);
                 if (occupiedPositions != null)
                 {
@@ -2193,6 +2268,9 @@ namespace FaeMaze.Systems
                         }
                     }
                 }
+
+                // Also remove from the spatial hash
+                RemoveFromPositionHash(pos2D);
 
                 Destroy(t.gameObject);
                 removedCount++;

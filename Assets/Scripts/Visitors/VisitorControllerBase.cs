@@ -432,11 +432,24 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Retargets visitor to the nearest spawn point by walking distance.
+        /// Retargets visitor to the nearest spawn point by walking distance from current position.
         /// Excludes the original spawn point to prevent visitors from going backwards.
         /// If no valid spawn points are available, falls back to the heart.
         /// </summary>
         public void RetargetToNearestSpawn()
+        {
+            RetargetToNearestSpawnFrom(transform.position);
+        }
+
+        /// <summary>
+        /// Retargets visitor to the nearest spawn point by walking distance from a specified position.
+        /// This is used when a destination portal is consumed - we want the nearest spawn from
+        /// where the visitor was heading, not from where they currently are.
+        /// Excludes the original spawn point to prevent visitors from going backwards.
+        /// If no valid spawn points are available, falls back to the heart.
+        /// </summary>
+        /// <param name="fromPosition">The position to measure walking distance from</param>
+        public void RetargetToNearestSpawnFrom(Vector3 fromPosition)
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
@@ -457,7 +470,6 @@ namespace FaeMaze.Visitors
             var spawnInfo = string.Join(", ", spawnPoints.Select(kvp => $"{kvp.Key}"));
             // Debug.Log($"[Pathfinding] {name}: RetargetToNearestSpawn - considering {spawnPoints.Count} spawn points: [{spawnInfo}]");
 
-            Vector3 currentPos = transform.position;
             Vector3 bestSpawn = Vector3.zero;
             float shortestWalkingDist = float.MaxValue;
             int validSpawnsConsidered = 0;
@@ -477,14 +489,14 @@ namespace FaeMaze.Visitors
                     }
                 }
 
-                // Calculate walking distance by building a path
-                var testPath = BuildWorldPath(currentPos, spawnPos);
+                // Calculate walking distance by building a path from the specified position
+                var testPath = BuildWorldPath(fromPosition, spawnPos);
                 if (testPath == null || testPath.Count == 0)
                     continue;
 
                 // Calculate total path length
                 float pathLength = 0f;
-                Vector3 prevPoint = currentPos;
+                Vector3 prevPoint = fromPosition;
                 foreach (var point in testPath)
                 {
                     pathLength += Vector3.Distance(prevPoint, point);

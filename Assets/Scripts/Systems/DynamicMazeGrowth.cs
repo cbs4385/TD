@@ -287,6 +287,16 @@ namespace FaeMaze.Systems
                     mazeRenderer.RemoveWallsPastEndpoint(consumedSpawnPos, consumedFrontierDir, 2.5f, -0.3f);
                 }
 
+                // Remove existing walls along the new edge paths BEFORE adding new walls
+                // This clears walls from previous edges that would intersect with new paths
+                foreach (var newEdge in newEdges)
+                {
+                    if (newEdge.PolylinePoints != null && newEdge.PolylinePoints.Count >= 2)
+                    {
+                        mazeRenderer.RemoveWallsAlongPolyline(newEdge.PolylinePoints, PathRadius + 0.5f);
+                    }
+                }
+
                 // Regenerate cross-connection walls
                 foreach (var targetNode in crossConnectionTargetNodes)
                 {
@@ -546,6 +556,16 @@ namespace FaeMaze.Systems
                 if (consumedSpawnPos != Vector3.zero && consumedFrontierDir != Vector3.zero)
                 {
                     mazeRenderer.RemoveWallsPastEndpoint(consumedSpawnPos, consumedFrontierDir, 2.5f, -0.3f);
+                }
+
+                // Remove existing walls along the new edge paths BEFORE adding new walls
+                // This clears walls from previous edges that would intersect with new paths
+                foreach (var newEdge in newEdges)
+                {
+                    if (newEdge.PolylinePoints != null && newEdge.PolylinePoints.Count >= 2)
+                    {
+                        mazeRenderer.RemoveWallsAlongPolyline(newEdge.PolylinePoints, PathRadius + 0.5f);
+                    }
                 }
 
                 // Regenerate walls for cross-connection target nodes (existing nodes that received a new edge)
@@ -913,7 +933,10 @@ namespace FaeMaze.Systems
 
                 if (destinationWasRemoved)
                 {
-                    visitor.RetargetToNearestSpawn();
+                    // Retarget from the old destination position (where the consumed portal was)
+                    // This finds the nearest spawn from where the visitor was heading,
+                    // not from where they currently are
+                    visitor.RetargetToNearestSpawnFrom(visitorDest);
                 }
             }
         }

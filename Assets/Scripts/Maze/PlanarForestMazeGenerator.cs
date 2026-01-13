@@ -23,8 +23,9 @@ namespace ForestMaze
         private const float EXCLUSION_ZONE = NODE_RADIUS + 2.0f; // 5.0 - minimum distance for frontier endpoints from nodes
 
         // Tunable parameters
-        private const float ANGLE_MIN_SEPARATION = 75.0f; // degrees - minimum separation between edges
+        private const float ANGLE_MIN_SEPARATION = 75.0f; // degrees - minimum separation between edges (normal growth)
         private const float ANGLE_MAX_SEPARATION = 105.0f; // degrees - maximum separation between edges (for random interval)
+        private const float CROSS_CONNECTION_MIN_SEPARATION = 35.0f; // degrees - minimum separation for cross-connections (more permissive)
         private const float ANGLE_EXCLUSION_TOWARD_NODES = 15.0f; // degrees - exclude orientations within this angle toward existing nodes
         private const float ROTATE_STEP = 6.0f; // degrees
         private const float SHORTEN_STEP = 0.3f;
@@ -768,13 +769,25 @@ namespace ForestMaze
                     continue;
                 }
 
-                // Cross-connections are direct - no angle constraints
-                // The S-curve will handle diverging from existing edges
+                // Calculate angles for this connection
                 Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
                 float directAngle = Mathf.Atan2(directDirection.y, directDirection.x);
                 directAngle = (directAngle + 2 * Mathf.PI) % (2 * Mathf.PI);
 
                 float reverseAngle = (directAngle + Mathf.PI) % (2 * Mathf.PI);
+
+                // Validate angle at target node - cross-connections use more permissive separation (35°)
+                // to allow connections while still preventing severe overlaps
+                if (!IsAngleValid(candidate, reverseAngle, CROSS_CONNECTION_MIN_SEPARATION))
+                {
+                    continue;
+                }
+
+                // Also validate angle at source node
+                if (!IsAngleValid(newNode, directAngle, CROSS_CONNECTION_MIN_SEPARATION))
+                {
+                    continue;
+                }
 
                 // Build edge curve (node-to-node)
                 var boundaries = GetEdgeBoundaries(newNode.Position, candidate.Position, startIsNode: true, endIsNode: true);
