@@ -531,9 +531,37 @@ namespace FaeMaze.Systems
             }
 
             // Add walls around nodes (3 rings at nodeRadius + offset)
-            // Node walls go all the way around - they can overlap with edge walls at junctions
+            // Node walls go all the way around EXCEPT where edges connect
+            // Skip walls within ±9.5° of each edge direction (~19° arc for 1-unit wide path on 3-unit radius)
+            float edgeAngleClearance = 9.5f * Mathf.Deg2Rad;
+
             foreach (var node in forestState.Nodes)
             {
+                // Find angles of all edges connected to this node
+                var edgeAngles = new List<float>();
+                foreach (var edge in forestState.Edges)
+                {
+                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                    // Check if this edge connects to this node
+                    bool isNodeA = (edge.NodeA == node.Id);
+                    bool isNodeB = (edge.NodeB.HasValue && edge.NodeB.Value == node.Id);
+
+                    if (isNodeA || isNodeB)
+                    {
+                        // Get the edge direction from this node's perspective
+                        Vector2 edgePoint;
+                        if (isNodeA)
+                            edgePoint = edge.PolylinePoints[0]; // Start of edge
+                        else
+                            edgePoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1]; // End of edge
+
+                        Vector2 direction = (edgePoint - node.Position).normalized;
+                        float edgeAngle = Mathf.Atan2(direction.y, direction.x);
+                        edgeAngles.Add(edgeAngle);
+                    }
+                }
+
                 for (int layer = 0; layer < wallDepth; layer++)
                 {
                     // Walls start right at node edge (no pathHalfWidth offset for nodes)
@@ -544,26 +572,22 @@ namespace FaeMaze.Systems
                     for (int i = 0; i < numWalls; i++)
                     {
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
-                        Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
-                        // Skip if wall would be ON the edge path (within path radius of centerline)
-                        bool onEdgePath = false;
-                        foreach (var edge in forestState.Edges)
+                        // Skip if wall angle is within ±9.5° of any edge angle
+                        bool inEdgeClearance = false;
+                        foreach (float edgeAngle in edgeAngles)
                         {
-                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
+                            float angleDiff = Mathf.Abs(angle - edgeAngle);
+                            angleDiff = Mathf.Min(angleDiff, 2f * Mathf.PI - angleDiff);
+                            if (angleDiff < edgeAngleClearance)
                             {
-                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
-                                if (distToSeg < pathHalfWidth) // On the path itself
-                                {
-                                    onEdgePath = true;
-                                    break;
-                                }
+                                inEdgeClearance = true;
+                                break;
                             }
-                            if (onEdgePath) break;
                         }
-                        if (onEdgePath) continue;
+                        if (inEdgeClearance) continue;
 
+                        Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
                         float orientationDegrees = angle * Mathf.Rad2Deg;
                         Vector3 worldPos = ToVector3(wallPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
@@ -1619,38 +1643,58 @@ namespace FaeMaze.Systems
             }
 
             // Add walls around the new node (3 rings)
-            // Node walls go all the way around - they can overlap with edge walls at junctions
+            // Skip walls within ±9.5° of each edge direction (~19° arc for 1-unit wide path)
             if (newNode != null)
             {
+                float edgeAngleClearance = 9.5f * Mathf.Deg2Rad;
+
+                // Find angles of all edges connected to this node
+                var edgeAngles = new List<float>();
+                foreach (var edge in forestState.Edges)
+                {
+                    if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                    bool isNodeA = (edge.NodeA == newNode.Id);
+                    bool isNodeB = (edge.NodeB.HasValue && edge.NodeB.Value == newNode.Id);
+
+                    if (isNodeA || isNodeB)
+                    {
+                        Vector2 edgePoint;
+                        if (isNodeA)
+                            edgePoint = edge.PolylinePoints[0];
+                        else
+                            edgePoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+
+                        Vector2 direction = (edgePoint - newNode.Position).normalized;
+                        float edgeAngle = Mathf.Atan2(direction.y, direction.x);
+                        edgeAngles.Add(edgeAngle);
+                    }
+                }
+
                 for (int layer = 0; layer < wallDepth; layer++)
                 {
-                    // Walls start right at node edge (matching RenderWallBorder)
                     float ringRadius = nodeRadius + wallSpacing * (layer + 0.5f);
                     int numWalls = Mathf.Max(32, (int)(ringRadius * 2f * Mathf.PI / stepSize));
 
                     for (int i = 0; i < numWalls; i++)
                     {
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
-                        Vector2 wallPos = newNode.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
-                        // Skip if wall would be ON the edge path (within path radius of centerline)
-                        bool onEdgePath = false;
-                        foreach (var edge in forestState.Edges)
+                        // Skip if wall angle is within ±9.5° of any edge angle
+                        bool inEdgeClearance = false;
+                        foreach (float edgeAngle in edgeAngles)
                         {
-                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
+                            float angleDiff = Mathf.Abs(angle - edgeAngle);
+                            angleDiff = Mathf.Min(angleDiff, 2f * Mathf.PI - angleDiff);
+                            if (angleDiff < edgeAngleClearance)
                             {
-                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
-                                if (distToSeg < pathHalfWidth) // On the path itself
-                                {
-                                    onEdgePath = true;
-                                    break;
-                                }
+                                inEdgeClearance = true;
+                                break;
                             }
-                            if (onEdgePath) break;
                         }
-                        if (onEdgePath) continue;
+                        if (inEdgeClearance) continue;
 
+                        Vector2 wallPos = newNode.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
                         float orientationDegrees = angle * Mathf.Rad2Deg;
                         Vector3 worldPos = ToVector3(wallPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
