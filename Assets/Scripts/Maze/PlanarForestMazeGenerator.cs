@@ -454,6 +454,8 @@ namespace ForestMaze
                 .Take(3) // Select 3 closest
                 .ToList();
 
+            Debug.Log($"[CrossConnect] Node {newNode.Id} trying cross-connect, candidates={candidates.Count}, parentId={parentNodeId}");
+
             if (candidates.Count == 0)
                 return false;
 
@@ -467,7 +469,10 @@ namespace ForestMaze
             {
                 // Check if connection would cross through any other node
                 if (WouldEdgeCrossNode(state, newNode.Position, candidate.Position, newNode.Id, candidate.Id))
+                {
+                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: would cross node");
                     continue;
+                }
 
                 // Find valid angles for both nodes
                 Vector2 directDirection = (candidate.Position - newNode.Position).normalized;
@@ -476,18 +481,32 @@ namespace ForestMaze
 
                 float reverseAngle = (directAngle + Mathf.PI) % (2 * Mathf.PI);
 
-                if (!IsAngleValid(newNode, directAngle) || !IsAngleValid(candidate, reverseAngle))
+                if (!IsAngleValid(newNode, directAngle))
+                {
+                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on new node");
                     continue;
+                }
+                if (!IsAngleValid(candidate, reverseAngle))
+                {
+                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: angle invalid on candidate");
+                    continue;
+                }
 
                 // Build edge curve (node-to-node)
                 var boundaries = GetEdgeBoundaries(newNode.Position, candidate.Position, startIsNode: true, endIsNode: true);
                 if (!boundaries.HasValue)
+                {
+                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: boundaries null");
                     continue;
+                }
 
                 var curve = CreateSimpleCurve(boundaries.Value.start, boundaries.Value.end, state.Random);
                 var polyline = GenerateSCurvePolyline(boundaries.Value.start, boundaries.Value.end, state.Random);
                 if (!IsPolylineValid(state, polyline, new List<int> { newNode.Id, candidate.Id }, null, true))
+                {
+                    Debug.Log($"[CrossConnect] Rejected candidate {candidate.Id}: polyline invalid");
                     continue;
+                }
 
                 // Expand candidate's capacity if needed
                 if (!candidate.HasCapacity())
