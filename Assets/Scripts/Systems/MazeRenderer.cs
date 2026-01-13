@@ -543,9 +543,40 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Add side walls at frontier edge ends to connect edge walls to portal walls
+            foreach (var edge in forestState.Edges)
+            {
+                if (!edge.Partial || edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                    continue;
+
+                // Get the frontier end position and direction
+                int lastIdx = edge.PolylinePoints.Count - 1;
+                Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
+                Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
+                Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
+
+                // Place side walls at the frontier end to connect to portal
+                // These fill the gap where edgeEndSkip left off
+                foreach (float side in new[] { 1f, -1f })
+                {
+                    for (int layer = 0; layer < wallDepth; layer++)
+                    {
+                        float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
+                        Vector2 wallPos = frontierEnd + perpendicular * side * wallOffset;
+
+                        float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                        if (side < 0) orientationDegrees += 180f;
+
+                        Vector3 worldPos = ToVector3(wallPos);
+                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                        tileCount++;
+                    }
+                }
+            }
+
             // Add walls around nodes (3 rings at nodeRadius + offset)
             // First create complete rings, then remove walls at edge intersections
-            float edgeAngleClearance = 9.5f * Mathf.Deg2Rad;
+            float edgeAngleClearance = 10.0f * Mathf.Deg2Rad;
 
             foreach (var node in forestState.Nodes)
             {
@@ -1681,11 +1712,44 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Add side walls at frontier edge ends to connect edge walls to portal walls
+            if (newEdges != null)
+            {
+                foreach (var edge in newEdges)
+                {
+                    if (!edge.Partial || edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+                        continue;
+
+                    // Get the frontier end position and direction
+                    int lastIdx = edge.PolylinePoints.Count - 1;
+                    Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
+                    Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
+                    Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
+
+                    // Place side walls at the frontier end to connect to portal
+                    foreach (float side in new[] { 1f, -1f })
+                    {
+                        for (int layer = 0; layer < wallDepth; layer++)
+                        {
+                            float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
+                            Vector2 wallPos = frontierEnd + perpendicular * side * wallOffset;
+
+                            float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                            if (side < 0) orientationDegrees += 180f;
+
+                            Vector3 worldPos = ToVector3(wallPos);
+                            CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                            wallsCreated++;
+                        }
+                    }
+                }
+            }
+
             // Add walls around the new node (3 rings)
             // First create all wall positions, then skip those at edge intersections
             if (newNode != null)
             {
-                float edgeAngleClearance = 9.5f * Mathf.Deg2Rad;
+                float edgeAngleClearance = 10.0f * Mathf.Deg2Rad;
 
                 // Create all wall positions for this node
                 var nodeWalls = new List<(Vector2 pos, float angle)>();
