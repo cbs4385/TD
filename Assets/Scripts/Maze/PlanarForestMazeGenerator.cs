@@ -647,6 +647,7 @@ namespace ForestMaze
             float length0 = (float)(state.Random.NextDouble() * 15.0 + 12.0);
 
             int maxRotations = (int)(180 / ROTATE_STEP);
+            int forbiddenCount = 0, angleInvalidCount = 0, ghostInvalidCount = 0, polylineInvalidCount = 0;
 
             for (int rotStep = 0; rotStep < maxRotations; rotStep++)
             {
@@ -662,10 +663,16 @@ namespace ForestMaze
 
                 // Check if angle is in forbidden zone
                 if (IsAngleInForbiddenZone(theta, forbiddenAngles))
+                {
+                    forbiddenCount++;
                     continue;
+                }
 
                 if (!IsAngleValid(node, theta))
+                {
+                    angleInvalidCount++;
                     continue;
+                }
 
                 float length = length0;
                 while (length >= MIN_SEGMENT_LENGTH * 2)
@@ -676,6 +683,7 @@ namespace ForestMaze
                     // Use EXCLUSION_ZONE for ghost position validation
                     if (!IsGhostPositionValidWithExclusionZone(state, ghostCenter, node.Id))
                     {
+                        ghostInvalidCount++;
                         length -= SHORTEN_STEP * 2;
                         continue;
                     }
@@ -707,13 +715,17 @@ namespace ForestMaze
 
                             return true;
                         }
+                        else
+                        {
+                            polylineInvalidCount++;
+                        }
                     }
 
                     length -= SHORTEN_STEP * 2;
                 }
             }
 
-            Debug.Log($"[AddPartialEdgeWithNodeExclusion] FAILED for node {node.Id} after {(int)(180 / ROTATE_STEP)} rotation attempts");
+            Debug.Log($"[AddPartialEdgeWithNodeExclusion] FAILED for node {node.Id}: forbidden={forbiddenCount}, angleInvalid={angleInvalidCount}, ghostInvalid={ghostInvalidCount}, polylineInvalid={polylineInvalidCount}");
             return false;
         }
 
