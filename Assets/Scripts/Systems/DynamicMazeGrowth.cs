@@ -327,8 +327,8 @@ namespace FaeMaze.Systems
                 // 5. Add tiles for new edges
                 mazeRenderer.AddEdgeTilesIncremental(newEdges);
 
-                // 6. Add walls around the new elements (DISABLED FOR DEBUGGING)
-                // mazeRenderer.AddWallsIncremental(newEdges, newNode);
+                // 6. Add walls around the new elements
+                mazeRenderer.AddWallsIncremental(newEdges, newNode);
             }
         }
 
