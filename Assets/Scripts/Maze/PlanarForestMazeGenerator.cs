@@ -380,12 +380,11 @@ namespace ForestMaze
             state.GhostCenters.RemoveAll(g => Vector2.Distance(g, edge.GhostCenter.Value) < 1e-6f);
             edge.GhostCenter = null;
 
-            // Cross-connection: only on even steps when we have more than 2 other nodes
-            bool isEvenStep = (state.TurnCount % 2) == 0;
-            int otherNodesCount = state.Nodes.Count - 1; // Exclude the new node we just added
+            // Cross-connection: always try to connect to closest unconnected node
             bool hasExistingConnection = false;
+            int otherNodesCount = state.Nodes.Count - 1; // Exclude the new node we just added
 
-            if (isEvenStep && otherNodesCount > 2)
+            if (otherNodesCount >= 1)
             {
                 // Try to connect to existing node using new selection criteria:
                 // Pick from 3 closest, prefer the one with fewest connections
@@ -393,6 +392,7 @@ namespace ForestMaze
                 {
                     hasExistingConnection = true;
                     state.HasCrossConnection = true;
+                    Debug.Log($"[Step] Cross-connection created from node {newNode.Id}");
                 }
             }
 

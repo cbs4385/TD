@@ -506,10 +506,6 @@ namespace FaeMaze.Systems
                                 float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
                                 Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
 
-                                // Skip only if nearly identical position (walls can overlap)
-                                if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
-                                    continue;
-
                                 // Skip if inside a node
                                 bool wallInsideNode = false;
                                 foreach (var node in forestState.Nodes)
@@ -521,8 +517,6 @@ namespace FaeMaze.Systems
                                     }
                                 }
                                 if (wallInsideNode) continue;
-
-                                occupiedWallPositions.Add(wallPos);
 
                                 float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                 if (side < 0) orientationDegrees += 180f;
@@ -552,30 +546,7 @@ namespace FaeMaze.Systems
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
-                        // Skip if wall would be on top of edge path (within edge corridor)
-                        bool onEdgePath = false;
-                        foreach (var edge in forestState.Edges)
-                        {
-                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
-                            {
-                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
-                                if (distToSeg < pathHalfWidth + 0.1f) // Within edge corridor
-                                {
-                                    onEdgePath = true;
-                                    break;
-                                }
-                            }
-                            if (onEdgePath) break;
-                        }
-                        if (onEdgePath) continue;
-
-                        // Skip only if nearly identical position (walls can overlap)
-                        if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
-                            continue;
-
-                        occupiedWallPositions.Add(wallPos);
-
+                        // Walls can overlap freely - no collision checks needed
                         float orientationDegrees = angle * Mathf.Rad2Deg;
                         Vector3 worldPos = ToVector3(wallPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
@@ -1605,10 +1576,6 @@ namespace FaeMaze.Systems
                                     float wallOffset = pathHalfWidth + wallSpacing * (layer + 1);
                                     Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
 
-                                    // Skip only if nearly identical position (walls can overlap)
-                                    if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
-                                        continue;
-
                                     // Skip if inside a node
                                     bool wallInsideNode = false;
                                     foreach (var node in forestState.Nodes)
@@ -1620,8 +1587,6 @@ namespace FaeMaze.Systems
                                         }
                                     }
                                     if (wallInsideNode) continue;
-
-                                    occupiedWallPositions.Add(wallPos);
 
                                     float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                     if (side < 0) orientationDegrees += 180f;
@@ -1651,30 +1616,7 @@ namespace FaeMaze.Systems
                         float angle = (float)i / numWalls * 2f * Mathf.PI;
                         Vector2 wallPos = newNode.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
 
-                        // Skip if wall would be on top of edge path (within edge corridor)
-                        bool onEdgePath = false;
-                        foreach (var edge in forestState.Edges)
-                        {
-                            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-                            for (int j = 0; j < edge.PolylinePoints.Count - 1; j++)
-                            {
-                                float distToSeg = DistanceToLineSegment(wallPos, edge.PolylinePoints[j], edge.PolylinePoints[j + 1]);
-                                if (distToSeg < pathHalfWidth + 0.1f) // Within edge corridor
-                                {
-                                    onEdgePath = true;
-                                    break;
-                                }
-                            }
-                            if (onEdgePath) break;
-                        }
-                        if (onEdgePath) continue;
-
-                        // Skip only if nearly identical position (walls can overlap)
-                        if (IsPositionOccupied(wallPos, occupiedWallPositions, 0.15f))
-                            continue;
-
-                        occupiedWallPositions.Add(wallPos);
-
+                        // Walls can overlap freely - no collision checks needed
                         float orientationDegrees = angle * Mathf.Rad2Deg;
                         Vector3 worldPos = ToVector3(wallPos);
                         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
