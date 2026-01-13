@@ -983,45 +983,40 @@ namespace FaeMaze.Systems
             int tileCount = 0;
             Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-            // DISABLED FOR DEBUGGING - Side walls
-            // Place side walls - blocks centered at 1.5 units perpendicular from portal
-            // const float sideBlockCenter = 1.5f;
-            // foreach (float side in new[] { 1f, -1f })
-            // {
-            //     for (int depthLayer = 0; depthLayer < wallDepth; depthLayer++)
-            //     {
-            //         float perpOffset = sideBlockCenter + wallSpacing * (depthLayer - 1);
-            //         Vector2 wallPos = frontierEnd + perpendicular * side * perpOffset;
-            //         float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
-            //         Vector3 worldPos = ToVector3(wallPos);
-            //         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-            //         tileCount++;
-            //     }
-            // }
-
-            // Simplified front cap - 3 layers deep, spanning path width + wall depth on each side
-            // Total width: from -1.5 to +1.5 perpendicular to edge
-            float capWidth = pathHalfWidth + wallDepth * wallSpacing; // 0.5 + 0.9 = 1.4, round to 1.5
-            for (int layer = 0; layer < wallDepth; layer++)
+            // Side walls - blocks centered at 1.5 units perpendicular from portal
+            // Long axis of wall models parallel to edge, depth layers perpendicular to edge
+            const float sideBlockCenter = 1.5f;
+            foreach (float side in new[] { 1f, -1f })
             {
-                // Position layers past the frontier end
-                float forwardOffset = wallSpacing * layer;
-                Vector2 capCenter = frontierEnd + frontierDir * forwardOffset;
-
-                // Place walls spanning perpendicular, using wallSpacing steps
-                int numPerpWalls = Mathf.CeilToInt(capWidth / wallSpacing);
-                for (int perpIdx = -numPerpWalls; perpIdx <= numPerpWalls; perpIdx++)
+                for (int depthLayer = 0; depthLayer < wallDepth; depthLayer++)
                 {
-                    Vector2 wallPos = capCenter + perpendicular * perpIdx * wallSpacing;
-
-                    // Orient walls perpendicular to edge (facing towards the node)
-                    float orientationDegrees = Mathf.Atan2(-frontierDir.y, -frontierDir.x) * Mathf.Rad2Deg;
-
+                    // 3 layers centered at 1.5: gives 1.2, 1.5, 1.8 for layers 0, 1, 2
+                    float perpOffset = sideBlockCenter + wallSpacing * (depthLayer - 1);
+                    Vector2 wallPos = frontierEnd + perpendicular * side * perpOffset;
+                    // Orient walls with long axis parallel to edge direction
+                    float orientationDegrees = Mathf.Atan2(frontierDir.y, frontierDir.x) * Mathf.Rad2Deg;
                     Vector3 worldPos = ToVector3(wallPos);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
                     tileCount++;
                 }
             }
+
+            // DISABLED FOR DEBUGGING - Front cap
+            // float capWidth = pathHalfWidth + wallDepth * wallSpacing;
+            // for (int layer = 0; layer < wallDepth; layer++)
+            // {
+            //     float forwardOffset = wallSpacing * layer;
+            //     Vector2 capCenter = frontierEnd + frontierDir * forwardOffset;
+            //     int numPerpWalls = Mathf.CeilToInt(capWidth / wallSpacing);
+            //     for (int perpIdx = -numPerpWalls; perpIdx <= numPerpWalls; perpIdx++)
+            //     {
+            //         Vector2 wallPos = capCenter + perpendicular * perpIdx * wallSpacing;
+            //         float orientationDegrees = Mathf.Atan2(-frontierDir.y, -frontierDir.x) * Mathf.Rad2Deg;
+            //         Vector3 worldPos = ToVector3(wallPos);
+            //         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+            //         tileCount++;
+            //     }
+            // }
 
             return tileCount;
         }
@@ -1074,34 +1069,30 @@ namespace FaeMaze.Systems
                         }
                         if (insideNode) continue;
 
-                        // Place wall layers on each side
-                        foreach (float side in new[] { 1f, -1f })
-                        {
-                            for (int layer = 0; layer < WALL_DEPTH; layer++)
-                            {
-                                float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
-                                Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
-
-                                // Skip if inside a node
-                                bool wallInsideNode = false;
-                                foreach (var node in allNodes)
-                                {
-                                    if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
-                                    {
-                                        wallInsideNode = true;
-                                        break;
-                                    }
-                                }
-                                if (wallInsideNode) continue;
-
-                                float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-                                if (side < 0) orientationDegrees += 180f;
-
-                                Vector3 worldPos = ToVector3(wallPos);
-                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                                tileCount++;
-                            }
-                        }
+                        // DISABLED FOR DEBUGGING - Edge side walls
+                        // foreach (float side in new[] { 1f, -1f })
+                        // {
+                        //     for (int layer = 0; layer < WALL_DEPTH; layer++)
+                        //     {
+                        //         float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
+                        //         Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
+                        //         bool wallInsideNode = false;
+                        //         foreach (var node in allNodes)
+                        //         {
+                        //             if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
+                        //             {
+                        //                 wallInsideNode = true;
+                        //                 break;
+                        //             }
+                        //         }
+                        //         if (wallInsideNode) continue;
+                        //         float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                        //         if (side < 0) orientationDegrees += 180f;
+                        //         Vector3 worldPos = ToVector3(wallPos);
+                        //         CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                        //         tileCount++;
+                        //     }
+                        // }
                     }
                 }
 
