@@ -365,64 +365,38 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders circular node columns centered on each node.
-        /// Uses radial/polar sampling with world-space coordinates for seamless coverage.
-        /// Creates both a solid 3D cylinder (radius=nodeRadius) and individual tiles (radius=nodeTileRadius).
+        /// Creates a single 3D cylinder for visual representation.
+        /// Marks positions as occupied for pathfinding without creating visible tiles.
         /// </summary>
         private int RenderNodeColumns(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
-            int tileCount = 0;
-
-            // Use radial sampling for world-space positioning
-            float stepSize = 0.5f; // Distance between tiles
-            int numRadialLayers = Mathf.CeilToInt(nodeTileRadius / stepSize);
-
             foreach (var node in forestState.Nodes)
             {
-                // Create a solid 3D cylinder at the node center to fill gaps (uses larger nodeRadius)
+                // Create the single 3D cylinder - this is the only visual object for the node
                 CreateNodeColumnCylinder(node, mazeOrigin);
 
-                // Place center tile first
-                if (!IsPositionOccupied(node.Position, occupiedPositions))
+                // Mark node area as occupied for pathfinding (no visible tiles needed)
+                // Use coarse step for logical positions only
+                float logicalStep = 1.0f;
+                int logicalRadius = Mathf.CeilToInt(nodeRadius / logicalStep);
+
+                for (int dx = -logicalRadius; dx <= logicalRadius; dx++)
                 {
-                    char centerSymbol = node.Kind == "root" ? 'H' : 'N';
-                    Vector3 centerWorldPos = ToVector3(node.Position);
-                    CreateWorldSpaceTile(centerWorldPos, 0f, centerSymbol, mazeOrigin, isWall: false);
-                    occupiedPositions.Add(node.Position);
-                    tileCount++;
-                }
-
-                // Place tiles in concentric rings using polar coordinates
-                for (int layer = 1; layer <= numRadialLayers; layer++)
-                {
-                    float radius = layer * stepSize;
-                    if (radius > nodeTileRadius) break;
-
-                    // Calculate number of tiles in this ring to ensure coverage
-                    // Circumference / stepSize gives us approximately the number of tiles needed
-                    float circumference = 2f * Mathf.PI * radius;
-                    int numTilesInRing = Mathf.Max(8, Mathf.CeilToInt(circumference / stepSize));
-
-                    for (int i = 0; i < numTilesInRing; i++)
+                    for (int dy = -logicalRadius; dy <= logicalRadius; dy++)
                     {
-                        float angle = (float)i / numTilesInRing * 2f * Mathf.PI;
-                        Vector2 offset = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+                        Vector2 offset = new Vector2(dx * logicalStep, dy * logicalStep);
+                        if (offset.magnitude > nodeRadius) continue;
+
                         Vector2 pos2D = node.Position + offset;
-
-                        // Check if position already occupied using distance-based check
-                        if (IsPositionOccupied(pos2D, occupiedPositions)) continue;
-
-                        // Orientation: tiles face outward radially from node center
-                        float orientationDegrees = angle * Mathf.Rad2Deg;
-
-                        Vector3 worldPos = ToVector3(pos2D);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '.', mazeOrigin, isWall: false);
-                        occupiedPositions.Add(pos2D);
-                        tileCount++;
+                        if (!IsPositionOccupied(pos2D, occupiedPositions))
+                        {
+                            occupiedPositions.Add(pos2D);
+                        }
                     }
                 }
             }
 
-            return tileCount;
+            return forestState.Nodes.Count; // Return count of cylinders created
         }
 
         /// <summary>
@@ -563,46 +537,9 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Project walls from nodes (radially outward beyond the column radius)
-            foreach (var node in forestState.Nodes)
-            {
-                // Place walls in rings around the node, starting at the edge of nodeRadius
-                float startRadius = nodeRadius;
-                float endRadius = nodeRadius + wallBorderDepth;
-
-                // Angular step for good coverage
-                int angularSteps = Mathf.CeilToInt(2 * Mathf.PI * endRadius / stepSize);
-
-                for (float r = startRadius; r <= endRadius; r += stepSize)
-                {
-                    for (int a = 0; a < angularSteps; a++)
-                    {
-                        float angle = (float)a / angularSteps * 2 * Mathf.PI;
-                        Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                        Vector2 wallPos = node.Position + radialDir * r;
-
-                        // Get adjusted position (translates away from intersections)
-                        Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radialDir, forestState, occupiedWallPositions);
-                        if (!adjustedPos.HasValue)
-                            continue;
-
-                        occupiedWallPositions.Add(adjustedPos.Value);
-
-                        // Orientation: facing outward radially
-                        float orientationDegrees = angle * Mathf.Rad2Deg;
-
-                        Vector3 worldPos = ToVector3(adjustedPos.Value);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        tileCount++;
-                    }
-                }
-            }
-
-            // Fill gaps between diverging edges at nodes
-            tileCount += FillAllDivergingEdgeGaps(forestState, occupiedWallPositions, mazeOrigin, stepSize);
-
-            // Gap-filling pass: check along inner edge of buffer for any remaining gaps
-            tileCount += FillInnerEdgeGaps(forestState, occupiedWallPositions, mazeOrigin, stepSize);
+            // Node walls are NOT needed - the cylinder itself provides the visual boundary
+            // The node column blocks pathfinding via occupiedPositions
+            // Walls are only needed along edges (corridors)
 
             return tileCount;
         }
@@ -666,35 +603,7 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Also check around node columns for gaps throughout the wall border depth
-            foreach (var node in forestState.Nodes)
-            {
-                int angularSteps = 72; // Fine angular resolution for better coverage
-                for (float r = nodeRadius; r <= nodeRadius + wallBorderDepth + stepSize; r += stepSize * 0.5f)
-                {
-                    for (int a = 0; a < angularSteps; a++)
-                    {
-                        float angle = (float)a / angularSteps * 2 * Mathf.PI;
-                        Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                        Vector2 checkPos = node.Position + radialDir * r;
-
-                        // Skip if already occupied by path
-                        if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
-
-                        // Check if wall would intersect path
-                        Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
-                        if (intersection.HasValue) continue;
-
-                        // Found a gap - fill it
-                        wallPositions.Add(checkPos);
-                        float orientationDegrees = angle * Mathf.Rad2Deg;
-
-                        Vector3 worldPos = ToVector3(checkPos);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        tileCount++;
-                    }
-                }
-            }
+            // Node gap filling removed - cylinder provides visual boundary
 
             return tileCount;
         }
@@ -776,47 +685,8 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Fill gaps around new node
-            if (newNode != null)
-            {
-                int angularSteps = 72; // Fine angular resolution
-                for (float r = nodeRadius; r <= nodeRadius + wallBorderDepth + stepSize; r += stepSize * 0.5f)
-                {
-                    for (int a = 0; a < angularSteps; a++)
-                    {
-                        float angle = (float)a / angularSteps * 2 * Mathf.PI;
-                        Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                        Vector2 checkPos = newNode.Position + radialDir * r;
-
-                        // Skip if already occupied by path
-                        if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
-
-                        // Skip if inside any node column
-                        bool insideNode = false;
-                        foreach (var node in forestState.Nodes)
-                        {
-                            if (Vector2.Distance(checkPos, node.Position) < nodeRadius)
-                            {
-                                insideNode = true;
-                                break;
-                            }
-                        }
-                        if (insideNode) continue;
-
-                        // Check if wall would intersect path
-                        Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
-                        if (intersection.HasValue) continue;
-
-                        // Found a gap - fill it
-                        wallPositions.Add(checkPos);
-                        float orientationDegrees = angle * Mathf.Rad2Deg;
-
-                        Vector3 worldPos = ToVector3(checkPos);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        tileCount++;
-                    }
-                }
-            }
+            // Node gap filling is NOT needed - the cylinder provides the visual boundary
+            // Only edge walls are needed
 
             return tileCount;
         }
@@ -1491,8 +1361,7 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Incrementally adds tiles for a newly added node.
-        /// Uses radial/polar sampling with world-space coordinates for seamless coverage.
+        /// Incrementally adds a node (single cylinder, no individual tiles).
         /// Much faster than full refresh - only adds the delta.
         /// </summary>
         public void AddNodeTilesIncremental(ForestMaze.PlanarForestMazeGenerator.Node newNode)
@@ -1506,51 +1375,29 @@ namespace FaeMaze.Systems
             if (occupiedPositions == null)
                 occupiedPositions = new List<Vector2>();
 
-            // Create node cylinder
+            // Create the single node cylinder - this is the only visual object
             CreateNodeColumnCylinder(newNode, mazeOrigin);
 
-            // Create tiles for the node using radial sampling
-            float stepSize = 0.5f;
-            int numRadialLayers = Mathf.CeilToInt(nodeTileRadius / stepSize);
-            int tilesCreated = 0;
+            // Mark node area as occupied for pathfinding (no visible tiles)
+            float logicalStep = 1.0f;
+            int logicalRadius = Mathf.CeilToInt(nodeRadius / logicalStep);
 
-            // Place center tile first
-            if (!IsPositionOccupied(newNode.Position, occupiedPositions))
+            for (int dx = -logicalRadius; dx <= logicalRadius; dx++)
             {
-                char centerSymbol = newNode.Kind == "root" ? 'H' : 'N';
-                Vector3 centerWorldPos = ToVector3(newNode.Position);
-                CreateWorldSpaceTile(centerWorldPos, 0f, centerSymbol, mazeOrigin, isWall: false);
-                occupiedPositions.Add(newNode.Position);
-                tilesCreated++;
-            }
-
-            // Place tiles in concentric rings using polar coordinates
-            for (int layer = 1; layer <= numRadialLayers; layer++)
-            {
-                float radius = layer * stepSize;
-                if (radius > nodeTileRadius) break;
-
-                float circumference = 2f * Mathf.PI * radius;
-                int numTilesInRing = Mathf.Max(8, Mathf.CeilToInt(circumference / stepSize));
-
-                for (int i = 0; i < numTilesInRing; i++)
+                for (int dy = -logicalRadius; dy <= logicalRadius; dy++)
                 {
-                    float angle = (float)i / numTilesInRing * 2f * Mathf.PI;
-                    Vector2 offset = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+                    Vector2 offset = new Vector2(dx * logicalStep, dy * logicalStep);
+                    if (offset.magnitude > nodeRadius) continue;
+
                     Vector2 pos2D = newNode.Position + offset;
-
-                    if (IsPositionOccupied(pos2D, occupiedPositions)) continue;
-
-                    float orientationDegrees = angle * Mathf.Rad2Deg;
-
-                    Vector3 worldPos = ToVector3(pos2D);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '.', mazeOrigin, isWall: false);
-                    occupiedPositions.Add(pos2D);
-                    tilesCreated++;
+                    if (!IsPositionOccupied(pos2D, occupiedPositions))
+                    {
+                        occupiedPositions.Add(pos2D);
+                    }
                 }
             }
 
-            // Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} node tiles for node {newNode.Id}");
+            // Debug.Log($"[MazeRenderer] Incremental: Added node cylinder for node {newNode.Id}");
         }
 
         /// <summary>
@@ -1720,39 +1567,8 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Add walls around new node
-            if (newNode != null)
-            {
-                float startRadius = nodeRadius;
-                float endRadius = nodeRadius + wallBorderDepth;
-                int angularSteps = Mathf.CeilToInt(2 * Mathf.PI * endRadius / stepSize);
-
-                for (float r = startRadius; r <= endRadius; r += stepSize)
-                {
-                    for (int a = 0; a < angularSteps; a++)
-                    {
-                        float angle = (float)a / angularSteps * 2 * Mathf.PI;
-                        Vector2 radialDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                        Vector2 wallPos = newNode.Position + radialDir * r;
-
-                        Vector2? adjustedPos = GetAdjustedWallPosition(wallPos, radialDir, forestState, occupiedWallPositions);
-                        if (!adjustedPos.HasValue)
-                            continue;
-
-                        occupiedWallPositions.Add(adjustedPos.Value);
-                        float orientationDegrees = angle * Mathf.Rad2Deg;
-
-                        Vector3 worldPos = ToVector3(adjustedPos.Value);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
-                        wallsCreated++;
-                    }
-                }
-            }
-
-            // Localized gap-filling pass - only fill gaps around the new edges and node
-            // This is much faster than FillInnerEdgeGaps which iterates over ALL edges
-            int gapsFilled = FillGapsAroundNewElements(newEdges, newNode, forestState, occupiedWallPositions, mazeOrigin, stepSize);
-            wallsCreated += gapsFilled;
+            // Node walls are NOT needed - the cylinder itself provides the visual boundary
+            // Only edges need walls along their corridors
 
             // Debug.Log($"[MazeRenderer] Incremental: Added {wallsCreated} wall tiles ({gapsFilled} gap fills)");
         }
@@ -1912,52 +1728,28 @@ namespace FaeMaze.Systems
             CollectEdgeSegments(forestState);
             yield return null; // Yield after collecting edges
 
-            // Step 2: Render node columns using radial sampling
-            float nodeStepSize = 0.5f;
-            int numRadialLayers = Mathf.CeilToInt(nodeTileRadius / nodeStepSize);
-
+            // Step 2: Render node columns (cylinder only, no individual tiles)
             foreach (var node in forestState.Nodes)
             {
-                // Create node cylinder
+                // Create the single node cylinder
                 CreateNodeColumnCylinder(node, mazeOrigin);
+                tilesCreated++;
 
-                // Place center tile first
-                if (!IsPositionOccupied(node.Position, occupiedPositions))
+                // Mark node area as occupied for pathfinding (no visible tiles)
+                float logicalStep = 1.0f;
+                int logicalRadius = Mathf.CeilToInt(nodeRadius / logicalStep);
+
+                for (int dx = -logicalRadius; dx <= logicalRadius; dx++)
                 {
-                    char centerSymbol = node.Kind == "root" ? 'H' : 'N';
-                    Vector3 centerWorldPos = ToVector3(node.Position);
-                    CreateWorldSpaceTile(centerWorldPos, 0f, centerSymbol, mazeOrigin, isWall: false);
-                    occupiedPositions.Add(node.Position);
-                    tilesCreated++;
-                }
-
-                // Place tiles in concentric rings using polar coordinates
-                for (int layer = 1; layer <= numRadialLayers; layer++)
-                {
-                    float radius = layer * nodeStepSize;
-                    if (radius > nodeTileRadius) break;
-
-                    float circumference = 2f * Mathf.PI * radius;
-                    int numTilesInRing = Mathf.Max(8, Mathf.CeilToInt(circumference / nodeStepSize));
-
-                    for (int i = 0; i < numTilesInRing; i++)
+                    for (int dy = -logicalRadius; dy <= logicalRadius; dy++)
                     {
-                        float angle = (float)i / numTilesInRing * 2f * Mathf.PI;
-                        Vector2 offset = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+                        Vector2 offset = new Vector2(dx * logicalStep, dy * logicalStep);
+                        if (offset.magnitude > nodeRadius) continue;
+
                         Vector2 pos2D = node.Position + offset;
-
-                        if (IsPositionOccupied(pos2D, occupiedPositions)) continue;
-
-                        float orientationDegrees = angle * Mathf.Rad2Deg;
-
-                        Vector3 worldPos = ToVector3(pos2D);
-                        CreateWorldSpaceTile(worldPos, orientationDegrees, '.', mazeOrigin, isWall: false);
-                        occupiedPositions.Add(pos2D);
-                        tilesCreated++;
-
-                        if (tilesCreated % batchSize == 0)
+                        if (!IsPositionOccupied(pos2D, occupiedPositions))
                         {
-                            yield return null; // Yield every batch
+                            occupiedPositions.Add(pos2D);
                         }
                     }
                 }
