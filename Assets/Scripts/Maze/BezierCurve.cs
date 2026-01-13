@@ -5,6 +5,28 @@ using UnityEngine;
 namespace ForestMaze
 {
     /// <summary>
+    /// Represents a sample point along a Bezier curve with position and orientation data.
+    /// </summary>
+    public struct CurveSample
+    {
+        public Vector2 Position;
+        public Vector2 Tangent;
+        public Vector2 Normal;
+
+        public CurveSample(Vector2 position, Vector2 tangent, Vector2 normal)
+        {
+            Position = position;
+            Tangent = tangent;
+            Normal = normal;
+        }
+
+        // For compatibility with tuple-style access
+        public Vector2 Item1 => Position;
+        public Vector2 Item2 => Tangent;
+        public Vector2 Item3 => Normal;
+    }
+
+    /// <summary>
     /// Represents a cubic Bezier curve with utilities for evaluation, sampling, and tangent calculation.
     /// Supports 2-3 control points placed equidistantly along the curve on alternating sides.
     /// </summary>
@@ -141,9 +163,9 @@ namespace ForestMaze
         /// Samples the curve returning both positions and tangent directions.
         /// Useful for wall placement perpendicular to the path.
         /// </summary>
-        public List<(Vector2 position, Vector2 tangent, Vector2 normal)> SampleWithOrientations(float spacing, float maxGap = 0.25f)
+        public List<CurveSample> SampleWithOrientations(float spacing, float maxGap = 0.25f)
         {
-            var samples = new List<(Vector2, Vector2, Vector2)>();
+            var samples = new List<CurveSample>();
             float length = ApproximateLength();
 
             float actualSpacing = Mathf.Min(spacing, maxGap);
@@ -152,7 +174,7 @@ namespace ForestMaze
             for (int i = 0; i <= numSamples; i++)
             {
                 float t = (float)i / numSamples;
-                samples.Add((Evaluate(t), Tangent(t), Normal(t)));
+                samples.Add(new CurveSample(Evaluate(t), Tangent(t), Normal(t)));
             }
 
             return samples;
@@ -416,9 +438,24 @@ namespace ForestMaze
         }
 
         /// <summary>
+        /// Result of adjusting a curve endpoint for crossing angle constraint.
+        /// </summary>
+        public struct EndpointAdjustmentResult
+        {
+            public BezierCurve Curve;
+            public Vector2 NewEndpoint;
+
+            public EndpointAdjustmentResult(BezierCurve curve, Vector2 newEndpoint)
+            {
+                Curve = curve;
+                NewEndpoint = newEndpoint;
+            }
+        }
+
+        /// <summary>
         /// Adjusts the endpoint of a curve (for frontier placement) to achieve better crossing angle.
         /// </summary>
-        public static (BezierCurve curve, Vector2 newEndpoint) AdjustEndpointForCrossing(
+        public static EndpointAdjustmentResult AdjustEndpointForCrossing(
             Vector2 start,
             Vector2 originalEnd,
             Vector2 crossingPoint,
@@ -455,12 +492,12 @@ namespace ForestMaze
                 float angle = Mathf.Acos(Mathf.Clamp(dot, 0, 1)) * Mathf.Rad2Deg;
 
                 if (angle >= minCrossingAngle)
-                    return (curve, newEnd);
+                    return new EndpointAdjustmentResult(curve, newEnd);
             }
 
             // Fallback - return original
             var fallbackCurve = CreateGentleCurve(start, originalEnd, random, 2);
-            return (fallbackCurve, originalEnd);
+            return new EndpointAdjustmentResult(fallbackCurve, originalEnd);
         }
 
         private static Vector2 RotateAround(Vector2 point, Vector2 center, float cos, float sin)

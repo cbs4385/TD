@@ -425,7 +425,8 @@ namespace ForestMaze
 
             for (int i = 0; i < samples.Count; i++)
             {
-                var (position, tangent, normal) = samples[i];
+                Vector2 position = samples[i].Position;
+                Vector2 tangent = samples[i].Tangent;
 
                 // Calculate orientation from tangent
                 float orientation = Mathf.Atan2(tangent.y, tangent.x);
