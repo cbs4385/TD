@@ -298,9 +298,9 @@ namespace FaeMaze.Systems
                 mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f); // Clear edge tiles to make room for node tiles
 
                 // 3. Remove walls along all new edge paths (sample along segments, not just control points)
-                // Skip wall removal near existing nodes to protect their border rings
-                float wallRemovalStepSize = 1.0f; // Sample every 1 unit along the path
-                float wallRemovalRadius = 2.5f; // Slightly larger than path width + buffer
+                // Only remove walls that are ON the walkable path - not the wall borders
+                float wallRemovalStepSize = 0.5f; // Sample every 0.5 units for dense coverage
+                float wallRemovalRadius = 0.7f; // Just slightly larger than pathHalfWidth (0.5) to clear the path
                 float nodeBorderProtectionRadius = 4.5f; // nodeRadius (3) + wallBorder (3 * 0.3 = 0.9) + buffer
 
                 foreach (var edge in newEdges)
