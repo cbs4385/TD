@@ -84,7 +84,7 @@ public class LanternGlow : MonoBehaviour
 
     // State tracking
     private LanternState currentState = LanternState.Idle;
-    private VisitorController targetVisitor;
+    private VisitorControllerBase targetVisitor;
     private float reactionTimer;
     private bool spotlightActive;
     private float spotlightTimer;
@@ -191,11 +191,12 @@ public class LanternGlow : MonoBehaviour
 
     private void UpdateIdleState()
     {
-        // Reset rotation to idle
-        transform.rotation = idleRotation;
+        // Spin continuously on Z axis at 1 Hz (360 degrees per second)
+        float spinAngle = Time.time * 360f; // 1 full rotation per second
+        transform.rotation = Quaternion.Euler(idleRotation.eulerAngles.x, idleRotation.eulerAngles.y, spinAngle);
 
         // Look for nearby visitors
-        VisitorController closestVisitor = FindClosestVisitorInRange(reactionRadius);
+        VisitorControllerBase closestVisitor = FindClosestVisitorInRange(reactionRadius);
 
         if (closestVisitor != null)
         {
@@ -212,7 +213,7 @@ public class LanternGlow : MonoBehaviour
         if (targetVisitor == null || !targetVisitor.gameObject.activeInHierarchy)
         {
             // Lost target, try to find another
-            VisitorController newTarget = FindClosestVisitorInRange(reactionRadius);
+            VisitorControllerBase newTarget = FindClosestVisitorInRange(reactionRadius);
             if (newTarget != null)
             {
                 targetVisitor = newTarget;
@@ -233,7 +234,7 @@ public class LanternGlow : MonoBehaviour
         if (distanceToVisitor > reactionRadius * 1.2f) // Small hysteresis
         {
             // Try to find another visitor
-            VisitorController newTarget = FindClosestVisitorInRange(reactionRadius);
+            VisitorControllerBase newTarget = FindClosestVisitorInRange(reactionRadius);
             if (newTarget != null)
             {
                 targetVisitor = newTarget;
@@ -249,10 +250,9 @@ public class LanternGlow : MonoBehaviour
         // Rotate toward visitor (only X/Y plane, no Z rotation)
         RotateTowardVisitor();
 
-        // Check if visitor entered the node
-        if (distanceToVisitor <= nodeEntryRadius && !spotlightActive)
+        // Start spotlight immediately when reacting (not waiting for node entry)
+        if (!spotlightActive)
         {
-            // Visitor is at the node! Fire the spotlight
             StartSpotlight();
         }
 
@@ -280,12 +280,13 @@ public class LanternGlow : MonoBehaviour
 
     #region Visitor Detection
 
-    private VisitorController FindClosestVisitorInRange(float range)
+    private VisitorControllerBase FindClosestVisitorInRange(float range)
     {
-        VisitorController closest = null;
+        VisitorControllerBase closest = null;
         float closestDist = float.MaxValue;
 
-        foreach (var visitor in VisitorController.All)
+        // Use VisitorRegistry which tracks ALL visitor types
+        foreach (var visitor in VisitorRegistry.All)
         {
             if (visitor == null || !visitor.gameObject.activeInHierarchy)
                 continue;
@@ -344,12 +345,20 @@ public class LanternGlow : MonoBehaviour
         spotlightActive = true;
         spotlightTimer = spotlightDuration;
 
+        // Disable the omni-directional glow while spotlighting
+        if (pointLight != null)
+        {
+            pointLight.enabled = false;
+        }
+
         // Create spotlight if needed
         CreateSpotlight();
 
         if (spotLight != null)
         {
             spotLight.enabled = true;
+            // Spotlight intensity is 10x the glow intensity
+            spotLight.intensity = lightIntensity * 10f;
             spotLight.color = currentGlowColor;
         }
     }
@@ -375,7 +384,8 @@ public class LanternGlow : MonoBehaviour
         spotLight.range = spotlightRange;
         spotLight.spotAngle = spotlightAngle;
         spotLight.innerSpotAngle = spotlightAngle * 0.5f;
-        spotLight.shadows = LightShadows.Soft;
+        // Disable shadows to avoid shadow atlas overflow warnings
+        spotLight.shadows = LightShadows.None;
         spotLight.enabled = false;
     }
 
@@ -417,6 +427,12 @@ public class LanternGlow : MonoBehaviour
             spotLight.enabled = false;
         }
 
+        // Re-enable the omni-directional glow
+        if (pointLight != null && enableLight)
+        {
+            pointLight.enabled = true;
+        }
+
         // Trigger fascination test on the visitor
         if (targetVisitor != null && targetVisitor.gameObject.activeInHierarchy)
         {
@@ -427,7 +443,7 @@ public class LanternGlow : MonoBehaviour
         TransitionToIdle();
     }
 
-    private void TriggerFascinationTest(VisitorController visitor)
+    private void TriggerFascinationTest(VisitorControllerBase visitor)
     {
         // Use the visitor's fascination chance from their archetype
         float fascinationChance = visitor.GetFascinationChance();
@@ -566,10 +582,8 @@ public class LanternGlow : MonoBehaviour
         pointLight.type = LightType.Point;
         pointLight.intensity = lightIntensity;
         pointLight.range = lightRange;
-        pointLight.shadows = LightShadows.Soft;
-        pointLight.shadowStrength = 1f;
-        pointLight.shadowBias = 0.05f;
-        pointLight.shadowNormalBias = 0.4f;
+        // Disable shadows to avoid shadow atlas overflow warnings
+        pointLight.shadows = LightShadows.None;
     }
 
     #endregion

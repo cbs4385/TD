@@ -1582,6 +1582,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Handles movement in world-space navigation mode.
         /// Walks along the world path toward the destination.
+        /// Uses continuous movement that doesn't pause at waypoints.
         /// </summary>
         protected virtual void UpdateWorldSpaceWalking()
         {
@@ -1598,41 +1599,64 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Get current target waypoint
-            Vector3 targetWorldPos = worldPath[worldPathIndex];
             float effectiveSpeed = moveSpeed * speedMultiplier;
+            float remainingDistance = effectiveSpeed * Time.deltaTime;
 
-            Vector3 newPosition = Vector3.MoveTowards(
-                transform.position,
-                targetWorldPos,
-                effectiveSpeed * Time.deltaTime
-            );
+            // Move continuously, consuming distance across multiple waypoints if needed
+            while (remainingDistance > 0f && worldPathIndex < worldPath.Count)
+            {
+                Vector3 targetWorldPos = worldPath[worldPathIndex];
+                float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
 
-            // Use path direction (toward target waypoint) for facing, not frame movement delta
-            // This ensures correct orientation even when movement is small
-            Vector3 pathDirection = (targetWorldPos - transform.position).normalized;
-            Vector2 facingDirection = new Vector2(pathDirection.x, pathDirection.y);
-            UpdateAnimatorDirection(facingDirection);
+                if (distanceToTarget <= remainingDistance)
+                {
+                    // We can reach (or pass) this waypoint - move to it and continue
+                    remainingDistance -= distanceToTarget;
+                    transform.position = targetWorldPos;
+                    waypointsTraversedSinceSpawn++;
 
-            // Apply movement using 3D physics
+                    // Allow derived classes to handle detour logic at waypoints
+                    // This may change the path, so we need to check bounds after
+                    HandleDetourAtWaypoint();
+
+                    // If path was changed or we've reached the end, stop consuming distance
+                    if (worldPath == null || worldPathIndex >= worldPath.Count)
+                    {
+                        break;
+                    }
+                }
+                else
+                {
+                    // Can't reach the next waypoint yet - move toward it
+                    Vector3 direction = (targetWorldPos - transform.position).normalized;
+                    transform.position += direction * remainingDistance;
+                    remainingDistance = 0f;
+                }
+            }
+
+            // Update facing direction based on current target waypoint (or last movement direction)
+            if (worldPath != null && worldPathIndex < worldPath.Count)
+            {
+                Vector3 targetWorldPos = worldPath[worldPathIndex];
+                Vector3 pathDirection = (targetWorldPos - transform.position).normalized;
+                if (pathDirection.sqrMagnitude > 0.001f)
+                {
+                    Vector2 facingDirection = new Vector2(pathDirection.x, pathDirection.y);
+                    UpdateAnimatorDirection(facingDirection);
+                }
+            }
+
+            // Sync physics if using rigidbody
             if (rb3D != null)
             {
-                rb3D.MovePosition(newPosition);
+                rb3D.MovePosition(transform.position);
                 Physics.SyncTransforms();
             }
-            else
-            {
-                transform.position = newPosition;
-            }
 
-            // Check if we've reached the waypoint
-            float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
-            if (distanceToTarget < waypointReachedDistance)
+            // Check if we've completed the path
+            if (worldPathIndex >= worldPath.Count)
             {
-                waypointsTraversedSinceSpawn++;
-
-                // Allow derived classes to handle detour logic at waypoints
-                HandleDetourAtWaypoint();
+                OnWorldSpacePathComplete();
             }
         }
 
