@@ -345,10 +345,11 @@ public class LanternGlow : MonoBehaviour
         spotlightActive = true;
         spotlightTimer = spotlightDuration;
 
-        // Disable the omni-directional glow while spotlighting
+        // Dim the omni-directional glow while spotlighting (don't disable completely)
+        // This creates the visual effect of the glow "focusing" into the spotlight
         if (pointLight != null)
         {
-            pointLight.enabled = false;
+            pointLight.intensity = lightIntensity * 0.2f;
         }
 
         // Create spotlight if needed
@@ -360,6 +361,12 @@ public class LanternGlow : MonoBehaviour
             // Spotlight intensity is 10x the glow intensity
             spotLight.intensity = lightIntensity * 10f;
             spotLight.color = currentGlowColor;
+        }
+
+        // Trigger fascination check when spotlight activates (not when it ends)
+        if (targetVisitor != null && targetVisitor.gameObject.activeInHierarchy)
+        {
+            TriggerFascinationTest(targetVisitor);
         }
     }
 
@@ -427,16 +434,11 @@ public class LanternGlow : MonoBehaviour
             spotLight.enabled = false;
         }
 
-        // Re-enable the omni-directional glow
+        // Restore the omni-directional glow to full intensity
+        // This creates the visual effect of the focused light "relaxing" back to glow
         if (pointLight != null && enableLight)
         {
-            pointLight.enabled = true;
-        }
-
-        // Trigger fascination test on the visitor
-        if (targetVisitor != null && targetVisitor.gameObject.activeInHierarchy)
-        {
-            TriggerFascinationTest(targetVisitor);
+            pointLight.intensity = lightIntensity;
         }
 
         // Return to idle after spotlight ends

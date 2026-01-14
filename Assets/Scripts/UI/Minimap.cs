@@ -3,27 +3,35 @@ using UnityEngine.UI;
 using FaeMaze.Systems;
 using FaeMaze.Visitors;
 using FaeMaze.Maze;
-using FaeMaze.Props;
 using System.Collections.Generic;
 
 namespace FaeMaze.UI
 {
     /// <summary>
-    /// Displays a minimap showing the entire maze, rotated so camera forward is up.
-    /// Shows hazards (lanterns, pukas), visitors, and the heart.
+    /// Radar-style minimap centered on the focal point with circular mask.
+    /// Shows a configurable tile radius with edge indicators for distant objects.
+    /// Rotates with camera so forward is always up.
     /// </summary>
     public class Minimap : MonoBehaviour
     {
         [Header("References")]
         [SerializeField]
-        [Tooltip("Maze grid behaviour for bounds and coordinate conversion")]
+        [Tooltip("Focal point transform to center the map on")]
+        private Transform focalPoint;
+
+        [SerializeField]
+        [Tooltip("Maze grid behaviour for coordinate conversion")]
         private MazeGridBehaviour mazeGridBehaviour;
 
         [Header("Settings")]
         [SerializeField]
         [Tooltip("Size as percentage of smaller screen dimension (0.2 = 20%)")]
-        [Range(0.05f, 0.5f)]
+        [Range(0.05f, 0.3f)]
         private float sizePercent = 0.2f;
+
+        [SerializeField]
+        [Tooltip("View radius in tiles")]
+        private float viewRadiusTiles = 40f;
 
         [SerializeField]
         [Tooltip("Corner to place minimap in")]
@@ -33,18 +41,22 @@ namespace FaeMaze.UI
         [Tooltip("Padding from screen edges in pixels")]
         private float edgePadding = 20f;
 
-        [SerializeField]
-        [Tooltip("Extra padding around maze bounds (world units)")]
-        private float boundsPadding = 5f;
-
         [Header("Colors")]
         [SerializeField]
         [Tooltip("Background color")]
-        private Color backgroundColor = new Color(0.1f, 0.1f, 0.1f, 0.8f);
+        private Color backgroundColor = new Color(0.05f, 0.1f, 0.05f, 0.9f);
 
         [SerializeField]
         [Tooltip("Border color")]
-        private Color borderColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+        private Color borderColor = new Color(0.2f, 0.4f, 0.2f, 1f);
+
+        [SerializeField]
+        [Tooltip("Radar ring color")]
+        private Color ringColor = new Color(0.2f, 0.4f, 0.2f, 0.5f);
+
+        [SerializeField]
+        [Tooltip("Focal point crosshair color")]
+        private Color crosshairColor = new Color(0.3f, 0.6f, 0.3f, 0.8f);
 
         [SerializeField]
         [Tooltip("Heart of maze color")]
@@ -55,12 +67,8 @@ namespace FaeMaze.UI
         private Color visitorColor = new Color(0.3f, 1f, 0.3f, 1f);
 
         [SerializeField]
-        [Tooltip("Lantern dot color")]
-        private Color lanternColor = new Color(1f, 0.9f, 0.3f, 1f);
-
-        [SerializeField]
-        [Tooltip("Puka hazard dot color")]
-        private Color pukaColor = new Color(0.8f, 0.2f, 0.8f, 1f);
+        [Tooltip("Edge indicator color")]
+        private Color edgeIndicatorColor = new Color(1f, 0.8f, 0.2f, 1f);
 
         [Header("Dot Sizes")]
         [SerializeField]
@@ -69,11 +77,15 @@ namespace FaeMaze.UI
 
         [SerializeField]
         [Tooltip("Visitor dot size in pixels")]
-        private float visitorDotSize = 4f;
+        private float visitorDotSize = 6f;
 
         [SerializeField]
-        [Tooltip("Hazard dot size in pixels")]
-        private float hazardDotSize = 6f;
+        [Tooltip("Crosshair size in pixels")]
+        private float crosshairSize = 12f;
+
+        [SerializeField]
+        [Tooltip("Edge indicator size in pixels")]
+        private float edgeIndicatorSize = 8f;
 
         public enum Corner
         {
@@ -85,31 +97,44 @@ namespace FaeMaze.UI
 
         private Canvas canvas;
         private RectTransform minimapPanel;
-        private RawImage backgroundImage;
+        private RectTransform radarContainer;
         private RectTransform dotsContainer;
         private Camera mainCamera;
         private HeartOfTheMaze heart;
 
         private List<Image> visitorDots = new List<Image>();
-        private List<Image> lanternDots = new List<Image>();
-        private List<Image> pukaDots = new List<Image>();
+        private List<Image> visitorEdgeIndicators = new List<Image>();
         private Image heartDot;
-
+        private Image heartEdgeIndicator;
+        private RectTransform crosshair;
+        private List<Image> radarRings = new List<Image>();
         private Sprite circleSprite;
-        private float currentMapSize;
-        private float pixelsPerUnit = 1f;
-        private Vector2 mazeCenter = Vector2.zero;
-        private bool boundsInitialized = false;
+        private Sprite ringSprite;
+        private Sprite triangleSprite;
 
         private void Awake()
         {
             mainCamera = Camera.main;
-            circleSprite = CreateCircleSprite();
+            CreateSprites();
             CreateMinimapUI();
         }
 
         private void Start()
         {
+            // Find focal point if not assigned
+            if (focalPoint == null)
+            {
+                GameObject focalPointObj = GameObject.Find("Focal Point");
+                if (focalPointObj != null)
+                {
+                    focalPoint = focalPointObj.transform;
+                }
+                else if (mainCamera != null)
+                {
+                    focalPoint = mainCamera.transform;
+                }
+            }
+
             // Find maze grid if not assigned
             if (mazeGridBehaviour == null)
             {
@@ -121,7 +146,15 @@ namespace FaeMaze.UI
             if (heart != null)
             {
                 CreateHeartDot();
+                CreateHeartEdgeIndicator();
             }
+        }
+
+        private void CreateSprites()
+        {
+            circleSprite = CreateCircleSprite();
+            ringSprite = CreateRingSprite();
+            triangleSprite = CreateTriangleSprite();
         }
 
         private void CreateMinimapUI()
@@ -138,30 +171,143 @@ namespace FaeMaze.UI
 
             canvasObj.AddComponent<GraphicRaycaster>();
 
-            // Create minimap panel
+            // Create minimap panel (outer container for positioning)
             GameObject panelObj = new GameObject("MinimapPanel");
             panelObj.transform.SetParent(canvas.transform, false);
             minimapPanel = panelObj.AddComponent<RectTransform>();
 
-            // Add background
-            backgroundImage = panelObj.AddComponent<RawImage>();
-            backgroundImage.color = backgroundColor;
+            // Create circular background with mask
+            GameObject bgObj = new GameObject("Background");
+            bgObj.transform.SetParent(panelObj.transform, false);
+            RectTransform bgRect = bgObj.AddComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.sizeDelta = Vector2.zero;
+            bgRect.anchoredPosition = Vector2.zero;
 
-            // Add border
-            Outline outline = panelObj.AddComponent<Outline>();
-            outline.effectColor = borderColor;
-            outline.effectDistance = new Vector2(2, 2);
+            // Use Image with circle sprite for mask (Mask requires Image, not RawImage)
+            Image maskImage = bgObj.AddComponent<Image>();
+            maskImage.sprite = circleSprite;
+            maskImage.color = backgroundColor;
+            maskImage.type = Image.Type.Simple;
+            maskImage.preserveAspect = true;
 
-            // Create dots container (this will rotate with camera)
+            // Add mask for circular clipping
+            Mask mask = bgObj.AddComponent<Mask>();
+            mask.showMaskGraphic = true;
+
+            // Create radar container (this rotates with camera)
+            GameObject radarObj = new GameObject("RadarContainer");
+            radarObj.transform.SetParent(bgObj.transform, false);
+            radarContainer = radarObj.AddComponent<RectTransform>();
+            radarContainer.anchorMin = new Vector2(0.5f, 0.5f);
+            radarContainer.anchorMax = new Vector2(0.5f, 0.5f);
+            radarContainer.pivot = new Vector2(0.5f, 0.5f);
+            radarContainer.sizeDelta = Vector2.zero;
+            radarContainer.anchoredPosition = Vector2.zero;
+
+            // Create radar rings (decorative)
+            CreateRadarRings();
+
+            // Create crosshair
+            CreateCrosshair();
+
+            // Create dots container
             GameObject dotsObj = new GameObject("DotsContainer");
-            dotsObj.transform.SetParent(panelObj.transform, false);
+            dotsObj.transform.SetParent(radarContainer, false);
             dotsContainer = dotsObj.AddComponent<RectTransform>();
             dotsContainer.anchorMin = new Vector2(0.5f, 0.5f);
             dotsContainer.anchorMax = new Vector2(0.5f, 0.5f);
+            dotsContainer.pivot = new Vector2(0.5f, 0.5f);
             dotsContainer.sizeDelta = Vector2.zero;
             dotsContainer.anchoredPosition = Vector2.zero;
 
+            // Create border ring
+            CreateBorderRing(panelObj);
+
             UpdateMinimapSize();
+        }
+
+        private void CreateRadarRings()
+        {
+            // Create concentric rings at 25%, 50%, 75% of radius
+            float[] ringRadii = { 0.25f, 0.5f, 0.75f };
+
+            foreach (float radiusFraction in ringRadii)
+            {
+                GameObject ringObj = new GameObject($"RadarRing_{radiusFraction * 100}");
+                ringObj.transform.SetParent(radarContainer, false);
+                RectTransform ringRect = ringObj.AddComponent<RectTransform>();
+                ringRect.anchorMin = new Vector2(0.5f, 0.5f);
+                ringRect.anchorMax = new Vector2(0.5f, 0.5f);
+                ringRect.pivot = new Vector2(0.5f, 0.5f);
+                ringRect.anchoredPosition = Vector2.zero;
+
+                Image ringImage = ringObj.AddComponent<Image>();
+                ringImage.sprite = ringSprite;
+                ringImage.color = ringColor;
+                ringImage.type = Image.Type.Simple;
+                ringImage.preserveAspect = true;
+                ringImage.raycastTarget = false;
+
+                radarRings.Add(ringImage);
+            }
+        }
+
+        private void CreateBorderRing(GameObject parent)
+        {
+            GameObject borderObj = new GameObject("BorderRing");
+            borderObj.transform.SetParent(parent.transform, false);
+            RectTransform borderRect = borderObj.AddComponent<RectTransform>();
+            borderRect.anchorMin = Vector2.zero;
+            borderRect.anchorMax = Vector2.one;
+            borderRect.sizeDelta = Vector2.zero;
+            borderRect.anchoredPosition = Vector2.zero;
+
+            Image borderImage = borderObj.AddComponent<Image>();
+            borderImage.sprite = ringSprite;
+            borderImage.color = borderColor;
+            borderImage.type = Image.Type.Simple;
+            borderImage.preserveAspect = true;
+            borderImage.raycastTarget = false;
+        }
+
+        private void CreateCrosshair()
+        {
+            GameObject crosshairObj = new GameObject("Crosshair");
+            crosshairObj.transform.SetParent(radarContainer, false);
+            crosshair = crosshairObj.AddComponent<RectTransform>();
+            crosshair.anchorMin = new Vector2(0.5f, 0.5f);
+            crosshair.anchorMax = new Vector2(0.5f, 0.5f);
+            crosshair.pivot = new Vector2(0.5f, 0.5f);
+            crosshair.sizeDelta = new Vector2(crosshairSize, crosshairSize);
+            crosshair.anchoredPosition = Vector2.zero;
+
+            // Horizontal line
+            GameObject hLineObj = new GameObject("HorizontalLine");
+            hLineObj.transform.SetParent(crosshairObj.transform, false);
+            RectTransform hLineRect = hLineObj.AddComponent<RectTransform>();
+            hLineRect.anchorMin = new Vector2(0.5f, 0.5f);
+            hLineRect.anchorMax = new Vector2(0.5f, 0.5f);
+            hLineRect.pivot = new Vector2(0.5f, 0.5f);
+            hLineRect.sizeDelta = new Vector2(crosshairSize, 1f);
+            hLineRect.anchoredPosition = Vector2.zero;
+            Image hLineImg = hLineObj.AddComponent<Image>();
+            hLineImg.color = crosshairColor;
+            hLineImg.raycastTarget = false;
+
+            // Vertical line
+            GameObject vLineObj = new GameObject("VerticalLine");
+            vLineObj.transform.SetParent(crosshairObj.transform, false);
+            RectTransform vLineRect = vLineObj.AddComponent<RectTransform>();
+            vLineRect.anchorMin = new Vector2(0.5f, 0.5f);
+            vLineRect.anchorMax = new Vector2(0.5f, 0.5f);
+            vLineRect.pivot = new Vector2(0.5f, 0.5f);
+            vLineRect.sizeDelta = new Vector2(1f, crosshairSize);
+            vLineRect.anchoredPosition = Vector2.zero;
+            Image vLineImg = vLineObj.AddComponent<Image>();
+            vLineImg.color = crosshairColor;
+            vLineImg.raycastTarget = false;
         }
 
         private void CreateHeartDot()
@@ -169,7 +315,6 @@ namespace FaeMaze.UI
             GameObject dotObj = new GameObject("HeartDot");
             dotObj.transform.SetParent(dotsContainer, false);
             RectTransform dotRect = dotObj.AddComponent<RectTransform>();
-            // Anchor to center so anchoredPosition is relative to center
             dotRect.anchorMin = new Vector2(0.5f, 0.5f);
             dotRect.anchorMax = new Vector2(0.5f, 0.5f);
             dotRect.pivot = new Vector2(0.5f, 0.5f);
@@ -178,75 +323,206 @@ namespace FaeMaze.UI
             heartDot = dotObj.AddComponent<Image>();
             heartDot.color = heartColor;
             heartDot.sprite = circleSprite;
+            heartDot.raycastTarget = false;
         }
 
-        private Image CreateDot(string name, Color color, float size, Transform parent)
+        private void CreateHeartEdgeIndicator()
         {
-            GameObject dotObj = new GameObject(name);
-            dotObj.transform.SetParent(parent, false);
+            GameObject indicatorObj = new GameObject("HeartEdgeIndicator");
+            indicatorObj.transform.SetParent(dotsContainer, false);
+            RectTransform indicatorRect = indicatorObj.AddComponent<RectTransform>();
+            indicatorRect.anchorMin = new Vector2(0.5f, 0.5f);
+            indicatorRect.anchorMax = new Vector2(0.5f, 0.5f);
+            indicatorRect.pivot = new Vector2(0.5f, 0.5f);
+            indicatorRect.sizeDelta = new Vector2(edgeIndicatorSize, edgeIndicatorSize);
+
+            heartEdgeIndicator = indicatorObj.AddComponent<Image>();
+            heartEdgeIndicator.color = heartColor;
+            heartEdgeIndicator.sprite = triangleSprite;
+            heartEdgeIndicator.raycastTarget = false;
+            heartEdgeIndicator.gameObject.SetActive(false);
+        }
+
+        private Image CreateVisitorDot()
+        {
+            GameObject dotObj = new GameObject("VisitorDot");
+            dotObj.transform.SetParent(dotsContainer, false);
             RectTransform dotRect = dotObj.AddComponent<RectTransform>();
-            // Anchor to center so anchoredPosition is relative to center
             dotRect.anchorMin = new Vector2(0.5f, 0.5f);
             dotRect.anchorMax = new Vector2(0.5f, 0.5f);
             dotRect.pivot = new Vector2(0.5f, 0.5f);
-            dotRect.sizeDelta = new Vector2(size, size);
+            dotRect.sizeDelta = new Vector2(visitorDotSize, visitorDotSize);
 
             Image dot = dotObj.AddComponent<Image>();
-            dot.color = color;
+            dot.color = visitorColor;
             dot.sprite = circleSprite;
+            dot.raycastTarget = false;
 
             return dot;
         }
 
+        private Image CreateVisitorEdgeIndicator()
+        {
+            GameObject indicatorObj = new GameObject("VisitorEdgeIndicator");
+            indicatorObj.transform.SetParent(dotsContainer, false);
+            RectTransform indicatorRect = indicatorObj.AddComponent<RectTransform>();
+            indicatorRect.anchorMin = new Vector2(0.5f, 0.5f);
+            indicatorRect.anchorMax = new Vector2(0.5f, 0.5f);
+            indicatorRect.pivot = new Vector2(0.5f, 0.5f);
+            indicatorRect.sizeDelta = new Vector2(edgeIndicatorSize, edgeIndicatorSize);
+
+            Image indicator = indicatorObj.AddComponent<Image>();
+            indicator.color = edgeIndicatorColor;
+            indicator.sprite = triangleSprite;
+            indicator.raycastTarget = false;
+
+            return indicator;
+        }
+
         private Sprite CreateCircleSprite()
         {
-            int resolution = 32;
+            int resolution = 64;
             Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
             Color[] pixels = new Color[resolution * resolution];
 
             Vector2 center = new Vector2(resolution / 2f, resolution / 2f);
-            float radius = resolution / 2f;
+            float radius = resolution / 2f - 1f;
 
             for (int y = 0; y < resolution; y++)
             {
                 for (int x = 0; x < resolution; x++)
                 {
                     float distance = Vector2.Distance(new Vector2(x, y), center);
-                    pixels[y * resolution + x] = distance <= radius ? Color.white : Color.clear;
+                    if (distance <= radius)
+                    {
+                        // Smooth edge with anti-aliasing
+                        float alpha = Mathf.Clamp01(radius - distance + 0.5f);
+                        pixels[y * resolution + x] = new Color(1f, 1f, 1f, alpha);
+                    }
+                    else
+                    {
+                        pixels[y * resolution + x] = Color.clear;
+                    }
                 }
             }
 
             texture.SetPixels(pixels);
             texture.Apply();
+            texture.filterMode = FilterMode.Bilinear;
 
             return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
         }
 
-        private void Update()
+        private Sprite CreateRingSprite()
         {
-            if (mazeGridBehaviour == null)
+            int resolution = 64;
+            Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
+            Color[] pixels = new Color[resolution * resolution];
+
+            Vector2 center = new Vector2(resolution / 2f, resolution / 2f);
+            float outerRadius = resolution / 2f - 1f;
+            float innerRadius = outerRadius - 2f;
+
+            for (int y = 0; y < resolution; y++)
             {
-                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-                if (mazeGridBehaviour == null)
+                for (int x = 0; x < resolution; x++)
                 {
-                    return;
+                    float distance = Vector2.Distance(new Vector2(x, y), center);
+                    if (distance <= outerRadius && distance >= innerRadius)
+                    {
+                        float alpha = 1f;
+                        // Smooth outer edge
+                        if (distance > outerRadius - 0.5f)
+                            alpha = Mathf.Clamp01(outerRadius - distance + 0.5f);
+                        // Smooth inner edge
+                        if (distance < innerRadius + 0.5f)
+                            alpha = Mathf.Min(alpha, Mathf.Clamp01(distance - innerRadius + 0.5f));
+
+                        pixels[y * resolution + x] = new Color(1f, 1f, 1f, alpha);
+                    }
+                    else
+                    {
+                        pixels[y * resolution + x] = Color.clear;
+                    }
                 }
             }
 
-            UpdateMinimapSize();
-            UpdateScaleFromBounds();
+            texture.SetPixels(pixels);
+            texture.Apply();
+            texture.filterMode = FilterMode.Bilinear;
 
-            // Only update dots after bounds are initialized
-            if (!boundsInitialized)
+            return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
+        }
+
+        private Sprite CreateTriangleSprite()
+        {
+            int resolution = 32;
+            Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
+            Color[] pixels = new Color[resolution * resolution];
+
+            // Create an upward-pointing triangle
+            Vector2 top = new Vector2(resolution / 2f, resolution - 2f);
+            Vector2 bottomLeft = new Vector2(2f, 2f);
+            Vector2 bottomRight = new Vector2(resolution - 2f, 2f);
+
+            for (int y = 0; y < resolution; y++)
+            {
+                for (int x = 0; x < resolution; x++)
+                {
+                    Vector2 point = new Vector2(x, y);
+                    if (IsPointInTriangle(point, top, bottomLeft, bottomRight))
+                    {
+                        pixels[y * resolution + x] = Color.white;
+                    }
+                    else
+                    {
+                        pixels[y * resolution + x] = Color.clear;
+                    }
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply();
+            texture.filterMode = FilterMode.Bilinear;
+
+            return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
+        }
+
+        private bool IsPointInTriangle(Vector2 p, Vector2 v1, Vector2 v2, Vector2 v3)
+        {
+            float d1 = Sign(p, v1, v2);
+            float d2 = Sign(p, v2, v3);
+            float d3 = Sign(p, v3, v1);
+
+            bool hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+            bool hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+            return !(hasNeg && hasPos);
+        }
+
+        private float Sign(Vector2 p1, Vector2 p2, Vector2 p3)
+        {
+            return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+        }
+
+        private void Update()
+        {
+            if (focalPoint == null)
             {
                 return;
             }
 
-            UpdateRotation();
+            // Try to find mazeGridBehaviour if not set
+            if (mazeGridBehaviour == null)
+            {
+                mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+            }
+
+            UpdateMinimapSize();
+            UpdateRadarRotation();
+            UpdateRadarRings();
             UpdateHeartDot();
             UpdateVisitorDots();
-            UpdateLanternDots();
-            UpdatePukaDots();
         }
 
         private void UpdateMinimapSize()
@@ -258,9 +534,9 @@ namespace FaeMaze.UI
 
             // Calculate size based on smaller screen dimension
             float smallerDimension = Mathf.Min(Screen.width, Screen.height);
-            currentMapSize = smallerDimension * sizePercent;
+            float mapSize = smallerDimension * sizePercent;
 
-            minimapPanel.sizeDelta = new Vector2(currentMapSize, currentMapSize);
+            minimapPanel.sizeDelta = new Vector2(mapSize, mapSize);
 
             // Position based on corner
             Vector2 anchorMin, anchorMax, pivot, anchoredPosition;
@@ -295,93 +571,76 @@ namespace FaeMaze.UI
             minimapPanel.anchoredPosition = anchoredPosition;
         }
 
-        private void UpdateScaleFromBounds()
+        private void UpdateRadarRotation()
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+            if (radarContainer == null || mainCamera == null)
             {
                 return;
             }
 
-            var bounds = mazeGridBehaviour.WorldSpaceMazeData.WorldBounds;
+            // Get camera forward direction in 2D (XY plane)
+            Vector3 forward = mainCamera.transform.forward;
+            Vector2 forward2D = new Vector2(forward.x, forward.y).normalized;
 
-            // Skip if bounds are invalid (zero size)
-            if (bounds.size.x < 0.01f && bounds.size.y < 0.01f)
-            {
-                return;
-            }
-
-            // Calculate maze extent with padding
-            float mazeWidth = bounds.size.x + boundsPadding * 2f;
-            float mazeHeight = bounds.size.y + boundsPadding * 2f;
-            float maxExtent = Mathf.Max(mazeWidth, mazeHeight);
-
-            // Calculate pixels per world unit to fit entire maze
-            if (maxExtent > 0.01f && currentMapSize > 0)
-            {
-                pixelsPerUnit = currentMapSize / maxExtent;
-                boundsInitialized = true;
-            }
-
-            // Cache maze center for coordinate conversion
-            mazeCenter = new Vector2(bounds.center.x, bounds.center.y);
-        }
-
-        private void UpdateRotation()
-        {
-            if (dotsContainer == null || mainCamera == null)
-            {
-                return;
-            }
-
-            // Get camera's forward direction projected onto XY plane (the world plane)
-            // Camera looking along +X means forward2D = (1, 0)
-            // We want that direction to appear as "up" on the minimap
-            Vector3 camForward = mainCamera.transform.forward;
-            Vector2 forward2D = new Vector2(camForward.x, camForward.y);
-
-            // If camera is looking straight down (Z axis), use camera's up vector instead
-            if (forward2D.sqrMagnitude < 0.01f)
-            {
-                Vector3 camUp = mainCamera.transform.up;
-                forward2D = new Vector2(camUp.x, camUp.y);
-            }
-
-            forward2D = forward2D.normalized;
-
-            // Calculate the angle from +Y axis to the camera forward direction
-            // Atan2(x, y) gives angle from +Y axis, clockwise positive
-            // If camera looks along +X, forward2D = (1, 0), angle = 90 degrees
-            // We need to rotate the minimap content by this angle so +X appears as up
+            // Calculate angle: we want camera forward to point "up" (positive Y) on the minimap
+            // Atan2(x, y) gives angle from +Y axis, which is what we want
             float angle = Mathf.Atan2(forward2D.x, forward2D.y) * Mathf.Rad2Deg;
 
-            // Rotate the dots container so camera forward direction points up
-            dotsContainer.localRotation = Quaternion.Euler(0, 0, angle);
+            // Apply rotation to radar container
+            radarContainer.localRotation = Quaternion.Euler(0f, 0f, angle);
+        }
+
+        private void UpdateRadarRings()
+        {
+            if (minimapPanel == null)
+            {
+                return;
+            }
+
+            float mapSize = minimapPanel.rect.width;
+            float[] ringRadii = { 0.25f, 0.5f, 0.75f };
+
+            for (int i = 0; i < radarRings.Count && i < ringRadii.Length; i++)
+            {
+                float ringSize = mapSize * ringRadii[i] * 2f;
+                radarRings[i].rectTransform.sizeDelta = new Vector2(ringSize, ringSize);
+            }
         }
 
         private void UpdateHeartDot()
         {
-            if (heartDot == null || heart == null)
+            if (heart == null)
             {
                 return;
             }
 
+            if (heartDot == null)
+            {
+                CreateHeartDot();
+            }
+
+            if (heartEdgeIndicator == null)
+            {
+                CreateHeartEdgeIndicator();
+            }
+
             Vector3 heartWorldPos = heart.transform.position;
-            Vector2 minimapPos = WorldToMinimapPosition(heartWorldPos);
-            heartDot.rectTransform.anchoredPosition = minimapPos;
-            heartDot.gameObject.SetActive(true);
+            UpdateDotOrEdgeIndicator(heartWorldPos, heartDot, heartEdgeIndicator, heartColor);
         }
 
         private void UpdateVisitorDots()
         {
+            // Get all active visitors
             IReadOnlyList<VisitorControllerBase> activeVisitors = VisitorRegistry.All;
 
-            // Ensure we have enough dots
+            // Ensure we have enough dots and edge indicators
             while (visitorDots.Count < activeVisitors.Count)
             {
-                visitorDots.Add(CreateDot("VisitorDot", visitorColor, visitorDotSize, dotsContainer));
+                visitorDots.Add(CreateVisitorDot());
+                visitorEdgeIndicators.Add(CreateVisitorEdgeIndicator());
             }
 
-            // Update each dot
+            // Update each visitor
             int visitorIndex = 0;
             foreach (var visitor in activeVisitors)
             {
@@ -391,111 +650,82 @@ namespace FaeMaze.UI
                 }
 
                 Image dot = visitorDots[visitorIndex];
-                Vector2 minimapPos = WorldToMinimapPosition(visitor.transform.position);
-                dot.rectTransform.anchoredPosition = minimapPos;
-                dot.gameObject.SetActive(true);
+                Image edgeIndicator = visitorEdgeIndicators[visitorIndex];
+                Vector3 visitorWorldPos = visitor.transform.position;
+
+                UpdateDotOrEdgeIndicator(visitorWorldPos, dot, edgeIndicator, visitorColor);
 
                 visitorIndex++;
             }
 
-            // Hide unused dots
+            // Hide unused dots and edge indicators
             for (int i = visitorIndex; i < visitorDots.Count; i++)
             {
                 visitorDots[i].gameObject.SetActive(false);
+                visitorEdgeIndicators[i].gameObject.SetActive(false);
             }
         }
 
-        private void UpdateLanternDots()
+        private void UpdateDotOrEdgeIndicator(Vector3 worldPos, Image dot, Image edgeIndicator, Color dotColor)
         {
-            var activeLanterns = FaeLantern.All;
-            int count = 0;
-
-            // Count active lanterns
-            foreach (var lantern in activeLanterns)
+            if (focalPoint == null || minimapPanel == null)
             {
-                if (lantern != null) count++;
+                return;
             }
 
-            // Ensure we have enough dots
-            while (lanternDots.Count < count)
-            {
-                lanternDots.Add(CreateDot("LanternDot", lanternColor, hazardDotSize, dotsContainer));
-            }
+            Vector3 focalWorldPos = focalPoint.position;
+            Vector3 relativePos = worldPos - focalWorldPos;
 
-            // Update each dot
-            int lanternIndex = 0;
-            foreach (var lantern in activeLanterns)
+            // Calculate distance in world units
+            float distanceWorld = Mathf.Sqrt(relativePos.x * relativePos.x + relativePos.y * relativePos.y);
+
+            // Get map dimensions
+            float mapSize = minimapPanel.rect.width;
+            float mapRadius = mapSize / 2f;
+            float viewRadiusWorld = viewRadiusTiles;
+            float pixelsPerUnit = mapRadius / viewRadiusWorld;
+
+            // Check if within view radius
+            if (distanceWorld <= viewRadiusWorld)
             {
-                if (lantern == null || lanternIndex >= lanternDots.Count)
+                // Show dot, hide edge indicator
+                dot.gameObject.SetActive(true);
+                if (edgeIndicator != null)
                 {
-                    continue;
+                    edgeIndicator.gameObject.SetActive(false);
                 }
 
-                Image dot = lanternDots[lanternIndex];
-                Vector2 minimapPos = WorldToMinimapPosition(lantern.transform.position);
-                dot.rectTransform.anchoredPosition = minimapPos;
-                dot.gameObject.SetActive(true);
-
-                lanternIndex++;
+                // Calculate position on minimap
+                float minimapX = relativePos.x * pixelsPerUnit;
+                float minimapY = relativePos.y * pixelsPerUnit;
+                dot.rectTransform.anchoredPosition = new Vector2(minimapX, minimapY);
             }
-
-            // Hide unused dots
-            for (int i = lanternIndex; i < lanternDots.Count; i++)
+            else
             {
-                lanternDots[i].gameObject.SetActive(false);
-            }
-        }
+                // Hide dot, show edge indicator at edge of radar
+                dot.gameObject.SetActive(false);
 
-        private void UpdatePukaDots()
-        {
-            var activePukas = PukaHazard.All;
-
-            // Ensure we have enough dots
-            while (pukaDots.Count < activePukas.Count)
-            {
-                pukaDots.Add(CreateDot("PukaDot", pukaColor, hazardDotSize, dotsContainer));
-            }
-
-            // Update each dot
-            int pukaIndex = 0;
-            foreach (var puka in activePukas)
-            {
-                if (puka == null || pukaIndex >= pukaDots.Count)
+                if (edgeIndicator != null)
                 {
-                    continue;
+                    edgeIndicator.gameObject.SetActive(true);
+
+                    // Calculate direction to object
+                    Vector2 direction = new Vector2(relativePos.x, relativePos.y).normalized;
+
+                    // Position at edge (95% of radius to keep inside mask)
+                    float edgeDistance = mapRadius * 0.9f;
+                    float edgeX = direction.x * edgeDistance;
+                    float edgeY = direction.y * edgeDistance;
+                    edgeIndicator.rectTransform.anchoredPosition = new Vector2(edgeX, edgeY);
+
+                    // Rotate triangle to point outward
+                    float angle = Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg;
+                    edgeIndicator.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -angle);
+
+                    // Use the dot color for consistency
+                    edgeIndicator.color = dotColor;
                 }
-
-                Image dot = pukaDots[pukaIndex];
-                Vector2 minimapPos = WorldToMinimapPosition(puka.transform.position);
-                dot.rectTransform.anchoredPosition = minimapPos;
-                dot.gameObject.SetActive(true);
-
-                pukaIndex++;
             }
-
-            // Hide unused dots
-            for (int i = pukaIndex; i < pukaDots.Count; i++)
-            {
-                pukaDots[i].gameObject.SetActive(false);
-            }
-        }
-
-        private Vector2 WorldToMinimapPosition(Vector3 worldPos)
-        {
-            if (minimapPanel == null)
-            {
-                return Vector2.zero;
-            }
-
-            // Get position relative to maze center
-            float relativeX = worldPos.x - mazeCenter.x;
-            float relativeY = worldPos.y - mazeCenter.y;
-
-            // Convert to minimap pixels
-            float minimapX = relativeX * pixelsPerUnit;
-            float minimapY = relativeY * pixelsPerUnit;
-
-            return new Vector2(minimapX, minimapY);
         }
     }
 }

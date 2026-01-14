@@ -148,6 +148,7 @@ namespace FaeMaze.Visitors
         protected bool hasReachedLantern;
         protected float fascinationTimer;
         protected FaeMaze.Props.FaeLantern currentFaeLantern;
+        protected const float FascinationSpeedMultiplier = 0.5f; // 50% speed when approaching lantern
 
         // Cooldown tracking per lantern (prevents immediate re-triggering)
         protected Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
@@ -342,11 +343,19 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // Handle fascination timer (2-second pause at lantern)
-            if (isFascinated && hasReachedLantern && fascinationTimer > 0)
+            // Handle fascination timer (pause at lantern)
+            if (isFascinated && hasReachedLantern)
             {
-                fascinationTimer -= Time.deltaTime;
-                return; // Don't move while fascinated timer is active
+                if (fascinationTimer > 0)
+                {
+                    fascinationTimer -= Time.deltaTime;
+                    return; // Don't move while fascinated timer is active
+                }
+                else
+                {
+                    // Fascination timer ended - resume wandering
+                    EndFascination();
+                }
             }
 
             if (IsMovementState(state))
@@ -1599,7 +1608,18 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            // Log fascinated movement periodically
+            if (isFascinated && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"[Fascination] Walking - pathIndex: {worldPathIndex}/{worldPath.Count}, pos: {transform.position}, target: {worldPath[worldPathIndex]}, dest: {worldDestination}");
+            }
+
+            // Use 50% speed if fascinated and walking to lantern
             float effectiveSpeed = moveSpeed * speedMultiplier;
+            if (isFascinated && !hasReachedLantern)
+            {
+                effectiveSpeed *= FascinationSpeedMultiplier;
+            }
             float remainingDistance = effectiveSpeed * Time.deltaTime;
 
             // Move continuously, consuming distance across multiple waypoints if needed
@@ -1696,6 +1716,26 @@ namespace FaeMaze.Visitors
             if (ShouldLogVisitorPath())
             {
                 LogVisitorPath($"reached world-space destination at {worldDestination}");
+            }
+
+            Debug.Log($"[Fascination] OnWorldSpacePathComplete - isFascinated: {isFascinated}, hasReachedLantern: {hasReachedLantern}, position: {transform.position}, destination: {worldDestination}");
+
+            // Check if fascinated - visitor has reached the lantern stop position
+            if (isFascinated && !hasReachedLantern)
+            {
+                hasReachedLantern = true;
+                // Get fascination duration from the current lantern if available
+                float duration = 2f; // Default 2 seconds
+                if (currentFaeLantern != null)
+                {
+                    duration = currentFaeLantern.FascinationDuration;
+                }
+                fascinationTimer = duration;
+                state = VisitorState.Idle; // Idle at the lantern
+                Vector2 posXY = new Vector2(transform.position.x, transform.position.y);
+                Vector2 lanternXY = new Vector2(fascinationLanternPosition.x, fascinationLanternPosition.y);
+                Debug.Log($"[Fascination] Visitor reached lantern stop position. Final position: {transform.position}, XY Distance to lantern: {Vector2.Distance(posXY, lanternXY):F3}, Timer: {fascinationTimer}s");
+                return;
             }
 
             // Check if at the heart (destination is near the heart)
@@ -2153,13 +2193,17 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Makes this visitor fascinated by a FaeLantern at the given world position.
+        /// The visitor will slowly walk (taking 2 seconds) to stop 1.5 units away from the lantern and idle there.
         /// </summary>
         public virtual void BecomeFascinated(Vector3 lanternWorldPosition)
         {
             if (!IsMovementState(state))
             {
+                Debug.Log($"[Fascination] BecomeFascinated called but not in movement state: {state}");
                 return;
             }
+
+            Debug.Log($"[Fascination] BecomeFascinated START - Visitor at {transform.position}, Lantern at {lanternWorldPosition}");
 
             isFascinated = true;
             fascinationLanternPosition = lanternWorldPosition;
@@ -2169,8 +2213,137 @@ namespace FaeMaze.Visitors
             ResetDetourState();
             waypointsTraversedSinceSpawn = 0;
 
-            worldPath = BuildWorldPath(transform.position, lanternWorldPosition);
+            // Calculate stop position 1.5 units away from the lantern (XY plane only, ignore Z)
+            Vector2 lanternXY = new Vector2(lanternWorldPosition.x, lanternWorldPosition.y);
+            Vector2 visitorXY = new Vector2(transform.position.x, transform.position.y);
+            Vector2 directionToLanternXY = (lanternXY - visitorXY).normalized;
+            Vector2 stopPositionXY = lanternXY - directionToLanternXY * 1.5f;
+            Vector3 stopPosition = new Vector3(stopPositionXY.x, stopPositionXY.y, transform.position.z);
+
+            Debug.Log($"[Fascination] Direction to lantern (XY): {directionToLanternXY}, Stop position: {stopPosition}");
+
+            // Build path to the stop position
+            worldPath = BuildWorldPath(transform.position, stopPosition);
             worldPathIndex = 0;
+
+            // CRITICAL: The lantern should NEVER be a waypoint. The path should terminate
+            // at the stop location (1.5 units from lantern in XY plane). Remove ALL waypoints that are
+            // within the stop distance of the lantern, then add the stop position as the final waypoint.
+            const float stopDistance = 1.5f;
+            if (worldPath != null && worldPath.Count > 0)
+            {
+                // Find the first waypoint that gets too close to the lantern (XY distance only)
+                int firstBadIndex = -1;
+                for (int i = 0; i < worldPath.Count; i++)
+                {
+                    Vector2 waypointXY = new Vector2(worldPath[i].x, worldPath[i].y);
+                    float distToLanternXY = Vector2.Distance(waypointXY, lanternXY);
+                    if (distToLanternXY <= stopDistance)
+                    {
+                        firstBadIndex = i;
+                        break;
+                    }
+                }
+
+                if (firstBadIndex >= 0)
+                {
+                    Vector2 badWaypointXY = new Vector2(worldPath[firstBadIndex].x, worldPath[firstBadIndex].y);
+                    Debug.Log($"[Fascination] Trimming path at index {firstBadIndex} (waypoint at XY dist {Vector2.Distance(badWaypointXY, lanternXY):F2} from lantern)");
+                    // Remove all waypoints from firstBadIndex onward (these are too close to lantern)
+                    worldPath.RemoveRange(firstBadIndex, worldPath.Count - firstBadIndex);
+                }
+
+                // Ensure the stop position is the final waypoint
+                if (worldPath.Count == 0 || Vector3.Distance(worldPath[worldPath.Count - 1], stopPosition) > 0.01f)
+                {
+                    worldPath.Add(stopPosition);
+                }
+                Debug.Log($"[Fascination] Final path has {worldPath.Count} waypoints, ending at stop position");
+            }
+
+            // Set destination to the stop position
+            worldDestination = stopPosition;
+
+            // Log the path that was built
+            Debug.Log($"[Fascination] Path built with {worldPath?.Count ?? 0} waypoints");
+            if (worldPath != null && worldPath.Count > 0)
+            {
+                Debug.Log($"[Fascination] Path: {FormatWorldPath(worldPath)}");
+                Debug.Log($"[Fascination] First waypoint: {worldPath[0]}, Last waypoint: {worldPath[worldPath.Count - 1]}");
+                Vector2 lastWaypointXY = new Vector2(worldPath[worldPath.Count - 1].x, worldPath[worldPath.Count - 1].y);
+                Debug.Log($"[Fascination] XY Distance from last waypoint to stopPosition: {Vector2.Distance(lastWaypointXY, stopPositionXY):F3}");
+                Debug.Log($"[Fascination] XY Distance from last waypoint to lantern: {Vector2.Distance(lastWaypointXY, lanternXY):F3}");
+            }
+        }
+
+        /// <summary>
+        /// Ends the fascination state and resumes toward the original destination.
+        /// Called when the fascination timer expires.
+        /// </summary>
+        protected virtual void EndFascination()
+        {
+            Debug.Log($"[Fascination] EndFascination - resuming from {transform.position} toward original destination {originalDestination}");
+
+            // Set cooldown BEFORE clearing the lantern reference, to prevent immediate re-fascination
+            if (currentFaeLantern != null)
+            {
+                float cooldown = config != null ? config.FascinationCooldown : currentFaeLantern.CooldownSec;
+                lanternCooldowns[currentFaeLantern] = cooldown;
+                Debug.Log($"[Fascination] Set cooldown for lantern: {cooldown}s");
+            }
+
+            isFascinated = false;
+            hasReachedLantern = false;
+            fascinationTimer = 0f;
+            ClearLanternInteraction();
+
+            // Resume from stop point toward the original destination
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && originalDestination != Vector3.zero)
+            {
+                worldPath = BuildWorldPath(transform.position, originalDestination);
+                worldPathIndex = 0;
+                worldDestination = originalDestination;
+                state = VisitorState.Walking;
+                Debug.Log($"[Fascination] Resumed path has {worldPath?.Count ?? 0} waypoints to {originalDestination}");
+            }
+            else
+            {
+                // Fallback: pick a random destination if no original destination
+                Vector3 randomDestination = GetRandomWanderDestination();
+                worldPath = BuildWorldPath(transform.position, randomDestination);
+                worldPathIndex = 0;
+                state = VisitorState.Walking;
+                Debug.Log($"[Fascination] No original destination, wandering to {randomDestination}");
+            }
+        }
+
+        /// <summary>
+        /// Gets a random walkable node position for wandering after fascination ends.
+        /// </summary>
+        protected virtual Vector3 GetRandomWanderDestination()
+        {
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
+
+            // Collect all node tiles (junctions/clearings) as potential destinations
+            var nodeTiles = new List<ForestMaze.WorldSpaceTile>();
+            foreach (var tile in mazeData.Tiles)
+            {
+                if (tile.Category == ForestMaze.WorldSpaceTile.TileCategory.Node && tile.Walkable)
+                {
+                    nodeTiles.Add(tile);
+                }
+            }
+
+            if (nodeTiles.Count > 0)
+            {
+                // Pick a random node
+                int randomIndex = Random.Range(0, nodeTiles.Count);
+                Vector2 nodePos = nodeTiles[randomIndex].Position;
+                return new Vector3(nodePos.x, nodePos.y, transform.position.z);
+            }
+
+            // Fallback: return current position if no nodes found
+            return transform.position;
         }
 
         #endregion

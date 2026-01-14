@@ -16,6 +16,14 @@ namespace FaeMaze.Systems
 
         [Header("Prefab Settings")]
         [SerializeField]
+        [Tooltip("Disable maze wall generation (for debugging)")]
+        private bool disableWalls = false;
+
+        [SerializeField]
+        [Tooltip("Disable end cap walls at portals (for debugging)")]
+        private bool disableEndCapWalls = false;
+
+        [SerializeField]
         [Tooltip("Prefab/model for front-rank wall tiles (full detail, LOD0)")]
         private GameObject wallPrefab;
 
@@ -141,7 +149,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public GameObject CreateWallAtPosition(Vector3 worldPos, float orientationDegrees)
         {
-            if (wallPrefab == null)
+            if (disableEndCapWalls || wallPrefab == null)
             {
                 return null;
             }
@@ -1480,6 +1488,12 @@ namespace FaeMaze.Systems
             GameObject tileObj = null;
             Color color = GetColorForSymbol(symbol, !isWall);
 
+            // Skip wall generation if disabled
+            if (symbol == '#' && disableWalls)
+            {
+                return;
+            }
+
             // Add random jitter for walls
             if (symbol == '#')
             {
@@ -1494,8 +1508,7 @@ namespace FaeMaze.Systems
                 GameObject prefabToUse = (wallLayer > 0 && wallPrefabLOD2 != null) ? wallPrefabLOD2 : wallPrefab;
                 tileObj = Instantiate(prefabToUse, tilesParent);
                 tileObj.transform.position = worldPos;
-                // Wall models are always oriented perpendicular to graph elements (no rotation)
-                tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
+                // Wall models use prefab default scale (no additional scaling)
                 wallTiles?.Add(tileObj);
             }
             else if (symbol == 'N' && nodeHazardPrefab != null)

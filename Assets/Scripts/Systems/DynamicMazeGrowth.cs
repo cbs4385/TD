@@ -729,8 +729,8 @@ namespace FaeMaze.Systems
                 Vector3 wallOffset = new Vector3(directionOutward.x, directionOutward.y, 0f) * 0.5f;
                 Vector3 wallWorldPos = endpointWorld + wallOffset;
 
-                // Portal is placed 0.7 units INSIDE the path (toward node, at inside edge of final tile)
-                Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 0.7f;
+                // Portal is placed 0.95 units INSIDE the path (toward node, away from endcap wall)
+                Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 0.95f;
                 Vector3 portalWorldPos = endpointWorld + portalOffset;
 
                 // Get next spawn ID
@@ -748,16 +748,75 @@ namespace FaeMaze.Systems
                 Vector3 perpendicular = new Vector3(-directionOutward.y, directionOutward.x, 0f);
                 float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
 
-                // Create THREE walls PAST the portal to fully block the path exit (center, left, right)
+                // Create side walls (left and right of the path) and rear walls
                 // Track these walls so they can be removed when frontier changes
                 if (mazeRenderer != null)
                 {
-                    var wall1 = mazeRenderer.CreateWallAtPosition(wallWorldPos, orientationDegrees);
-                    var wall2 = mazeRenderer.CreateWallAtPosition(wallWorldPos + perpendicular * tileSize, orientationDegrees);
-                    var wall3 = mazeRenderer.CreateWallAtPosition(wallWorldPos - perpendicular * tileSize, orientationDegrees);
-                    if (wall1 != null) portalWalls.Add(wall1);
-                    if (wall2 != null) portalWalls.Add(wall2);
-                    if (wall3 != null) portalWalls.Add(wall3);
+                    // Side wall orientation is parallel to path (not perpendicular like rear walls)
+                    float sideWallOrientation = Mathf.Atan2(directionOutward.y, directionOutward.x) * Mathf.Rad2Deg;
+                    // Rear wall orientation is perpendicular to path (blocking the path)
+                    float rearWallOrientation = sideWallOrientation + 90f;
+
+                    // Match border wall constants exactly:
+                    // WALL_DEPTH = 3 layers
+                    // PATH_HALF_WIDTH = 0.5f
+                    // WALL_SPACING = 0.3f
+                    // wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1)
+                    // Layer 0: 0.8, Layer 1: 1.1, Layer 2: 1.4
+                    const int WALL_DEPTH = 3;
+                    const float PATH_HALF_WIDTH = 0.5f;
+                    const float WALL_SPACING = 0.3f;
+                    const float STEP_SIZE = 0.5f;
+
+                    Vector3 outwardDir = new Vector3(directionOutward.x, directionOutward.y, 0f);
+
+                    // Side walls: 3 layers deep (layer 0, 1, 2), multiple positions along path
+                    // Positions along path: from -1 to +1 in 0.5 steps
+                    for (float alongPathDist = -1f; alongPathDist <= 1f; alongPathDist += STEP_SIZE)
+                    {
+                        Vector3 alongPath = outwardDir * alongPathDist;
+
+                        // 3 layers of depth for each side
+                        for (int layer = 0; layer < WALL_DEPTH; layer++)
+                        {
+                            float sideWallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
+
+                            // Left side wall (positive perpendicular)
+                            Vector3 leftWallPos = wallWorldPos + alongPath + perpendicular * sideWallOffset;
+                            if (!mazeGridBehaviour.IsWalkableAtWorldPos(leftWallPos))
+                            {
+                                var leftWall = mazeRenderer.CreateWallAtPosition(leftWallPos, sideWallOrientation);
+                                if (leftWall != null) portalWalls.Add(leftWall);
+                            }
+
+                            // Right side wall (negative perpendicular)
+                            Vector3 rightWallPos = wallWorldPos + alongPath - perpendicular * sideWallOffset;
+                            if (!mazeGridBehaviour.IsWalkableAtWorldPos(rightWallPos))
+                            {
+                                var rightWall = mazeRenderer.CreateWallAtPosition(rightWallPos, sideWallOrientation);
+                                if (rightWall != null) portalWalls.Add(rightWall);
+                            }
+                        }
+                    }
+
+                    // Rear walls: 3 layers deep (outward), spanning width
+                    // Width spans the full wall depth on each side
+                    float maxWidth = PATH_HALF_WIDTH + WALL_SPACING * WALL_DEPTH;
+                    for (int layer = 0; layer < WALL_DEPTH; layer++)
+                    {
+                        float outwardDist = layer * WALL_SPACING + STEP_SIZE;
+                        Vector3 layerOffset = outwardDir * outwardDist;
+
+                        for (float width = -maxWidth; width <= maxWidth; width += STEP_SIZE)
+                        {
+                            Vector3 rearWallPos = wallWorldPos + layerOffset + perpendicular * width;
+                            if (!mazeGridBehaviour.IsWalkableAtWorldPos(rearWallPos))
+                            {
+                                var rearWall = mazeRenderer.CreateWallAtPosition(rearWallPos, rearWallOrientation);
+                                if (rearWall != null) portalWalls.Add(rearWall);
+                            }
+                        }
+                    }
                 }
 
                 // Create portal at the frontier endpoint
