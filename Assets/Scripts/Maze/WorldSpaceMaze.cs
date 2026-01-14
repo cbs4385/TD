@@ -349,25 +349,15 @@ namespace ForestMaze
         /// </summary>
         public bool AreTilesConnected(WorldSpaceTile tileA, WorldSpaceTile tileB)
         {
-            // Debug: Log connectivity check for first few calls
-            bool shouldLog = _connectivityLogCount < 20;
-            if (shouldLog)
-            {
-                _connectivityLogCount++;
-                UnityEngine.Debug.Log($"[TileConnect] Checking: A(edge={tileA.EdgeIndex}, node={tileA.NodeIndex}, pos={tileA.Position}) vs B(edge={tileB.EdgeIndex}, node={tileB.NodeIndex}, pos={tileB.Position})");
-            }
-
             // Same edge - connected
             if (tileA.EdgeIndex >= 0 && tileA.EdgeIndex == tileB.EdgeIndex)
             {
-                if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: same edge {tileA.EdgeIndex}");
                 return true;
             }
 
             // Same node - connected
             if (tileA.NodeIndex >= 0 && tileA.NodeIndex == tileB.NodeIndex)
             {
-                if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: same node {tileA.NodeIndex}");
                 return true;
             }
 
@@ -378,7 +368,6 @@ namespace ForestMaze
                 {
                     if (connectedNodes.Contains(tileB.NodeIndex))
                     {
-                        if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: edge {tileA.EdgeIndex} connects to node {tileB.NodeIndex}");
                         return true;
                     }
                 }
@@ -391,24 +380,12 @@ namespace ForestMaze
                 {
                     if (connectedNodes.Contains(tileA.NodeIndex))
                     {
-                        if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> CONNECTED: node {tileA.NodeIndex} connects to edge {tileB.EdgeIndex}");
                         return true;
                     }
                 }
             }
 
-            if (shouldLog) UnityEngine.Debug.Log($"[TileConnect] -> NOT CONNECTED");
             return false;
-        }
-
-        private static int _connectivityLogCount = 0;
-
-        /// <summary>
-        /// Resets the connectivity log counter (call when starting new pathfinding).
-        /// </summary>
-        public static void ResetConnectivityLogCount()
-        {
-            _connectivityLogCount = 0;
         }
     }
 
@@ -462,61 +439,6 @@ namespace ForestMaze
             }
 
             data.RecalculateBounds();
-
-            // Verify spatial grid is populated correctly
-            int gridCellCount = data.GetSpatialGridCellCount();
-            int walkableCount = data.Tiles.Count(t => t.Walkable);
-            int pathCount = data.Tiles.Count(t => t.Category == WorldSpaceTile.TileCategory.Path);
-            int nodeCount = data.Tiles.Count(t => t.Category == WorldSpaceTile.TileCategory.Node);
-            int wallCount = data.Tiles.Count(t => t.Category == WorldSpaceTile.TileCategory.Wall);
-
-            // Debug: Check edge-to-node connectivity
-            int edgeTilesWithNodeConnection = 0;
-            int nodeTilesWithEdgeConnection = 0;
-            float neighborRadius = tileSize * 1.42f;
-
-            foreach (var tile in data.Tiles)
-            {
-                if (!tile.Walkable) continue;
-
-                if (tile.EdgeIndex >= 0)
-                {
-                    // Check if this edge tile has a nearby node tile
-                    var nearby = data.GetTilesNear(tile.Position, neighborRadius);
-                    foreach (var neighbor in nearby)
-                    {
-                        if (neighbor.NodeIndex >= 0 && neighbor.Walkable)
-                        {
-                            float dist = Vector2.Distance(tile.Position, neighbor.Position);
-                            if (dist <= neighborRadius && data.AreTilesConnected(tile, neighbor))
-                            {
-                                edgeTilesWithNodeConnection++;
-                                break;
-                            }
-                        }
-                    }
-                }
-                else if (tile.NodeIndex >= 0)
-                {
-                    // Check if this node tile has a nearby edge tile
-                    var nearby = data.GetTilesNear(tile.Position, neighborRadius);
-                    foreach (var neighbor in nearby)
-                    {
-                        if (neighbor.EdgeIndex >= 0 && neighbor.Walkable)
-                        {
-                            float dist = Vector2.Distance(tile.Position, neighbor.Position);
-                            if (dist <= neighborRadius && data.AreTilesConnected(tile, neighbor))
-                            {
-                                nodeTilesWithEdgeConnection++;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated {data.Tiles.Count} tiles ({walkableCount} walkable: {pathCount} path, {nodeCount} node) + {wallCount} walls in {gridCellCount} spatial grid cells");
-            UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Edge-node connectivity: {edgeTilesWithNodeConnection}/{pathCount} edge tiles connect to nodes, {nodeTilesWithEdgeConnection}/{nodeCount} node tiles connect to edges");
 
             return data;
         }
@@ -715,8 +637,6 @@ namespace ForestMaze
                     walkablePositions.Add(ToGridPosition(position, tileSize));
                 }
             }
-
-            // UnityEngine.Debug.Log($"[WorldSpaceMazeGenerator] Generated tiles for {state.AdjustmentFills.Count} adjustment fill segments");
         }
 
         /// <summary>

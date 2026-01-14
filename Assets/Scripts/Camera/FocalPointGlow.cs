@@ -4,7 +4,8 @@ using FaeMaze.Systems;
 namespace FaeMaze.Cameras
 {
     /// <summary>
-    /// Creates a pulsing 3D point light glow effect at the focal point tile position.
+    /// Creates a column indicator at the focal point position.
+    /// The column is oriented along the Z axis and tracks the focal point X/Y.
     /// </summary>
     public class FocalPointGlow : MonoBehaviour
     {
@@ -19,41 +20,34 @@ namespace FaeMaze.Cameras
         [Tooltip("Reference to the focal point transform")]
         private Transform focalPointTransform;
 
-        [Header("3D Glow Settings")]
+        [Header("Column Settings")]
         [SerializeField]
-        [Tooltip("Enable pulsing 3D point light effect")]
-        private bool enableGlow = true;
+        [Tooltip("Enable focal point column indicator")]
+        private bool enableColumn = true;
 
         [SerializeField]
-        [Tooltip("Color of the 3D point light glow")]
-        private Color glowColor = new Color(0.5f, 1.0f, 0.0f, 1f); // Lime green
+        [Tooltip("Color of the column")]
+        private Color columnColor = new Color(1.0f, 0.2f, 0.8f, 1f); // Hot neon pink
 
         [SerializeField]
-        [Tooltip("Range of the 3D point light")]
-        private float glowRange = 8f;
+        [Tooltip("Radius of the column")]
+        private float columnRadius = 0.15f;
 
         [SerializeField]
-        [Tooltip("Pulse speed in Hz")]
-        private float pulseSpeed = 1.0f;
+        [Tooltip("Length of the column")]
+        private float columnLength = 1f;
 
         [SerializeField]
-        [Tooltip("Minimum glow intensity")]
-        private float glowMinIntensity = 0.5f;
-
-        [SerializeField]
-        [Tooltip("Maximum glow intensity")]
-        private float glowMaxIntensity = 2.0f;
-
-        [SerializeField]
-        [Tooltip("Z offset for light position to illuminate tile surface")]
-        private float lightZOffset = -1.0f;
+        [Tooltip("Z position of the column center")]
+        private float columnZCenter = -0.25f;
 
         #endregion
 
         #region Private Fields
 
-        private Light glowLight;
-        private GameObject lightObject;
+        private GameObject columnObject;
+        private MeshRenderer columnRenderer;
+        private Material columnMaterial;
 
         #endregion
 
@@ -78,79 +72,100 @@ namespace FaeMaze.Cameras
                 }
             }
 
-            CreateGlowLight();
+            CreateColumn();
         }
 
         private void Update()
         {
-            if (enableGlow && glowLight != null && focalPointTransform != null)
+            if (enableColumn && columnObject != null && focalPointTransform != null)
             {
-                UpdateGlowPosition();
-                UpdateGlowPulse();
+                UpdateColumnPosition();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (columnMaterial != null)
+            {
+                Destroy(columnMaterial);
             }
         }
 
         #endregion
 
-        #region Glow Creation
+        #region Column Creation
 
-        private void CreateGlowLight()
+        private void CreateColumn()
         {
-            if (!enableGlow)
+            if (!enableColumn)
                 return;
 
-            // Create a child GameObject for the light
-            lightObject = new GameObject("FocalPointLight");
-            lightObject.transform.SetParent(transform, false);
+            // Create a cylinder primitive
+            columnObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            columnObject.name = "FocalPointColumn";
+            columnObject.transform.SetParent(transform, false);
 
-            // Add Light component
-            glowLight = lightObject.AddComponent<Light>();
+            // Remove collider - we don't need it
+            var collider = columnObject.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Destroy(collider);
+            }
 
-            // Configure the 3D point light
-            glowLight.type = LightType.Point;
-            glowLight.color = glowColor;
-            glowLight.range = glowRange;
-            glowLight.intensity = glowMaxIntensity;
+            // Cylinder default: height 2, radius 0.5, oriented along Y axis
+            // We want: length 1, radius 0.15, oriented along Z axis
+            // Scale: X and Z control radius (0.15/0.5 = 0.3), Y controls height (1/2 = 0.5)
+            float radiusScale = columnRadius / 0.5f;
+            float heightScale = columnLength / 2f;
+            columnObject.transform.localScale = new Vector3(radiusScale, heightScale, radiusScale);
 
-            // Set light to use realtime mode for URP
-            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
+            // Rotate to orient along Z axis (rotate 90 degrees around X)
+            columnObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
-            // Disable shadows for performance
-            glowLight.shadows = LightShadows.None;
+            // Setup material
+            columnRenderer = columnObject.GetComponent<MeshRenderer>();
+            if (columnRenderer != null)
+            {
+                // Create material
+                Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (shader == null)
+                {
+                    shader = Shader.Find("Unlit/Color");
+                }
+                if (shader == null)
+                {
+                    shader = Shader.Find("Standard");
+                }
 
+                if (shader != null)
+                {
+                    columnMaterial = new Material(shader);
+                    if (columnMaterial.HasProperty("_BaseColor"))
+                    {
+                        columnMaterial.SetColor("_BaseColor", columnColor);
+                    }
+                    else if (columnMaterial.HasProperty("_Color"))
+                    {
+                        columnMaterial.SetColor("_Color", columnColor);
+                    }
+                    else
+                    {
+                        columnMaterial.color = columnColor;
+                    }
+                    columnRenderer.material = columnMaterial;
+                }
+            }
         }
 
         #endregion
 
-        #region Glow Updates
+        #region Column Updates
 
-        private void UpdateGlowPosition()
+        private void UpdateColumnPosition()
         {
-            // Position the light at the focal point's world position
+            // Position the column at the focal point's X/Y with fixed Z center
             Vector3 focalPos = focalPointTransform.position;
-
-            // Position the light at the focal point with Z offset to illuminate the surface
-            if (lightObject != null)
-            {
-                lightObject.transform.position = new Vector3(focalPos.x, focalPos.y, lightZOffset);
-            }
-        }
-
-        private void UpdateGlowPulse()
-        {
-            // Calculate pulsing intensity using sine wave
-            float angle = Time.time * pulseSpeed * 2f * Mathf.PI;
-
-            // Map sin wave from [-1, 1] to [0, 1]
-            float normalizedPulse = (Mathf.Sin(angle) + 1f) / 2f;
-
-            // Map to intensity range [min, max]
-            float intensity = Mathf.Lerp(glowMinIntensity, glowMaxIntensity, normalizedPulse);
-
-            if (glowLight != null)
-            {
-                glowLight.intensity = intensity;
-            }
+            columnObject.transform.position = new Vector3(focalPos.x, focalPos.y, columnZCenter);
         }
 
         #endregion

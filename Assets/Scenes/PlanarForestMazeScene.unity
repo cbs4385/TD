@@ -14,10 +14,10 @@ OcclusionCullingSettings:
 RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
-  m_Fog: 0
-  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  m_Fog: 1
+  m_FogColor: {r: 0.5, g: 0.5, b: 0.6, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.01
+  m_FogDensity: 0.02
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
@@ -427,6 +427,74 @@ MonoBehaviour:
   defaultFocusPoint: {x: 0, y: 0, z: 0}
   defaultFocusTransform: {fileID: 0}
   mazeGridBehaviour: {fileID: 963194231}
+--- !u!1 &724333638
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 724333639}
+  - component: {fileID: 724333640}
+  - component: {fileID: 724333641}
+  m_Layer: 0
+  m_Name: Global Volume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &724333639
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 724333638}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 963194228}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &724333640
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 724333638}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 1
+  blendDistance: 0
+  weight: 1
+  sharedProfile: {fileID: 0}
+--- !u!114 &724333641
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 724333638}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d758ce0ab77047e4b8f795c60a4aa237, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Cameras.GlobalVolumeSetup
+  bloomThreshold: 0.9
+  bloomIntensity: 1.5
+  bloomScatter: 0.7
+  enableFog: 1
+  fogColor: {r: 0.5, g: 0.5, b: 0.6, a: 1}
+  fogDensity: 0.02
 --- !u!1 &820251993
 GameObject:
   m_ObjectHideFlags: 0
@@ -637,6 +705,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 330585546}
+  - {fileID: 724333639}
   m_Father: {fileID: 396929189}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &963194229
@@ -668,7 +737,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21a41d6b956888d49bd606d9620f27e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
-  wallPrefab: {fileID: 8684429058332283790, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
+  wallPrefab: {fileID: 1797253899782226283, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
+  wallPrefabLOD2: {fileID: 8303703275134932937, guid: 7a30ebae864fca341a8ed027b8c475c7, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   waterPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
   nodeHazardPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
@@ -702,6 +772,7 @@ MonoBehaviour:
   mazeOrigin: {fileID: 330585546}
   worldSpaceTileSize: 1
   drawGizmos: 1
+  drawTileConnectivity: 0
 --- !u!114 &963194232
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -716,8 +787,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.DynamicMazeGrowth
   growthInterval: 30
   autoGrowth: 1
+  initialGrowthStages: 5
   portalPrefab: {fileID: 6106434122546371744, guid: ae38ee219c15783488800e816bdf68db, type: 3}
   portalHeightOffset: 0
+  faeLanternPrefab: {fileID: 0}
+  faeLanternZPosition: -0.5
+  faeLanternRotationSpeed: 120
   portalsParent: {fileID: 0}
 --- !u!1 &1408523520
 GameObject:
@@ -871,6 +946,63 @@ MonoBehaviour:
   buildCursorHotspot: {x: 0, y: 0}
   defaultCursorTexture: {fileID: 0}
   defaultCursorHotspot: {x: 0, y: 0}
+--- !u!1001 &1424045297
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 657636986484176521, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_Name
+      value: lantern2
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8950299280616599998, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 8aa10d823c4ba87448ead06d3b1618bb, type: 3}
 --- !u!1 &1534669902
 GameObject:
   m_ObjectHideFlags: 0
@@ -1452,3 +1584,4 @@ SceneRoots:
   - {fileID: 879032714}
   - {fileID: 820251996}
   - {fileID: 1644971210}
+  - {fileID: 1424045297}

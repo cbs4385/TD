@@ -16,8 +16,12 @@ namespace FaeMaze.Systems
 
         [Header("Prefab Settings")]
         [SerializeField]
-        [Tooltip("Prefab/model for wall tiles (trees/brambles)")]
+        [Tooltip("Prefab/model for front-rank wall tiles (full detail, LOD0)")]
         private GameObject wallPrefab;
+
+        [SerializeField]
+        [Tooltip("Prefab/model for interior wall tiles (low detail, LOD2) - used for walls behind front rank")]
+        private GameObject wallPrefabLOD2;
 
         [SerializeField]
         [Tooltip("Prefab/model for undergrowth tiles")]
@@ -139,7 +143,6 @@ namespace FaeMaze.Systems
         {
             if (wallPrefab == null)
             {
-                // Debug.LogWarning("[MazeRenderer] Cannot create wall - wallPrefab is null");
                 return null;
             }
 
@@ -149,7 +152,6 @@ namespace FaeMaze.Systems
             wallObj.transform.rotation = Quaternion.Euler(0f, 0f, orientationDegrees);
             wallObj.name = $"Wall_Portal_{worldPos.x:F1}_{worldPos.y:F1}";
 
-            // Debug.Log($"[MazeRenderer] Created wall at portal position {worldPos}");
             return wallObj;
         }
 
@@ -189,7 +191,6 @@ namespace FaeMaze.Systems
             var forestState = mazeGridBehaviour.ForestMapState;
             if (forestState == null)
             {
-                // Debug.LogError("[MazeRenderer] No ForestMapState available for world-space rendering.");
                 return;
             }
 
@@ -214,30 +215,19 @@ namespace FaeMaze.Systems
             allEdgeSegments = new List<EdgeSegmentData>();
             occupiedPositionHash = new Dictionary<long, List<Vector2>>();
 
-            int renderedTiles = 0;
-
             // Step 1: Collect all edge segment data for wall orientation lookup
             CollectEdgeSegments(forestState);
 
             // Step 2: Render path tiles along edges FIRST
             // This ensures edges extend fully into node areas before nodes mark them occupied
-            int edgeTiles = RenderEdgePaths(forestState, mazeOrigin);
-            renderedTiles += edgeTiles;
-            // Debug.Log($"[MazeRenderer] Rendered {edgeTiles} edge path tiles");
+            RenderEdgePaths(forestState, mazeOrigin);
 
             // Step 3: Render node columns (circular, radius = nodeRadius)
             // Node cylinders visually cover the edge tiles underneath
-            int nodeColumnTiles = RenderNodeColumns(forestState, mazeOrigin);
-            renderedTiles += nodeColumnTiles;
-            // Debug.Log($"[MazeRenderer] Rendered {nodeColumnTiles} node column tiles");
+            RenderNodeColumns(forestState, mazeOrigin);
 
             // Step 4: Render wall border
-            int wallTileCount = RenderWallBorder(forestState, mazeOrigin);
-            renderedTiles += wallTileCount;
-            // Debug.Log($"[MazeRenderer] Rendered {wallTileCount} wall tiles");
-
-            // Debug.Log($"[MazeRenderer] World-space rendered {renderedTiles} tiles " +
-            //     $"({forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges)");
+            RenderWallBorder(forestState, mazeOrigin);
 
             if (enableMeshBatching)
             {
@@ -367,12 +357,6 @@ namespace FaeMaze.Systems
                     occupiedPositions.Add(exactEndpoint);
                     AddToPositionHash(exactEndpoint);
                     tileCount++;
-                    // Debug.LogWarning($"[MazeRenderer] FALLBACK: Placed endpoint tile for partial edge {edge.Id} at world {worldPos}");
-                }
-                else if (isPartialEdge)
-                {
-                    // Log successful endpoint placement for diagnostics
-                    // Debug.Log($"[MazeRenderer] Partial edge {edge.Id}: endpoint tile placed at world {ToVector3(exactEndpoint)}");
                 }
             }
 
@@ -554,8 +538,11 @@ namespace FaeMaze.Systems
                             float orientationDegrees = Mathf.Atan2(seg.Perpendicular.y, seg.Perpendicular.x) * Mathf.Rad2Deg;
                             if (side < 0) orientationDegrees += 180f;
 
+                            // Determine layer based on distance from path for LOD selection
+                            int wallLayer = Mathf.Clamp(Mathf.FloorToInt((dist - stepSize) / WALL_SPACING), 0, WALL_DEPTH - 1);
+
                             Vector3 worldPos = ToVector3(checkPos);
-                            CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                            CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                             tileCount++;
                         }
                     }
@@ -634,8 +621,11 @@ namespace FaeMaze.Systems
                                     float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                     if (side < 0) orientationDegrees += 180f;
 
+                                    // Determine layer based on distance from path for LOD selection
+                                    int wallLayer = Mathf.Clamp(Mathf.FloorToInt((dist - stepSize) / WALL_SPACING), 0, WALL_DEPTH - 1);
+
                                     Vector3 worldPos = ToVector3(checkPos);
-                                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                                     tileCount++;
                                 }
                             }
@@ -874,8 +864,11 @@ namespace FaeMaze.Systems
                     // Orientation facing outward from the bend
                     float orientationDegrees = currentAngle * Mathf.Rad2Deg;
 
+                    // Convert 1-based layer to 0-based for LOD selection
+                    int wallLayer = Mathf.Clamp(layer - 1, 0, WALL_DEPTH - 1);
+
                     Vector3 worldPos = ToVector3(adjustedPos.Value);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                     tileCount++;
                 }
             }
@@ -920,6 +913,9 @@ namespace FaeMaze.Systems
 
             for (float r = startRadius; r <= endRadius; r += stepSize)
             {
+                // Determine wall layer based on distance from node edge for LOD selection
+                int wallLayer = Mathf.Clamp(Mathf.FloorToInt((r - startRadius) / WALL_SPACING), 0, WALL_DEPTH - 1);
+
                 for (int a = 0; a <= angularSteps; a++)
                 {
                     float t = angularSteps > 0 ? (float)a / angularSteps : 0;
@@ -939,7 +935,7 @@ namespace FaeMaze.Systems
                     float orientationDegrees = currentAngle * Mathf.Rad2Deg;
 
                     Vector3 worldPos = ToVector3(adjustedPos.Value);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                     tileCount++;
                 }
             }
@@ -1031,22 +1027,26 @@ namespace FaeMaze.Systems
             // - Portal faces -Y (back toward node)
 
             // Rear wall segments: Y=1, X from -1 to 1 (5 segments)
+            // These face away from the path, use LOD2
             float[] rearX = { -1f, -0.5f, 0f, 0.5f, 1f };
             foreach (float x in rearX)
             {
                 Vector2 wallPos = frontierEnd + frontierDir * 1f + perpendicular * x;
                 Vector3 worldPos = ToVector3(wallPos);
-                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: 1);
                 tileCount++;
             }
 
             // Left wall segments: X=-1, Y from 1 to -1 (5 segments)
+            // Side walls visible from path, use full detail for front row (y <= 0), LOD2 for back
             float[] sideY = { 1f, 0.5f, 0f, -0.5f, -1f };
             foreach (float y in sideY)
             {
                 Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * -1f;
                 Vector3 worldPos = ToVector3(wallPos);
-                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                // Walls at y <= 0 are closer to the path, use full detail
+                int layer = y > 0f ? 1 : 0;
+                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
                 tileCount++;
             }
 
@@ -1055,7 +1055,9 @@ namespace FaeMaze.Systems
             {
                 Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * 1f;
                 Vector3 worldPos = ToVector3(wallPos);
-                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                // Walls at y <= 0 are closer to the path, use full detail
+                int layer = y > 0f ? 1 : 0;
+                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
                 tileCount++;
             }
 
@@ -1188,7 +1190,7 @@ namespace FaeMaze.Systems
                                     continue;
 
                                 Vector3 worldPos = ToVector3(wallPos);
-                                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
                                 tileCount++;
                             }
                         }
@@ -1220,8 +1222,8 @@ namespace FaeMaze.Systems
             int tileCount = 0;
             float edgeAngleClearance = EDGE_ANGLE_CLEARANCE_DEG * Mathf.Deg2Rad;
 
-            // Create all wall positions for this node
-            var nodeWalls = new List<(Vector2 pos, float angle)>();
+            // Create all wall positions for this node (includes layer for LOD selection)
+            var nodeWalls = new List<(Vector2 pos, float angle, int layer)>();
             for (int layer = 0; layer < WALL_DEPTH; layer++)
             {
                 float ringRadius = nodeRadius + WALL_SPACING * (layer + 0.5f);
@@ -1231,7 +1233,7 @@ namespace FaeMaze.Systems
                 {
                     float angle = (float)i / numWalls * 2f * Mathf.PI;
                     Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
-                    nodeWalls.Add((wallPos, angle));
+                    nodeWalls.Add((wallPos, angle, layer));
                 }
             }
 
@@ -1246,7 +1248,7 @@ namespace FaeMaze.Systems
             }
 
             // Create walls, skipping those within clearance of any edge angle
-            foreach (var (wallPos, wallAngle) in nodeWalls)
+            foreach (var (wallPos, wallAngle, wallLayer) in nodeWalls)
             {
                 bool inClearance = false;
                 foreach (float edgeAngle in edgeAngles)
@@ -1266,7 +1268,7 @@ namespace FaeMaze.Systems
                 {
                     float orientationDegrees = wallAngle * Mathf.Rad2Deg;
                     Vector3 worldPos = ToVector3(wallPos);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                     tileCount++;
                 }
             }
@@ -1284,13 +1286,11 @@ namespace FaeMaze.Systems
         {
             if (tilesParent == null || node == null)
             {
-                Debug.LogWarning($"[RegenerateNodeWalls] Skipping - tilesParent={tilesParent}, node={node}");
                 return;
             }
 
             // Calculate the wall ring radius (same as RenderNodeWalls)
             float maxWallRadius = nodeRadius + WALL_SPACING * (WALL_DEPTH + 0.5f);
-            Debug.Log($"[RegenerateNodeWalls] Node {node.Id} at {node.Position}, maxWallRadius={maxWallRadius}, nodeRadius={nodeRadius}");
 
             // Remove existing walls within the node's wall area
             // Wall tiles are named "WorldTile_#_..." (using # symbol for walls)
@@ -1308,7 +1308,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            Debug.Log($"[RegenerateNodeWalls] Removing {toRemove.Count} walls within radius {maxWallRadius}");
             foreach (var t in toRemove)
             {
                 Destroy(t.gameObject);
@@ -1316,9 +1315,7 @@ namespace FaeMaze.Systems
 
             // Re-render walls for this node using the standard logic
             // This will respect the node's EdgeAngles (including any newly added cross-connection)
-            Debug.Log($"[RegenerateNodeWalls] Node has {node.UsedAngles.Count} used angles: {string.Join(", ", node.UsedAngles)}");
-            int wallsCreated = RenderNodeWalls(node, allEdges, tilesParent);
-            Debug.Log($"[RegenerateNodeWalls] Created {wallsCreated} new walls");
+            RenderNodeWalls(node, allEdges, tilesParent);
         }
 
         /// <summary>
@@ -1471,7 +1468,8 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Creates a tile at a world-space position with the given orientation.
         /// </summary>
-        private void CreateWorldSpaceTile(Vector3 worldPos, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall)
+        /// <param name="wallLayer">For walls: 0 = front rank (full detail), 1+ = interior (LOD2)</param>
+        private void CreateWorldSpaceTile(Vector3 worldPos, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall, int wallLayer = 0)
         {
             // For flat tiles on XY plane, rotate only around Z axis
             Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
@@ -1492,7 +1490,9 @@ namespace FaeMaze.Systems
 
             if (symbol == '#' && wallPrefab != null)
             {
-                tileObj = Instantiate(wallPrefab, tilesParent);
+                // Use LOD2 prefab for interior walls (layer > 0), full detail for front rank (layer 0)
+                GameObject prefabToUse = (wallLayer > 0 && wallPrefabLOD2 != null) ? wallPrefabLOD2 : wallPrefab;
+                tileObj = Instantiate(prefabToUse, tilesParent);
                 tileObj.transform.position = worldPos;
                 // Wall models are always oriented perpendicular to graph elements (no rotation)
                 tileObj.transform.localScale = new Vector3(tileSize * 0.65f, tileSize * 0.65f, tileSize);
@@ -1598,8 +1598,6 @@ namespace FaeMaze.Systems
                 totalBatches += MeshBatcher.BatchInChunks(waterTiles, tilesParent, batchChunkSize, true).Count;
             if (pathTiles?.Count > 0)
                 totalBatches += MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, true).Count;
-
-            // Debug.Log($"[MazeRenderer] Created {totalBatches} batched meshes.");
         }
 
         private Material CreatePBRMaterialForSymbol(char symbol, Color color)
@@ -1715,8 +1713,6 @@ namespace FaeMaze.Systems
                     }
                 }
             }
-
-            // Debug.Log($"[MazeRenderer] Incremental: Added node cylinder for node {newNode.Id}");
         }
 
         /// <summary>
@@ -1814,8 +1810,6 @@ namespace FaeMaze.Systems
                     }
                 }
             }
-
-            // Debug.Log($"[MazeRenderer] Incremental: Added {tilesCreated} edge tiles for {newEdges.Count} edges");
         }
 
         /// <summary>
@@ -1958,7 +1952,7 @@ namespace FaeMaze.Systems
                                 continue;
 
                             Vector3 worldPos = ToVector3(wallPos);
-                            CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                            CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
                             wallsCreated++;
 
                             // Check time budget and yield if exceeded
@@ -1997,8 +1991,8 @@ namespace FaeMaze.Systems
             int wallsCreated = 0;
             float edgeAngleClearance = EDGE_ANGLE_CLEARANCE_DEG * Mathf.Deg2Rad;
 
-            // Create all wall positions for this node
-            var nodeWalls = new List<(Vector2 pos, float angle)>();
+            // Create all wall positions for this node (includes layer for LOD selection)
+            var nodeWalls = new List<(Vector2 pos, float angle, int layer)>();
             for (int layer = 0; layer < WALL_DEPTH; layer++)
             {
                 float ringRadius = nodeRadius + WALL_SPACING * (layer + 0.5f);
@@ -2008,7 +2002,7 @@ namespace FaeMaze.Systems
                 {
                     float angle = (float)i / numWalls * 2f * Mathf.PI;
                     Vector2 wallPos = node.Position + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * ringRadius;
-                    nodeWalls.Add((wallPos, angle));
+                    nodeWalls.Add((wallPos, angle, layer));
                 }
             }
 
@@ -2022,7 +2016,7 @@ namespace FaeMaze.Systems
             }
 
             // Place walls, skipping positions near edge angles
-            foreach (var (wallPos, wallAngle) in nodeWalls)
+            foreach (var (wallPos, wallAngle, wallLayer) in nodeWalls)
             {
                 bool tooCloseToEdge = false;
                 foreach (var edgeAngle in edgeAngles)
@@ -2039,7 +2033,7 @@ namespace FaeMaze.Systems
                 if (!tooCloseToEdge)
                 {
                     Vector3 worldPos = ToVector3(wallPos);
-                    CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true);
+                    CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                     wallsCreated++;
 
                     // Check time budget and yield if exceeded
@@ -2278,7 +2272,6 @@ namespace FaeMaze.Systems
 
             if (removedCount > 0)
             {
-                // Debug.Log($"[MazeRenderer] Removed {removedCount} path tiles near {position}");
             }
         }
 
@@ -2294,7 +2287,6 @@ namespace FaeMaze.Systems
             }
 
             var forestState = mazeGridBehaviour.ForestMapState;
-            // Debug.Log($"[MazeRenderer] Starting async refresh with {forestState.Nodes.Count} nodes, {forestState.Edges.Count} edges");
 
             // Create a temporary container for new tiles (invisible at first)
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
@@ -2362,7 +2354,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Debug.Log($"[MazeRenderer] Async: Created {tilesCreated} node tiles");
             yield return null;
 
             // Step 3: Render edge paths
@@ -2428,7 +2419,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - edgeTilesStart} edge tiles");
             yield return null;
 
             // Step 4: Render wall border (simplified - fewer walls during async for speed)
@@ -2458,6 +2448,8 @@ namespace FaeMaze.Systems
                         for (int layer = 1; layer <= numWallLayers; layer++)
                         {
                             float offset = layer * wallStepSize;
+                            // Convert 1-based layer to 0-based for LOD selection
+                            int wallLayer = Mathf.Clamp(layer - 1, 0, WALL_DEPTH - 1);
 
                             foreach (float side in new[] { 1f, -1f })
                             {
@@ -2473,7 +2465,7 @@ namespace FaeMaze.Systems
                                 if (side < 0) orientationDegrees += 180f;
 
                                 Vector3 worldPos = ToVector3(adjustedPos.Value);
-                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true);
+                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                                 tilesCreated++;
 
                                 if (tilesCreated % batchSize == 0)
@@ -2486,7 +2478,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Debug.Log($"[MazeRenderer] Async: Created {tilesCreated - wallTilesStart} wall tiles");
             yield return null;
 
             // Step 5: Perform mesh batching
@@ -2505,8 +2496,6 @@ namespace FaeMaze.Systems
                 // Destroy old tiles over a few frames to reduce spike
                 StartCoroutine(DestroyOldTilesGradually(oldTilesParent.gameObject));
             }
-
-            // Debug.Log($"[MazeRenderer] Async refresh complete: {tilesCreated} total tiles");
         }
 
         /// <summary>
@@ -2539,7 +2528,6 @@ namespace FaeMaze.Systems
 
             // Finally destroy the empty container
             Destroy(oldContainer);
-            // Debug.Log($"[MazeRenderer] Destroyed {destroyed} old tiles");
         }
 
         #endregion

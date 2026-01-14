@@ -151,21 +151,54 @@ namespace FaeMaze.Visitors
             if (state == VisitorState.Confused && isConfused && confusionEnabled)
             {
                 // Prevent confusion for first 10 waypoints, and only trigger at nodes
-                if (waypointsTraversedSinceSpawn >= 10 && worldPath != null && worldPathIndex < worldPath.Count - 1 && IsAtNode())
+                bool atNode = IsAtNode();
+                bool pastMinWaypoints = waypointsTraversedSinceSpawn >= 10;
+                bool hasPathRemaining = worldPath != null && worldPathIndex < worldPath.Count - 1;
+
+                if (logVisitorPathfinding)
+                {
+                    Debug.Log($"[Confusion] Waypoint check - AtNode: {atNode}, Waypoints: {waypointsTraversedSinceSpawn}, HasPath: {hasPathRemaining}");
+                }
+
+                if (pastMinWaypoints && hasPathRemaining && atNode)
                 {
                     float confusionChance = GetConfusionChance();
-                    if (Random.value <= confusionChance)
+                    float roll = Random.value;
+                    bool triggered = roll <= confusionChance;
+
+                    if (logVisitorPathfinding)
+                    {
+                        Debug.Log($"[Confusion] Roll at node - Chance: {confusionChance:P0}, Roll: {roll:F3}, Triggered: {triggered}");
+                    }
+
+                    if (triggered)
                     {
                         // Confused at intersection! Build a detour path through at least 2 random nodes
                         if (BuildConfusionDetourPath(2))
                         {
+                            if (logVisitorPathfinding)
+                            {
+                                Debug.Log($"[Confusion] Detour path built successfully with {worldPath?.Count ?? 0} waypoints");
+                            }
+
                             // 50% chance to recover from confusion after taking the wrong turn
                             DecideRecoveryFromConfusion();
+
+                            if (logVisitorPathfinding)
+                            {
+                                Debug.Log($"[Confusion] Recovery decision - StillConfused: {isConfused}");
+                            }
+
                             RefreshStateFromFlags();
                             return;
                         }
                         else
                         {
+                            if (logVisitorPathfinding)
+                            {
+                                Debug.LogWarning($"[Confusion] Failed to build detour path - recalculating normal path");
+                            }
+
                             // Couldn't build detour, just recalculate normal path
                             RecalculatePath();
                         }

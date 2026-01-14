@@ -149,14 +149,11 @@ namespace FaeMaze.Systems
             worldSpaceMazeData = WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, worldSpaceTileSize);
             worldSpaceMazeData.RecalculateBounds();
 
-            // Debug.Log($"[MazeGridBehaviour] Generated world-space maze with {worldSpaceMazeData.Tiles.Count} tiles");
-
             // Store heart world position (node 0 / root node)
             if (forestMapState.Nodes.Count > 0)
             {
                 var seedNode = forestMapState.Nodes[0];
                 heartWorldPosition = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
-                // Debug.Log($"[MazeGridBehaviour] Heart at world position {heartWorldPosition}");
             }
         }
 

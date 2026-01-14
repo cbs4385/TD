@@ -252,15 +252,11 @@ namespace FaeMaze.Systems
             DynamicMazeGrowth dynamicMazeGrowth = Object.FindFirstObjectByType<DynamicMazeGrowth>();
             if (dynamicMazeGrowth != null && !dynamicMazeGrowth.IsInitialGrowthComplete)
             {
-                Debug.Log("[DelayedWaveStarter] Waiting for initial maze growth to complete...");
-
                 // Wait until initial growth is complete
                 while (!dynamicMazeGrowth.IsInitialGrowthComplete)
                 {
                     yield return new WaitForSeconds(0.5f);
                 }
-
-                Debug.Log("[DelayedWaveStarter] Initial maze growth complete. Starting first wave.");
             }
 
             if (waveSpawner != null)

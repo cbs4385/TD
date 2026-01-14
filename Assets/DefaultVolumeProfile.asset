@@ -248,6 +248,37 @@ MonoBehaviour:
   highlightsEnd:
     m_OverrideState: 1
     m_Value: 1
+--- !u!114 &-5131268667808449458
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a5c2e9f4b3d6a1c7e8f9a0b1c2d3e4f, type: 3}
+  m_Name: RadialBlur
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.PostProcessing.RadialBlur
+  active: 1
+  enabled:
+    m_OverrideState: 1
+    m_Value: 0
+  blurAngleDegrees:
+    m_OverrideState: 1
+    m_Value: 85
+  blurIntensity:
+    m_OverrideState: 1
+    m_Value: 0.5
+  blurSamples:
+    m_OverrideState: 1
+    m_Value: 8
+  vignetteCoverage:
+    m_OverrideState: 1
+    m_Value: 0
+  vignetteIntensity:
+    m_OverrideState: 1
+    m_Value: 0.8
 --- !u!114 &-4210620904635426390
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -506,6 +537,7 @@ MonoBehaviour:
   - {fileID: -8186968272690591729}
   - {fileID: -3978695733392391637}
   - {fileID: -1083910812058648046}
+  - {fileID: -5131268667808449458}
 --- !u!114 &156332030701414761
 MonoBehaviour:
   m_ObjectHideFlags: 3

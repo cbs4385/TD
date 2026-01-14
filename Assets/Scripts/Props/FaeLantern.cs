@@ -110,7 +110,12 @@ namespace FaeMaze.Props
                 return;
             }
 
-            SetupSpriteRenderer();
+            // Only setup sprite renderer if this is NOT a 3D model (no MeshRenderer)
+            // 3D models use LanternGlow for visuals instead
+            if (GetComponentInChildren<MeshRenderer>() == null)
+            {
+                SetupSpriteRenderer();
+            }
 
             SetIdleDirection();
         }

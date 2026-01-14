@@ -48,6 +48,12 @@ namespace FaeMaze.Cameras
 
                 // Add RadialBlur for angle-based edge blur
                 TryAddRadialBlur(existingVolume.profile);
+
+                // Add Bloom for lantern glow effects
+                TryAddBloom(existingVolume.profile);
+
+                // Enable fog for visible light effects
+                EnableFog();
                 return;
             }
 
@@ -94,6 +100,20 @@ namespace FaeMaze.Cameras
 
             // Add RadialBlur for angle-based edge blur
             TryAddRadialBlur(profile);
+
+            // Add Bloom for lantern glow effects
+            TryAddBloom(profile);
+
+            // Enable fog for visible light effects
+            EnableFog();
+        }
+
+        private static void EnableFog()
+        {
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogColor = new Color(0.4f, 0.4f, 0.5f, 1f);
+            RenderSettings.fogDensity = 0.015f;
         }
 
         private static void EnableCameraPostProcessing()
@@ -153,6 +173,42 @@ namespace FaeMaze.Cameras
                     {
                         radialBlur.blurAngleDegrees.value = 85f;
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to add Bloom component to profile for lantern glow effects
+        /// </summary>
+        private static void TryAddBloom(VolumeProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            // Check if Bloom already exists in profile
+            Bloom bloom;
+            bool isNew = !profile.TryGet<Bloom>(out bloom);
+
+            if (isNew)
+            {
+                // Add Bloom component
+                bloom = profile.Add<Bloom>(true);
+            }
+
+            if (bloom != null)
+            {
+                // Set properties with override states
+                bloom.active = true;
+                bloom.threshold.overrideState = true;
+                bloom.intensity.overrideState = true;
+                bloom.scatter.overrideState = true;
+
+                // Set values for good lantern glow effect
+                if (isNew)
+                {
+                    bloom.threshold.value = 0.9f;      // Only bloom bright HDR colors
+                    bloom.intensity.value = 1.5f;      // Strong bloom for visible glow
+                    bloom.scatter.value = 0.7f;        // Spread the glow nicely
                 }
             }
         }

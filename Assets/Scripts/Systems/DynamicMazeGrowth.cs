@@ -36,6 +36,19 @@ namespace FaeMaze.Systems
         [Tooltip("Height offset for portal placement (world units)")]
         private float portalHeightOffset = 0f;
 
+        [Header("Node Props")]
+        [SerializeField]
+        [Tooltip("FaeLantern prefab to place at the center of each node")]
+        private GameObject faeLanternPrefab;
+
+        [SerializeField]
+        [Tooltip("Z position for FaeLanterns (default -0.5)")]
+        private float faeLanternZPosition = -0.5f;
+
+        [SerializeField]
+        [Tooltip("Rotation speed for FaeLanterns (degrees per second, default 120 = 1 cycle per 3 seconds)")]
+        private float faeLanternRotationSpeed = 120f;
+
         [Header("References")]
         [SerializeField]
         [Tooltip("Parent transform for spawned portals")]
@@ -60,6 +73,10 @@ namespace FaeMaze.Systems
 
         // Track portal wall objects (blocking walls at frontier endpoints)
         private List<GameObject> portalWalls = new List<GameObject>();
+
+        // Track FaeLanterns at each node (by node index)
+        private Dictionary<int, GameObject> nodeLanterns = new Dictionary<int, GameObject>();
+        private Transform lanternsParent;
 
         // Track available spawn IDs
         private char[] availableSpawnIds = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' };
@@ -112,6 +129,15 @@ namespace FaeMaze.Systems
                 portalsParent = portalsObj.transform;
             }
 
+            // Create lanterns parent for organizing FaeLanterns
+            if (lanternsParent == null)
+            {
+                GameObject lanternsObj = new GameObject("NodeLanterns");
+                lanternsObj.transform.SetParent(transform);
+                lanternsObj.transform.localPosition = Vector3.zero;
+                lanternsParent = lanternsObj.transform;
+            }
+
             // Run initial growth stages synchronously BEFORE the first frame renders
             if (mazeGridBehaviour != null && mazeGridBehaviour.ForestMapState != null && initialGrowthStages > 0)
             {
@@ -152,24 +178,19 @@ namespace FaeMaze.Systems
         /// </summary>
         private void RunInitialGrowthStagesSynchronous()
         {
-            Debug.Log($"[DynamicGrowth] Running {initialGrowthStages} initial growth stages synchronously...");
-
             var forestMapState = mazeGridBehaviour.ForestMapState;
 
             for (int i = 0; i < initialGrowthStages; i++)
             {
                 if (forestMapState.Frontier.Count == 0)
                 {
-                    Debug.Log($"[DynamicGrowth] No more frontier edges at stage {i + 1}. Stopping early.");
                     break;
                 }
 
-                Debug.Log($"[DynamicGrowth] Initial growth stage {i + 1}/{initialGrowthStages}");
                 GrowMazeSynchronous(forestMapState);
                 completedInitialGrowthStages = i + 1;
             }
 
-            Debug.Log($"[DynamicGrowth] All {completedInitialGrowthStages} initial growth stages complete (synchronous).");
             initialGrowthComplete = true;
         }
 
@@ -207,7 +228,6 @@ namespace FaeMaze.Systems
             bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
             if (!success)
             {
-                Debug.Log("[DynamicGrowth] Synchronous growth step failed.");
                 return;
             }
 
@@ -316,6 +336,9 @@ namespace FaeMaze.Systems
                 // Add walls (synchronous version)
                 mazeRenderer.AddWallsIncremental(newEdges, newNode);
             }
+
+            // Spawn FaeLantern at the new node center
+            SpawnLanternAtNode(newNode, newNodeId);
         }
 
         private void Update()
@@ -324,6 +347,19 @@ namespace FaeMaze.Systems
             {
                 GrowMaze();
                 nextGrowthTime = Time.time + growthInterval;
+            }
+
+            // Rotate all FaeLanterns
+            if (nodeLanterns.Count > 0 && faeLanternRotationSpeed != 0f)
+            {
+                float rotationDelta = faeLanternRotationSpeed * Time.deltaTime;
+                foreach (var kvp in nodeLanterns)
+                {
+                    if (kvp.Value != null)
+                    {
+                        kvp.Value.transform.Rotate(0f, 0f, rotationDelta);
+                    }
+                }
             }
         }
 
@@ -396,10 +432,6 @@ namespace FaeMaze.Systems
         /// </summary>
         private IEnumerator GrowMazeWorldSpaceAsync(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
         {
-            float startTime = Time.realtimeSinceStartup;
-            float lastTime = startTime;
-            Debug.Log($"[DynamicGrowth] Growth step START at {startTime:F4}s");
-
             // Track frontier edge indices before the step to identify consumed spawn point
             // Frontier is a HashSet<int> containing edge indices
             var frontierIndicesBefore = new HashSet<int>(forestMapState.Frontier);
@@ -425,21 +457,11 @@ namespace FaeMaze.Systems
                 }
             }
 
-            float preStepTime = Time.realtimeSinceStartup;
-            Debug.Log($"[Timing] Pre-step setup: {(preStepTime - lastTime) * 1000:F2}ms");
-            lastTime = preStepTime;
-
             // Use the same Step() method as initial generation to add a new node
             bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
 
-            float postStepTime = Time.realtimeSinceStartup;
-            Debug.Log($"[Timing] Step(): {(postStepTime - lastTime) * 1000:F2}ms");
-            lastTime = postStepTime;
-
             if (!success)
             {
-                float failedEndTime = Time.realtimeSinceStartup;
-                Debug.Log($"[DynamicGrowth] Growth step END (failed) at {failedEndTime:F4}s (duration: {(failedEndTime - startTime) * 1000:F2}ms)");
                 yield break;
             }
 
@@ -496,7 +518,6 @@ namespace FaeMaze.Systems
                     // The edge has already been added to NodeB's EdgeAngles by PlanarForestMazeGenerator
                     var targetNode = forestMapState.Nodes[edge.NodeB.Value];
                     crossConnectionTargetNodes.Add(targetNode);
-                    Debug.Log($"[CrossConnection] Edge {edge.Id}: NodeA={edge.NodeA} -> NodeB={edge.NodeB.Value} (existing). Will regenerate NodeB walls.");
                 }
             }
 
@@ -530,18 +551,10 @@ namespace FaeMaze.Systems
                 }
             }
 
-            float postGenerateTime = Time.realtimeSinceStartup;
-            Debug.Log($"[Timing] GenerateFromGraph: {(postGenerateTime - lastTime) * 1000:F2}ms");
-            lastTime = postGenerateTime;
-
             // Rebuild portals from frontier edges using world-space coordinates
             // This also registers spawn points and signals affected visitors to retarget
             // Pass the captured old spawn positions since WorldSpaceMazeData was regenerated
             RebuildSpawnPointsFromFrontier(oldSpawnPositions);
-
-            float postRebuildTime = Time.realtimeSinceStartup;
-            Debug.Log($"[Timing] RebuildSpawnPoints: {(postRebuildTime - lastTime) * 1000:F2}ms");
-            lastTime = postRebuildTime;
 
             // Yield after graph/portal setup to spread work across frames
             yield return null;
@@ -549,7 +562,6 @@ namespace FaeMaze.Systems
             // Use INCREMENTAL rendering updates (coroutine-based for non-blocking)
             if (mazeRenderer != null)
             {
-                float renderStart = Time.realtimeSinceStartup;
 
                 // Only remove the portal end cap walls that are "past" the endpoint (in frontier direction)
                 // This preserves side walls along the path while removing the U-shaped end cap
@@ -570,10 +582,8 @@ namespace FaeMaze.Systems
 
                 // Regenerate walls for cross-connection target nodes (existing nodes that received a new edge)
                 // This removes all walls around the node and re-renders them with proper edge angle clearance
-                Debug.Log($"[CrossConnection] Regenerating walls for {crossConnectionTargetNodes.Count} cross-connection target nodes");
                 foreach (var targetNode in crossConnectionTargetNodes)
                 {
-                    Debug.Log($"[CrossConnection] Regenerating walls for Node {targetNode.Id} at {targetNode.Position}");
                     mazeRenderer.RegenerateNodeWalls(targetNode, forestMapState.Edges);
                 }
 
@@ -581,44 +591,30 @@ namespace FaeMaze.Systems
                 Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
                 mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f);
 
-                float afterRemove = Time.realtimeSinceStartup;
-                Debug.Log($"[Timing]   End cap removal: {(afterRemove - renderStart) * 1000:F2}ms");
-
                 // Yield after removals
                 yield return null;
 
                 // Add edge tiles for ALL edges (completed + new) - completed edge needs path extended
                 mazeRenderer.AddEdgeTilesIncremental(allEdgesForPathTiles);
 
-                float afterAddEdges = Time.realtimeSinceStartup;
-                Debug.Log($"[Timing]   AddEdgeTilesIncremental: {(afterAddEdges - afterRemove) * 1000:F2}ms");
-
                 // Add tiles for the new node AFTER edges
                 // Node cylinder visually covers edge tiles, node area marks positions as occupied
                 mazeRenderer.AddNodeTilesIncremental(newNode);
-
-                float afterAddNode = Time.realtimeSinceStartup;
-                Debug.Log($"[Timing]   AddNodeTilesIncremental: {(afterAddNode - afterAddEdges) * 1000:F2}ms");
 
                 // Yield before wall generation (the slowest part)
                 yield return null;
 
                 // Add walls around the new elements (using async version)
                 yield return StartCoroutine(mazeRenderer.AddWallsIncrementalAsync(newEdges, newNode));
-
-                float afterAddWalls = Time.realtimeSinceStartup;
-                Debug.Log($"[Timing]   AddWallsIncrementalAsync: {(afterAddWalls - afterAddEdges) * 1000:F2}ms");
             }
 
-            float postRenderTime = Time.realtimeSinceStartup;
-            Debug.Log($"[Timing] Incremental rendering: {(postRenderTime - lastTime) * 1000:F2}ms");
+            // Spawn FaeLantern at the new node center
+            SpawnLanternAtNode(newNode, newNodeId);
 
             // Notify visitors who can see the growth location
             Vector3 growthPosition = new Vector3(newNode.Position.x, newNode.Position.y, 0);
             DazeVisitorsWhoCanSeeGrowth(growthPosition);
 
-            float endTime = Time.realtimeSinceStartup;
-            Debug.Log($"[DynamicGrowth] Growth step END at {endTime:F4}s (duration: {(endTime - startTime) * 1000:F2}ms)");
             yield break;
         }
 
@@ -702,16 +698,11 @@ namespace FaeMaze.Systems
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
 
-            int frontierCount = forestMapState.Frontier.Count;
-            int partialEdgeCount = 0;
-
             // Place portals at partial edge endpoints (the actual frontier)
             foreach (int edgeId in forestMapState.Frontier)
             {
                 var edge = forestMapState.Edges[edgeId];
                 if (!edge.Partial || edge.PolylinePoints.Count == 0) continue;
-
-                partialEdgeCount++;
 
                 // Get the connected node (already in world space)
                 var connectedNode = forestMapState.Nodes[edge.NodeA];
@@ -773,8 +764,6 @@ namespace FaeMaze.Systems
                 Vector3 directionIntoMaze = new Vector3(-directionOutward.x, -directionOutward.y, 0f);
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, directionIntoMaze);
             }
-
-            Debug.Log($"[DynamicMazeGrowth] RebuildSpawnPoints: {frontierCount} frontier edges, {partialEdgeCount} partial edges, {spawnPointPortals.Count} portals created");
 
             var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
             var finalSpawnPoints = mazeData?.GetSpawnPointPositions();
@@ -995,10 +984,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            if (dazedCount > 0)
-            {
-                Debug.Log($"[DynamicMazeGrowth] {dazedCount} visitors witnessed maze growth and are now dazed");
-            }
         }
 
         #endregion
@@ -1096,6 +1081,64 @@ namespace FaeMaze.Systems
             }
 
             return availableSpawnIds[nextSpawnIdIndex++];
+        }
+
+        #endregion
+
+        #region FaeLantern Spawning
+
+        /// <summary>
+        /// Spawns a FaeLantern at the center of the specified node.
+        /// </summary>
+        /// <param name="node">The node to spawn the lantern at</param>
+        /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
+        private void SpawnLanternAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        {
+            // Try to load prefab if not assigned
+            if (faeLanternPrefab == null)
+            {
+#if UNITY_EDITOR
+                faeLanternPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/lantern2.prefab");
+#else
+                faeLanternPrefab = Resources.Load<GameObject>("Prefabs/Props/lantern2");
+#endif
+            }
+
+            if (faeLanternPrefab == null)
+                return;
+
+            // Skip if lantern already exists at this node
+            if (nodeLanterns.ContainsKey(nodeIndex))
+                return;
+
+            // Skip the seed node (node 0) - that's where the Heart is
+            if (nodeIndex == 0)
+                return;
+
+            // Calculate world position at node center with specified Z
+            Vector3 lanternPos = new Vector3(node.Position.x, node.Position.y, faeLanternZPosition);
+
+            // Instantiate the lantern - use prefab's transform settings (scale, rotation)
+            // by not overriding them in the Instantiate call
+            GameObject lantern = Instantiate(faeLanternPrefab);
+            lantern.name = $"Lantern_Node{nodeIndex}";
+
+            // Set position while preserving prefab's local transform (scale, rotation)
+            lantern.transform.position = lanternPos;
+
+            if (lanternsParent != null)
+            {
+                lantern.transform.SetParent(lanternsParent, worldPositionStays: true);
+            }
+
+            // Add glow effect if not already present
+            if (lantern.GetComponent<LanternGlow>() == null)
+            {
+                lantern.AddComponent<LanternGlow>();
+            }
+
+            // Track the lantern
+            nodeLanterns[nodeIndex] = lantern;
         }
 
         #endregion
