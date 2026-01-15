@@ -10,8 +10,8 @@ namespace FaeMaze.Props
     /// Uses world-space coordinates for all movement and detection.
     /// Wanders at 2x visitor speed when alone, slows to visitor speed when leading.
     /// </summary>
-    [RequireComponent(typeof(Collider2D))]
-    [RequireComponent(typeof(Rigidbody2D))]
+    [RequireComponent(typeof(Collider))]
+    [RequireComponent(typeof(Rigidbody))]
     public class WillowTheWisp : MonoBehaviour
     {
         #region Enums
@@ -137,7 +137,7 @@ namespace FaeMaze.Props
         private MazeGridBehaviour mazeGridBehaviour;
         private GameController gameController;
         private SpriteRenderer spriteRenderer;
-        private Rigidbody2D rb;
+        private Rigidbody rb;
         private Animator animator;
         private Vector3 baseScale;
         private Vector3 initialScale;
@@ -446,20 +446,18 @@ namespace FaeMaze.Props
 
         private void SetupColliders()
         {
-            // Rigidbody2D for physics
-            rb = GetComponent<Rigidbody2D>();
+            rb = GetComponent<Rigidbody>();
             if (rb == null)
             {
-                rb = gameObject.AddComponent<Rigidbody2D>();
+                rb = gameObject.AddComponent<Rigidbody>();
             }
-            rb.bodyType = RigidbodyType2D.Kinematic;
-            rb.gravityScale = 0f;
+            rb.isKinematic = true;
+            rb.useGravity = false;
 
-            // Trigger collider for visitor detection
-            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            SphereCollider collider = GetComponent<SphereCollider>();
             if (collider == null)
             {
-                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider = gameObject.AddComponent<SphereCollider>();
             }
             collider.radius = 0.4f;
             collider.isTrigger = true;
@@ -622,7 +620,6 @@ namespace FaeMaze.Props
             if (rb != null)
             {
                 rb.MovePosition(newPosition);
-                Physics2D.SyncTransforms();
             }
             else
             {
@@ -692,7 +689,6 @@ namespace FaeMaze.Props
                 if (rb != null)
                 {
                     rb.MovePosition(newPosition);
-                    Physics2D.SyncTransforms();
                 }
                 else
                 {
@@ -766,7 +762,6 @@ namespace FaeMaze.Props
                 if (rb != null)
                 {
                     rb.MovePosition(newPosition);
-                    Physics2D.SyncTransforms();
                 }
                 else
                 {

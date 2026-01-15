@@ -38,19 +38,23 @@ namespace FaeMaze.Systems
 
         [Header("Node Props")]
         [SerializeField]
-        [Tooltip("PukaHazard prefab to place at the center of each node")]
+        [Tooltip("FairyRing prefab to place at the center of each node")]
+        private GameObject fairyRingPrefab;
+
+        [SerializeField]
+        [Tooltip("PukaHazard prefab to place at the center of each node (not currently used)")]
         private GameObject pukaHazardPrefab;
 
         [SerializeField]
-        [Tooltip("Kelpie model prefab with animations (kelpie_react.glb)")]
+        [Tooltip("Kelpie model prefab with animations (kelpie_react.glb) (not currently used)")]
         private GameObject kelpieModelPrefab;
 
         [SerializeField]
-        [Tooltip("Animator Controller for the kelpie model (with ArmatureAction states)")]
+        [Tooltip("Animator Controller for the kelpie model (with ArmatureAction states) (not currently used)")]
         private RuntimeAnimatorController kelpieAnimatorController;
 
         [SerializeField]
-        [Tooltip("Pond prefab to place underneath each PukaHazard")]
+        [Tooltip("Pond prefab to place underneath each PukaHazard (not currently used)")]
         private GameObject pondPrefab;
 
         [SerializeField]
@@ -86,9 +90,13 @@ namespace FaeMaze.Systems
         // Track portal wall objects (blocking walls at frontier endpoints)
         private List<GameObject> portalWalls = new List<GameObject>();
 
-        // Track PukaHazards at each node (by node index)
+        // Track PukaHazards at each node (by node index) - not currently used
         private Dictionary<int, GameObject> nodePukas = new Dictionary<int, GameObject>();
         private Transform pukasParent;
+
+        // Track FairyRings at each node (by node index)
+        private Dictionary<int, GameObject> nodeFairyRings = new Dictionary<int, GameObject>();
+        private Transform fairyRingsParent;
 
         // Track Ponds at each node (by node index)
         private Dictionary<int, GameObject> nodePonds = new Dictionary<int, GameObject>();
@@ -145,13 +153,22 @@ namespace FaeMaze.Systems
                 portalsParent = portalsObj.transform;
             }
 
-            // Create pukas parent for organizing PukaHazards
+            // Create pukas parent for organizing PukaHazards (not currently used)
             if (pukasParent == null)
             {
                 GameObject pukasObj = new GameObject("NodePukas");
                 pukasObj.transform.SetParent(transform);
                 pukasObj.transform.localPosition = Vector3.zero;
                 pukasParent = pukasObj.transform;
+            }
+
+            // Create fairy rings parent for organizing FairyRings
+            if (fairyRingsParent == null)
+            {
+                GameObject fairyRingsObj = new GameObject("NodeFairyRings");
+                fairyRingsObj.transform.SetParent(transform);
+                fairyRingsObj.transform.localPosition = Vector3.zero;
+                fairyRingsParent = fairyRingsObj.transform;
             }
 
             // Create ponds parent for organizing Ponds
@@ -1158,14 +1175,106 @@ namespace FaeMaze.Systems
 
         #endregion
 
-        #region PukaHazard Spawning
+        #region Node Prop Spawning
+
+        /// <summary>
+        /// Spawns a FairyRing at the center of the specified node.
+        /// Note: PukaHazard spawning code is preserved below for future use.
+        /// </summary>
+        /// <param name="node">The node to spawn the fairy ring at</param>
+        /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
+        private void SpawnPukaAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        {
+            // Skip if fairy ring already exists at this node
+            if (nodeFairyRings.ContainsKey(nodeIndex))
+                return;
+
+            // Skip the seed node (node 0) - that's where the Heart is
+            if (nodeIndex == 0)
+                return;
+
+            // Spawn FairyRing at this node
+            SpawnFairyRingAtNode(node, nodeIndex);
+        }
+
+        /// <summary>
+        /// Spawns a FairyRing at the center of the specified node.
+        /// </summary>
+        /// <param name="node">The node to spawn the fairy ring at</param>
+        /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
+        private void SpawnFairyRingAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        {
+            // Skip if fairy ring already exists at this node
+            if (nodeFairyRings.ContainsKey(nodeIndex))
+                return;
+
+            // Try to load FairyRing prefab if not assigned
+            if (fairyRingPrefab == null)
+            {
+#if UNITY_EDITOR
+                // Try ring.prefab first (the new 3D ring with spheres)
+                fairyRingPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/ring.prefab");
+                if (fairyRingPrefab == null)
+                {
+                    fairyRingPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/FairyRing.prefab");
+                }
+#else
+                fairyRingPrefab = Resources.Load<GameObject>("Prefabs/Props/ring");
+                if (fairyRingPrefab == null)
+                {
+                    fairyRingPrefab = Resources.Load<GameObject>("Prefabs/Props/FairyRing");
+                }
+#endif
+            }
+
+            if (fairyRingPrefab == null)
+            {
+                Debug.LogWarning($"[DynamicMazeGrowth] fairyRingPrefab is null, cannot spawn FairyRing at node {nodeIndex}");
+                return;
+            }
+
+            // Calculate world position at node center - offset Z to place in front of node cylinder
+            Vector3 ringPos = new Vector3(node.Position.x, node.Position.y, -0.2f);
+
+            // Instantiate the fairy ring
+            GameObject ring = Instantiate(fairyRingPrefab);
+            ring.name = $"FairyRing_Node{nodeIndex}";
+
+            // Set position
+            ring.transform.position = ringPos;
+
+            if (fairyRingsParent != null)
+            {
+                ring.transform.SetParent(fairyRingsParent, worldPositionStays: true);
+            }
+
+            // Add FairyRing component if not present (for entrancement behavior)
+            var fairyRing = ring.GetComponent<FaeMaze.Props.FairyRing>();
+            if (fairyRing == null)
+            {
+                var collider = ring.GetComponent<Collider>();
+                if (collider == null)
+                {
+                    var sphereCollider = ring.AddComponent<SphereCollider>();
+                    sphereCollider.isTrigger = true;
+                    sphereCollider.radius = 3f;
+                }
+                fairyRing = ring.AddComponent<FaeMaze.Props.FairyRing>();
+            }
+
+            // Track the fairy ring
+            nodeFairyRings[nodeIndex] = ring;
+        }
+
+        #region PukaHazard Spawning (Not Currently Used)
 
         /// <summary>
         /// Spawns a PukaHazard and Pond at the center of the specified node.
+        /// NOTE: This method is preserved for future use but not currently called.
         /// </summary>
         /// <param name="node">The node to spawn the puka at</param>
         /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
-        private void SpawnPukaAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        private void SpawnPukaHazardAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
             // Skip if puka already exists at this node
             if (nodePukas.ContainsKey(nodeIndex))
@@ -1237,6 +1346,8 @@ namespace FaeMaze.Systems
             // Track the puka
             nodePukas[nodeIndex] = puka;
         }
+
+        #endregion
 
         /// <summary>
         /// Spawns a Pond at the center of the specified node.

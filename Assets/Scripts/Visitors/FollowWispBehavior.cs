@@ -107,13 +107,10 @@ namespace FaeMaze.Visitors
             if (distance > followDistance)
             {
                 // Calculate direction to wisp
-                Vector2 direction = (targetWisp.transform.position - transform.position).normalized;
+                Vector3 direction = (targetWisp.transform.position - transform.position).normalized;
 
                 // Check if there's a wall in the way using raycast
-                RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, distance, LayerMask.GetMask("Walls", "Obstacles"));
-
-                // If there's a wall, don't move through it - visitor should stop or pathfind normally
-                if (hit.collider != null)
+                if (Physics.Raycast(transform.position, direction, out RaycastHit hit, distance, LayerMask.GetMask("Walls", "Obstacles")))
                 {
                     // Wall detected, let visitor's normal pathfinding handle it
                     return;
@@ -124,19 +121,17 @@ namespace FaeMaze.Visitors
 
                 float speed = visitorController.MoveSpeed * followSpeedMultiplier;
 
-                Vector2 currentPosition = transform.position;
-                Vector2 newPosition = currentPosition + direction * speed * Time.deltaTime;
+                Vector3 newPosition = transform.position + direction * speed * Time.deltaTime;
 
                 // Use rigidbody if available for proper collision detection
-                var rb = GetComponent<Rigidbody2D>();
+                var rb = GetComponent<Rigidbody>();
                 if (rb != null)
                 {
                     rb.MovePosition(newPosition);
-                    Physics2D.SyncTransforms();
                 }
                 else
                 {
-                    transform.position = new Vector3(newPosition.x, newPosition.y, transform.position.z);
+                    transform.position = newPosition;
                 }
             }
         }

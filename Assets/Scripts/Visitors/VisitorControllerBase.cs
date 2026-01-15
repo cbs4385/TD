@@ -2441,27 +2441,6 @@ namespace FaeMaze.Visitors
 
         protected virtual void SetupPhysics()
         {
-            // Always use 3D physics
-
-            // Remove any existing 2D physics components
-            Rigidbody2D existingRb2D = GetComponent<Rigidbody2D>();
-            if (existingRb2D != null)
-            {
-                existingRb2D.simulated = false;
-                DestroyImmediate(existingRb2D);
-            }
-
-            Collider2D[] existingColliders2D = GetComponents<Collider2D>();
-            foreach (var col2D in existingColliders2D)
-            {
-                if (col2D != null)
-                {
-                    col2D.enabled = false;
-                    DestroyImmediate(col2D);
-                }
-            }
-
-            // Setup 3D physics - use existing or add new
             rb3D = GetComponent<Rigidbody>();
             if (rb3D == null)
             {

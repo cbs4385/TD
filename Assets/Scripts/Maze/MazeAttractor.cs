@@ -67,7 +67,7 @@ namespace FaeMaze.Maze
 
         private MazeGridBehaviour gridBehaviour;
         private SpriteRenderer spriteRenderer;
-        private CircleCollider2D triggerCollider;
+        private SphereCollider triggerCollider;
         private Vector3 initialScale;
 
         #endregion
@@ -111,20 +111,18 @@ namespace FaeMaze.Maze
 
         private void SetupTriggerCollider()
         {
-            // Add Rigidbody2D for trigger detection (required for OnTriggerEnter2D to work)
-            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            Rigidbody rb = GetComponent<Rigidbody>();
             if (rb == null)
             {
-                rb = gameObject.AddComponent<Rigidbody2D>();
-                rb.bodyType = RigidbodyType2D.Kinematic; // Kinematic - attractor doesn't move
-                rb.gravityScale = 0f; // No gravity for 2D top-down
+                rb = gameObject.AddComponent<Rigidbody>();
+                rb.isKinematic = true;
+                rb.useGravity = false;
             }
 
-            // Add CircleCollider2D for trigger detection
-            triggerCollider = GetComponent<CircleCollider2D>();
+            triggerCollider = GetComponent<SphereCollider>();
             if (triggerCollider == null)
             {
-                triggerCollider = gameObject.AddComponent<CircleCollider2D>();
+                triggerCollider = gameObject.AddComponent<SphereCollider>();
             }
 
             triggerCollider.isTrigger = true;
@@ -205,17 +203,11 @@ namespace FaeMaze.Maze
             );
         }
 
-        private void OnTriggerEnter2D(Collider2D other)
+        private void OnTriggerEnter(Collider other)
         {
-            // Check if a visitor entered the attraction radius
             var visitor = other.GetComponent<Visitors.VisitorController>();
             if (visitor != null)
             {
-                // Note: Fascination is handled by FaeLantern directly, not through MazeAttractor
-                // The enableFascination field is kept for backwards compatibility but fascination
-                // requires world-space visitor APIs that are implemented in FaeLantern
-
-                // Apply slow effect if enabled
                 if (enableVisitorSlowing)
                 {
                     visitor.SpeedMultiplier = visitorSlowFactor;
@@ -223,16 +215,14 @@ namespace FaeMaze.Maze
             }
         }
 
-        private void OnTriggerExit2D(Collider2D other)
+        private void OnTriggerExit(Collider other)
         {
             if (!enableVisitorSlowing)
                 return;
 
-            // Check if a visitor exited the attraction radius
             var visitor = other.GetComponent<Visitors.VisitorController>();
             if (visitor != null)
             {
-                // Restore normal speed
                 visitor.SpeedMultiplier = 1f;
             }
         }

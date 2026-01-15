@@ -698,11 +698,10 @@ namespace FaeMaze.Visitors
             // Set scale
             transform.localScale = new Vector3(redCapSize, redCapSize, 1f);
 
-            // Add CircleCollider2D for trigger detection
-            CircleCollider2D collider = GetComponent<CircleCollider2D>();
+            SphereCollider collider = GetComponent<SphereCollider>();
             if (collider == null)
             {
-                collider = gameObject.AddComponent<CircleCollider2D>();
+                collider = gameObject.AddComponent<SphereCollider>();
                 collider.radius = contactRadius;
                 collider.isTrigger = true;
             }

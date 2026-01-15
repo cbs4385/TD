@@ -737,6 +737,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21a41d6b956888d49bd606d9620f27e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.MazeRenderer
+  disableWalls: 0
+  disableEndCapWalls: 0
   wallPrefab: {fileID: 1797253899782226283, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
   wallPrefabLOD2: {fileID: 8303703275134932937, guid: 7a30ebae864fca341a8ed027b8c475c7, type: 3}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
@@ -790,9 +792,13 @@ MonoBehaviour:
   initialGrowthStages: 5
   portalPrefab: {fileID: 6106434122546371744, guid: ae38ee219c15783488800e816bdf68db, type: 3}
   portalHeightOffset: 0
-  faeLanternPrefab: {fileID: 0}
-  faeLanternZPosition: -0.5
-  faeLanternRotationSpeed: 120
+  fairyRingPrefab: {fileID: 0}
+  pukaHazardPrefab: {fileID: 0}
+  kelpieModelPrefab: {fileID: 0}
+  kelpieAnimatorController: {fileID: 0}
+  pondPrefab: {fileID: 0}
+  pukaZPosition: -0.5
+  pondZPosition: 0
   portalsParent: {fileID: 0}
 --- !u!1 &1408523520
 GameObject:
@@ -1099,13 +1105,15 @@ MonoBehaviour:
   edgePadding: 20
   backgroundColor: {r: 0.1, g: 0.1, b: 0.1, a: 0.8}
   borderColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  ringColor: {r: 0.2, g: 0.4, b: 0.2, a: 0.5}
   crosshairColor: {r: 1, g: 1, b: 1, a: 1}
   heartColor: {r: 1, g: 0.2, b: 0.2, a: 1}
   visitorColor: {r: 0.3, g: 1, b: 0.3, a: 1}
-  pathColor: {r: 0.4, g: 0.4, b: 0.4, a: 0.5}
+  edgeIndicatorColor: {r: 1, g: 0.8, b: 0.2, a: 1}
   heartDotSize: 8
   visitorDotSize: 4
   crosshairSize: 10
+  edgeIndicatorSize: 8
 --- !u!4 &1644971210
 Transform:
   m_ObjectHideFlags: 0

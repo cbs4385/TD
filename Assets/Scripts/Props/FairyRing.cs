@@ -6,9 +6,10 @@ namespace FaeMaze.Props
     /// <summary>
     /// A mystical Fairy Ring that entrances and slows visitors passing through.
     /// Once entranced, a visitor remains in that state permanently (design choice).
-    /// Requires a Collider2D component set to isTrigger = true for detection.
+    /// Requires a Collider component set to isTrigger = true for detection.
+    /// Also manages rainbow-colored animated spheres within the ring.
     /// </summary>
-    [RequireComponent(typeof(Collider2D))]
+    [RequireComponent(typeof(Collider))]
     public class FairyRing : MonoBehaviour
     {
         #region Serialized Fields
@@ -20,8 +21,8 @@ namespace FaeMaze.Props
 
         [Header("Visual Settings")]
         [SerializeField]
-        [Tooltip("Pulse the sprite scale for visual effect")]
-        private bool enablePulse = true;
+        [Tooltip("Pulse the sprite scale for visual effect (disabled by default for 3D ring prefab)")]
+        private bool enablePulse = false;
 
         [SerializeField]
         [Tooltip("Pulse speed (higher = faster pulsing)")]
@@ -30,6 +31,11 @@ namespace FaeMaze.Props
         [SerializeField]
         [Tooltip("Pulse magnitude (0.1 = 10% scale variation)")]
         private float pulseMagnitude = 0.1f;
+
+        [Header("Sphere Setup")]
+        [SerializeField]
+        [Tooltip("Automatically add FairyRingSphere components and assign rainbow colors on start")]
+        private bool autoSetupSpheres = true;
 
         #endregion
 
@@ -51,6 +57,11 @@ namespace FaeMaze.Props
         private void Start()
         {
             originalScale = transform.localScale;
+
+            if (autoSetupSpheres)
+            {
+                SetupSpheres();
+            }
         }
 
         private void Update()
@@ -61,9 +72,8 @@ namespace FaeMaze.Props
             }
         }
 
-        private void OnTriggerEnter2D(Collider2D other)
+        private void OnTriggerEnter(Collider other)
         {
-            // Check if a visitor entered the ring
             var visitor = other.GetComponent<VisitorController>();
             if (visitor != null)
             {
@@ -71,9 +81,8 @@ namespace FaeMaze.Props
             }
         }
 
-        private void OnTriggerExit2D(Collider2D other)
+        private void OnTriggerExit(Collider other)
         {
-            // Check if a visitor left the ring
             var visitor = other.GetComponent<VisitorController>();
             if (visitor != null)
             {
@@ -87,7 +96,7 @@ namespace FaeMaze.Props
 
         /// <summary>
         /// Called when a visitor enters the Fairy Ring.
-        /// Marks them as entranced and applies speed reduction.Color.Wh
+        /// Marks them as entranced and applies speed reduction.
         /// </summary>
         /// <param name="visitor">The visitor entering the ring</param>
         private void OnVisitorEnter(VisitorControllerBase visitor)
@@ -133,50 +142,113 @@ namespace FaeMaze.Props
 
         #endregion
 
+        #region Sphere Setup
+
+        /// <summary>
+        /// Finds all Sphere children and adds/configures FairyRingSphere components.
+        /// Distributes starting colors evenly across the rainbow.
+        /// </summary>
+        [ContextMenu("Setup Spheres")]
+        public void SetupSpheres()
+        {
+            // Find all sphere children (direct or nested under Cylinder)
+            var children = GetComponentsInChildren<Transform>();
+            int sphereIndex = 0;
+            int totalSpheres = 0;
+
+            // First pass: count spheres
+            foreach (var t in children)
+            {
+                if (t != transform && t.name.Contains("Sphere"))
+                {
+                    totalSpheres++;
+                }
+            }
+
+            if (totalSpheres == 0)
+            {
+                return;
+            }
+
+            // Second pass: setup spheres
+            foreach (var t in children)
+            {
+                if (t != transform && t.name.Contains("Sphere"))
+                {
+                    // Clean up child Trail objects - TrailRenderer needs to be on the moving object itself
+                    var childTrail = t.Find("Trail");
+                    if (childTrail != null)
+                    {
+                        if (Application.isPlaying)
+                        {
+                            Destroy(childTrail.gameObject);
+                        }
+                        else
+                        {
+                            DestroyImmediate(childTrail.gameObject);
+                        }
+                    }
+
+                    // Add or get FairyRingSphere component
+                    var sphereScript = t.GetComponent<FairyRingSphere>();
+                    if (sphereScript == null)
+                    {
+                        sphereScript = t.gameObject.AddComponent<FairyRingSphere>();
+                    }
+
+                    // Distribute colors evenly - with 9 spheres and 7 colors, some will repeat
+                    int colorIndex = sphereIndex % 7;
+                    sphereScript.SetStartingColorIndex(colorIndex);
+
+                    sphereIndex++;
+                }
+            }
+        }
+
+        #endregion
+
         #region Gizmos
 
         private void OnDrawGizmos()
         {
-            // Draw ring area
-            Gizmos.color = new Color(0.8f, 0.2f, 0.8f, 0.3f); // Purple semi-transparent
-
-            // Draw circle representing trigger area
-            CircleCollider2D circleCollider = GetComponent<CircleCollider2D>();
-            if (circleCollider != null)
-            {
-                float radius = circleCollider.radius * Mathf.Max(transform.localScale.x, transform.localScale.y);
-                DrawCircle(transform.position, radius, 24);
-            }
+            Gizmos.color = new Color(0.8f, 0.2f, 0.8f, 0.3f);
+            DrawColliderGizmo();
         }
 
         private void OnDrawGizmosSelected()
         {
-            // Draw brighter when selected
             Gizmos.color = new Color(0.8f, 0.2f, 0.8f, 0.6f);
+            DrawColliderGizmo();
 
-            CircleCollider2D circleCollider = GetComponent<CircleCollider2D>();
-            if (circleCollider != null)
-            {
-                float radius = circleCollider.radius * Mathf.Max(transform.localScale.x, transform.localScale.y);
-                DrawCircle(transform.position, radius, 32);
-
-                // Draw center point
-                Gizmos.color = Color.magenta;
-                Gizmos.DrawWireSphere(transform.position, 0.2f);
-            }
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawWireSphere(transform.position, 0.2f);
         }
 
-        private void DrawCircle(Vector3 center, float radius, int segments)
+        private void DrawColliderGizmo()
         {
-            float angleStep = 360f / segments;
-            Vector3 prevPoint = center + new Vector3(radius, 0, 0);
-
-            for (int i = 1; i <= segments; i++)
+            var sphereCollider = GetComponent<SphereCollider>();
+            if (sphereCollider != null)
             {
-                float angle = i * angleStep * Mathf.Deg2Rad;
-                Vector3 newPoint = center + new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0);
-                Gizmos.DrawLine(prevPoint, newPoint);
-                prevPoint = newPoint;
+                float radius = sphereCollider.radius * Mathf.Max(transform.localScale.x, transform.localScale.y, transform.localScale.z);
+                Gizmos.DrawWireSphere(transform.position + sphereCollider.center, radius);
+                return;
+            }
+
+            var capsuleCollider = GetComponent<CapsuleCollider>();
+            if (capsuleCollider != null)
+            {
+                Vector3 center = transform.position + capsuleCollider.center;
+                float radius = capsuleCollider.radius * Mathf.Max(transform.localScale.x, transform.localScale.z);
+                float height = capsuleCollider.height * transform.localScale.y;
+                Gizmos.DrawWireSphere(center + Vector3.up * (height / 2f - radius), radius);
+                Gizmos.DrawWireSphere(center - Vector3.up * (height / 2f - radius), radius);
+            }
+
+            var boxCollider = GetComponent<BoxCollider>();
+            if (boxCollider != null)
+            {
+                Vector3 size = Vector3.Scale(boxCollider.size, transform.localScale);
+                Gizmos.DrawWireCube(transform.position + boxCollider.center, size);
             }
         }
 

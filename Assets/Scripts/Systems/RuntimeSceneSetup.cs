@@ -183,19 +183,6 @@ namespace FaeMaze.Systems
 
         private static void UpdateMazeReferences(MazeGridBehaviour newMaze)
         {
-            // Update CameraController reference (check both 2D and 3D variants)
-            var cameraController2D = Object.FindFirstObjectByType<FaeMaze.Cameras.CameraController2D>();
-            if (cameraController2D != null)
-            {
-                var ccType = typeof(FaeMaze.Cameras.CameraController2D);
-                var mazeGridField = ccType.GetField("mazeGridBehaviour",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (mazeGridField != null)
-                {
-                    mazeGridField.SetValue(cameraController2D, newMaze);
-                }
-            }
-
             var cameraController3D = Object.FindFirstObjectByType<FaeMaze.Cameras.CameraController3D>();
             if (cameraController3D != null)
             {

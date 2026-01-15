@@ -384,7 +384,7 @@ namespace FaeMaze.Props
 
             // Get mouse position in world space
             Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-            mouseWorldPos.z = 0; // Ensure z is 0 for 2D
+            mouseWorldPos.z = 0;
 
             // Check if position is already occupied
             if (IsPositionOccupied(mouseWorldPos))

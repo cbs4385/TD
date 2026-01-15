@@ -107,4 +107,7 @@ __pycache__/
 # Forest Map Generator demo outputs
 forest_turn_*.png
 forest_turn_*.json
-forest_comparison.pngtmpclaude-*-cwd
+forest_comparison.png
+
+# Claude Code temp files
+tmpclaude-*
