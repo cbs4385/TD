@@ -121,7 +121,6 @@ namespace FaeMaze.Visitors
         protected Animator animator;
         protected GameController gameController;
         protected MazeGridBehaviour mazeGridBehaviour;
-        protected bool isEntranced;
         protected float speedMultiplier = 1f;
 
         // Rendering
@@ -147,6 +146,15 @@ namespace FaeMaze.Visitors
         protected float fascinationTimer;
         protected FaeMaze.Props.FaeLantern currentFaeLantern;
         protected const float FascinationSpeedMultiplier = 0.5f; // 50% speed when approaching lantern
+
+        // FairyRing fascination state (circling behavior)
+        protected FaeMaze.Props.FairyRing currentFairyRing;
+        protected float fairyRingCircleAngle;
+        protected float fairyRingFascinationTimer;
+        protected bool fairyRingApproaching; // True while moving toward ring, false once circling
+        protected FaeMaze.Props.FairyRing immuneToFairyRing; // Ring visitor is immune to (after fascination ends)
+        protected const float FairyRingCircleRadius = 1.5f; // Distance from ring center to circle at
+        protected const float FairyRingCircleSpeed = 1.5f; // Radians per second
 
         // Cooldown tracking per lantern (prevents immediate re-triggering)
         protected Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
@@ -199,13 +207,10 @@ namespace FaeMaze.Visitors
         /// <summary>Gets the current move speed</summary>
         public abstract float MoveSpeed { get; }
 
-        /// <summary>Gets whether this visitor is entranced by a Fairy Ring</summary>
-        public abstract bool IsEntranced { get; }
-
         /// <summary>Gets or sets the speed multiplier applied to movement</summary>
         public abstract float SpeedMultiplier { get; set; }
 
-        /// <summary>Gets whether this visitor is fascinated by a FaeLantern</summary>
+        /// <summary>Gets whether this visitor is fascinated (entranced/mesmerized)</summary>
         public abstract bool IsFascinated { get; }
 
         /// <summary>Gets the visitor's archetype (from config if available)</summary>
@@ -327,6 +332,18 @@ namespace FaeMaze.Visitors
             {
                 redCapDetectionTimer = redCapDetectionInterval;
                 CheckForNearbyRedCaps();
+            }
+
+            // Handle FairyRing circling (takes priority over lantern fascination)
+            if (currentFairyRing != null)
+            {
+                // Log first frame of circling
+                if (Time.frameCount % 300 == 0)
+                {
+                    Debug.Log($"[FairyRing] Update - entering UpdateFairyRingCircling, currentFairyRing: {currentFairyRing.name}");
+                }
+                UpdateFairyRingCircling();
+                return; // Don't process other movement while circling
             }
 
             // Check for FaeLantern influence (world-space detection)
@@ -2003,19 +2020,8 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Sets the entranced state of this visitor.
-        /// </summary>
-        public virtual void SetEntranced(bool value)
-        {
-            if (isEntranced != value)
-            {
-                isEntranced = value;
-            }
-        }
-
-        /// <summary>
         /// Sets the visitor to Fascinated/Mesmerized state for a specified duration.
-        /// Alias for compatibility - uses Fascinated state internally.
+        /// This is the consolidated state for entranced/hypnotized/mesmerized effects.
         /// </summary>
         public virtual void SetMesmerized(float duration = 0f)
         {
@@ -2091,7 +2097,6 @@ namespace FaeMaze.Visitors
             isFascinated = false;
             isFrightened = false;
             isLured = false;
-            isEntranced = false;
             isConfused = false;
 
             // Clear path
@@ -2361,6 +2366,205 @@ namespace FaeMaze.Visitors
             return transform.position;
         }
 
+        /// <summary>
+        /// Makes this visitor fascinated by a FairyRing. The visitor abandons their path
+        /// and circles the ring for the specified duration. When fascination ends, they become lost.
+        /// </summary>
+        /// <param name="ring">The FairyRing causing fascination</param>
+        /// <param name="duration">How long the fascination lasts (seconds)</param>
+        /// <param name="slowFactor">Speed multiplier while fascinated (0.5 = 50% speed)</param>
+        public virtual void BecomeFascinatedByRing(FaeMaze.Props.FairyRing ring, float duration, float slowFactor)
+        {
+            Debug.Log($"[FairyRing] BecomeFascinatedByRing called - visitor at {transform.position}, ring at {ring.transform.position}, state: {state}");
+
+            if (!IsMovementState(state) && state != VisitorState.Idle)
+            {
+                Debug.Log($"[FairyRing] REJECTED - not in movement state: {state}");
+                return;
+            }
+
+            // Already fascinated by this ring
+            if (currentFairyRing == ring)
+            {
+                Debug.Log($"[FairyRing] REJECTED - already fascinated by this ring");
+                return;
+            }
+
+            // Immune to this ring (just finished fascination, haven't left trigger yet)
+            if (immuneToFairyRing == ring)
+            {
+                Debug.Log($"[FairyRing] REJECTED - immune to this ring until leaving trigger");
+                return;
+            }
+
+            // Clear any existing lantern fascination
+            if (currentFaeLantern != null)
+            {
+                Debug.Log($"[FairyRing] Clearing existing lantern fascination");
+                ClearLanternInteraction();
+            }
+
+            isFascinated = true;
+            currentFairyRing = ring;
+            fairyRingFascinationTimer = duration;
+            speedMultiplier = slowFactor;
+
+            // Calculate starting angle based on current position relative to ring
+            Vector2 ringPos = new Vector2(ring.transform.position.x, ring.transform.position.y);
+            Vector2 visitorPos = new Vector2(transform.position.x, transform.position.y);
+            Vector2 toVisitor = visitorPos - ringPos;
+            fairyRingCircleAngle = Mathf.Atan2(toVisitor.y, toVisitor.x);
+
+            // Check if we need to approach the ring first
+            float distanceToRing = toVisitor.magnitude;
+            fairyRingApproaching = distanceToRing > FairyRingCircleRadius;
+
+            Debug.Log($"[FairyRing] FASCINATED - duration: {duration}s, slowFactor: {slowFactor}, startAngle: {fairyRingCircleAngle * Mathf.Rad2Deg}deg, distance: {distanceToRing:F2}, approaching: {fairyRingApproaching}, ringPos: {ringPos}, visitorPos: {visitorPos}");
+
+            // Clear current path - we're now circling
+            worldPath = null;
+            worldPathIndex = 0;
+
+            RefreshStateFromFlags();
+            Debug.Log($"[FairyRing] State after refresh: {state}, isFascinated: {isFascinated}, currentFairyRing: {currentFairyRing != null}");
+        }
+
+        /// <summary>
+        /// Updates the FairyRing circling behavior. Called from Update when fascinated by a ring.
+        /// </summary>
+        protected virtual void UpdateFairyRingCircling()
+        {
+            if (currentFairyRing == null)
+            {
+                Debug.Log($"[FairyRing] UpdateFairyRingCircling - currentFairyRing is NULL, ending fascination");
+                EndFairyRingFascination();
+                return;
+            }
+
+            // Update timer
+            fairyRingFascinationTimer -= Time.deltaTime;
+            if (fairyRingFascinationTimer <= 0f)
+            {
+                Debug.Log($"[FairyRing] Timer expired, ending fascination");
+                EndFairyRingFascination();
+                return;
+            }
+
+            Vector3 ringCenter = currentFairyRing.transform.position;
+            float effectiveSpeed = moveSpeed * speedMultiplier;
+            Vector3 oldPosition = transform.position;
+
+            // Phase 1: Approach the ring until we're at circle radius
+            if (fairyRingApproaching)
+            {
+                // Calculate target position at circle radius along current angle to ring
+                float targetX = ringCenter.x + Mathf.Cos(fairyRingCircleAngle) * FairyRingCircleRadius;
+                float targetY = ringCenter.y + Mathf.Sin(fairyRingCircleAngle) * FairyRingCircleRadius;
+                Vector3 targetPos = new Vector3(targetX, targetY, transform.position.z);
+
+                Vector3 newPosition = Vector3.MoveTowards(oldPosition, targetPos, effectiveSpeed * Time.deltaTime);
+
+                // Log periodically
+                if (Time.frameCount % 60 == 0)
+                {
+                    float distToTarget = Vector3.Distance(newPosition, targetPos);
+                    Debug.Log($"[FairyRing] Approaching - timer: {fairyRingFascinationTimer:F1}s, distToTarget: {distToTarget:F2}, pos: {newPosition}, target: {targetPos}");
+                }
+
+                // Check if we've reached the circle radius
+                float distanceToRing = Vector2.Distance(new Vector2(newPosition.x, newPosition.y), new Vector2(ringCenter.x, ringCenter.y));
+                if (distanceToRing <= FairyRingCircleRadius + 0.05f)
+                {
+                    fairyRingApproaching = false;
+                    Debug.Log($"[FairyRing] Reached circle radius ({distanceToRing:F2}), starting to circle");
+                }
+
+                // Update animator direction
+                Vector3 moveDir = (newPosition - oldPosition).normalized;
+                if (moveDir.sqrMagnitude > 0.01f)
+                {
+                    UpdateAnimatorDirection(moveDir);
+                }
+
+                transform.position = newPosition;
+                return;
+            }
+
+            // Phase 2: Circle around the ring
+            // Calculate angular velocity based on speed and radius (arc length = radius * angle)
+            // We want to move at effectiveSpeed along the circle, so angular speed = linearSpeed / radius
+            float angularSpeed = effectiveSpeed / FairyRingCircleRadius;
+
+            // Update circle angle based on angular velocity
+            fairyRingCircleAngle += angularSpeed * Time.deltaTime;
+            if (fairyRingCircleAngle > Mathf.PI * 2f)
+            {
+                fairyRingCircleAngle -= Mathf.PI * 2f;
+            }
+
+            // Calculate new position directly on the circle at the new angle (fixed radius)
+            float circleNewX = ringCenter.x + Mathf.Cos(fairyRingCircleAngle) * FairyRingCircleRadius;
+            float circleNewY = ringCenter.y + Mathf.Sin(fairyRingCircleAngle) * FairyRingCircleRadius;
+            Vector3 circleNewPosition = new Vector3(circleNewX, circleNewY, transform.position.z);
+
+            // Log periodically (every 60 frames)
+            if (Time.frameCount % 60 == 0)
+            {
+                float distToCenter = Vector2.Distance(new Vector2(circleNewPosition.x, circleNewPosition.y), new Vector2(ringCenter.x, ringCenter.y));
+                Debug.Log($"[FairyRing] Circling - timer: {fairyRingFascinationTimer:F1}s, angle: {fairyRingCircleAngle * Mathf.Rad2Deg:F1}deg, pos: {circleNewPosition}, distToCenter: {distToCenter:F2}, ringCenter: {ringCenter}");
+            }
+
+            // Update animator direction based on movement (tangent to circle)
+            Vector3 circleMoveDir = (circleNewPosition - oldPosition).normalized;
+            if (circleMoveDir.sqrMagnitude > 0.01f)
+            {
+                UpdateAnimatorDirection(circleMoveDir);
+            }
+
+            // Apply movement directly to transform
+            transform.position = circleNewPosition;
+        }
+
+        /// <summary>
+        /// Ends FairyRing fascination. The visitor becomes lost and resumes pathing.
+        /// </summary>
+        protected virtual void EndFairyRingFascination()
+        {
+            Debug.Log($"[FairyRing] EndFairyRingFascination - visitor at {transform.position}");
+
+            // Set immunity to this ring until visitor leaves the trigger
+            immuneToFairyRing = currentFairyRing;
+            Debug.Log($"[FairyRing] Set immunity to ring: {immuneToFairyRing?.name}");
+
+            isFascinated = false;
+            currentFairyRing = null;
+            fairyRingFascinationTimer = 0f;
+            speedMultiplier = 1f;
+
+            // Visitor becomes lost after fascination ends
+            Debug.Log($"[FairyRing] Calling SetLost()");
+            SetLost();
+            Debug.Log($"[FairyRing] After SetLost - state: {state}, worldPath count: {worldPath?.Count ?? 0}");
+        }
+
+        /// <summary>
+        /// Returns true if currently fascinated by a FairyRing (circling behavior).
+        /// </summary>
+        public bool IsFascinatedByRing => currentFairyRing != null;
+
+        /// <summary>
+        /// Clears immunity to a FairyRing. Called when the visitor exits the ring's trigger.
+        /// </summary>
+        /// <param name="ring">The ring to clear immunity for</param>
+        public void ClearFairyRingImmunity(FaeMaze.Props.FairyRing ring)
+        {
+            if (immuneToFairyRing == ring)
+            {
+                Debug.Log($"[FairyRing] Clearing immunity to ring: {ring.name}");
+                immuneToFairyRing = null;
+            }
+        }
+
         #endregion
 
         #region Sprite Setup
@@ -2451,16 +2655,18 @@ namespace FaeMaze.Visitors
             rb3D.useGravity = false;
 
             // Use existing 3D collider (SphereCollider or CapsuleCollider) or add CapsuleCollider
+            // NOTE: Visitor colliders should NOT be triggers - they need to be detected by
+            // trigger colliders on props (FairyRing, FaeLantern, etc.)
             SphereCollider sphereCollider = GetComponent<SphereCollider>();
             CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
 
             if (sphereCollider != null)
             {
-                sphereCollider.isTrigger = true;
+                sphereCollider.isTrigger = false;
             }
             else if (capsuleCollider != null)
             {
-                capsuleCollider.isTrigger = true;
+                capsuleCollider.isTrigger = false;
             }
             else
             {
@@ -2469,7 +2675,7 @@ namespace FaeMaze.Visitors
                 capsuleCollider.height = 1.8f;
                 capsuleCollider.radius = 0.3f;
                 capsuleCollider.center = new Vector3(0, 0.9f, 0);
-                capsuleCollider.isTrigger = true;
+                capsuleCollider.isTrigger = false;
             }
         }
 

@@ -4,20 +4,26 @@ using FaeMaze.Visitors;
 namespace FaeMaze.Props
 {
     /// <summary>
-    /// A mystical Fairy Ring that entrances and slows visitors passing through.
-    /// Once entranced, a visitor remains in that state permanently (design choice).
+    /// A mystical Fairy Ring that fascinates visitors who pass through.
+    /// Fascinated visitors are slowed to 50% speed and circle the ring for 30 seconds.
+    /// After fascination ends, the visitor becomes lost and resumes pathing to their destination.
     /// Requires a Collider component set to isTrigger = true for detection.
     /// Also manages rainbow-colored animated spheres within the ring.
     /// </summary>
     [RequireComponent(typeof(Collider))]
+    [RequireComponent(typeof(Rigidbody))]
     public class FairyRing : MonoBehaviour
     {
         #region Serialized Fields
 
-        [Header("Entrancement Settings")]
+        [Header("Fascination Settings")]
         [SerializeField]
-        [Tooltip("Speed multiplier applied to visitors inside the ring (0.5 = 50% speed)")]
+        [Tooltip("Speed multiplier applied to fascinated visitors (0.5 = 50% speed)")]
         private float slowFactor = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Duration visitors circle the ring while fascinated (seconds)")]
+        private float fascinationDuration = 30f;
 
         [Header("Visual Settings")]
         [SerializeField]
@@ -58,6 +64,24 @@ namespace FaeMaze.Props
         {
             originalScale = transform.localScale;
 
+            // Ensure Rigidbody is configured for trigger detection
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.isKinematic = true;
+                rb.useGravity = false;
+            }
+
+            // Ensure collider is a trigger
+            var collider = GetComponent<Collider>();
+            if (collider != null && !collider.isTrigger)
+            {
+                Debug.LogWarning($"[FairyRing] Collider on {gameObject.name} was not set to trigger - fixing");
+                collider.isTrigger = true;
+            }
+
+            Debug.Log($"[FairyRing] Start - position: {transform.position}, collider: {collider?.GetType().Name}, isTrigger: {collider?.isTrigger}");
+
             if (autoSetupSpheres)
             {
                 SetupSpheres();
@@ -74,6 +98,7 @@ namespace FaeMaze.Props
 
         private void OnTriggerEnter(Collider other)
         {
+            Debug.Log($"[FairyRing] OnTriggerEnter - other: {other.gameObject.name}");
             var visitor = other.GetComponent<VisitorController>();
             if (visitor != null)
             {
@@ -96,35 +121,25 @@ namespace FaeMaze.Props
 
         /// <summary>
         /// Called when a visitor enters the Fairy Ring.
-        /// Marks them as entranced and applies speed reduction.
+        /// The visitor becomes fascinated and will circle the ring for the fascination duration.
         /// </summary>
         /// <param name="visitor">The visitor entering the ring</param>
         private void OnVisitorEnter(VisitorControllerBase visitor)
         {
-
-            // Mark as entranced (permanent effect - once entranced, always entranced)
-            visitor.SetEntranced(true);
-
-            // Apply slow effect
-            visitor.SpeedMultiplier = slowFactor;
-
+            Debug.Log($"[FairyRing] OnVisitorEnter - visitor: {visitor.gameObject.name}, calling BecomeFascinatedByRing");
+            // Make visitor fascinated by this ring - they will circle it
+            visitor.BecomeFascinatedByRing(this, fascinationDuration, slowFactor);
         }
 
         /// <summary>
-        /// Called when a visitor exits the Fairy Ring.
-        /// Restores normal speed but keeps entranced flag set.
+        /// Called when a visitor exits the Fairy Ring trigger.
+        /// Clears any immunity the visitor has to this ring.
         /// </summary>
-        /// <param name="visitor">The visitor exiting the ring</param>
+        /// <param name="visitor">The visitor exiting the ring trigger</param>
         private void OnVisitorExit(VisitorControllerBase visitor)
         {
-
-            // Restore normal speed
-            visitor.SpeedMultiplier = 1f;
-
-            // Design choice: Keep entranced flag set permanently
-            // Once a visitor passes through a Fairy Ring, they remain marked as entranced
-            // This could be used for future mechanics (e.g., entranced visitors give more essence)
-
+            // Clear immunity so visitor can be fascinated again if they re-enter
+            visitor.ClearFairyRingImmunity(this);
         }
 
         #endregion

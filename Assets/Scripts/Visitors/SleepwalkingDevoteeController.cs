@@ -21,7 +21,6 @@ namespace FaeMaze.Visitors
 
         public override VisitorState State => state;
         public override float MoveSpeed => moveSpeed;
-        public override bool IsEntranced => isEntranced;
         public override float SpeedMultiplier
         {
             get => speedMultiplier;

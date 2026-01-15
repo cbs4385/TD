@@ -40,9 +40,6 @@ namespace FaeMaze.Visitors
         /// <summary>Gets the current move speed</summary>
         public override float MoveSpeed => moveSpeed;
 
-        /// <summary>Gets whether this visitor is entranced by a Fairy Ring</summary>
-        public override bool IsEntranced => isEntranced;
-
         /// <summary>Gets or sets the speed multiplier applied to movement</summary>
         public override float SpeedMultiplier
         {

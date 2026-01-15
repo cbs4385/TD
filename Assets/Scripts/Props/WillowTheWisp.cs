@@ -374,9 +374,9 @@ namespace FaeMaze.Props
             foreach (var visitor in candidates)
             {
                 // Calculate status effect count (lower is better)
+                // IsFascinated covers both fascination and entrancement (consolidated states)
                 int statusCount = 0;
                 if (visitor.IsFascinated) statusCount++;
-                if (visitor.IsEntranced) statusCount++;
 
                 // Calculate distance to wisp
                 float distance = Vector3.Distance(transform.position, visitor.transform.position);
