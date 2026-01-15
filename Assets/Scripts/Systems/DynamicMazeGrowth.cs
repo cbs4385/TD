@@ -1251,25 +1251,20 @@ namespace FaeMaze.Systems
         /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
         private void SpawnNodeProp(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
-            Debug.Log($"[DynamicMazeGrowth] SpawnNodeProp called for node {nodeIndex} at position ({node.Position.x}, {node.Position.y})");
-
             // Skip if any prop already exists at this node
             if (nodeProps.ContainsKey(nodeIndex))
             {
-                Debug.Log($"[DynamicMazeGrowth] Skipping node {nodeIndex} - prop already exists: {nodeProps[nodeIndex]}");
                 return;
             }
 
             // Skip the seed node (node 0) - that's where the Heart is
             if (nodeIndex == 0)
             {
-                Debug.Log($"[DynamicMazeGrowth] Skipping node {nodeIndex} - seed node (Heart location)");
                 return;
             }
 
             // Get the next prop type in the cycle
             NodePropType propType = GetNextPropType();
-            Debug.Log($"[DynamicMazeGrowth] Selected prop type: {propType} (nextPropTypeIndex now = {nextPropTypeIndex})");
 
             // Dispatch to the appropriate spawn method
             bool success = false;
@@ -1289,13 +1284,10 @@ namespace FaeMaze.Systems
                     break;
             }
 
-            Debug.Log($"[DynamicMazeGrowth] Spawn {propType} at node {nodeIndex}: {(success ? "SUCCESS" : "FAILED")}");
-
             // Track what was spawned
             if (success)
             {
                 nodeProps[nodeIndex] = propType;
-                Debug.Log($"[DynamicMazeGrowth] Tracked {propType} at node {nodeIndex}. Total props: {nodeProps.Count}");
             }
         }
 
@@ -1313,37 +1305,29 @@ namespace FaeMaze.Systems
         /// <returns>True if spawn was successful</returns>
         private bool SpawnPondPropAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
-            Debug.Log($"[DynamicMazeGrowth] SpawnPondPropAtNode called for node {nodeIndex}");
-
             // Skip if pond already exists at this node
             if (nodePonds.ContainsKey(nodeIndex))
             {
-                Debug.Log($"[DynamicMazeGrowth] Pond already exists at node {nodeIndex}");
                 return false;
             }
 
             // Try to load prefab if not assigned
             if (pondPrefab == null)
             {
-                Debug.Log($"[DynamicMazeGrowth] pondPrefab is null, attempting to load...");
 #if UNITY_EDITOR
                 pondPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/Pond.prefab");
-                Debug.Log($"[DynamicMazeGrowth] Loaded pondPrefab from AssetDatabase: {(pondPrefab != null ? pondPrefab.name : "NULL")}");
 #else
                 pondPrefab = Resources.Load<GameObject>("Prefabs/Tile/Pond");
-                Debug.Log($"[DynamicMazeGrowth] Loaded pondPrefab from Resources: {(pondPrefab != null ? pondPrefab.name : "NULL")}");
 #endif
             }
 
             if (pondPrefab == null)
             {
-                Debug.LogWarning($"[DynamicMazeGrowth] pondPrefab is null, cannot spawn Pond at node {nodeIndex}");
                 return false;
             }
 
             // Calculate world position at node center with specified Z
             Vector3 pondPos = new Vector3(node.Position.x, node.Position.y, pondZPosition);
-            Debug.Log($"[DynamicMazeGrowth] Spawning Pond at position {pondPos}");
 
             // Instantiate the pond
             GameObject pond = Instantiate(pondPrefab);
@@ -1357,7 +1341,6 @@ namespace FaeMaze.Systems
 
             // Track the pond
             nodePonds[nodeIndex] = pond;
-            Debug.Log($"[DynamicMazeGrowth] Pond spawned successfully at node {nodeIndex}");
 
             // Now spawn the PukaHazard (kelpie) inside the pond
             SpawnPukaHazardInPond(node, nodeIndex, pondPos);
@@ -1370,31 +1353,24 @@ namespace FaeMaze.Systems
         /// </summary>
         private void SpawnPukaHazardInPond(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex, Vector3 pondPos)
         {
-            Debug.Log($"[DynamicMazeGrowth] SpawnPukaHazardInPond called for node {nodeIndex}");
-
             // Skip if puka already exists at this node
             if (nodePukas.ContainsKey(nodeIndex))
             {
-                Debug.Log($"[DynamicMazeGrowth] Puka already exists at node {nodeIndex}");
                 return;
             }
 
             // Try to load kelpie model prefab if not assigned
             if (kelpieModelPrefab == null)
             {
-                Debug.Log($"[DynamicMazeGrowth] kelpieModelPrefab is null, attempting to load...");
 #if UNITY_EDITOR
                 kelpieModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Animations/Kelpie/kelpie_react.glb");
-                Debug.Log($"[DynamicMazeGrowth] Loaded kelpie_react.glb: {(kelpieModelPrefab != null ? kelpieModelPrefab.name : "NULL")}");
 #else
                 kelpieModelPrefab = Resources.Load<GameObject>("Animations/Kelpie/kelpie_react");
-                Debug.Log($"[DynamicMazeGrowth] Loaded kelpie_react from Resources: {(kelpieModelPrefab != null ? kelpieModelPrefab.name : "NULL")}");
 #endif
             }
 
             if (kelpieModelPrefab == null)
             {
-                Debug.LogWarning($"[DynamicMazeGrowth] kelpieModelPrefab is null, cannot spawn PukaHazard at node {nodeIndex}");
                 return;
             }
 
@@ -1414,7 +1390,6 @@ namespace FaeMaze.Systems
 
             // Set position - puka should be at same position as pond
             puka.transform.position = pondPos;
-            Debug.Log($"[DynamicMazeGrowth] Spawning Puka at position {pondPos}");
 
             if (pukasParent != null)
             {
@@ -1426,7 +1401,6 @@ namespace FaeMaze.Systems
             if (animator != null && kelpieAnimatorController != null)
             {
                 animator.runtimeAnimatorController = kelpieAnimatorController;
-                Debug.Log($"[DynamicMazeGrowth] Assigned animator controller to {puka.name}");
             }
 
             // Add PukaHazard component
@@ -1438,7 +1412,6 @@ namespace FaeMaze.Systems
 
             // Track the puka
             nodePukas[nodeIndex] = puka;
-            Debug.Log($"[DynamicMazeGrowth] PukaHazard spawned successfully at node {nodeIndex}");
         }
 
         /// <summary>
@@ -1447,27 +1420,21 @@ namespace FaeMaze.Systems
         /// <returns>True if spawn was successful</returns>
         private bool SpawnFairyRingAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
-            Debug.Log($"[DynamicMazeGrowth] SpawnFairyRingAtNode called for node {nodeIndex}");
-
             // Skip if fairy ring already exists at this node
             if (nodeFairyRings.ContainsKey(nodeIndex))
             {
-                Debug.Log($"[DynamicMazeGrowth] FairyRing already exists at node {nodeIndex}");
                 return false;
             }
 
             // Try to load FairyRing prefab if not assigned
             if (fairyRingPrefab == null)
             {
-                Debug.Log($"[DynamicMazeGrowth] fairyRingPrefab is null, attempting to load...");
 #if UNITY_EDITOR
                 // Try ring.prefab first (the new 3D ring with spheres)
                 fairyRingPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/ring.prefab");
-                Debug.Log($"[DynamicMazeGrowth] Loaded ring.prefab: {(fairyRingPrefab != null ? fairyRingPrefab.name : "NULL")}");
                 if (fairyRingPrefab == null)
                 {
                     fairyRingPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/FairyRing.prefab");
-                    Debug.Log($"[DynamicMazeGrowth] Loaded FairyRing.prefab: {(fairyRingPrefab != null ? fairyRingPrefab.name : "NULL")}");
                 }
 #else
                 fairyRingPrefab = Resources.Load<GameObject>("Prefabs/Props/ring");
@@ -1480,13 +1447,11 @@ namespace FaeMaze.Systems
 
             if (fairyRingPrefab == null)
             {
-                Debug.LogWarning($"[DynamicMazeGrowth] fairyRingPrefab is null, cannot spawn FairyRing at node {nodeIndex}");
                 return false;
             }
 
             // Calculate world position at node center - offset Z to place in front of node cylinder
             Vector3 ringPos = new Vector3(node.Position.x, node.Position.y, -0.2f);
-            Debug.Log($"[DynamicMazeGrowth] Spawning FairyRing at position {ringPos}");
 
             // Instantiate the fairy ring
             GameObject ring = Instantiate(fairyRingPrefab);
@@ -1514,7 +1479,6 @@ namespace FaeMaze.Systems
 
             // Track the fairy ring
             nodeFairyRings[nodeIndex] = ring;
-            Debug.Log($"[DynamicMazeGrowth] FairyRing spawned successfully at node {nodeIndex}");
             return true;
         }
 
@@ -1524,37 +1488,29 @@ namespace FaeMaze.Systems
         /// <returns>True if spawn was successful</returns>
         private bool SpawnLanternAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
-            Debug.Log($"[DynamicMazeGrowth] SpawnLanternAtNode called for node {nodeIndex}");
-
             // Skip if lantern already exists at this node
             if (nodeLanterns.ContainsKey(nodeIndex))
             {
-                Debug.Log($"[DynamicMazeGrowth] Lantern already exists at node {nodeIndex}");
                 return false;
             }
 
             // Try to load FaeLantern prefab if not assigned
             if (lanternPrefab == null)
             {
-                Debug.Log($"[DynamicMazeGrowth] lanternPrefab is null, attempting to load...");
 #if UNITY_EDITOR
                 lanternPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/lantern2.prefab");
-                Debug.Log($"[DynamicMazeGrowth] Loaded lantern2.prefab: {(lanternPrefab != null ? lanternPrefab.name : "NULL")}");
 #else
                 lanternPrefab = Resources.Load<GameObject>("Prefabs/Props/lantern2");
-                Debug.Log($"[DynamicMazeGrowth] Loaded lantern2 from Resources: {(lanternPrefab != null ? lanternPrefab.name : "NULL")}");
 #endif
             }
 
             if (lanternPrefab == null)
             {
-                Debug.LogWarning($"[DynamicMazeGrowth] lanternPrefab is null, cannot spawn FaeLantern at node {nodeIndex}");
                 return false;
             }
 
             // Calculate world position at node center - offset Z to place in front of node cylinder
             Vector3 lanternPos = new Vector3(node.Position.x, node.Position.y, -0.5f);
-            Debug.Log($"[DynamicMazeGrowth] Spawning Lantern at position {lanternPos}");
 
             // Instantiate the lantern
             GameObject lantern = Instantiate(lanternPrefab);
@@ -1575,7 +1531,6 @@ namespace FaeMaze.Systems
 
             // Track the lantern
             nodeLanterns[nodeIndex] = lantern;
-            Debug.Log($"[DynamicMazeGrowth] Lantern spawned successfully at node {nodeIndex}");
             return true;
         }
 
@@ -1585,37 +1540,29 @@ namespace FaeMaze.Systems
         /// <returns>True if spawn was successful</returns>
         private bool SpawnWispAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
-            Debug.Log($"[DynamicMazeGrowth] SpawnWispAtNode called for node {nodeIndex}");
-
             // Skip if wisp already exists at this node
             if (nodeWisps.ContainsKey(nodeIndex))
             {
-                Debug.Log($"[DynamicMazeGrowth] Wisp already exists at node {nodeIndex}");
                 return false;
             }
 
             // Try to load WillowTheWisp prefab if not assigned
             if (wispPrefab == null)
             {
-                Debug.Log($"[DynamicMazeGrowth] wispPrefab is null, attempting to load...");
 #if UNITY_EDITOR
                 wispPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/WillowTheWisp.prefab");
-                Debug.Log($"[DynamicMazeGrowth] Loaded WillowTheWisp.prefab: {(wispPrefab != null ? wispPrefab.name : "NULL")}");
 #else
                 wispPrefab = Resources.Load<GameObject>("Prefabs/Props/WillowTheWisp");
-                Debug.Log($"[DynamicMazeGrowth] Loaded WillowTheWisp from Resources: {(wispPrefab != null ? wispPrefab.name : "NULL")}");
 #endif
             }
 
             if (wispPrefab == null)
             {
-                Debug.LogWarning($"[DynamicMazeGrowth] wispPrefab is null, cannot spawn WillowTheWisp at node {nodeIndex}");
                 return false;
             }
 
             // Calculate world position at node center - offset Z to place in front of node cylinder
             Vector3 wispPos = new Vector3(node.Position.x, node.Position.y, -0.5f);
-            Debug.Log($"[DynamicMazeGrowth] Spawning Wisp at position {wispPos}");
 
             // Instantiate the wisp
             GameObject wisp = Instantiate(wispPrefab);
@@ -1650,7 +1597,6 @@ namespace FaeMaze.Systems
 
             // Track the wisp
             nodeWisps[nodeIndex] = wisp;
-            Debug.Log($"[DynamicMazeGrowth] Wisp spawned successfully at node {nodeIndex}");
             return true;
         }
 
@@ -1687,7 +1633,6 @@ namespace FaeMaze.Systems
 
             if (kelpieModelPrefab == null)
             {
-                Debug.LogWarning($"[DynamicMazeGrowth] kelpieModelPrefab is null, cannot spawn PukaHazard at node {nodeIndex}");
                 return;
             }
 
@@ -1721,7 +1666,6 @@ namespace FaeMaze.Systems
             if (animator != null && kelpieAnimatorController != null)
             {
                 animator.runtimeAnimatorController = kelpieAnimatorController;
-                Debug.Log($"[DynamicMazeGrowth] Assigned animator controller to {puka.name}");
             }
 
             // Add PukaHazard component

@@ -278,7 +278,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Lures a visitor toward the assigned Puka.
+        /// Lures a visitor toward the assigned Puka by modifying their path.
         /// </summary>
         private void LureVisitor(VisitorControllerBase visitor)
         {
@@ -302,8 +302,54 @@ namespace FaeMaze.Visitors
             int animDirection = GetDirectionFromMovement(new Vector2(directionToPuka.x, directionToPuka.y));
             SetAnimatorDirection(animDirection);
 
-            // TODO: Could add path modification here to lure visitor toward Puka
-            // For now, the Kelpie just animates when visitors are near
+            // Try to insert a detour toward the Puka into the visitor's path
+            InsertPukaDetour(visitor);
+        }
+
+        /// <summary>
+        /// Inserts a detour waypoint near the Puka into the visitor's current path.
+        /// This causes confused/susceptible visitors to walk closer to the Puka hazard.
+        /// </summary>
+        private void InsertPukaDetour(VisitorControllerBase visitor)
+        {
+            if (visitor == null || assignedPuka == null || mazeGridBehaviour == null)
+            {
+                return;
+            }
+
+            // Build a path from visitor's current position to a point near the Puka
+            Vector3 pukaPosition = assignedPuka.WorldPosition;
+            Vector3 visitorPosition = visitor.transform.position;
+
+            // Calculate a position adjacent to the Puka (not directly on it)
+            // Use the direction from Puka to visitor to find a safe approach point
+            Vector3 approachDirection = (visitorPosition - pukaPosition).normalized;
+            float approachDistance = 1.5f; // Stay just outside Puka's detection radius
+            Vector3 approachPoint = pukaPosition + approachDirection * approachDistance;
+
+            // Build path segments: current -> approach point -> original destination
+            List<Vector3> detourPath = visitor.BuildWorldPath(visitorPosition, approachPoint);
+
+            if (detourPath == null || detourPath.Count == 0)
+            {
+                return;
+            }
+
+            // Get the visitor's original destination and build path from approach point
+            Vector3 originalDestination = visitor.GetCurrentDestination();
+            List<Vector3> continuationPath = visitor.BuildWorldPath(approachPoint, originalDestination);
+
+            if (continuationPath != null && continuationPath.Count > 0)
+            {
+                // Combine paths: detour + continuation (skip first point of continuation to avoid duplicate)
+                if (continuationPath.Count > 1)
+                {
+                    detourPath.AddRange(continuationPath.GetRange(1, continuationPath.Count - 1));
+                }
+            }
+
+            // Apply the modified path to the visitor
+            visitor.SetPathDirectly(detourPath);
         }
 
         /// <summary>

@@ -158,8 +158,6 @@ namespace FaeMaze.Props
 
         private void Start()
         {
-            Debug.Log($"[PukaHazard] {gameObject.name} Start() - position: {transform.position}");
-
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
             // Try to find kelpie model if not assigned
@@ -206,33 +204,6 @@ namespace FaeMaze.Props
                 }
             }
 
-            // Log available animations
-            if (legacyAnimation != null)
-            {
-                Debug.Log($"[PukaHazard] {gameObject.name} Legacy Animation found with {legacyAnimation.GetClipCount()} clips");
-                foreach (AnimationState state in legacyAnimation)
-                {
-                    Debug.Log($"[PukaHazard] - Legacy clip: {state.name}");
-                }
-            }
-
-            // Log Animator clips
-            if (animator != null && animator.runtimeAnimatorController != null)
-            {
-                var clips = animator.runtimeAnimatorController.animationClips;
-                Debug.Log($"[PukaHazard] {gameObject.name} Animator found with {clips.Length} clips");
-                foreach (var clip in clips)
-                {
-                    Debug.Log($"[PukaHazard] - Animator clip: {clip.name}");
-                }
-            }
-            else if (animator != null)
-            {
-                Debug.Log($"[PukaHazard] {gameObject.name} Animator found but no RuntimeAnimatorController assigned");
-            }
-
-            Debug.Log($"[PukaHazard] {gameObject.name} initialized - detectionRadius: {detectionRadius}, dragDuration: {dragDuration}, submergeDuration: {submergeDuration}, kelpieActiveModel: {(kelpieActiveModel != null ? kelpieActiveModel.name : "NULL")}, animator: {(animator != null ? animator.gameObject.name : "NULL")}, legacyAnimation: {(legacyAnimation != null ? legacyAnimation.gameObject.name : "NULL")}");
-
             // Set initial state to idle (static) - freeze the animator
             if (animator != null && animator.runtimeAnimatorController != null)
             {
@@ -242,7 +213,6 @@ namespace FaeMaze.Props
                     animator.Play("Idle", 0, 0f);
                 else
                     animator.Play("ArmatureAction", 0, 0f);
-                Debug.Log($"[PukaHazard] {gameObject.name} Initial static idle state set");
             }
         }
 
@@ -307,7 +277,6 @@ namespace FaeMaze.Props
             if (currentState == newState)
                 return;
 
-            Debug.Log($"[PukaHazard] {gameObject.name} SetState: {currentState} -> {newState}");
             currentState = newState;
 
             // When idle, stop animation completely (static pose)
@@ -319,7 +288,6 @@ namespace FaeMaze.Props
                     animator.Play("Idle", 0, 0f);
                 else
                     animator.Play("ArmatureAction", 0, 0f);
-                Debug.Log($"[PukaHazard] {gameObject.name} Set to static idle (animator.speed = 0)");
                 return;
             }
 
@@ -343,7 +311,6 @@ namespace FaeMaze.Props
                     if (legacyAnimation.GetClip(clipName) != null)
                     {
                         legacyAnimation.Play(clipName);
-                        Debug.Log($"[PukaHazard] {gameObject.name} legacyAnimation.Play('{clipName}')");
                         clipFound = true;
                         break;
                     }
@@ -355,11 +322,6 @@ namespace FaeMaze.Props
                     if (legacyAnimation.clip != null)
                     {
                         legacyAnimation.Play(legacyAnimation.clip.name);
-                        Debug.Log($"[PukaHazard] {gameObject.name} Playing default clip: {legacyAnimation.clip.name}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[PukaHazard] {gameObject.name} No animation clips found to play");
                     }
                 }
             }
@@ -373,7 +335,6 @@ namespace FaeMaze.Props
                     try
                     {
                         animator.Play(stateName, 0, 0f);
-                        Debug.Log($"[PukaHazard] {gameObject.name} animator.Play('{stateName}')");
                         stateFound = true;
                         break;
                     }
@@ -389,23 +350,9 @@ namespace FaeMaze.Props
                     var clips = animator.runtimeAnimatorController?.animationClips;
                     if (clips != null && clips.Length > 0)
                     {
-                        Debug.Log($"[PukaHazard] {gameObject.name} Available animator clips:");
-                        foreach (var clip in clips)
-                        {
-                            Debug.Log($"[PukaHazard] - Clip: {clip.name}");
-                        }
                         animator.Play(clips[0].name, 0, 0f);
-                        Debug.Log($"[PukaHazard] {gameObject.name} Playing first available clip: {clips[0].name}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"[PukaHazard] {gameObject.name} No animator clips found");
                     }
                 }
-            }
-            else
-            {
-                Debug.LogWarning($"[PukaHazard] {gameObject.name} No animation system found!");
             }
         }
 
@@ -444,7 +391,6 @@ namespace FaeMaze.Props
                 float distance = Vector3.Distance(transform.position, visitor.transform.position);
                 if (distance <= detectionRadius)
                 {
-                    Debug.Log($"[PukaHazard] {gameObject.name} detected visitor {visitor.gameObject.name} at distance {distance:F2} (radius: {detectionRadius})");
                     CaptureVisitor(visitor);
                     break; // Only capture one visitor at a time
                 }
@@ -457,12 +403,7 @@ namespace FaeMaze.Props
         private void CaptureVisitor(VisitorControllerBase visitor)
         {
             if (visitor == null)
-            {
-                Debug.LogWarning($"[PukaHazard] {gameObject.name} CaptureVisitor called with null visitor");
                 return;
-            }
-
-            Debug.Log($"[PukaHazard] {gameObject.name} capturing visitor {visitor.gameObject.name}");
 
             // Mark as processed so we don't capture again
             processedVisitors.Add(visitor.gameObject);
@@ -470,14 +411,11 @@ namespace FaeMaze.Props
 
             // Set state to active
             SetState(PukaState.Active);
-            Debug.Log($"[PukaHazard] {gameObject.name} state set to Active");
 
             // Rotate kelpie_active model to face the visitor
             RotateKelpieToFaceVisitor(visitor.transform.position);
-            Debug.Log($"[PukaHazard] {gameObject.name} kelpieActiveModel: {(kelpieActiveModel != null ? kelpieActiveModel.name : "NULL")}");
 
             // Start the drowning coroutine
-            Debug.Log($"[PukaHazard] {gameObject.name} starting DrownVisitorCoroutine");
             StartCoroutine(DrownVisitorCoroutine(visitor));
         }
 
@@ -510,11 +448,8 @@ namespace FaeMaze.Props
         /// </summary>
         private IEnumerator DrownVisitorCoroutine(VisitorControllerBase visitor)
         {
-            Debug.Log($"[PukaHazard] DrownVisitorCoroutine START - visitor: {(visitor != null ? visitor.gameObject.name : "NULL")}");
-
             if (visitor == null)
             {
-                Debug.LogWarning($"[PukaHazard] DrownVisitorCoroutine - visitor is null, aborting");
                 SetState(PukaState.Idle);
                 yield break;
             }
@@ -523,14 +458,11 @@ namespace FaeMaze.Props
             Transform visitorTransform = visitor.transform;
 
             // Set the visitor to Drowning state (stops movement and clears all other states)
-            Debug.Log($"[PukaHazard] Calling BecomeDrowning on visitor {visitorObj.name}");
             visitor.BecomeDrowning();
-            Debug.Log($"[PukaHazard] Visitor state after BecomeDrowning: {visitor.State}");
 
             // Store initial values
             Vector3 initialPosition = visitorTransform.position;
             Quaternion initialRotation = visitorTransform.rotation;
-            Debug.Log($"[PukaHazard] Visitor initial position: {initialPosition}, rotation: {initialRotation.eulerAngles}");
 
             // Wait a moment before knockdown
             yield return new WaitForSeconds(0.25f);
@@ -538,7 +470,6 @@ namespace FaeMaze.Props
             // Apply knockdown rotation instantly (tips forward)
             Quaternion knockdownRotation = initialRotation * Quaternion.Euler(knockdownXRotation, 0f, 0f);
             visitorTransform.rotation = knockdownRotation;
-            Debug.Log($"[PukaHazard] Knockdown rotation applied: {knockdownRotation.eulerAngles}");
 
             // Wait a moment after knockdown before dragging
             yield return new WaitForSeconds(0.25f);
@@ -554,16 +485,13 @@ namespace FaeMaze.Props
             // Phase 1: Drag on X/Y plane toward pond
             Vector3 dragStartPos = initialPosition;
             Vector3 dragEndPos = initialPosition + directionToPond * dragDistance;
-            Debug.Log($"[PukaHazard] Phase 1 - Drag on X/Y plane over {dragDuration}s from {dragStartPos} to {dragEndPos}");
 
             float elapsed = 0f;
-            int frameCount = 0;
 
             while (elapsed < dragDuration)
             {
                 if (visitorObj == null)
                 {
-                    Debug.LogWarning($"[PukaHazard] Visitor destroyed externally during drag phase at frame {frameCount}");
                     SetState(PukaState.Idle);
                     yield break;
                 }
@@ -578,13 +506,6 @@ namespace FaeMaze.Props
                 // Continuously track the visitor with the kelpie model
                 RotateKelpieToFaceVisitor(visitorTransform.position);
 
-                frameCount++;
-
-                if (frameCount % 10 == 0)
-                {
-                    Debug.Log($"[PukaHazard] Drag progress: {t * 100:F0}%, pos: {visitorTransform.position}");
-                }
-
                 yield return null;
             }
 
@@ -594,8 +515,6 @@ namespace FaeMaze.Props
                 visitorTransform.position = dragEndPos;
             }
 
-            Debug.Log($"[PukaHazard] Phase 1 complete - drag finished at {dragEndPos}");
-
             // Phase 2: Submerge in Z direction
             Vector3 submergeStartPos = visitorTransform.position;
             Vector3 submergedPosition = new Vector3(
@@ -603,16 +522,13 @@ namespace FaeMaze.Props
                 submergeStartPos.y,
                 submergedZ
             );
-            Debug.Log($"[PukaHazard] Phase 2 - Submerge in Z over {submergeDuration}s from {submergeStartPos} to {submergedPosition}");
 
             elapsed = 0f;
-            frameCount = 0;
 
             while (elapsed < submergeDuration)
             {
                 if (visitorObj == null)
                 {
-                    Debug.LogWarning($"[PukaHazard] Visitor destroyed externally during submerge phase at frame {frameCount}");
                     SetState(PukaState.Idle);
                     yield break;
                 }
@@ -627,23 +543,13 @@ namespace FaeMaze.Props
                 // Continuously track the visitor with the kelpie model
                 RotateKelpieToFaceVisitor(visitorTransform.position);
 
-                frameCount++;
-
-                if (frameCount % 10 == 0)
-                {
-                    Debug.Log($"[PukaHazard] Submerge progress: {t * 100:F0}%, pos: {visitorTransform.position}");
-                }
-
                 yield return null;
             }
-
-            Debug.Log($"[PukaHazard] Drowning animation complete");
 
             // Ensure final position
             if (visitorObj != null)
             {
                 visitorTransform.position = submergedPosition;
-                Debug.Log($"[PukaHazard] Final position set to {submergedPosition}");
 
                 // Play sound effect
                 FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
@@ -655,14 +561,12 @@ namespace FaeMaze.Props
                 }
 
                 // Destroy the visitor
-                Debug.Log($"[PukaHazard] Destroying visitor {visitorObj.name}");
                 Destroy(visitorObj);
             }
 
             // Revert to idle state
             currentVictim = null;
             SetState(PukaState.Idle);
-            Debug.Log($"[PukaHazard] DrownVisitorCoroutine END - state reset to Idle");
         }
 
         #endregion

@@ -337,11 +337,6 @@ namespace FaeMaze.Visitors
             // Handle FairyRing circling (takes priority over lantern fascination)
             if (currentFairyRing != null)
             {
-                // Log first frame of circling
-                if (Time.frameCount % 300 == 0)
-                {
-                    Debug.Log($"[FairyRing] Update - entering UpdateFairyRingCircling, currentFairyRing: {currentFairyRing.name}");
-                }
                 UpdateFairyRingCircling();
                 return; // Don't process other movement while circling
             }
@@ -373,6 +368,14 @@ namespace FaeMaze.Visitors
 
             if (IsMovementState(state))
             {
+                // Don't update normal walking if being lured by a wisp
+                var followWisp = GetComponent<FollowWispBehavior>();
+                if (followWisp != null && followWisp.IsFollowing)
+                {
+                    // Wisp is controlling movement
+                    return;
+                }
+
                 if (!isCalculatingPath)
                 {
                     UpdateWalking();
@@ -770,7 +773,7 @@ namespace FaeMaze.Visitors
         /// Builds a world-space path from start to end using BFS through walkable tiles.
         /// Uses actual tile positions from WorldSpaceMazeData to guarantee paths stay on walkable terrain.
         /// </summary>
-        protected virtual List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
+        public virtual List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
@@ -1407,15 +1410,9 @@ namespace FaeMaze.Visitors
 
                 if (dist <= nodeProximityThreshold)
                 {
-                    if (logVisitorPathfinding)
-                        Debug.Log($"[Confusion:IsAtNode] YES - At node {i} (dist: {dist:F2} <= {nodeProximityThreshold})");
                     return true;
                 }
             }
-
-            // Only log "not at node" occasionally to avoid spam
-            if (logVisitorPathfinding && Time.frameCount % 60 == 0)
-                Debug.Log($"[Confusion:IsAtNode] NO - Nearest node {closestNodeId} at dist {closestDist:F2} (threshold: {nodeProximityThreshold})");
 
             return false;
         }
@@ -1618,11 +1615,6 @@ namespace FaeMaze.Visitors
             }
 
             // Log fascinated movement periodically
-            if (isFascinated && Time.frameCount % 60 == 0)
-            {
-                Debug.Log($"[Fascination] Walking - pathIndex: {worldPathIndex}/{worldPath.Count}, pos: {transform.position}, target: {worldPath[worldPathIndex]}, dest: {worldDestination}");
-            }
-
             // Use 50% speed if fascinated and walking to lantern
             float effectiveSpeed = moveSpeed * speedMultiplier;
             if (isFascinated && !hasReachedLantern)
@@ -1727,8 +1719,6 @@ namespace FaeMaze.Visitors
                 LogVisitorPath($"reached world-space destination at {worldDestination}");
             }
 
-            Debug.Log($"[Fascination] OnWorldSpacePathComplete - isFascinated: {isFascinated}, hasReachedLantern: {hasReachedLantern}, position: {transform.position}, destination: {worldDestination}");
-
             // Check if fascinated - visitor has reached the lantern stop position
             if (isFascinated && !hasReachedLantern)
             {
@@ -1741,9 +1731,6 @@ namespace FaeMaze.Visitors
                 }
                 fascinationTimer = duration;
                 state = VisitorState.Idle; // Idle at the lantern
-                Vector2 posXY = new Vector2(transform.position.x, transform.position.y);
-                Vector2 lanternXY = new Vector2(fascinationLanternPosition.x, fascinationLanternPosition.y);
-                Debug.Log($"[Fascination] Visitor reached lantern stop position. Final position: {transform.position}, XY Distance to lantern: {Vector2.Distance(posXY, lanternXY):F3}, Timer: {fascinationTimer}s");
                 return;
             }
 
@@ -1988,6 +1975,30 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Directly sets the visitor's path without recalculating.
+        /// Used by external systems (like Kelpie) to modify the visitor's route.
+        /// </summary>
+        /// <param name="path">The new world-space path to follow</param>
+        public virtual void SetPathDirectly(List<Vector3> path)
+        {
+            if (path == null || path.Count == 0)
+            {
+                return;
+            }
+
+            worldPath = path;
+            worldPathIndex = 0;
+
+            // Update destination to the last point in the path
+            if (path.Count > 0)
+            {
+                worldDestination = path[path.Count - 1];
+            }
+
+            RefreshStateFromFlags();
+        }
+
+        /// <summary>
         /// Recalculates the path to the current destination.
         /// </summary>
         public virtual void RecalculatePath()
@@ -2219,11 +2230,8 @@ namespace FaeMaze.Visitors
         {
             if (!IsMovementState(state))
             {
-                Debug.Log($"[Fascination] BecomeFascinated called but not in movement state: {state}");
                 return;
             }
-
-            Debug.Log($"[Fascination] BecomeFascinated START - Visitor at {transform.position}, Lantern at {lanternWorldPosition}");
 
             isFascinated = true;
             fascinationLanternPosition = lanternWorldPosition;
@@ -2239,8 +2247,6 @@ namespace FaeMaze.Visitors
             Vector2 directionToLanternXY = (lanternXY - visitorXY).normalized;
             Vector2 stopPositionXY = lanternXY - directionToLanternXY * 1.5f;
             Vector3 stopPosition = new Vector3(stopPositionXY.x, stopPositionXY.y, transform.position.z);
-
-            Debug.Log($"[Fascination] Direction to lantern (XY): {directionToLanternXY}, Stop position: {stopPosition}");
 
             // Build path to the stop position
             worldPath = BuildWorldPath(transform.position, stopPosition);
@@ -2267,8 +2273,6 @@ namespace FaeMaze.Visitors
 
                 if (firstBadIndex >= 0)
                 {
-                    Vector2 badWaypointXY = new Vector2(worldPath[firstBadIndex].x, worldPath[firstBadIndex].y);
-                    Debug.Log($"[Fascination] Trimming path at index {firstBadIndex} (waypoint at XY dist {Vector2.Distance(badWaypointXY, lanternXY):F2} from lantern)");
                     // Remove all waypoints from firstBadIndex onward (these are too close to lantern)
                     worldPath.RemoveRange(firstBadIndex, worldPath.Count - firstBadIndex);
                 }
@@ -2278,22 +2282,10 @@ namespace FaeMaze.Visitors
                 {
                     worldPath.Add(stopPosition);
                 }
-                Debug.Log($"[Fascination] Final path has {worldPath.Count} waypoints, ending at stop position");
             }
 
             // Set destination to the stop position
             worldDestination = stopPosition;
-
-            // Log the path that was built
-            Debug.Log($"[Fascination] Path built with {worldPath?.Count ?? 0} waypoints");
-            if (worldPath != null && worldPath.Count > 0)
-            {
-                Debug.Log($"[Fascination] Path: {FormatWorldPath(worldPath)}");
-                Debug.Log($"[Fascination] First waypoint: {worldPath[0]}, Last waypoint: {worldPath[worldPath.Count - 1]}");
-                Vector2 lastWaypointXY = new Vector2(worldPath[worldPath.Count - 1].x, worldPath[worldPath.Count - 1].y);
-                Debug.Log($"[Fascination] XY Distance from last waypoint to stopPosition: {Vector2.Distance(lastWaypointXY, stopPositionXY):F3}");
-                Debug.Log($"[Fascination] XY Distance from last waypoint to lantern: {Vector2.Distance(lastWaypointXY, lanternXY):F3}");
-            }
         }
 
         /// <summary>
@@ -2302,14 +2294,11 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void EndFascination()
         {
-            Debug.Log($"[Fascination] EndFascination - resuming from {transform.position} toward original destination {originalDestination}");
-
             // Set cooldown BEFORE clearing the lantern reference, to prevent immediate re-fascination
             if (currentFaeLantern != null)
             {
                 float cooldown = config != null ? config.FascinationCooldown : currentFaeLantern.CooldownSec;
                 lanternCooldowns[currentFaeLantern] = cooldown;
-                Debug.Log($"[Fascination] Set cooldown for lantern: {cooldown}s");
             }
 
             isFascinated = false;
@@ -2324,7 +2313,6 @@ namespace FaeMaze.Visitors
                 worldPathIndex = 0;
                 worldDestination = originalDestination;
                 state = VisitorState.Walking;
-                Debug.Log($"[Fascination] Resumed path has {worldPath?.Count ?? 0} waypoints to {originalDestination}");
             }
             else
             {
@@ -2333,7 +2321,6 @@ namespace FaeMaze.Visitors
                 worldPath = BuildWorldPath(transform.position, randomDestination);
                 worldPathIndex = 0;
                 state = VisitorState.Walking;
-                Debug.Log($"[Fascination] No original destination, wandering to {randomDestination}");
             }
         }
 
@@ -2375,32 +2362,33 @@ namespace FaeMaze.Visitors
         /// <param name="slowFactor">Speed multiplier while fascinated (0.5 = 50% speed)</param>
         public virtual void BecomeFascinatedByRing(FaeMaze.Props.FairyRing ring, float duration, float slowFactor)
         {
-            Debug.Log($"[FairyRing] BecomeFascinatedByRing called - visitor at {transform.position}, ring at {ring.transform.position}, state: {state}");
-
             if (!IsMovementState(state) && state != VisitorState.Idle)
             {
-                Debug.Log($"[FairyRing] REJECTED - not in movement state: {state}");
+                return;
+            }
+
+            // Don't become fascinated if being lured by a wisp
+            var followWisp = GetComponent<FaeMaze.Visitors.FollowWispBehavior>();
+            if (followWisp != null && followWisp.IsFollowing)
+            {
                 return;
             }
 
             // Already fascinated by this ring
             if (currentFairyRing == ring)
             {
-                Debug.Log($"[FairyRing] REJECTED - already fascinated by this ring");
                 return;
             }
 
             // Immune to this ring (just finished fascination, haven't left trigger yet)
             if (immuneToFairyRing == ring)
             {
-                Debug.Log($"[FairyRing] REJECTED - immune to this ring until leaving trigger");
                 return;
             }
 
             // Clear any existing lantern fascination
             if (currentFaeLantern != null)
             {
-                Debug.Log($"[FairyRing] Clearing existing lantern fascination");
                 ClearLanternInteraction();
             }
 
@@ -2419,14 +2407,11 @@ namespace FaeMaze.Visitors
             float distanceToRing = toVisitor.magnitude;
             fairyRingApproaching = distanceToRing > FairyRingCircleRadius;
 
-            Debug.Log($"[FairyRing] FASCINATED - duration: {duration}s, slowFactor: {slowFactor}, startAngle: {fairyRingCircleAngle * Mathf.Rad2Deg}deg, distance: {distanceToRing:F2}, approaching: {fairyRingApproaching}, ringPos: {ringPos}, visitorPos: {visitorPos}");
-
             // Clear current path - we're now circling
             worldPath = null;
             worldPathIndex = 0;
 
             RefreshStateFromFlags();
-            Debug.Log($"[FairyRing] State after refresh: {state}, isFascinated: {isFascinated}, currentFairyRing: {currentFairyRing != null}");
         }
 
         /// <summary>
@@ -2436,7 +2421,6 @@ namespace FaeMaze.Visitors
         {
             if (currentFairyRing == null)
             {
-                Debug.Log($"[FairyRing] UpdateFairyRingCircling - currentFairyRing is NULL, ending fascination");
                 EndFairyRingFascination();
                 return;
             }
@@ -2445,7 +2429,6 @@ namespace FaeMaze.Visitors
             fairyRingFascinationTimer -= Time.deltaTime;
             if (fairyRingFascinationTimer <= 0f)
             {
-                Debug.Log($"[FairyRing] Timer expired, ending fascination");
                 EndFairyRingFascination();
                 return;
             }
@@ -2464,19 +2447,11 @@ namespace FaeMaze.Visitors
 
                 Vector3 newPosition = Vector3.MoveTowards(oldPosition, targetPos, effectiveSpeed * Time.deltaTime);
 
-                // Log periodically
-                if (Time.frameCount % 60 == 0)
-                {
-                    float distToTarget = Vector3.Distance(newPosition, targetPos);
-                    Debug.Log($"[FairyRing] Approaching - timer: {fairyRingFascinationTimer:F1}s, distToTarget: {distToTarget:F2}, pos: {newPosition}, target: {targetPos}");
-                }
-
                 // Check if we've reached the circle radius
                 float distanceToRing = Vector2.Distance(new Vector2(newPosition.x, newPosition.y), new Vector2(ringCenter.x, ringCenter.y));
                 if (distanceToRing <= FairyRingCircleRadius + 0.05f)
                 {
                     fairyRingApproaching = false;
-                    Debug.Log($"[FairyRing] Reached circle radius ({distanceToRing:F2}), starting to circle");
                 }
 
                 // Update animator direction
@@ -2507,13 +2482,6 @@ namespace FaeMaze.Visitors
             float circleNewY = ringCenter.y + Mathf.Sin(fairyRingCircleAngle) * FairyRingCircleRadius;
             Vector3 circleNewPosition = new Vector3(circleNewX, circleNewY, transform.position.z);
 
-            // Log periodically (every 60 frames)
-            if (Time.frameCount % 60 == 0)
-            {
-                float distToCenter = Vector2.Distance(new Vector2(circleNewPosition.x, circleNewPosition.y), new Vector2(ringCenter.x, ringCenter.y));
-                Debug.Log($"[FairyRing] Circling - timer: {fairyRingFascinationTimer:F1}s, angle: {fairyRingCircleAngle * Mathf.Rad2Deg:F1}deg, pos: {circleNewPosition}, distToCenter: {distToCenter:F2}, ringCenter: {ringCenter}");
-            }
-
             // Update animator direction based on movement (tangent to circle)
             Vector3 circleMoveDir = (circleNewPosition - oldPosition).normalized;
             if (circleMoveDir.sqrMagnitude > 0.01f)
@@ -2530,11 +2498,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void EndFairyRingFascination()
         {
-            Debug.Log($"[FairyRing] EndFairyRingFascination - visitor at {transform.position}");
-
             // Set immunity to this ring until visitor leaves the trigger
             immuneToFairyRing = currentFairyRing;
-            Debug.Log($"[FairyRing] Set immunity to ring: {immuneToFairyRing?.name}");
 
             isFascinated = false;
             currentFairyRing = null;
@@ -2542,9 +2507,7 @@ namespace FaeMaze.Visitors
             speedMultiplier = 1f;
 
             // Visitor becomes lost after fascination ends
-            Debug.Log($"[FairyRing] Calling SetLost()");
             SetLost();
-            Debug.Log($"[FairyRing] After SetLost - state: {state}, worldPath count: {worldPath?.Count ?? 0}");
         }
 
         /// <summary>
@@ -2560,7 +2523,6 @@ namespace FaeMaze.Visitors
         {
             if (immuneToFairyRing == ring)
             {
-                Debug.Log($"[FairyRing] Clearing immunity to ring: {ring.name}");
                 immuneToFairyRing = null;
             }
         }

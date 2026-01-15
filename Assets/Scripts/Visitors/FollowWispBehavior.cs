@@ -6,6 +6,8 @@ namespace FaeMaze.Visitors
     /// <summary>
     /// Component that makes a visitor follow a Willow-the-Wisp.
     /// Attached dynamically when a wisp captures a visitor.
+    /// The visitor will follow the wisp until they reach a PukaHazard
+    /// or become confused (escape condition).
     /// </summary>
     public class FollowWispBehavior : MonoBehaviour
     {
@@ -17,7 +19,7 @@ namespace FaeMaze.Visitors
 
         [SerializeField]
         [Tooltip("Distance to maintain from the wisp")]
-        private float followDistance = 0.3f;
+        private float followDistance = 0.5f;
 
         [SerializeField]
         [Tooltip("Speed multiplier when following wisp")]
@@ -51,6 +53,14 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            // Check if the wisp is still luring (in Reacting state)
+            if (!targetWisp.IsLuring)
+            {
+                // Wisp stopped luring, stop following
+                StopFollowing();
+                return;
+            }
+
             // Follow the wisp
             UpdateFollowing();
         }
@@ -67,12 +77,12 @@ namespace FaeMaze.Visitors
         {
             if (wisp == null)
             {
+                Debug.LogWarning($"[FollowWisp] StartFollowing called with null wisp");
                 return;
             }
 
             targetWisp = wisp;
             isFollowing = true;
-
         }
 
         /// <summary>
@@ -85,7 +95,6 @@ namespace FaeMaze.Visitors
 
             isFollowing = false;
             targetWisp = null;
-
 
             // Remove this component
             Destroy(this);
@@ -100,39 +109,27 @@ namespace FaeMaze.Visitors
             if (visitorController == null || targetWisp == null)
                 return;
 
+            // Get wisp position as the target
+            Vector3 wispPosition = targetWisp.transform.position;
+
             // Get distance to wisp
-            float distance = Vector3.Distance(transform.position, targetWisp.transform.position);
+            float distance = Vector3.Distance(transform.position, wispPosition);
 
             // Only move if we're too far from the wisp
             if (distance > followDistance)
             {
                 // Calculate direction to wisp
-                Vector3 direction = (targetWisp.transform.position - transform.position).normalized;
+                Vector3 direction = (wispPosition - transform.position).normalized;
 
-                // Check if there's a wall in the way using raycast
-                if (Physics.Raycast(transform.position, direction, out RaycastHit hit, distance, LayerMask.GetMask("Walls", "Obstacles")))
-                {
-                    // Wall detected, let visitor's normal pathfinding handle it
-                    return;
-                }
-
-                // Update facing based on actual travel direction, not just wisp position
-                visitorController.ApplyExternalAnimatorDirection(direction);
-
+                // Move toward the wisp (wisp is now on walkable paths, so direct movement is valid)
                 float speed = visitorController.MoveSpeed * followSpeedMultiplier;
-
                 Vector3 newPosition = transform.position + direction * speed * Time.deltaTime;
 
-                // Use rigidbody if available for proper collision detection
-                var rb = GetComponent<Rigidbody>();
-                if (rb != null)
-                {
-                    rb.MovePosition(newPosition);
-                }
-                else
-                {
-                    transform.position = newPosition;
-                }
+                // Update facing direction
+                visitorController.ApplyExternalAnimatorDirection(direction);
+
+                // Move directly
+                transform.position = newPosition;
             }
         }
 

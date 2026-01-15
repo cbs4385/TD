@@ -76,11 +76,8 @@ namespace FaeMaze.Props
             var collider = GetComponent<Collider>();
             if (collider != null && !collider.isTrigger)
             {
-                Debug.LogWarning($"[FairyRing] Collider on {gameObject.name} was not set to trigger - fixing");
                 collider.isTrigger = true;
             }
-
-            Debug.Log($"[FairyRing] Start - position: {transform.position}, collider: {collider?.GetType().Name}, isTrigger: {collider?.isTrigger}");
 
             if (autoSetupSpheres)
             {
@@ -98,7 +95,6 @@ namespace FaeMaze.Props
 
         private void OnTriggerEnter(Collider other)
         {
-            Debug.Log($"[FairyRing] OnTriggerEnter - other: {other.gameObject.name}");
             var visitor = other.GetComponent<VisitorController>();
             if (visitor != null)
             {
@@ -126,7 +122,6 @@ namespace FaeMaze.Props
         /// <param name="visitor">The visitor entering the ring</param>
         private void OnVisitorEnter(VisitorControllerBase visitor)
         {
-            Debug.Log($"[FairyRing] OnVisitorEnter - visitor: {visitor.gameObject.name}, calling BecomeFascinatedByRing");
             // Make visitor fascinated by this ring - they will circle it
             visitor.BecomeFascinatedByRing(this, fascinationDuration, slowFactor);
         }
