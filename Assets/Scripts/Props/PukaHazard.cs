@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Visitors;
@@ -7,11 +8,20 @@ namespace FaeMaze.Props
 {
     /// <summary>
     /// A mystical Puka that creates hazards for visitors using world-space coordinates.
-    /// When visitors become adjacent to a Puka, they may be teleported or destroyed.
-    /// Pukas can link to water locations in the maze.
+    /// When visitors come within range, the Puka becomes active and drags them into the water.
     /// </summary>
     public class PukaHazard : MonoBehaviour
     {
+        #region Enums
+
+        public enum PukaState
+        {
+            Idle,
+            Active
+        }
+
+        #endregion
+
         #region Static Registry
 
         private static readonly List<PukaHazard> _allPukas = new List<PukaHazard>();
@@ -23,50 +33,45 @@ namespace FaeMaze.Props
 
         #region Serialized Fields
 
-        [Header("Kelpie Spawning")]
+        [Header("Kelpie Model")]
         [SerializeField]
-        [Tooltip("Prefab for Kelpie water spirit that lures visitors toward this Puka")]
-        private GameObject kelpiePrefab;
+        [Tooltip("Reference to the kelpie_active child model that rotates to face visitors")]
+        private Transform kelpieActiveModel;
 
+        [Header("Detection Settings")]
         [SerializeField]
-        [Tooltip("Should this Puka spawn a Kelpie guardian?")]
-        private bool spawnKelpie = true;
-
-        [SerializeField]
-        [Tooltip("Offset from Puka position to spawn Kelpie")]
-        private Vector3 kelpieSpawnOffset = new Vector3(2f, 0f, 0f);
-
-        [Header("Interaction Settings")]
-        [SerializeField]
-        [Tooltip("Chance (0-1) that nothing happens when visitor is adjacent")]
-        [Range(0f, 1f)]
-        private float noInteractionChance = 0.2f;
-
-        [SerializeField]
-        [Tooltip("Chance (0-1) that visitor is teleported to linked water location")]
-        [Range(0f, 1f)]
-        private float teleportChance = 0.7f;
-
-        // Note: Kill chance is implicit (1.0 - noInteractionChance - teleportChance)
-        // Typically 10% with default settings (1.0 - 0.2 - 0.7 = 0.1)
+        [Tooltip("World-space distance to detect and capture a visitor")]
+        private float detectionRadius = 1.5f;
 
         [SerializeField]
         [Tooltip("How often to scan for adjacent visitors (seconds)")]
         private float scanInterval = 0.5f;
 
+        [Header("Drowning Animation")]
         [SerializeField]
-        [Tooltip("World-space distance to consider a visitor adjacent")]
-        private float adjacencyDistance = 1.5f;
+        [Tooltip("Duration of the drag phase (moving toward pond on X/Y plane)")]
+        private float dragDuration = 0.333f;
 
-        [Header("Linked Teleport Locations")]
         [SerializeField]
-        [Tooltip("World positions where visitors can be teleported to (water locations)")]
-        private List<Vector3> linkedWaterPositions = new List<Vector3>();
+        [Tooltip("Duration of the submerge phase (sinking in Z direction)")]
+        private float submergeDuration = 0.333f;
+
+        [SerializeField]
+        [Tooltip("How far toward the pond center to drag on X/Y plane")]
+        private float dragDistance = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Final Z position when visitor is fully submerged")]
+        private float submergedZ = 2f;
+
+        [SerializeField]
+        [Tooltip("X rotation applied to visitor when knocked down (degrees) - tips forward")]
+        private float knockdownXRotation = -90f;
 
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("Color of the Puka sprite (default green)")]
-        private Color pukaColor = new Color(0f, 1f, 0f, 1f); // Green
+        private Color pukaColor = new Color(0f, 1f, 0f, 1f);
 
         [SerializeField]
         [Tooltip("Size of the Puka sprite")]
@@ -77,7 +82,7 @@ namespace FaeMaze.Props
         private int sortingOrder = 14;
 
         [SerializeField]
-        [Tooltip("Enable pulsing glow effect")]
+        [Tooltip("Enable pulsing glow effect when idle")]
         private bool enablePulse = true;
 
         [SerializeField]
@@ -90,24 +95,27 @@ namespace FaeMaze.Props
 
         [SerializeField]
         [Tooltip("Generate a procedural sprite instead of using imported visuals")]
-        private bool useProceduralSprite = true;
+        private bool useProceduralSprite = false;
 
         [Header("Debug")]
         [SerializeField]
-        [Tooltip("Draw linked water locations in Scene view")]
-        private bool debugDrawLinks = true;
+        [Tooltip("Draw detection radius in Scene view")]
+        private bool debugDrawRadius = true;
 
         #endregion
 
         #region Private Fields
 
         private MazeGridBehaviour mazeGridBehaviour;
-        private HashSet<GameObject> processedVisitors; // Track which visitors we've already interacted with
+        private HashSet<GameObject> processedVisitors;
         private float scanTimer;
         private SpriteRenderer spriteRenderer;
         private Vector3 baseScale;
         private Vector3 initialScale;
-        private GameObject spawnedKelpie;
+        private PukaState currentState = PukaState.Idle;
+        private Animator animator;
+        private Animation legacyAnimation;
+        private GameObject currentVictim;
 
         #endregion
 
@@ -116,8 +124,8 @@ namespace FaeMaze.Props
         /// <summary>Gets the world position of this Puka</summary>
         public Vector3 WorldPosition => transform.position;
 
-        /// <summary>Gets the list of linked water positions in world space</summary>
-        public IReadOnlyList<Vector3> LinkedWaterPositions => linkedWaterPositions;
+        /// <summary>Gets the current state of the Puka</summary>
+        public PukaState State => currentState;
 
         #endregion
 
@@ -127,23 +135,114 @@ namespace FaeMaze.Props
         {
             initialScale = transform.localScale;
             processedVisitors = new HashSet<GameObject>();
-            SetupSpriteRenderer();
+
+            // Try to find animator on this object or in children
+            animator = GetComponent<Animator>();
+            if (animator == null)
+            {
+                animator = GetComponentInChildren<Animator>();
+            }
+
+            // Also look for legacy Animation component
+            legacyAnimation = GetComponent<Animation>();
+            if (legacyAnimation == null)
+            {
+                legacyAnimation = GetComponentInChildren<Animation>();
+            }
+
+            if (useProceduralSprite)
+            {
+                SetupSpriteRenderer();
+            }
         }
 
         private void Start()
         {
-            // Find references
+            Debug.Log($"[PukaHazard] {gameObject.name} Start() - position: {transform.position}");
+
             mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
 
-            if (mazeGridBehaviour == null)
+            // Try to find kelpie model if not assigned
+            // New prefab structure has Armature as direct child
+            if (kelpieActiveModel == null)
             {
-                return;
+                kelpieActiveModel = transform.Find("kelpie_react");
+                if (kelpieActiveModel == null)
+                {
+                    kelpieActiveModel = transform.Find("kelpie_active");
+                }
+                if (kelpieActiveModel == null)
+                {
+                    kelpieActiveModel = transform.Find("Root");
+                }
+                if (kelpieActiveModel == null)
+                {
+                    kelpieActiveModel = transform.Find("Armature");
+                }
+                // If still null, use this transform itself (the puka node is the rotatable object)
+                if (kelpieActiveModel == null && transform.childCount > 0)
+                {
+                    kelpieActiveModel = transform.GetChild(0);
+                }
             }
 
-            // Spawn Kelpie if enabled
-            if (spawnKelpie && kelpiePrefab != null)
+            // Reset the kelpie model's local transform to (0,0,0) relative to puka node
+            if (kelpieActiveModel != null)
             {
-                SpawnKelpie();
+                kelpieActiveModel.localPosition = Vector3.zero;
+                kelpieActiveModel.localRotation = Quaternion.identity;
+            }
+
+            // Also try to find animator/animation on the kelpie model
+            if (kelpieActiveModel != null)
+            {
+                if (animator == null)
+                {
+                    animator = kelpieActiveModel.GetComponent<Animator>();
+                }
+                if (legacyAnimation == null)
+                {
+                    legacyAnimation = kelpieActiveModel.GetComponent<Animation>();
+                }
+            }
+
+            // Log available animations
+            if (legacyAnimation != null)
+            {
+                Debug.Log($"[PukaHazard] {gameObject.name} Legacy Animation found with {legacyAnimation.GetClipCount()} clips");
+                foreach (AnimationState state in legacyAnimation)
+                {
+                    Debug.Log($"[PukaHazard] - Legacy clip: {state.name}");
+                }
+            }
+
+            // Log Animator clips
+            if (animator != null && animator.runtimeAnimatorController != null)
+            {
+                var clips = animator.runtimeAnimatorController.animationClips;
+                Debug.Log($"[PukaHazard] {gameObject.name} Animator found with {clips.Length} clips");
+                foreach (var clip in clips)
+                {
+                    Debug.Log($"[PukaHazard] - Animator clip: {clip.name}");
+                }
+            }
+            else if (animator != null)
+            {
+                Debug.Log($"[PukaHazard] {gameObject.name} Animator found but no RuntimeAnimatorController assigned");
+            }
+
+            Debug.Log($"[PukaHazard] {gameObject.name} initialized - detectionRadius: {detectionRadius}, dragDuration: {dragDuration}, submergeDuration: {submergeDuration}, kelpieActiveModel: {(kelpieActiveModel != null ? kelpieActiveModel.name : "NULL")}, animator: {(animator != null ? animator.gameObject.name : "NULL")}, legacyAnimation: {(legacyAnimation != null ? legacyAnimation.gameObject.name : "NULL")}");
+
+            // Set initial state to idle (static) - freeze the animator
+            if (animator != null && animator.runtimeAnimatorController != null)
+            {
+                animator.speed = 0f;
+                // Try new clip name first, then fall back to old name
+                if (HasAnimatorState("Idle"))
+                    animator.Play("Idle", 0, 0f);
+                else
+                    animator.Play("ArmatureAction", 0, 0f);
+                Debug.Log($"[PukaHazard] {gameObject.name} Initial static idle state set");
             }
         }
 
@@ -162,86 +261,20 @@ namespace FaeMaze.Props
 
         private void Update()
         {
-            if (enablePulse && spriteRenderer != null)
+            // Only pulse when idle
+            if (currentState == PukaState.Idle)
             {
-                UpdatePulse();
-            }
-
-            // Periodically scan for adjacent visitors
-            scanTimer += Time.deltaTime;
-            if (scanTimer >= scanInterval)
-            {
-                scanTimer = 0f;
-                ScanForAdjacentVisitors();
-            }
-        }
-
-        #endregion
-
-        #region Visitor Detection and Interaction
-
-        private bool IsVisitorActive(FaeMaze.Visitors.VisitorControllerBase.VisitorState state)
-        {
-            return state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking
-                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Fascinated
-                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Confused
-                || state == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Frightened;
-        }
-
-        /// <summary>
-        /// Scans for visitors adjacent to this Puka using world-space distance.
-        /// </summary>
-        private void ScanForAdjacentVisitors()
-        {
-            if (mazeGridBehaviour == null)
-            {
-                return;
-            }
-
-            // Find all visitors in the scene
-            VisitorController[] allVisitors = FindObjectsByType<VisitorController>(FindObjectsSortMode.None);
-            MistakingVisitorController[] mistakingVisitors = FindObjectsByType<MistakingVisitorController>(FindObjectsSortMode.None);
-
-            // Process regular visitors
-            foreach (var visitor in allVisitors)
-            {
-                if (visitor == null || processedVisitors.Contains(visitor.gameObject))
+                if (enablePulse && spriteRenderer != null)
                 {
-                    continue;
+                    UpdatePulse();
                 }
 
-                // Check if visitor is active
-                if (!IsVisitorActive(visitor.State))
+                // Only scan for visitors when idle
+                scanTimer += Time.deltaTime;
+                if (scanTimer >= scanInterval)
                 {
-                    continue;
-                }
-
-                // Check world-space distance for adjacency
-                float distance = Vector3.Distance(transform.position, visitor.transform.position);
-                if (distance <= adjacencyDistance)
-                {
-                    InteractWithVisitor(visitor.gameObject, visitor.transform.position);
-                }
-            }
-
-            // Process mistaking visitors
-            foreach (var mistakingVisitor in mistakingVisitors)
-            {
-                if (mistakingVisitor == null || processedVisitors.Contains(mistakingVisitor.gameObject))
-                {
-                    continue;
-                }
-
-                if (!IsVisitorActive(mistakingVisitor.State))
-                {
-                    continue;
-                }
-
-                // Check world-space distance for adjacency
-                float distance = Vector3.Distance(transform.position, mistakingVisitor.transform.position);
-                if (distance <= adjacencyDistance)
-                {
-                    InteractWithVisitor(mistakingVisitor.gameObject, mistakingVisitor.transform.position);
+                    scanTimer = 0f;
+                    ScanForAdjacentVisitors();
                 }
             }
 
@@ -249,120 +282,387 @@ namespace FaeMaze.Props
             processedVisitors.RemoveWhere(v => v == null);
         }
 
+        #endregion
+
+        #region State Management
+
         /// <summary>
-        /// Interacts with a visitor that has become adjacent to this Puka.
-        /// Rolls for one of three outcomes: no interaction, teleport, or kill.
+        /// Checks if the animator has a clip with the given name.
         /// </summary>
-        private void InteractWithVisitor(GameObject visitorObject, Vector3 visitorWorldPos)
+        private bool HasAnimatorState(string stateName)
         {
-            if (visitorObject == null)
+            if (animator == null || animator.runtimeAnimatorController == null)
+                return false;
+
+            foreach (var clip in animator.runtimeAnimatorController.animationClips)
             {
+                if (clip.name == stateName)
+                    return true;
+            }
+            return false;
+        }
+
+        private void SetState(PukaState newState)
+        {
+            if (currentState == newState)
+                return;
+
+            Debug.Log($"[PukaHazard] {gameObject.name} SetState: {currentState} -> {newState}");
+            currentState = newState;
+
+            // When idle, stop animation completely (static pose)
+            if (newState == PukaState.Idle && animator != null)
+            {
+                animator.speed = 0f;
+                // Play first frame and freeze - try new name first
+                if (HasAnimatorState("Idle"))
+                    animator.Play("Idle", 0, 0f);
+                else
+                    animator.Play("ArmatureAction", 0, 0f);
+                Debug.Log($"[PukaHazard] {gameObject.name} Set to static idle (animator.speed = 0)");
                 return;
             }
 
-            // Mark as processed
-            processedVisitors.Add(visitorObject);
-
-            // Calculate approach direction based on visitor position relative to Puka
-            int direction = CalculateApproachDirection(visitorWorldPos);
-
-            // Set Direction parameter on Animator if present
-            var animator = GetComponent<Animator>();
+            // When active, ensure animator is playing at normal speed
             if (animator != null)
             {
-                animator.SetInteger("Direction", direction);
+                animator.speed = 1f;
             }
 
-            // Roll for interaction
-            float roll = Random.value;
+            // Animation clip/state names to try (new naming: React/Idle, old naming: ArmatureAction)
+            string[] clipNamesToTry = newState == PukaState.Active
+                ? new[] { "React", "ArmatureAction.002", "kelpie_react", "react", "active", "attack" }
+                : new[] { "Idle", "ArmatureAction", "ArmatureAction.001", "kelpie_idle", "idle", "default" };
 
-            if (roll < noInteractionChance)
+            // Try legacy Animation first (from GLB import)
+            if (legacyAnimation != null)
             {
-                // 20% - No interaction
-                return;
+                bool clipFound = false;
+                foreach (string clipName in clipNamesToTry)
+                {
+                    if (legacyAnimation.GetClip(clipName) != null)
+                    {
+                        legacyAnimation.Play(clipName);
+                        Debug.Log($"[PukaHazard] {gameObject.name} legacyAnimation.Play('{clipName}')");
+                        clipFound = true;
+                        break;
+                    }
+                }
+
+                if (!clipFound)
+                {
+                    // Try playing the default/first clip
+                    if (legacyAnimation.clip != null)
+                    {
+                        legacyAnimation.Play(legacyAnimation.clip.name);
+                        Debug.Log($"[PukaHazard] {gameObject.name} Playing default clip: {legacyAnimation.clip.name}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[PukaHazard] {gameObject.name} No animation clips found to play");
+                    }
+                }
             }
-            else if (roll < noInteractionChance + teleportChance)
+            // Try Animator (Mecanim) - play states by name directly
+            else if (animator != null)
             {
-                // 70% - Teleport to linked water location
-                TeleportVisitor(visitorObject);
+                bool stateFound = false;
+                foreach (string stateName in clipNamesToTry)
+                {
+                    // Try to play the state directly - CrossFade will work if state exists
+                    try
+                    {
+                        animator.Play(stateName, 0, 0f);
+                        Debug.Log($"[PukaHazard] {gameObject.name} animator.Play('{stateName}')");
+                        stateFound = true;
+                        break;
+                    }
+                    catch
+                    {
+                        // State doesn't exist, try next
+                    }
+                }
+
+                if (!stateFound)
+                {
+                    // Try to play any available state
+                    var clips = animator.runtimeAnimatorController?.animationClips;
+                    if (clips != null && clips.Length > 0)
+                    {
+                        Debug.Log($"[PukaHazard] {gameObject.name} Available animator clips:");
+                        foreach (var clip in clips)
+                        {
+                            Debug.Log($"[PukaHazard] - Clip: {clip.name}");
+                        }
+                        animator.Play(clips[0].name, 0, 0f);
+                        Debug.Log($"[PukaHazard] {gameObject.name} Playing first available clip: {clips[0].name}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[PukaHazard] {gameObject.name} No animator clips found");
+                    }
+                }
             }
             else
             {
-                // 10% - Kill visitor
-                KillVisitor(visitorObject);
+                Debug.LogWarning($"[PukaHazard] {gameObject.name} No animation system found!");
+            }
+        }
+
+        #endregion
+
+        #region Visitor Detection and Interaction
+
+        private bool IsVisitorActive(VisitorControllerBase.VisitorState state)
+        {
+            return state == VisitorControllerBase.VisitorState.Walking
+                || state == VisitorControllerBase.VisitorState.Fascinated
+                || state == VisitorControllerBase.VisitorState.Confused
+                || state == VisitorControllerBase.VisitorState.Frightened;
+        }
+
+        /// <summary>
+        /// Scans for visitors within detection radius.
+        /// </summary>
+        private void ScanForAdjacentVisitors()
+        {
+            if (currentState != PukaState.Idle)
+                return;
+
+            // Find all visitor types (using base class to get all subtypes)
+            var allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor == null || processedVisitors.Contains(visitor.gameObject))
+                    continue;
+
+                if (!IsVisitorActive(visitor.State))
+                    continue;
+
+                // Check world-space distance
+                float distance = Vector3.Distance(transform.position, visitor.transform.position);
+                if (distance <= detectionRadius)
+                {
+                    Debug.Log($"[PukaHazard] {gameObject.name} detected visitor {visitor.gameObject.name} at distance {distance:F2} (radius: {detectionRadius})");
+                    CaptureVisitor(visitor);
+                    break; // Only capture one visitor at a time
+                }
             }
         }
 
         /// <summary>
-        /// Calculates which direction the visitor is approaching from using world-space.
-        /// Returns: 1 (+y), 2 (-y), 3 (-x), 4 (+x), or 0 (other)
+        /// Captures a visitor and begins the drowning sequence.
         /// </summary>
-        private int CalculateApproachDirection(Vector3 visitorWorldPos)
+        private void CaptureVisitor(VisitorControllerBase visitor)
         {
-            Vector3 delta = visitorWorldPos - transform.position;
-
-            // Determine dominant direction
-            if (Mathf.Abs(delta.y) > Mathf.Abs(delta.x))
+            if (visitor == null)
             {
-                return delta.y > 0 ? 1 : 2; // +y (north) : -y (south)
-            }
-            else if (Mathf.Abs(delta.x) > 0.01f)
-            {
-                return delta.x < 0 ? 3 : 4; // -x (west) : +x (east)
-            }
-
-            return 0; // Centered or other
-        }
-
-        /// <summary>
-        /// Teleports a visitor to a randomly selected linked water location.
-        /// </summary>
-        private void TeleportVisitor(GameObject visitorObject)
-        {
-            if (linkedWaterPositions.Count == 0)
-            {
+                Debug.LogWarning($"[PukaHazard] {gameObject.name} CaptureVisitor called with null visitor");
                 return;
             }
 
-            // Pick a random linked water position
-            Vector3 targetWorldPos = linkedWaterPositions[Random.Range(0, linkedWaterPositions.Count)];
+            Debug.Log($"[PukaHazard] {gameObject.name} capturing visitor {visitor.gameObject.name}");
 
-            // Teleport the visitor
-            visitorObject.transform.position = targetWorldPos;
+            // Mark as processed so we don't capture again
+            processedVisitors.Add(visitor.gameObject);
+            currentVictim = visitor.gameObject;
 
-            // Let the visitor recalculate its own path
-            var visitorController = visitorObject.GetComponent<VisitorController>();
-            if (visitorController != null)
-            {
-                visitorController.RecalculatePath();
-            }
+            // Set state to active
+            SetState(PukaState.Active);
+            Debug.Log($"[PukaHazard] {gameObject.name} state set to Active");
 
-            var mistakingVisitorController = visitorObject.GetComponent<MistakingVisitorController>();
-            if (mistakingVisitorController != null)
-            {
-                mistakingVisitorController.RecalculatePath();
-            }
+            // Rotate kelpie_active model to face the visitor
+            RotateKelpieToFaceVisitor(visitor.transform.position);
+            Debug.Log($"[PukaHazard] {gameObject.name} kelpieActiveModel: {(kelpieActiveModel != null ? kelpieActiveModel.name : "NULL")}");
 
-            // Play sound effect if available
-            FaeMaze.Audio.SoundManager.Instance?.PlayLanternPlaced(); // Reuse lantern sound for now
+            // Start the drowning coroutine
+            Debug.Log($"[PukaHazard] {gameObject.name} starting DrownVisitorCoroutine");
+            StartCoroutine(DrownVisitorCoroutine(visitor));
         }
 
         /// <summary>
-        /// Kills a visitor immediately.
+        /// Rotates the kelpie_active model to face the visitor.
         /// </summary>
-        private void KillVisitor(GameObject visitorObject)
+        private void RotateKelpieToFaceVisitor(Vector3 visitorPosition)
         {
-            // Play death sound if available
-            FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed(); // Reuse consumption sound
+            if (kelpieActiveModel == null)
+                return;
 
-            // Destroy the visitor
-            Destroy(visitorObject);
+            // Calculate direction to visitor in XY plane
+            Vector3 direction = visitorPosition - transform.position;
+            direction.z = 0;
 
-            // Track statistic (treat as consumed for now)
-            if (GameStatsTracker.Instance != null)
+            if (direction.sqrMagnitude > 0.001f)
             {
-                GameStatsTracker.Instance.RecordVisitorConsumed();
+                // Calculate angle in XY plane
+                float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+
+                // Rotate around world Z axis to face the visitor in XY plane
+                kelpieActiveModel.localRotation = Quaternion.Euler(0f, 0f, angle);
             }
+        }
+
+        /// <summary>
+        /// Coroutine that handles the visitor drowning animation.
+        /// Phase 1: Knockdown (instant rotation) + drag on X/Y plane toward pond
+        /// Phase 2: Submerge in Z direction
+        /// </summary>
+        private IEnumerator DrownVisitorCoroutine(VisitorControllerBase visitor)
+        {
+            Debug.Log($"[PukaHazard] DrownVisitorCoroutine START - visitor: {(visitor != null ? visitor.gameObject.name : "NULL")}");
+
+            if (visitor == null)
+            {
+                Debug.LogWarning($"[PukaHazard] DrownVisitorCoroutine - visitor is null, aborting");
+                SetState(PukaState.Idle);
+                yield break;
+            }
+
+            GameObject visitorObj = visitor.gameObject;
+            Transform visitorTransform = visitor.transform;
+
+            // Set the visitor to Drowning state (stops movement and clears all other states)
+            Debug.Log($"[PukaHazard] Calling BecomeDrowning on visitor {visitorObj.name}");
+            visitor.BecomeDrowning();
+            Debug.Log($"[PukaHazard] Visitor state after BecomeDrowning: {visitor.State}");
+
+            // Store initial values
+            Vector3 initialPosition = visitorTransform.position;
+            Quaternion initialRotation = visitorTransform.rotation;
+            Debug.Log($"[PukaHazard] Visitor initial position: {initialPosition}, rotation: {initialRotation.eulerAngles}");
+
+            // Wait a moment before knockdown
+            yield return new WaitForSeconds(0.25f);
+
+            // Apply knockdown rotation instantly (tips forward)
+            Quaternion knockdownRotation = initialRotation * Quaternion.Euler(knockdownXRotation, 0f, 0f);
+            visitorTransform.rotation = knockdownRotation;
+            Debug.Log($"[PukaHazard] Knockdown rotation applied: {knockdownRotation.eulerAngles}");
+
+            // Wait a moment after knockdown before dragging
+            yield return new WaitForSeconds(0.25f);
+
+            // Calculate drag direction on X/Y plane toward pond center
+            Vector3 pondPosition = transform.position;
+            Vector3 directionToPond = new Vector3(
+                pondPosition.x - initialPosition.x,
+                pondPosition.y - initialPosition.y,
+                0f
+            ).normalized;
+
+            // Phase 1: Drag on X/Y plane toward pond
+            Vector3 dragStartPos = initialPosition;
+            Vector3 dragEndPos = initialPosition + directionToPond * dragDistance;
+            Debug.Log($"[PukaHazard] Phase 1 - Drag on X/Y plane over {dragDuration}s from {dragStartPos} to {dragEndPos}");
+
+            float elapsed = 0f;
+            int frameCount = 0;
+
+            while (elapsed < dragDuration)
+            {
+                if (visitorObj == null)
+                {
+                    Debug.LogWarning($"[PukaHazard] Visitor destroyed externally during drag phase at frame {frameCount}");
+                    SetState(PukaState.Idle);
+                    yield break;
+                }
+
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / dragDuration);
+                float smoothT = Mathf.SmoothStep(0f, 1f, t);
+
+                // Lerp position on X/Y plane only
+                visitorTransform.position = Vector3.Lerp(dragStartPos, dragEndPos, smoothT);
+
+                // Continuously track the visitor with the kelpie model
+                RotateKelpieToFaceVisitor(visitorTransform.position);
+
+                frameCount++;
+
+                if (frameCount % 10 == 0)
+                {
+                    Debug.Log($"[PukaHazard] Drag progress: {t * 100:F0}%, pos: {visitorTransform.position}");
+                }
+
+                yield return null;
+            }
+
+            // Ensure we're at the drag end position
+            if (visitorObj != null)
+            {
+                visitorTransform.position = dragEndPos;
+            }
+
+            Debug.Log($"[PukaHazard] Phase 1 complete - drag finished at {dragEndPos}");
+
+            // Phase 2: Submerge in Z direction
+            Vector3 submergeStartPos = visitorTransform.position;
+            Vector3 submergedPosition = new Vector3(
+                submergeStartPos.x,
+                submergeStartPos.y,
+                submergedZ
+            );
+            Debug.Log($"[PukaHazard] Phase 2 - Submerge in Z over {submergeDuration}s from {submergeStartPos} to {submergedPosition}");
+
+            elapsed = 0f;
+            frameCount = 0;
+
+            while (elapsed < submergeDuration)
+            {
+                if (visitorObj == null)
+                {
+                    Debug.LogWarning($"[PukaHazard] Visitor destroyed externally during submerge phase at frame {frameCount}");
+                    SetState(PukaState.Idle);
+                    yield break;
+                }
+
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / submergeDuration);
+                float smoothT = Mathf.SmoothStep(0f, 1f, t);
+
+                // Lerp Z position only
+                visitorTransform.position = Vector3.Lerp(submergeStartPos, submergedPosition, smoothT);
+
+                // Continuously track the visitor with the kelpie model
+                RotateKelpieToFaceVisitor(visitorTransform.position);
+
+                frameCount++;
+
+                if (frameCount % 10 == 0)
+                {
+                    Debug.Log($"[PukaHazard] Submerge progress: {t * 100:F0}%, pos: {visitorTransform.position}");
+                }
+
+                yield return null;
+            }
+
+            Debug.Log($"[PukaHazard] Drowning animation complete");
+
+            // Ensure final position
+            if (visitorObj != null)
+            {
+                visitorTransform.position = submergedPosition;
+                Debug.Log($"[PukaHazard] Final position set to {submergedPosition}");
+
+                // Play sound effect
+                FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
+
+                // Track statistic
+                if (GameStatsTracker.Instance != null)
+                {
+                    GameStatsTracker.Instance.RecordVisitorConsumed();
+                }
+
+                // Destroy the visitor
+                Debug.Log($"[PukaHazard] Destroying visitor {visitorObj.name}");
+                Destroy(visitorObj);
+            }
+
+            // Revert to idle state
+            currentVictim = null;
+            SetState(PukaState.Idle);
+            Debug.Log($"[PukaHazard] DrownVisitorCoroutine END - state reset to Idle");
         }
 
         #endregion
@@ -385,11 +685,8 @@ namespace FaeMaze.Props
         private void ApplySpriteSettings()
         {
             if (spriteRenderer == null)
-            {
                 return;
-            }
 
-            // Only override scale when generating a procedural sprite
             if (useProceduralSprite)
             {
                 baseScale = new Vector3(pukaSize, pukaSize, 1f);
@@ -422,97 +719,30 @@ namespace FaeMaze.Props
 
         #endregion
 
-        #region Kelpie Spawning
-
-        /// <summary>
-        /// Spawns a Kelpie water spirit near this Puka.
-        /// </summary>
-        private void SpawnKelpie()
-        {
-            if (spawnedKelpie != null)
-            {
-                return; // Already spawned
-            }
-
-            Vector3 spawnPosition = transform.position + kelpieSpawnOffset;
-            spawnedKelpie = Instantiate(kelpiePrefab, spawnPosition, Quaternion.identity);
-            spawnedKelpie.name = $"Kelpie_{gameObject.name}";
-        }
-
-        #endregion
-
-        #region Public Methods
-
-        /// <summary>
-        /// Adds a water position to the linked teleport locations.
-        /// </summary>
-        /// <param name="worldPos">World position to add</param>
-        public void AddLinkedWaterPosition(Vector3 worldPos)
-        {
-            if (!linkedWaterPositions.Contains(worldPos))
-            {
-                linkedWaterPositions.Add(worldPos);
-            }
-        }
-
-        /// <summary>
-        /// Clears all linked water positions.
-        /// </summary>
-        public void ClearLinkedWaterPositions()
-        {
-            linkedWaterPositions.Clear();
-        }
-
-        #endregion
-
         #region Gizmos
 
         private void OnDrawGizmos()
         {
-            if (!debugDrawLinks || linkedWaterPositions == null)
-            {
+            if (!debugDrawRadius)
                 return;
-            }
 
-            // Draw lines to linked water positions
-            Gizmos.color = new Color(0f, 1f, 0f, 0.3f); // Semi-transparent green
-            foreach (var waterPos in linkedWaterPositions)
-            {
-                Gizmos.DrawLine(transform.position, waterPos);
-
-                // Draw small sphere at linked position
-                Gizmos.DrawWireSphere(waterPos, 0.2f);
-            }
-
-            // Draw adjacency radius
+            // Draw detection radius
             Gizmos.color = new Color(0f, 1f, 0f, 0.15f);
-            Gizmos.DrawWireSphere(transform.position, adjacencyDistance);
+            Gizmos.DrawWireSphere(transform.position, detectionRadius);
         }
 
         private void OnDrawGizmosSelected()
         {
-            if (!debugDrawLinks || linkedWaterPositions == null)
-            {
+            if (!debugDrawRadius)
                 return;
-            }
 
-            // Draw brighter when selected
-            Gizmos.color = new Color(0f, 1f, 0f, 0.6f);
-            foreach (var waterPos in linkedWaterPositions)
-            {
-                Gizmos.DrawLine(transform.position, waterPos);
-
-                // Draw sphere at linked position
-                Gizmos.DrawSphere(waterPos, 0.15f);
-            }
+            // Draw detection radius (brighter when selected)
+            Gizmos.color = new Color(0f, 1f, 0f, 0.3f);
+            Gizmos.DrawWireSphere(transform.position, detectionRadius);
 
             // Draw this Puka's position
             Gizmos.color = Color.green;
             Gizmos.DrawWireSphere(transform.position, 0.3f);
-
-            // Draw adjacency radius
-            Gizmos.color = new Color(0f, 1f, 0f, 0.3f);
-            Gizmos.DrawWireSphere(transform.position, adjacencyDistance);
         }
 
         #endregion

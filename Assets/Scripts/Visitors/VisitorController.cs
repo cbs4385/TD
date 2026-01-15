@@ -88,29 +88,21 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            if (isMesmerized)
-            {
-                state = VisitorState.Mesmerized;
-            }
-            else if (isFrightened)
+            if (isFrightened)
             {
                 state = VisitorState.Frightened;
-            }
-            else if (isLost)
-            {
-                state = VisitorState.Lost;
             }
             else if (isFascinated)
             {
                 state = VisitorState.Fascinated;
             }
-            else if (isLured)
-            {
-                state = VisitorState.Lured;
-            }
             else if (isConfused && confusionEnabled)
             {
                 state = VisitorState.Confused;
+            }
+            else if (isLured)
+            {
+                state = VisitorState.Lured;
             }
             else
             {

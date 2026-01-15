@@ -499,7 +499,7 @@ namespace FaeMaze.HeartPowers
 
             foreach (var visitor in visitors)
             {
-                if (visitor.State == VisitorControllerBase.VisitorState.Mesmerized ||
+                if (visitor.State == VisitorControllerBase.VisitorState.Fascinated ||
                     visitor.State == VisitorControllerBase.VisitorState.Consumed ||
                     visitor.State == VisitorControllerBase.VisitorState.Escaping)
                 {

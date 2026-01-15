@@ -20,15 +20,13 @@ namespace FaeMaze.Visitors
         {
             Idle,
             Walking,
-            Fascinated,
-            Confused,
+            Fascinated,    // Entranced/hypnotized/mesmerized state (consolidated)
+            Confused,      // Lost/wandering aimlessly state (consolidated)
             Frightened,
-            Mesmerized,    // New: entranced/hypnotized state
-            Lost,          // New: wandering aimlessly state
-            Lured,         // New: drawn toward the Heart by Murmuring Paths
+            Lured,         // Drawn toward the Heart by Murmuring Paths
             Dazed,         // Stunned from witnessing maze growth
             Consumed,
-            Escaping
+            Escaping       // Leaving the game (includes drowning)
         }
 
         #endregion
@@ -175,8 +173,6 @@ namespace FaeMaze.Visitors
         protected VisitorState currentTimedState = VisitorState.Idle;
         protected float currentStateDuration;
         protected float currentStateTimer;
-        protected bool isMesmerized;
-        protected bool isLost;
         protected bool isFrightened;
         protected bool isLured;
         protected bool isDazed;
@@ -588,8 +584,8 @@ namespace FaeMaze.Visitors
                 || visitorState == VisitorState.Fascinated
                 || visitorState == VisitorState.Confused
                 || visitorState == VisitorState.Frightened
-                || visitorState == VisitorState.Mesmerized
-                || visitorState == VisitorState.Lost
+                || visitorState == VisitorState.Fascinated
+                || visitorState == VisitorState.Confused
                 || visitorState == VisitorState.Lured;
         }
 
@@ -607,21 +603,17 @@ namespace FaeMaze.Visitors
             {
                 state = VisitorState.Dazed;
             }
-            else if (isMesmerized)
-            {
-                state = VisitorState.Mesmerized;
-            }
             else if (isFrightened)
             {
                 state = VisitorState.Frightened;
             }
-            else if (isLost)
-            {
-                state = VisitorState.Lost;
-            }
             else if (isFascinated)
             {
                 state = VisitorState.Fascinated;
+            }
+            else if (isConfused)
+            {
+                state = VisitorState.Confused;
             }
             else if (isLured)
             {
@@ -2022,7 +2014,8 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Sets the visitor to Mesmerized state for a specified duration.
+        /// Sets the visitor to Fascinated/Mesmerized state for a specified duration.
+        /// Alias for compatibility - uses Fascinated state internally.
         /// </summary>
         public virtual void SetMesmerized(float duration = 0f)
         {
@@ -2031,14 +2024,15 @@ namespace FaeMaze.Visitors
                 duration = mesmerizedDuration;
             }
 
-            isMesmerized = true;
-            SetTimedState(VisitorState.Mesmerized, duration);
+            isFascinated = true;
+            SetTimedState(VisitorState.Fascinated, duration);
             RefreshStateFromFlags();
         }
 
         /// <summary>
-        /// Sets the visitor to Lost state for a specified duration.
+        /// Sets the visitor to Confused/Lost state for a specified duration.
         /// In world-space mode, this triggers a path recalculation.
+        /// Alias for compatibility - uses Confused state internally.
         /// </summary>
         public virtual void SetLost(float duration = 0f)
         {
@@ -2047,8 +2041,8 @@ namespace FaeMaze.Visitors
                 duration = lostDuration;
             }
 
-            isLost = true;
-            SetTimedState(VisitorState.Lost, duration);
+            isConfused = true;
+            SetTimedState(VisitorState.Confused, duration);
             RefreshStateFromFlags();
 
             // In world-space mode, just recalculate path (no grid-based detours)
@@ -2085,6 +2079,27 @@ namespace FaeMaze.Visitors
                     RecalculatePath();
                 }
             }
+        }
+
+        /// <summary>
+        /// Sets the visitor to Escaping state (for drowning by Puka).
+        /// The visitor stops all movement and cannot be interacted with.
+        /// </summary>
+        public virtual void BecomeDrowning()
+        {
+            // Clear any existing states
+            isFascinated = false;
+            isFrightened = false;
+            isLured = false;
+            isEntranced = false;
+            isConfused = false;
+
+            // Clear path
+            worldPath = null;
+            worldPathIndex = 0;
+
+            // Set state to Escaping (used for both escaping and drowning)
+            state = VisitorState.Escaping;
         }
 
         /// <summary>
@@ -2149,11 +2164,11 @@ namespace FaeMaze.Visitors
         {
             switch (expiredState)
             {
-                case VisitorState.Mesmerized:
-                    isMesmerized = false;
+                case VisitorState.Fascinated:
+                    isFascinated = false;
                     break;
-                case VisitorState.Lost:
-                    isLost = false;
+                case VisitorState.Confused:
+                    isConfused = false;
                     break;
                 case VisitorState.Frightened:
                     isFrightened = false;

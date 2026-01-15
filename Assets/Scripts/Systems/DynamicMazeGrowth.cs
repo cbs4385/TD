@@ -38,16 +38,28 @@ namespace FaeMaze.Systems
 
         [Header("Node Props")]
         [SerializeField]
-        [Tooltip("FaeLantern prefab to place at the center of each node")]
-        private GameObject faeLanternPrefab;
+        [Tooltip("PukaHazard prefab to place at the center of each node")]
+        private GameObject pukaHazardPrefab;
 
         [SerializeField]
-        [Tooltip("Z position for FaeLanterns (default -0.5)")]
-        private float faeLanternZPosition = -0.5f;
+        [Tooltip("Kelpie model prefab with animations (kelpie_react.glb)")]
+        private GameObject kelpieModelPrefab;
 
         [SerializeField]
-        [Tooltip("Rotation speed for FaeLanterns (degrees per second, default 120 = 1 cycle per 3 seconds)")]
-        private float faeLanternRotationSpeed = 120f;
+        [Tooltip("Animator Controller for the kelpie model (with ArmatureAction states)")]
+        private RuntimeAnimatorController kelpieAnimatorController;
+
+        [SerializeField]
+        [Tooltip("Pond prefab to place underneath each PukaHazard")]
+        private GameObject pondPrefab;
+
+        [SerializeField]
+        [Tooltip("Z position for PukaHazards (default -0.5)")]
+        private float pukaZPosition = -0.5f;
+
+        [SerializeField]
+        [Tooltip("Z position for Ponds (default 0)")]
+        private float pondZPosition = 0f;
 
         [Header("References")]
         [SerializeField]
@@ -74,9 +86,13 @@ namespace FaeMaze.Systems
         // Track portal wall objects (blocking walls at frontier endpoints)
         private List<GameObject> portalWalls = new List<GameObject>();
 
-        // Track FaeLanterns at each node (by node index)
-        private Dictionary<int, GameObject> nodeLanterns = new Dictionary<int, GameObject>();
-        private Transform lanternsParent;
+        // Track PukaHazards at each node (by node index)
+        private Dictionary<int, GameObject> nodePukas = new Dictionary<int, GameObject>();
+        private Transform pukasParent;
+
+        // Track Ponds at each node (by node index)
+        private Dictionary<int, GameObject> nodePonds = new Dictionary<int, GameObject>();
+        private Transform pondsParent;
 
         // Track available spawn IDs
         private char[] availableSpawnIds = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' };
@@ -129,13 +145,22 @@ namespace FaeMaze.Systems
                 portalsParent = portalsObj.transform;
             }
 
-            // Create lanterns parent for organizing FaeLanterns
-            if (lanternsParent == null)
+            // Create pukas parent for organizing PukaHazards
+            if (pukasParent == null)
             {
-                GameObject lanternsObj = new GameObject("NodeLanterns");
-                lanternsObj.transform.SetParent(transform);
-                lanternsObj.transform.localPosition = Vector3.zero;
-                lanternsParent = lanternsObj.transform;
+                GameObject pukasObj = new GameObject("NodePukas");
+                pukasObj.transform.SetParent(transform);
+                pukasObj.transform.localPosition = Vector3.zero;
+                pukasParent = pukasObj.transform;
+            }
+
+            // Create ponds parent for organizing Ponds
+            if (pondsParent == null)
+            {
+                GameObject pondsObj = new GameObject("NodePonds");
+                pondsObj.transform.SetParent(transform);
+                pondsObj.transform.localPosition = Vector3.zero;
+                pondsParent = pondsObj.transform;
             }
 
             // Run initial growth stages synchronously BEFORE the first frame renders
@@ -338,7 +363,7 @@ namespace FaeMaze.Systems
             }
 
             // Spawn FaeLantern at the new node center
-            SpawnLanternAtNode(newNode, newNodeId);
+            SpawnPukaAtNode(newNode, newNodeId);
         }
 
         private void Update()
@@ -349,18 +374,7 @@ namespace FaeMaze.Systems
                 nextGrowthTime = Time.time + growthInterval;
             }
 
-            // Rotate all FaeLanterns
-            if (nodeLanterns.Count > 0 && faeLanternRotationSpeed != 0f)
-            {
-                float rotationDelta = faeLanternRotationSpeed * Time.deltaTime;
-                foreach (var kvp in nodeLanterns)
-                {
-                    if (kvp.Value != null)
-                    {
-                        kvp.Value.transform.Rotate(0f, 0f, rotationDelta);
-                    }
-                }
-            }
+            // Note: PukaHazards handle their own visual effects via their Update method
         }
 
         #endregion
@@ -609,7 +623,7 @@ namespace FaeMaze.Systems
             }
 
             // Spawn FaeLantern at the new node center
-            SpawnLanternAtNode(newNode, newNodeId);
+            SpawnPukaAtNode(newNode, newNodeId);
 
             // Notify visitors who can see the growth location
             Vector3 growthPosition = new Vector3(newNode.Position.x, newNode.Position.y, 0);
@@ -1144,60 +1158,127 @@ namespace FaeMaze.Systems
 
         #endregion
 
-        #region FaeLantern Spawning
+        #region PukaHazard Spawning
 
         /// <summary>
-        /// Spawns a FaeLantern at the center of the specified node.
+        /// Spawns a PukaHazard and Pond at the center of the specified node.
         /// </summary>
-        /// <param name="node">The node to spawn the lantern at</param>
+        /// <param name="node">The node to spawn the puka at</param>
         /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
-        private void SpawnLanternAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        private void SpawnPukaAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
-            // Try to load prefab if not assigned
-            if (faeLanternPrefab == null)
-            {
-#if UNITY_EDITOR
-                faeLanternPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/lantern2.prefab");
-#else
-                faeLanternPrefab = Resources.Load<GameObject>("Prefabs/Props/lantern2");
-#endif
-            }
-
-            if (faeLanternPrefab == null)
-                return;
-
-            // Skip if lantern already exists at this node
-            if (nodeLanterns.ContainsKey(nodeIndex))
+            // Skip if puka already exists at this node
+            if (nodePukas.ContainsKey(nodeIndex))
                 return;
 
             // Skip the seed node (node 0) - that's where the Heart is
             if (nodeIndex == 0)
                 return;
 
-            // Calculate world position at node center with specified Z
-            Vector3 lanternPos = new Vector3(node.Position.x, node.Position.y, faeLanternZPosition);
+            // Spawn the pond first (underneath the puka)
+            SpawnPondAtNode(node, nodeIndex);
 
-            // Instantiate the lantern - use prefab's transform settings (scale, rotation)
-            // by not overriding them in the Instantiate call
-            GameObject lantern = Instantiate(faeLanternPrefab);
-            lantern.name = $"Lantern_Node{nodeIndex}";
+            // Try to load kelpie model prefab if not assigned
+            if (kelpieModelPrefab == null)
+            {
+#if UNITY_EDITOR
+                kelpieModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Animations/Kelpie/kelpie_react.glb");
+#else
+                kelpieModelPrefab = Resources.Load<GameObject>("Animations/Kelpie/kelpie_react");
+#endif
+            }
+
+            if (kelpieModelPrefab == null)
+            {
+                Debug.LogWarning($"[DynamicMazeGrowth] kelpieModelPrefab is null, cannot spawn PukaHazard at node {nodeIndex}");
+                return;
+            }
+
+            // Try to load animator controller if not assigned
+            if (kelpieAnimatorController == null)
+            {
+#if UNITY_EDITOR
+                kelpieAnimatorController = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Animations/Kelpie/kelpie_react.controller");
+#else
+                kelpieAnimatorController = Resources.Load<RuntimeAnimatorController>("Animations/Kelpie/kelpie_react");
+#endif
+            }
+
+            // Calculate world position at node center - use same Z as pond (0) for alignment
+            Vector3 pukaPos = new Vector3(node.Position.x, node.Position.y, pondZPosition);
+
+            // Instantiate the kelpie model directly (it contains the mesh and animations)
+            GameObject puka = Instantiate(kelpieModelPrefab);
+            puka.name = $"Puka_Node{nodeIndex}";
+
+            // Set position - puka should be at same position as pond
+            puka.transform.position = pukaPos;
+
+            if (pukasParent != null)
+            {
+                puka.transform.SetParent(pukasParent, worldPositionStays: true);
+            }
+
+            // Assign animator controller if available
+            var animator = puka.GetComponent<Animator>();
+            if (animator != null && kelpieAnimatorController != null)
+            {
+                animator.runtimeAnimatorController = kelpieAnimatorController;
+                Debug.Log($"[DynamicMazeGrowth] Assigned animator controller to {puka.name}");
+            }
+
+            // Add PukaHazard component
+            var pukaHazard = puka.GetComponent<FaeMaze.Props.PukaHazard>();
+            if (pukaHazard == null)
+            {
+                pukaHazard = puka.AddComponent<FaeMaze.Props.PukaHazard>();
+            }
+
+            // Track the puka
+            nodePukas[nodeIndex] = puka;
+        }
+
+        /// <summary>
+        /// Spawns a Pond at the center of the specified node.
+        /// </summary>
+        /// <param name="node">The node to spawn the pond at</param>
+        /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
+        private void SpawnPondAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        {
+            // Skip if pond already exists at this node
+            if (nodePonds.ContainsKey(nodeIndex))
+                return;
+
+            // Try to load prefab if not assigned
+            if (pondPrefab == null)
+            {
+#if UNITY_EDITOR
+                pondPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/Pond.prefab");
+#else
+                pondPrefab = Resources.Load<GameObject>("Prefabs/Tile/Pond");
+#endif
+            }
+
+            if (pondPrefab == null)
+                return;
+
+            // Calculate world position at node center with specified Z
+            Vector3 pondPos = new Vector3(node.Position.x, node.Position.y, pondZPosition);
+
+            // Instantiate the pond - use prefab's transform settings (scale, rotation)
+            GameObject pond = Instantiate(pondPrefab);
+            pond.name = $"Pond_Node{nodeIndex}";
 
             // Set position while preserving prefab's local transform (scale, rotation)
-            lantern.transform.position = lanternPos;
+            pond.transform.position = pondPos;
 
-            if (lanternsParent != null)
+            if (pondsParent != null)
             {
-                lantern.transform.SetParent(lanternsParent, worldPositionStays: true);
+                pond.transform.SetParent(pondsParent, worldPositionStays: true);
             }
 
-            // Add glow effect if not already present
-            if (lantern.GetComponent<LanternGlow>() == null)
-            {
-                lantern.AddComponent<LanternGlow>();
-            }
-
-            // Track the lantern
-            nodeLanterns[nodeIndex] = lantern;
+            // Track the pond
+            nodePonds[nodeIndex] = pond;
         }
 
         #endregion
