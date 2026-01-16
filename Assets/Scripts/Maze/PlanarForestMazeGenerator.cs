@@ -18,8 +18,8 @@ namespace ForestMaze
         private const float NODE_RADIUS = 3.0f;
         private const float NODE_PADDING = 0.7f;
         private const float R_KEEP = NODE_RADIUS + NODE_PADDING; // 3.7
-        private const float PATH_WIDTH = 1.0f;
-        private const float PATH_RADIUS = PATH_WIDTH / 2.0f; // 0.5
+        private const float PATH_WIDTH = 1.25f; // Increased 25% for wider paths
+        private const float PATH_RADIUS = PATH_WIDTH / 2.0f; // 0.625
         private const float EXCLUSION_ZONE = NODE_RADIUS + 2.0f; // 5.0 - minimum distance for frontier endpoints from nodes
 
         // Tunable parameters

@@ -152,6 +152,12 @@ namespace FaeMaze.Maze
                 GameController.Instance.AddEssence(essence);
             }
 
+            // Notify HeartPowerManager of consumption (for toggle powers like MurmuringPaths)
+            if (HeartPowers.HeartPowerManager.Instance != null)
+            {
+                HeartPowers.HeartPowerManager.Instance.NotifyVisitorConsumed();
+            }
+
             SoundManager.Instance?.PlayVisitorConsumed();
 
             // Destroy the visitor

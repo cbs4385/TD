@@ -46,10 +46,11 @@ namespace FaeMaze.UI
 
         #region Private Fields
 
-        private Button[] powerButtons = new Button[9];
-        private Image[] buttonImages = new Image[9];
-        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[9];
-        private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[9];
+        // Reduced to 3 active powers (MurmuringPaths, HeartwardGrasp, DevouringMaw)
+        private Button[] powerButtons = new Button[3];
+        private Image[] buttonImages = new Image[3];
+        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[3];
+        private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[3];
 
         // Right panel UI elements
         private TextMeshProUGUI waveText;
@@ -58,62 +59,66 @@ namespace FaeMaze.UI
 
         private readonly string[] powerNames = new string[]
         {
-            "1: Heartbeat\nof Longing",
-            "2: Murmuring\nPaths",
-            "3: Dream\nSnare",
-            "4: Feastward\nPanic",
-            "5: Covenant\nwith Wisps",
-            "6: Puka's\nBargain",
-            "7: Ring of\nInvitations",
-            "8: Heartward\nGrasp",
-            "9: Devouring\nMaw"
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // "1: Heartbeat\nof Longing",
+            "1: Murmuring\nPaths",
+            // "3: Dream\nSnare",
+            // "4: Feastward\nPanic",
+            // "5: Covenant\nwith Wisps",
+            // "6: Puka's\nBargain",
+            // "7: Ring of\nInvitations",
+            "2: Heartward\nGrasp",
+            "3: Devouring\nMaw"
         };
 
         private readonly HeartPowerType[] powerTypes = new HeartPowerType[]
         {
-            HeartPowerType.HeartbeatOfLonging,
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // HeartPowerType.HeartbeatOfLonging,
             HeartPowerType.MurmuringPaths,
-            HeartPowerType.DreamSnare,
-            HeartPowerType.FeastwardPanic,
-            HeartPowerType.CovenantWithWisps,
-            HeartPowerType.PukasBargain,
-            HeartPowerType.RingOfInvitations,
+            // HeartPowerType.DreamSnare,
+            // HeartPowerType.FeastwardPanic,
+            // HeartPowerType.CovenantWithWisps,
+            // HeartPowerType.PukasBargain,
+            // HeartPowerType.RingOfInvitations,
             HeartPowerType.HeartwardGrasp,
             HeartPowerType.DevouringMaw
         };
 
-        // ROYGBIV spectrum colors for each power
+        // ROYGBIV spectrum colors for each power (reduced to 3 active powers)
         private readonly Color[] roygbivColors = new Color[]
         {
-            new Color(0.8f, 0.1f, 0.1f, 1f),  // Power 1: Deep Red
-            new Color(1.0f, 0.5f, 0.0f, 1f),  // Power 2: Warm Orange
-            new Color(1.0f, 0.9f, 0.1f, 1f),  // Power 3: Bright Yellow
-            new Color(0.2f, 0.8f, 0.2f, 1f),  // Power 4: Vivid Green
-            new Color(0.2f, 0.5f, 1.0f, 1f),  // Power 5: Cool Blue
-            new Color(0.3f, 0.0f, 0.5f, 1f),  // Power 6: Indigo
-            new Color(0.6f, 0.2f, 0.8f, 1f),  // Power 7: Vibrant Violet
-            new Color(0.9f, 0.1f, 0.5f, 1f),  // Power 8: Crimson
-            new Color(0.5f, 0.0f, 0.2f, 1f)   // Power 9: Dark Burgundy
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // new Color(0.8f, 0.1f, 0.1f, 1f),  // Power 1: Deep Red
+            new Color(1.0f, 0.5f, 0.0f, 1f),  // MurmuringPaths: Warm Orange
+            // new Color(1.0f, 0.9f, 0.1f, 1f),  // Power 3: Bright Yellow
+            // new Color(0.2f, 0.8f, 0.2f, 1f),  // Power 4: Vivid Green
+            // new Color(0.2f, 0.5f, 1.0f, 1f),  // Power 5: Cool Blue
+            // new Color(0.3f, 0.0f, 0.5f, 1f),  // Power 6: Indigo
+            // new Color(0.6f, 0.2f, 0.8f, 1f),  // Power 7: Vibrant Violet
+            new Color(0.9f, 0.1f, 0.5f, 1f),  // HeartwardGrasp: Crimson
+            new Color(0.5f, 0.0f, 0.2f, 1f)   // DevouringMaw: Dark Burgundy
         };
 
         // Base colors (darker versions for inactive state)
         private readonly Color[] baseColors = new Color[]
         {
-            new Color(0.3f, 0.05f, 0.05f, 1f),  // Dim Red
-            new Color(0.35f, 0.18f, 0.0f, 1f),  // Dim Orange
-            new Color(0.35f, 0.32f, 0.05f, 1f), // Dim Yellow
-            new Color(0.08f, 0.3f, 0.08f, 1f),  // Dim Green
-            new Color(0.08f, 0.18f, 0.35f, 1f), // Dim Blue
-            new Color(0.12f, 0.0f, 0.2f, 1f),   // Dim Indigo
-            new Color(0.22f, 0.08f, 0.3f, 1f),  // Dim Violet
-            new Color(0.32f, 0.05f, 0.18f, 1f), // Dim Crimson
-            new Color(0.18f, 0.0f, 0.08f, 1f)   // Dim Dark Burgundy
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // new Color(0.3f, 0.05f, 0.05f, 1f),  // Dim Red
+            new Color(0.35f, 0.18f, 0.0f, 1f),  // Dim Orange (MurmuringPaths)
+            // new Color(0.35f, 0.32f, 0.05f, 1f), // Dim Yellow
+            // new Color(0.08f, 0.3f, 0.08f, 1f),  // Dim Green
+            // new Color(0.08f, 0.18f, 0.35f, 1f), // Dim Blue
+            // new Color(0.12f, 0.0f, 0.2f, 1f),   // Dim Indigo
+            // new Color(0.22f, 0.08f, 0.3f, 1f),  // Dim Violet
+            new Color(0.32f, 0.05f, 0.18f, 1f), // Dim Crimson (HeartwardGrasp)
+            new Color(0.18f, 0.0f, 0.08f, 1f)   // Dim Dark Burgundy (DevouringMaw)
         };
 
-        // Glow animation tracking
-        private float[] glowPhase = new float[9];
-        private float[] glowIntensity = new float[9];
-        private float[] flashIntensity = new float[9]; // Flash effect when power is activated
+        // Glow animation tracking (reduced to 3 active powers)
+        private float[] glowPhase = new float[3];
+        private float[] glowIntensity = new float[3];
+        private float[] flashIntensity = new float[3]; // Flash effect when power is activated
         private float glowSpeed = 2.0f;
         private float glowPulseSpeed = 3.0f;
         private float flashDecaySpeed = 5.0f;
@@ -205,6 +210,7 @@ namespace FaeMaze.UI
             {
                 heartPowerManager.OnEssenceChanged += UpdateEssenceDisplay;
                 heartPowerManager.OnPowerActivated += OnPowerActivated;
+                heartPowerManager.OnPowerDeactivated += OnPowerDeactivated;
             }
 
             // Also subscribe to GameController essence changes for real-time updates
@@ -229,6 +235,7 @@ namespace FaeMaze.UI
             {
                 heartPowerManager.OnEssenceChanged -= UpdateEssenceDisplay;
                 heartPowerManager.OnPowerActivated -= OnPowerActivated;
+                heartPowerManager.OnPowerDeactivated -= OnPowerDeactivated;
             }
 
             // Unsubscribe from GameController
@@ -346,13 +353,14 @@ namespace FaeMaze.UI
             float leftPadding = 10f;
             float buttonSpacing = 3f;
             float buttonHeight = panelHeight - 10f; // Leave 5px padding top/bottom
-            // Calculate button width to fit 9 buttons in left half (assume half screen = 960px)
+            // Calculate button width to fit 3 buttons in left half (assume half screen = 960px)
             float leftHalfWidth = 960f; // Half of 1920 reference resolution
-            float buttonWidth = (leftHalfWidth - leftPadding * 2 - buttonSpacing * 8) / 9f;
+            float buttonWidth = (leftHalfWidth - leftPadding * 2 - buttonSpacing * 2) / 3f;
             float buttonsStartX = -960f + leftPadding; // Start from left edge of screen
             float buttonYPos = 0f; // Vertically centered (0 is center when pivot is at center)
 
-            for (int i = 0; i < 9; i++)
+            // Reduced to 3 active powers
+            for (int i = 0; i < 3; i++)
             {
                 float xPos = buttonsStartX + (i * (buttonWidth + buttonSpacing)) + buttonWidth / 2f;
                 powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, buttonYPos, buttonWidth, buttonHeight);
@@ -720,6 +728,23 @@ namespace FaeMaze.UI
             }
         }
 
+        /// <summary>
+        /// Called when a toggle power is deactivated.
+        /// </summary>
+        private void OnPowerDeactivated(HeartPowerType powerType)
+        {
+            // Find which button corresponds to this power
+            for (int i = 0; i < powerTypes.Length; i++)
+            {
+                if (powerTypes[i] == powerType)
+                {
+                    // Trigger a dim flash to indicate deactivation
+                    flashIntensity[i] = 0.5f;
+                    break;
+                }
+            }
+        }
+
         #endregion
 
         #region Keyboard Input
@@ -731,42 +756,44 @@ namespace FaeMaze.UI
         {
             if (Keyboard.current == null) return;
 
+            // Reduced to 3 active powers - keys 1, 2, 3
             if (Keyboard.current.digit1Key.wasPressedThisFrame || Keyboard.current.numpad1Key.wasPressedThisFrame)
             {
-                OnPowerButtonClicked(0);
+                OnPowerButtonClicked(0); // MurmuringPaths
             }
             else if (Keyboard.current.digit2Key.wasPressedThisFrame || Keyboard.current.numpad2Key.wasPressedThisFrame)
             {
-                OnPowerButtonClicked(1);
+                OnPowerButtonClicked(1); // HeartwardGrasp
             }
             else if (Keyboard.current.digit3Key.wasPressedThisFrame || Keyboard.current.numpad3Key.wasPressedThisFrame)
             {
-                OnPowerButtonClicked(2);
+                OnPowerButtonClicked(2); // DevouringMaw
             }
-            else if (Keyboard.current.digit4Key.wasPressedThisFrame || Keyboard.current.numpad4Key.wasPressedThisFrame)
-            {
-                OnPowerButtonClicked(3);
-            }
-            else if (Keyboard.current.digit5Key.wasPressedThisFrame || Keyboard.current.numpad5Key.wasPressedThisFrame)
-            {
-                OnPowerButtonClicked(4);
-            }
-            else if (Keyboard.current.digit6Key.wasPressedThisFrame || Keyboard.current.numpad6Key.wasPressedThisFrame)
-            {
-                OnPowerButtonClicked(5);
-            }
-            else if (Keyboard.current.digit7Key.wasPressedThisFrame || Keyboard.current.numpad7Key.wasPressedThisFrame)
-            {
-                OnPowerButtonClicked(6);
-            }
-            else if (Keyboard.current.digit8Key.wasPressedThisFrame || Keyboard.current.numpad8Key.wasPressedThisFrame)
-            {
-                OnPowerButtonClicked(7);
-            }
-            else if (Keyboard.current.digit9Key.wasPressedThisFrame || Keyboard.current.numpad9Key.wasPressedThisFrame)
-            {
-                OnPowerButtonClicked(8);
-            }
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // else if (Keyboard.current.digit4Key.wasPressedThisFrame || Keyboard.current.numpad4Key.wasPressedThisFrame)
+            // {
+            //     OnPowerButtonClicked(3);
+            // }
+            // else if (Keyboard.current.digit5Key.wasPressedThisFrame || Keyboard.current.numpad5Key.wasPressedThisFrame)
+            // {
+            //     OnPowerButtonClicked(4);
+            // }
+            // else if (Keyboard.current.digit6Key.wasPressedThisFrame || Keyboard.current.numpad6Key.wasPressedThisFrame)
+            // {
+            //     OnPowerButtonClicked(5);
+            // }
+            // else if (Keyboard.current.digit7Key.wasPressedThisFrame || Keyboard.current.numpad7Key.wasPressedThisFrame)
+            // {
+            //     OnPowerButtonClicked(6);
+            // }
+            // else if (Keyboard.current.digit8Key.wasPressedThisFrame || Keyboard.current.numpad8Key.wasPressedThisFrame)
+            // {
+            //     OnPowerButtonClicked(7);
+            // }
+            // else if (Keyboard.current.digit9Key.wasPressedThisFrame || Keyboard.current.numpad9Key.wasPressedThisFrame)
+            // {
+            //     OnPowerButtonClicked(8);
+            // }
         }
 
         #endregion
@@ -853,26 +880,54 @@ namespace FaeMaze.UI
 
                 // Check if power can be activated
                 bool canActivate = heartPowerManager.CanActivatePower(powerType, out string reason);
+                bool isTogglePower = heartPowerManager.IsTogglePower(powerType);
+                bool isActive = heartPowerManager.IsPowerActive(powerType);
 
                 // Keep buttons always clickable so we can see debug messages
                 // But provide visual feedback about availability
                 powerButtons[i].interactable = true;
 
-                // Update cooldown display
-                float cooldownRemaining = heartPowerManager.GetCooldownRemaining(powerType);
-                if (cooldownRemaining > 0)
+                // Update display based on power type
+                if (isTogglePower)
                 {
-                    cooldownTexts[i].text = $"{cooldownRemaining:F1}s";
-                    cooldownTexts[i].gameObject.SetActive(true);
+                    // Toggle power: show active state or ready state
+                    if (isActive)
+                    {
+                        // Show "ACTIVE" and consumption progress
+                        cooldownTexts[i].text = "ACTIVE";
+                        cooldownTexts[i].color = new Color(0.3f, 1f, 0.3f, 1f); // Green for active
+                        cooldownTexts[i].gameObject.SetActive(true);
+                    }
+                    else
+                    {
+                        // Toggle power is ready (no cooldown)
+                        cooldownTexts[i].gameObject.SetActive(false);
+                    }
                 }
                 else
                 {
-                    cooldownTexts[i].gameObject.SetActive(false);
+                    // Non-toggle power: show cooldown
+                    float cooldownRemaining = heartPowerManager.GetCooldownRemaining(powerType);
+                    if (cooldownRemaining > 0)
+                    {
+                        cooldownTexts[i].text = $"{cooldownRemaining:F1}s";
+                        cooldownTexts[i].color = new Color(1f, 0.3f, 0.3f, 1f); // Red for cooldown
+                        cooldownTexts[i].gameObject.SetActive(true);
+                    }
+                    else
+                    {
+                        cooldownTexts[i].gameObject.SetActive(false);
+                    }
                 }
 
                 // Update glow intensity based on availability
                 // Glow effects will be applied by UpdateGlowEffects()
-                if (canActivate)
+                if (isTogglePower && isActive)
+                {
+                    // Active toggle power - keep high glow intensity
+                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.2f, Time.deltaTime * glowSpeed);
+                }
+                else if (canActivate)
                 {
                     // Power is ready - increase glow intensity
                     glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.0f, Time.deltaTime * glowSpeed);

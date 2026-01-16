@@ -6,9 +6,11 @@ using FaeMaze.Maze;
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// Renders a world-space maze using continuous coordinates and oriented tiles.
-    /// Unlike the grid-based MazeRenderer, this renderer positions and rotates
-    /// tiles according to their world-space data.
+    /// DEPRECATED: This renderer is superseded by MazeRenderer for visual output.
+    /// Previously rendered world-space maze using basic shapes (LineRenderers for edges,
+    /// SpriteRenderers for nodes). MazeRenderer now handles all visual rendering with
+    /// 3D cylinders for nodes and textured path tiles.
+    /// This component may be removed in a future update.
     /// </summary>
     [RequireComponent(typeof(MazeGridBehaviour))]
     public class WorldSpaceMazeRenderer : MonoBehaviour
@@ -21,7 +23,7 @@ namespace FaeMaze.Systems
         private GameObject wallPrefab;
 
         [SerializeField]
-        [Tooltip("Prefab/model for path tiles")]
+        [Tooltip("Prefab/model for path tiles (unused in shape mode)")]
         private GameObject pathPrefab;
 
         [SerializeField]
@@ -30,7 +32,7 @@ namespace FaeMaze.Systems
 
         [Header("Color Settings")]
         [SerializeField]
-        [Tooltip("Color for walkable path tiles")]
+        [Tooltip("Color for walkable path/edges")]
         private Color pathColor = Color.white;
 
         [SerializeField]
@@ -38,30 +40,47 @@ namespace FaeMaze.Systems
         private Color wallColor = Color.black;
 
         [SerializeField]
-        [Tooltip("Color for the heart tile")]
+        [Tooltip("Color for the heart node")]
         private Color heartColor = new Color(0.9f, 0.35f, 0.35f, 1f);
 
         [SerializeField]
-        [Tooltip("Color for node tiles")]
+        [Tooltip("Color for node circles")]
         private Color nodeColor = Color.white;
 
         [Header("Size Settings")]
         [SerializeField]
-        [Tooltip("World-space size of a single tile")]
+        [Tooltip("World-space size of a single tile (used for walls and data)")]
         private float tileSize = 1.0f;
 
         [SerializeField]
-        [Tooltip("Tile height (Z thickness)")]
+        [Tooltip("Tile height (Z thickness for walls)")]
         private float tileHeight = 0.1f;
+
+        [Header("Shape Rendering Settings")]
+        [SerializeField]
+        [Tooltip("Width of edge lines (LineRenderer width) - should match tile coverage area")]
+        private float edgeWidth = 3.5f;
+
+        [SerializeField]
+        [Tooltip("Radius of node circles - slightly larger than tile coverage to fill gaps")]
+        private float nodeRadius = 4.5f;
+
+        [SerializeField]
+        [Tooltip("Z level for path/node visuals (negative = in front)")]
+        private float visualZLevel = -0.1f;
+
+        [SerializeField]
+        [Tooltip("Negative padding on wall positions to close gaps with path shapes")]
+        private float wallPadding = 0.125f;
 
         [Header("Container Settings")]
         [SerializeField]
-        [Tooltip("Parent transform to hold all tile objects")]
+        [Tooltip("Parent transform to hold all rendered objects")]
         private Transform tilesParent;
 
         [Header("Optimization Settings")]
         [SerializeField]
-        [Tooltip("Enable mesh batching to combine tiles")]
+        [Tooltip("Enable mesh batching for wall tiles")]
         private bool enableMeshBatching = true;
 
         [SerializeField]
@@ -76,9 +95,19 @@ namespace FaeMaze.Systems
         private WorldSpaceMazeData mazeData;
         private GameObject tilesContainer;
 
+        // Wall tiles (still rendered as individual tiles)
         private List<GameObject> wallTiles;
-        private List<GameObject> pathTiles;
-        private List<GameObject> nodeTiles;
+
+        // Shape-based rendering objects
+        private List<LineRenderer> edgeLineRenderers = new List<LineRenderer>();
+        private List<SpriteRenderer> nodeCircleRenderers = new List<SpriteRenderer>();
+        private GameObject shapesContainer;
+
+        // Cached circle sprite for nodes
+        private Sprite circleSprite;
+
+        // Shared material for edges
+        private Material edgeMaterial;
 
         #endregion
 
@@ -138,18 +167,20 @@ namespace FaeMaze.Systems
         #region Rendering
 
         /// <summary>
-        /// Renders all tiles in the world-space maze.
+        /// Renders the maze using shape-based rendering.
+        /// Edges are drawn as LineRenderers, nodes as circle sprites.
+        /// Walls are still rendered as individual tiles.
         /// </summary>
         public void RenderMaze()
         {
-            if (mazeData == null || mazeData.Tiles.Count == 0)
+            if (mazeData == null)
             {
                 return;
             }
 
             Transform mazeOrigin = mazeGridBehaviour != null ? mazeGridBehaviour.MazeOrigin : transform;
 
-            // Create container for tiles
+            // Create container for all rendered objects
             if (tilesParent == null)
             {
                 tilesContainer = new GameObject("WorldSpaceMazeTiles");
@@ -160,139 +191,192 @@ namespace FaeMaze.Systems
                 tilesParent = tilesContainer.transform;
             }
 
-            // Initialize batching lists
-            if (enableMeshBatching)
-            {
-                wallTiles = new List<GameObject>();
-                pathTiles = new List<GameObject>();
-                nodeTiles = new List<GameObject>();
-            }
+            // Create shapes container for edges and nodes
+            shapesContainer = new GameObject("MazeShapes");
+            shapesContainer.transform.SetParent(tilesParent);
+            shapesContainer.transform.localPosition = Vector3.zero;
+            shapesContainer.transform.localRotation = Quaternion.identity;
+            shapesContainer.transform.localScale = Vector3.one;
 
-            // Render each tile
-            int renderedCount = 0;
-            foreach (var tile in mazeData.Tiles)
-            {
-                CreateTile3D(tile, mazeOrigin);
-                renderedCount++;
-            }
+            // Initialize lists
+            wallTiles = new List<GameObject>();
+            edgeLineRenderers.Clear();
+            nodeCircleRenderers.Clear();
 
-            // Perform batching
-            if (enableMeshBatching)
+            // Create shared resources
+            CreateSharedResources();
+
+            // Render edges first (lower layer)
+            RenderEdges(mazeOrigin);
+
+            // Render nodes on top of edges (higher layer to cover edge endpoints cleanly)
+            RenderNodes(mazeOrigin);
+
+            // Render wall tiles (still use individual tiles for walls)
+            RenderWalls(mazeOrigin);
+
+            // Batch wall tiles
+            if (enableMeshBatching && wallTiles.Count > 0)
             {
-                PerformMeshBatching();
+                MeshBatcher.BatchInChunks(wallTiles, tilesParent, batchChunkSize, destroyOriginals: true);
             }
         }
 
         /// <summary>
-        /// Creates a 3D tile at the specified world-space position with proper orientation.
+        /// Creates shared resources (materials, sprites) for rendering.
         /// </summary>
-        private void CreateTile3D(WorldSpaceTile tile, Transform mazeOrigin)
+        private void CreateSharedResources()
         {
-            // Convert 2D world position to 3D (X, Y plane with Z as height)
-            Vector3 worldPos = mazeOrigin.position + new Vector3(tile.Position.x, tile.Position.y, 0);
+            // Create circle sprite for nodes
+            if (circleSprite == null)
+            {
+                circleSprite = CreateFilledCircleSprite();
+            }
 
-            // Calculate rotation from tile orientation
-            // The tile orientation is in radians, we convert to a quaternion
-            // The base rotation aligns the tile to the XY plane (facing -Z)
+            // Create material for edges
+            if (edgeMaterial == null)
+            {
+                edgeMaterial = new Material(Shader.Find("Sprites/Default"));
+            }
+        }
+
+        /// <summary>
+        /// Renders all edges using LineRenderers following polyline points.
+        /// </summary>
+        private void RenderEdges(Transform mazeOrigin)
+        {
+            var graphState = mazeData.GraphState;
+            if (graphState == null) return;
+
+            for (int edgeIndex = 0; edgeIndex < graphState.Edges.Count; edgeIndex++)
+            {
+                var edge = graphState.Edges[edgeIndex];
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
+
+                GameObject edgeObj = new GameObject($"Edge_{edgeIndex}");
+                edgeObj.transform.SetParent(shapesContainer.transform);
+
+                LineRenderer lr = edgeObj.AddComponent<LineRenderer>();
+                lr.positionCount = edge.PolylinePoints.Count;
+                lr.startWidth = edgeWidth;
+                lr.endWidth = edgeWidth;
+                lr.material = new Material(edgeMaterial);
+                lr.startColor = pathColor;
+                lr.endColor = pathColor;
+                lr.sortingLayerName = "Default";
+                lr.sortingOrder = 0; // Below nodes
+                lr.useWorldSpace = true;
+                lr.numCapVertices = 4; // Rounded caps
+                lr.numCornerVertices = 4; // Smooth corners
+
+                for (int i = 0; i < edge.PolylinePoints.Count; i++)
+                {
+                    Vector3 pos = mazeOrigin.position + new Vector3(
+                        edge.PolylinePoints[i].x,
+                        edge.PolylinePoints[i].y,
+                        visualZLevel
+                    );
+                    lr.SetPosition(i, pos);
+                }
+
+                edgeLineRenderers.Add(lr);
+            }
+        }
+
+        /// <summary>
+        /// Renders all nodes as filled circle sprites.
+        /// </summary>
+        private void RenderNodes(Transform mazeOrigin)
+        {
+            var graphState = mazeData.GraphState;
+            if (graphState == null) return;
+
+            for (int nodeIndex = 0; nodeIndex < graphState.Nodes.Count; nodeIndex++)
+            {
+                var node = graphState.Nodes[nodeIndex];
+
+                GameObject nodeObj = new GameObject($"Node_{nodeIndex}");
+                nodeObj.transform.SetParent(shapesContainer.transform);
+
+                // Put nodes slightly in front of edges (more negative Z) to cover edge endpoints
+                Vector3 nodePos = mazeOrigin.position + new Vector3(
+                    node.Position.x,
+                    node.Position.y,
+                    visualZLevel - 0.01f
+                );
+                nodeObj.transform.position = nodePos;
+                nodeObj.transform.localScale = Vector3.one * nodeRadius * 2f;
+
+                SpriteRenderer sr = nodeObj.AddComponent<SpriteRenderer>();
+                sr.sprite = circleSprite;
+                sr.color = node.Kind == "root" ? heartColor : nodeColor;
+                sr.sortingLayerName = "Default";
+                sr.sortingOrder = 1; // Above edges to cover endpoints cleanly
+
+                nodeCircleRenderers.Add(sr);
+            }
+        }
+
+        /// <summary>
+        /// Renders wall tiles using the existing tile-based approach.
+        /// </summary>
+        private void RenderWalls(Transform mazeOrigin)
+        {
+            foreach (var tile in mazeData.Tiles)
+            {
+                if (tile.Category != WorldSpaceTile.TileCategory.Wall) continue;
+
+                CreateWallTile(tile, mazeOrigin);
+            }
+        }
+
+        /// <summary>
+        /// Creates a wall tile at the specified position.
+        /// </summary>
+        private void CreateWallTile(WorldSpaceTile tile, Transform mazeOrigin)
+        {
+            // Apply negative padding: shift wall toward path using orientation normal
+            // Orientation points outward from path, so we move opposite direction (inward)
+            Vector2 inwardDir = new Vector2(Mathf.Cos(tile.Orientation), Mathf.Sin(tile.Orientation));
+            Vector2 paddedPosition = tile.Position - inwardDir * wallPadding;
+
+            Vector3 worldPos = mazeOrigin.position + new Vector3(paddedPosition.x, paddedPosition.y, 0);
+
             Quaternion baseRotation = Quaternion.Euler(-90f, 0f, 0f);
-            // Apply the tile's orientation around the Z axis (which becomes up after base rotation)
             float orientationDegrees = tile.Orientation * Mathf.Rad2Deg;
             Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees) * baseRotation;
 
-            GameObject tileObj = null;
+            GameObject tileObj;
 
-            // Determine prefab and color based on tile category
-            switch (tile.Category)
+            if (wallPrefab != null)
             {
-                case WorldSpaceTile.TileCategory.Wall:
-                    if (wallPrefab != null)
-                    {
-                        tileObj = Instantiate(wallPrefab, tilesParent);
-                        tileObj.transform.position = worldPos;
-                        tileObj.transform.rotation = tileRotation;
-                        tileObj.transform.localScale = new Vector3(tile.Size * 0.65f, tile.Size * 0.65f, tile.Size);
-                    }
-                    else
-                    {
-                        tileObj = CreateProceduralTile(tile, wallColor);
-                        tileObj.transform.SetParent(tilesParent);
-                        tileObj.transform.position = worldPos;
-                        tileObj.transform.rotation = tileRotation;
-                    }
-                    wallTiles?.Add(tileObj);
-                    break;
-
-                case WorldSpaceTile.TileCategory.Path:
-                    Color pathTileColor = tile.Symbol == 'H' ? heartColor : pathColor;
-                    if (pathPrefab != null)
-                    {
-                        tileObj = Instantiate(pathPrefab, tilesParent);
-                        tileObj.transform.position = worldPos;
-                        tileObj.transform.rotation = tileRotation;
-                        tileObj.transform.localScale = Vector3.one * tile.Size;
-                    }
-                    else
-                    {
-                        tileObj = CreateProceduralTile(tile, pathTileColor);
-                        tileObj.transform.SetParent(tilesParent);
-                        tileObj.transform.position = worldPos;
-                        tileObj.transform.rotation = tileRotation;
-                    }
-                    pathTiles?.Add(tileObj);
-                    break;
-
-                case WorldSpaceTile.TileCategory.Node:
-                    Color nodeTileColor = nodeColor;
-                    if (tile.Symbol == 'H')
-                    {
-                        nodeTileColor = heartColor;
-                    }
-                    else if (tile.Symbol == 'N' && nodeHazardPrefab != null)
-                    {
-                        // Create path base
-                        var pathBase = CreateProceduralTile(tile, nodeColor);
-                        pathBase.transform.SetParent(tilesParent);
-                        pathBase.transform.position = worldPos;
-                        pathBase.transform.rotation = tileRotation;
-                        nodeTiles?.Add(pathBase);
-
-                        // Add node hazard on top
-                        var hazard = Instantiate(nodeHazardPrefab, tilesParent);
-                        hazard.transform.position = worldPos;
-                        hazard.transform.rotation = tileRotation;
-                        hazard.transform.localScale = Vector3.one * tile.Size;
-                        tileObj = hazard;
-                    }
-                    else
-                    {
-                        tileObj = CreateProceduralTile(tile, nodeTileColor);
-                        tileObj.transform.SetParent(tilesParent);
-                        tileObj.transform.position = worldPos;
-                        tileObj.transform.rotation = tileRotation;
-                    }
-                    nodeTiles?.Add(tileObj);
-                    break;
+                tileObj = Instantiate(wallPrefab, tilesParent);
+                tileObj.transform.position = worldPos;
+                tileObj.transform.rotation = tileRotation;
+                tileObj.transform.localScale = new Vector3(tile.Size * 0.65f, tile.Size * 0.65f, tile.Size);
+            }
+            else
+            {
+                tileObj = CreateProceduralWallTile(tile, wallColor);
+                tileObj.transform.SetParent(tilesParent);
+                tileObj.transform.position = worldPos;
+                tileObj.transform.rotation = tileRotation;
             }
 
-            if (tileObj != null)
-            {
-                tileObj.name = $"WorldTile_{tile.Category}_{tile.Position.x:F1}_{tile.Position.y:F1}";
-            }
+            tileObj.name = $"Wall_{tile.Position.x:F1}_{tile.Position.y:F1}";
+            wallTiles.Add(tileObj);
         }
 
         /// <summary>
-        /// Creates a procedural 3D mesh tile with the specified color.
+        /// Creates a procedural wall tile.
         /// </summary>
-        private GameObject CreateProceduralTile(WorldSpaceTile tile, Color color)
+        private GameObject CreateProceduralWallTile(WorldSpaceTile tile, Color color)
         {
             GameObject tileObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            tileObj.name = $"Tile_{tile.Category}_{tile.Symbol}";
-
-            // Scale: width and height match tile size, thin in depth
+            tileObj.name = $"Wall_{tile.Symbol}";
             tileObj.transform.localScale = new Vector3(tile.Size, tile.Size, tileHeight);
 
-            // Create material
-            Material material = CreateMaterialForTile(tile, color);
+            Material material = PBRMaterialFactory.CreateWallMaterial(color);
             MeshRenderer renderer = tileObj.GetComponent<MeshRenderer>();
             if (renderer != null)
             {
@@ -303,58 +387,40 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Creates an appropriate material for the tile.
+        /// Creates a filled circle sprite for node rendering.
         /// </summary>
-        private Material CreateMaterialForTile(WorldSpaceTile tile, Color color)
+        private Sprite CreateFilledCircleSprite()
         {
-            switch (tile.Category)
+            int resolution = 64;
+            Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Bilinear;
+
+            Color[] pixels = new Color[resolution * resolution];
+            Vector2 center = new Vector2(resolution / 2f, resolution / 2f);
+            float radius = resolution / 2f - 2f;
+
+            for (int y = 0; y < resolution; y++)
             {
-                case WorldSpaceTile.TileCategory.Wall:
-                    return PBRMaterialFactory.CreateWallMaterial(color);
+                for (int x = 0; x < resolution; x++)
+                {
+                    Vector2 pos = new Vector2(x, y);
+                    float distance = Vector2.Distance(pos, center);
 
-                case WorldSpaceTile.TileCategory.Path:
-                    if (tile.Symbol == 'H')
-                    {
-                        return PBRMaterialFactory.CreateEmissiveMaterial(color, color * 1.5f, 1.0f);
-                    }
-                    return PBRMaterialFactory.CreatePathMaterial(color);
-
-                case WorldSpaceTile.TileCategory.Node:
-                    if (tile.Symbol == 'H')
-                    {
-                        return PBRMaterialFactory.CreateEmissiveMaterial(color, color * 1.5f, 1.0f);
-                    }
-                    return PBRMaterialFactory.CreatePathMaterial(color);
-
-                default:
-                    return PBRMaterialFactory.CreateLitMaterial(color);
-            }
-        }
-
-        /// <summary>
-        /// Performs mesh batching to reduce draw calls.
-        /// </summary>
-        private void PerformMeshBatching()
-        {
-            int totalBatches = 0;
-
-            if (wallTiles != null && wallTiles.Count > 0)
-            {
-                var batches = MeshBatcher.BatchInChunks(wallTiles, tilesParent, batchChunkSize, destroyOriginals: true);
-                totalBatches += batches.Count;
+                    // Create soft-edged filled circle
+                    float alpha = 1f - Mathf.Clamp01((distance - radius + 4f) / 4f);
+                    pixels[y * resolution + x] = new Color(1f, 1f, 1f, alpha);
+                }
             }
 
-            if (pathTiles != null && pathTiles.Count > 0)
-            {
-                var batches = MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, destroyOriginals: true);
-                totalBatches += batches.Count;
-            }
+            texture.SetPixels(pixels);
+            texture.Apply();
 
-            if (nodeTiles != null && nodeTiles.Count > 0)
-            {
-                var batches = MeshBatcher.BatchInChunks(nodeTiles, tilesParent, batchChunkSize, destroyOriginals: true);
-                totalBatches += batches.Count;
-            }
+            return Sprite.Create(
+                texture,
+                new Rect(0, 0, resolution, resolution),
+                new Vector2(0.5f, 0.5f),
+                resolution
+            );
         }
 
         #endregion
@@ -366,14 +432,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public void RefreshMaze()
         {
-            // Clear existing tiles
-            if (tilesParent != null)
-            {
-                foreach (Transform child in tilesParent)
-                {
-                    Destroy(child.gameObject);
-                }
-            }
+            // Clear existing rendered objects
+            ClearRenderedObjects();
 
             // Regenerate if we have a forest state
             var forestState = mazeGridBehaviour?.ForestMapState;
@@ -384,6 +444,141 @@ namespace FaeMaze.Systems
 
             // Re-render
             RenderMaze();
+        }
+
+        /// <summary>
+        /// Clears all rendered objects (shapes and walls).
+        /// </summary>
+        private void ClearRenderedObjects()
+        {
+            // Clear shape-based objects
+            edgeLineRenderers.Clear();
+            nodeCircleRenderers.Clear();
+
+            if (shapesContainer != null)
+            {
+                Destroy(shapesContainer);
+                shapesContainer = null;
+            }
+
+            // Clear all children of tiles parent
+            if (tilesParent != null)
+            {
+                foreach (Transform child in tilesParent)
+                {
+                    Destroy(child.gameObject);
+                }
+            }
+
+            wallTiles?.Clear();
+        }
+
+        /// <summary>
+        /// Adds a new edge to the visual rendering (for dynamic growth).
+        /// </summary>
+        public void AddEdgeVisual(int edgeIndex)
+        {
+            if (mazeData?.GraphState == null || shapesContainer == null) return;
+            if (edgeIndex < 0 || edgeIndex >= mazeData.GraphState.Edges.Count) return;
+
+            var edge = mazeData.GraphState.Edges[edgeIndex];
+            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) return;
+
+            Transform mazeOrigin = mazeGridBehaviour != null ? mazeGridBehaviour.MazeOrigin : transform;
+
+            GameObject edgeObj = new GameObject($"Edge_{edgeIndex}");
+            edgeObj.transform.SetParent(shapesContainer.transform);
+
+            LineRenderer lr = edgeObj.AddComponent<LineRenderer>();
+            lr.positionCount = edge.PolylinePoints.Count;
+            lr.startWidth = edgeWidth;
+            lr.endWidth = edgeWidth;
+            lr.material = new Material(edgeMaterial);
+            lr.startColor = pathColor;
+            lr.endColor = pathColor;
+            lr.sortingLayerName = "Default";
+            lr.sortingOrder = 0; // Below nodes
+            lr.useWorldSpace = true;
+            lr.numCapVertices = 4;
+            lr.numCornerVertices = 4;
+
+            for (int i = 0; i < edge.PolylinePoints.Count; i++)
+            {
+                Vector3 pos = mazeOrigin.position + new Vector3(
+                    edge.PolylinePoints[i].x,
+                    edge.PolylinePoints[i].y,
+                    visualZLevel
+                );
+                lr.SetPosition(i, pos);
+            }
+
+            edgeLineRenderers.Add(lr);
+        }
+
+        /// <summary>
+        /// Adds a new node to the visual rendering (for dynamic growth).
+        /// </summary>
+        public void AddNodeVisual(int nodeIndex)
+        {
+            if (mazeData?.GraphState == null || shapesContainer == null) return;
+            if (nodeIndex < 0 || nodeIndex >= mazeData.GraphState.Nodes.Count) return;
+
+            var node = mazeData.GraphState.Nodes[nodeIndex];
+            Transform mazeOrigin = mazeGridBehaviour != null ? mazeGridBehaviour.MazeOrigin : transform;
+
+            GameObject nodeObj = new GameObject($"Node_{nodeIndex}");
+            nodeObj.transform.SetParent(shapesContainer.transform);
+
+            Vector3 nodePos = mazeOrigin.position + new Vector3(
+                node.Position.x,
+                node.Position.y,
+                visualZLevel
+            );
+            nodeObj.transform.position = nodePos;
+            nodeObj.transform.localScale = Vector3.one * nodeRadius * 2f;
+
+            SpriteRenderer sr = nodeObj.AddComponent<SpriteRenderer>();
+            sr.sprite = circleSprite;
+            sr.color = node.Kind == "root" ? heartColor : nodeColor;
+            sr.sortingLayerName = "Default";
+            sr.sortingOrder = 1; // Above edges
+
+            nodeCircleRenderers.Add(sr);
+        }
+
+        /// <summary>
+        /// Updates an existing edge's polyline points (for dynamic growth).
+        /// </summary>
+        public void UpdateEdgeVisual(int edgeIndex)
+        {
+            if (mazeData?.GraphState == null) return;
+            if (edgeIndex < 0 || edgeIndex >= mazeData.GraphState.Edges.Count) return;
+            if (edgeIndex >= edgeLineRenderers.Count) return;
+
+            var edge = mazeData.GraphState.Edges[edgeIndex];
+            var lr = edgeLineRenderers[edgeIndex];
+            if (lr == null || edge.PolylinePoints == null) return;
+
+            Transform mazeOrigin = mazeGridBehaviour != null ? mazeGridBehaviour.MazeOrigin : transform;
+
+            lr.positionCount = edge.PolylinePoints.Count;
+            for (int i = 0; i < edge.PolylinePoints.Count; i++)
+            {
+                Vector3 pos = mazeOrigin.position + new Vector3(
+                    edge.PolylinePoints[i].x,
+                    edge.PolylinePoints[i].y,
+                    visualZLevel
+                );
+                lr.SetPosition(i, pos);
+            }
+        }
+
+        /// <summary>
+        /// Sets the wall prefab used for rendering walls.
+        /// </summary>
+        public void SetWallPrefab(GameObject prefab)
+        {
+            wallPrefab = prefab;
         }
 
         #endregion

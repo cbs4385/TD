@@ -1801,15 +1801,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void OnConsumedByHeart()
         {
-            // Award essence if using heart destination (not spawn marker escape)
-            if (gameController != null)
-            {
-                int essenceReward = config != null ? config.EssenceReward : 10;
-                gameController.AddEssence(essenceReward);
-            }
-
-            // Destroy the visitor
-            Destroy(gameObject, 0.1f);
+            // Delegate to HandleConsumption which properly routes through HeartOfTheMaze
+            HandleConsumption();
         }
 
         /// <summary>
@@ -1948,10 +1941,16 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Gets the destination for the current visitor state.
-        /// Returns the originally set destination, not the heart.
+        /// Lured visitors always go to the heart. Others return their set destination.
         /// </summary>
         protected virtual Vector3 GetDestinationForCurrentState()
         {
+            // Lured visitors always head to the heart
+            if (isLured && mazeGridBehaviour != null)
+            {
+                return mazeGridBehaviour.HeartWorldPosition;
+            }
+
             // Return the world destination that was set via SetWorldDestination
             // Only fall back to heart if no destination was ever set
             if (worldDestination != Vector3.zero)

@@ -98,6 +98,7 @@ namespace FaeMaze.HeartPowers
         #region Events
 
         public event Action<HeartPowerType> OnPowerActivated;
+        public event Action<HeartPowerType> OnPowerDeactivated;
         public event Action<int> OnEssenceChanged;
 
         #endregion
@@ -286,6 +287,7 @@ namespace FaeMaze.HeartPowers
             foreach (var powerType in _powersToRemove)
             {
                 activePowers.Remove(powerType);
+                OnPowerDeactivated?.Invoke(powerType);
             }
         }
 
@@ -349,12 +351,17 @@ namespace FaeMaze.HeartPowers
             {
             }
 
-            // Consume essence and start cooldown
+            // Consume essence
             if (definition.essenceCost > 0)
             {
                 SpendEssence(definition.essenceCost);
             }
-            cooldownTimers[powerType] = definition.cooldown;
+
+            // Only start cooldown for non-toggle powers
+            if (!IsTogglePower(powerType))
+            {
+                cooldownTimers[powerType] = definition.cooldown;
+            }
 
             // Activate the power
             ActivatePower(powerType, definition, worldPosition);
@@ -412,7 +419,15 @@ namespace FaeMaze.HeartPowers
                 return false;
             }
 
-            if (cooldownTimers.GetValueOrDefault(powerType, 0) > 0)
+            // Toggle powers (like MurmuringPaths) cannot be activated while already active
+            if (IsTogglePower(powerType) && IsPowerActive(powerType))
+            {
+                reason = "Power is already active";
+                return false;
+            }
+
+            // Non-toggle powers use cooldowns
+            if (!IsTogglePower(powerType) && cooldownTimers.GetValueOrDefault(powerType, 0) > 0)
             {
                 reason = $"On cooldown ({cooldownTimers[powerType]:F1}s remaining)";
                 return false;
@@ -423,11 +438,51 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
+        /// Checks if a power type is a toggle power (no cooldown, expires on conditions).
+        /// </summary>
+        public bool IsTogglePower(HeartPowerType powerType)
+        {
+            return powerType == HeartPowerType.MurmuringPaths;
+        }
+
+        /// <summary>
+        /// Checks if a power is currently active.
+        /// </summary>
+        public bool IsPowerActive(HeartPowerType powerType)
+        {
+            return activePowers.ContainsKey(powerType);
+        }
+
+        /// <summary>
         /// Gets the remaining cooldown time for a power.
         /// </summary>
         public float GetCooldownRemaining(HeartPowerType powerType)
         {
             return cooldownTimers.GetValueOrDefault(powerType, 0f);
+        }
+
+        /// <summary>
+        /// Gets the current tier for a power type.
+        /// </summary>
+        public int GetPowerTier(HeartPowerType powerType)
+        {
+            return powerTiers.GetValueOrDefault(powerType, 1);
+        }
+
+        /// <summary>
+        /// Notifies the manager that a visitor was consumed.
+        /// Used by toggle powers that expire based on consumption count.
+        /// </summary>
+        public void NotifyVisitorConsumed()
+        {
+            // Notify any active toggle power effects about the consumption
+            if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect))
+            {
+                if (effect is MurmuringPathsEffect murmuringEffect)
+                {
+                    murmuringEffect.OnVisitorConsumed();
+                }
+            }
         }
 
         /// <summary>
@@ -509,33 +564,34 @@ namespace FaeMaze.HeartPowers
 
             switch (powerType)
             {
-                case HeartPowerType.HeartbeatOfLonging:
-                    effect = new HeartbeatOfLongingEffect(this, definition, worldPosition);
-                    break;
+                // Commented out - focusing on powers 2, 8, 9 for now
+                // case HeartPowerType.HeartbeatOfLonging:
+                //     effect = new HeartbeatOfLongingEffect(this, definition, worldPosition);
+                //     break;
 
                 case HeartPowerType.MurmuringPaths:
                     effect = new MurmuringPathsEffect(this, definition, worldPosition);
                     break;
 
-                case HeartPowerType.DreamSnare:
-                    effect = new DreamSnareEffect(this, definition, worldPosition);
-                    break;
+                // case HeartPowerType.DreamSnare:
+                //     effect = new DreamSnareEffect(this, definition, worldPosition);
+                //     break;
 
-                case HeartPowerType.FeastwardPanic:
-                    effect = new FeastwardPanicEffect(this, definition, worldPosition);
-                    break;
+                // case HeartPowerType.FeastwardPanic:
+                //     effect = new FeastwardPanicEffect(this, definition, worldPosition);
+                //     break;
 
-                case HeartPowerType.CovenantWithWisps:
-                    effect = new CovenantWithWispsEffect(this, definition, worldPosition);
-                    break;
+                // case HeartPowerType.CovenantWithWisps:
+                //     effect = new CovenantWithWispsEffect(this, definition, worldPosition);
+                //     break;
 
-                case HeartPowerType.PukasBargain:
-                    effect = new PukasBargainEffect(this, definition, worldPosition);
-                    break;
+                // case HeartPowerType.PukasBargain:
+                //     effect = new PukasBargainEffect(this, definition, worldPosition);
+                //     break;
 
-                case HeartPowerType.RingOfInvitations:
-                    effect = new RingOfInvitationsEffect(this, definition, worldPosition);
-                    break;
+                // case HeartPowerType.RingOfInvitations:
+                //     effect = new RingOfInvitationsEffect(this, definition, worldPosition);
+                //     break;
 
                 case HeartPowerType.HeartwardGrasp:
                     effect = new HeartwardGraspEffect(this, definition, worldPosition);
@@ -610,10 +666,11 @@ namespace FaeMaze.HeartPowers
         {
             switch (powerType)
             {
-                case HeartPowerType.HeartbeatOfLonging:
+                // Commented out - focusing on powers 2, 8, 9 for now
+                // case HeartPowerType.HeartbeatOfLonging:
                 case HeartPowerType.MurmuringPaths:
-                case HeartPowerType.DreamSnare:
-                case HeartPowerType.FeastwardPanic:
+                // case HeartPowerType.DreamSnare:
+                // case HeartPowerType.FeastwardPanic:
                 case HeartPowerType.HeartwardGrasp:
                     return true;
                 default:
@@ -711,7 +768,7 @@ namespace FaeMaze.HeartPowers
         protected float elapsedTime;
 
         public float Duration => definition.duration;
-        public bool IsExpired => elapsedTime >= Duration && Duration > 0;
+        public virtual bool IsExpired => elapsedTime >= Duration && Duration > 0;
 
         protected ActivePowerEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
         {

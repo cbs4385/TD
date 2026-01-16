@@ -43,7 +43,7 @@ namespace FaeMaze.Props
         [Header("Detection Settings")]
         [SerializeField]
         [Tooltip("Distance to detect visitors and trigger reacting state")]
-        private float visitorDetectionRadius = 10f;
+        private float visitorDetectionRadius = 3f;
 
         [SerializeField]
         [Tooltip("How often to scan for visitors (seconds)")]
@@ -1001,19 +1001,55 @@ namespace FaeMaze.Props
             // Get current target waypoint
             Vector3 currentTarget = reactingWorldPath[reactingWorldPathIndex];
 
+            // Check distance to visitor - if too far, stop and wait
+            Vector3 visitorPos = targetVisitor.transform.position;
+            float distanceToVisitor = Vector3.Distance(transform.position, visitorPos);
+
+            // Use a maximum lead distance - wisp should never get further than this from the visitor
+            // This prevents the wisp from running off and leaving the visitor behind
+            float maxLeadDistance = visitorDetectionRadius * 0.75f; // Stay within 75% of detection radius
+
+            if (distanceToVisitor > maxLeadDistance)
+            {
+                // Too far from visitor - stop and wait for them to catch up
+                // Update animator to idle
+                UpdateAnimatorDirection(Vector3.zero);
+                return;
+            }
+
             // Check if wisp is ahead of the visitor (toward the Puka)
             // Use dot product: if visitor-to-wisp direction aligns with visitor-to-puka direction, wisp is ahead
-            Vector3 visitorPos = targetVisitor.transform.position;
             Vector3 visitorToWisp = (transform.position - visitorPos).normalized;
             Vector3 visitorToPuka = (targetPuka.WorldPosition - visitorPos).normalized;
             float dotProduct = Vector3.Dot(visitorToWisp, visitorToPuka);
 
             // Also check if wisp is far enough ahead (at least 1 unit in front)
-            float distanceAhead = Vector3.Distance(transform.position, visitorPos);
-            bool isAheadOfVisitor = dotProduct > 0.5f && distanceAhead > 1f;
+            bool isAheadOfVisitor = dotProduct > 0.5f && distanceToVisitor > 1f;
 
-            // Move faster to get ahead, then match visitor speed once in front
-            float luringSpeed = isAheadOfVisitor ? targetVisitor.MoveSpeed : reactingSpeed;
+            // Calculate desired speed based on position relative to visitor
+            float luringSpeed;
+            if (isAheadOfVisitor)
+            {
+                // When ahead, match visitor speed to maintain lead distance
+                // If getting close to max distance, slow down even more
+                float distanceRatio = distanceToVisitor / maxLeadDistance;
+                if (distanceRatio > 0.8f)
+                {
+                    // Very close to max distance - slow down significantly
+                    luringSpeed = targetVisitor.MoveSpeed * 0.5f;
+                }
+                else
+                {
+                    // Ahead but not too far - match visitor speed
+                    luringSpeed = targetVisitor.MoveSpeed;
+                }
+            }
+            else
+            {
+                // Behind visitor - move faster to get ahead
+                luringSpeed = reactingSpeed;
+            }
+
             MoveDirectlyTowardTarget(currentTarget, luringSpeed);
 
             // Check if we've reached the current waypoint

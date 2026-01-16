@@ -462,6 +462,7 @@ namespace FaeMaze.Props
         /// <returns>True if occupied, false otherwise</returns>
         public bool IsPositionOccupied(Vector3 worldPos)
         {
+            if (placedProps == null) return false;
             return placedProps.Any(p =>
                 Vector3.Distance(p.WorldPosition, worldPos) < occupancyRadius);
         }

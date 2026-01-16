@@ -249,7 +249,7 @@ namespace FaeMaze.Props
             }
 
             // Clean up destroyed visitors from processed set
-            processedVisitors.RemoveWhere(v => v == null);
+            processedVisitors?.RemoveWhere(v => v == null);
         }
 
         #endregion

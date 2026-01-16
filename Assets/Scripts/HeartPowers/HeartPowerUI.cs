@@ -29,33 +29,34 @@ namespace FaeMaze.HeartPowers
         private TextMeshProUGUI essenceText;
 
         [Header("Power Buttons")]
-        [SerializeField]
-        [Tooltip("Button for Heartbeat of Longing (Key: 1)")]
-        private Button heartbeatButton;
+        // Commented out - focusing on powers 2, 8, 9 for now
+        // [SerializeField]
+        // [Tooltip("Button for Heartbeat of Longing (Key: 1)")]
+        // private Button heartbeatButton;
 
         [SerializeField]
         [Tooltip("Button for Murmuring Paths (Key: 2)")]
         private Button murmuringButton;
 
-        [SerializeField]
-        [Tooltip("Button for Dream Snare (Key: 3)")]
-        private Button dreamSnareButton;
+        // [SerializeField]
+        // [Tooltip("Button for Dream Snare (Key: 3)")]
+        // private Button dreamSnareButton;
 
-        [SerializeField]
-        [Tooltip("Button for Feastward Panic (Key: 4)")]
-        private Button feastwardButton;
+        // [SerializeField]
+        // [Tooltip("Button for Feastward Panic (Key: 4)")]
+        // private Button feastwardButton;
 
-        [SerializeField]
-        [Tooltip("Button for Covenant with Wisps (Key: 5)")]
-        private Button covenantButton;
+        // [SerializeField]
+        // [Tooltip("Button for Covenant with Wisps (Key: 5)")]
+        // private Button covenantButton;
 
-        [SerializeField]
-        [Tooltip("Button for Puka's Bargain (Key: 6)")]
-        private Button pukaButton;
+        // [SerializeField]
+        // [Tooltip("Button for Puka's Bargain (Key: 6)")]
+        // private Button pukaButton;
 
-        [SerializeField]
-        [Tooltip("Button for Ring of Invitations (Key: 7)")]
-        private Button ringButton;
+        // [SerializeField]
+        // [Tooltip("Button for Ring of Invitations (Key: 7)")]
+        // private Button ringButton;
 
         [SerializeField]
         [Tooltip("Button for Heartward Grasp (Key: 8)")]
@@ -104,37 +105,39 @@ namespace FaeMaze.HeartPowers
             }
 
             // Map buttons to power types
-            if (heartbeatButton != null)
-                powerButtons[HeartPowerType.HeartbeatOfLonging] = heartbeatButton;
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // if (heartbeatButton != null)
+            //     powerButtons[HeartPowerType.HeartbeatOfLonging] = heartbeatButton;
             if (murmuringButton != null)
                 powerButtons[HeartPowerType.MurmuringPaths] = murmuringButton;
-            if (dreamSnareButton != null)
-                powerButtons[HeartPowerType.DreamSnare] = dreamSnareButton;
-            if (feastwardButton != null)
-                powerButtons[HeartPowerType.FeastwardPanic] = feastwardButton;
-            if (covenantButton != null)
-                powerButtons[HeartPowerType.CovenantWithWisps] = covenantButton;
-            if (pukaButton != null)
-                powerButtons[HeartPowerType.PukasBargain] = pukaButton;
-            if (ringButton != null)
-                powerButtons[HeartPowerType.RingOfInvitations] = ringButton;
+            // if (dreamSnareButton != null)
+            //     powerButtons[HeartPowerType.DreamSnare] = dreamSnareButton;
+            // if (feastwardButton != null)
+            //     powerButtons[HeartPowerType.FeastwardPanic] = feastwardButton;
+            // if (covenantButton != null)
+            //     powerButtons[HeartPowerType.CovenantWithWisps] = covenantButton;
+            // if (pukaButton != null)
+            //     powerButtons[HeartPowerType.PukasBargain] = pukaButton;
+            // if (ringButton != null)
+            //     powerButtons[HeartPowerType.RingOfInvitations] = ringButton;
             if (graspButton != null)
                 powerButtons[HeartPowerType.HeartwardGrasp] = graspButton;
             if (devourButton != null)
                 powerButtons[HeartPowerType.DevouringMaw] = devourButton;
 
             // Map cooldown texts
-            if (buttonCooldownTexts != null && buttonCooldownTexts.Length >= 9)
+            // Commented out - focusing on powers 2, 8, 9 for now
+            if (buttonCooldownTexts != null && buttonCooldownTexts.Length >= 3)
             {
-                cooldownTexts[HeartPowerType.HeartbeatOfLonging] = buttonCooldownTexts[0];
-                cooldownTexts[HeartPowerType.MurmuringPaths] = buttonCooldownTexts[1];
-                cooldownTexts[HeartPowerType.DreamSnare] = buttonCooldownTexts[2];
-                cooldownTexts[HeartPowerType.FeastwardPanic] = buttonCooldownTexts[3];
-                cooldownTexts[HeartPowerType.CovenantWithWisps] = buttonCooldownTexts[4];
-                cooldownTexts[HeartPowerType.PukasBargain] = buttonCooldownTexts[5];
-                cooldownTexts[HeartPowerType.RingOfInvitations] = buttonCooldownTexts[6];
-                cooldownTexts[HeartPowerType.HeartwardGrasp] = buttonCooldownTexts[7];
-                cooldownTexts[HeartPowerType.DevouringMaw] = buttonCooldownTexts[8];
+                // cooldownTexts[HeartPowerType.HeartbeatOfLonging] = buttonCooldownTexts[0];
+                cooldownTexts[HeartPowerType.MurmuringPaths] = buttonCooldownTexts[0];
+                // cooldownTexts[HeartPowerType.DreamSnare] = buttonCooldownTexts[2];
+                // cooldownTexts[HeartPowerType.FeastwardPanic] = buttonCooldownTexts[3];
+                // cooldownTexts[HeartPowerType.CovenantWithWisps] = buttonCooldownTexts[4];
+                // cooldownTexts[HeartPowerType.PukasBargain] = buttonCooldownTexts[5];
+                // cooldownTexts[HeartPowerType.RingOfInvitations] = buttonCooldownTexts[6];
+                cooldownTexts[HeartPowerType.HeartwardGrasp] = buttonCooldownTexts[1];
+                cooldownTexts[HeartPowerType.DevouringMaw] = buttonCooldownTexts[2];
             }
 
             SetupButtons();
@@ -182,20 +185,21 @@ namespace FaeMaze.HeartPowers
 
         private void SetupButtons()
         {
-            if (heartbeatButton != null)
-                heartbeatButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.HeartbeatOfLonging));
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // if (heartbeatButton != null)
+            //     heartbeatButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.HeartbeatOfLonging));
             if (murmuringButton != null)
                 murmuringButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.MurmuringPaths));
-            if (dreamSnareButton != null)
-                dreamSnareButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.DreamSnare));
-            if (feastwardButton != null)
-                feastwardButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.FeastwardPanic));
-            if (covenantButton != null)
-                covenantButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.CovenantWithWisps));
-            if (pukaButton != null)
-                pukaButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.PukasBargain));
-            if (ringButton != null)
-                ringButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.RingOfInvitations));
+            // if (dreamSnareButton != null)
+            //     dreamSnareButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.DreamSnare));
+            // if (feastwardButton != null)
+            //     feastwardButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.FeastwardPanic));
+            // if (covenantButton != null)
+            //     covenantButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.CovenantWithWisps));
+            // if (pukaButton != null)
+            //     pukaButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.PukasBargain));
+            // if (ringButton != null)
+            //     ringButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.RingOfInvitations));
             if (graspButton != null)
                 graspButton.onClick.AddListener(() => OnPowerButtonClicked(HeartPowerType.HeartwardGrasp));
             if (devourButton != null)
@@ -251,42 +255,52 @@ namespace FaeMaze.HeartPowers
 
         private void HandleKeyboardInput()
         {
+            // Commented out - focusing on powers 2, 8, 9 for now
+            // Remapped to keys 1, 2, 3 for the active powers
+            // if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))
+            // {
+            //     ActivatePower(HeartPowerType.HeartbeatOfLonging);
+            // }
             if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))
-            {
-                ActivatePower(HeartPowerType.HeartbeatOfLonging);
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2))
             {
                 ActivatePower(HeartPowerType.MurmuringPaths);
             }
-            else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
-            {
-                ActivatePower(HeartPowerType.DreamSnare);
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4))
-            {
-                ActivatePower(HeartPowerType.FeastwardPanic);
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha5) || Input.GetKeyDown(KeyCode.Keypad5))
-            {
-                ActivatePower(HeartPowerType.CovenantWithWisps);
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha6) || Input.GetKeyDown(KeyCode.Keypad6))
-            {
-                ActivatePower(HeartPowerType.PukasBargain);
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha7) || Input.GetKeyDown(KeyCode.Keypad7))
-            {
-                ActivatePower(HeartPowerType.RingOfInvitations);
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha8) || Input.GetKeyDown(KeyCode.Keypad8))
+            else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2))
             {
                 ActivatePower(HeartPowerType.HeartwardGrasp);
             }
-            else if (Input.GetKeyDown(KeyCode.Alpha9) || Input.GetKeyDown(KeyCode.Keypad9))
+            else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
             {
                 ActivatePower(HeartPowerType.DevouringMaw);
             }
+            // else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
+            // {
+            //     ActivatePower(HeartPowerType.DreamSnare);
+            // }
+            // else if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4))
+            // {
+            //     ActivatePower(HeartPowerType.FeastwardPanic);
+            // }
+            // else if (Input.GetKeyDown(KeyCode.Alpha5) || Input.GetKeyDown(KeyCode.Keypad5))
+            // {
+            //     ActivatePower(HeartPowerType.CovenantWithWisps);
+            // }
+            // else if (Input.GetKeyDown(KeyCode.Alpha6) || Input.GetKeyDown(KeyCode.Keypad6))
+            // {
+            //     ActivatePower(HeartPowerType.PukasBargain);
+            // }
+            // else if (Input.GetKeyDown(KeyCode.Alpha7) || Input.GetKeyDown(KeyCode.Keypad7))
+            // {
+            //     ActivatePower(HeartPowerType.RingOfInvitations);
+            // }
+            // else if (Input.GetKeyDown(KeyCode.Alpha8) || Input.GetKeyDown(KeyCode.Keypad8))
+            // {
+            //     ActivatePower(HeartPowerType.HeartwardGrasp);
+            // }
+            // else if (Input.GetKeyDown(KeyCode.Alpha9) || Input.GetKeyDown(KeyCode.Keypad9))
+            // {
+            //     ActivatePower(HeartPowerType.DevouringMaw);
+            // }
         }
 
         #endregion

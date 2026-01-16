@@ -8,6 +8,7 @@ using FaeMaze.Audio;
 
 namespace FaeMaze.HeartPowers
 {
+    /*
     #region Heartbeat of Longing
 
     /// <summary>
@@ -165,12 +166,16 @@ namespace FaeMaze.HeartPowers
     }
 
     #endregion
+    */
 
     #region Murmuring Paths
 
     /// <summary>
-    /// Creates corridors of desire or sealing from selected position to the Heart.
-    /// Simplified for world-space: creates visual path effect without grid-based pathfinding.
+    /// Affects all visitors on the targeted node or edge.
+    /// Uses visitor pathfinding to find path to heart.
+    /// Lures affected visitors toward the heart tile.
+    /// Toggle power: no cooldown, expires when visitors consumed equals power tier.
+    /// Visualizes with fairy ring style lights that trace paths to the heart from all affected positions.
     /// </summary>
     public class MurmuringPathsEffect : ActivePowerEffect
     {
@@ -178,9 +183,90 @@ namespace FaeMaze.HeartPowers
         private const string ModifierSourceId = "MurmuringPaths";
         private static int segmentCounter = 0;
         private string instanceSourceId;
-        private GameObject pathVisualObject;
-        private LineRenderer pathLineRenderer;
         private float animationTime = 0f;
+
+        // Track which node/edge is affected (initial trigger location)
+        private int affectedNodeIndex = -1;
+        private int affectedEdgeIndex = -1;
+
+        // Track ALL nodes and edges along the path to the heart
+        private HashSet<int> allAffectedNodeIndices = new HashSet<int>();
+        private HashSet<int> allAffectedEdgeIndices = new HashSet<int>();
+
+        // Track visitors affected by this power instance
+        private HashSet<VisitorControllerBase> affectedVisitors = new HashSet<VisitorControllerBase>();
+
+        // Toggle power expiration: expires when consumedCount reaches powerTier
+        private int consumedCount = 0;
+        private int requiredConsumptions = 1; // Set to power tier on start
+        private bool hasExpired = false;
+
+        // Visual elements - fairy ring style lights with trails
+        private GameObject visualContainer;
+        private List<PathLight> pathLightObjects = new List<PathLight>();
+
+        // Light settings (reduced intensity - 25% of FairyRingSphere)
+        private const float LIGHT_INTENSITY = 1.25f; // 25% of FairyRingSphere's 5f intensity
+        private const float LIGHT_RANGE = 1.2f; // Match FairyRingSphere range
+        private const float LIGHT_Z_OFFSET = -0.5f; // Slight offset above path
+        private const int LIGHTS_PER_NODE = 8; // Number of lights per affected node
+        private const int LIGHTS_PER_EDGE = 4; // Number of lights per affected edge
+
+        // Rainbow hues (same as FairyRingSphere)
+        private static readonly float[] RainbowHues = new float[]
+        {
+            0.00f,  // Red
+            0.08f,  // Orange
+            0.16f,  // Yellow
+            0.33f,  // Green
+            0.50f,  // Cyan
+            0.66f,  // Blue
+            0.80f,  // Violet
+        };
+
+        // Animation settings
+        private float moveSpeed = 6.0f; // How fast lights move along path toward heart
+
+        // Path boundary settings - lights travel the full path to the heart
+        private const float PATH_END_THRESHOLD = 1.0f; // Travel full path
+        private const float MIN_RESPAWN_DELAY = 0.2f; // Minimum delay between light spawns
+        private const float MAX_RESPAWN_DELAY = 1.5f; // Maximum delay between light spawns
+
+        // Erratic movement settings
+        private const float MIN_WANDER_AMPLITUDE = 0.8f; // Minimum wander distance from path
+        private const float MAX_WANDER_AMPLITUDE = 2.0f; // Maximum wander distance from path
+        private const float MIN_WANDER_SPEED = 2.0f; // Minimum wander velocity
+        private const float MAX_WANDER_SPEED = 5.0f; // Maximum wander velocity
+        private const float MIN_DIRECTION_CHANGE = 0.2f; // Minimum time between direction changes
+        private const float MAX_DIRECTION_CHANGE = 0.8f; // Maximum time between direction changes
+
+        // Store all paths from affected positions to heart
+        private List<List<Vector3>> allPathsToHeart = new List<List<Vector3>>();
+
+        /// <summary>
+        /// Helper class to manage individual path lights with trails
+        /// </summary>
+        private class PathLight
+        {
+            public GameObject gameObject;
+            public Light light;
+            public TrailRenderer trail;
+            public int pathIndex;
+            public float normalizedPosition; // 0-1 position along path
+            public float colorTimeOffset;
+            public float cycleDuration;
+            public bool trailStarted; // Track if trail has begun emitting
+            public float respawnDelay; // Random delay before respawning
+            public float currentDelay; // Current delay countdown
+            public bool isWaiting; // Whether light is waiting to respawn
+
+            // Erratic movement properties
+            public Vector2 wanderOffset; // Current offset from path center
+            public Vector2 wanderVelocity; // Current wander velocity
+            public float wanderChangeTimer; // Time until next direction change
+            public float wanderAmplitude; // How far this light wanders from path
+            public float wanderSpeed; // How fast this light changes direction
+        }
 
         public MurmuringPathsEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition)
@@ -188,182 +274,992 @@ namespace FaeMaze.HeartPowers
             instanceSourceId = $"{ModifierSourceId}_{segmentCounter++}";
         }
 
+        /// <summary>
+        /// Override IsExpired to use consumption-based expiration instead of duration.
+        /// Power expires when consumed visitor count reaches the power tier.
+        /// </summary>
+        public override bool IsExpired => hasExpired;
+
+        /// <summary>
+        /// Called by HeartPowerManager when a visitor is consumed.
+        /// Increments the consumption count and triggers expiration when threshold is reached.
+        /// </summary>
+        public void OnVisitorConsumed()
+        {
+            if (hasExpired) return;
+
+            consumedCount++;
+            if (consumedCount >= requiredConsumptions)
+            {
+                hasExpired = true;
+            }
+        }
+
+        /// <summary>
+        /// Gets the current consumption progress (for UI display).
+        /// </summary>
+        public int GetConsumedCount() => consumedCount;
+
+        /// <summary>
+        /// Gets the required consumption count to expire (power tier).
+        /// </summary>
+        public int GetRequiredConsumptions() => requiredConsumptions;
+
         public override void OnStart()
         {
-            // Create a simple visual path from target to heart using world positions
-            pathPositions = GeneratePathPositions(targetPosition);
+            // Set required consumptions to the power tier
+            requiredConsumptions = manager.GetPowerTier(HeartPowerType.MurmuringPaths);
+            consumedCount = 0;
+            hasExpired = false;
 
-            if (pathPositions.Count > 0)
+            // Find which node or edge the target position belongs to
+            FindAffectedNodeOrEdge();
+
+            // First generate the main path from target to heart - this determines all affected graph elements
+            pathPositions = GeneratePathToHeart(targetPosition);
+
+            // Identify ALL nodes and edges along the path, then get positions from all of them
+            var affectedPositions = GetAllPositionsAlongPath(pathPositions);
+
+            // Generate paths from each affected position to the heart
+            allPathsToHeart.Clear();
+            foreach (var pos in affectedPositions)
             {
-                // Determine mode: Lure (default) or Seal (Tier III)
-                bool sealMode = definition.tier >= 3 && definition.flag2;
-
-                // Create continuous glowing path visualization
-                CreatePathVisualization(pathPositions, sealMode);
+                var path = GeneratePathToHeart(pos);
+                if (path.Count >= 2)
+                {
+                    allPathsToHeart.Add(path);
+                }
             }
+
+            // If no paths were generated, fall back to just the target position
+            if (allPathsToHeart.Count == 0)
+            {
+                if (pathPositions.Count >= 2)
+                {
+                    allPathsToHeart.Add(pathPositions);
+                }
+            }
+
+            // Create fairy ring style lights along all paths
+            CreateFairyRingStyleLights();
+
+            // Apply lure to all visitors currently on the affected node/edge
+            ApplyLureToVisitorsOnAffectedArea();
         }
 
         public override void OnEnd()
         {
-            // Remove path visualization
-            if (pathVisualObject != null)
+            // Remove all visual elements
+            if (visualContainer != null)
             {
-                Object.Destroy(pathVisualObject);
-                pathVisualObject = null;
-                pathLineRenderer = null;
+                Object.Destroy(visualContainer);
+                visualContainer = null;
             }
 
-            // Clear Lured state from all visitors
-            var activeVisitors = VisitorRegistry.All;
-            if (activeVisitors != null)
+            pathLightObjects.Clear();
+
+            // Clear Lured state from all affected visitors
+            foreach (var visitor in affectedVisitors)
             {
-                foreach (var visitor in activeVisitors)
+                if (visitor != null && visitor.State == VisitorControllerBase.VisitorState.Lured)
                 {
-                    if (visitor != null && visitor.State == VisitorControllerBase.VisitorState.Lured)
-                    {
-                        visitor.SetLured(false);
-                    }
+                    visitor.SetLured(false);
                 }
             }
 
+            affectedVisitors.Clear();
             pathPositions.Clear();
+            allPathsToHeart.Clear();
+            allAffectedNodeIndices.Clear();
+            allAffectedEdgeIndices.Clear();
         }
 
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
 
-            // Animate the path visual with jagged moving edges
             animationTime += deltaTime;
-            if (pathLineRenderer != null)
-            {
-                UpdatePathAnimation();
-            }
 
-            // Find all active visitors and check if they're near the path
-            var activeVisitors = VisitorRegistry.All;
-            if (activeVisitors == null || pathPositions == null || pathPositions.Count == 0)
+            // Animate the lights - move along path and update colors
+            UpdateFairyRingLights(deltaTime);
+
+            // Check for new visitors entering the affected area
+            CheckForNewVisitorsOnAffectedArea();
+
+            // Clean up destroyed visitors from tracking set
+            affectedVisitors.RemoveWhere(v => v == null);
+        }
+
+        /// <summary>
+        /// Creates fairy ring style lights with trails along all paths to the heart.
+        /// Generates a fixed number of lights per affected node and edge for denser coverage.
+        /// </summary>
+        private void CreateFairyRingStyleLights()
+        {
+            if (allPathsToHeart.Count == 0)
                 return;
 
-            float pathProximity = 1.5f; // World units
+            visualContainer = new GameObject($"MurmuringPathsLights_{instanceSourceId}");
+
+            int lightIndex = 0;
+
+            // Calculate total lights needed based on affected nodes and edges
+            int totalNodeLights = allAffectedNodeIndices.Count * LIGHTS_PER_NODE;
+            int totalEdgeLights = allAffectedEdgeIndices.Count * LIGHTS_PER_EDGE;
+            int totalLightsNeeded = totalNodeLights + totalEdgeLights;
+
+            // Ensure we have at least some lights
+            totalLightsNeeded = Mathf.Max(totalLightsNeeded, 4);
+
+            // Distribute lights across all paths proportionally
+            if (allPathsToHeart.Count > 0)
+            {
+                // Calculate total path length for proportional distribution
+                float[] pathLengths = new float[allPathsToHeart.Count];
+                float totalLength = 0f;
+                for (int pathIdx = 0; pathIdx < allPathsToHeart.Count; pathIdx++)
+                {
+                    var path = allPathsToHeart[pathIdx];
+                    float pathLen = CalculatePathLength(path);
+                    pathLengths[pathIdx] = pathLen;
+                    totalLength += pathLen;
+                }
+
+                // Create lights distributed across paths based on length
+                for (int pathIdx = 0; pathIdx < allPathsToHeart.Count; pathIdx++)
+                {
+                    var path = allPathsToHeart[pathIdx];
+                    if (path.Count < 2) continue;
+
+                    // Calculate lights for this path proportional to its length
+                    float pathProportion = totalLength > 0 ? pathLengths[pathIdx] / totalLength : 1f / allPathsToHeart.Count;
+                    int numLightsForPath = Mathf.Max(1, Mathf.RoundToInt(totalLightsNeeded * pathProportion));
+
+                    // Create lights for this path with staggered starting positions
+                    for (int i = 0; i < numLightsForPath; i++)
+                    {
+                        float startPos = (float)i / numLightsForPath;
+                        // Add some randomness to starting positions
+                        startPos += UnityEngine.Random.Range(-0.05f, 0.05f);
+                        startPos = Mathf.Clamp01(startPos);
+
+                        var pathLight = CreateSingleFairyLight(lightIndex, pathIdx, startPos);
+                        if (pathLight != null)
+                        {
+                            pathLightObjects.Add(pathLight);
+                            lightIndex++;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Creates a single fairy ring style light with trail renderer.
+        /// </summary>
+        private PathLight CreateSingleFairyLight(int lightIndex, int pathIndex, float startingPosition)
+        {
+            if (pathIndex >= allPathsToHeart.Count)
+                return null;
+
+            var path = allPathsToHeart[pathIndex];
+            if (path.Count < 2)
+                return null;
+
+            // Get starting position along path
+            Vector3 startPos = GetPositionAlongPath(path, startingPosition);
+            startPos.z = LIGHT_Z_OFFSET;
+
+            // Create light object
+            GameObject lightObj = new GameObject($"FairyPathLight_{lightIndex}");
+            lightObj.transform.SetParent(visualContainer.transform);
+            lightObj.transform.position = startPos;
+
+            // Add point light component (matching FairyRingSphere style)
+            Light light = lightObj.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.range = LIGHT_RANGE;
+            light.intensity = LIGHT_INTENSITY;
+            light.shadows = LightShadows.None;
+            light.renderMode = LightRenderMode.Auto;
+
+            // Add trail renderer (matching FairyRingSphere style)
+            TrailRenderer trail = lightObj.AddComponent<TrailRenderer>();
+            trail.time = 2f;  // Long trail for light painting effect
+            trail.startWidth = 0.15f;
+            trail.endWidth = 0.03f;
+            trail.minVertexDistance = 0.01f;
+            trail.emitting = false; // Start disabled, enable after light moves
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sortingOrder = 100;
+            trail.allowOcclusionWhenDynamic = false;
+
+            // Set up trail material for additive blending (like FairyRingSphere)
+            SetupTrailMaterial(trail);
+
+            // Create PathLight wrapper with random initial delay for staggered spawning
+            float initialDelay = Random.Range(0f, MAX_RESPAWN_DELAY);
+
+            // Initialize erratic movement with random parameters
+            float wanderAngle = Random.Range(0f, Mathf.PI * 2f);
+            float wanderSpeed = Random.Range(MIN_WANDER_SPEED, MAX_WANDER_SPEED);
+
+            PathLight pathLight = new PathLight
+            {
+                gameObject = lightObj,
+                light = light,
+                trail = trail,
+                pathIndex = pathIndex,
+                normalizedPosition = 0f, // Always start at beginning
+                colorTimeOffset = Random.Range(0f, 10f), // Random phase offset for color
+                cycleDuration = Random.Range(1f, 3f), // Random cycle duration like FairyRingSphere
+                trailStarted = false, // Trail starts disabled
+                respawnDelay = Random.Range(MIN_RESPAWN_DELAY, MAX_RESPAWN_DELAY),
+                currentDelay = initialDelay, // Stagger initial spawns
+                isWaiting = initialDelay > 0f, // Start waiting if there's an initial delay
+
+                // Erratic movement initialization
+                wanderOffset = Vector2.zero,
+                wanderVelocity = new Vector2(Mathf.Cos(wanderAngle), Mathf.Sin(wanderAngle)) * wanderSpeed,
+                wanderChangeTimer = Random.Range(MIN_DIRECTION_CHANGE, MAX_DIRECTION_CHANGE),
+                wanderAmplitude = Random.Range(MIN_WANDER_AMPLITUDE, MAX_WANDER_AMPLITUDE),
+                wanderSpeed = wanderSpeed
+            };
+
+            // Hide light initially if waiting
+            if (pathLight.isWaiting)
+            {
+                lightObj.SetActive(false);
+            }
+
+            return pathLight;
+        }
+
+        /// <summary>
+        /// Sets up trail material for additive blending (matching FairyRingSphere).
+        /// </summary>
+        private void SetupTrailMaterial(TrailRenderer trail)
+        {
+            if (trail == null) return;
+
+            // Try URP Particles shader first
+            var trailMaterial = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+            if (trailMaterial.shader == null || trailMaterial.shader.name == "Hidden/InternalErrorShader")
+            {
+                trailMaterial = new Material(Shader.Find("Particles/Standard Unlit"));
+            }
+            if (trailMaterial.shader == null || trailMaterial.shader.name == "Hidden/InternalErrorShader")
+            {
+                trailMaterial = new Material(Shader.Find("Sprites/Default"));
+            }
+
+            // Configure for additive blending
+            trailMaterial.SetFloat("_Surface", 1); // Transparent
+            trailMaterial.SetFloat("_Blend", 4); // Additive blend mode
+            trailMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            trailMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            trailMaterial.SetInt("_ZWrite", 0);
+            trailMaterial.renderQueue = 3500;
+            trailMaterial.SetColor("_BaseColor", Color.white);
+            trailMaterial.SetColor("_Color", Color.white);
+
+            trailMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            trailMaterial.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+
+            trail.material = trailMaterial;
+        }
+
+        /// <summary>
+        /// Updates all fairy ring style lights - movement and color cycling.
+        /// </summary>
+        private void UpdateFairyRingLights(float deltaTime)
+        {
+            if (allPathsToHeart.Count == 0 || pathLightObjects.Count == 0)
+                return;
+
+            foreach (var pathLight in pathLightObjects)
+            {
+                if (pathLight == null || pathLight.gameObject == null)
+                    continue;
+
+                // Handle waiting state (random spawn delays)
+                if (pathLight.isWaiting)
+                {
+                    pathLight.currentDelay -= deltaTime;
+                    if (pathLight.currentDelay <= 0f)
+                    {
+                        // Done waiting, activate the light
+                        pathLight.isWaiting = false;
+                        pathLight.gameObject.SetActive(true);
+                        pathLight.normalizedPosition = 0f;
+                        pathLight.trailStarted = false;
+                    }
+                    continue; // Skip movement while waiting
+                }
+
+                // Move light along its path toward the heart
+                if (pathLight.pathIndex < allPathsToHeart.Count)
+                {
+                    var path = allPathsToHeart[pathLight.pathIndex];
+                    float pathLength = CalculatePathLength(path);
+
+                    if (pathLength > 0)
+                    {
+                        // Move toward heart (position increases toward 1.0)
+                        pathLight.normalizedPosition += (moveSpeed / pathLength) * deltaTime;
+
+                        // Enable trail after light has moved 2% along the path
+                        if (!pathLight.trailStarted && pathLight.normalizedPosition > 0.02f)
+                        {
+                            pathLight.trailStarted = true;
+                            if (pathLight.trail != null)
+                            {
+                                pathLight.trail.emitting = true;
+                            }
+                        }
+
+                        // When reaching the end of the path (heart), respawn after delay
+                        if (pathLight.normalizedPosition >= PATH_END_THRESHOLD)
+                        {
+                            // Hide the light and start waiting
+                            pathLight.gameObject.SetActive(false);
+                            pathLight.isWaiting = true;
+                            pathLight.currentDelay = Random.Range(MIN_RESPAWN_DELAY, MAX_RESPAWN_DELAY);
+                            pathLight.normalizedPosition = 0f;
+                            pathLight.trailStarted = false;
+
+                            // Reset wander for next cycle
+                            pathLight.wanderOffset = Vector2.zero;
+                            float newAngle = Random.Range(0f, Mathf.PI * 2f);
+                            pathLight.wanderVelocity = new Vector2(Mathf.Cos(newAngle), Mathf.Sin(newAngle)) * pathLight.wanderSpeed;
+
+                            // Clear the trail
+                            if (pathLight.trail != null)
+                            {
+                                pathLight.trail.Clear();
+                                pathLight.trail.emitting = false;
+                            }
+                            continue;
+                        }
+
+                        // Update erratic wandering
+                        UpdateErraticWander(pathLight, deltaTime);
+
+                        // Get base position along path
+                        Vector3 basePos = GetPositionAlongPath(path, pathLight.normalizedPosition);
+
+                        // Apply wander offset perpendicular to path direction
+                        Vector3 newPos = basePos;
+                        newPos.x += pathLight.wanderOffset.x;
+                        newPos.y += pathLight.wanderOffset.y;
+                        newPos.z = LIGHT_Z_OFFSET;
+                        pathLight.gameObject.transform.position = newPos;
+                    }
+                }
+
+                // Update rainbow color cycling (matching FairyRingSphere style)
+                float t = animationTime + pathLight.colorTimeOffset;
+                Color currentColor = EvaluateRainbowCycle(t, pathLight.cycleDuration / RainbowHues.Length);
+
+                // Update light color
+                if (pathLight.light != null)
+                {
+                    pathLight.light.color = currentColor;
+                }
+
+                // Update trail color gradient
+                if (pathLight.trail != null)
+                {
+                    Color brightColor = currentColor * 2f; // HDR boost for glow
+
+                    Gradient gradient = new Gradient();
+                    gradient.SetKeys(
+                        new GradientColorKey[]
+                        {
+                            new GradientColorKey(brightColor, 0f),
+                            new GradientColorKey(currentColor, 0.4f),
+                            new GradientColorKey(currentColor * 0.5f, 1f)
+                        },
+                        new GradientAlphaKey[]
+                        {
+                            new GradientAlphaKey(1f, 0f),
+                            new GradientAlphaKey(0.8f, 0.2f),
+                            new GradientAlphaKey(0.4f, 0.5f),
+                            new GradientAlphaKey(0f, 1f)
+                        }
+                    );
+                    pathLight.trail.colorGradient = gradient;
+                    pathLight.trail.startColor = brightColor;
+                    pathLight.trail.endColor = new Color(currentColor.r * 0.5f, currentColor.g * 0.5f, currentColor.b * 0.5f, 0f);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates the erratic wandering behavior for a path light.
+        /// The light moves in random directions but stays within its amplitude bounds.
+        /// </summary>
+        private void UpdateErraticWander(PathLight pathLight, float deltaTime)
+        {
+            // Update direction change timer
+            pathLight.wanderChangeTimer -= deltaTime;
+            if (pathLight.wanderChangeTimer <= 0f)
+            {
+                // Change to a new random direction
+                float newAngle = Random.Range(0f, Mathf.PI * 2f);
+                float speedVariation = Random.Range(0.7f, 1.3f);
+                pathLight.wanderVelocity = new Vector2(
+                    Mathf.Cos(newAngle),
+                    Mathf.Sin(newAngle)
+                ) * pathLight.wanderSpeed * speedVariation;
+
+                // Reset timer with some randomness
+                pathLight.wanderChangeTimer = Random.Range(MIN_DIRECTION_CHANGE, MAX_DIRECTION_CHANGE);
+            }
+
+            // Apply velocity to offset
+            pathLight.wanderOffset += pathLight.wanderVelocity * deltaTime;
+
+            // Clamp to amplitude bounds with soft bounce
+            float currentDistance = pathLight.wanderOffset.magnitude;
+            if (currentDistance > pathLight.wanderAmplitude)
+            {
+                // Reflect velocity inward when hitting boundary
+                Vector2 normal = pathLight.wanderOffset.normalized;
+                pathLight.wanderVelocity = Vector2.Reflect(pathLight.wanderVelocity, -normal);
+
+                // Also nudge the offset back inside
+                pathLight.wanderOffset = normal * pathLight.wanderAmplitude * 0.95f;
+
+                // Add some randomness to the reflection
+                float perturbAngle = Random.Range(-0.5f, 0.5f);
+                float cos = Mathf.Cos(perturbAngle);
+                float sin = Mathf.Sin(perturbAngle);
+                Vector2 rotated = new Vector2(
+                    pathLight.wanderVelocity.x * cos - pathLight.wanderVelocity.y * sin,
+                    pathLight.wanderVelocity.x * sin + pathLight.wanderVelocity.y * cos
+                );
+                pathLight.wanderVelocity = rotated;
+            }
+        }
+
+        /// <summary>
+        /// Returns a smoothly cycling color through the rainbow (same as FairyRingSphere).
+        /// </summary>
+        private static Color EvaluateRainbowCycle(float timeSeconds, float holdDuration)
+        {
+            int colorCount = RainbowHues.Length;
+            float totalCycleDuration = colorCount * holdDuration;
+
+            if (holdDuration <= 0.0001f) return Color.HSVToRGB(RainbowHues[0], 0.8f, 1f);
+
+            float cycleTime = Mathf.Repeat(timeSeconds, totalCycleDuration);
+            int currentColorIndex = Mathf.FloorToInt(cycleTime / holdDuration);
+            currentColorIndex = Mathf.Clamp(currentColorIndex, 0, colorCount - 1);
+
+            float timeInSegment = cycleTime - (currentColorIndex * holdDuration);
+            float segmentProgress = timeInSegment / holdDuration;
+
+            float transitionT = 0f;
+            if (segmentProgress > 0.5f)
+            {
+                float transitionProgress = (segmentProgress - 0.5f) * 2f;
+                transitionT = 0.5f - 0.5f * Mathf.Cos(Mathf.PI * transitionProgress);
+            }
+
+            float fromH = RainbowHues[currentColorIndex];
+            float toH = RainbowHues[(currentColorIndex + 1) % colorCount];
+
+            float hDiff = toH - fromH;
+            if (hDiff > 0.5f) hDiff -= 1f;
+            else if (hDiff < -0.5f) hDiff += 1f;
+            float h = fromH + hDiff * transitionT;
+            if (h < 0f) h += 1f;
+            if (h > 1f) h -= 1f;
+
+            const float saturation = 0.8f;
+            const float value = 1.0f;
+
+            return Color.HSVToRGB(h, saturation, value);
+        }
+
+        /// <summary>
+        /// Gets a world position along a path at a normalized distance (0-1).
+        /// </summary>
+        private Vector3 GetPositionAlongPath(List<Vector3> path, float normalizedDistance)
+        {
+            if (path.Count < 2)
+                return path.Count > 0 ? path[0] : Vector3.zero;
+
+            float totalLength = CalculatePathLength(path);
+            float targetDistance = normalizedDistance * totalLength;
+            float currentDistance = 0f;
+
+            for (int i = 1; i < path.Count; i++)
+            {
+                float segmentLength = Vector3.Distance(path[i - 1], path[i]);
+
+                if (currentDistance + segmentLength >= targetDistance)
+                {
+                    float t = (targetDistance - currentDistance) / segmentLength;
+                    return Vector3.Lerp(path[i - 1], path[i], t);
+                }
+
+                currentDistance += segmentLength;
+            }
+
+            return path[path.Count - 1];
+        }
+
+        /// <summary>
+        /// Calculates the total length of a path.
+        /// </summary>
+        private float CalculatePathLength(List<Vector3> path)
+        {
+            float totalLength = 0f;
+            for (int i = 1; i < path.Count; i++)
+            {
+                totalLength += Vector3.Distance(path[i - 1], path[i]);
+            }
+            return totalLength;
+        }
+
+        /// <summary>
+        /// Gets all walkable positions along the ENTIRE path to the heart.
+        /// Uses the pre-computed HeartPower1 position index from WorldSpaceMazeData.
+        /// Also populates allAffectedNodeIndices and allAffectedEdgeIndices for visitor detection.
+        /// When triggered on an edge, only includes positions UP TO the focal point (not past it).
+        /// </summary>
+        private List<Vector3> GetAllPositionsAlongPath(List<Vector3> mainPath)
+        {
+            var positions = new List<Vector3>();
+
+            // Clear and prepare to populate affected indices
+            allAffectedNodeIndices.Clear();
+            allAffectedEdgeIndices.Clear();
+
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null || mainPath.Count < 2)
+            {
+                positions.Add(targetPosition);
+                return positions;
+            }
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+            Vector3 heartPos = manager.MazeGrid.HeartWorldPosition;
+            Vector2 heartPos2D = new Vector2(heartPos.x, heartPos.y);
+            Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
+
+            // Ensure the triggering node/edge is always included
+            // (The path might not sample it if activation point is mid-edge)
+            if (affectedNodeIndex >= 0)
+                allAffectedNodeIndices.Add(affectedNodeIndex);
+            if (affectedEdgeIndex >= 0)
+                allAffectedEdgeIndices.Add(affectedEdgeIndex);
+
+            // Sample points along the path to identify all graph elements the path passes through
+            float pathLength = CalculatePathLength(mainPath);
+            int numSamples = Mathf.Max(20, (int)(pathLength / 2f)); // Sample every ~2 units
+
+            for (int i = 0; i <= numSamples; i++)
+            {
+                float t = i / (float)numSamples;
+                Vector3 samplePos = GetPositionAlongPath(mainPath, t);
+                Vector2 samplePos2D = new Vector2(samplePos.x, samplePos.y);
+
+                // Find the tile at this sample point
+                var tile = FindNearestWalkableTile(mazeData, samplePos2D);
+                if (tile != null)
+                {
+                    if (tile.NodeIndex >= 0)
+                        allAffectedNodeIndices.Add(tile.NodeIndex);
+                    if (tile.EdgeIndex >= 0)
+                        allAffectedEdgeIndices.Add(tile.EdgeIndex);
+                }
+            }
+
+            // Use the pre-computed HeartPower1 position index
+            var indexedPositions = mazeData.GetHeartPower1Positions(allAffectedNodeIndices, allAffectedEdgeIndices);
+
+            // Calculate distance from heart to focal point (for filtering edge positions)
+            float targetDistFromHeart = Vector2.Distance(heartPos2D, targetPos2D);
+
+            // Convert Vector2 positions to Vector3
+            // For the triggering edge, only include positions BETWEEN the heart and the activation point
+            // (i.e., closer to or equal distance from heart as the activation point)
+            foreach (var pos2D in indexedPositions)
+            {
+                // When triggered on an edge, filter out positions that are FARTHER from the heart
+                // than the activation point (they are beyond the effect boundary)
+                if (affectedEdgeIndex >= 0)
+                {
+                    // Check if this position is on the triggering edge
+                    var tile = FindNearestWalkableTile(mazeData, pos2D);
+                    if (tile != null && tile.EdgeIndex == affectedEdgeIndex)
+                    {
+                        // Include positions that are closer to or at the same distance as the activation point
+                        // These are the positions BETWEEN the heart and activation point
+                        float posDistFromHeart = Vector2.Distance(heartPos2D, pos2D);
+                        if (posDistFromHeart > targetDistFromHeart + 0.5f) // Small tolerance
+                        {
+                            // This position is beyond the activation point (away from heart), skip it
+                            continue;
+                        }
+                        // Positions closer to heart than activation point ARE included (no continue)
+                    }
+                }
+
+                positions.Add(new Vector3(pos2D.x, pos2D.y, targetPosition.z));
+            }
+
+            // Limit total positions to avoid performance issues (max ~60 light trails)
+            if (positions.Count > 60)
+            {
+                var sampled = new List<Vector3>();
+                float sampleStep = (float)positions.Count / 60f;
+                for (int i = 0; i < 60; i++)
+                {
+                    int idx = Mathf.Min((int)(i * sampleStep), positions.Count - 1);
+                    sampled.Add(positions[idx]);
+                }
+                positions = sampled;
+            }
+
+            // If no positions found, fall back to target position
+            if (positions.Count == 0)
+            {
+                positions.Add(targetPosition);
+            }
+
+            return positions;
+        }
+
+        /// <summary>
+        /// Gets all walkable positions on the affected node or edge (legacy method).
+        /// </summary>
+        private List<Vector3> GetAllAffectedPositions()
+        {
+            var positions = new List<Vector3>();
+
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
+            {
+                // Fallback to just target position
+                positions.Add(targetPosition);
+                return positions;
+            }
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+
+            // If we have an affected node or edge, get all walkable tiles on it
+            if (affectedNodeIndex >= 0 || affectedEdgeIndex >= 0)
+            {
+                // Search a larger area to find all tiles belonging to this node/edge
+                float searchRadius = 20f; // Large search to cover entire node/edge
+                Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
+                var nearbyTiles = mazeData.GetTilesNear(targetPos2D, searchRadius);
+
+                // Filter to tiles on the affected node or edge
+                foreach (var tile in nearbyTiles)
+                {
+                    if (!tile.Walkable) continue;
+
+                    bool onAffectedNode = affectedNodeIndex >= 0 && tile.NodeIndex == affectedNodeIndex;
+                    bool onAffectedEdge = affectedEdgeIndex >= 0 && tile.EdgeIndex == affectedEdgeIndex;
+
+                    if (onAffectedNode || onAffectedEdge)
+                    {
+                        positions.Add(new Vector3(tile.Position.x, tile.Position.y, targetPosition.z));
+                    }
+                }
+
+                // Sample positions to avoid too many paths (max ~8 light trails)
+                if (positions.Count > 8)
+                {
+                    var sampled = new List<Vector3>();
+                    float step = (float)positions.Count / 8f;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        int idx = Mathf.Min((int)(i * step), positions.Count - 1);
+                        sampled.Add(positions[idx]);
+                    }
+                    positions = sampled;
+                }
+            }
+
+            // If no positions found, fall back to target position
+            if (positions.Count == 0)
+            {
+                positions.Add(targetPosition);
+            }
+
+            return positions;
+        }
+
+        /// <summary>
+        /// Finds the node or edge at the target position.
+        /// </summary>
+        private void FindAffectedNodeOrEdge()
+        {
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
+                return;
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+            Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
+
+            // Find nearest walkable tile to determine node/edge
+            float searchRadius = 3f;
+            var nearbyTiles = mazeData.GetTilesNear(targetPos2D, searchRadius);
+
+            float minDist = float.MaxValue;
+            ForestMaze.WorldSpaceTile nearestTile = null;
+
+            foreach (var tile in nearbyTiles)
+            {
+                if (!tile.Walkable) continue;
+
+                float dist = Vector2.Distance(targetPos2D, tile.Position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    nearestTile = tile;
+                }
+            }
+
+            if (nearestTile != null)
+            {
+                affectedNodeIndex = nearestTile.NodeIndex;
+                affectedEdgeIndex = nearestTile.EdgeIndex;
+            }
+        }
+
+        /// <summary>
+        /// Generates a path from start position to the heart using visitor pathfinding.
+        /// </summary>
+        private List<Vector3> GeneratePathToHeart(Vector3 startPos)
+        {
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
+                return new List<Vector3>();
+
+            Vector3 heartPos = manager.MazeGrid.HeartWorldPosition;
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+
+            Vector2 startPos2D = new Vector2(startPos.x, startPos.y);
+            Vector2 heartPos2D = new Vector2(heartPos.x, heartPos.y);
+
+            var startTile = FindNearestWalkableTile(mazeData, startPos2D);
+            var heartTile = FindNearestWalkableTile(mazeData, heartPos2D);
+
+            if (startTile == null || heartTile == null)
+            {
+                return GenerateStraightLinePath(startPos, heartPos);
+            }
+
+            var tilePath = FindTilePath(mazeData, startTile, heartTile);
+            if (tilePath == null || tilePath.Count == 0)
+            {
+                return GenerateStraightLinePath(startPos, heartPos);
+            }
+
+            var result = new List<Vector3>();
+            foreach (var tile in tilePath)
+            {
+                result.Add(new Vector3(tile.Position.x, tile.Position.y, startPos.z));
+            }
+
+            return result;
+        }
+
+        private List<Vector3> GenerateStraightLinePath(Vector3 start, Vector3 end)
+        {
+            var positions = new List<Vector3>();
+            int numPoints = 20;
+            for (int i = 0; i <= numPoints; i++)
+            {
+                float t = i / (float)numPoints;
+                positions.Add(Vector3.Lerp(start, end, t));
+            }
+            return positions;
+        }
+
+        private ForestMaze.WorldSpaceTile FindNearestWalkableTile(ForestMaze.WorldSpaceMazeData mazeData, Vector2 position)
+        {
+            float searchRadius = 5f;
+            float minDist = float.MaxValue;
+            ForestMaze.WorldSpaceTile nearest = null;
+
+            var nearbyTiles = mazeData.GetTilesNear(position, searchRadius);
+            foreach (var tile in nearbyTiles)
+            {
+                if (!tile.Walkable) continue;
+                float dist = Vector2.Distance(position, tile.Position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    nearest = tile;
+                }
+            }
+            return nearest;
+        }
+
+        private List<ForestMaze.WorldSpaceTile> FindTilePath(ForestMaze.WorldSpaceMazeData mazeData,
+            ForestMaze.WorldSpaceTile start, ForestMaze.WorldSpaceTile end)
+        {
+            var visited = new HashSet<ForestMaze.WorldSpaceTile>();
+            var queue = new Queue<ForestMaze.WorldSpaceTile>();
+            var cameFrom = new Dictionary<ForestMaze.WorldSpaceTile, ForestMaze.WorldSpaceTile>();
+
+            queue.Enqueue(start);
+            visited.Add(start);
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+
+                if (current == end)
+                {
+                    var path = new List<ForestMaze.WorldSpaceTile>();
+                    var node = current;
+                    while (node != null)
+                    {
+                        path.Add(node);
+                        cameFrom.TryGetValue(node, out node);
+                    }
+                    path.Reverse();
+                    return path;
+                }
+
+                float neighborRadius = 2f;
+                var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
+
+                foreach (var neighbor in neighbors)
+                {
+                    if (!neighbor.Walkable || visited.Contains(neighbor))
+                        continue;
+
+                    if (!mazeData.AreTilesConnected(current, neighbor))
+                        continue;
+
+                    visited.Add(neighbor);
+                    cameFrom[neighbor] = current;
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Checks if a visitor is on ANY affected node or edge along the path to the heart.
+        /// </summary>
+        private bool IsVisitorOnAffectedArea(VisitorControllerBase visitor)
+        {
+            if (visitor == null || manager.MazeGrid?.WorldSpaceMazeData == null)
+                return false;
+
+            // If no affected areas were identified, fall back to radius check
+            if (allAffectedNodeIndices.Count == 0 && allAffectedEdgeIndices.Count == 0)
+            {
+                float radius = definition.radius > 0 ? definition.radius : 3f;
+                return Vector3.Distance(visitor.transform.position, targetPosition) <= radius;
+            }
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+            Vector2 visitorPos2D = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+
+            var nearestTile = FindNearestWalkableTile(mazeData, visitorPos2D);
+            if (nearestTile == null)
+                return false;
+
+            // Check if visitor is on ANY affected node along the path
+            if (nearestTile.NodeIndex >= 0 && allAffectedNodeIndices.Contains(nearestTile.NodeIndex))
+                return true;
+
+            // Check if visitor is on ANY affected edge along the path
+            if (nearestTile.EdgeIndex >= 0 && allAffectedEdgeIndices.Contains(nearestTile.EdgeIndex))
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Applies lure effect to all visitors currently on the affected area.
+        /// </summary>
+        private void ApplyLureToVisitorsOnAffectedArea()
+        {
+            var activeVisitors = VisitorRegistry.All;
+            if (activeVisitors == null) return;
 
             foreach (var visitor in activeVisitors)
             {
                 if (visitor == null || visitor.State == VisitorControllerBase.VisitorState.Consumed)
                     continue;
 
-                Vector3 visitorPos = visitor.transform.position;
-                bool onPath = IsNearPath(visitorPos, pathProximity);
-
-                if (onPath && visitor.State != VisitorControllerBase.VisitorState.Lured)
+                if (IsVisitorOnAffectedArea(visitor))
                 {
-                    visitor.SetLured(true);
-                }
-                else if (!onPath && visitor.State == VisitorControllerBase.VisitorState.Lured)
-                {
-                    visitor.SetLured(false);
+                    LureVisitorToHeart(visitor);
                 }
             }
         }
 
-        private bool IsNearPath(Vector3 pos, float proximity)
+        /// <summary>
+        /// Checks for new visitors entering the affected area and lures them.
+        /// </summary>
+        private void CheckForNewVisitorsOnAffectedArea()
         {
-            foreach (var pathPos in pathPositions)
+            var activeVisitors = VisitorRegistry.All;
+            if (activeVisitors == null) return;
+
+            foreach (var visitor in activeVisitors)
             {
-                if (Vector3.Distance(pos, pathPos) <= proximity)
+                if (visitor == null || visitor.State == VisitorControllerBase.VisitorState.Consumed)
+                    continue;
+
+                if (affectedVisitors.Contains(visitor))
+                    continue;
+
+                if (IsVisitorOnAffectedArea(visitor))
                 {
-                    return true;
+                    LureVisitorToHeart(visitor);
                 }
             }
-            return false;
         }
 
-        private List<Vector3> GeneratePathPositions(Vector3 startPos)
+        /// <summary>
+        /// Lures a visitor toward the heart.
+        /// Generates a path from the visitor's current position to the heart,
+        /// not from the activation point (to avoid backtracking).
+        /// </summary>
+        private void LureVisitorToHeart(VisitorControllerBase visitor)
         {
-            List<Vector3> positions = new List<Vector3>();
+            if (visitor == null) return;
 
-            // Get heart world position
-            Vector3 heartPos = manager.MazeGrid.HeartWorldPosition;
+            visitor.SetLured(true);
 
-            // Create a simple straight-line path from start to heart
-            // (No grid-based A* pathfinding - just visual effect)
-            int numPoints = 20;
-            for (int i = 0; i <= numPoints; i++)
+            // Generate a path from the VISITOR's current position to the heart
+            // This prevents backtracking when visitor is between activation point and heart
+            if (manager.MazeGrid != null)
             {
-                float t = i / (float)numPoints;
-                Vector3 point = Vector3.Lerp(startPos, heartPos, t);
-                positions.Add(point);
+                var visitorPath = GeneratePathToHeart(visitor.transform.position);
+                if (visitorPath.Count >= 2)
+                {
+                    visitor.SetPathDirectly(visitorPath);
+                }
+                else if (pathPositions.Count > 0)
+                {
+                    // Fallback to activation path if visitor path generation failed
+                    visitor.SetPathDirectly(new List<Vector3>(pathPositions));
+                }
             }
 
-            return positions;
-        }
-
-        private void CreatePathVisualization(List<Vector3> path, bool sealMode)
-        {
-            if (path == null || path.Count == 0)
-                return;
-
-            pathVisualObject = new GameObject($"MurmuringPath_{instanceSourceId}");
-            pathLineRenderer = pathVisualObject.AddComponent<LineRenderer>();
-
-            pathLineRenderer.startWidth = 0.8f;
-            pathLineRenderer.endWidth = 0.8f;
-            pathLineRenderer.positionCount = path.Count;
-
-            Color pathColor = sealMode
-                ? new Color(0.8f, 0.1f, 0.1f, 0.7f)
-                : new Color(1.0f, 0.5f, 0.0f, 0.7f);
-
-            pathLineRenderer.startColor = pathColor;
-            pathLineRenderer.endColor = pathColor;
-
-            pathLineRenderer.material = new Material(Shader.Find("Sprites/Default"));
-            pathLineRenderer.material.color = pathColor;
-
-            pathLineRenderer.sortingLayerName = "Default";
-            pathLineRenderer.sortingOrder = 5;
-
-            for (int i = 0; i < path.Count; i++)
-            {
-                Vector3 worldPos = path[i];
-                worldPos.z = -0.1f;
-                pathLineRenderer.SetPosition(i, worldPos);
-            }
-        }
-
-        private void UpdatePathAnimation()
-        {
-            if (pathLineRenderer == null || pathPositions == null || pathPositions.Count == 0)
-                return;
-
-            float baseWidth = 0.8f;
-            float jaggedAmount = 0.3f;
-            float animSpeed = 2.0f;
-
-            AnimationCurve widthCurve = new AnimationCurve();
-
-            for (int i = 0; i < pathPositions.Count; i++)
-            {
-                float t = (float)i / pathPositions.Count;
-                float jaggedOffset = Mathf.Sin((t * 10.0f) + (animationTime * animSpeed)) * jaggedAmount;
-                jaggedOffset += Mathf.Sin((t * 5.0f) - (animationTime * animSpeed * 1.5f)) * jaggedAmount * 0.5f;
-
-                float width = baseWidth + jaggedOffset;
-                widthCurve.AddKey(t, width);
-            }
-
-            pathLineRenderer.widthCurve = widthCurve;
-
-            float pulseAlpha = 0.5f + Mathf.Sin(animationTime * 3.0f) * 0.2f;
-            Color currentColor = pathLineRenderer.startColor;
-            currentColor.a = pulseAlpha;
-            pathLineRenderer.startColor = currentColor;
-            pathLineRenderer.endColor = currentColor;
+            affectedVisitors.Add(visitor);
         }
     }
 
     #endregion
 
+    /*
     #region Dream Snare
 
     /// <summary>
@@ -833,6 +1729,7 @@ namespace FaeMaze.HeartPowers
     }
 
     #endregion
+    */
 
     #region Heartward Grasp
 
@@ -1378,6 +2275,38 @@ namespace FaeMaze.HeartPowers
 
             devourVisual = Object.Instantiate(devourPrefab, worldPos, Quaternion.identity);
             devourBasePosition = worldPos;
+
+            // Fix MawThroat mesh rendering - disable backface culling so both sides are visible
+            // The throat mesh has inward-facing normals by design
+            SetDoubleSidedRendering(devourVisual);
+        }
+
+        /// <summary>
+        /// Sets all materials on a GameObject to render both front and back faces.
+        /// Used for meshes with inward-facing normals like the MawThroat.
+        /// </summary>
+        private void SetDoubleSidedRendering(GameObject obj)
+        {
+            if (obj == null) return;
+
+            foreach (var renderer in obj.GetComponentsInChildren<Renderer>())
+            {
+                foreach (var mat in renderer.materials)
+                {
+                    // Disable culling (render both sides)
+                    mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+
+                    // For URP/glTF shaders, also try these property names
+                    if (mat.HasProperty("_CullMode"))
+                    {
+                        mat.SetFloat("_CullMode", 0f); // 0 = Off
+                    }
+                    if (mat.HasProperty("_DoubleSidedEnable"))
+                    {
+                        mat.SetFloat("_DoubleSidedEnable", 1f);
+                    }
+                }
+            }
         }
 
         private void UpdateDevourVisualAnimation()

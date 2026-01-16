@@ -60,7 +60,7 @@ namespace FaeMaze.Systems
 
         [Header("Background")]
         [SerializeField]
-        private bool createBlackBackdrop = true;
+        private bool createBlackBackdrop = false; // Disabled - camera background color (#0a0a0a) handles this
 
         [SerializeField]
         private float backdropZPosition = 1000f;

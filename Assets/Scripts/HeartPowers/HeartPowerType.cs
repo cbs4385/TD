@@ -5,13 +5,14 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public enum HeartPowerType
     {
-        HeartbeatOfLonging,     // Amplifies FaeLanterns
+        // Commented out - focusing on powers 2, 8, 9 for now
+        // HeartbeatOfLonging,     // Amplifies FaeLanterns
         MurmuringPaths,         // Tilts corridor costs
-        DreamSnare,             // AoE Mesmerize + Lost
-        FeastwardPanic,         // Global/cone Frightened toward Heart
-        CovenantWithWisps,      // Control WillowTheWisp behavior
-        PukasBargain,           // Bias PukaHazard teleports
-        RingOfInvitations,      // Enhance FairyRing entrancement
+        // DreamSnare,             // AoE Mesmerize + Lost
+        // FeastwardPanic,         // Global/cone Frightened toward Heart
+        // CovenantWithWisps,      // Control WillowTheWisp behavior
+        // PukasBargain,           // Bias PukaHazard teleports
+        // RingOfInvitations,      // Enhance FairyRing entrancement
         HeartwardGrasp,         // Pull visitor through wall to Heart
         DevouringMaw            // Instantly consume visitor on tile
     }

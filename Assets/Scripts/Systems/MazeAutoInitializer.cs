@@ -16,6 +16,25 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            // If MazeVisualSetup is present, let it handle renderer setup
+            MazeVisualSetup visualSetup = mazeGrid.GetComponent<MazeVisualSetup>();
+            if (visualSetup != null)
+            {
+                // MazeVisualSetup handles renderer selection, just setup camera
+                SetupCamera(mazeGrid);
+                return;
+            }
+
+            // Check if WorldSpaceMazeRenderer is already present (preferred)
+            WorldSpaceMazeRenderer wsRenderer = mazeGrid.GetComponent<WorldSpaceMazeRenderer>();
+            if (wsRenderer != null)
+            {
+                // WorldSpaceMazeRenderer is present, don't add MazeRenderer
+                SetupCamera(mazeGrid);
+                return;
+            }
+
+            // Fall back to MazeRenderer if no WorldSpaceMazeRenderer and no MazeVisualSetup
             MazeRenderer renderer = mazeGrid.GetComponent<MazeRenderer>();
             if (renderer == null)
             {

@@ -43,6 +43,17 @@ namespace FaeMaze.Systems
         [Tooltip("Prefab/model for node hazards (placed at clearing centers)")]
         private GameObject nodeHazardPrefab;
 
+        [SerializeField]
+        [Tooltip("Prefab/model for the heart (placed at seed node / node 0)")]
+        private GameObject heartPrefab;
+
+        [SerializeField]
+        [Tooltip("Use the EarthenRingGround material from the heart prefab for path tiles")]
+        private bool useHeartMaterialForPaths = true;
+
+        // Cached material from heart prefab's EarthenRingGround child
+        private Material heartGroundMaterial;
+
         [Header("Color Settings")]
         [SerializeField]
         [Tooltip("Color for walkable path tiles")]
@@ -118,9 +129,9 @@ namespace FaeMaze.Systems
 
         // Wall generation constants - shared between initial render and incremental updates
         private const float WALL_STEP_SIZE = 0.8f; // 4x larger for 75% fewer walls
-        private const float PATH_HALF_WIDTH = 0.5f;
+        private const float PATH_HALF_WIDTH = 0f; // No padding around path edges
         private const int WALL_DEPTH = 3;
-        private const float WALL_SPACING = 0.3f;
+        private const float WALL_SPACING = 0.8f; // Increased for more visible wall depth
         private const float EDGE_END_SKIP = 1.0f;
         private const float EDGE_ANGLE_CLEARANCE_DEG = 12.0f;
 
@@ -171,10 +182,111 @@ namespace FaeMaze.Systems
         {
             pathColor = Color.saddleBrown;
             waterColor = Color.magenta;
+
+            // Extract EarthenRingGround material from heart prefab if available
+            if (useHeartMaterialForPaths && heartPrefab != null)
+            {
+                ExtractHeartGroundMaterial();
+            }
+        }
+
+        /// <summary>
+        /// Creates a material using the extracted/modified EarthenGroundTexture.
+        /// Falls back to procedural shader if texture is not found.
+        /// </summary>
+        private void ExtractHeartGroundMaterial()
+        {
+            // First, try to load the extracted texture file
+            Texture2D texture = null;
+
+            #if UNITY_EDITOR
+            texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/EarthenGroundTexture.png");
+            #endif
+
+            // Also try Resources folder at runtime
+            if (texture == null)
+            {
+                texture = Resources.Load<Texture2D>("EarthenGroundTexture");
+            }
+
+            if (texture != null)
+            {
+                // Use the texture-based shader
+                var shader = Shader.Find("Custom/EarthenGroundTextured");
+                if (shader != null)
+                {
+                    heartGroundMaterial = new Material(shader);
+                    heartGroundMaterial.SetTexture("_MainTex", texture);
+                    heartGroundMaterial.SetFloat("_TileScale", 0.05f); // Lower = larger texture, higher = more repetition
+                    heartGroundMaterial.SetFloat("_Brightness", 1.0f); // Boost brightness to match heart model
+                    heartGroundMaterial.SetFloat("_Metallic", 0.0f); // Match glTF-pbrMetallic defaults
+                    heartGroundMaterial.SetFloat("_Smoothness", 0.2f); // Matte earthy surface
+                    heartGroundMaterial.SetFloat("_EdgeDarkening", 0.0f); // Disabled to match heart material
+                    Debug.Log("Using extracted EarthenGroundTexture for path material");
+                    return;
+                }
+            }
+
+            // Fallback: Try to use the material from the heart prefab directly
+            if (heartPrefab != null)
+            {
+                Transform earthenRing = heartPrefab.transform.Find("EarthenRingGround");
+                if (earthenRing == null)
+                {
+                    foreach (Transform child in heartPrefab.GetComponentsInChildren<Transform>())
+                    {
+                        if (child.name == "EarthenRingGround")
+                        {
+                            earthenRing = child;
+                            break;
+                        }
+                    }
+                }
+
+                if (earthenRing != null)
+                {
+                    var renderer = earthenRing.GetComponent<MeshRenderer>();
+                    if (renderer != null && renderer.sharedMaterial != null)
+                    {
+                        heartGroundMaterial = renderer.sharedMaterial;
+                        return;
+                    }
+                }
+            }
+
+            // Fallback: Try to find the procedural EarthenGround shader
+            var proceduralShader = Shader.Find("Custom/EarthenGround");
+            if (proceduralShader == null)
+            {
+                Debug.LogWarning("EarthenGround shader not found and could not extract heart material, falling back to default path material");
+                return;
+            }
+
+            // Create the procedural earthy ground material with lighter, warmer colors
+            heartGroundMaterial = new Material(proceduralShader);
+
+            // Boosted brightness to better match the visible EarthenRingGround
+            heartGroundMaterial.SetColor("_DeepShadow", new Color(0.38f, 0.32f, 0.28f, 1f));
+            heartGroundMaterial.SetColor("_DarkBase", new Color(0.45f, 0.38f, 0.33f, 1f));
+            heartGroundMaterial.SetColor("_MidTone", new Color(0.55f, 0.47f, 0.42f, 1f));
+            heartGroundMaterial.SetColor("_LightMid", new Color(0.62f, 0.55f, 0.50f, 1f));
+            heartGroundMaterial.SetColor("_Highlight", new Color(0.70f, 0.64f, 0.60f, 1f));
+            heartGroundMaterial.SetFloat("_NoiseScale", 10f);
+            heartGroundMaterial.SetFloat("_DetailScale", 30f);
+            heartGroundMaterial.SetFloat("_ColorVariation", 0.7f);
+            heartGroundMaterial.SetFloat("_EdgeDarkening", 0.05f);
         }
 
         private void Start()
         {
+            // WorldSpaceMazeRenderer is deprecated - MazeRenderer is now the primary visual renderer
+            // This check remains for backwards compatibility during transition
+            if (GetComponent<WorldSpaceMazeRenderer>() != null)
+            {
+                enabled = false;
+                return;
+            }
+
             mazeGridBehaviour = GetComponent<MazeGridBehaviour>();
 
             if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
@@ -208,6 +320,8 @@ namespace FaeMaze.Systems
             Transform mazeOrigin = mazeGridBehaviour.MazeOrigin ?? transform;
 
             CreateTilesContainer(mazeOrigin);
+
+            // Background plane removed - camera background color (#0a0a0a) handles this
 
             if (enableMeshBatching)
             {
@@ -378,10 +492,18 @@ namespace FaeMaze.Systems
         /// </summary>
         private int RenderNodeColumns(PlanarForestMazeGenerator.ForestMapState forestState, Transform mazeOrigin)
         {
-            foreach (var node in forestState.Nodes)
+            for (int nodeIndex = 0; nodeIndex < forestState.Nodes.Count; nodeIndex++)
             {
+                var node = forestState.Nodes[nodeIndex];
+
                 // Create the single 3D cylinder - this is the only visual object for the node
                 CreateNodeColumnCylinder(node, mazeOrigin);
+
+                // Spawn heart prefab at seed node (node 0)
+                if (nodeIndex == 0 && heartPrefab != null)
+                {
+                    SpawnHeartAtNode(node);
+                }
 
                 // Mark node area as occupied for pathfinding (no visible tiles needed)
                 // Use coarse step for logical positions only
@@ -431,18 +553,24 @@ namespace FaeMaze.Systems
             // 1. Scale to get the right diameter and thickness
             // 2. Rotate so the circular face is parallel to XY plane (height along Z)
 
-            // Scale: X and Z for diameter, Y for thickness (0.03 for thin disc)
+            // Scale: X and Z for diameter, Y for thickness
+            // Path tiles use Z scale = 0.1, which means cube extends ±0.05 from center
+            // Cylinder default height is 2, so Y scale = 0.05 gives actual height of 0.1 (matching path tiles)
             float diameter = worldRadius * 2f;
-            cylinder.transform.localScale = new Vector3(diameter, 0.03f, diameter);
+            float cylinderThicknessScale = 0.05f; // Results in 0.1 actual thickness (matches path tile Z=0.1)
+            cylinder.transform.localScale = new Vector3(diameter, cylinderThicknessScale, diameter);
 
             // Rotate 90° around X so the cylinder lies flat (circular face in XY plane, thickness along Z)
             cylinder.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
-            // Position cylinder at Z=0 (same plane as tiles)
+            // Position cylinder so its top face aligns with path tiles' top face
+            // Path tiles: center at Z=0, scale Z=0.1, so top at Z=0.05
+            // Cylinder: after rotation, Y scale becomes Z thickness. Scale Y=0.05 means height=0.1, so ±0.05 from center
+            // Both now have top at Z=0.05 when centered at Z=0
             cylinder.transform.position = worldPos;
 
             // Apply path material to match path tiles
-            Material pathMaterial = PBRMaterialFactory.CreatePathMaterial(pathColor);
+            Material pathMaterial = GetPathMaterial();
             MeshRenderer renderer = cylinder.GetComponent<MeshRenderer>();
             if (renderer != null)
             {
@@ -458,6 +586,27 @@ namespace FaeMaze.Systems
 
             // DO NOT add to pathTiles - keep cylinder as separate object to avoid batching distortion
             // Cylinders cannot be combined with cube meshes properly
+        }
+
+        /// <summary>
+        /// Spawns the heart prefab at the given node (seed node / node 0).
+        /// Positions it at the node center, preserving prefab position offset, scale and rotation.
+        /// </summary>
+        private void SpawnHeartAtNode(PlanarForestMazeGenerator.Node node)
+        {
+            if (heartPrefab == null) return;
+
+            // Get world position of node center
+            Vector3 nodeWorldPos = ToVector3(node.Position);
+
+            // Apply prefab's local position as offset from node center
+            Vector3 worldPos = nodeWorldPos + heartPrefab.transform.position;
+
+            // Instantiate the heart prefab, preserving its rotation and scale from the prefab
+            GameObject heart = Instantiate(heartPrefab, worldPos, heartPrefab.transform.rotation, tilesParent);
+            heart.name = "Heart_SeedNode";
+
+            // Preserve the prefab's scale (do not modify)
         }
 
         /// <summary>
@@ -656,78 +805,36 @@ namespace FaeMaze.Systems
         private Vector2? GetAdjustedWallPosition(Vector2 wallPos, Vector2 pushDirection,
             PlanarForestMazeGenerator.ForestMapState forestState, List<Vector2> wallPositions)
         {
-            // Use half-unit steps for finer adjustment precision
-            float stepSize = 0.5f;
+            // Wall overlap is allowed and encouraged - multiple walls can share the same position
+            // to ensure complete border coverage. Unity handles any visual overlaps.
+            // Delete walls that intersect paths or are inside node columns (don't push them).
+
             float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
-            int maxIterations = 15; // Prevent infinite loops
+            float wallRadius = 0.65f; // Wall model radius
 
-            // Wall model radius (wall prefab is scaled to 0.65 * tileSize)
-            float wallRadius = 0.65f;
-
-            Vector2 currentPos = wallPos;
-
-            for (int iter = 0; iter < maxIterations; iter++)
+            // Check if inside any node column - delete wall
+            foreach (var node in forestState.Nodes)
             {
-                bool needsAdjustment = false;
-                Vector2 adjustmentVector = Vector2.zero;
+                float distToNode = Vector2.Distance(wallPos, node.Position);
+                float minDist = nodeRadius + nodeBuffer;
 
-                // Wall overlap is allowed - multiple walls can share the same position
-                // to ensure complete border coverage
-
-                // Check if wall model would intersect any path tile (check multiple sample points)
-                if (!needsAdjustment)
+                if (distToNode < minDist)
                 {
-                    Vector2? pathIntersection = CheckWallPathIntersection(currentPos, wallRadius);
-                    if (pathIntersection.HasValue)
-                    {
-                        // Push away from the intersecting path position
-                        Vector2 awayFromPath = (currentPos - pathIntersection.Value).normalized;
-                        if (awayFromPath.sqrMagnitude < 0.001f)
-                            awayFromPath = pushDirection.normalized;
-                        adjustmentVector = awayFromPath * stepSize;
-                        needsAdjustment = true;
-                    }
+                    // Inside a node column - delete wall
+                    return null;
                 }
-
-                // Check if inside any node column
-                if (!needsAdjustment)
-                {
-                    foreach (var node in forestState.Nodes)
-                    {
-                        float distToNode = Vector2.Distance(currentPos, node.Position);
-                        float minDist = nodeRadius + nodeBuffer;
-
-                        if (distToNode < minDist)
-                        {
-                            // Calculate push direction: away from node center
-                            Vector2 awayFromNode = (currentPos - node.Position).normalized;
-                            if (awayFromNode.sqrMagnitude < 0.001f)
-                                awayFromNode = pushDirection.normalized;
-
-                            // Push out to just beyond the minimum distance
-                            float pushDist = minDist - distToNode + stepSize * 0.5f;
-                            adjustmentVector = awayFromNode * pushDist;
-                            needsAdjustment = true;
-                            break;
-                        }
-                    }
-                }
-
-                // Only reject walls for path tiles and node columns (edge path check removed)
-                // Wall placement is allowed anywhere else - walls can overlap each other
-
-                if (!needsAdjustment)
-                {
-                    // Position is valid
-                    return currentPos;
-                }
-
-                // Apply adjustment
-                currentPos += adjustmentVector;
             }
 
-            // Could not find valid position
-            return null;
+            // Check if wall intersects a path tile - delete wall
+            Vector2? pathIntersection = CheckWallPathIntersection(wallPos, wallRadius);
+            if (pathIntersection.HasValue)
+            {
+                // Intersects path - delete wall
+                return null;
+            }
+
+            // Position is valid - place the wall
+            return wallPos;
         }
 
         /// <summary>
@@ -784,16 +891,15 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Simple check if a wall position is valid (for cases where we don't want translation).
+        /// Walls are allowed to overlap with each other and with path tiles.
+        /// Only rejects walls inside node columns.
         /// </summary>
         private bool IsWallPositionValid(Vector2 wallPos, PlanarForestMazeGenerator.ForestMapState forestState,
             List<Vector2> wallPositions)
         {
             float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
 
-            // Check if already occupied by path tiles
-            if (IsPositionOccupied(wallPos, occupiedPositions)) return false;
-
-            // Check if inside any node column
+            // Wall overlap is allowed - only reject if inside node column
             foreach (var node in forestState.Nodes)
             {
                 float distToNode = Vector2.Distance(wallPos, node.Position);
@@ -939,8 +1045,8 @@ namespace FaeMaze.Systems
 
                     wallPositions.Add(adjustedPos.Value);
 
-                    // Orientation facing outward from node
-                    float orientationDegrees = currentAngle * Mathf.Rad2Deg;
+                    // Orientation facing inward toward node center (add 180 degrees)
+                    float orientationDegrees = (currentAngle * Mathf.Rad2Deg) + 180f;
 
                     Vector3 worldPos = ToVector3(adjustedPos.Value);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
@@ -1274,7 +1380,8 @@ namespace FaeMaze.Systems
 
                 if (!inClearance)
                 {
-                    float orientationDegrees = wallAngle * Mathf.Rad2Deg;
+                    // Orientation faces inward toward node center (add 180 degrees to outward angle)
+                    float orientationDegrees = (wallAngle * Mathf.Rad2Deg) + 180f;
                     Vector3 worldPos = ToVector3(wallPos);
                     CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                     tileCount++;
@@ -1508,6 +1615,9 @@ namespace FaeMaze.Systems
                 GameObject prefabToUse = (wallLayer > 0 && wallPrefabLOD2 != null) ? wallPrefabLOD2 : wallPrefab;
                 tileObj = Instantiate(prefabToUse, tilesParent);
                 tileObj.transform.position = worldPos;
+                // Apply Z-axis rotation only so model's X axis aligns radially (toward node center for node walls)
+                // Using tileRotation (Z-only) instead of flatPrefabRotation (which tilts on X-axis)
+                tileObj.transform.rotation = tileRotation;
                 // Wall models use prefab default scale (no additional scaling)
                 wallTiles?.Add(tileObj);
             }
@@ -1620,10 +1730,23 @@ namespace FaeMaze.Systems
                 case '#': return PBRMaterialFactory.CreateWallMaterial(color);
                 case ';': return PBRMaterialFactory.CreateUndergrowthMaterial(color);
                 case '~': return PBRMaterialFactory.CreateWaterMaterial(color);
-                case '.': return PBRMaterialFactory.CreatePathMaterial(color);
+                case '.': return GetPathMaterial();
                 case 'H': return PBRMaterialFactory.CreateEmissiveMaterial(color, color * 1.5f, 1.0f);
                 default: return PBRMaterialFactory.CreateLitMaterial(color);
             }
+        }
+
+        /// <summary>
+        /// Returns the material for path tiles. Uses the heart's EarthenRingGround material if available,
+        /// otherwise falls back to the standard path material.
+        /// </summary>
+        private Material GetPathMaterial()
+        {
+            if (useHeartMaterialForPaths && heartGroundMaterial != null)
+            {
+                return heartGroundMaterial;
+            }
+            return PBRMaterialFactory.CreatePathMaterial(pathColor);
         }
 
         private string GetTileTypeName(char symbol)
@@ -2045,8 +2168,10 @@ namespace FaeMaze.Systems
 
                 if (!tooCloseToEdge)
                 {
+                    // Orientation faces inward toward node center (add 180 degrees to outward angle)
+                    float orientationDegrees = (wallAngle * Mathf.Rad2Deg) + 180f;
                     Vector3 worldPos = ToVector3(wallPos);
-                    CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
                     wallsCreated++;
 
                     // Check time budget and yield if exceeded

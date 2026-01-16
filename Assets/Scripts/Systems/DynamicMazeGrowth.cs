@@ -19,10 +19,11 @@ namespace FaeMaze.Systems
         /// </summary>
         public enum NodePropType
         {
-            Pond,
+            Pond,           // Standalone pond (no Puka)
             FairyRing,
             FaeLantern,
-            WillowTheWisp
+            WillowTheWisp,
+            Puka            // Pond with Puka inside
         }
 
         #endregion
@@ -99,6 +100,8 @@ namespace FaeMaze.Systems
 
         private MazeGridBehaviour mazeGridBehaviour;
         private MazeRenderer mazeRenderer;
+        private WorldSpaceMazeRenderer worldSpaceRenderer;
+        private bool useWorldSpaceRenderer = false;
         private float nextGrowthTime;
         private int completedInitialGrowthStages = 0;
         private bool initialGrowthComplete = false;
@@ -179,7 +182,17 @@ namespace FaeMaze.Systems
         private void Awake()
         {
             mazeGridBehaviour = GetComponent<MazeGridBehaviour>();
-            mazeRenderer = GetComponent<MazeRenderer>();
+
+            // Check for WorldSpaceMazeRenderer first (preferred)
+            worldSpaceRenderer = GetComponent<WorldSpaceMazeRenderer>();
+            if (worldSpaceRenderer != null)
+            {
+                useWorldSpaceRenderer = true;
+            }
+            else
+            {
+                mazeRenderer = GetComponent<MazeRenderer>();
+            }
 
             // Create portals parent early so it's available for initial growth
             if (portalsParent == null)
@@ -396,7 +409,13 @@ namespace FaeMaze.Systems
             }
 
             // Render the new elements (synchronous)
-            if (mazeRenderer != null)
+            if (useWorldSpaceRenderer && worldSpaceRenderer != null)
+            {
+                // WorldSpaceMazeRenderer uses shapes - refresh the entire visualization
+                // The WorldSpaceMazeRenderer regenerates from the updated GraphState
+                worldSpaceRenderer.RefreshMaze();
+            }
+            else if (mazeRenderer != null)
             {
                 // Remove end cap walls
                 if (consumedSpawnPos != Vector3.zero && consumedFrontierDir != Vector3.zero)
@@ -646,7 +665,14 @@ namespace FaeMaze.Systems
             yield return null;
 
             // Use INCREMENTAL rendering updates (coroutine-based for non-blocking)
-            if (mazeRenderer != null)
+            if (useWorldSpaceRenderer && worldSpaceRenderer != null)
+            {
+                // WorldSpaceMazeRenderer uses shapes - refresh the entire visualization
+                // The WorldSpaceMazeRenderer regenerates from the updated GraphState
+                worldSpaceRenderer.RefreshMaze();
+                yield return null;
+            }
+            else if (mazeRenderer != null)
             {
 
                 // Only remove the portal end cap walls that are "past" the endpoint (in frontier direction)
@@ -1233,19 +1259,56 @@ namespace FaeMaze.Systems
         #region Node Prop Spawning
 
         /// <summary>
-        /// Gets the next prop type in the cycling sequence.
-        /// Cycles through: Pond -> FairyRing -> FaeLantern -> WillowTheWisp -> Pond...
+        /// Gets a random prop type based on weighted chances.
+        /// Base chances: 50% Pond, 20% Lantern, 15% Ring, 10% Puka, 5% Wisp
+        /// Wisp only spawns if there's already a Puka in the maze.
+        /// If no Puka exists, Wisp's 5% is added to Puka's chance (15% total).
         /// </summary>
-        private NodePropType GetNextPropType()
+        private NodePropType GetRandomPropType()
         {
-            NodePropType propType = (NodePropType)nextPropTypeIndex;
-            nextPropTypeIndex = (nextPropTypeIndex + 1) % 4; // 4 prop types
-            return propType;
+            // Check if any Puka exists in the maze
+            bool hasPuka = nodePukas.Count > 0;
+
+            float roll = Random.value * 100f;
+
+            // Cumulative thresholds based on whether Puka exists
+            // Base: Pond 50%, Lantern 20%, Ring 15%, Puka 10%, Wisp 5%
+            // If no Puka: Pond 50%, Lantern 20%, Ring 15%, Puka 15% (absorbs Wisp's 5%)
+            if (roll < 50f)
+            {
+                return NodePropType.Pond;
+            }
+            else if (roll < 70f) // 50 + 20
+            {
+                return NodePropType.FaeLantern;
+            }
+            else if (roll < 85f) // 70 + 15
+            {
+                return NodePropType.FairyRing;
+            }
+            else if (hasPuka)
+            {
+                // Puka exists, so we can spawn wisps
+                if (roll < 95f) // 85 + 10 (Puka)
+                {
+                    return NodePropType.Puka;
+                }
+                else // 95-100 (Wisp)
+                {
+                    return NodePropType.WillowTheWisp;
+                }
+            }
+            else
+            {
+                // No Puka exists, Puka gets 15% chance (10% + 5% from Wisp)
+                return NodePropType.Puka;
+            }
         }
 
         /// <summary>
         /// Spawns a prop at the center of the specified node during dynamic growth.
-        /// Cycles through prop types: Pond, FairyRing, FaeLantern, WillowTheWisp.
+        /// Uses weighted random selection: 50% Pond, 20% Lantern, 15% Ring, 10% Puka, 5% Wisp.
+        /// Wisp only spawns if there's already a Puka; otherwise Puka gets 15% chance.
         /// </summary>
         /// <param name="node">The node to spawn the prop at</param>
         /// <param name="nodeIndex">The index of the node in the ForestMapState</param>
@@ -1263,15 +1326,15 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Get the next prop type in the cycle
-            NodePropType propType = GetNextPropType();
+            // Get a random prop type based on weighted chances
+            NodePropType propType = GetRandomPropType();
 
             // Dispatch to the appropriate spawn method
             bool success = false;
             switch (propType)
             {
                 case NodePropType.Pond:
-                    success = SpawnPondPropAtNode(node, nodeIndex);
+                    success = SpawnStandalonePondAtNode(node, nodeIndex);
                     break;
                 case NodePropType.FairyRing:
                     success = SpawnFairyRingAtNode(node, nodeIndex);
@@ -1281,6 +1344,9 @@ namespace FaeMaze.Systems
                     break;
                 case NodePropType.WillowTheWisp:
                     success = SpawnWispAtNode(node, nodeIndex);
+                    break;
+                case NodePropType.Puka:
+                    success = SpawnPondPropAtNode(node, nodeIndex); // Pond with Puka inside
                     break;
             }
 
@@ -1300,7 +1366,7 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Spawns a Pond at the center of the specified node (as a standalone prop).
+        /// Spawns a Pond with a Puka (kelpie) at the center of the specified node.
         /// </summary>
         /// <returns>True if spawn was successful</returns>
         private bool SpawnPondPropAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
@@ -1345,6 +1411,53 @@ namespace FaeMaze.Systems
             // Now spawn the PukaHazard (kelpie) inside the pond
             SpawnPukaHazardInPond(node, nodeIndex, pondPos);
 
+            return true;
+        }
+
+        /// <summary>
+        /// Spawns a standalone Pond (without Puka) at the center of the specified node.
+        /// </summary>
+        /// <returns>True if spawn was successful</returns>
+        private bool SpawnStandalonePondAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        {
+            // Skip if pond already exists at this node
+            if (nodePonds.ContainsKey(nodeIndex))
+            {
+                return false;
+            }
+
+            // Try to load prefab if not assigned
+            if (pondPrefab == null)
+            {
+#if UNITY_EDITOR
+                pondPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/Pond.prefab");
+#else
+                pondPrefab = Resources.Load<GameObject>("Prefabs/Tile/Pond");
+#endif
+            }
+
+            if (pondPrefab == null)
+            {
+                return false;
+            }
+
+            // Calculate world position at node center with specified Z
+            Vector3 pondPos = new Vector3(node.Position.x, node.Position.y, pondZPosition);
+
+            // Instantiate the pond (without Puka)
+            GameObject pond = Instantiate(pondPrefab);
+            pond.name = $"Pond_Node{nodeIndex}";
+            pond.transform.position = pondPos;
+
+            if (pondsParent != null)
+            {
+                pond.transform.SetParent(pondsParent, worldPositionStays: true);
+            }
+
+            // Track the pond
+            nodePonds[nodeIndex] = pond;
+
+            // No Puka spawned - this is a standalone decorative pond
             return true;
         }
 
