@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using FaeMaze.Systems;
 using FaeMaze.Visitors;
 using FaeMaze.Maze;
+using ForestMaze;
 using System.Collections.Generic;
 
 namespace FaeMaze.UI
@@ -27,7 +28,7 @@ namespace FaeMaze.UI
         [SerializeField]
         [Tooltip("Size as percentage of smaller screen dimension (0.2 = 20%)")]
         [Range(0.05f, 0.3f)]
-        private float sizePercent = 0.2f;
+        private float sizePercent = 0.3f;
 
         [SerializeField]
         [Tooltip("View radius in tiles")]
@@ -70,6 +71,14 @@ namespace FaeMaze.UI
         [Tooltip("Edge indicator color")]
         private Color edgeIndicatorColor = new Color(1f, 0.8f, 0.2f, 1f);
 
+        [SerializeField]
+        [Tooltip("Graph node color")]
+        private Color graphNodeColor = new Color(0.4f, 0.6f, 0.8f, 0.6f);
+
+        [SerializeField]
+        [Tooltip("Graph edge color")]
+        private Color graphEdgeColor = new Color(0.3f, 0.5f, 0.3f, 0.4f);
+
         [Header("Dot Sizes")]
         [SerializeField]
         [Tooltip("Heart dot size in pixels")]
@@ -86,6 +95,14 @@ namespace FaeMaze.UI
         [SerializeField]
         [Tooltip("Edge indicator size in pixels")]
         private float edgeIndicatorSize = 8f;
+
+        [SerializeField]
+        [Tooltip("Graph node dot size in pixels")]
+        private float graphNodeSize = 8f;
+
+        [SerializeField]
+        [Tooltip("Graph edge line width in pixels")]
+        private float graphEdgeWidth = 2f;
 
         public enum Corner
         {
@@ -111,6 +128,13 @@ namespace FaeMaze.UI
         private Sprite circleSprite;
         private Sprite ringSprite;
         private Sprite triangleSprite;
+
+        // Graph visualization
+        private RectTransform graphContainer;
+        private List<Image> graphNodeDots = new List<Image>();
+        private List<List<RectTransform>> graphEdgeSegments = new List<List<RectTransform>>(); // Each edge has multiple segments
+        private int lastGraphNodeCount = 0;
+        private int lastGraphEdgeCount = 0;
 
         private void Awake()
         {
@@ -208,6 +232,9 @@ namespace FaeMaze.UI
 
             // Create radar rings (decorative)
             CreateRadarRings();
+
+            // Create graph container (for nodes and edges - below other elements)
+            CreateGraphContainer();
 
             // Create crosshair
             CreateCrosshair();
@@ -395,8 +422,8 @@ namespace FaeMaze.UI
                     float distance = Vector2.Distance(new Vector2(x, y), center);
                     if (distance <= radius)
                     {
-                        // Smooth edge with anti-aliasing
-                        float alpha = Mathf.Clamp01(radius - distance + 0.5f);
+                        // Solid fill with smooth edge anti-aliasing only at the border
+                        float alpha = distance > radius - 1f ? Mathf.Clamp01(radius - distance + 1f) : 1f;
                         pixels[y * resolution + x] = new Color(1f, 1f, 1f, alpha);
                     }
                     else
@@ -521,6 +548,7 @@ namespace FaeMaze.UI
             UpdateMinimapSize();
             UpdateRadarRotation();
             UpdateRadarRings();
+            UpdateGraphVisualization();
             UpdateHeartDot();
             UpdateVisitorDots();
         }
@@ -726,6 +754,285 @@ namespace FaeMaze.UI
                     edgeIndicator.color = dotColor;
                 }
             }
+        }
+
+        private void CreateGraphContainer()
+        {
+            GameObject graphObj = new GameObject("GraphContainer");
+            graphObj.transform.SetParent(radarContainer, false);
+            graphContainer = graphObj.AddComponent<RectTransform>();
+            graphContainer.anchorMin = new Vector2(0.5f, 0.5f);
+            graphContainer.anchorMax = new Vector2(0.5f, 0.5f);
+            graphContainer.pivot = new Vector2(0.5f, 0.5f);
+            graphContainer.sizeDelta = Vector2.zero;
+            graphContainer.anchoredPosition = Vector2.zero;
+        }
+
+        private void UpdateGraphVisualization()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+            {
+                return;
+            }
+
+            if (focalPoint == null || minimapPanel == null || graphContainer == null)
+            {
+                return;
+            }
+
+            var graphState = mazeGridBehaviour.WorldSpaceMazeData.GraphState;
+            if (graphState == null)
+            {
+                return;
+            }
+
+            // Get map dimensions for coordinate conversion
+            float mapSize = minimapPanel.rect.width;
+            float mapRadius = mapSize / 2f;
+            float viewRadiusWorld = viewRadiusTiles;
+            float pixelsPerUnit = mapRadius / viewRadiusWorld;
+            Vector3 focalWorldPos = focalPoint.position;
+
+            // Update edges first (so they render behind nodes)
+            UpdateGraphEdges(graphState, focalWorldPos, pixelsPerUnit, mapRadius);
+
+            // Update nodes
+            UpdateGraphNodes(graphState, focalWorldPos, pixelsPerUnit, mapRadius);
+        }
+
+        private void UpdateGraphNodes(PlanarForestMazeGenerator.ForestMapState graphState, Vector3 focalWorldPos, float pixelsPerUnit, float mapRadius)
+        {
+            // Create or update node dots
+            int nodeCount = graphState.Nodes.Count;
+
+            // Ensure we have enough node dots
+            while (graphNodeDots.Count < nodeCount)
+            {
+                graphNodeDots.Add(CreateGraphNodeDot());
+            }
+
+            // Update each node
+            for (int i = 0; i < nodeCount; i++)
+            {
+                var node = graphState.Nodes[i];
+                Image nodeDot = graphNodeDots[i];
+
+                // Convert node position to minimap coordinates
+                Vector2 nodeWorldPos = node.Position;
+                Vector2 relativePos = nodeWorldPos - new Vector2(focalWorldPos.x, focalWorldPos.y);
+                float distance = relativePos.magnitude;
+
+                // Only show nodes within view radius
+                if (distance <= viewRadiusTiles)
+                {
+                    nodeDot.gameObject.SetActive(true);
+                    float minimapX = relativePos.x * pixelsPerUnit;
+                    float minimapY = relativePos.y * pixelsPerUnit;
+                    nodeDot.rectTransform.anchoredPosition = new Vector2(minimapX, minimapY);
+                }
+                else
+                {
+                    nodeDot.gameObject.SetActive(false);
+                }
+            }
+
+            // Hide unused node dots
+            for (int i = nodeCount; i < graphNodeDots.Count; i++)
+            {
+                graphNodeDots[i].gameObject.SetActive(false);
+            }
+        }
+
+        private void UpdateGraphEdges(PlanarForestMazeGenerator.ForestMapState graphState, Vector3 focalWorldPos, float pixelsPerUnit, float mapRadius)
+        {
+            int edgeCount = graphState.Edges.Count;
+
+            // Ensure we have enough edge segment lists
+            while (graphEdgeSegments.Count < edgeCount)
+            {
+                graphEdgeSegments.Add(new List<RectTransform>());
+            }
+
+            Vector2 focalPos2D = new Vector2(focalWorldPos.x, focalWorldPos.y);
+
+            // Update each edge
+            for (int i = 0; i < edgeCount; i++)
+            {
+                var edge = graphState.Edges[i];
+                List<RectTransform> segments = graphEdgeSegments[i];
+
+                // Get polyline points
+                if (edge.PolylinePoints.Count < 2)
+                {
+                    // Hide all segments for this edge
+                    foreach (var segment in segments)
+                    {
+                        segment.gameObject.SetActive(false);
+                    }
+                    continue;
+                }
+
+                int segmentCount = edge.PolylinePoints.Count - 1;
+
+                // Ensure we have enough segments for this edge
+                while (segments.Count < segmentCount)
+                {
+                    segments.Add(CreateGraphEdgeLine());
+                }
+
+                // Check if any point is within view radius
+                bool anyVisible = false;
+                for (int p = 0; p < edge.PolylinePoints.Count; p++)
+                {
+                    Vector2 pointRelative = edge.PolylinePoints[p] - focalPos2D;
+                    if (pointRelative.magnitude <= viewRadiusTiles)
+                    {
+                        anyVisible = true;
+                        break;
+                    }
+                }
+
+                if (!anyVisible)
+                {
+                    // Check if any segment crosses the view area
+                    for (int s = 0; s < segmentCount && !anyVisible; s++)
+                    {
+                        Vector2 segStart = edge.PolylinePoints[s] - focalPos2D;
+                        Vector2 segEnd = edge.PolylinePoints[s + 1] - focalPos2D;
+                        // Simple check: midpoint
+                        Vector2 midPoint = (segStart + segEnd) * 0.5f;
+                        if (midPoint.magnitude <= viewRadiusTiles)
+                        {
+                            anyVisible = true;
+                        }
+                    }
+                }
+
+                if (!anyVisible)
+                {
+                    // Hide all segments for this edge
+                    foreach (var segment in segments)
+                    {
+                        segment.gameObject.SetActive(false);
+                    }
+                    continue;
+                }
+
+                // Update each segment of the polyline
+                for (int s = 0; s < segmentCount; s++)
+                {
+                    RectTransform segmentLine = segments[s];
+
+                    Vector2 segStartWorld = edge.PolylinePoints[s];
+                    Vector2 segEndWorld = edge.PolylinePoints[s + 1];
+
+                    Vector2 segStartRelative = segStartWorld - focalPos2D;
+                    Vector2 segEndRelative = segEndWorld - focalPos2D;
+
+                    // Check if this segment is visible
+                    float startDist = segStartRelative.magnitude;
+                    float endDist = segEndRelative.magnitude;
+
+                    if (startDist > viewRadiusTiles && endDist > viewRadiusTiles)
+                    {
+                        // Both outside - check midpoint
+                        Vector2 midRelative = (segStartRelative + segEndRelative) * 0.5f;
+                        if (midRelative.magnitude > viewRadiusTiles)
+                        {
+                            segmentLine.gameObject.SetActive(false);
+                            continue;
+                        }
+                    }
+
+                    segmentLine.gameObject.SetActive(true);
+
+                    // Clamp points to view radius for visual display
+                    Vector2 clampedStart = ClampToViewRadius(segStartRelative, viewRadiusTiles);
+                    Vector2 clampedEnd = ClampToViewRadius(segEndRelative, viewRadiusTiles);
+
+                    // Convert to minimap coordinates
+                    Vector2 startMinimap = clampedStart * pixelsPerUnit;
+                    Vector2 endMinimap = clampedEnd * pixelsPerUnit;
+
+                    // Position and rotate the line
+                    PositionEdgeLine(segmentLine, startMinimap, endMinimap);
+                }
+
+                // Hide unused segments for this edge
+                for (int s = segmentCount; s < segments.Count; s++)
+                {
+                    segments[s].gameObject.SetActive(false);
+                }
+            }
+
+            // Hide unused edge segment lists
+            for (int i = edgeCount; i < graphEdgeSegments.Count; i++)
+            {
+                foreach (var segment in graphEdgeSegments[i])
+                {
+                    segment.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        private Vector2 ClampToViewRadius(Vector2 relativePos, float radius)
+        {
+            if (relativePos.magnitude <= radius)
+            {
+                return relativePos;
+            }
+            return relativePos.normalized * radius;
+        }
+
+        private Image CreateGraphNodeDot()
+        {
+            GameObject dotObj = new GameObject("GraphNodeDot");
+            dotObj.transform.SetParent(graphContainer, false);
+            RectTransform dotRect = dotObj.AddComponent<RectTransform>();
+            dotRect.anchorMin = new Vector2(0.5f, 0.5f);
+            dotRect.anchorMax = new Vector2(0.5f, 0.5f);
+            dotRect.pivot = new Vector2(0.5f, 0.5f);
+            dotRect.sizeDelta = new Vector2(graphNodeSize, graphNodeSize);
+
+            Image dot = dotObj.AddComponent<Image>();
+            dot.color = graphNodeColor;
+            dot.sprite = circleSprite;
+            dot.raycastTarget = false;
+
+            return dot;
+        }
+
+        private RectTransform CreateGraphEdgeLine()
+        {
+            GameObject lineObj = new GameObject("GraphEdgeLine");
+            lineObj.transform.SetParent(graphContainer, false);
+            RectTransform lineRect = lineObj.AddComponent<RectTransform>();
+            lineRect.anchorMin = new Vector2(0.5f, 0.5f);
+            lineRect.anchorMax = new Vector2(0.5f, 0.5f);
+            lineRect.pivot = new Vector2(0f, 0.5f); // Pivot at left-center for rotation
+
+            Image lineImage = lineObj.AddComponent<Image>();
+            lineImage.color = graphEdgeColor;
+            lineImage.raycastTarget = false;
+
+            return lineRect;
+        }
+
+        private void PositionEdgeLine(RectTransform lineRect, Vector2 start, Vector2 end)
+        {
+            // Calculate line properties
+            Vector2 direction = end - start;
+            float length = direction.magnitude;
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+
+            // Position at start point
+            lineRect.anchoredPosition = start;
+
+            // Set size (width = length, height = line width)
+            lineRect.sizeDelta = new Vector2(length, graphEdgeWidth);
+
+            // Rotate to point toward end
+            lineRect.localRotation = Quaternion.Euler(0f, 0f, angle);
         }
     }
 }

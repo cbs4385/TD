@@ -197,6 +197,23 @@ namespace FaeMaze.Visitors
         protected List<Vector3> worldPath;
         protected int worldPathIndex;
 
+        // Catmull-Rom spline smoothing for path following (similar to WillowTheWisp idle behavior)
+        // Uses 4 control points: P0 influences entry tangent, P1 is current start, P2 is target, P3 influences exit tangent
+        protected bool useSplineSmoothing = true;
+        protected float splineProgress = 0f;
+        protected float splineSegmentLength = 1f;
+        protected int splineStartIndex = 0; // Index in worldPath for P1 (current segment start)
+        protected Vector3[] splineControlPoints = new Vector3[4]; // P0, P1, P2, P3
+        protected bool splineInitialized = false;
+
+        // State aura visual feedback
+        protected GameObject stateAuraObject;
+        protected Light stateAuraLight;
+        protected VisitorState lastAuraState = VisitorState.Idle;
+        protected const float AURA_LIGHT_INTENSITY = 1.5f;
+        protected const float AURA_LIGHT_RANGE = 2.0f;
+        protected const float AURA_Z_OFFSET = -0.3f; // Above the visitor
+
         #endregion
 
         #region Properties
@@ -254,6 +271,9 @@ namespace FaeMaze.Visitors
                 CacheAuthoredSpriteSize();
                 SetupSpriteRenderer();
             }
+
+            // Always setup state aura for visual feedback (regardless of model setup method)
+            SetupStateAura();
 
             SetupPhysics();
 
@@ -373,6 +393,7 @@ namespace FaeMaze.Visitors
                 if (followWisp != null && followWisp.IsFollowing)
                 {
                     // Wisp is controlling movement
+                    UpdateStateAura();
                     return;
                 }
 
@@ -381,6 +402,9 @@ namespace FaeMaze.Visitors
                     UpdateWalking();
                 }
             }
+
+            // Update state aura visual
+            UpdateStateAura();
         }
 
         #endregion
@@ -758,6 +782,8 @@ namespace FaeMaze.Visitors
 
             // Build world-space path from current position to destination
             worldPath = BuildWorldPath(transform.position, destination);
+            worldPathIndex = 0;
+            ResetSplineState();
 
             if (worldPath != null && worldPath.Count > 0)
             {
@@ -1597,7 +1623,7 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Handles movement in world-space navigation mode.
         /// Walks along the world path toward the destination.
-        /// Uses continuous movement that doesn't pause at waypoints.
+        /// Uses Catmull-Rom spline smoothing for natural curved movement.
         /// </summary>
         protected virtual void UpdateWorldSpaceWalking()
         {
@@ -1614,13 +1640,129 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Log fascinated movement periodically
             // Use 50% speed if fascinated and walking to lantern
             float effectiveSpeed = moveSpeed * speedMultiplier;
             if (isFascinated && !hasReachedLantern)
             {
                 effectiveSpeed *= FascinationSpeedMultiplier;
             }
+
+            // Use spline smoothing if enabled and path has enough waypoints
+            if (useSplineSmoothing && worldPath.Count >= 2)
+            {
+                UpdateSplineWalking(effectiveSpeed);
+            }
+            else
+            {
+                UpdateDirectWalking(effectiveSpeed);
+            }
+
+            // Sync physics if using rigidbody
+            if (rb3D != null)
+            {
+                rb3D.MovePosition(transform.position);
+                Physics.SyncTransforms();
+            }
+
+            // Check if we've completed the path
+            if (worldPathIndex >= worldPath.Count)
+            {
+                OnWorldSpacePathComplete();
+            }
+        }
+
+        /// <summary>
+        /// Updates movement using Catmull-Rom spline interpolation for smooth curves.
+        /// Similar to WillowTheWisp idle behavior.
+        /// </summary>
+        protected virtual void UpdateSplineWalking(float effectiveSpeed)
+        {
+            // Initialize spline if needed
+            if (!splineInitialized)
+            {
+                InitializeSpline();
+                if (!splineInitialized)
+                {
+                    // Fall back to direct walking if spline can't be initialized
+                    UpdateDirectWalking(effectiveSpeed);
+                    return;
+                }
+            }
+
+            // Store previous position for direction calculation
+            Vector3 previousPosition = transform.position;
+
+            // Progress along spline based on speed (normalized by segment length)
+            float speedFactor = effectiveSpeed / Mathf.Max(0.1f, splineSegmentLength);
+            splineProgress += speedFactor * Time.deltaTime;
+
+            // Handle segment completion and advancement
+            while (splineProgress >= 1f && splineStartIndex < worldPath.Count - 1)
+            {
+                splineProgress -= 1f;
+                waypointsTraversedSinceSpawn++;
+
+                // Allow derived classes to handle detour logic at waypoints
+                int previousIndex = splineStartIndex;
+                HandleDetourAtWaypoint();
+
+                // If path was changed by detour handling, reinitialize spline
+                if (worldPath == null || worldPathIndex != previousIndex + 1)
+                {
+                    splineInitialized = false;
+                    return;
+                }
+
+                // Advance to next segment
+                AdvanceSplineSegment();
+
+                // If spline is no longer valid, stop
+                if (!splineInitialized)
+                {
+                    return;
+                }
+            }
+
+            // If we've reached the end, snap to final position
+            if (splineStartIndex >= worldPath.Count - 1)
+            {
+                transform.position = worldPath[worldPath.Count - 1];
+                worldPathIndex = worldPath.Count;
+                splineInitialized = false;
+                return;
+            }
+
+            // Calculate position on Catmull-Rom spline
+            Vector3 newPosition = EvaluateCatmullRom(
+                splineControlPoints[0],
+                splineControlPoints[1],
+                splineControlPoints[2],
+                splineControlPoints[3],
+                Mathf.Clamp01(splineProgress)
+            );
+
+            // Preserve Z position
+            newPosition.z = transform.position.z;
+            transform.position = newPosition;
+
+            // Update facing direction based on movement
+            Vector3 moveDirection = (newPosition - previousPosition).normalized;
+            if (moveDirection.sqrMagnitude > 0.001f)
+            {
+                Vector2 facingDirection = new Vector2(moveDirection.x, moveDirection.y);
+                UpdateAnimatorDirection(facingDirection);
+            }
+
+            // Sync worldPathIndex with spline progress for compatibility
+            worldPathIndex = splineStartIndex;
+        }
+
+        /// <summary>
+        /// Updates movement using direct waypoint-to-waypoint walking (original behavior).
+        /// Used as fallback when spline smoothing is disabled or not possible.
+        /// </summary>
+        protected virtual void UpdateDirectWalking(float effectiveSpeed)
+        {
             float remainingDistance = effectiveSpeed * Time.deltaTime;
 
             // Move continuously, consuming distance across multiple waypoints if needed
@@ -1666,19 +1808,6 @@ namespace FaeMaze.Visitors
                     UpdateAnimatorDirection(facingDirection);
                 }
             }
-
-            // Sync physics if using rigidbody
-            if (rb3D != null)
-            {
-                rb3D.MovePosition(transform.position);
-                Physics.SyncTransforms();
-            }
-
-            // Check if we've completed the path
-            if (worldPathIndex >= worldPath.Count)
-            {
-                OnWorldSpacePathComplete();
-            }
         }
 
         /// <summary>
@@ -1699,6 +1828,143 @@ namespace FaeMaze.Visitors
                 }
             }
         }
+
+        #region Catmull-Rom Spline Smoothing
+
+        /// <summary>
+        /// Initializes the Catmull-Rom spline for smooth path following.
+        /// Sets up control points P0, P1, P2, P3 based on current worldPath.
+        /// </summary>
+        protected virtual void InitializeSpline()
+        {
+            if (worldPath == null || worldPath.Count < 2)
+            {
+                splineInitialized = false;
+                return;
+            }
+
+            splineStartIndex = worldPathIndex;
+            splineProgress = 0f;
+            UpdateSplineControlPoints();
+            splineInitialized = true;
+        }
+
+        /// <summary>
+        /// Updates the 4 control points for the current spline segment.
+        /// P0 = previous point (or extrapolated), P1 = current start, P2 = target, P3 = next point (or extrapolated)
+        /// </summary>
+        protected virtual void UpdateSplineControlPoints()
+        {
+            if (worldPath == null || worldPath.Count < 2)
+                return;
+
+            int p1Index = splineStartIndex;
+            int p2Index = Mathf.Min(p1Index + 1, worldPath.Count - 1);
+
+            // P1 and P2 are the current segment endpoints
+            splineControlPoints[1] = worldPath[p1Index];
+            splineControlPoints[2] = worldPath[p2Index];
+
+            // P0: previous point or extrapolate backward from P1
+            if (p1Index > 0)
+            {
+                splineControlPoints[0] = worldPath[p1Index - 1];
+            }
+            else
+            {
+                // Extrapolate backward: P0 = P1 - (P2 - P1)
+                splineControlPoints[0] = splineControlPoints[1] - (splineControlPoints[2] - splineControlPoints[1]);
+            }
+
+            // P3: next point after P2 or extrapolate forward
+            if (p2Index < worldPath.Count - 1)
+            {
+                splineControlPoints[3] = worldPath[p2Index + 1];
+            }
+            else
+            {
+                // Extrapolate forward: P3 = P2 + (P2 - P1)
+                splineControlPoints[3] = splineControlPoints[2] + (splineControlPoints[2] - splineControlPoints[1]);
+            }
+
+            // Calculate segment length for speed normalization
+            splineSegmentLength = EstimateCatmullRomLength(
+                splineControlPoints[0], splineControlPoints[1],
+                splineControlPoints[2], splineControlPoints[3]
+            );
+        }
+
+        /// <summary>
+        /// Advances to the next spline segment when current segment is complete.
+        /// </summary>
+        protected virtual void AdvanceSplineSegment()
+        {
+            splineStartIndex++;
+            splineProgress = 0f;
+
+            // Check if we've reached the end of the path
+            if (splineStartIndex >= worldPath.Count - 1)
+            {
+                splineInitialized = false;
+                worldPathIndex = worldPath.Count;
+                return;
+            }
+
+            UpdateSplineControlPoints();
+        }
+
+        /// <summary>
+        /// Evaluates a point on a Catmull-Rom spline.
+        /// The spline passes through P1 at t=0 and P2 at t=1.
+        /// P0 and P3 influence the tangents at P1 and P2 respectively.
+        /// </summary>
+        protected Vector3 EvaluateCatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+        {
+            float t2 = t * t;
+            float t3 = t2 * t;
+
+            // Catmull-Rom basis matrix coefficients
+            // P(t) = 0.5 * ((2*P1) + (-P0 + P2)*t + (2*P0 - 5*P1 + 4*P2 - P3)*t^2 + (-P0 + 3*P1 - 3*P2 + P3)*t^3)
+            Vector3 result = 0.5f * (
+                (2f * p1) +
+                (-p0 + p2) * t +
+                (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
+                (-p0 + 3f * p1 - 3f * p2 + p3) * t3
+            );
+
+            return result;
+        }
+
+        /// <summary>
+        /// Estimates the length of a Catmull-Rom spline segment using sampling.
+        /// </summary>
+        protected float EstimateCatmullRomLength(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, int samples = 10)
+        {
+            float length = 0f;
+            Vector3 prev = p1; // Start at P1 (t=0)
+
+            for (int i = 1; i <= samples; i++)
+            {
+                float t = i / (float)samples;
+                Vector3 current = EvaluateCatmullRom(p0, p1, p2, p3, t);
+                length += Vector3.Distance(prev, current);
+                prev = current;
+            }
+
+            return Mathf.Max(0.1f, length); // Ensure non-zero length
+        }
+
+        /// <summary>
+        /// Resets the spline state when path changes.
+        /// </summary>
+        protected virtual void ResetSplineState()
+        {
+            splineInitialized = false;
+            splineProgress = 0f;
+            splineStartIndex = 0;
+        }
+
+        #endregion
 
         /// <summary>
         /// Called when the visitor completes their path.
@@ -1811,12 +2077,21 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void HandleConsumption()
         {
+            Debug.Log($"[VisitorController] HandleConsumption called for {name}. gameController={gameController != null}, Heart={gameController?.Heart != null}");
             if (gameController != null && gameController.Heart != null)
             {
+                Debug.Log($"[VisitorController] Calling HeartOfTheMaze.OnVisitorConsumed for {name}");
                 gameController.Heart.OnVisitorConsumed(this);
             }
             else
             {
+                Debug.LogWarning($"[VisitorController] HandleConsumption: gameController or Heart is null! Destroying visitor {name} without proper consumption notification.");
+                // Still notify HeartPowerManager if possible
+                if (HeartPowers.HeartPowerManager.Instance != null)
+                {
+                    Debug.Log($"[VisitorController] Notifying HeartPowerManager directly for {name}");
+                    HeartPowers.HeartPowerManager.Instance.NotifyVisitorConsumed();
+                }
                 Destroy(gameObject);
             }
         }
@@ -1904,6 +2179,7 @@ namespace FaeMaze.Visitors
             // Navigate to lantern using world-space path
             worldPath = BuildWorldPath(transform.position, lanternWorldPos);
             worldPathIndex = 0;
+            ResetSplineState();
             RefreshStateFromFlags();
         }
 
@@ -1987,6 +2263,7 @@ namespace FaeMaze.Visitors
 
             worldPath = path;
             worldPathIndex = 0;
+            ResetSplineState();
 
             // Update destination to the last point in the path
             if (path.Count > 0)
@@ -2020,6 +2297,7 @@ namespace FaeMaze.Visitors
             worldPath = BuildWorldPath(transform.position, destination);
             worldPathIndex = 0;
             worldDestination = destination;
+            ResetSplineState();
 
             if (worldPath != null && worldPath.Count > 0)
             {
@@ -2112,6 +2390,7 @@ namespace FaeMaze.Visitors
             // Clear path
             worldPath = null;
             worldPathIndex = 0;
+            ResetSplineState();
 
             // Set state to Escaping (used for both escaping and drowning)
             state = VisitorState.Escaping;
@@ -2250,6 +2529,7 @@ namespace FaeMaze.Visitors
             // Build path to the stop position
             worldPath = BuildWorldPath(transform.position, stopPosition);
             worldPathIndex = 0;
+            ResetSplineState();
 
             // CRITICAL: The lantern should NEVER be a waypoint. The path should terminate
             // at the stop location (1.5 units from lantern in XY plane). Remove ALL waypoints that are
@@ -2311,6 +2591,7 @@ namespace FaeMaze.Visitors
                 worldPath = BuildWorldPath(transform.position, originalDestination);
                 worldPathIndex = 0;
                 worldDestination = originalDestination;
+                ResetSplineState();
                 state = VisitorState.Walking;
             }
             else
@@ -2319,6 +2600,7 @@ namespace FaeMaze.Visitors
                 Vector3 randomDestination = GetRandomWanderDestination();
                 worldPath = BuildWorldPath(transform.position, randomDestination);
                 worldPathIndex = 0;
+                ResetSplineState();
                 state = VisitorState.Walking;
             }
         }
@@ -2409,6 +2691,7 @@ namespace FaeMaze.Visitors
             // Clear current path - we're now circling
             worldPath = null;
             worldPathIndex = 0;
+            ResetSplineState();
 
             RefreshStateFromFlags();
         }
@@ -2615,28 +2898,33 @@ namespace FaeMaze.Visitors
             rb3D.isKinematic = true;
             rb3D.useGravity = false;
 
-            // Use existing 3D collider (SphereCollider or CapsuleCollider) or add CapsuleCollider
+            // Use existing 3D collider (SphereCollider or CapsuleCollider) or add SphereCollider
             // NOTE: Visitor colliders should NOT be triggers - they need to be detected by
-            // trigger colliders on props (FairyRing, FaeLantern, etc.)
+            // trigger colliders on props (FairyRing, FaeLantern, Heart, etc.)
+            // For top-down XY-plane games, use SphereCollider centered at Z=0 for reliable collision
             SphereCollider sphereCollider = GetComponent<SphereCollider>();
             CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
 
             if (sphereCollider != null)
             {
                 sphereCollider.isTrigger = false;
+                // Ensure center is at Z=0 for XY-plane collision
+                sphereCollider.center = Vector3.zero;
             }
             else if (capsuleCollider != null)
             {
                 capsuleCollider.isTrigger = false;
+                // Ensure center is at Z=0 for XY-plane collision
+                capsuleCollider.center = Vector3.zero;
             }
             else
             {
-                // Add CapsuleCollider if no 3D collider exists
-                capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
-                capsuleCollider.height = 1.8f;
-                capsuleCollider.radius = 0.3f;
-                capsuleCollider.center = new Vector3(0, 0.9f, 0);
-                capsuleCollider.isTrigger = false;
+                // Add SphereCollider for reliable XY-plane collision detection
+                // SphereCollider works better than CapsuleCollider for top-down 2D games
+                sphereCollider = gameObject.AddComponent<SphereCollider>();
+                sphereCollider.radius = 0.3f;
+                sphereCollider.center = Vector3.zero;
+                sphereCollider.isTrigger = false;
             }
         }
 
@@ -2667,6 +2955,103 @@ namespace FaeMaze.Visitors
             foreach (var sprite in sprites)
             {
                 sprite.enabled = false;
+            }
+        }
+
+        #endregion
+
+        #region State Aura Visual
+
+        /// <summary>
+        /// Sets up the state aura light for visual feedback on visitor state.
+        /// Creates a point light that changes color based on the visitor's current state.
+        /// </summary>
+        protected virtual void SetupStateAura()
+        {
+            if (stateAuraObject != null)
+                return;
+
+            stateAuraObject = new GameObject("StateAura");
+            stateAuraObject.transform.SetParent(transform);
+            stateAuraObject.transform.localPosition = new Vector3(0f, 0f, AURA_Z_OFFSET);
+
+            stateAuraLight = stateAuraObject.AddComponent<Light>();
+            stateAuraLight.type = LightType.Point;
+            stateAuraLight.range = AURA_LIGHT_RANGE;
+            stateAuraLight.intensity = AURA_LIGHT_INTENSITY;
+            stateAuraLight.shadows = LightShadows.None;
+            stateAuraLight.renderMode = LightRenderMode.Auto;
+
+            // Start with no aura (Walking state has no special color)
+            stateAuraLight.enabled = false;
+            lastAuraState = VisitorState.Walking;
+        }
+
+        /// <summary>
+        /// Updates the state aura color based on current visitor state.
+        /// Only shows aura for special states (not Walking or Idle).
+        /// </summary>
+        protected virtual void UpdateStateAura()
+        {
+            if (stateAuraLight == null)
+                return;
+
+            // Only update if state changed
+            if (state == lastAuraState)
+                return;
+
+            lastAuraState = state;
+
+            // Get color for current state
+            Color auraColor = GetStateAuraColor(state);
+
+            if (auraColor.a > 0f)
+            {
+                stateAuraLight.color = auraColor;
+                stateAuraLight.enabled = true;
+            }
+            else
+            {
+                // No aura for this state
+                stateAuraLight.enabled = false;
+            }
+        }
+
+        /// <summary>
+        /// Gets the aura color for a given visitor state.
+        /// Returns transparent color for states that shouldn't show an aura.
+        /// </summary>
+        protected virtual Color GetStateAuraColor(VisitorState visitorState)
+        {
+            switch (visitorState)
+            {
+                case VisitorState.Fascinated:
+                    // Pink/magenta - entranced by fae magic
+                    return new Color(1f, 0.4f, 0.8f, 1f);
+
+                case VisitorState.Confused:
+                    // Yellow/gold - lost and wandering
+                    return new Color(1f, 0.85f, 0.2f, 1f);
+
+                case VisitorState.Frightened:
+                    // Cyan/pale blue - fear
+                    return new Color(0.5f, 0.9f, 1f, 1f);
+
+                case VisitorState.Lured:
+                    // Green - drawn toward heart
+                    return new Color(0.3f, 1f, 0.5f, 1f);
+
+                case VisitorState.Dazed:
+                    // Purple - stunned
+                    return new Color(0.7f, 0.4f, 1f, 1f);
+
+                case VisitorState.Walking:
+                case VisitorState.Idle:
+                case VisitorState.Consumed:
+                case VisitorState.Escaping:
+                default:
+                    // No aura for normal/terminal states
+                    return Color.clear;
             }
         }
 
@@ -2864,6 +3249,7 @@ namespace FaeMaze.Visitors
             // Set the new detour path
             worldPath = fullPath;
             worldPathIndex = 0;
+            ResetSplineState();
 
             if (logVisitorPathfinding)
                 Debug.Log($"[Confusion:Detour] SUCCESS - Detour path built with {fullPath.Count} waypoints through {detourNodeIds.Count} nodes");

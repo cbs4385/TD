@@ -99,6 +99,12 @@ namespace FaeMaze.Maze
         private MeshRenderer[] meshRenderers;
         private Material[] materials;
 
+        // Tentacle/maw bone references for accordion animation
+        private Transform mawSegRoot;
+        private Transform[] mawSegChildren;
+        private Quaternion mawSegRootTargetRotation;
+        private Quaternion[] mawSegChildTargetRotations;
+
         #endregion
 
         #region Properties
@@ -134,8 +140,11 @@ namespace FaeMaze.Maze
         /// <param name="visitor">The visitor controller to consume</param>
         public void OnVisitorConsumed(VisitorControllerBase visitor)
         {
+            Debug.Log($"[HeartOfTheMaze] OnVisitorConsumed called with visitor: {(visitor != null ? visitor.name : "NULL")}");
+
             if (visitor == null)
             {
+                Debug.LogWarning("[HeartOfTheMaze] OnVisitorConsumed: visitor is NULL, returning early");
                 return;
             }
 
@@ -143,6 +152,7 @@ namespace FaeMaze.Maze
             if (Systems.GameStatsTracker.Instance != null)
             {
                 Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
+                Debug.Log("[HeartOfTheMaze] Recorded visitor consumed in GameStatsTracker");
             }
 
             // Add essence to game controller - use archetype-specific reward if available
@@ -150,17 +160,26 @@ namespace FaeMaze.Maze
             {
                 int essence = visitor.GetEssenceReward();
                 GameController.Instance.AddEssence(essence);
+                Debug.Log($"[HeartOfTheMaze] Added {essence} essence to GameController");
             }
 
             // Notify HeartPowerManager of consumption (for toggle powers like MurmuringPaths)
+            Debug.Log($"[HeartOfTheMaze] About to notify HeartPowerManager. Instance exists: {HeartPowers.HeartPowerManager.Instance != null}");
             if (HeartPowers.HeartPowerManager.Instance != null)
             {
+                Debug.Log("[HeartOfTheMaze] Notifying HeartPowerManager of visitor consumption");
                 HeartPowers.HeartPowerManager.Instance.NotifyVisitorConsumed();
+                Debug.Log("[HeartOfTheMaze] NotifyVisitorConsumed call completed");
+            }
+            else
+            {
+                Debug.LogWarning("[HeartOfTheMaze] HeartPowerManager.Instance is NULL!");
             }
 
             SoundManager.Instance?.PlayVisitorConsumed();
 
             // Destroy the visitor
+            Debug.Log($"[HeartOfTheMaze] Destroying visitor: {visitor.name}");
             Destroy(visitor.gameObject);
         }
 
@@ -219,6 +238,36 @@ namespace FaeMaze.Maze
             }
         }
 
+        private void LateUpdate()
+        {
+            // Apply maw bone accordion rotations after Animator has processed
+            ApplyMawBoneRotations();
+        }
+
+        /// <summary>
+        /// Applies the stored accordion rotations to maw bones.
+        /// Called in LateUpdate to override Animator transforms.
+        /// </summary>
+        private void ApplyMawBoneRotations()
+        {
+            if (mawSegRoot == null) return;
+
+            // Apply root bone rotation
+            mawSegRoot.localRotation = mawSegRootTargetRotation;
+
+            // Apply child bone rotations
+            if (mawSegChildren != null && mawSegChildTargetRotations != null)
+            {
+                for (int i = 0; i < mawSegChildren.Length && i < mawSegChildTargetRotations.Length; i++)
+                {
+                    if (mawSegChildren[i] != null)
+                    {
+                        mawSegChildren[i].localRotation = mawSegChildTargetRotations[i];
+                    }
+                }
+            }
+        }
+
         private void EnsureTriggerCollider()
         {
             // Add SphereCollider for 3D trigger detection if not present
@@ -234,6 +283,9 @@ namespace FaeMaze.Maze
                 // Ensure it's set as trigger
                 collider.isTrigger = true;
             }
+
+            // Ensure collider center is at Z=0 for XY-plane collision detection
+            collider.center = Vector3.zero;
         }
 
 
@@ -265,6 +317,9 @@ namespace FaeMaze.Maze
             // (prefab has scale 100, so we keep that and just apply modelSize multiplier)
             Vector3 prefabScale = modelInstance.transform.localScale;
             modelInstance.transform.localScale = prefabScale * modelSize;
+
+            // Set up accordion-style bone rotations for the maw/tentacle
+            SetupMawBoneRotations();
 
             // Collect all mesh renderers and replace materials with 3D PBR materials
             meshRenderers = modelInstance.GetComponentsInChildren<MeshRenderer>();
@@ -344,6 +399,82 @@ namespace FaeMaze.Maze
                 // Store materials for pulsing
                 materials = new Material[] { heartMat };
                 meshRenderers = new MeshRenderer[] { renderer };
+            }
+        }
+
+        /// <summary>
+        /// Sets up the maw bone rotations to create an accordion effect for the tentacle.
+        /// Finds mawseg_013, rotates it 90 degrees on Y, then alternates children -180/180 degrees on Y.
+        /// Stores target rotations to be applied in LateUpdate (to override Animator).
+        /// </summary>
+        private void SetupMawBoneRotations()
+        {
+            if (modelInstance == null) return;
+
+            // Find mawseg_013 bone in the hierarchy
+            mawSegRoot = FindChildRecursive(modelInstance.transform, "mawseg_013");
+            if (mawSegRoot == null)
+            {
+                Debug.LogWarning("HeartOfTheMaze: Could not find mawseg_013 bone in heart model");
+                return;
+            }
+
+            // Calculate and store target rotation for mawseg_013 (90 degrees on Y axis)
+            mawSegRootTargetRotation = Quaternion.Euler(
+                mawSegRoot.localEulerAngles.x,
+                mawSegRoot.localEulerAngles.y + 90f,
+                mawSegRoot.localEulerAngles.z
+            );
+
+            // Collect all children
+            System.Collections.Generic.List<Transform> children = new System.Collections.Generic.List<Transform>();
+            CollectAllDescendants(mawSegRoot, children);
+            mawSegChildren = children.ToArray();
+
+            // Calculate and store alternating -180/180 degree Y rotations for accordion effect
+            mawSegChildTargetRotations = new Quaternion[mawSegChildren.Length];
+            bool rotateNegative = true;
+            for (int i = 0; i < mawSegChildren.Length; i++)
+            {
+                Transform child = mawSegChildren[i];
+                float yRotation = rotateNegative ? -180f : 180f;
+                mawSegChildTargetRotations[i] = Quaternion.Euler(
+                    child.localEulerAngles.x,
+                    child.localEulerAngles.y + yRotation,
+                    child.localEulerAngles.z
+                );
+                rotateNegative = !rotateNegative;
+            }
+
+            Debug.Log($"HeartOfTheMaze: Found mawseg_013 with {mawSegChildren.Length} descendants for accordion animation");
+        }
+
+        /// <summary>
+        /// Recursively finds a child transform by name.
+        /// </summary>
+        private Transform FindChildRecursive(Transform parent, string name)
+        {
+            foreach (Transform child in parent)
+            {
+                if (child.name == name)
+                    return child;
+
+                Transform found = FindChildRecursive(child, name);
+                if (found != null)
+                    return found;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Collects all descendants of a transform into a list.
+        /// </summary>
+        private void CollectAllDescendants(Transform parent, System.Collections.Generic.List<Transform> list)
+        {
+            foreach (Transform child in parent)
+            {
+                list.Add(child);
+                CollectAllDescendants(child, list);
             }
         }
 
@@ -434,11 +565,17 @@ namespace FaeMaze.Maze
 
         private void OnTriggerEnter(Collider other)
         {
+            Debug.Log($"[HeartOfTheMaze] OnTriggerEnter: {other.gameObject.name} (layer: {LayerMask.LayerToName(other.gameObject.layer)})");
             // Check if a visitor entered the heart
             var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
+                Debug.Log($"[HeartOfTheMaze] Visitor detected: {visitor.name}, State: {visitor.State}");
                 OnVisitorConsumed(visitor);
+            }
+            else
+            {
+                Debug.Log($"[HeartOfTheMaze] OnTriggerEnter with non-visitor: {other.gameObject.name}");
             }
         }
 
@@ -448,6 +585,7 @@ namespace FaeMaze.Maze
             var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
+                Debug.Log($"[HeartOfTheMaze] OnTriggerStay - consuming visitor: {visitor.name}");
                 OnVisitorConsumed(visitor);
             }
         }

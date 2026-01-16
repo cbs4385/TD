@@ -1319,6 +1319,7 @@ namespace FaeMaze.Props
             }
             collider.radius = 0.4f;
             collider.isTrigger = true;
+            collider.center = Vector3.zero; // XY-plane collision
         }
 
         private void UpdatePulse()

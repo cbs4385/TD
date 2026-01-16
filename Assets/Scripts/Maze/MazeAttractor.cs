@@ -127,6 +127,7 @@ namespace FaeMaze.Maze
 
             triggerCollider.isTrigger = true;
             triggerCollider.radius = radius;
+            triggerCollider.center = Vector3.zero; // XY-plane collision
         }
 
         private void CreateVisualSprite()

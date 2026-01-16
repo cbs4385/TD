@@ -417,21 +417,10 @@ namespace FaeMaze.Systems
             }
             else if (mazeRenderer != null)
             {
-                // Remove end cap walls
-                if (consumedSpawnPos != Vector3.zero && consumedFrontierDir != Vector3.zero)
-                {
-                    mazeRenderer.RemoveWallsPastEndpoint(consumedSpawnPos, consumedFrontierDir, 2.5f, -0.3f);
-                }
-
-                // Remove existing walls along the new edge paths BEFORE adding new walls
-                // This clears walls from previous edges that would intersect with new paths
-                foreach (var newEdge in newEdges)
-                {
-                    if (newEdge.PolylinePoints != null && newEdge.PolylinePoints.Count >= 2)
-                    {
-                        mazeRenderer.RemoveWallsAlongPolyline(newEdge.PolylinePoints, PathRadius + 0.5f);
-                    }
-                }
+                // NOTE: Wall overlap is allowed! Wall models may overlap with each other and with paths.
+                // Wall removal is handled by Unity physics collision detection, NOT by manual intersection checks.
+                // Portal end cap walls are tracked in portalWalls list and destroyed via RebuildSpawnPointsFromFrontier.
+                // Do NOT use RemoveWallsPastEndpoint or RemoveWallsAlongPolyline - they will throw exceptions.
 
                 // Regenerate cross-connection walls
                 foreach (var targetNode in crossConnectionTargetNodes)
@@ -448,6 +437,18 @@ namespace FaeMaze.Systems
 
                 // Add node tiles
                 mazeRenderer.AddNodeTilesIncremental(newNode);
+
+                // ARCHITECTURE: After adding new path tiles and node, re-check existing walls
+                // for physics collisions. This removes walls that now collide with the new edges/node.
+                // Uses Unity physics (WallCollisionChecker) - the ONLY valid way to remove walls.
+                WallCollisionChecker.RecheckWallsAroundNode(newNode.Position, 2.5f);
+                foreach (var edge in newEdges)
+                {
+                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
+                    {
+                        WallCollisionChecker.RecheckWallsAlongPath(edge.PolylinePoints, 1.5f);
+                    }
+                }
 
                 // Add walls (synchronous version)
                 mazeRenderer.AddWallsIncremental(newEdges, newNode);
@@ -674,23 +675,10 @@ namespace FaeMaze.Systems
             }
             else if (mazeRenderer != null)
             {
-
-                // Only remove the portal end cap walls that are "past" the endpoint (in frontier direction)
-                // This preserves side walls along the path while removing the U-shaped end cap
-                if (consumedSpawnPos != Vector3.zero && consumedFrontierDir != Vector3.zero)
-                {
-                    mazeRenderer.RemoveWallsPastEndpoint(consumedSpawnPos, consumedFrontierDir, 2.5f, -0.3f);
-                }
-
-                // Remove existing walls along the new edge paths BEFORE adding new walls
-                // This clears walls from previous edges that would intersect with new paths
-                foreach (var newEdge in newEdges)
-                {
-                    if (newEdge.PolylinePoints != null && newEdge.PolylinePoints.Count >= 2)
-                    {
-                        mazeRenderer.RemoveWallsAlongPolyline(newEdge.PolylinePoints, PathRadius + 0.5f);
-                    }
-                }
+                // NOTE: Wall overlap is allowed! Wall models may overlap with each other and with paths.
+                // Wall removal is handled by Unity physics collision detection, NOT by manual intersection checks.
+                // Portal end cap walls are tracked in portalWalls list and destroyed via RebuildSpawnPointsFromFrontier.
+                // Do NOT use RemoveWallsPastEndpoint or RemoveWallsAlongPolyline - they will throw exceptions.
 
                 // Regenerate walls for cross-connection target nodes (existing nodes that received a new edge)
                 // This removes all walls around the node and re-renders them with proper edge angle clearance
@@ -1019,11 +1007,6 @@ namespace FaeMaze.Systems
             {
                 worldSpaceData.RegisterSpawnPoint(spawnId, portal.transform);
             }
-
-            // Create debug visualization
-            CreateDebugColumn(worldPos, worldPos + direction * 2f, Color.blue, $"Portal_{spawnId}_FacingDir");
-            CreateDebugColumn(portal.transform.position, portal.transform.position + portal.transform.right * 2f,
-                Color.red, $"Portal_{spawnId}_XAxis");
         }
 
         /// <summary>
@@ -1160,69 +1143,6 @@ namespace FaeMaze.Systems
         #endregion
 
         #region Portal Management
-
-        private void CreateDebugColumn(Vector3 start, Vector3 end, Color color, string name)
-        {
-            Vector3 flatStart = new Vector3(start.x, start.y, -0.5f);
-            Vector3 flatEnd = new Vector3(end.x, end.y, -0.5f);
-            Vector3 direction = flatEnd - flatStart;
-            float length = direction.magnitude;
-
-            if (length <= Mathf.Epsilon)
-            {
-                return;
-            }
-
-            GameObject column = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            column.name = name;
-            column.transform.SetParent(portalsParent, true);
-            column.transform.position = flatStart + direction * 0.5f;
-            column.transform.rotation = Quaternion.FromToRotation(Vector3.up, direction.normalized);
-            column.transform.localScale = new Vector3(0.05f, length * 0.5f, 0.05f);
-
-            Renderer renderer = column.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                Material material = CreateDebugMaterial(color);
-                if (material != null)
-                {
-                    renderer.material = material;
-                }
-            }
-        }
-
-        private Material CreateDebugMaterial(Color color)
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Unlit/Color");
-            }
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-            if (shader == null)
-            {
-                return null;
-            }
-
-            Material material = new Material(shader);
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", color);
-            }
-            else if (material.HasProperty("_Color"))
-            {
-                material.SetColor("_Color", color);
-            }
-            else
-            {
-                material.color = color;
-            }
-
-            return material;
-        }
 
         /// <summary>
         /// Removes the portal at the specified spawn point.
@@ -1586,6 +1506,7 @@ namespace FaeMaze.Systems
                     var sphereCollider = ring.AddComponent<SphereCollider>();
                     sphereCollider.isTrigger = true;
                     sphereCollider.radius = 3f;
+                    sphereCollider.center = Vector3.zero; // XY-plane collision
                 }
                 fairyRing = ring.AddComponent<FaeMaze.Props.FairyRing>();
             }
@@ -1697,6 +1618,7 @@ namespace FaeMaze.Systems
                     var sphereCollider = wisp.AddComponent<SphereCollider>();
                     sphereCollider.isTrigger = true;
                     sphereCollider.radius = 0.4f;
+                    sphereCollider.center = Vector3.zero; // XY-plane collision
                 }
                 var rigidbody = wisp.GetComponent<Rigidbody>();
                 if (rigidbody == null)

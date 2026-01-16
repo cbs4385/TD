@@ -135,18 +135,6 @@ namespace ForestMaze
         /// </summary>
         public Dictionary<int, HashSet<int>> EdgeToNodes = new Dictionary<int, HashSet<int>>();
 
-        /// <summary>
-        /// Pre-computed positions for HeartPower1 effect per node.
-        /// Maps node index to list of sample positions for spawning lights.
-        /// </summary>
-        public Dictionary<int, List<Vector2>> HeartPower1NodePositions = new Dictionary<int, List<Vector2>>();
-
-        /// <summary>
-        /// Pre-computed positions for HeartPower1 effect per edge.
-        /// Maps edge index to list of sample positions for spawning lights.
-        /// </summary>
-        public Dictionary<int, List<Vector2>> HeartPower1EdgePositions = new Dictionary<int, List<Vector2>>();
-
         /// <summary>Spatial lookup for quick tile access by position</summary>
         private Dictionary<Vector2Int, List<WorldSpaceTile>> _spatialGrid;
 
@@ -353,35 +341,6 @@ namespace ForestMaze
         }
 
         /// <summary>
-        /// Gets all pre-computed HeartPower1 positions for a set of affected nodes and edges.
-        /// </summary>
-        /// <param name="nodeIndices">Set of affected node indices</param>
-        /// <param name="edgeIndices">Set of affected edge indices</param>
-        /// <returns>List of all sample positions from the affected graph elements</returns>
-        public List<Vector2> GetHeartPower1Positions(HashSet<int> nodeIndices, HashSet<int> edgeIndices)
-        {
-            var positions = new List<Vector2>();
-
-            foreach (int nodeIndex in nodeIndices)
-            {
-                if (HeartPower1NodePositions.TryGetValue(nodeIndex, out var nodePositions))
-                {
-                    positions.AddRange(nodePositions);
-                }
-            }
-
-            foreach (int edgeIndex in edgeIndices)
-            {
-                if (HeartPower1EdgePositions.TryGetValue(edgeIndex, out var edgePositions))
-                {
-                    positions.AddRange(edgePositions);
-                }
-            }
-
-            return positions;
-        }
-
-        /// <summary>
         /// Checks if two tiles are topologically connected through the graph.
         /// Tiles are connected if:
         /// - Both are on the same edge (same EdgeIndex)
@@ -479,88 +438,9 @@ namespace ForestMaze
                 tile.FinalizeOrientation();
             }
 
-            // Build HeartPower1 position index from tiles
-            BuildHeartPower1PositionIndex(data, tileSize);
-
             data.RecalculateBounds();
 
             return data;
-        }
-
-        /// <summary>
-        /// Builds the pre-computed HeartPower1 position index for nodes and edges.
-        /// Samples 6 positions per node and 4 positions per edge for light spawning.
-        /// </summary>
-        private static void BuildHeartPower1PositionIndex(WorldSpaceMazeData data, float tileSize)
-        {
-            data.HeartPower1NodePositions.Clear();
-            data.HeartPower1EdgePositions.Clear();
-
-            // Group walkable tiles by node index
-            var nodeToTiles = new Dictionary<int, List<WorldSpaceTile>>();
-            // Group walkable tiles by edge index
-            var edgeToTiles = new Dictionary<int, List<WorldSpaceTile>>();
-
-            foreach (var tile in data.Tiles)
-            {
-                if (!tile.Walkable) continue;
-
-                if (tile.NodeIndex >= 0)
-                {
-                    if (!nodeToTiles.ContainsKey(tile.NodeIndex))
-                        nodeToTiles[tile.NodeIndex] = new List<WorldSpaceTile>();
-                    nodeToTiles[tile.NodeIndex].Add(tile);
-                }
-
-                if (tile.EdgeIndex >= 0)
-                {
-                    if (!edgeToTiles.ContainsKey(tile.EdgeIndex))
-                        edgeToTiles[tile.EdgeIndex] = new List<WorldSpaceTile>();
-                    edgeToTiles[tile.EdgeIndex].Add(tile);
-                }
-            }
-
-            // Sample 6 positions per node (spread across the node)
-            foreach (var kvp in nodeToTiles)
-            {
-                int nodeIndex = kvp.Key;
-                var tiles = kvp.Value;
-
-                if (tiles.Count == 0) continue;
-
-                var positions = new List<Vector2>();
-                int samplesPerNode = Mathf.Min(6, tiles.Count);
-                float step = tiles.Count / (float)samplesPerNode;
-
-                for (int i = 0; i < samplesPerNode; i++)
-                {
-                    int idx = Mathf.Min((int)(i * step), tiles.Count - 1);
-                    positions.Add(tiles[idx].Position);
-                }
-
-                data.HeartPower1NodePositions[nodeIndex] = positions;
-            }
-
-            // Sample 4 positions per edge (spread along the edge)
-            foreach (var kvp in edgeToTiles)
-            {
-                int edgeIndex = kvp.Key;
-                var tiles = kvp.Value;
-
-                if (tiles.Count == 0) continue;
-
-                var positions = new List<Vector2>();
-                int samplesPerEdge = Mathf.Min(4, tiles.Count);
-                float step = tiles.Count / (float)samplesPerEdge;
-
-                for (int i = 0; i < samplesPerEdge; i++)
-                {
-                    int idx = Mathf.Min((int)(i * step), tiles.Count - 1);
-                    positions.Add(tiles[idx].Position);
-                }
-
-                data.HeartPower1EdgePositions[edgeIndex] = positions;
-            }
         }
 
         /// <summary>

@@ -201,72 +201,39 @@ namespace FaeMaze.HeartPowers
         private int requiredConsumptions = 1; // Set to power tier on start
         private bool hasExpired = false;
 
-        // Visual elements - fairy ring style lights with trails
+        // Visual elements - fog quad covering affected area
         private GameObject visualContainer;
-        private List<PathLight> pathLightObjects = new List<PathLight>();
+        private GameObject fogQuad;
+        private Material fogMaterial;
+        private Texture2D pathMaskTexture;
+        private Bounds fogBounds;
 
-        // Light settings (reduced intensity - 25% of FairyRingSphere)
-        private const float LIGHT_INTENSITY = 1.25f; // 25% of FairyRingSphere's 5f intensity
-        private const float LIGHT_RANGE = 1.2f; // Match FairyRingSphere range
-        private const float LIGHT_Z_OFFSET = -0.5f; // Slight offset above path
-        private const int LIGHTS_PER_NODE = 8; // Number of lights per affected node
-        private const int LIGHTS_PER_EDGE = 4; // Number of lights per affected edge
+        // Fog visual settings
+        private const float FOG_Z_POSITION = -0.2f; // Above path, below UI
+        private const float FOG_PADDING = 3f; // Padding around affected area
+        private const float MASK_PIXELS_PER_UNIT = 4f; // Resolution of path mask
 
-        // Rainbow hues (same as FairyRingSphere)
-        private static readonly float[] RainbowHues = new float[]
-        {
-            0.00f,  // Red
-            0.08f,  // Orange
-            0.16f,  // Yellow
-            0.33f,  // Green
-            0.50f,  // Cyan
-            0.66f,  // Blue
-            0.80f,  // Violet
-        };
+        // Power color (Deep Red for MurmuringPaths - power index 0)
+        private static readonly Color PowerFogColor = new Color(0.8f, 0.1f, 0.1f, 0.5f);
+        private static readonly Color PowerFogColorDark = new Color(0.5f, 0.05f, 0.05f, 0.5f);
+        private static readonly Color PowerGlowColor = new Color(1f, 0.4f, 0.3f, 1f);
 
-        // Animation settings
-        private float moveSpeed = 6.0f; // How fast lights move along path toward heart
+        // Wave animation settings
+        private const float WAVE_SPEED = 0.3f; // How fast wave travels (0-1 per second)
+        private const float WAVE_CYCLE_PAUSE = 1.5f; // Pause between wave cycles
+        private float waveProgress = 0f; // 0 = at furthest, 1 = at heart
+        private bool waveActive = true;
+        private float wavePauseTimer = 0f;
 
-        // Path boundary settings - lights travel the full path to the heart
-        private const float PATH_END_THRESHOLD = 1.0f; // Travel full path
-        private const float MIN_RESPAWN_DELAY = 0.2f; // Minimum delay between light spawns
-        private const float MAX_RESPAWN_DELAY = 1.5f; // Maximum delay between light spawns
-
-        // Erratic movement settings
-        private const float MIN_WANDER_AMPLITUDE = 0.8f; // Minimum wander distance from path
-        private const float MAX_WANDER_AMPLITUDE = 2.0f; // Maximum wander distance from path
-        private const float MIN_WANDER_SPEED = 2.0f; // Minimum wander velocity
-        private const float MAX_WANDER_SPEED = 5.0f; // Maximum wander velocity
-        private const float MIN_DIRECTION_CHANGE = 0.2f; // Minimum time between direction changes
-        private const float MAX_DIRECTION_CHANGE = 0.8f; // Maximum time between direction changes
+        // Furthest extent tracking for wave animation
+        private Vector3 furthestPosition;
+        private Vector3 heartPosition;
 
         // Store all paths from affected positions to heart
         private List<List<Vector3>> allPathsToHeart = new List<List<Vector3>>();
 
-        /// <summary>
-        /// Helper class to manage individual path lights with trails
-        /// </summary>
-        private class PathLight
-        {
-            public GameObject gameObject;
-            public Light light;
-            public TrailRenderer trail;
-            public int pathIndex;
-            public float normalizedPosition; // 0-1 position along path
-            public float colorTimeOffset;
-            public float cycleDuration;
-            public bool trailStarted; // Track if trail has begun emitting
-            public float respawnDelay; // Random delay before respawning
-            public float currentDelay; // Current delay countdown
-            public bool isWaiting; // Whether light is waiting to respawn
-
-            // Erratic movement properties
-            public Vector2 wanderOffset; // Current offset from path center
-            public Vector2 wanderVelocity; // Current wander velocity
-            public float wanderChangeTimer; // Time until next direction change
-            public float wanderAmplitude; // How far this light wanders from path
-            public float wanderSpeed; // How fast this light changes direction
-        }
+        // Store ALL tile positions on affected nodes/edges (for fog coverage)
+        private List<Vector3> allAffectedTilePositions = new List<Vector3>();
 
         public MurmuringPathsEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition)
@@ -286,7 +253,10 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void OnVisitorConsumed()
         {
-            if (hasExpired) return;
+            if (hasExpired)
+            {
+                return;
+            }
 
             consumedCount++;
             if (consumedCount >= requiredConsumptions)
@@ -318,7 +288,7 @@ namespace FaeMaze.HeartPowers
             // First generate the main path from target to heart - this determines all affected graph elements
             pathPositions = GeneratePathToHeart(targetPosition);
 
-            // Identify ALL nodes and edges along the path, then get positions from all of them
+            // Identify ALL nodes and edges along the path (populates allAffectedNodeIndices/allAffectedEdgeIndices)
             var affectedPositions = GetAllPositionsAlongPath(pathPositions);
 
             // Generate paths from each affected position to the heart
@@ -341,11 +311,78 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            // Create fairy ring style lights along all paths
-            CreateFairyRingStyleLights();
+            // Store heart position for wave animation
+            if (manager.MazeGrid != null)
+            {
+                heartPosition = manager.MazeGrid.HeartWorldPosition;
+            }
+
+            // Get ALL tile positions on affected nodes/edges for fog coverage
+            PopulateAllAffectedTilePositions();
+
+            // Find the furthest position from the heart for wave animation
+            FindFurthestExtent();
+
+            // Create power fog covering affected area
+            CreatePowerFog();
 
             // Apply lure to all visitors currently on the affected node/edge
             ApplyLureToVisitorsOnAffectedArea();
+        }
+
+        /// <summary>
+        /// Populates allAffectedTilePositions with every tile position on affected nodes/edges.
+        /// This ensures the fog covers the FULL area, not just sampled path positions.
+        /// For the triggering edge, only includes tiles BETWEEN the focal point and the heart.
+        /// </summary>
+        private void PopulateAllAffectedTilePositions()
+        {
+            allAffectedTilePositions.Clear();
+
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
+            {
+                // Fallback to path positions
+                allAffectedTilePositions.AddRange(pathPositions);
+                return;
+            }
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+            Vector2 heartPos2D = new Vector2(heartPosition.x, heartPosition.y);
+            Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
+            float targetDistFromHeart = Vector2.Distance(heartPos2D, targetPos2D);
+
+            // Get ALL walkable tiles on affected nodes and edges (not just sampled positions)
+            // We need full coverage for fog, not the sparse sampling used for lights
+            foreach (var tile in mazeData.Tiles)
+            {
+                if (!tile.Walkable) continue;
+
+                bool isOnAffectedNode = tile.NodeIndex >= 0 && allAffectedNodeIndices.Contains(tile.NodeIndex);
+                bool isOnAffectedEdge = tile.EdgeIndex >= 0 && allAffectedEdgeIndices.Contains(tile.EdgeIndex);
+
+                if (isOnAffectedNode || isOnAffectedEdge)
+                {
+                    // For tiles on the TRIGGERING edge, only include those closer to heart than the focal point
+                    if (affectedEdgeIndex >= 0 && tile.EdgeIndex == affectedEdgeIndex)
+                    {
+                        float tileDistFromHeart = Vector2.Distance(heartPos2D, tile.Position);
+                        if (tileDistFromHeart > targetDistFromHeart + 0.5f) // Small tolerance
+                        {
+                            // This tile is beyond the focal point (away from heart), skip it
+                            continue;
+                        }
+                    }
+
+                    allAffectedTilePositions.Add(new Vector3(tile.Position.x, tile.Position.y, targetPosition.z));
+                }
+            }
+
+
+            // If no positions found, fall back to path positions
+            if (allAffectedTilePositions.Count == 0)
+            {
+                allAffectedTilePositions.AddRange(pathPositions);
+            }
         }
 
         public override void OnEnd()
@@ -357,7 +394,18 @@ namespace FaeMaze.HeartPowers
                 visualContainer = null;
             }
 
-            pathLightObjects.Clear();
+            // Clean up fog resources
+            if (fogMaterial != null)
+            {
+                Object.Destroy(fogMaterial);
+                fogMaterial = null;
+            }
+            if (pathMaskTexture != null)
+            {
+                Object.Destroy(pathMaskTexture);
+                pathMaskTexture = null;
+            }
+            fogQuad = null;
 
             // Clear Lured state from all affected visitors
             foreach (var visitor in affectedVisitors)
@@ -373,6 +421,7 @@ namespace FaeMaze.HeartPowers
             allPathsToHeart.Clear();
             allAffectedNodeIndices.Clear();
             allAffectedEdgeIndices.Clear();
+            allAffectedTilePositions.Clear();
         }
 
         public override void Update(float deltaTime)
@@ -381,8 +430,8 @@ namespace FaeMaze.HeartPowers
 
             animationTime += deltaTime;
 
-            // Animate the lights - move along path and update colors
-            UpdateFairyRingLights(deltaTime);
+            // Update fog wave animation
+            UpdatePowerFog(deltaTime);
 
             // Check for new visitors entering the affected area
             CheckForNewVisitorsOnAffectedArea();
@@ -392,397 +441,261 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Creates fairy ring style lights with trails along all paths to the heart.
-        /// Generates a fixed number of lights per affected node and edge for denser coverage.
+        /// Finds the furthest position from the heart among all affected positions.
+        /// Used for wave animation starting point.
         /// </summary>
-        private void CreateFairyRingStyleLights()
+        private void FindFurthestExtent()
+        {
+            furthestPosition = targetPosition;
+            float maxDist = 0f;
+
+            // Check ALL tile positions on affected nodes/edges
+            foreach (var pos in allAffectedTilePositions)
+            {
+                float dist = Vector3.Distance(pos, heartPosition);
+                if (dist > maxDist)
+                {
+                    maxDist = dist;
+                    furthestPosition = pos;
+                }
+            }
+
+        }
+
+        /// <summary>
+        /// Creates power fog covering all affected graph elements.
+        /// Fog is color-coded to the power and shows wave animations.
+        /// </summary>
+        private void CreatePowerFog()
         {
             if (allPathsToHeart.Count == 0)
                 return;
 
-            visualContainer = new GameObject($"MurmuringPathsLights_{instanceSourceId}");
+            visualContainer = new GameObject($"MurmuringPathsFog_{instanceSourceId}");
 
-            int lightIndex = 0;
+            // Calculate bounds covering all affected positions
+            CalculateFogBounds();
 
-            // Calculate total lights needed based on affected nodes and edges
-            int totalNodeLights = allAffectedNodeIndices.Count * LIGHTS_PER_NODE;
-            int totalEdgeLights = allAffectedEdgeIndices.Count * LIGHTS_PER_EDGE;
-            int totalLightsNeeded = totalNodeLights + totalEdgeLights;
+            // Generate path mask texture
+            GeneratePathMaskTexture();
 
-            // Ensure we have at least some lights
-            totalLightsNeeded = Mathf.Max(totalLightsNeeded, 4);
+            // Create fog material
+            CreateFogMaterial();
 
-            // Distribute lights across all paths proportionally
-            if (allPathsToHeart.Count > 0)
-            {
-                // Calculate total path length for proportional distribution
-                float[] pathLengths = new float[allPathsToHeart.Count];
-                float totalLength = 0f;
-                for (int pathIdx = 0; pathIdx < allPathsToHeart.Count; pathIdx++)
-                {
-                    var path = allPathsToHeart[pathIdx];
-                    float pathLen = CalculatePathLength(path);
-                    pathLengths[pathIdx] = pathLen;
-                    totalLength += pathLen;
-                }
-
-                // Create lights distributed across paths based on length
-                for (int pathIdx = 0; pathIdx < allPathsToHeart.Count; pathIdx++)
-                {
-                    var path = allPathsToHeart[pathIdx];
-                    if (path.Count < 2) continue;
-
-                    // Calculate lights for this path proportional to its length
-                    float pathProportion = totalLength > 0 ? pathLengths[pathIdx] / totalLength : 1f / allPathsToHeart.Count;
-                    int numLightsForPath = Mathf.Max(1, Mathf.RoundToInt(totalLightsNeeded * pathProportion));
-
-                    // Create lights for this path with staggered starting positions
-                    for (int i = 0; i < numLightsForPath; i++)
-                    {
-                        float startPos = (float)i / numLightsForPath;
-                        // Add some randomness to starting positions
-                        startPos += UnityEngine.Random.Range(-0.05f, 0.05f);
-                        startPos = Mathf.Clamp01(startPos);
-
-                        var pathLight = CreateSingleFairyLight(lightIndex, pathIdx, startPos);
-                        if (pathLight != null)
-                        {
-                            pathLightObjects.Add(pathLight);
-                            lightIndex++;
-                        }
-                    }
-                }
-            }
+            // Create fog quad
+            CreateFogQuad();
         }
 
         /// <summary>
-        /// Creates a single fairy ring style light with trail renderer.
+        /// Calculates bounds that cover all affected graph elements.
         /// </summary>
-        private PathLight CreateSingleFairyLight(int lightIndex, int pathIndex, float startingPosition)
+        private void CalculateFogBounds()
         {
-            if (pathIndex >= allPathsToHeart.Count)
-                return null;
+            fogBounds = new Bounds(targetPosition, Vector3.zero);
 
-            var path = allPathsToHeart[pathIndex];
-            if (path.Count < 2)
-                return null;
+            // Include heart position
+            fogBounds.Encapsulate(heartPosition);
 
-            // Get starting position along path
-            Vector3 startPos = GetPositionAlongPath(path, startingPosition);
-            startPos.z = LIGHT_Z_OFFSET;
-
-            // Create light object
-            GameObject lightObj = new GameObject($"FairyPathLight_{lightIndex}");
-            lightObj.transform.SetParent(visualContainer.transform);
-            lightObj.transform.position = startPos;
-
-            // Add point light component (matching FairyRingSphere style)
-            Light light = lightObj.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.range = LIGHT_RANGE;
-            light.intensity = LIGHT_INTENSITY;
-            light.shadows = LightShadows.None;
-            light.renderMode = LightRenderMode.Auto;
-
-            // Add trail renderer (matching FairyRingSphere style)
-            TrailRenderer trail = lightObj.AddComponent<TrailRenderer>();
-            trail.time = 2f;  // Long trail for light painting effect
-            trail.startWidth = 0.15f;
-            trail.endWidth = 0.03f;
-            trail.minVertexDistance = 0.01f;
-            trail.emitting = false; // Start disabled, enable after light moves
-            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            trail.receiveShadows = false;
-            trail.sortingOrder = 100;
-            trail.allowOcclusionWhenDynamic = false;
-
-            // Set up trail material for additive blending (like FairyRingSphere)
-            SetupTrailMaterial(trail);
-
-            // Create PathLight wrapper with random initial delay for staggered spawning
-            float initialDelay = Random.Range(0f, MAX_RESPAWN_DELAY);
-
-            // Initialize erratic movement with random parameters
-            float wanderAngle = Random.Range(0f, Mathf.PI * 2f);
-            float wanderSpeed = Random.Range(MIN_WANDER_SPEED, MAX_WANDER_SPEED);
-
-            PathLight pathLight = new PathLight
+            // Include ALL tile positions on affected nodes/edges
+            foreach (var pos in allAffectedTilePositions)
             {
-                gameObject = lightObj,
-                light = light,
-                trail = trail,
-                pathIndex = pathIndex,
-                normalizedPosition = 0f, // Always start at beginning
-                colorTimeOffset = Random.Range(0f, 10f), // Random phase offset for color
-                cycleDuration = Random.Range(1f, 3f), // Random cycle duration like FairyRingSphere
-                trailStarted = false, // Trail starts disabled
-                respawnDelay = Random.Range(MIN_RESPAWN_DELAY, MAX_RESPAWN_DELAY),
-                currentDelay = initialDelay, // Stagger initial spawns
-                isWaiting = initialDelay > 0f, // Start waiting if there's an initial delay
-
-                // Erratic movement initialization
-                wanderOffset = Vector2.zero,
-                wanderVelocity = new Vector2(Mathf.Cos(wanderAngle), Mathf.Sin(wanderAngle)) * wanderSpeed,
-                wanderChangeTimer = Random.Range(MIN_DIRECTION_CHANGE, MAX_DIRECTION_CHANGE),
-                wanderAmplitude = Random.Range(MIN_WANDER_AMPLITUDE, MAX_WANDER_AMPLITUDE),
-                wanderSpeed = wanderSpeed
-            };
-
-            // Hide light initially if waiting
-            if (pathLight.isWaiting)
-            {
-                lightObj.SetActive(false);
+                fogBounds.Encapsulate(pos);
             }
 
-            return pathLight;
+            // Add padding
+            fogBounds.Expand(FOG_PADDING * 2f);
+
         }
 
         /// <summary>
-        /// Sets up trail material for additive blending (matching FairyRingSphere).
+        /// Generates a mask texture showing only the affected path/node areas.
         /// </summary>
-        private void SetupTrailMaterial(TrailRenderer trail)
+        private void GeneratePathMaskTexture()
         {
-            if (trail == null) return;
+            int texWidth = Mathf.CeilToInt(fogBounds.size.x * MASK_PIXELS_PER_UNIT);
+            int texHeight = Mathf.CeilToInt(fogBounds.size.y * MASK_PIXELS_PER_UNIT);
 
-            // Try URP Particles shader first
-            var trailMaterial = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
-            if (trailMaterial.shader == null || trailMaterial.shader.name == "Hidden/InternalErrorShader")
+            // Clamp to reasonable size
+            texWidth = Mathf.Clamp(texWidth, 32, 512);
+            texHeight = Mathf.Clamp(texHeight, 32, 512);
+
+            pathMaskTexture = new Texture2D(texWidth, texHeight, TextureFormat.R8, false);
+            pathMaskTexture.filterMode = FilterMode.Bilinear;
+            pathMaskTexture.wrapMode = TextureWrapMode.Clamp;
+
+            Color[] pixels = new Color[texWidth * texHeight];
+
+            // Initialize all pixels to transparent (no fog)
+            for (int i = 0; i < pixels.Length; i++)
             {
-                trailMaterial = new Material(Shader.Find("Particles/Standard Unlit"));
+                pixels[i] = Color.black;
             }
-            if (trailMaterial.shader == null || trailMaterial.shader.name == "Hidden/InternalErrorShader")
+
+            // World to texture scale
+            float worldToTexX = texWidth / fogBounds.size.x;
+            float worldToTexY = texHeight / fogBounds.size.y;
+
+            // Paint all path positions with circular gradients
+            float tileRadius = 1.5f; // Radius of effect around each path point
+            int radiusPixels = Mathf.CeilToInt(tileRadius * Mathf.Max(worldToTexX, worldToTexY));
+
+            // Helper to paint a position onto the mask
+            void PaintPosition(Vector3 pos)
             {
-                trailMaterial = new Material(Shader.Find("Sprites/Default"));
-            }
+                float worldX = pos.x - fogBounds.min.x;
+                float worldY = pos.y - fogBounds.min.y;
 
-            // Configure for additive blending
-            trailMaterial.SetFloat("_Surface", 1); // Transparent
-            trailMaterial.SetFloat("_Blend", 4); // Additive blend mode
-            trailMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            trailMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
-            trailMaterial.SetInt("_ZWrite", 0);
-            trailMaterial.renderQueue = 3500;
-            trailMaterial.SetColor("_BaseColor", Color.white);
-            trailMaterial.SetColor("_Color", Color.white);
+                int centerTexX = Mathf.RoundToInt(worldX * worldToTexX);
+                int centerTexY = Mathf.RoundToInt(worldY * worldToTexY);
 
-            trailMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            trailMaterial.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-
-            trail.material = trailMaterial;
-        }
-
-        /// <summary>
-        /// Updates all fairy ring style lights - movement and color cycling.
-        /// </summary>
-        private void UpdateFairyRingLights(float deltaTime)
-        {
-            if (allPathsToHeart.Count == 0 || pathLightObjects.Count == 0)
-                return;
-
-            foreach (var pathLight in pathLightObjects)
-            {
-                if (pathLight == null || pathLight.gameObject == null)
-                    continue;
-
-                // Handle waiting state (random spawn delays)
-                if (pathLight.isWaiting)
+                // Paint circular gradient
+                for (int dy = -radiusPixels; dy <= radiusPixels; dy++)
                 {
-                    pathLight.currentDelay -= deltaTime;
-                    if (pathLight.currentDelay <= 0f)
+                    for (int dx = -radiusPixels; dx <= radiusPixels; dx++)
                     {
-                        // Done waiting, activate the light
-                        pathLight.isWaiting = false;
-                        pathLight.gameObject.SetActive(true);
-                        pathLight.normalizedPosition = 0f;
-                        pathLight.trailStarted = false;
-                    }
-                    continue; // Skip movement while waiting
-                }
+                        int px = centerTexX + dx;
+                        int py = centerTexY + dy;
 
-                // Move light along its path toward the heart
-                if (pathLight.pathIndex < allPathsToHeart.Count)
-                {
-                    var path = allPathsToHeart[pathLight.pathIndex];
-                    float pathLength = CalculatePathLength(path);
-
-                    if (pathLength > 0)
-                    {
-                        // Move toward heart (position increases toward 1.0)
-                        pathLight.normalizedPosition += (moveSpeed / pathLength) * deltaTime;
-
-                        // Enable trail after light has moved 2% along the path
-                        if (!pathLight.trailStarted && pathLight.normalizedPosition > 0.02f)
-                        {
-                            pathLight.trailStarted = true;
-                            if (pathLight.trail != null)
-                            {
-                                pathLight.trail.emitting = true;
-                            }
-                        }
-
-                        // When reaching the end of the path (heart), respawn after delay
-                        if (pathLight.normalizedPosition >= PATH_END_THRESHOLD)
-                        {
-                            // Hide the light and start waiting
-                            pathLight.gameObject.SetActive(false);
-                            pathLight.isWaiting = true;
-                            pathLight.currentDelay = Random.Range(MIN_RESPAWN_DELAY, MAX_RESPAWN_DELAY);
-                            pathLight.normalizedPosition = 0f;
-                            pathLight.trailStarted = false;
-
-                            // Reset wander for next cycle
-                            pathLight.wanderOffset = Vector2.zero;
-                            float newAngle = Random.Range(0f, Mathf.PI * 2f);
-                            pathLight.wanderVelocity = new Vector2(Mathf.Cos(newAngle), Mathf.Sin(newAngle)) * pathLight.wanderSpeed;
-
-                            // Clear the trail
-                            if (pathLight.trail != null)
-                            {
-                                pathLight.trail.Clear();
-                                pathLight.trail.emitting = false;
-                            }
+                        if (px < 0 || px >= texWidth || py < 0 || py >= texHeight)
                             continue;
+
+                        float distWorld = Mathf.Sqrt(dx * dx / (worldToTexX * worldToTexX) + dy * dy / (worldToTexY * worldToTexY));
+
+                        // Calculate fog amount (1 = full fog, 0 = no fog)
+                        float fogAmount;
+                        if (distWorld <= tileRadius * 0.5f)
+                        {
+                            fogAmount = 1f;
+                        }
+                        else if (distWorld <= tileRadius)
+                        {
+                            float t = (distWorld - tileRadius * 0.5f) / (tileRadius * 0.5f);
+                            fogAmount = Mathf.SmoothStep(1f, 0f, t);
+                        }
+                        else
+                        {
+                            fogAmount = 0f;
                         }
 
-                        // Update erratic wandering
-                        UpdateErraticWander(pathLight, deltaTime);
-
-                        // Get base position along path
-                        Vector3 basePos = GetPositionAlongPath(path, pathLight.normalizedPosition);
-
-                        // Apply wander offset perpendicular to path direction
-                        Vector3 newPos = basePos;
-                        newPos.x += pathLight.wanderOffset.x;
-                        newPos.y += pathLight.wanderOffset.y;
-                        newPos.z = LIGHT_Z_OFFSET;
-                        pathLight.gameObject.transform.position = newPos;
+                        // Take maximum (most visible) value
+                        int pixelIndex = py * texWidth + px;
+                        pixels[pixelIndex].r = Mathf.Max(pixels[pixelIndex].r, fogAmount);
                     }
                 }
-
-                // Update rainbow color cycling (matching FairyRingSphere style)
-                float t = animationTime + pathLight.colorTimeOffset;
-                Color currentColor = EvaluateRainbowCycle(t, pathLight.cycleDuration / RainbowHues.Length);
-
-                // Update light color
-                if (pathLight.light != null)
-                {
-                    pathLight.light.color = currentColor;
-                }
-
-                // Update trail color gradient
-                if (pathLight.trail != null)
-                {
-                    Color brightColor = currentColor * 2f; // HDR boost for glow
-
-                    Gradient gradient = new Gradient();
-                    gradient.SetKeys(
-                        new GradientColorKey[]
-                        {
-                            new GradientColorKey(brightColor, 0f),
-                            new GradientColorKey(currentColor, 0.4f),
-                            new GradientColorKey(currentColor * 0.5f, 1f)
-                        },
-                        new GradientAlphaKey[]
-                        {
-                            new GradientAlphaKey(1f, 0f),
-                            new GradientAlphaKey(0.8f, 0.2f),
-                            new GradientAlphaKey(0.4f, 0.5f),
-                            new GradientAlphaKey(0f, 1f)
-                        }
-                    );
-                    pathLight.trail.colorGradient = gradient;
-                    pathLight.trail.startColor = brightColor;
-                    pathLight.trail.endColor = new Color(currentColor.r * 0.5f, currentColor.g * 0.5f, currentColor.b * 0.5f, 0f);
-                }
             }
+
+            // Paint ALL tile positions on affected nodes/edges
+            foreach (var pos in allAffectedTilePositions)
+            {
+                PaintPosition(pos);
+            }
+
+            pathMaskTexture.SetPixels(pixels);
+            pathMaskTexture.Apply();
         }
 
         /// <summary>
-        /// Updates the erratic wandering behavior for a path light.
-        /// The light moves in random directions but stays within its amplitude bounds.
+        /// Creates the fog material with the PowerFog shader.
         /// </summary>
-        private void UpdateErraticWander(PathLight pathLight, float deltaTime)
+        private void CreateFogMaterial()
         {
-            // Update direction change timer
-            pathLight.wanderChangeTimer -= deltaTime;
-            if (pathLight.wanderChangeTimer <= 0f)
+            var shader = Shader.Find("Custom/PowerFog");
+            if (shader == null)
             {
-                // Change to a new random direction
-                float newAngle = Random.Range(0f, Mathf.PI * 2f);
-                float speedVariation = Random.Range(0.7f, 1.3f);
-                pathLight.wanderVelocity = new Vector2(
-                    Mathf.Cos(newAngle),
-                    Mathf.Sin(newAngle)
-                ) * pathLight.wanderSpeed * speedVariation;
-
-                // Reset timer with some randomness
-                pathLight.wanderChangeTimer = Random.Range(MIN_DIRECTION_CHANGE, MAX_DIRECTION_CHANGE);
+                Debug.LogWarning("PowerFog shader not found, falling back to default");
+                shader = Shader.Find("Sprites/Default");
             }
 
-            // Apply velocity to offset
-            pathLight.wanderOffset += pathLight.wanderVelocity * deltaTime;
-
-            // Clamp to amplitude bounds with soft bounce
-            float currentDistance = pathLight.wanderOffset.magnitude;
-            if (currentDistance > pathLight.wanderAmplitude)
-            {
-                // Reflect velocity inward when hitting boundary
-                Vector2 normal = pathLight.wanderOffset.normalized;
-                pathLight.wanderVelocity = Vector2.Reflect(pathLight.wanderVelocity, -normal);
-
-                // Also nudge the offset back inside
-                pathLight.wanderOffset = normal * pathLight.wanderAmplitude * 0.95f;
-
-                // Add some randomness to the reflection
-                float perturbAngle = Random.Range(-0.5f, 0.5f);
-                float cos = Mathf.Cos(perturbAngle);
-                float sin = Mathf.Sin(perturbAngle);
-                Vector2 rotated = new Vector2(
-                    pathLight.wanderVelocity.x * cos - pathLight.wanderVelocity.y * sin,
-                    pathLight.wanderVelocity.x * sin + pathLight.wanderVelocity.y * cos
-                );
-                pathLight.wanderVelocity = rotated;
-            }
+            fogMaterial = new Material(shader);
+            UpdateFogMaterialProperties();
         }
 
         /// <summary>
-        /// Returns a smoothly cycling color through the rainbow (same as FairyRingSphere).
+        /// Updates the fog material properties.
         /// </summary>
-        private static Color EvaluateRainbowCycle(float timeSeconds, float holdDuration)
+        private void UpdateFogMaterialProperties()
         {
-            int colorCount = RainbowHues.Length;
-            float totalCycleDuration = colorCount * holdDuration;
+            if (fogMaterial == null) return;
 
-            if (holdDuration <= 0.0001f) return Color.HSVToRGB(RainbowHues[0], 0.8f, 1f);
+            // Colors
+            fogMaterial.SetColor("_FogColor", PowerFogColor);
+            fogMaterial.SetColor("_FogColorDark", PowerFogColorDark);
+            fogMaterial.SetColor("_GlowColor", PowerGlowColor);
 
-            float cycleTime = Mathf.Repeat(timeSeconds, totalCycleDuration);
-            int currentColorIndex = Mathf.FloorToInt(cycleTime / holdDuration);
-            currentColorIndex = Mathf.Clamp(currentColorIndex, 0, colorCount - 1);
-
-            float timeInSegment = cycleTime - (currentColorIndex * holdDuration);
-            float segmentProgress = timeInSegment / holdDuration;
-
-            float transitionT = 0f;
-            if (segmentProgress > 0.5f)
+            // Path mask
+            if (pathMaskTexture != null)
             {
-                float transitionProgress = (segmentProgress - 0.5f) * 2f;
-                transitionT = 0.5f - 0.5f * Mathf.Cos(Mathf.PI * transitionProgress);
+                fogMaterial.SetTexture("_PathMask", pathMaskTexture);
             }
 
-            float fromH = RainbowHues[currentColorIndex];
-            float toH = RainbowHues[(currentColorIndex + 1) % colorCount];
+            // Wave animation
+            fogMaterial.SetFloat("_WaveProgress", waveProgress);
+            fogMaterial.SetVector("_HeartPosition", new Vector4(heartPosition.x, heartPosition.y, 0, 0));
+            fogMaterial.SetVector("_FurthestPosition", new Vector4(furthestPosition.x, furthestPosition.y, 0, 0));
+        }
 
-            float hDiff = toH - fromH;
-            if (hDiff > 0.5f) hDiff -= 1f;
-            else if (hDiff < -0.5f) hDiff += 1f;
-            float h = fromH + hDiff * transitionT;
-            if (h < 0f) h += 1f;
-            if (h > 1f) h -= 1f;
+        /// <summary>
+        /// Creates the fog quad covering the affected area.
+        /// </summary>
+        private void CreateFogQuad()
+        {
+            fogQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            fogQuad.name = "PowerFogQuad";
+            fogQuad.transform.SetParent(visualContainer.transform);
 
-            const float saturation = 0.8f;
-            const float value = 1.0f;
+            // Position and scale
+            fogQuad.transform.position = new Vector3(fogBounds.center.x, fogBounds.center.y, FOG_Z_POSITION);
+            fogQuad.transform.localScale = new Vector3(fogBounds.size.x, fogBounds.size.y, 1f);
+            fogQuad.transform.rotation = Quaternion.identity;
 
-            return Color.HSVToRGB(h, saturation, value);
+            // Remove collider
+            var collider = fogQuad.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.Destroy(collider);
+            }
+
+            // Apply material
+            var renderer = fogQuad.GetComponent<Renderer>();
+            renderer.material = fogMaterial;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        /// <summary>
+        /// Updates the power fog animation (wave sweep from furthest to heart).
+        /// </summary>
+        private void UpdatePowerFog(float deltaTime)
+        {
+            if (fogMaterial == null) return;
+
+            // Update wave animation
+            if (waveActive)
+            {
+                waveProgress += WAVE_SPEED * deltaTime;
+
+                if (waveProgress >= 1f)
+                {
+                    // Wave reached heart, start pause
+                    waveProgress = 1f;
+                    waveActive = false;
+                    wavePauseTimer = WAVE_CYCLE_PAUSE;
+                }
+            }
+            else
+            {
+                // Pausing between waves
+                wavePauseTimer -= deltaTime;
+                if (wavePauseTimer <= 0f)
+                {
+                    // Start new wave from furthest extent
+                    waveProgress = 0f;
+                    waveActive = true;
+                }
+            }
+
+            // Update shader
+            fogMaterial.SetFloat("_WaveProgress", waveProgress);
         }
 
         /// <summary>
@@ -879,120 +792,9 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            // Use the pre-computed HeartPower1 position index
-            var indexedPositions = mazeData.GetHeartPower1Positions(allAffectedNodeIndices, allAffectedEdgeIndices);
 
-            // Calculate distance from heart to focal point (for filtering edge positions)
-            float targetDistFromHeart = Vector2.Distance(heartPos2D, targetPos2D);
-
-            // Convert Vector2 positions to Vector3
-            // For the triggering edge, only include positions BETWEEN the heart and the activation point
-            // (i.e., closer to or equal distance from heart as the activation point)
-            foreach (var pos2D in indexedPositions)
-            {
-                // When triggered on an edge, filter out positions that are FARTHER from the heart
-                // than the activation point (they are beyond the effect boundary)
-                if (affectedEdgeIndex >= 0)
-                {
-                    // Check if this position is on the triggering edge
-                    var tile = FindNearestWalkableTile(mazeData, pos2D);
-                    if (tile != null && tile.EdgeIndex == affectedEdgeIndex)
-                    {
-                        // Include positions that are closer to or at the same distance as the activation point
-                        // These are the positions BETWEEN the heart and activation point
-                        float posDistFromHeart = Vector2.Distance(heartPos2D, pos2D);
-                        if (posDistFromHeart > targetDistFromHeart + 0.5f) // Small tolerance
-                        {
-                            // This position is beyond the activation point (away from heart), skip it
-                            continue;
-                        }
-                        // Positions closer to heart than activation point ARE included (no continue)
-                    }
-                }
-
-                positions.Add(new Vector3(pos2D.x, pos2D.y, targetPosition.z));
-            }
-
-            // Limit total positions to avoid performance issues (max ~60 light trails)
-            if (positions.Count > 60)
-            {
-                var sampled = new List<Vector3>();
-                float sampleStep = (float)positions.Count / 60f;
-                for (int i = 0; i < 60; i++)
-                {
-                    int idx = Mathf.Min((int)(i * sampleStep), positions.Count - 1);
-                    sampled.Add(positions[idx]);
-                }
-                positions = sampled;
-            }
-
-            // If no positions found, fall back to target position
-            if (positions.Count == 0)
-            {
-                positions.Add(targetPosition);
-            }
-
-            return positions;
-        }
-
-        /// <summary>
-        /// Gets all walkable positions on the affected node or edge (legacy method).
-        /// </summary>
-        private List<Vector3> GetAllAffectedPositions()
-        {
-            var positions = new List<Vector3>();
-
-            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
-            {
-                // Fallback to just target position
-                positions.Add(targetPosition);
-                return positions;
-            }
-
-            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
-
-            // If we have an affected node or edge, get all walkable tiles on it
-            if (affectedNodeIndex >= 0 || affectedEdgeIndex >= 0)
-            {
-                // Search a larger area to find all tiles belonging to this node/edge
-                float searchRadius = 20f; // Large search to cover entire node/edge
-                Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
-                var nearbyTiles = mazeData.GetTilesNear(targetPos2D, searchRadius);
-
-                // Filter to tiles on the affected node or edge
-                foreach (var tile in nearbyTiles)
-                {
-                    if (!tile.Walkable) continue;
-
-                    bool onAffectedNode = affectedNodeIndex >= 0 && tile.NodeIndex == affectedNodeIndex;
-                    bool onAffectedEdge = affectedEdgeIndex >= 0 && tile.EdgeIndex == affectedEdgeIndex;
-
-                    if (onAffectedNode || onAffectedEdge)
-                    {
-                        positions.Add(new Vector3(tile.Position.x, tile.Position.y, targetPosition.z));
-                    }
-                }
-
-                // Sample positions to avoid too many paths (max ~8 light trails)
-                if (positions.Count > 8)
-                {
-                    var sampled = new List<Vector3>();
-                    float step = (float)positions.Count / 8f;
-                    for (int i = 0; i < 8; i++)
-                    {
-                        int idx = Mathf.Min((int)(i * step), positions.Count - 1);
-                        sampled.Add(positions[idx]);
-                    }
-                    positions = sampled;
-                }
-            }
-
-            // If no positions found, fall back to target position
-            if (positions.Count == 0)
-            {
-                positions.Add(targetPosition);
-            }
-
+            // Return target position - actual positions are gathered in PopulateAllAffectedTilePositions
+            positions.Add(targetPosition);
             return positions;
         }
 
@@ -1189,14 +991,20 @@ namespace FaeMaze.HeartPowers
         private void ApplyLureToVisitorsOnAffectedArea()
         {
             var activeVisitors = VisitorRegistry.All;
-            if (activeVisitors == null) return;
+            if (activeVisitors == null)
+            {
+                return;
+            }
+
 
             foreach (var visitor in activeVisitors)
             {
                 if (visitor == null || visitor.State == VisitorControllerBase.VisitorState.Consumed)
                     continue;
 
-                if (IsVisitorOnAffectedArea(visitor))
+                bool isOnArea = IsVisitorOnAffectedArea(visitor);
+
+                if (isOnArea)
                 {
                     LureVisitorToHeart(visitor);
                 }
@@ -1205,6 +1013,7 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>
         /// Checks for new visitors entering the affected area and lures them.
+        /// Called every frame to catch visitors who walk into the affected zone.
         /// </summary>
         private void CheckForNewVisitorsOnAffectedArea()
         {
@@ -1213,12 +1022,19 @@ namespace FaeMaze.HeartPowers
 
             foreach (var visitor in activeVisitors)
             {
-                if (visitor == null || visitor.State == VisitorControllerBase.VisitorState.Consumed)
+                if (visitor == null)
                     continue;
 
+                // Skip visitors in terminal or non-lurable states
+                if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
+                    continue;
+
+                // Skip visitors already affected by this power instance
                 if (affectedVisitors.Contains(visitor))
                     continue;
 
+                // Check if visitor is on the affected area
                 if (IsVisitorOnAffectedArea(visitor))
                 {
                     LureVisitorToHeart(visitor);
@@ -1228,29 +1044,49 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>
         /// Lures a visitor toward the heart.
-        /// Generates a path from the visitor's current position to the heart,
-        /// not from the activation point (to avoid backtracking).
+        /// Uses the visitor's own pathfinding to generate a path from their current position to the heart.
+        /// This ensures the path is compatible with the visitor's movement system.
         /// </summary>
         private void LureVisitorToHeart(VisitorControllerBase visitor)
         {
             if (visitor == null) return;
 
+
+            // Set lured state first
             visitor.SetLured(true);
 
-            // Generate a path from the VISITOR's current position to the heart
-            // This prevents backtracking when visitor is between activation point and heart
+            // Use the visitor's own pathfinding to build a path to the heart
+            // This ensures compatibility with the visitor's spline-based movement system
             if (manager.MazeGrid != null)
             {
-                var visitorPath = GeneratePathToHeart(visitor.transform.position);
-                if (visitorPath.Count >= 2)
+                Vector3 heartPos = manager.MazeGrid.HeartWorldPosition;
+
+                // Use visitor's BuildWorldPath for consistent pathfinding
+                var visitorPath = visitor.BuildWorldPath(visitor.transform.position, heartPos);
+                if (visitorPath != null && visitorPath.Count >= 2)
                 {
                     visitor.SetPathDirectly(visitorPath);
                 }
-                else if (pathPositions.Count > 0)
+                else
                 {
-                    // Fallback to activation path if visitor path generation failed
-                    visitor.SetPathDirectly(new List<Vector3>(pathPositions));
+                    // Fallback: try the effect's internal pathfinding
+                    var effectPath = GeneratePathToHeart(visitor.transform.position);
+                    if (effectPath.Count >= 2)
+                    {
+                        visitor.SetPathDirectly(effectPath);
+                    }
+                    else if (pathPositions.Count > 0)
+                    {
+                        // Last resort: use activation path
+                        visitor.SetPathDirectly(new List<Vector3>(pathPositions));
+                    }
+                    else
+                    {
+                    }
                 }
+            }
+            else
+            {
             }
 
             affectedVisitors.Add(visitor);

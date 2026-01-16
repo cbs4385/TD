@@ -475,13 +475,33 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void NotifyVisitorConsumed()
         {
+            Debug.Log($"[HeartPowerManager] NotifyVisitorConsumed called. Active powers count: {activePowers.Count}");
+            foreach (var kvp in activePowers)
+            {
+                Debug.Log($"[HeartPowerManager] Active power: {kvp.Key}, Effect type: {kvp.Value?.GetType().Name}");
+            }
+
+            bool hasMurmuringPaths = activePowers.ContainsKey(HeartPowerType.MurmuringPaths);
+            Debug.Log($"[HeartPowerManager] MurmuringPaths active: {hasMurmuringPaths}");
+
             // Notify any active toggle power effects about the consumption
             if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect))
             {
+                Debug.Log($"[HeartPowerManager] Found MurmuringPaths in activePowers. Effect is null: {effect == null}");
                 if (effect is MurmuringPathsEffect murmuringEffect)
                 {
+                    Debug.Log("[HeartPowerManager] Casting succeeded, calling OnVisitorConsumed on MurmuringPathsEffect");
                     murmuringEffect.OnVisitorConsumed();
+                    Debug.Log("[HeartPowerManager] OnVisitorConsumed call completed");
                 }
+                else
+                {
+                    Debug.LogWarning($"[HeartPowerManager] Effect is not MurmuringPathsEffect! Actual type: {effect?.GetType().Name}");
+                }
+            }
+            else
+            {
+                Debug.Log("[HeartPowerManager] MurmuringPaths NOT found in activePowers dictionary");
             }
         }
 
@@ -613,9 +633,14 @@ namespace FaeMaze.HeartPowers
 
                 effect.OnStart();
 
-                if (effect.Duration > 0)
+                // Toggle powers (like MurmuringPaths) use consumption-based expiration, not duration
+                // They need to be in activePowers even if Duration is 0
+                bool isTogglePower = powerType == HeartPowerType.MurmuringPaths;
+
+                if (effect.Duration > 0 || isTogglePower)
                 {
                     activePowers[powerType] = effect;
+                    Debug.Log($"[HeartPowerManager] Added {powerType} to activePowers. Duration={effect.Duration}, IsToggle={isTogglePower}");
                     if (debugLog)
                     {
                     }

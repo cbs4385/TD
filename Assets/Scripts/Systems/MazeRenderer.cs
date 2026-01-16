@@ -129,7 +129,9 @@ namespace FaeMaze.Systems
 
         // Wall generation constants - shared between initial render and incremental updates
         private const float WALL_STEP_SIZE = 0.8f; // 4x larger for 75% fewer walls
-        private const float PATH_HALF_WIDTH = 0f; // No padding around path edges
+        // PATH_HALF_WIDTH = 0 keeps walls tight against path edges
+        // Path tile colliders are reduced to 2/3 size to prevent false collision on curves
+        private const float PATH_HALF_WIDTH = 0f;
         private const int WALL_DEPTH = 3;
         private const float WALL_SPACING = 0.8f; // Increased for more visible wall depth
         private const float EDGE_END_SKIP = 1.0f;
@@ -577,12 +579,20 @@ namespace FaeMaze.Systems
                 renderer.material = pathMaterial;
             }
 
-            // Remove collider (not needed for visual)
-            Collider col = cylinder.GetComponent<Collider>();
-            if (col != null)
+            // Replace CapsuleCollider with SphereCollider for reliable collision detection.
+            // CapsuleCollider behavior is affected by the 90° rotation, making radius calculation complex.
+            // SphereCollider with explicit radius in local space (will be scaled by transform) is simpler.
+            CapsuleCollider capCol = cylinder.GetComponent<CapsuleCollider>();
+            if (capCol != null)
             {
-                Destroy(col);
+                Object.Destroy(capCol);
             }
+            SphereCollider sphereCol = cylinder.AddComponent<SphereCollider>();
+            // Local radius 0.5 * scale (diameter) = worldRadius, which is nodeRadius * tileSize
+            sphereCol.radius = 0.5f;
+            sphereCol.isTrigger = true;
+            // Tag the cylinder so WallCollisionChecker can identify it
+            cylinder.tag = "MazeNode";
 
             // DO NOT add to pathTiles - keep cylinder as separate object to avoid batching distortion
             // Cylinders cannot be combined with cube meshes properly
@@ -665,32 +675,22 @@ namespace FaeMaze.Systems
                     Vector2 pathPos = Vector2.Lerp(seg.Start, seg.End, t);
 
                     // Check positions perpendicular to the edge throughout the wall border depth
+                    // ARCHITECTURE: Place ALL walls unconditionally.
+                    // WallCollisionChecker component handles physics-based collision removal.
                     for (float dist = stepSize; dist <= wallBorderDepth + stepSize; dist += stepSize * 0.5f)
                     {
                         foreach (float side in new[] { 1f, -1f })
                         {
                             Vector2 checkPos = pathPos + seg.Perpendicular * side * dist;
 
-                            // Skip if already occupied by path
+                            // Skip if already occupied by path (this is about path positions, not wall collision)
                             if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
 
-                            // Skip if inside a node column
-                            bool insideNode = false;
-                            foreach (var node in forestState.Nodes)
-                            {
-                                if (Vector2.Distance(checkPos, node.Position) < nodeRadius)
-                                {
-                                    insideNode = true;
-                                    break;
-                                }
-                            }
-                            if (insideNode) continue;
+                            // REMOVED: Manual distance checks for insideNode and CheckWallPathIntersection
+                            // These violated the architecture. Wall collision removal is handled by
+                            // WallCollisionChecker component using Unity physics.
 
-                            // Check if wall would intersect path
-                            Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
-                            if (intersection.HasValue) continue;
-
-                            // Found a gap - fill it
+                            // Place the wall - WallCollisionChecker handles collision removal
                             wallPositions.Add(checkPos);
                             float orientationDegrees = Mathf.Atan2(seg.Perpendicular.y, seg.Perpendicular.x) * Mathf.Rad2Deg;
                             if (side < 0) orientationDegrees += 180f;
@@ -748,32 +748,22 @@ namespace FaeMaze.Systems
                             Vector2 pathPos = Vector2.Lerp(segStart, segEnd, t);
 
                             // Check positions perpendicular to the edge throughout the wall border depth
+                            // ARCHITECTURE: Place ALL walls unconditionally.
+                            // WallCollisionChecker component handles physics-based collision removal.
                             for (float dist = stepSize; dist <= wallBorderDepth + stepSize; dist += stepSize * 0.5f)
                             {
                                 foreach (float side in new[] { 1f, -1f })
                                 {
                                     Vector2 checkPos = pathPos + perpendicular * side * dist;
 
-                                    // Skip if already occupied by path
+                                    // Skip if already occupied by path (this is about path positions, not wall collision)
                                     if (IsPositionOccupied(checkPos, occupiedPositions)) continue;
 
-                                    // Skip if inside a node column
-                                    bool insideNode = false;
-                                    foreach (var node in forestState.Nodes)
-                                    {
-                                        if (Vector2.Distance(checkPos, node.Position) < nodeRadius)
-                                        {
-                                            insideNode = true;
-                                            break;
-                                        }
-                                    }
-                                    if (insideNode) continue;
+                                    // REMOVED: Manual distance checks for insideNode and CheckWallPathIntersection
+                                    // These violated the architecture. Wall collision removal is handled by
+                                    // WallCollisionChecker component using Unity physics.
 
-                                    // Check if wall would intersect path
-                                    Vector2? intersection = CheckWallPathIntersection(checkPos, wallRadius);
-                                    if (intersection.HasValue) continue;
-
-                                    // Found a gap - fill it
+                                    // Place the wall - WallCollisionChecker handles collision removal
                                     wallPositions.Add(checkPos);
                                     float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
                                     if (side < 0) orientationDegrees += 180f;
@@ -798,116 +788,52 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets an adjusted wall position that doesn't intersect node columns or path tiles.
-        /// If the original position intersects, translates it along the shortest vector toward void.
-        /// Returns null if no valid position can be found.
+        /// Gets an adjusted wall position.
+        /// ARCHITECTURE: Wall overlap IS allowed. Walls are placed unconditionally.
+        /// Collision detection and removal is handled by WallCollisionChecker component using Unity physics.
+        /// DO NOT add distance checks or intersection tests here - that violates the architecture.
         /// </summary>
         private Vector2? GetAdjustedWallPosition(Vector2 wallPos, Vector2 pushDirection,
             PlanarForestMazeGenerator.ForestMapState forestState, List<Vector2> wallPositions)
         {
-            // Wall overlap is allowed and encouraged - multiple walls can share the same position
-            // to ensure complete border coverage. Unity handles any visual overlaps.
-            // Delete walls that intersect paths or are inside node columns (don't push them).
-
-            float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
-            float wallRadius = 0.65f; // Wall model radius
-
-            // Check if inside any node column - delete wall
-            foreach (var node in forestState.Nodes)
-            {
-                float distToNode = Vector2.Distance(wallPos, node.Position);
-                float minDist = nodeRadius + nodeBuffer;
-
-                if (distToNode < minDist)
-                {
-                    // Inside a node column - delete wall
-                    return null;
-                }
-            }
-
-            // Check if wall intersects a path tile - delete wall
-            Vector2? pathIntersection = CheckWallPathIntersection(wallPos, wallRadius);
-            if (pathIntersection.HasValue)
-            {
-                // Intersects path - delete wall
-                return null;
-            }
-
-            // Position is valid - place the wall
+            // ARCHITECTURE: Wall overlap is allowed and encouraged.
+            // DO NOT check for node column intersection here - that's a manual distance check.
+            // DO NOT check for path tile intersection here - that's a manual distance check.
+            //
+            // Wall collision removal is handled AFTER placement by WallCollisionChecker component
+            // which uses Unity physics (OverlapSphere) to detect collisions.
+            //
+            // Simply return the position - ALL walls get placed, then physics handles removal.
             return wallPos;
         }
 
         /// <summary>
-        /// Checks if a wall at the given position would intersect any path tile.
-        /// Uses spatial hash for fast lookup.
-        /// Returns the position of the intersecting path tile, or null if no intersection.
+        /// DEPRECATED: Manual intersection checks are prohibited.
+        /// Wall collision removal is handled by WallCollisionChecker using Unity physics.
+        /// This method exists only for backwards compatibility and throws an exception.
         /// </summary>
+        [System.Obsolete("VIOLATION: Wall intersection checks must use Unity physics (WallCollisionChecker), not manual distance checks. This method will throw.", true)]
         private Vector2? CheckWallPathIntersection(Vector2 wallPos, float wallRadius)
         {
-            // Use spatial hash for fast check - wall intersects if it's close to any path position
-            if (occupiedPositionHash != null && occupiedPositionHash.Count > 0)
-            {
-                // Check cells that could contain positions within wallRadius
-                int cellRadius = Mathf.CeilToInt(wallRadius / POSITION_HASH_CELL_SIZE) + 1;
-                int baseX = Mathf.FloorToInt(wallPos.x / POSITION_HASH_CELL_SIZE);
-                int baseY = Mathf.FloorToInt(wallPos.y / POSITION_HASH_CELL_SIZE);
-
-                for (int dx = -cellRadius; dx <= cellRadius; dx++)
-                {
-                    for (int dy = -cellRadius; dy <= cellRadius; dy++)
-                    {
-                        int x = baseX + dx;
-                        int y = baseY + dy;
-                        long key = ((long)x << 32) | (uint)y;
-                        if (occupiedPositionHash.TryGetValue(key, out var cellPositions))
-                        {
-                            // Check actual distances to positions in this cell
-                            foreach (var pathPos in cellPositions)
-                            {
-                                if (Vector2.Distance(wallPos, pathPos) < wallRadius)
-                                {
-                                    return pathPos;
-                                }
-                            }
-                        }
-                    }
-                }
-                return null;
-            }
-
-            // Fallback to linear search
-            for (int i = 0; i < occupiedPositions.Count; i++)
-            {
-                Vector2 pathPos = occupiedPositions[i];
-                float dist = Vector2.Distance(wallPos, pathPos);
-                if (dist < wallRadius)
-                {
-                    return pathPos;
-                }
-            }
-
-            return null;
+            throw new System.InvalidOperationException(
+                "[MazeRenderer] CheckWallPathIntersection is DEPRECATED. " +
+                "Wall collision detection must use Unity physics via WallCollisionChecker component. " +
+                "DO NOT use manual distance/intersection checks to determine wall validity.");
         }
 
         /// <summary>
-        /// Simple check if a wall position is valid (for cases where we don't want translation).
-        /// Walls are allowed to overlap with each other and with path tiles.
-        /// Only rejects walls inside node columns.
+        /// DEPRECATED: Manual distance checks are prohibited.
+        /// Wall collision detection is handled by WallCollisionChecker using Unity physics.
+        /// This method exists only for backwards compatibility and throws an exception.
         /// </summary>
+        [System.Obsolete("VIOLATION: Wall validity checks must use Unity physics (WallCollisionChecker), not manual distance checks. This method will throw.", true)]
         private bool IsWallPositionValid(Vector2 wallPos, PlanarForestMazeGenerator.ForestMapState forestState,
             List<Vector2> wallPositions)
         {
-            float nodeBuffer = 0.0f; // No buffer - walls should touch node column edges
-
-            // Wall overlap is allowed - only reject if inside node column
-            foreach (var node in forestState.Nodes)
-            {
-                float distToNode = Vector2.Distance(wallPos, node.Position);
-                if (distToNode < nodeRadius + nodeBuffer)
-                    return false;
-            }
-
-            return true;
+            throw new System.InvalidOperationException(
+                "[MazeRenderer] IsWallPositionValid is DEPRECATED. " +
+                "Wall collision detection must use Unity physics via WallCollisionChecker component. " +
+                "DO NOT use manual distance checks to determine wall validity.");
         }
 
         /// <summary>
@@ -1129,7 +1055,7 @@ namespace FaeMaze.Systems
         /// Only renders LEFT side wall to avoid intersection at narrow frontier ends.
         /// </summary>
         private int RenderFrontierEndCap(Vector2 frontierEnd, Vector2 frontierDir, Transform mazeOrigin,
-            float stepSize, float pathHalfWidth, int wallDepth, float wallSpacing, float edgeEndSkip)
+            float stepSize, float pathHalfWidth, int wallDepth, float wallSpacing, GraphElementWallContainer wallContainer)
         {
             int tileCount = 0;
             // perpendicular: +X is to the right when facing frontierDir
@@ -1141,37 +1067,39 @@ namespace FaeMaze.Systems
             // - Portal faces -Y (back toward node)
 
             // Rear wall segments: Y=1, X from -1 to 1 (5 segments)
-            // These face away from the path, use LOD2
+            // Orientation: wall faces back toward the path (-frontierDir)
+            float rearOrientationDegrees = Mathf.Atan2(-frontierDir.y, -frontierDir.x) * Mathf.Rad2Deg;
             float[] rearX = { -1f, -0.5f, 0f, 0.5f, 1f };
             foreach (float x in rearX)
             {
                 Vector2 wallPos = frontierEnd + frontierDir * 1f + perpendicular * x;
                 Vector3 worldPos = ToVector3(wallPos);
-                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: 1);
+                CreateWorldSpaceTile(worldPos, rearOrientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: 1, wallContainer: wallContainer);
                 tileCount++;
             }
 
             // Left wall segments: X=-1, Y from 1 to -1 (5 segments)
-            // Side walls visible from path, use full detail for front row (y <= 0), LOD2 for back
+            // Orientation: wall faces right (toward +perpendicular)
+            float leftOrientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
             float[] sideY = { 1f, 0.5f, 0f, -0.5f, -1f };
             foreach (float y in sideY)
             {
                 Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * -1f;
                 Vector3 worldPos = ToVector3(wallPos);
-                // Walls at y <= 0 are closer to the path, use full detail
                 int layer = y > 0f ? 1 : 0;
-                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
+                CreateWorldSpaceTile(worldPos, leftOrientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: layer, wallContainer: wallContainer);
                 tileCount++;
             }
 
             // Right wall segments: X=1, Y from 1 to -1 (5 segments)
+            // Orientation: wall faces left (toward -perpendicular)
+            float rightOrientationDegrees = Mathf.Atan2(-perpendicular.y, -perpendicular.x) * Mathf.Rad2Deg;
             foreach (float y in sideY)
             {
                 Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * 1f;
                 Vector3 worldPos = ToVector3(wallPos);
-                // Walls at y <= 0 are closer to the path, use full detail
                 int layer = y > 0f ? 1 : 0;
-                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
+                CreateWorldSpaceTile(worldPos, rightOrientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: layer, wallContainer: wallContainer);
                 tileCount++;
             }
 
@@ -1179,75 +1107,47 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Checks if a position is too close to any edge polyline (within clearance distance).
-        /// Used to prevent walls from overlapping with existing paths.
+        /// DEPRECATED: Manual distance checks are prohibited.
+        /// Wall collision detection is handled by WallCollisionChecker using Unity physics.
+        /// This method exists only for backwards compatibility and throws an exception.
         /// </summary>
+        [System.Obsolete("VIOLATION: Wall proximity checks must use Unity physics (WallCollisionChecker), not manual distance checks. This method will throw.", true)]
         private bool IsPositionTooCloseToEdge(Vector2 position, PlanarForestMazeGenerator.Edge edgeToSkip,
             IEnumerable<PlanarForestMazeGenerator.Edge> allEdges, float clearance)
         {
-            foreach (var edge in allEdges)
-            {
-                // Skip the edge we're currently rendering walls for
-                if (edge == edgeToSkip) continue;
-                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                // Check distance to each segment of the edge polyline
-                for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
-                {
-                    Vector2 segStart = edge.PolylinePoints[i];
-                    Vector2 segEnd = edge.PolylinePoints[i + 1];
-
-                    float distToSegment = DistanceToLineSegment(position, segStart, segEnd);
-                    if (distToSegment < clearance)
-                    {
-                        return true;
-                    }
-                }
-            }
-            return false;
+            throw new System.InvalidOperationException(
+                "[MazeRenderer] IsPositionTooCloseToEdge is DEPRECATED. " +
+                "Wall collision detection must use Unity physics via WallCollisionChecker component. " +
+                "DO NOT use manual distance checks to determine wall validity.");
         }
 
         /// <summary>
         /// Renders walls along edges (perpendicular to edge direction).
-        /// Shared helper used by both initial render and incremental updates.
+        /// Walls are created as children of a GraphElementWallContainer for each edge.
         /// </summary>
         private int RenderEdgeWalls(IEnumerable<PlanarForestMazeGenerator.Edge> edges,
             IEnumerable<PlanarForestMazeGenerator.Node> allNodes, Transform mazeOrigin,
             IEnumerable<PlanarForestMazeGenerator.Edge> allEdges = null)
         {
             int tileCount = 0;
-
-            // Convert to list for indexed access (only once)
-            var nodesList = allNodes as List<PlanarForestMazeGenerator.Node> ?? new List<PlanarForestMazeGenerator.Node>(allNodes);
+            int edgeIndex = 0;
 
             foreach (var edge in edges)
             {
-                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2) continue;
-
-                // Pre-filter nodes that could possibly affect this edge (within max possible distance)
-                float maxWallOffset = PATH_HALF_WIDTH + WALL_SPACING * WALL_DEPTH + nodeRadius + 1f;
-                var nearbyNodes = new List<PlanarForestMazeGenerator.Node>();
-                foreach (var node in nodesList)
+                if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                 {
-                    // Check distance to edge bounding box with buffer
-                    float minX = float.MaxValue, maxX = float.MinValue;
-                    float minY = float.MaxValue, maxY = float.MinValue;
-                    foreach (var pt in edge.PolylinePoints)
-                    {
-                        if (pt.x < minX) minX = pt.x;
-                        if (pt.x > maxX) maxX = pt.x;
-                        if (pt.y < minY) minY = pt.y;
-                        if (pt.y > maxY) maxY = pt.y;
-                    }
-                    if (node.Position.x >= minX - maxWallOffset && node.Position.x <= maxX + maxWallOffset &&
-                        node.Position.y >= minY - maxWallOffset && node.Position.y <= maxY + maxWallOffset)
-                    {
-                        nearbyNodes.Add(node);
-                    }
+                    edgeIndex++;
+                    continue;
                 }
 
+                // Create wall container for this edge
                 Vector2 edgeStart = edge.PolylinePoints[0];
                 Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
+
+                GameObject containerObj = new GameObject();
+                containerObj.transform.SetParent(tilesParent);
+                var wallContainer = containerObj.AddComponent<GraphElementWallContainer>();
+                wallContainer.InitializeForEdge(edgeIndex, edgeStart, edgeEnd);
 
                 for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
                 {
@@ -1263,48 +1163,20 @@ namespace FaeMaze.Systems
                         float t = numSteps > 0 ? (float)j / numSteps : 0;
                         Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
-                        // Skip first and last units of edge for intersection handling
-                        float distFromStart = Vector2.Distance(centerPos, edgeStart);
-                        float distFromEnd = Vector2.Distance(centerPos, edgeEnd);
-                        if (distFromStart < EDGE_END_SKIP || distFromEnd < EDGE_END_SKIP)
-                            continue;
-
-                        // Skip positions inside nodes (check only nearby nodes)
-                        bool insideNode = false;
-                        foreach (var node in nearbyNodes)
-                        {
-                            if (Vector2.Distance(centerPos, node.Position) < nodeRadius + 0.5f)
-                            {
-                                insideNode = true;
-                                break;
-                            }
-                        }
-                        if (insideNode) continue;
-
-                        // Edge side walls
+                        // ARCHITECTURE: Place ALL walls unconditionally.
+                        // WallCollisionChecker handles physics-based collision removal.
                         foreach (float side in new[] { 1f, -1f })
                         {
+                            float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                            if (side < 0) orientationDegrees += 180f;
+
                             for (int layer = 0; layer < WALL_DEPTH; layer++)
                             {
                                 float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
                                 Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
-                                bool wallInsideNode = false;
-                                foreach (var node in nearbyNodes)
-                                {
-                                    if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
-                                    {
-                                        wallInsideNode = true;
-                                        break;
-                                    }
-                                }
-                                if (wallInsideNode) continue;
-
-                                // Skip walls that would overlap with other edge paths
-                                if (allEdges != null && IsPositionTooCloseToEdge(wallPos, edge, allEdges, PATH_HALF_WIDTH + 0.5f))
-                                    continue;
 
                                 Vector3 worldPos = ToVector3(wallPos);
-                                CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
+                                CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: layer, wallContainer: wallContainer);
                                 tileCount++;
                             }
                         }
@@ -1319,8 +1191,13 @@ namespace FaeMaze.Systems
                     Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
 
                     tileCount += RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
-                        WALL_STEP_SIZE, PATH_HALF_WIDTH, WALL_DEPTH, WALL_SPACING, EDGE_END_SKIP);
+                        WALL_STEP_SIZE, PATH_HALF_WIDTH, WALL_DEPTH, WALL_SPACING, wallContainer);
                 }
+
+                // Trigger collision checks for walls in this container
+                wallContainer.TriggerWallCollisionChecks();
+
+                edgeIndex++;
             }
 
             return tileCount;
@@ -1328,13 +1205,19 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders wall rings around a single node, with clearance for edge intersections.
-        /// Shared helper used by both initial render and incremental updates.
+        /// Walls are created as children of a GraphElementWallContainer.
         /// </summary>
         private int RenderNodeWalls(PlanarForestMazeGenerator.Node node,
             IEnumerable<PlanarForestMazeGenerator.Edge> allEdges, Transform mazeOrigin)
         {
             int tileCount = 0;
             float edgeAngleClearance = EDGE_ANGLE_CLEARANCE_DEG * Mathf.Deg2Rad;
+
+            // Create wall container for this node
+            GameObject containerObj = new GameObject();
+            containerObj.transform.SetParent(tilesParent);
+            var wallContainer = containerObj.AddComponent<GraphElementWallContainer>();
+            wallContainer.InitializeForNode(node.Id, node.Position);
 
             // Create all wall positions for this node (includes layer for LOD selection)
             var nodeWalls = new List<(Vector2 pos, float angle, int layer)>();
@@ -1352,7 +1235,6 @@ namespace FaeMaze.Systems
             }
 
             // Use the node's stored UsedAngles directly (much faster than iterating all edges)
-            // UsedAngles already contains the outgoing angles for all incident edges
             var edgeAngles = new List<float>();
             foreach (var angle in node.UsedAngles)
             {
@@ -1380,56 +1262,42 @@ namespace FaeMaze.Systems
 
                 if (!inClearance)
                 {
-                    // Orientation faces inward toward node center (add 180 degrees to outward angle)
                     float orientationDegrees = (wallAngle * Mathf.Rad2Deg) + 180f;
                     Vector3 worldPos = ToVector3(wallPos);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer, wallContainer: wallContainer);
                     tileCount++;
                 }
             }
+
+            // Trigger collision checks for walls in this container
+            wallContainer.TriggerWallCollisionChecks();
 
             return tileCount;
         }
 
         /// <summary>
         /// Regenerates walls around a specific node.
-        /// Removes existing walls within the node's wall radius and re-renders them,
-        /// respecting the node's current edge angles (with ±12° clearance).
-        /// Used when a cross-connection edge is added to an existing node.
+        /// DEPRECATED: This method used manual distance-based wall removal which violates the architecture.
+        /// Wall removal must ONLY happen via Unity physics collision detection (WallCollisionChecker).
+        /// Now simply renders new walls at the node - existing walls with collisions will self-remove via physics.
         /// </summary>
+        [System.Obsolete("Wall removal via distance checks is prohibited. Use RenderNodeWalls directly - walls self-remove via WallCollisionChecker.")]
         public void RegenerateNodeWalls(PlanarForestMazeGenerator.Node node, IEnumerable<PlanarForestMazeGenerator.Edge> allEdges)
         {
+            // ARCHITECTURE VIOLATION PREVENTION:
+            // The old implementation removed walls based on distance checks (dist < maxWallRadius).
+            // This violates the rule: walls may ONLY be removed via Unity physics collision detection.
+            //
+            // New behavior: Just render new walls. The WallCollisionChecker component on each wall
+            // will detect physics collisions and destroy walls that overlap with nodes/edges.
+            // Existing walls in the area will remain unless they have physics collisions.
+
             if (tilesParent == null || node == null)
             {
                 return;
             }
 
-            // Calculate the wall ring radius (same as RenderNodeWalls)
-            float maxWallRadius = nodeRadius + WALL_SPACING * (WALL_DEPTH + 0.5f);
-
-            // Remove existing walls within the node's wall area
-            // Wall tiles are named "WorldTile_#_..." (using # symbol for walls)
-            List<Transform> toRemove = new List<Transform>();
-            foreach (Transform child in tilesParent)
-            {
-                if (child.name.StartsWith("WorldTile_#"))
-                {
-                    Vector2 wallPos = new Vector2(child.position.x, child.position.y);
-                    float dist = Vector2.Distance(wallPos, node.Position);
-                    if (dist < maxWallRadius)
-                    {
-                        toRemove.Add(child);
-                    }
-                }
-            }
-
-            foreach (var t in toRemove)
-            {
-                Destroy(t.gameObject);
-            }
-
-            // Re-render walls for this node using the standard logic
-            // This will respect the node's EdgeAngles (including any newly added cross-connection)
+            // Render walls for this node - WallCollisionChecker handles collision-based removal
             RenderNodeWalls(node, allEdges, tilesParent);
         }
 
@@ -1584,7 +1452,8 @@ namespace FaeMaze.Systems
         /// Creates a tile at a world-space position with the given orientation.
         /// </summary>
         /// <param name="wallLayer">For walls: 0 = front rank (full detail), 1+ = interior (LOD2)</param>
-        private void CreateWorldSpaceTile(Vector3 worldPos, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall, int wallLayer = 0)
+        /// <param name="wallContainer">Optional container for walls - walls will be parented under this</param>
+        private void CreateWorldSpaceTile(Vector3 worldPos, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall, int wallLayer = 0, GraphElementWallContainer wallContainer = null)
         {
             // For flat tiles on XY plane, rotate only around Z axis
             Quaternion tileRotation = Quaternion.Euler(0f, 0f, orientationDegrees);
@@ -1609,17 +1478,42 @@ namespace FaeMaze.Systems
                 worldPos += new Vector3(jitterX, jitterY, 0f);
             }
 
+            // Determine parent for this tile
+            Transform tileParent = (symbol == '#' && wallContainer != null)
+                ? wallContainer.transform
+                : tilesParent;
+
             if (symbol == '#' && wallPrefab != null)
             {
                 // Use LOD2 prefab for interior walls (layer > 0), full detail for front rank (layer 0)
                 GameObject prefabToUse = (wallLayer > 0 && wallPrefabLOD2 != null) ? wallPrefabLOD2 : wallPrefab;
-                tileObj = Instantiate(prefabToUse, tilesParent);
+                tileObj = Instantiate(prefabToUse, tileParent);
                 tileObj.transform.position = worldPos;
                 // Apply Z-axis rotation only so model's X axis aligns radially (toward node center for node walls)
                 // Using tileRotation (Z-only) instead of flatPrefabRotation (which tilts on X-axis)
                 tileObj.transform.rotation = tileRotation;
                 // Wall models use prefab default scale (no additional scaling)
                 wallTiles?.Add(tileObj);
+
+                // Ensure wall has a collider for physics-based wall re-checking
+                // (needed so WallCollisionChecker.RecheckWallsInArea can find it via OverlapSphere)
+                Collider wallCollider = tileObj.GetComponent<Collider>();
+                if (wallCollider == null)
+                {
+                    // Add a sphere collider if no collider exists
+                    SphereCollider sphereCol = tileObj.AddComponent<SphereCollider>();
+                    sphereCol.radius = 0.3f;
+                    sphereCol.isTrigger = true;
+                }
+                else
+                {
+                    wallCollider.isTrigger = true;
+                }
+
+                // ARCHITECTURE: Add WallCollisionChecker to handle physics-based collision removal.
+                // This component will use Unity physics to detect collisions with nodes/edges
+                // and destroy the wall if it collides. This is the ONLY valid way to remove walls.
+                tileObj.AddComponent<WallCollisionChecker>();
             }
             else if (symbol == 'N' && nodeHazardPrefab != null)
             {
@@ -1641,7 +1535,17 @@ namespace FaeMaze.Systems
                 tileObj.transform.SetParent(tilesParent);
 
                 if (symbol == '#')
+                {
                     wallTiles?.Add(tileObj);
+                    // Make collider a trigger so it doesn't block movement
+                    Collider wallCol = tileObj.GetComponent<Collider>();
+                    if (wallCol != null)
+                    {
+                        wallCol.isTrigger = true;
+                    }
+                    // ARCHITECTURE: Add WallCollisionChecker for physics-based collision removal
+                    tileObj.AddComponent<WallCollisionChecker>();
+                }
                 else
                     pathTiles?.Add(tileObj);
             }
@@ -1667,6 +1571,21 @@ namespace FaeMaze.Systems
             if (renderer != null)
             {
                 renderer.material = material;
+            }
+
+            // Tag path tiles for physics-based wall collision detection.
+            // WallCollisionChecker uses OverlapSphere to find path tiles.
+            if (symbol == '.' || symbol == 'H' || symbol == 'N')
+            {
+                tileObj.tag = "MazePath";
+                // Reduce collider to 2/3 size to prevent false wall collisions on curves
+                // Visual mesh stays full size, only collision detection is smaller
+                BoxCollider boxCol = tileObj.GetComponent<BoxCollider>();
+                if (boxCol != null)
+                {
+                    boxCol.size = new Vector3(0.667f, 0.667f, 1f);
+                    boxCol.isTrigger = true;
+                }
             }
 
             return tileObj;
@@ -1789,8 +1708,11 @@ namespace FaeMaze.Systems
         {
             if (tilesParent != null)
             {
+                // Signal that maze is regenerating so walls can be destroyed without error
+                WallCollisionChecker.IsMazeRegenerating = true;
                 foreach (Transform child in tilesParent)
                     Destroy(child.gameObject);
+                WallCollisionChecker.IsMazeRegenerating = false;
             }
 
             spawnSymbolCounter = 0;
@@ -2012,10 +1934,11 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Async version of RenderEdgeWalls for a single edge.
+        /// Walls are created as children of a GraphElementWallContainer.
         /// </summary>
         private IEnumerator RenderEdgeWallsAsync(PlanarForestMazeGenerator.Edge edge,
             IList<PlanarForestMazeGenerator.Node> nodesList, Transform mazeOrigin, float frameBudgetMs,
-            IEnumerable<PlanarForestMazeGenerator.Edge> allEdges = null)
+            IEnumerable<PlanarForestMazeGenerator.Edge> allEdges = null, int edgeIndex = 0)
         {
             if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
                 yield break;
@@ -2023,27 +1946,14 @@ namespace FaeMaze.Systems
             float frameStartTime = Time.realtimeSinceStartup;
             int wallsCreated = 0;
 
-            // Pre-filter nodes that could possibly affect this edge
-            float maxWallOffset = PATH_HALF_WIDTH + WALL_SPACING * WALL_DEPTH + nodeRadius + 1f;
-            Vector2 boundsMin = edge.PolylinePoints[0];
-            Vector2 boundsMax = edge.PolylinePoints[0];
-            foreach (var pt in edge.PolylinePoints)
-            {
-                boundsMin = Vector2.Min(boundsMin, pt);
-                boundsMax = Vector2.Max(boundsMax, pt);
-            }
-            boundsMin -= Vector2.one * maxWallOffset;
-            boundsMax += Vector2.one * maxWallOffset;
+            // Create wall container for this edge
+            Vector2 edgeStart = edge.PolylinePoints[0];
+            Vector2 edgeEnd = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
 
-            var nearbyNodes = new List<PlanarForestMazeGenerator.Node>();
-            foreach (var node in nodesList)
-            {
-                if (node.Position.x >= boundsMin.x && node.Position.x <= boundsMax.x &&
-                    node.Position.y >= boundsMin.y && node.Position.y <= boundsMax.y)
-                {
-                    nearbyNodes.Add(node);
-                }
-            }
+            GameObject containerObj = new GameObject();
+            containerObj.transform.SetParent(tilesParent);
+            var wallContainer = containerObj.AddComponent<GraphElementWallContainer>();
+            wallContainer.InitializeForEdge(edgeIndex, edgeStart, edgeEnd);
 
             // Generate side walls along each segment
             for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
@@ -2054,44 +1964,27 @@ namespace FaeMaze.Systems
                 Vector2 perpendicular = new Vector2(-direction.y, direction.x);
                 float segmentLength = Vector2.Distance(segStart, segEnd);
 
-                float effectiveStart = (i == 0) ? EDGE_END_SKIP : 0f;
-                float effectiveEnd = (i == edge.PolylinePoints.Count - 2 && !edge.Partial) ?
-                    segmentLength - EDGE_END_SKIP : segmentLength;
-
-                int numSteps = Mathf.Max(1, Mathf.CeilToInt((effectiveEnd - effectiveStart) / WALL_STEP_SIZE));
+                int numSteps = Mathf.Max(1, Mathf.CeilToInt(segmentLength / WALL_STEP_SIZE));
 
                 for (int step = 0; step <= numSteps; step++)
                 {
-                    float t = effectiveStart + (effectiveEnd - effectiveStart) * ((float)step / numSteps);
-                    Vector2 centerPos = segStart + direction * t;
+                    float t = numSteps > 0 ? (float)step / numSteps : 0;
+                    Vector2 centerPos = Vector2.Lerp(segStart, segEnd, t);
 
                     foreach (int side in new[] { -1, 1 })
                     {
+                        float orientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
+                        if (side < 0) orientationDegrees += 180f;
+
                         for (int layer = 0; layer < WALL_DEPTH; layer++)
                         {
                             float wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
                             Vector2 wallPos = centerPos + perpendicular * side * wallOffset;
 
-                            bool wallInsideNode = false;
-                            foreach (var node in nearbyNodes)
-                            {
-                                if (Vector2.Distance(wallPos, node.Position) < nodeRadius)
-                                {
-                                    wallInsideNode = true;
-                                    break;
-                                }
-                            }
-                            if (wallInsideNode) continue;
-
-                            // Skip walls that would overlap with other edge paths
-                            if (allEdges != null && IsPositionTooCloseToEdge(wallPos, edge, allEdges, PATH_HALF_WIDTH + 0.5f))
-                                continue;
-
                             Vector3 worldPos = ToVector3(wallPos);
-                            CreateWorldSpaceTile(worldPos, 0f, '#', mazeOrigin, isWall: true, wallLayer: layer);
+                            CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: layer, wallContainer: wallContainer);
                             wallsCreated++;
 
-                            // Check time budget and yield if exceeded
                             if (wallsCreated % 20 == 0)
                             {
                                 float elapsed = (Time.realtimeSinceStartup - frameStartTime) * 1000f;
@@ -2113,12 +2006,16 @@ namespace FaeMaze.Systems
                 Vector2 frontierEnd = edge.PolylinePoints[lastIdx];
                 Vector2 frontierDir = (edge.PolylinePoints[lastIdx] - edge.PolylinePoints[lastIdx - 1]).normalized;
                 RenderFrontierEndCap(frontierEnd, frontierDir, mazeOrigin,
-                    WALL_STEP_SIZE, PATH_HALF_WIDTH, WALL_DEPTH, WALL_SPACING, EDGE_END_SKIP);
+                    WALL_STEP_SIZE, PATH_HALF_WIDTH, WALL_DEPTH, WALL_SPACING, wallContainer);
             }
+
+            // Trigger collision checks for walls in this container
+            wallContainer.TriggerWallCollisionChecks();
         }
 
         /// <summary>
         /// Async version of RenderNodeWalls.
+        /// Walls are created as children of a GraphElementWallContainer.
         /// </summary>
         private IEnumerator RenderNodeWallsAsync(PlanarForestMazeGenerator.Node node,
             IEnumerable<PlanarForestMazeGenerator.Edge> allEdges, Transform mazeOrigin, float frameBudgetMs)
@@ -2127,7 +2024,13 @@ namespace FaeMaze.Systems
             int wallsCreated = 0;
             float edgeAngleClearance = EDGE_ANGLE_CLEARANCE_DEG * Mathf.Deg2Rad;
 
-            // Create all wall positions for this node (includes layer for LOD selection)
+            // Create wall container for this node
+            GameObject containerObj = new GameObject();
+            containerObj.transform.SetParent(tilesParent);
+            var wallContainer = containerObj.AddComponent<GraphElementWallContainer>();
+            wallContainer.InitializeForNode(node.Id, node.Position);
+
+            // Create all wall positions for this node
             var nodeWalls = new List<(Vector2 pos, float angle, int layer)>();
             for (int layer = 0; layer < WALL_DEPTH; layer++)
             {
@@ -2168,13 +2071,11 @@ namespace FaeMaze.Systems
 
                 if (!tooCloseToEdge)
                 {
-                    // Orientation faces inward toward node center (add 180 degrees to outward angle)
                     float orientationDegrees = (wallAngle * Mathf.Rad2Deg) + 180f;
                     Vector3 worldPos = ToVector3(wallPos);
-                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer);
+                    CreateWorldSpaceTile(worldPos, orientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: wallLayer, wallContainer: wallContainer);
                     wallsCreated++;
 
-                    // Check time budget and yield if exceeded
                     if (wallsCreated % 20 == 0)
                     {
                         float elapsed = (Time.realtimeSinceStartup - frameStartTime) * 1000f;
@@ -2186,176 +2087,66 @@ namespace FaeMaze.Systems
                     }
                 }
             }
+
+            // Trigger collision checks for walls in this container
+            wallContainer.TriggerWallCollisionChecks();
         }
 
         /// <summary>
-        /// Removes wall tiles near a consumed spawn point position.
-        /// Called when a frontier edge is consumed and walls blocking it should be removed.
+        /// DEPRECATED: Do NOT use this method! Wall overlap is allowed by design.
+        /// Wall removal should be handled by Unity physics collision detection, not manual checks.
+        /// This method violates the architectural rule that walls are removed via physics collisions.
         /// </summary>
+        [System.Obsolete("VIOLATION: Wall removal must use Unity physics collision detection, not manual checks. This method will throw.", true)]
         public void RemoveWallsNearPosition(Vector3 position, float radius)
         {
-            if (tilesParent == null)
-                return;
-
-            List<Transform> toRemove = new List<Transform>();
-
-            foreach (Transform child in tilesParent)
-            {
-                if (child.name.StartsWith("WorldTile_#") || child.name.StartsWith("Wall_"))
-                {
-                    float dist = Vector3.Distance(child.position, position);
-                    if (dist < radius)
-                    {
-                        toRemove.Add(child);
-                    }
-                }
-            }
-
-            foreach (var t in toRemove)
-            {
-                Destroy(t.gameObject);
-            }
+            throw new System.InvalidOperationException(
+                "[MazeRenderer] RemoveWallsNearPosition is DEPRECATED. " +
+                "Wall removal must be handled by Unity physics collision detection between walls and graph elements. " +
+                "Wall models ARE allowed to overlap. Do NOT use manual intersection checks to remove walls.");
         }
 
         /// <summary>
-        /// Removes wall tiles near any of the given positions in a single pass.
-        /// Much more efficient than calling RemoveWallsNearPosition multiple times.
+        /// DEPRECATED: Do NOT use this method! Wall overlap is allowed by design.
+        /// Wall removal should be handled by Unity physics collision detection, not manual checks.
+        /// This method violates the architectural rule that walls are removed via physics collisions.
         /// </summary>
+        [System.Obsolete("VIOLATION: Wall removal must use Unity physics collision detection, not manual checks. This method will throw.", true)]
         public void RemoveWallsNearPositionsBatched(List<Vector3> positions, float radius)
         {
-            if (tilesParent == null || positions == null || positions.Count == 0)
-                return;
-
-            // Build a spatial hash of removal positions for O(1) lookup
-            float cellSize = radius * 2f;
-            var removalCells = new HashSet<long>();
-            foreach (var pos in positions)
-            {
-                int cellX = Mathf.FloorToInt(pos.x / cellSize);
-                int cellY = Mathf.FloorToInt(pos.y / cellSize);
-                // Add the cell and its neighbors to cover boundary cases
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    for (int dy = -1; dy <= 1; dy++)
-                    {
-                        long key = ((long)(cellX + dx) << 32) | (uint)(cellY + dy);
-                        removalCells.Add(key);
-                    }
-                }
-            }
-
-            List<Transform> toRemove = new List<Transform>();
-
-            // Single pass through all children
-            foreach (Transform child in tilesParent)
-            {
-                if (child.name.StartsWith("WorldTile_#") || child.name.StartsWith("Wall_"))
-                {
-                    // Quick rejection using spatial hash
-                    int cellX = Mathf.FloorToInt(child.position.x / cellSize);
-                    int cellY = Mathf.FloorToInt(child.position.y / cellSize);
-                    long key = ((long)cellX << 32) | (uint)cellY;
-
-                    if (!removalCells.Contains(key))
-                        continue;
-
-                    // Detailed check against actual positions
-                    foreach (var pos in positions)
-                    {
-                        float dist = Vector3.Distance(child.position, pos);
-                        if (dist < radius)
-                        {
-                            toRemove.Add(child);
-                            break; // Found a match, no need to check other positions
-                        }
-                    }
-                }
-            }
-
-            foreach (var t in toRemove)
-            {
-                Destroy(t.gameObject);
-            }
+            throw new System.InvalidOperationException(
+                "[MazeRenderer] RemoveWallsNearPositionsBatched is DEPRECATED. " +
+                "Wall removal must be handled by Unity physics collision detection between walls and graph elements. " +
+                "Wall models ARE allowed to overlap. Do NOT use manual intersection checks to remove walls.");
         }
 
         /// <summary>
-        /// Removes wall tiles that are "past" the endpoint in the frontier direction.
-        /// Used to remove portal end cap walls while preserving side walls along the path.
-        /// Only removes walls where dot(wallPos - endpoint, frontierDir) > threshold.
+        /// DEPRECATED: Do NOT use this method! Wall overlap is allowed by design.
+        /// Wall removal should be handled by Unity physics collision detection, not manual checks.
+        /// This method violates the architectural rule that walls are removed via physics collisions.
+        /// Portal end cap walls should be managed by the portal wall system, not manual removal.
         /// </summary>
+        [System.Obsolete("VIOLATION: Wall removal must use Unity physics collision detection, not manual checks. This method will throw.", true)]
         public void RemoveWallsPastEndpoint(Vector3 endpoint, Vector3 frontierDirection, float radius, float dirThreshold = -0.3f)
         {
-            if (tilesParent == null)
-                return;
-
-            List<Transform> toRemove = new List<Transform>();
-
-            foreach (Transform child in tilesParent)
-            {
-                if (child.name.StartsWith("WorldTile_#") || child.name.StartsWith("Wall_"))
-                {
-                    Vector3 toWall = child.position - endpoint;
-                    float dist = toWall.magnitude;
-
-                    // Must be within radius
-                    if (dist > radius)
-                        continue;
-
-                    // Check if wall is "past" the endpoint (in the frontier direction)
-                    // dot > threshold means wall is in front of/past the endpoint
-                    float dot = Vector3.Dot(toWall.normalized, frontierDirection);
-                    if (dot > dirThreshold)
-                    {
-                        toRemove.Add(child);
-                    }
-                }
-            }
-
-            foreach (var t in toRemove)
-            {
-                Destroy(t.gameObject);
-            }
+            throw new System.InvalidOperationException(
+                "[MazeRenderer] RemoveWallsPastEndpoint is DEPRECATED. " +
+                "Wall removal must be handled by Unity physics collision detection between walls and graph elements. " +
+                "Wall models ARE allowed to overlap. Portal end cap walls are managed by the portal wall tracking system (portalWalls list in DynamicMazeGrowth).");
         }
 
         /// <summary>
-        /// Removes walls that intersect with a polyline path.
-        /// Used for cross-connections where we need to clear walls along the new edge's path
-        /// at an existing node, without clearing all walls around the node.
+        /// DEPRECATED: Do NOT use this method! Wall overlap is allowed by design.
+        /// Wall removal should be handled by Unity physics collision detection, not manual intersection checks.
+        /// This method violates the architectural rule that walls are removed via physics collisions.
         /// </summary>
+        [System.Obsolete("VIOLATION: Wall removal must use Unity physics collision detection, not manual checks. This method will throw.", true)]
         public void RemoveWallsAlongPolyline(List<Vector2> polylinePoints, float pathWidth)
         {
-            if (tilesParent == null || polylinePoints == null || polylinePoints.Count < 2)
-                return;
-
-            List<Transform> toRemove = new List<Transform>();
-
-            foreach (Transform child in tilesParent)
-            {
-                // Check both wall prefab instances and procedural wall tiles
-                if (child.name.StartsWith("Wall_") || child.name.StartsWith("WorldTile_#"))
-                {
-                    Vector2 wallPos = new Vector2(child.position.x, child.position.y);
-
-                    // Check distance to each line segment of the polyline
-                    for (int i = 0; i < polylinePoints.Count - 1; i++)
-                    {
-                        Vector2 segStart = polylinePoints[i];
-                        Vector2 segEnd = polylinePoints[i + 1];
-
-                        float dist = DistanceToLineSegment(wallPos, segStart, segEnd);
-                        if (dist < pathWidth)
-                        {
-                            toRemove.Add(child);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            foreach (var t in toRemove)
-            {
-                Destroy(t.gameObject);
-            }
+            throw new System.InvalidOperationException(
+                "[MazeRenderer] RemoveWallsAlongPolyline is DEPRECATED. " +
+                "Wall removal must be handled by Unity physics collision detection between walls and graph elements. " +
+                "Wall models ARE allowed to overlap. Do NOT use manual intersection checks to remove walls.");
         }
 
         /// <summary>
@@ -2645,6 +2436,9 @@ namespace FaeMaze.Systems
             oldContainer.SetActive(false);
             yield return null;
 
+            // Signal that maze is regenerating so walls can be destroyed without error
+            WallCollisionChecker.IsMazeRegenerating = true;
+
             // Destroy children in batches
             Transform oldTransform = oldContainer.transform;
             int destroyBatch = 100;
@@ -2663,6 +2457,8 @@ namespace FaeMaze.Systems
                 }
                 yield return null;
             }
+
+            WallCollisionChecker.IsMazeRegenerating = false;
 
             // Finally destroy the empty container
             Destroy(oldContainer);

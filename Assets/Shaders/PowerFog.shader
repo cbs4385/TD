@@ -1,0 +1,227 @@
+Shader "Custom/PowerFog"
+{
+    Properties
+    {
+        _FogColor ("Fog Color", Color) = (1.0, 0.5, 0.0, 0.6)
+        _FogColorDark ("Fog Color Dark", Color) = (0.8, 0.3, 0.0, 0.6)
+        _GlowColor ("Glow Color", Color) = (1.0, 0.8, 0.4, 1.0)
+        _PathMask ("Path Mask", 2D) = "white" {}
+
+        [Header(Cloud Shape)]
+        _CloudScale ("Cloud Scale", Range(0.5, 20)) = 8.0
+        _CloudDetail ("Cloud Detail", Range(0.5, 5)) = 2.0
+        _CloudDensity ("Cloud Density", Range(0.1, 2)) = 0.7
+        _CloudSharpness ("Cloud Sharpness", Range(1, 10)) = 4.0
+
+        [Header(Animation)]
+        _WindSpeed ("Wind Speed", Range(0, 0.5)) = 0.02
+        _WindDirection ("Wind Direction", Vector) = (1, 0.3, 0, 0)
+
+        [Header(Wave Animation)]
+        _WaveProgress ("Wave Progress (0-1)", Range(0, 1)) = 0.0
+        _WaveWidth ("Wave Width", Range(0.05, 0.5)) = 0.15
+        _WaveIntensity ("Wave Intensity", Range(0, 3)) = 2.0
+        _HeartPosition ("Heart Position", Vector) = (0, 0, 0, 0)
+        _FurthestPosition ("Furthest Position", Vector) = (10, 10, 0, 0)
+
+        [Header(Lighting)]
+        _ShadowStrength ("Shadow Strength", Range(0, 1)) = 0.2
+        _AmbientLight ("Ambient Light", Range(0, 1)) = 0.7
+    }
+    SubShader
+    {
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-50" }
+        LOD 100
+
+        Pass
+        {
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
+            Cull Off
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #include "UnityCG.cginc"
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+                float3 worldPos : TEXCOORD1;
+            };
+
+            fixed4 _FogColor;
+            fixed4 _FogColorDark;
+            fixed4 _GlowColor;
+            sampler2D _PathMask;
+
+            float _CloudScale;
+            float _CloudDetail;
+            float _CloudDensity;
+            float _CloudSharpness;
+
+            float _WindSpeed;
+            float4 _WindDirection;
+
+            float _WaveProgress;
+            float _WaveWidth;
+            float _WaveIntensity;
+            float4 _HeartPosition;
+            float4 _FurthestPosition;
+
+            float _ShadowStrength;
+            float _AmbientLight;
+
+            // Hash function for noise
+            float hash(float2 p)
+            {
+                float3 p3 = frac(float3(p.xyx) * 0.1031);
+                p3 += dot(p3, p3.yzx + 33.33);
+                return frac((p3.x + p3.y) * p3.z);
+            }
+
+            // Value noise with smooth interpolation
+            float valueNoise(float2 p)
+            {
+                float2 i = floor(p);
+                float2 f = frac(p);
+
+                // Quintic interpolation
+                float2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+                float a = hash(i);
+                float b = hash(i + float2(1.0, 0.0));
+                float c = hash(i + float2(0.0, 1.0));
+                float d = hash(i + float2(1.0, 1.0));
+
+                return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+            }
+
+            // Fractal Brownian Motion
+            float fbm(float2 p, int octaves)
+            {
+                float value = 0.0;
+                float amplitude = 0.5;
+                float frequency = 1.0;
+                float maxValue = 0.0;
+
+                for (int i = 0; i < octaves; i++)
+                {
+                    value += amplitude * valueNoise(p * frequency);
+                    maxValue += amplitude;
+                    amplitude *= 0.5;
+                    frequency *= 2.0;
+                    p = float2(p.x * 0.866 - p.y * 0.5, p.x * 0.5 + p.y * 0.866);
+                }
+
+                return value / maxValue;
+            }
+
+            // Cloud noise function
+            float cloudNoise(float2 p)
+            {
+                float baseCloud = fbm(p * _CloudScale, 4);
+                float detail = fbm(p * _CloudScale * _CloudDetail, 3) * 0.4;
+                float cloud = baseCloud + detail * 0.3;
+                cloud = cloud * _CloudDensity;
+                cloud = pow(saturate(cloud), 1.0 / _CloudSharpness);
+                return cloud;
+            }
+
+            // Calculate wave glow based on position along path from heart to furthest extent
+            float calculateWaveGlow(float2 worldPos)
+            {
+                float2 heartPos = _HeartPosition.xy;
+                float2 furthestPos = _FurthestPosition.xy;
+
+                // Calculate total path length
+                float pathLength = distance(heartPos, furthestPos);
+                if (pathLength < 0.001) return 0.0;
+
+                // Calculate distance from heart for this pixel
+                float distFromHeart = distance(worldPos, heartPos);
+
+                // Normalize to 0-1 range (0 = at heart, 1 = at furthest extent)
+                float normalizedDist = saturate(distFromHeart / pathLength);
+
+                // Wave travels from furthest (1.0) toward heart (0.0)
+                // So waveProgress 0 = wave at furthest, waveProgress 1 = wave reached heart
+                float wavePosition = 1.0 - _WaveProgress;
+
+                // Calculate distance from wave front
+                float distFromWave = abs(normalizedDist - wavePosition);
+
+                // Create soft glow around wave front
+                float glow = 1.0 - saturate(distFromWave / _WaveWidth);
+                glow = glow * glow; // Quadratic falloff for softer edges
+
+                // Only glow areas the wave has passed through (closer to heart than wave)
+                float behindWave = step(normalizedDist, wavePosition + _WaveWidth);
+
+                return glow * behindWave * _WaveIntensity;
+            }
+
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.vertex = UnityObjectToClipPos(v.vertex);
+                o.uv = v.uv;
+                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                return o;
+            }
+
+            fixed4 frag (v2f i) : SV_Target
+            {
+                // Sample the path mask (1 = affected area, 0 = not affected)
+                float pathMask = tex2D(_PathMask, i.uv).r;
+
+                // Early out if not in affected area
+                if (pathMask < 0.01)
+                    return fixed4(0, 0, 0, 0);
+
+                // Animate cloud position
+                float2 windOffset = _WindDirection.xy * _Time.y * _WindSpeed;
+                float2 cloudUV = i.worldPos.xy * 0.1 + windOffset;
+
+                // Generate cloud pattern
+                float cloudValue = cloudNoise(cloudUV);
+
+                // Simple lighting
+                float lighting = _AmbientLight + cloudValue * _ShadowStrength;
+
+                // Base fog color
+                fixed3 fogCol = lerp(_FogColorDark.rgb, _FogColor.rgb, lighting);
+
+                // Calculate wave glow
+                float waveGlow = calculateWaveGlow(i.worldPos.xy);
+
+                // Add glow color
+                fogCol = lerp(fogCol, _GlowColor.rgb, waveGlow * 0.7);
+
+                // Cloud alpha with softer edges
+                float cloudAlpha = smoothstep(0.15, 0.5, cloudValue);
+
+                // Combine with path mask - softer transition at edges
+                float edgeFade = smoothstep(0.0, 0.4, pathMask);
+                float finalAlpha = cloudAlpha * edgeFade * _FogColor.a;
+
+                // Boost alpha in glowing areas
+                finalAlpha = saturate(finalAlpha + waveGlow * 0.3);
+
+                // Add edge noise for wispy look
+                float edgeNoise = fbm(cloudUV * 3.0 + windOffset * 1.5, 3);
+                finalAlpha *= lerp(edgeNoise * 0.4 + 0.6, 1.0, edgeFade);
+
+                return fixed4(fogCol, saturate(finalAlpha));
+            }
+            ENDCG
+        }
+    }
+}

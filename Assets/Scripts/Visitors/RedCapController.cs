@@ -704,6 +704,7 @@ namespace FaeMaze.Visitors
                 collider = gameObject.AddComponent<SphereCollider>();
                 collider.radius = contactRadius;
                 collider.isTrigger = true;
+                collider.center = Vector3.zero; // XY-plane collision
             }
         }
 
