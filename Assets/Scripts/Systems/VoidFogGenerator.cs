@@ -5,9 +5,8 @@ using ForestMaze;
 namespace FaeMaze.Systems
 {
     /// <summary>
-    /// Generates thick fog quads to fill the interior void spaces of the maze.
-    /// These are areas inside the maze bounds but not on walkable paths.
-    /// The fog makes wisp lights more dramatic as they illuminate it.
+    /// Generates a cloud-like fog plane that covers void areas, similar to Civilization's fog of war.
+    /// Uses procedural noise to create billowy, atmospheric clouds with pseudo-3D lighting.
     /// </summary>
     public class VoidFogGenerator : MonoBehaviour
     {
@@ -16,56 +15,81 @@ namespace FaeMaze.Systems
         [Tooltip("The maze grid behaviour to read void areas from")]
         private MazeGridBehaviour mazeGridBehaviour;
 
-        [Header("Fog Appearance")]
+        [Header("Fog Colors")]
         [SerializeField]
-        [Tooltip("Color and opacity of the fog")]
-        private Color fogColor = new Color(0.02f, 0.02f, 0.03f, 0.85f);
+        [Tooltip("Main fog color (lit areas) - matches forest canopy")]
+        private Color fogColor = new Color(0.07f, 0.08f, 0.02f, 1f);
 
+        [SerializeField]
+        [Tooltip("Shadow fog color (darker areas) - deep forest shadow")]
+        private Color fogColorDark = new Color(0.01f, 0.11f, 0.00f, 1f);
+
+        [Header("Cloud Shape")]
+        [SerializeField]
+        [Range(0.5f, 10f)]
+        [Tooltip("Scale of cloud pattern (lower = larger clouds)")]
+        private float cloudScale = 10f;
+
+        [SerializeField]
+        [Range(0.5f, 5f)]
+        [Tooltip("Amount of fine detail in clouds")]
+        private float cloudDetail = 2f;
+
+        [SerializeField]
+        [Range(0.1f, 2f)]
+        [Tooltip("Overall cloud density/coverage")]
+        private float cloudDensity = 1f;
+
+        [SerializeField]
+        [Range(1f, 10f)]
+        [Tooltip("Sharpness of cloud edges (higher = more defined)")]
+        private float cloudSharpness = 8f;
+
+        [Header("Animation")]
         [SerializeField]
         [Range(0f, 0.5f)]
-        [Tooltip("How much fog fades at edges")]
-        private float edgeFade = 0.15f;
+        [Tooltip("Speed of cloud movement")]
+        private float windSpeed = 0.03f;
 
         [SerializeField]
-        [Range(0.1f, 10f)]
-        [Tooltip("Scale of noise pattern")]
-        private float noiseScale = 2f;
+        [Tooltip("Direction of cloud movement")]
+        private Vector2 windDirection = new Vector2(1f, 0.3f);
+
+        [Header("Lighting")]
+        [SerializeField]
+        [Tooltip("Direction light comes from")]
+        private Vector2 lightDirection = new Vector2(0.5f, 1f);
 
         [SerializeField]
         [Range(0f, 1f)]
-        [Tooltip("Speed of fog animation")]
-        private float noiseSpeed = 0.1f;
+        [Tooltip("Strength of cloud shadows")]
+        private float shadowStrength = 0.4f;
 
         [SerializeField]
-        [Range(0f, 0.5f)]
-        [Tooltip("Strength of noise variation")]
-        private float noiseStrength = 0.15f;
+        [Range(0f, 1f)]
+        [Tooltip("Ambient light level")]
+        private float ambientLight = 0.6f;
+
+        [Header("Path Masking")]
+        [SerializeField]
+        [Tooltip("How far from paths the fog fades (in world units)")]
+        private float pathFadeDistance = 3f;
+
+        [SerializeField]
+        [Tooltip("Extra padding around the maze bounds")]
+        private float boundsPadding = 100f;
 
         [Header("Positioning")]
         [SerializeField]
-        [Tooltip("Z position of fog (should be slightly in front of background)")]
-        private float zPosition = 50f;
+        [Tooltip("Z position of fog (at top of wall models, around -1)")]
+        private float zPosition = -1f;
 
-        [SerializeField]
-        [Tooltip("Minimum size for a fog quad (in world units)")]
-        private float minFogSize = 1f;
-
-        [SerializeField]
-        [Tooltip("Buffer distance from walkable paths")]
-        private float pathBuffer = 0.5f;
-
-        [Header("Performance")]
-        [SerializeField]
-        [Tooltip("Grid resolution for detecting void areas (lower = fewer fog quads)")]
-        private float detectionGridSize = 2f;
-
-        [SerializeField]
-        [Tooltip("Merge nearby fog areas into larger quads")]
-        private bool mergeFogAreas = true;
-
-        private GameObject fogParent;
+        private GameObject fogQuad;
         private Material fogMaterial;
-        private List<GameObject> fogQuads = new List<GameObject>();
+        private Texture2D pathMaskTexture;
+        private Bounds mazeBounds;
+        private DynamicMazeGrowth dynamicMazeGrowth;
+        private int lastKnownTileCount = 0;
 
         private void Start()
         {
@@ -80,39 +104,26 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // Create parent object
-            fogParent = new GameObject("VoidFog");
-            fogParent.transform.SetParent(transform);
-
-            // Create fog material
-            CreateFogMaterial();
+            // Find DynamicMazeGrowth to detect when maze changes
+            dynamicMazeGrowth = mazeGridBehaviour.GetComponent<DynamicMazeGrowth>();
 
             // Wait for maze to be ready
             StartCoroutine(GenerateFogNextFrame());
         }
 
-        private void CreateFogMaterial()
+        private void Update()
         {
-            var shader = Shader.Find("Custom/VoidFog");
-            if (shader == null)
+            // Check if maze data has changed (new tiles added)
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null)
             {
-                // Fallback to standard transparent shader
-                shader = Shader.Find("Sprites/Default");
+                int currentTileCount = mazeGridBehaviour.WorldSpaceMazeData.Tiles.Count;
+                if (currentTileCount != lastKnownTileCount && lastKnownTileCount > 0)
+                {
+                    // Maze has grown - regenerate fog
+                    lastKnownTileCount = currentTileCount;
+                    RegenerateFog();
+                }
             }
-
-            fogMaterial = new Material(shader);
-            UpdateMaterialProperties();
-        }
-
-        private void UpdateMaterialProperties()
-        {
-            if (fogMaterial == null) return;
-
-            fogMaterial.SetColor("_FogColor", fogColor);
-            fogMaterial.SetFloat("_EdgeFade", edgeFade);
-            fogMaterial.SetFloat("_NoiseScale", noiseScale);
-            fogMaterial.SetFloat("_NoiseSpeed", noiseSpeed);
-            fogMaterial.SetFloat("_NoiseStrength", noiseStrength);
         }
 
         private System.Collections.IEnumerator GenerateFogNextFrame()
@@ -132,161 +143,164 @@ namespace FaeMaze.Systems
             }
 
             var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
-            var bounds = mazeData.Bounds;
-            float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
+            mazeBounds = mazeData.Bounds;
 
-            // Use a grid to detect void areas
-            float gridSize = detectionGridSize * tileSize;
+            // Track tile count for change detection
+            lastKnownTileCount = mazeData.Tiles.Count;
 
-            // Collect all void cells
-            List<Vector2> voidCells = new List<Vector2>();
+            // Expand bounds with padding
+            mazeBounds.Expand(boundsPadding * 2f);
 
-            for (float y = bounds.min.y; y < bounds.max.y; y += gridSize)
-            {
-                for (float x = bounds.min.x; x < bounds.max.x; x += gridSize)
-                {
-                    Vector2 cellCenter = new Vector2(x + gridSize * 0.5f, y + gridSize * 0.5f);
+            // Generate the path mask texture
+            GeneratePathMaskTexture(mazeData);
 
-                    // Check if this cell is a void (not walkable)
-                    if (IsVoidArea(mazeData, cellCenter, gridSize * 0.5f))
-                    {
-                        voidCells.Add(new Vector2(x, y));
-                    }
-                }
-            }
+            // Create fog material with mask
+            CreateFogMaterial();
 
-            if (mergeFogAreas)
-            {
-                // Merge adjacent void cells into larger rectangles
-                var mergedAreas = MergeVoidCells(voidCells, gridSize);
-                foreach (var area in mergedAreas)
-                {
-                    CreateFogQuad(area.center, area.size);
-                }
-            }
-            else
-            {
-                // Create individual fog quads for each void cell
-                foreach (var cell in voidCells)
-                {
-                    Vector2 center = cell + new Vector2(gridSize * 0.5f, gridSize * 0.5f);
-                    CreateFogQuad(center, new Vector2(gridSize, gridSize));
-                }
-            }
+            // Create a single large quad covering the entire area
+            CreateFogQuad();
         }
 
-        private bool IsVoidArea(WorldSpaceMazeData mazeData, Vector2 position, float radius)
+        private void GeneratePathMaskTexture(WorldSpaceMazeData mazeData)
         {
-            // Sample multiple points in the area to check if any are walkable
-            Vector2[] checkPoints = new Vector2[]
-            {
-                position,
-                position + new Vector2(radius * 0.5f, 0),
-                position + new Vector2(-radius * 0.5f, 0),
-                position + new Vector2(0, radius * 0.5f),
-                position + new Vector2(0, -radius * 0.5f)
-            };
+            // Texture resolution based on bounds size (2 pixels per world unit)
+            int texWidth = Mathf.CeilToInt(mazeBounds.size.x * 2f);
+            int texHeight = Mathf.CeilToInt(mazeBounds.size.y * 2f);
 
-            foreach (var point in checkPoints)
-            {
-                // If any check point is walkable, this is not a void area
-                if (mazeData.IsWalkable(point))
-                {
-                    return false;
-                }
+            // Clamp to reasonable size
+            texWidth = Mathf.Clamp(texWidth, 64, 2048);
+            texHeight = Mathf.Clamp(texHeight, 64, 2048);
 
-                // Also check nearby tiles to maintain buffer from paths
-                var nearbyTiles = mazeData.GetTilesNear(point, pathBuffer * mazeGridBehaviour.WorldSpaceTileSize);
-                foreach (var tile in nearbyTiles)
-                {
-                    if (tile.Walkable)
-                    {
-                        return false; // Too close to a walkable tile
-                    }
-                }
+            pathMaskTexture = new Texture2D(texWidth, texHeight, TextureFormat.R8, false);
+            pathMaskTexture.filterMode = FilterMode.Bilinear;
+            pathMaskTexture.wrapMode = TextureWrapMode.Clamp;
+
+            Color[] pixels = new Color[texWidth * texHeight];
+
+            // Initialize all pixels to full fog (white = fog visible)
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] = Color.white;
             }
 
-            return true;
-        }
+            // Calculate world-to-texture scale
+            float worldToTexX = texWidth / mazeBounds.size.x;
+            float worldToTexY = texHeight / mazeBounds.size.y;
 
-        private struct FogArea
-        {
-            public Vector2 center;
-            public Vector2 size;
-        }
-
-        private List<FogArea> MergeVoidCells(List<Vector2> cells, float cellSize)
-        {
-            var areas = new List<FogArea>();
-            var used = new HashSet<int>();
-
-            for (int i = 0; i < cells.Count; i++)
+            // Mark walkable areas as transparent (black = no fog)
+            foreach (var tile in mazeData.Tiles)
             {
-                if (used.Contains(i)) continue;
+                if (!tile.Walkable) continue;
 
-                Vector2 minCorner = cells[i];
-                Vector2 maxCorner = cells[i] + new Vector2(cellSize, cellSize);
+                // Convert world position to texture coordinates
+                float worldX = tile.Position.x - mazeBounds.min.x;
+                float worldY = tile.Position.y - mazeBounds.min.y;
 
-                // Try to expand in X direction
-                bool expanded = true;
-                while (expanded)
+                int centerTexX = Mathf.RoundToInt(worldX * worldToTexX);
+                int centerTexY = Mathf.RoundToInt(worldY * worldToTexY);
+
+                // Calculate radius in texture pixels (tile size + fade distance)
+                float tileRadius = tile.Size * 0.5f + pathFadeDistance;
+                int radiusPixels = Mathf.CeilToInt(tileRadius * Mathf.Max(worldToTexX, worldToTexY));
+
+                // Paint a circular gradient around each walkable tile
+                for (int dy = -radiusPixels; dy <= radiusPixels; dy++)
                 {
-                    expanded = false;
-
-                    // Try to expand right
-                    for (int j = 0; j < cells.Count; j++)
+                    for (int dx = -radiusPixels; dx <= radiusPixels; dx++)
                     {
-                        if (used.Contains(j)) continue;
-                        if (Mathf.Abs(cells[j].x - maxCorner.x) < 0.01f &&
-                            cells[j].y >= minCorner.y - 0.01f &&
-                            cells[j].y + cellSize <= maxCorner.y + 0.01f)
+                        int px = centerTexX + dx;
+                        int py = centerTexY + dy;
+
+                        if (px < 0 || px >= texWidth || py < 0 || py >= texHeight)
+                            continue;
+
+                        // Calculate distance from tile center in world units
+                        float distWorld = Mathf.Sqrt(dx * dx / (worldToTexX * worldToTexX) + dy * dy / (worldToTexY * worldToTexY));
+
+                        // Calculate fog amount based on distance
+                        float halfTileSize = tile.Size * 0.5f;
+                        float fogAmount;
+
+                        if (distWorld <= halfTileSize)
                         {
-                            maxCorner.x = cells[j].x + cellSize;
-                            used.Add(j);
-                            expanded = true;
+                            // Inside tile: no fog
+                            fogAmount = 0f;
                         }
-                    }
-
-                    // Try to expand up
-                    for (int j = 0; j < cells.Count; j++)
-                    {
-                        if (used.Contains(j)) continue;
-                        if (Mathf.Abs(cells[j].y - maxCorner.y) < 0.01f &&
-                            cells[j].x >= minCorner.x - 0.01f &&
-                            cells[j].x + cellSize <= maxCorner.x + 0.01f)
+                        else if (distWorld <= halfTileSize + pathFadeDistance)
                         {
-                            maxCorner.y = cells[j].y + cellSize;
-                            used.Add(j);
-                            expanded = true;
+                            // Fade zone: gradual transition
+                            float t = (distWorld - halfTileSize) / pathFadeDistance;
+                            fogAmount = Mathf.SmoothStep(0f, 1f, t);
                         }
+                        else
+                        {
+                            // Outside fade zone: full fog
+                            fogAmount = 1f;
+                        }
+
+                        // Take minimum (most transparent) value
+                        int pixelIndex = py * texWidth + px;
+                        pixels[pixelIndex].r = Mathf.Min(pixels[pixelIndex].r, fogAmount);
                     }
-                }
-
-                used.Add(i);
-
-                Vector2 size = maxCorner - minCorner;
-                if (size.x >= minFogSize && size.y >= minFogSize)
-                {
-                    areas.Add(new FogArea
-                    {
-                        center = (minCorner + maxCorner) * 0.5f,
-                        size = size
-                    });
                 }
             }
 
-            return areas;
+            pathMaskTexture.SetPixels(pixels);
+            pathMaskTexture.Apply();
         }
 
-        private void CreateFogQuad(Vector2 center, Vector2 size)
+        private void CreateFogMaterial()
         {
-            GameObject fogQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            fogQuad.name = $"VoidFog_{center.x:F0}_{center.y:F0}";
-            fogQuad.transform.SetParent(fogParent.transform);
+            var shader = Shader.Find("Custom/VoidFogMasked");
+            if (shader == null)
+            {
+                Debug.LogWarning("VoidFogMasked shader not found, falling back to default");
+                shader = Shader.Find("Sprites/Default");
+            }
 
-            // Position the quad
-            fogQuad.transform.position = new Vector3(center.x, center.y, zPosition);
-            fogQuad.transform.localScale = new Vector3(size.x, size.y, 1f);
+            fogMaterial = new Material(shader);
+            UpdateMaterialProperties();
+        }
+
+        private void UpdateMaterialProperties()
+        {
+            if (fogMaterial == null) return;
+
+            // Colors
+            fogMaterial.SetColor("_FogColor", fogColor);
+            fogMaterial.SetColor("_FogColorDark", fogColorDark);
+
+            // Cloud shape
+            fogMaterial.SetFloat("_CloudScale", cloudScale);
+            fogMaterial.SetFloat("_CloudDetail", cloudDetail);
+            fogMaterial.SetFloat("_CloudDensity", cloudDensity);
+            fogMaterial.SetFloat("_CloudSharpness", cloudSharpness);
+
+            // Animation
+            fogMaterial.SetFloat("_WindSpeed", windSpeed);
+            fogMaterial.SetVector("_WindDirection", new Vector4(windDirection.x, windDirection.y, 0, 0));
+
+            // Lighting
+            fogMaterial.SetVector("_LightDirection", new Vector4(lightDirection.x, lightDirection.y, 0, 0));
+            fogMaterial.SetFloat("_ShadowStrength", shadowStrength);
+            fogMaterial.SetFloat("_AmbientLight", ambientLight);
+
+            // Path mask
+            if (pathMaskTexture != null)
+            {
+                fogMaterial.SetTexture("_PathMask", pathMaskTexture);
+            }
+        }
+
+        private void CreateFogQuad()
+        {
+            fogQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            fogQuad.name = "VoidFogPlane";
+            fogQuad.transform.SetParent(transform);
+
+            // Position and scale to cover entire bounds
+            fogQuad.transform.position = new Vector3(mazeBounds.center.x, mazeBounds.center.y, zPosition);
+            fogQuad.transform.localScale = new Vector3(mazeBounds.size.x, mazeBounds.size.y, 1f);
             fogQuad.transform.rotation = Quaternion.identity;
 
             // Remove collider
@@ -301,8 +315,6 @@ namespace FaeMaze.Systems
             renderer.material = fogMaterial;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
-
-            fogQuads.Add(fogQuad);
         }
 
         private void OnValidate()
@@ -315,19 +327,21 @@ namespace FaeMaze.Systems
 
         public void ClearFog()
         {
-            foreach (var quad in fogQuads)
+            if (fogQuad != null)
             {
-                if (quad != null)
-                {
-                    Destroy(quad);
-                }
+                Destroy(fogQuad);
+                fogQuad = null;
             }
-            fogQuads.Clear();
         }
 
         public void RegenerateFog()
         {
             ClearFog();
+            if (pathMaskTexture != null)
+            {
+                Destroy(pathMaskTexture);
+                pathMaskTexture = null;
+            }
             GenerateVoidFog();
         }
 
@@ -338,9 +352,9 @@ namespace FaeMaze.Systems
             {
                 Destroy(fogMaterial);
             }
-            if (fogParent != null)
+            if (pathMaskTexture != null)
             {
-                Destroy(fogParent);
+                Destroy(pathMaskTexture);
             }
         }
     }

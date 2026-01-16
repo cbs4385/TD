@@ -45,6 +45,14 @@ namespace FaeMaze.Cameras
         private float angleChangeSpeed = 5f;
 
         [SerializeField]
+        [Tooltip("Maximum zoom distance along focal axis (Shift+Scroll)")]
+        private float maxFocalZoomDistance = 3f;
+
+        [SerializeField]
+        [Tooltip("Speed of zoom along focal axis")]
+        private float focalZoomSpeed = 0.5f;
+
+        [SerializeField]
         [Tooltip("Optional transform to use as the focal point (otherwise created at runtime)")]
         private Transform focalPointTransform;
 
@@ -140,6 +148,7 @@ namespace FaeMaze.Cameras
         // Focal point state
         private bool focalPointInitialized;
         private bool focalCameraPoseInitialized;
+        private float focalZoomOffset = 0f; // Current zoom offset along focal axis (0 = minimum/start, positive = further away)
 
         // Debugging
         private float rollLogTimer;
@@ -531,13 +540,36 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // In focal point mode, scroll changes viewing angle instead of radius
+            // In focal point mode, handle scroll differently
             if (useFocalPointMode)
             {
-                // Positive scroll = increase angle (move toward top-down)
-                // Negative scroll = decrease angle (move toward level)
-                focalViewAngle += scroll * angleChangeSpeed;
-                focalViewAngle = Mathf.Clamp(focalViewAngle, 37f, 89f);
+                Keyboard keyboard = Keyboard.current;
+                bool shiftHeld = keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed);
+
+                if (shiftHeld)
+                {
+                    // Shift+Scroll: zoom along focal axis using logarithmic scale
+                    // Scale scroll input by 10 and apply on log scale for smooth zoom feel
+                    // Positive scroll (toward user) = zoom in (decrease offset, move closer)
+                    // Negative scroll (away from user) = zoom out (increase offset, move further)
+                    float scaledScroll = scroll * 10f * focalZoomSpeed * 0.01f;
+
+                    // Use logarithmic scaling: convert current offset to log space, modify, convert back
+                    // Add 1 to avoid log(0), so offset 0 maps to log(1)=0
+                    float logOffset = Mathf.Log(focalZoomOffset + 1f);
+                    logOffset -= scaledScroll;
+                    logOffset = Mathf.Clamp(logOffset, 0f, Mathf.Log(maxFocalZoomDistance + 1f));
+                    focalZoomOffset = Mathf.Exp(logOffset) - 1f;
+                    focalZoomOffset = Mathf.Clamp(focalZoomOffset, 0f, maxFocalZoomDistance);
+                }
+                else
+                {
+                    // Normal scroll: change viewing angle
+                    // Positive scroll = increase angle (move toward top-down)
+                    // Negative scroll = decrease angle (move toward level)
+                    focalViewAngle += scroll * angleChangeSpeed;
+                    focalViewAngle = Mathf.Clamp(focalViewAngle, 37f, 89f);
+                }
                 return;
             }
 
@@ -796,7 +828,8 @@ namespace FaeMaze.Cameras
             // 45 degrees = angled view
             // 89 degrees = nearly above focal point (near top-down view)
             float angleRad = focalViewAngle * Mathf.Deg2Rad;
-            float cameraDistance = 5f; // Fixed distance from focal point
+            // Apply focalZoomOffset to camera distance (0 = closest/start position, positive = further away)
+            float cameraDistance = 5f + focalZoomOffset;
             float horizontalDistance = cameraDistance * Mathf.Cos(angleRad);
             float verticalOffset = cameraDistance * Mathf.Sin(angleRad);
 

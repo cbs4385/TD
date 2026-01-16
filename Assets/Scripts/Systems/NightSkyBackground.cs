@@ -8,6 +8,15 @@ namespace FaeMaze.Systems
     /// </summary>
     public class NightSkyBackground : MonoBehaviour
     {
+        [Header("Debug")]
+        [SerializeField]
+        [Tooltip("Use a uniform debug color instead of the gradient")]
+        private bool useDebugColor = false;
+
+        [SerializeField]
+        [Tooltip("Uniform debug background color")]
+        private Color debugColor = new Color(0.2f, 0.4f, 0.8f, 1f); // Uniform blue
+
         [Header("Colors")]
         [SerializeField]
         [Tooltip("Dark forest color at bottom")]
@@ -67,18 +76,28 @@ namespace FaeMaze.Systems
             }
 
             // Create and apply gradient material
-            var shader = Shader.Find("Custom/NightSkyGradient");
-            if (shader == null)
+            if (useDebugColor)
             {
-                // Fallback to unlit color if shader not found
-                shader = Shader.Find("Unlit/Color");
-                gradientMaterial = new Material(shader);
-                gradientMaterial.color = bottomColor;
+                // Use simple unlit color for debugging
+                var unlitShader = Shader.Find("Unlit/Color");
+                gradientMaterial = new Material(unlitShader);
+                gradientMaterial.color = debugColor;
             }
             else
             {
-                gradientMaterial = new Material(shader);
-                UpdateMaterialProperties();
+                var shader = Shader.Find("Custom/NightSkyGradient");
+                if (shader == null)
+                {
+                    // Fallback to unlit color if shader not found
+                    shader = Shader.Find("Unlit/Color");
+                    gradientMaterial = new Material(shader);
+                    gradientMaterial.color = bottomColor;
+                }
+                else
+                {
+                    gradientMaterial = new Material(shader);
+                    UpdateMaterialProperties();
+                }
             }
 
             var renderer = backgroundQuad.GetComponent<Renderer>();
@@ -102,7 +121,14 @@ namespace FaeMaze.Systems
             // Update material when values change in inspector
             if (Application.isPlaying && gradientMaterial != null)
             {
-                UpdateMaterialProperties();
+                if (useDebugColor)
+                {
+                    gradientMaterial.color = debugColor;
+                }
+                else
+                {
+                    UpdateMaterialProperties();
+                }
             }
         }
 

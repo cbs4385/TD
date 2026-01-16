@@ -23,6 +23,10 @@ namespace FaeMaze.Systems
         [Tooltip("Automatically center camera on maze")]
         private bool autoCenterCamera = true;
 
+        [SerializeField]
+        [Tooltip("Automatically add VoidFogGenerator to fill non-walkable areas with fog")]
+        private bool autoAddVoidFog = true;
+
         [Header("Defaults")]
         [SerializeField]
         [Tooltip("Wall prefab/model to inject when MazeRenderer is missing a reference")]
@@ -43,10 +47,30 @@ namespace FaeMaze.Systems
                 SetupRenderer();
             }
 
+            if (autoAddVoidFog)
+            {
+                SetupVoidFog();
+            }
+
             if (autoCenterCamera)
             {
                 CenterCameraOnMaze();
             }
+        }
+
+        private void SetupVoidFog()
+        {
+            // Check if VoidFogGenerator already exists in the scene
+            VoidFogGenerator existingFog = FindFirstObjectByType<VoidFogGenerator>();
+            if (existingFog != null)
+            {
+                return;
+            }
+
+            // Create a new GameObject for the void fog
+            GameObject fogObject = new GameObject("VoidFogGenerator");
+            fogObject.transform.SetParent(transform);
+            fogObject.AddComponent<VoidFogGenerator>();
         }
 
         private void SetupRenderer()
