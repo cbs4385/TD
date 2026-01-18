@@ -1598,7 +1598,7 @@ namespace FaeMaze.HeartPowers
         }
 
         // Constants
-        private const float GRASP_ZONE_RADIUS = 2f;
+        private const float GRASP_ZONE_RADIUS = 2.5f;
         private const int MIN_WALL_THICKNESS = 3;         // Minimum wall models required for valid wall intersection
         private const float TRANSPORT_DURATION = 1.0f;    // Duration of transport phase
         private const float HGZ_WALL_OFFSET = 0.5f;       // How far to offset HGZ into the wall (away from path)
@@ -1636,13 +1636,16 @@ namespace FaeMaze.HeartPowers
         private Vector3 pushingWallPos;
         private Vector3 pushingWallNormal;
         private Vector3 pushingStartPos;   // Initial position for push translation (at wall)
-        private Vector3 pushingTargetPos;  // Target position after pushing (1 unit toward heart)
+        private Vector3 pushingTargetPos;  // Target position after pushing (dynamically calculated)
+        private Vector3 pushingDir;        // Direction of push (toward heart)
         private PushPhase pushPhase = PushPhase.Idle;
         private float pushPhaseStartTime = 0f;
         private int pushCurrentFrame = 24;  // Starts at end for reverse play
-        private const float PUSH_DISTANCE = 1.0f;     // Distance to push toward heart
-        private const float PUSH_DURATION = 0.5f;     // Duration of push translation
-        private const float WITHDRAW_DURATION = 0.5f; // Duration of withdraw translation
+        private const float MIN_PUSH_DISTANCE = 1.0f;     // Minimum distance to push toward heart
+        private const float MAX_PUSH_DISTANCE = 10.0f;    // Maximum push distance (safety limit)
+        private const float PUSH_SPEED = 2.0f;            // Units per second during push
+        private const float WITHDRAW_DURATION = 0.5f;     // Duration of withdraw translation
+        private const float VISITOR_CHECK_RADIUS = 0.3f;  // Radius to check for visitor collision with walls/paths
 
         // Visitor processing
         private Queue<VisitorControllerBase> pendingVisitors = new Queue<VisitorControllerBase>();
@@ -1660,13 +1663,6 @@ namespace FaeMaze.HeartPowers
         // Affected wall tiles in grabbing zone
         private List<GameObject> affectedGrabbingWalls = new List<GameObject>();
         private Dictionary<GameObject, Vector3> originalWallPositions = new Dictionary<GameObject, Vector3>();
-
-        // Debug visualization
-        private GameObject debugRayColumn;
-        private GameObject debugGrabbingHitSphere;
-        private GameObject debugPushingHitSphere;
-        private GameObject debugGrabbingZoneCylinder;
-        private GameObject debugPushingZoneCylinder;
 
         // Toggle power expiration
         private int capturedCount = 0;
@@ -1688,19 +1684,14 @@ namespace FaeMaze.HeartPowers
             capturedCount = 0;
             hasExpired = false;
 
-            Debug.Log($"[HeartwardGrasp] OnStart - Click position: {targetPosition}, Tier: {requiredCaptures}");
-
             // Get heart node position
             if (manager.MazeGrid != null)
             {
                 heartNodePosition = manager.MazeGrid.HeartWorldPosition;
-                Debug.Log($"[HeartwardGrasp] Heart position: {heartNodePosition}");
             }
 
             // Find wall positions for both HGZs along the heart-to-focal ray
             FindWallPositions(targetPosition);
-
-            Debug.Log($"[HeartwardGrasp] Grabbing wall: {grabbingWallPos}, Pushing wall: {pushingWallPos}");
 
             // Create both HGZs
             CreateGrabbingHGZ();
@@ -1712,11 +1703,6 @@ namespace FaeMaze.HeartPowers
 
             // Find and affect wall tiles in grabbing zone
             FindAffectedGrabbingWalls();
-
-            // Create debug ray visualization
-            CreateDebugRayColumn(targetPosition);
-
-            Debug.Log($"[HeartwardGrasp] Initialization complete. Zone radius: {GRASP_ZONE_RADIUS}, affected walls: {affectedGrabbingWalls.Count}");
         }
 
         /// <summary>
@@ -1745,16 +1731,9 @@ namespace FaeMaze.HeartPowers
                 }
             }
             RaycastHit[] hits = wallHitsList.ToArray();
-            Debug.Log($"[HeartwardGrasp] Raycast: allHits={allHits.Length}, wallHits={hits.Length}");
 
             // Sort hits by distance from ray origin (heart)
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-            // Log all wall hits for debugging
-            for (int i = 0; i < hits.Length; i++)
-            {
-                Debug.Log($"[HeartwardGrasp] Wall hit {i}: dist={hits[i].distance:F2}, pos={hits[i].point}, obj={hits[i].collider.gameObject.name}");
-            }
 
             // HGZ is placed directly at the wall center (no offset)
             const float MAX_PUSHING_DISTANCE_FROM_HEART = 3.5f;
@@ -1784,15 +1763,12 @@ namespace FaeMaze.HeartPowers
 
                 if (distFromHeart > MAX_PUSHING_DISTANCE_FROM_HEART)
                 {
-                    Debug.Log($"[HeartwardGrasp] First hit too far from heart ({distFromHeart:F2} > {MAX_PUSHING_DISTANCE_FROM_HEART}), finding closest node border wall");
-
                     // Find closest wall on heart node border to the ray
                     Transform closestNodeWall = FindClosestNodeBorderWallToRay(heartPos2D, rayDirection);
                     if (closestNodeWall != null)
                     {
                         firstWallCenter = closestNodeWall.position;
                         pushingPos = new Vector2(firstWallCenter.x, firstWallCenter.y);
-                        Debug.Log($"[HeartwardGrasp] Using node border wall at {firstWallCenter}");
                     }
                 }
 
@@ -1804,15 +1780,12 @@ namespace FaeMaze.HeartPowers
 
                 if (distFromFocal > MAX_GRABBING_DISTANCE_FROM_FOCAL)
                 {
-                    Debug.Log($"[HeartwardGrasp] Last hit too far from focal ({distFromFocal:F2} > {MAX_GRABBING_DISTANCE_FROM_FOCAL}), finding closest edge border wall");
-
                     // Find closest wall to the focal point
                     Transform closestEdgeWall = FindClosestWallToPoint(focalPos2D, rayDirection);
                     if (closestEdgeWall != null)
                     {
                         lastWallCenter = closestEdgeWall.position;
                         grabbingPos = new Vector2(lastWallCenter.x, lastWallCenter.y);
-                        Debug.Log($"[HeartwardGrasp] Using edge border wall at {lastWallCenter}");
                     }
                 }
 
@@ -1834,21 +1807,10 @@ namespace FaeMaze.HeartPowers
 
                 pushingWallNormal = new Vector3(pushingWallPerp.x, pushingWallPerp.y, 0f);
                 grabbingWallNormal = new Vector3(grabbingWallPerp.x, grabbingWallPerp.y, 0f);
-
-                Debug.Log($"[HeartwardGrasp] Pushing: intoForest={pushingIntoForest}, offset={pushingOffset}");
-                Debug.Log($"[HeartwardGrasp] Grabbing: intoForest={grabbingIntoForest}, offset={grabbingOffset}");
-                Debug.Log($"[HeartwardGrasp] First wall center: {firstWallCenter}, pushing at {pushingWallPos}");
-                Debug.Log($"[HeartwardGrasp] Last wall center: {lastWallCenter}, grabbing at {grabbingWallPos}");
-
-                // Create debug spheres at wall centers
-                debugPushingHitSphere = CreateDebugSphere(new Vector3(firstWallCenter.x, firstWallCenter.y, 0f), Color.cyan, "Debug_PushingWallHit");
-                debugGrabbingHitSphere = CreateDebugSphere(new Vector3(lastWallCenter.x, lastWallCenter.y, 0f), Color.magenta, "Debug_GrabbingWallHit");
             }
             else
             {
                 // No walls hit along ray - find closest walls to heart and focal point
-                Debug.Log($"[HeartwardGrasp] No walls hit along ray, searching for nearby walls");
-
                 Vector2 rayDir2D = new Vector2(rayDirection.x, rayDirection.y).normalized;
 
                 // Find closest wall to heart node border
@@ -1865,7 +1827,6 @@ namespace FaeMaze.HeartPowers
                         closestNodeWall.position.y + pushingOffset.y,
                         -0.4f);
                     pushingWallNormal = new Vector3(pushingIntoForest.x, pushingIntoForest.y, 0f);
-                    Debug.Log($"[HeartwardGrasp] Found pushing wall at node border: {pushingWallPos}, intoForest={pushingIntoForest}");
                 }
                 else
                 {
@@ -1874,7 +1835,6 @@ namespace FaeMaze.HeartPowers
                     Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
                     pushingWallPos = new Vector3(rayOrigin.x + rayDirection.x * 3.5f + pushingOffset.x, rayOrigin.y + rayDirection.y * 3.5f + pushingOffset.y, -0.4f);
                     pushingWallNormal = rayDirection;
-                    Debug.Log($"[HeartwardGrasp] No node border wall found, using default pushing position");
                 }
 
                 // Find closest wall to focal point
@@ -1891,7 +1851,6 @@ namespace FaeMaze.HeartPowers
                         closestFocalWall.position.y + grabbingOffset.y,
                         -0.4f);
                     grabbingWallNormal = new Vector3(grabbingIntoForest.x, grabbingIntoForest.y, 0f);
-                    Debug.Log($"[HeartwardGrasp] Found grabbing wall near focal: {grabbingWallPos}, intoForest={grabbingIntoForest}");
                 }
                 else
                 {
@@ -1899,15 +1858,8 @@ namespace FaeMaze.HeartPowers
                     Vector2 grabbingOffset = rayDir2D * HGZ_WALL_OFFSET;
                     grabbingWallPos = new Vector3(focalPos3D.x + grabbingOffset.x, focalPos3D.y + grabbingOffset.y, -0.4f);
                     grabbingWallNormal = -rayDirection;
-                    Debug.Log($"[HeartwardGrasp] No focal wall found, using focal point as grabbing position");
                 }
-
-                // Create debug spheres at the offset positions
-                debugPushingHitSphere = CreateDebugSphere(pushingWallPos, Color.cyan, "Debug_PushingWallHit");
-                debugGrabbingHitSphere = CreateDebugSphere(grabbingWallPos, Color.magenta, "Debug_GrabbingWallHit");
             }
-
-            Debug.Log($"[HeartwardGrasp] Final positions: pushing={pushingWallPos}, grabbing={grabbingWallPos}");
         }
 
         private Transform FindClosestNodeBorderWallToRay(Vector2 heartPos, Vector3 rayDir)
@@ -1916,7 +1868,6 @@ namespace FaeMaze.HeartPowers
             GameObject nodeWallsContainer = GameObject.Find("NodeWalls_0");
             if (nodeWallsContainer == null)
             {
-                Debug.LogWarning("[HeartwardGrasp] Could not find NodeWalls_0");
                 return null;
             }
 
@@ -1952,7 +1903,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[HeartwardGrasp] Closest node border wall: {(closestWall != null ? closestWall.name : "none")} at dist {closestDistToRay:F2}");
             return closestWall;
         }
 
@@ -1991,7 +1941,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[HeartwardGrasp] Closest wall to focal: {(closestWall != null ? closestWall.name : "none")} at dist {closestDist:F2}");
             return closestWall;
         }
 
@@ -2026,7 +1975,6 @@ namespace FaeMaze.HeartPowers
                 // Fallback: use direction away from heart
                 Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
                 Vector2 awayFromHeart = (position - heartPos2D).normalized;
-                Debug.Log($"[HeartwardGrasp] GetIntoForestDirectionForEdge: no walls found, using away-from-heart direction {awayFromHeart}");
                 return awayFromHeart;
             }
 
@@ -2035,7 +1983,6 @@ namespace FaeMaze.HeartPowers
             Vector2 avgNormal = (sumNormals / wallCount).normalized;
             Vector2 intoForest = avgNormal;  // Not negated - walls point into forest
 
-            Debug.Log($"[HeartwardGrasp] GetIntoForestDirectionForEdge at {position}: sampled {wallCount} walls, avgNormal={avgNormal}, intoForest={intoForest}");
             return intoForest;
         }
 
@@ -2047,7 +1994,6 @@ namespace FaeMaze.HeartPowers
         {
             Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
             Vector2 awayFromHeart = (position - heartPos2D).normalized;
-            Debug.Log($"[HeartwardGrasp] GetIntoForestDirectionForNode at {position}: awayFromHeart={awayFromHeart}");
             return awayFromHeart;
         }
 
@@ -2061,12 +2007,10 @@ namespace FaeMaze.HeartPowers
             const float CHECK_RADIUS = 6.0f;  // Must be large enough to detect heart node center (radius 3.0 + buffer)
             const float NODE_RADIUS = 3.0f;   // Node radius from MazeRenderer
 
-            Debug.Log($"[HeartwardGrasp] ValidateHGZPosition: checking pos={proposedPos}, offsetDir={offsetDir}, minDist={minEdgeDistance}");
 
             // Check if there are any path or node tiles near the proposed position
             Collider[] nearbyColliders = Physics.OverlapSphere(proposedPos, CHECK_RADIUS, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
 
-            Debug.Log($"[HeartwardGrasp] ValidateHGZPosition: found {nearbyColliders.Length} colliders within radius {CHECK_RADIUS}");
 
             float closestEdgeDist = float.MaxValue;
             string closestName = "";
@@ -2091,7 +2035,6 @@ namespace FaeMaze.HeartPowers
                     {
                         // For nodes, the edge is NODE_RADIUS away from center
                         distToEdge = distToCenter - NODE_RADIUS;
-                        Debug.Log($"[HeartwardGrasp] Found node: {collider.gameObject.name}, tag={collider.tag}, center={collider.transform.position}, distToCenter={distToCenter:F2}, distToEdge={distToEdge:F2}");
                     }
                     else
                     {
@@ -2107,18 +2050,15 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[HeartwardGrasp] ValidateHGZPosition: pathCount={pathCount}, nodeCount={nodeCount}, closestEdgeDist={closestEdgeDist:F2}, closestName={closestName}");
 
             // If we're too close to a path/node edge, push further in the offset direction
             if (closestEdgeDist < minEdgeDistance)
             {
                 float additionalOffset = minEdgeDistance - closestEdgeDist + 0.5f;  // Add extra margin
                 Vector3 correctedPos = proposedPos + new Vector3(offsetDir.x, offsetDir.y, 0f) * additionalOffset;
-                Debug.Log($"[HeartwardGrasp] HGZ position too close to edge ({closestEdgeDist:F2} < {minEdgeDistance}), pushing {additionalOffset:F2} further. Nearest: {closestName}");
                 return correctedPos;
             }
 
-            Debug.Log($"[HeartwardGrasp] HGZ position validated: {closestEdgeDist:F2} >= {minEdgeDistance} from nearest edge ({closestName})");
             return proposedPos;
         }
 
@@ -2142,7 +2082,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            Debug.Log($"[HeartwardGrasp] Found {affectedGrabbingWalls.Count} wall tiles in grabbing zone");
         }
 
         private void UpdateWallShakeEffect()
@@ -2203,9 +2142,6 @@ namespace FaeMaze.HeartPowers
             // Model +X axis should point toward where visitors approach from
             Vector3 dirTowardFocal = (targetPosition - grabbingWallPos).normalized;
             SpawnGraspVisual(grabbingZoneObject, grabbingWallPos, dirTowardFocal, ref grabbingVisual, ref grabbingAnimator, ref grabbingTouchCollider, "GrabbingHand");
-
-            // Debug: create cylinder showing collision zone
-            debugGrabbingZoneCylinder = CreateDebugZoneCylinder(grabbingWallPos, GRASP_ZONE_RADIUS, Color.green, "Debug_GrabbingZone");
         }
 
         private void CreatePushingHGZ()
@@ -2228,9 +2164,6 @@ namespace FaeMaze.HeartPowers
             // Model +X axis should point toward the heart where visitors are pushed
             Vector3 dirTowardHeart = (heartNodePosition - pushingWallPos).normalized;
             SpawnGraspVisual(pushingZoneObject, pushingWallPos, dirTowardHeart, ref pushingVisual, ref pushingAnimator, ref pushingTouchCollider, "PushingHand");
-
-            // Debug: create cylinder showing collision zone
-            debugPushingZoneCylinder = CreateDebugZoneCylinder(pushingWallPos, GRASP_ZONE_RADIUS, Color.red, "Debug_PushingZone");
         }
 
         private void SpawnGraspVisual(GameObject parent, Vector3 position, Vector3 forwardDir, ref GameObject visual, ref Animator animator, ref SphereCollider touchCollider, string name)
@@ -2238,7 +2171,6 @@ namespace FaeMaze.HeartPowers
             GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/Grasp/grasp");
             if (graspPrefab == null)
             {
-                Debug.LogWarning("[HeartwardGrasp] Could not load grasp prefab");
                 return;
             }
 
@@ -2250,7 +2182,6 @@ namespace FaeMaze.HeartPowers
             float angle = Mathf.Atan2(forwardDir.y, forwardDir.x) * Mathf.Rad2Deg;
             Quaternion finalRotation = Quaternion.Euler(0f, 0f, angle);
 
-            Debug.Log($"[HeartwardGrasp] {name} forwardDir={forwardDir}, angle={angle}deg, rotation={finalRotation.eulerAngles}");
 
             visual = Object.Instantiate(graspPrefab, position, finalRotation);
             visual.name = name;
@@ -2267,7 +2198,6 @@ namespace FaeMaze.HeartPowers
             {
                 // Log animator details
                 var controller = animator.runtimeAnimatorController;
-                Debug.Log($"[HeartwardGrasp] {name} animator found. Controller: {(controller != null ? controller.name : "NULL")}, enabled: {animator.enabled}");
 
                 if (controller != null)
                 {
@@ -2278,16 +2208,13 @@ namespace FaeMaze.HeartPowers
 
                     // Verify the state was set
                     var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
-                    Debug.Log($"[HeartwardGrasp] {name} initialized. State hash: {stateInfo.fullPathHash}, normalizedTime: {stateInfo.normalizedTime:F3}, length: {stateInfo.length:F3}");
                 }
                 else
                 {
-                    Debug.LogWarning($"[HeartwardGrasp] {name} animator has no controller assigned!");
                 }
             }
             else
             {
-                Debug.LogWarning($"[HeartwardGrasp] {name} has no Animator component");
             }
 
             // Find or create the "touch" collider on the grasp model
@@ -2313,7 +2240,6 @@ namespace FaeMaze.HeartPowers
                 if (touchCollider != null)
                 {
                     touchCollider.isTrigger = true;
-                    Debug.Log($"[HeartwardGrasp] {name} touch collider found, isTrigger={touchCollider.isTrigger}");
                 }
             }
 
@@ -2334,7 +2260,6 @@ namespace FaeMaze.HeartPowers
                 // Store reference so we can update position during reaching
                 touchObj.name = $"touch_{name}";
 
-                Debug.Log($"[HeartwardGrasp] {name} created touch collider at runtime, pos={touchObj.transform.position}, radius={touchCollider.radius}");
             }
         }
 
@@ -2398,139 +2323,6 @@ namespace FaeMaze.HeartPowers
             particles.Play();
         }
 
-        private void CreateDebugRayColumn(Vector3 focalPos)
-        {
-            Vector3 rayOrigin = new Vector3(heartNodePosition.x, heartNodePosition.y, -0.5f);
-            Vector3 focalPos3D = new Vector3(focalPos.x, focalPos.y, -0.5f);
-            Vector3 midpoint = (rayOrigin + focalPos3D) / 2f;
-            float rayLength = Vector3.Distance(rayOrigin, focalPos3D);
-            Vector3 rayDirection = (focalPos3D - rayOrigin).normalized;
-
-            // Create cylinder along the ray
-            debugRayColumn = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            debugRayColumn.name = "HeartwardGrasp_DebugRay";
-
-            // Remove collider
-            var collider = debugRayColumn.GetComponent<Collider>();
-            if (collider != null) Object.Destroy(collider);
-
-            // Position at midpoint of ray
-            debugRayColumn.transform.position = midpoint;
-
-            // Cylinder default: height 2, radius 0.5, oriented along Y axis
-            // Scale: radius 0.1 means radiusScale = 0.1/0.5 = 0.2, height = rayLength/2
-            float radiusScale = 0.1f / 0.5f;  // radius 0.1
-            float heightScale = rayLength / 2f;
-            debugRayColumn.transform.localScale = new Vector3(radiusScale, heightScale, radiusScale);
-
-            // Orient cylinder along ray direction (default Y axis -> ray direction)
-            float angle = Mathf.Atan2(rayDirection.y, rayDirection.x) * Mathf.Rad2Deg;
-            debugRayColumn.transform.rotation = Quaternion.Euler(0f, 0f, angle - 90f);
-
-            // Bright yellow material
-            var renderer = debugRayColumn.GetComponent<MeshRenderer>();
-            if (renderer != null)
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-                    ?? Shader.Find("Unlit/Color")
-                    ?? Shader.Find("Standard");
-
-                if (shader != null)
-                {
-                    var mat = new Material(shader);
-                    Color brightYellow = new Color(1f, 1f, 0f, 1f);
-                    if (mat.HasProperty("_BaseColor"))
-                        mat.SetColor("_BaseColor", brightYellow);
-                    if (mat.HasProperty("_Color"))
-                        mat.SetColor("_Color", brightYellow);
-                    renderer.material = mat;
-                }
-            }
-
-            Debug.Log($"[HeartwardGrasp] Debug ray created from {rayOrigin} to {focalPos3D}, length={rayLength}");
-        }
-
-        private GameObject CreateDebugSphere(Vector3 position, Color color, string name)
-        {
-            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            sphere.name = name;
-
-            // Remove collider
-            var collider = sphere.GetComponent<Collider>();
-            if (collider != null) Object.Destroy(collider);
-
-            // Position at z=-0.5, radius ~0.5
-            sphere.transform.position = new Vector3(position.x, position.y, -0.5f);
-            sphere.transform.localScale = new Vector3(1f, 1f, 1f);
-
-            // Set color
-            var renderer = sphere.GetComponent<MeshRenderer>();
-            if (renderer != null)
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-                    ?? Shader.Find("Unlit/Color")
-                    ?? Shader.Find("Standard");
-
-                if (shader != null)
-                {
-                    var mat = new Material(shader);
-                    if (mat.HasProperty("_BaseColor"))
-                        mat.SetColor("_BaseColor", color);
-                    if (mat.HasProperty("_Color"))
-                        mat.SetColor("_Color", color);
-                    renderer.material = mat;
-                }
-            }
-
-            return sphere;
-        }
-
-        private GameObject CreateDebugZoneCylinder(Vector3 position, float radius, Color color, string name)
-        {
-            var cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            cylinder.name = name;
-
-            // Remove collider
-            var collider = cylinder.GetComponent<Collider>();
-            if (collider != null) Object.Destroy(collider);
-
-            // Position at playing surface (z=0), height 0.1 along Z axis
-            cylinder.transform.position = new Vector3(position.x, position.y, 0f);
-
-            // Unity cylinder: height along local Y, radius in local XZ
-            // We want: height along world Z, radius in world XY
-            // Rotate -90° around X to map local Y to world Z
-            cylinder.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
-
-            // Cylinder default: height 2, radius 0.5
-            // After rotation: local Y (height) -> world Z, local X -> world X, local Z -> world Y
-            // Scale: X and Z control radius in world XY plane, Y controls height in world Z
-            float radiusScale = radius / 0.5f;
-            float heightScale = 0.1f / 2f;
-            cylinder.transform.localScale = new Vector3(radiusScale, heightScale, radiusScale);
-
-            // Set color
-            var renderer = cylinder.GetComponent<MeshRenderer>();
-            if (renderer != null)
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-                    ?? Shader.Find("Unlit/Color")
-                    ?? Shader.Find("Standard");
-
-                if (shader != null)
-                {
-                    var mat = new Material(shader);
-                    if (mat.HasProperty("_BaseColor"))
-                        mat.SetColor("_BaseColor", color);
-                    if (mat.HasProperty("_Color"))
-                        mat.SetColor("_Color", color);
-                    renderer.material = mat;
-                }
-            }
-
-            return cylinder;
-        }
-
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
@@ -2579,7 +2371,6 @@ namespace FaeMaze.HeartPowers
         {
             if (visitor == null || hasExpired) return;
 
-            Debug.Log($"[HeartwardGrasp] Starting grab on visitor at {visitor.transform.position}");
 
             currentVisitor = visitor;
             visitorVisible = true;
@@ -2596,7 +2387,6 @@ namespace FaeMaze.HeartPowers
 
             if (grabbingParticles != null) grabbingParticles.Emit(25);
 
-            Debug.Log($"[HeartwardGrasp] Grab phase: Idle -> Reaching");
         }
 
         private void UpdateGrabbingHGZ(float deltaTime)
@@ -2661,27 +2451,14 @@ namespace FaeMaze.HeartPowers
                                 if (hit.transform.IsChildOf(currentVisitor.transform) || hit.transform == currentVisitor.transform)
                                 {
                                     touchedVisitor = true;
-                                    Debug.Log($"[HeartwardGrasp] Touch detected! Hit: {hit.name}");
                                     break;
                                 }
                             }
 
-                            // Debug every frame to see what's happening
-                            if (Time.frameCount % 30 == 0) // Every 30 frames
-                            {
-                                float distToVisitor = Vector2.Distance(new Vector2(touchCenter.x, touchCenter.y), new Vector2(visitorPos.x, visitorPos.y));
-                                Debug.Log($"[HeartwardGrasp] Touch check: center={touchCenter}, radius={touchRadius:F3}, distToVisitor={distToVisitor:F2}, hits={hits.Length}");
-                            }
-                        }
-                        else
-                        {
-                            if (Time.frameCount % 60 == 0)
-                                Debug.LogWarning("[HeartwardGrasp] grabbingTouchCollider is NULL!");
                         }
 
                         if (touchedVisitor)
                         {
-                            Debug.Log($"[HeartwardGrasp] SUCCESS: Touch collider triggered on visitor! Transitioning to Grabbing");
                             // Stop visitor movement immediately
                             currentVisitor.Stop();
                             // Store the grab position and visitor offset
@@ -2709,7 +2486,6 @@ namespace FaeMaze.HeartPowers
 
                         if (phaseElapsed >= GRAB_ANIMATION_DURATION)
                         {
-                            Debug.Log($"[HeartwardGrasp] Grab phase: Grabbing -> Pulling (animation complete at frame {grabCurrentFrame})");
                             grabPhase = GrabPhase.Pulling;
                             grabPhaseStartTime = elapsedTime;
                             if (grabbingParticles != null) grabbingParticles.Emit(20);
@@ -2744,7 +2520,6 @@ namespace FaeMaze.HeartPowers
 
                         if (pullProgress >= 1f)
                         {
-                            Debug.Log($"[HeartwardGrasp] Grab phase: Pulling -> Transporting");
                             SetVisitorVisible(currentVisitor, false);
                             visitorVisible = false;
                             grabPhase = GrabPhase.Transporting;
@@ -2757,34 +2532,17 @@ namespace FaeMaze.HeartPowers
                     // 1 second duration, then relocate visitor to pushing HGZ
                     if (phaseElapsed >= TRANSPORT_DURATION)
                     {
-                        Debug.Log($"[HeartwardGrasp] Transport complete, starting push sequence");
-                        Debug.Log($"[HeartwardGrasp] visitorGrabOffset={visitorGrabOffset}, pushingWallPos={pushingWallPos}");
-
-                        // Transform the grab offset to pushing hand's orientation
-                        // Grabbing hand points away from heart, pushing hand points toward heart
-                        // Convert offset from grabbing hand's local space to pushing hand's local space
-                        Vector3 grabbingDir = (grabbingWallPos - heartNodePosition).normalized;
+                        // Position visitor in front of pushing hand, along the push direction (toward heart)
+                        // The visitor should be in contact with the touch collider and ahead of the hand
                         Vector3 pushingDir = (heartNodePosition - pushingWallPos).normalized;
 
-                        // Calculate the rotation difference between the two orientations
-                        float grabbingAngle = Mathf.Atan2(grabbingDir.y, grabbingDir.x);
-                        float pushingAngle = Mathf.Atan2(pushingDir.y, pushingDir.x);
-                        float angleDiff = pushingAngle - grabbingAngle;
-
-                        Debug.Log($"[HeartwardGrasp] grabbingDir={grabbingDir}, pushingDir={pushingDir}");
-                        Debug.Log($"[HeartwardGrasp] grabbingAngle={grabbingAngle * Mathf.Rad2Deg}°, pushingAngle={pushingAngle * Mathf.Rad2Deg}°, angleDiff={angleDiff * Mathf.Rad2Deg}°");
-
-                        // Rotate the offset to match pushing hand's orientation
-                        visitorPushOffset = new Vector3(
-                            visitorGrabOffset.x * Mathf.Cos(angleDiff) - visitorGrabOffset.y * Mathf.Sin(angleDiff),
-                            visitorGrabOffset.x * Mathf.Sin(angleDiff) + visitorGrabOffset.y * Mathf.Cos(angleDiff),
-                            visitorGrabOffset.z
-                        );
-
-                        Debug.Log($"[HeartwardGrasp] visitorPushOffset={visitorPushOffset}");
+                        // Offset distance: place visitor slightly in front of hand (along push direction)
+                        // Use a small offset so visitor is in contact with touch collider
+                        float forwardOffset = 0.3f;  // Distance in front of hand along push axis
+                        visitorPushOffset = pushingDir * forwardOffset;
+                        visitorPushOffset.z = visitorGrabOffset.z;  // Preserve Z offset from grab
 
                         Vector3 newVisitorPos = pushingWallPos + visitorPushOffset;
-                        Debug.Log($"[HeartwardGrasp] Setting visitor position to {newVisitorPos}");
                         currentVisitor.transform.position = newVisitorPos;
 
                         // Start pushing sequence
@@ -2812,8 +2570,9 @@ namespace FaeMaze.HeartPowers
 
             // Calculate push translation positions
             pushingStartPos = pushingWallPos;
-            Vector3 dirToHeart = (heartNodePosition - pushingWallPos).normalized;
-            pushingTargetPos = pushingStartPos + dirToHeart * PUSH_DISTANCE;
+            pushingDir = (heartNodePosition - pushingWallPos).normalized;
+            // Initial target is minimum distance, but will extend dynamically if visitor still in walls
+            pushingTargetPos = pushingStartPos + pushingDir * MIN_PUSH_DISTANCE;
 
             // Start with Pushing phase (translate toward heart)
             pushPhase = PushPhase.Pushing;
@@ -2822,7 +2581,6 @@ namespace FaeMaze.HeartPowers
 
             if (pushingParticles != null) pushingParticles.Emit(25);
 
-            Debug.Log($"[HeartwardGrasp] Push phase: Idle -> Pushing (translating {PUSH_DISTANCE} unit toward heart)");
         }
 
         private void UpdatePushingHGZ(float deltaTime)
@@ -2839,33 +2597,47 @@ namespace FaeMaze.HeartPowers
             switch (pushPhase)
             {
                 case PushPhase.Pushing:
-                    // Model translates 1 unit toward heart, hand stays closed (frame 24)
+                    // Model translates toward heart at constant speed until visitor is clear of walls and on path
                     {
-                        float pushProgress = Mathf.Clamp01(phaseElapsed / PUSH_DURATION);
-
                         // Keep hand closed at frame 24
                         SetAnimatorFrame(pushingAnimator, GRAB_ANIMATION_FRAMES);
 
-                        // Translate model toward heart
-                        pushingVisual.transform.position = Vector3.Lerp(pushingStartPos, pushingTargetPos, pushProgress);
+                        // Move at constant speed toward heart
+                        Vector3 currentPos = pushingVisual.transform.position;
+                        Vector3 newPos = currentPos + pushingDir * PUSH_SPEED * deltaTime;
 
-                        // Update touch collider position
-                        if (pushingTouchCollider != null)
+                        // Calculate how far we've traveled
+                        float distanceTraveled = Vector3.Distance(pushingStartPos, newPos);
+
+                        // Check if we've hit max distance (safety limit)
+                        if (distanceTraveled >= MAX_PUSH_DISTANCE)
                         {
-                            pushingTouchCollider.transform.position = new Vector3(
-                                pushingVisual.transform.position.x,
-                                pushingVisual.transform.position.y,
-                                -0.3f);
-                        }
-
-                        // Move visitor with the hand
-                        currentVisitor.transform.position = pushingVisual.transform.position + visitorPushOffset;
-
-                        if (pushProgress >= 1f)
-                        {
-                            Debug.Log($"[HeartwardGrasp] Push phase: Pushing -> Releasing");
+                            newPos = pushingStartPos + pushingDir * MAX_PUSH_DISTANCE;
+                            pushingTargetPos = newPos;
+                            pushingVisual.transform.position = newPos;
+                            // Update touch collider and visitor positions
+                            UpdatePushPositions(newPos);
+                            // Force transition to releasing
                             pushPhase = PushPhase.Releasing;
                             pushPhaseStartTime = elapsedTime;
+                            break;
+                        }
+
+                        // Update positions
+                        pushingVisual.transform.position = newPos;
+                        UpdatePushPositions(newPos);
+
+                        // Check if visitor is clear of walls and on a valid walkable area
+                        // Only check after minimum distance traveled
+                        if (distanceTraveled >= MIN_PUSH_DISTANCE)
+                        {
+                            Vector3 visitorPos = currentVisitor.transform.position;
+                            if (IsVisitorOnValidWalkableArea(visitorPos))
+                            {
+                                pushingTargetPos = newPos;
+                                pushPhase = PushPhase.Releasing;
+                                pushPhaseStartTime = elapsedTime;
+                            }
                         }
                     }
                     break;
@@ -2889,7 +2661,6 @@ namespace FaeMaze.HeartPowers
 
                         if (releaseProgress >= 1f)
                         {
-                            Debug.Log($"[HeartwardGrasp] Push phase: Releasing -> Withdrawing, visitor dazed");
                             // Apply daze to visitor
                             float dazeDuration = definition.param1 > 0 ? definition.param1 : 2f;
                             currentVisitor.OnWitnessMazeGrowth(dazeDuration);
@@ -2923,7 +2694,6 @@ namespace FaeMaze.HeartPowers
 
                         if (withdrawProgress >= 1f)
                         {
-                            Debug.Log($"[HeartwardGrasp] Push phase: Withdrawing complete");
                             FinalizeCapture();
                         }
                     }
@@ -2935,20 +2705,15 @@ namespace FaeMaze.HeartPowers
         {
             if (currentVisitor != null)
             {
-                Debug.Log($"[HeartwardGrasp] FinalizeCapture - visitor position before resume: {currentVisitor.transform.position}");
                 currentVisitor.Resume();
                 currentVisitor.RecalculatePath();
-                Debug.Log($"[HeartwardGrasp] FinalizeCapture - visitor position after resume: {currentVisitor.transform.position}");
-                Debug.Log($"[HeartwardGrasp] Visitor released and dazed at heart area");
             }
 
             capturedCount++;
-            Debug.Log($"[HeartwardGrasp] Capture complete. Count: {capturedCount}/{requiredCaptures}");
 
             if (capturedCount >= requiredCaptures)
             {
                 hasExpired = true;
-                Debug.Log($"[HeartwardGrasp] Power expired after {capturedCount} captures");
             }
 
             currentVisitor = null;
@@ -2979,34 +2744,80 @@ namespace FaeMaze.HeartPowers
             visual.transform.rotation = Quaternion.Euler(0f, 0f, angle);
         }
 
+        /// <summary>
+        /// Updates touch collider and visitor positions during push phase.
+        /// </summary>
+        private void UpdatePushPositions(Vector3 handPos)
+        {
+            if (pushingTouchCollider != null)
+            {
+                pushingTouchCollider.transform.position = new Vector3(handPos.x, handPos.y, -0.3f);
+            }
+
+            if (currentVisitor != null)
+            {
+                currentVisitor.transform.position = handPos + visitorPushOffset;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the visitor position is on a valid walkable area (path or node tile)
+        /// and NOT colliding with any wall tiles.
+        /// </summary>
+        private bool IsVisitorOnValidWalkableArea(Vector3 visitorPos)
+        {
+            // Use XY position for 2D check (this game uses XY as ground plane)
+            Vector3 checkPos = new Vector3(visitorPos.x, visitorPos.y, 0f);
+
+            // Check for collisions at visitor position
+            Collider[] hits = Physics.OverlapSphere(checkPos, VISITOR_CHECK_RADIUS, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            bool onWalkableTile = false;
+            bool touchingWall = false;
+
+            foreach (var hit in hits)
+            {
+                string objName = hit.gameObject.name;
+
+                // Check for wall tiles (WorldTile_#)
+                if (objName.StartsWith("WorldTile_#"))
+                {
+                    touchingWall = true;
+                }
+
+                // Check for path tiles (MazePath tag or PathTile/WorldTile_ without #)
+                if (hit.CompareTag("MazePath") ||
+                    objName.StartsWith("PathTile") ||
+                    (objName.StartsWith("WorldTile_") && !objName.StartsWith("WorldTile_#")))
+                {
+                    onWalkableTile = true;
+                }
+
+                // Check for node tiles (MazeNode tag or NodeColumn/NodeCylinder)
+                if (hit.CompareTag("MazeNode") ||
+                    objName.StartsWith("NodeColumn") ||
+                    objName.StartsWith("NodeCylinder"))
+                {
+                    onWalkableTile = true;
+                }
+            }
+
+            // Visitor is valid if on a walkable tile AND not touching any walls
+            return onWalkableTile && !touchingWall;
+        }
+
         private void SetAnimatorFrame(Animator animator, int frame)
         {
-            if (animator == null)
-            {
-                Debug.LogWarning($"[HeartwardGrasp] SetAnimatorFrame called with null animator!");
-                return;
-            }
+            if (animator == null) return;
 
-            // Ensure animator is enabled
-            if (!animator.enabled)
-            {
-                animator.enabled = true;
-                Debug.Log($"[HeartwardGrasp] SetAnimatorFrame: re-enabled animator");
-            }
+            // Calculate normalized time (0 to 1) for the frame
+            // Clamp to 0.999 to avoid looping back to frame 0 when at last frame
+            float normalizedTime = Mathf.Min(frame / (float)GRAB_ANIMATION_FRAMES, 0.999f);
 
-            // The GLB animation reports length: Infinity, so normalized time doesn't work.
-            // Instead, use the actual animation time. The animation is ~0.4 seconds at 60fps (24 frames).
-            // Frame 0 = time 0, Frame 24 = time 0.4
-            const float ANIMATION_DURATION_SECONDS = 0.4f;  // 24 frames at 60fps
-            float targetTime = (frame / (float)GRAB_ANIMATION_FRAMES) * ANIMATION_DURATION_SECONDS;
-
-            // Play the animation and immediately jump to the target time
-            animator.speed = 1f;  // Enable playback temporarily
-            animator.Play("GraspFinal", 0, 0f);  // Start from beginning
-            animator.Update(targetTime);  // Advance to target time
-            animator.speed = 0f;  // Pause
-
-            Debug.Log($"[HeartwardGrasp] SetAnimatorFrame: frame={frame}/{GRAB_ANIMATION_FRAMES}, targetTime={targetTime:F3}s");
+            animator.speed = 0f;
+            var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+            animator.Play(stateInfo.fullPathHash, 0, normalizedTime);
+            animator.Update(0f);
         }
 
         private void SetVisitorVisible(VisitorControllerBase visitor, bool visible)
@@ -3040,7 +2851,6 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
-            Debug.Log($"[HeartwardGrasp] OnEnd - Cleaning up. Captured: {capturedCount}");
 
             if (grabbingZoneObject != null)
             {
@@ -3052,33 +2862,6 @@ namespace FaeMaze.HeartPowers
             {
                 Object.Destroy(pushingZoneObject);
                 pushingZoneObject = null;
-            }
-
-            // Clean up debug visualizations
-            if (debugRayColumn != null)
-            {
-                Object.Destroy(debugRayColumn);
-                debugRayColumn = null;
-            }
-            if (debugGrabbingHitSphere != null)
-            {
-                Object.Destroy(debugGrabbingHitSphere);
-                debugGrabbingHitSphere = null;
-            }
-            if (debugPushingHitSphere != null)
-            {
-                Object.Destroy(debugPushingHitSphere);
-                debugPushingHitSphere = null;
-            }
-            if (debugGrabbingZoneCylinder != null)
-            {
-                Object.Destroy(debugGrabbingZoneCylinder);
-                debugGrabbingZoneCylinder = null;
-            }
-            if (debugPushingZoneCylinder != null)
-            {
-                Object.Destroy(debugPushingZoneCylinder);
-                debugPushingZoneCylinder = null;
             }
 
             if (currentVisitor != null)
@@ -3112,18 +2895,6 @@ namespace FaeMaze.HeartPowers
                 grabbingZoneObject.transform.position += worldOffset;
             if (pushingZoneObject != null)
                 pushingZoneObject.transform.position += worldOffset;
-
-            // Move debug visualizations
-            if (debugRayColumn != null)
-                debugRayColumn.transform.position += worldOffset;
-            if (debugGrabbingHitSphere != null)
-                debugGrabbingHitSphere.transform.position += worldOffset;
-            if (debugPushingHitSphere != null)
-                debugPushingHitSphere.transform.position += worldOffset;
-            if (debugGrabbingZoneCylinder != null)
-                debugGrabbingZoneCylinder.transform.position += worldOffset;
-            if (debugPushingZoneCylinder != null)
-                debugPushingZoneCylinder.transform.position += worldOffset;
         }
 
         public int GetCapturedCount() => capturedCount;

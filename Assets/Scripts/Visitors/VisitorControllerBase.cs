@@ -2004,7 +2004,7 @@ namespace FaeMaze.Visitors
             if (mazeGridBehaviour != null)
             {
                 float distToHeart = Vector3.Distance(transform.position, mazeGridBehaviour.HeartWorldPosition);
-                if (distToHeart < 5f) // Within 5 units of heart
+                if (distToHeart < 1.5f) // Within 1.5 units of heart
                 {
                     // Visitor has reached the heart - trigger consumed
                     state = VisitorState.Consumed;

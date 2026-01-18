@@ -118,6 +118,32 @@ namespace FaeMaze.Props
             }
 
             SetIdleDirection();
+
+            // Create exclusion zone to prevent visitors from entering lantern center
+            CreateExclusionZone();
+        }
+
+        private void CreateExclusionZone()
+        {
+            // Check if exclusion zone already exists
+            if (GetComponentInChildren<LanternExclusionZone>() != null) return;
+
+            // Create child object for exclusion zone
+            GameObject zoneObj = new GameObject("ExclusionZone");
+            zoneObj.transform.SetParent(transform);
+            zoneObj.transform.localPosition = Vector3.zero;
+
+            // Add kinematic Rigidbody for trigger detection
+            var rb = zoneObj.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            // Add sphere collider and exclusion zone component
+            var collider = zoneObj.AddComponent<SphereCollider>();
+            collider.isTrigger = true;
+            collider.radius = 1f; // 1 unit exclusion radius
+
+            zoneObj.AddComponent<LanternExclusionZone>();
         }
 
         private void OnEnable()

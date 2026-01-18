@@ -304,52 +304,34 @@ int samplesPerNode = Mathf.Min(6, tiles.Count); // NO! Fog needs ALL tiles, not 
 
 ### In Progress - HeartwardGrasp (Heart Power 2)
 
-**Current State**: Core grab/transport/push sequence is implemented and partially tested. Grab sequence (Idle→Reaching→Grabbing→Pulling→Transporting) works. Push sequence starts but needs full testing. Recent fixes address HGZ positioning depth and visitor orientation during teleport.
+**Current State**: Core grab/transport/push sequence is fully implemented and working. Animation plays smoothly through all phases. Push phase now dynamically extends until visitor is on valid walkable area (not in walls).
 
-**What was done this session:**
-1. Restructured HeartwardGrasp to use TWO HGZs (GrabbingHGZ and PushingHGZ)
-2. Implemented frame-based animation control via Animator normalized time
-3. Fixed wall detection using `Physics.RaycastAll` with `QueryTriggerInteraction.Collide`
-4. Walls are filtered by name (`WorldTile_#`) since they use trigger colliders on default layer
-5. First hit = PushingHGZ (near heart), last hit before focal = GrabbingHGZ (near focal point)
-6. Fixed hand rotation: model's X axis is forward, Z points to world -Z. Uses `Quaternion.Euler(0f, -angle, 0f)`
-7. Increased WALL_OFFSET from 0.5 to 1.5 for better HGZ placement depth into walls
-8. Fixed pushing hand to orient TOWARD heart (was incorrectly pointing away)
-9. Added `visitorPushOffset` - transforms grab offset to match pushing hand's different orientation
-10. Teleportation now rotates the visitor offset based on angle difference between grabbing/pushing directions
+**Remaining issue:**
+- [ ] **Visitor despawns upon release** - Likely related to dazed state logic. When `OnWitnessMazeGrowth()` is called at the end of the release phase, the visitor despawns instead of becoming dazed. Investigate visitor daze/despawn logic in `VisitorControllerBase.cs`.
 
-**Recent issues addressed:**
-- HGZs were not far enough into walls → increased WALL_OFFSET to 1.5
-- Pushing hand was oriented away from heart instead of toward it → fixed direction
-- Visitor teleported to wrong position because offset wasn't transformed for pushing hand's rotation → added angle-based offset transformation
-
-**Next steps to complete HeartwardGrasp:**
-- [ ] Test that HGZs are now properly positioned 1.5 units into walls
-- [ ] Verify pushing hand now points toward heart
-- [ ] Test full push sequence: Reaching (reverse 62→46) → Releasing (46→20, daze visitor) → Withdrawing (20→0)
-- [ ] Verify visitor position is correct after teleport (using transformed offset)
-- [ ] Verify daze effect applied when visitor released
-- [ ] Verify power expires after tier-count captures
+**What works:**
+- Grab sequence: Idle → Reaching → Grabbing → Pulling → Transporting ✓
+- Push sequence: Pushing → Releasing → Withdrawing ✓
+- Animation plays smoothly (frames 0-24, reverse 24-0) ✓
+- Hand stays closed during pull phase (fixed normalizedTime clamping to 0.999) ✓
+- Push continues until visitor is on valid walkable area (no walls, on path/node tile) ✓
+- Visitor positioned in front of pushing hand along push axis ✓
 
 **Key implementation details:**
 - File: `HeartPowerEffects.cs` - `HeartwardGraspEffect` class (line ~1580)
 - Two state machines: `GrabPhase` and `PushPhase` enums
-- Animation controlled via `SetAnimatorFrame(animator, frameNumber)` using normalized time
-- Wall raycast filters by `gameObject.name.StartsWith("WorldTile_#")`
-- Hand rotation: `Quaternion.Euler(0f, -angle, 0f)` where angle = `Atan2(dir.y, dir.x) * Rad2Deg`
-- Grabbing hand points AWAY from heart (toward focal)
-- Pushing hand points TOWARD heart
-- Visitor offset transformed during teleport: rotates by angle difference between grabbing/pushing directions
+- Animation controlled via `SetAnimatorFrame(animator, frameNumber)` using normalized time (clamped to 0.999 max)
+- Push phase uses continuous movement at `PUSH_SPEED` until `IsVisitorOnValidWalkableArea()` returns true
+- `IsVisitorOnValidWalkableArea()` checks for: on path/node tile AND not touching wall tiles
 
 **Key constants:**
 | Constant | Value | Description |
 |----------|-------|-------------|
-| WALL_OFFSET | 1.5 | How far into wall to position HGZ |
-| GRASP_ZONE_RADIUS | 1.0 | Trigger radius for visitor detection |
-| GRAB_REACH_END_FRAME | 20 | End of reach phase |
-| GRAB_GRAB_END_FRAME | 46 | Visitor stops here |
-| GRAB_PULL_END_FRAME | 62 | Animation end |
-| TRANSPORT_DURATION | 1.0f | Seconds for transport |
+| GRASP_ZONE_RADIUS | 2.5 | Trigger radius for visitor detection |
+| MIN_PUSH_DISTANCE | 1.0 | Minimum push before checking for valid area |
+| MAX_PUSH_DISTANCE | 10.0 | Safety limit for push distance |
+| PUSH_SPEED | 2.0 | Units per second during push |
+| VISITOR_CHECK_RADIUS | 0.3 | Collision check radius for walkable area |
 
 ---
 
