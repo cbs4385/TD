@@ -44,8 +44,12 @@ namespace FaeMaze.Systems
         private GameObject nodeHazardPrefab;
 
         [SerializeField]
-        [Tooltip("Prefab/model for the heart (placed at seed node / node 0)")]
-        private GameObject heartPrefab;
+        [Tooltip("Prefab/model for the heart base (static ring, placed at seed node / node 0)")]
+        private GameObject heartBasePrefab;
+
+        [SerializeField]
+        [Tooltip("Prefab/model for the heart tongue (animated, placed at seed node / node 0)")]
+        private GameObject heartTonguePrefab;
 
         [SerializeField]
         [Tooltip("Use the EarthenRingGround material from the heart prefab for path tiles")]
@@ -185,8 +189,22 @@ namespace FaeMaze.Systems
             pathColor = Color.saddleBrown;
             waterColor = Color.magenta;
 
-            // Extract EarthenRingGround material from heart prefab if available
-            if (useHeartMaterialForPaths && heartPrefab != null)
+            // Load heart prefabs dynamically if not assigned via inspector
+            if (heartBasePrefab == null)
+            {
+#if UNITY_EDITOR
+                heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heartbase.prefab");
+#endif
+            }
+            if (heartTonguePrefab == null)
+            {
+#if UNITY_EDITOR
+                heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
+#endif
+            }
+
+            // Extract EarthenRingGround material from heart base prefab if available
+            if (useHeartMaterialForPaths && heartBasePrefab != null)
             {
                 ExtractHeartGroundMaterial();
             }
@@ -229,13 +247,13 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Fallback: Try to use the material from the heart prefab directly
-            if (heartPrefab != null)
+            // Fallback: Try to use the material from the heart base prefab directly
+            if (heartBasePrefab != null)
             {
-                Transform earthenRing = heartPrefab.transform.Find("EarthenRingGround");
+                Transform earthenRing = heartBasePrefab.transform.Find("EarthenRingGround");
                 if (earthenRing == null)
                 {
-                    foreach (Transform child in heartPrefab.GetComponentsInChildren<Transform>())
+                    foreach (Transform child in heartBasePrefab.GetComponentsInChildren<Transform>())
                     {
                         if (child.name == "EarthenRingGround")
                         {
@@ -501,8 +519,8 @@ namespace FaeMaze.Systems
                 // Create the single 3D cylinder - this is the only visual object for the node
                 CreateNodeColumnCylinder(node, mazeOrigin);
 
-                // Spawn heart prefab at seed node (node 0)
-                if (nodeIndex == 0 && heartPrefab != null)
+                // Spawn heart prefabs at seed node (node 0)
+                if (nodeIndex == 0 && (heartBasePrefab != null || heartTonguePrefab != null))
                 {
                     SpawnHeartAtNode(node);
                 }
@@ -599,24 +617,29 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Spawns the heart prefab at the given node (seed node / node 0).
-        /// Positions it at the node center, preserving prefab position offset, scale and rotation.
+        /// Spawns the heart prefabs (base + tongue) at the given node (seed node / node 0).
+        /// Positions them at the node center, preserving prefab position offset, scale and rotation.
         /// </summary>
         private void SpawnHeartAtNode(PlanarForestMazeGenerator.Node node)
         {
-            if (heartPrefab == null) return;
-
             // Get world position of node center
             Vector3 nodeWorldPos = ToVector3(node.Position);
 
-            // Apply prefab's local position as offset from node center
-            Vector3 worldPos = nodeWorldPos + heartPrefab.transform.position;
+            // Spawn heart base (static ring)
+            if (heartBasePrefab != null)
+            {
+                Vector3 baseWorldPos = nodeWorldPos + heartBasePrefab.transform.position;
+                GameObject heartBase = Instantiate(heartBasePrefab, baseWorldPos, heartBasePrefab.transform.rotation, tilesParent);
+                heartBase.name = "Heart_Base";
+            }
 
-            // Instantiate the heart prefab, preserving its rotation and scale from the prefab
-            GameObject heart = Instantiate(heartPrefab, worldPos, heartPrefab.transform.rotation, tilesParent);
-            heart.name = "Heart_SeedNode";
-
-            // Preserve the prefab's scale (do not modify)
+            // Spawn heart tongue (animated)
+            if (heartTonguePrefab != null)
+            {
+                Vector3 tongueWorldPos = nodeWorldPos + heartTonguePrefab.transform.position;
+                GameObject heartTongue = Instantiate(heartTonguePrefab, tongueWorldPos, heartTonguePrefab.transform.rotation, tilesParent);
+                heartTongue.name = "Heart_Tongue";
+            }
         }
 
         /// <summary>
