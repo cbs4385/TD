@@ -111,6 +111,9 @@ namespace FaeMaze.Systems
             if (this == null || gameObject == null)
                 return false;
 
+            // Sync transforms so newly created path/node colliders are detected
+            Physics.SyncTransforms();
+
             Collider[] colliders = Physics.OverlapSphere(transform.position, WALL_CHECK_RADIUS);
 
             foreach (var collider in colliders)
@@ -138,6 +141,9 @@ namespace FaeMaze.Systems
         /// </summary>
         public static void RecheckWallsInArea(Vector3 areaCenter, float areaRadius)
         {
+            // Sync transforms so newly created colliders (like node cylinders) are detected
+            Physics.SyncTransforms();
+
             Collider[] wallColliders = Physics.OverlapSphere(areaCenter, areaRadius);
 
             foreach (var collider in wallColliders)

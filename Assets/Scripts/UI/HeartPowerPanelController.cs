@@ -698,10 +698,13 @@ namespace FaeMaze.UI
         {
             if (cameraController != null)
             {
-                return cameraController.FocalPointPosition;
+                Vector3 pos = cameraController.FocalPointPosition;
+                Debug.Log($"[HeartPowerPanel] GetFocalPointPosition from camera: {pos}");
+                return pos;
             }
 
             // Fallback to Heart position if camera controller is not available
+            Debug.LogWarning("[HeartPowerPanel] cameraController is null, falling back to heart position");
             if (GameController.Instance != null && GameController.Instance.Heart != null)
             {
                 return GameController.Instance.Heart.transform.position;

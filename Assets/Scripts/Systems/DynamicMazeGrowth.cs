@@ -113,9 +113,6 @@ namespace FaeMaze.Systems
         // Track portals at each spawn point
         private Dictionary<char, GameObject> spawnPointPortals = new Dictionary<char, GameObject>();
 
-        // Track portal wall objects (blocking walls at frontier endpoints)
-        private List<GameObject> portalWalls = new List<GameObject>();
-
         // Track PukaHazards at each node (by node index) - not currently used
         private Dictionary<int, GameObject> nodePukas = new Dictionary<int, GameObject>();
         private Transform pukasParent;
@@ -306,156 +303,16 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Synchronous version of maze growth for initial stages.
-        /// Runs all growth logic in a single frame without yielding.
+        /// Runs the async coroutine to completion in a single frame.
         /// </summary>
         private void GrowMazeSynchronous(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
         {
-            // Track state before step
-            var frontierIndicesBefore = new HashSet<int>(forestMapState.Frontier);
-            int nodeCountBefore = forestMapState.Nodes.Count;
-            int edgeCountBefore = forestMapState.Edges.Count;
-
-            // Store endpoint positions and frontier directions for all frontier edges BEFORE step
-            var frontierEndpoints = new Dictionary<int, Vector3>();
-            var frontierDirections = new Dictionary<int, Vector3>();
-            foreach (int edgeIndex in frontierIndicesBefore)
+            // Run the async coroutine to completion synchronously
+            var enumerator = GrowMazeWorldSpaceAsync(forestMapState, synchronous: true);
+            while (enumerator.MoveNext())
             {
-                if (edgeIndex >= 0 && edgeIndex < forestMapState.Edges.Count)
-                {
-                    var edge = forestMapState.Edges[edgeIndex];
-                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
-                    {
-                        var endpoint = edge.PolylinePoints[edge.PolylinePoints.Count - 1];
-                        var prevPoint = edge.PolylinePoints[edge.PolylinePoints.Count - 2];
-                        frontierEndpoints[edgeIndex] = new Vector3(endpoint.x, endpoint.y, 0);
-                        Vector2 dir = (endpoint - prevPoint).normalized;
-                        frontierDirections[edgeIndex] = new Vector3(dir.x, dir.y, 0);
-                    }
-                }
+                // Consume all yields without waiting
             }
-
-            // Step the graph
-            bool success = ForestMaze.PlanarForestMazeGenerator.Step(forestMapState);
-            if (!success)
-            {
-                return;
-            }
-
-            // Get the newly created node
-            int newNodeId = nodeCountBefore;
-            var newNode = forestMapState.Nodes[newNodeId];
-
-            // Find the CONSUMED spawn point
-            Vector3 consumedSpawnPos = Vector3.zero;
-            Vector3 consumedFrontierDir = Vector3.zero;
-            int consumedEdgeIndex = -1;
-            foreach (int edgeIndex in frontierIndicesBefore)
-            {
-                if (!forestMapState.Frontier.Contains(edgeIndex))
-                {
-                    consumedEdgeIndex = edgeIndex;
-                    if (frontierEndpoints.TryGetValue(edgeIndex, out Vector3 endpoint))
-                    {
-                        consumedSpawnPos = endpoint;
-                    }
-                    if (frontierDirections.TryGetValue(edgeIndex, out Vector3 dir))
-                    {
-                        consumedFrontierDir = dir;
-                    }
-                    break;
-                }
-            }
-
-            // Find new/modified edges
-            ForestMaze.PlanarForestMazeGenerator.Edge completedEdge = null;
-            var newEdges = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
-
-            if (consumedEdgeIndex >= 0 && consumedEdgeIndex < forestMapState.Edges.Count)
-            {
-                completedEdge = forestMapState.Edges[consumedEdgeIndex];
-            }
-
-            // Identify cross-connection target nodes
-            var crossConnectionTargetNodes = new List<ForestMaze.PlanarForestMazeGenerator.Node>();
-            for (int i = edgeCountBefore; i < forestMapState.Edges.Count; i++)
-            {
-                var edge = forestMapState.Edges[i];
-                newEdges.Add(edge);
-
-                if (!edge.Partial && edge.NodeB.HasValue && edge.NodeB.Value < nodeCountBefore)
-                {
-                    var targetNode = forestMapState.Nodes[edge.NodeB.Value];
-                    crossConnectionTargetNodes.Add(targetNode);
-                }
-            }
-
-            // All edges that need path tiles
-            var allEdgesForPathTiles = new List<ForestMaze.PlanarForestMazeGenerator.Edge>();
-            if (completedEdge != null) allEdgesForPathTiles.Add(completedEdge);
-            allEdgesForPathTiles.AddRange(newEdges);
-
-            // Regenerate world-space maze data
-            var worldSpaceData = mazeGridBehaviour.WorldSpaceMazeData;
-            if (worldSpaceData != null)
-            {
-                worldSpaceData = ForestMaze.WorldSpaceMazeGenerator.GenerateFromGraph(forestMapState, mazeGridBehaviour.WorldSpaceTileSize);
-
-                var worldSpaceDataField = typeof(MazeGridBehaviour).GetField("worldSpaceMazeData",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (worldSpaceDataField != null)
-                {
-                    worldSpaceDataField.SetValue(mazeGridBehaviour, worldSpaceData);
-                }
-            }
-
-            // Render the new elements (synchronous)
-            if (useWorldSpaceRenderer && worldSpaceRenderer != null)
-            {
-                // WorldSpaceMazeRenderer uses shapes - refresh the entire visualization
-                // The WorldSpaceMazeRenderer regenerates from the updated GraphState
-                worldSpaceRenderer.RefreshMaze();
-            }
-            else if (mazeRenderer != null)
-            {
-                // NOTE: Wall overlap is allowed! Wall models may overlap with each other and with paths.
-                // Wall removal is handled by Unity physics collision detection, NOT by manual intersection checks.
-                // Portal end cap walls are tracked in portalWalls list and destroyed via RebuildSpawnPointsFromFrontier.
-                // Do NOT use RemoveWallsPastEndpoint or RemoveWallsAlongPolyline - they will throw exceptions.
-
-                // Regenerate cross-connection walls
-                foreach (var targetNode in crossConnectionTargetNodes)
-                {
-                    mazeRenderer.RegenerateNodeWalls(targetNode, forestMapState.Edges);
-                }
-
-                // Remove path tiles around new node
-                Vector3 newNodeWorldPos = new Vector3(newNode.Position.x, newNode.Position.y, 0);
-                mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f);
-
-                // Add edge tiles
-                mazeRenderer.AddEdgeTilesIncremental(allEdgesForPathTiles);
-
-                // Add node tiles
-                mazeRenderer.AddNodeTilesIncremental(newNode);
-
-                // ARCHITECTURE: After adding new path tiles and node, re-check existing walls
-                // for physics collisions. This removes walls that now collide with the new edges/node.
-                // Uses Unity physics (WallCollisionChecker) - the ONLY valid way to remove walls.
-                WallCollisionChecker.RecheckWallsAroundNode(newNode.Position, 2.5f);
-                foreach (var edge in newEdges)
-                {
-                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
-                    {
-                        WallCollisionChecker.RecheckWallsAlongPath(edge.PolylinePoints, 1.5f);
-                    }
-                }
-
-                // Add walls (synchronous version)
-                mazeRenderer.AddWallsIncremental(newEdges, newNode);
-            }
-
-            // Spawn FaeLantern at the new node center
-            SpawnPukaAtNode(newNode, newNodeId);
         }
 
         private void Update()
@@ -536,7 +393,9 @@ namespace FaeMaze.Systems
         /// Uses incremental rendering updates to avoid rebuilding the entire maze.
         /// Spreads rendering work across multiple frames to prevent game lockup.
         /// </summary>
-        private IEnumerator GrowMazeWorldSpaceAsync(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState)
+        /// <param name="forestMapState">The maze state to grow</param>
+        /// <param name="synchronous">If true, skips yields and runs synchronously (for initial growth)</param>
+        private IEnumerator GrowMazeWorldSpaceAsync(ForestMaze.PlanarForestMazeGenerator.ForestMapState forestMapState, bool synchronous = false)
         {
             // Track frontier edge indices before the step to identify consumed spawn point
             // Frontier is a HashSet<int> containing edge indices
@@ -660,10 +519,14 @@ namespace FaeMaze.Systems
             // Rebuild portals from frontier edges using world-space coordinates
             // This also registers spawn points and signals affected visitors to retarget
             // Pass the captured old spawn positions since WorldSpaceMazeData was regenerated
-            RebuildSpawnPointsFromFrontier(oldSpawnPositions);
+            // Skip portal rebuild during synchronous initial growth (done once in Start)
+            if (!synchronous)
+            {
+                RebuildSpawnPointsFromFrontier(oldSpawnPositions);
+            }
 
             // Yield after graph/portal setup to spread work across frames
-            yield return null;
+            if (!synchronous) yield return null;
 
             // Use INCREMENTAL rendering updates (coroutine-based for non-blocking)
             if (useWorldSpaceRenderer && worldSpaceRenderer != null)
@@ -671,13 +534,13 @@ namespace FaeMaze.Systems
                 // WorldSpaceMazeRenderer uses shapes - refresh the entire visualization
                 // The WorldSpaceMazeRenderer regenerates from the updated GraphState
                 worldSpaceRenderer.RefreshMaze();
-                yield return null;
+                if (!synchronous) yield return null;
             }
             else if (mazeRenderer != null)
             {
                 // NOTE: Wall overlap is allowed! Wall models may overlap with each other and with paths.
                 // Wall removal is handled by Unity physics collision detection, NOT by manual intersection checks.
-                // Portal end cap walls are tracked in portalWalls list and destroyed via RebuildSpawnPointsFromFrontier.
+                // Portal end cap walls are part of edge wall containers and destroyed via physics collision checks.
                 // Do NOT use RemoveWallsPastEndpoint or RemoveWallsAlongPolyline - they will throw exceptions.
 
                 // Regenerate walls for cross-connection target nodes (existing nodes that received a new edge)
@@ -692,7 +555,7 @@ namespace FaeMaze.Systems
                 mazeRenderer.RemovePathTilesNearPosition(newNodeWorldPos, 4f);
 
                 // Yield after removals
-                yield return null;
+                if (!synchronous) yield return null;
 
                 // Add edge tiles for ALL edges (completed + new) - completed edge needs path extended
                 mazeRenderer.AddEdgeTilesIncremental(allEdgesForPathTiles);
@@ -701,19 +564,50 @@ namespace FaeMaze.Systems
                 // Node cylinder visually covers edge tiles, node area marks positions as occupied
                 mazeRenderer.AddNodeTilesIncremental(newNode);
 
-                // Yield before wall generation (the slowest part)
-                yield return null;
+                // ARCHITECTURE: After adding new path tiles and node, re-trigger collision checks
+                // on the completed edge's wall container. Its walls may now collide with the new node.
+                if (consumedEdgeIndex >= 0)
+                {
+                    mazeRenderer.TriggerEdgeWallCollisionChecks(consumedEdgeIndex);
+                }
 
-                // Add walls around the new elements (using async version)
-                yield return StartCoroutine(mazeRenderer.AddWallsIncrementalAsync(newEdges, newNode));
+                // Also recheck walls around the new node position
+                WallCollisionChecker.RecheckWallsAroundNode(newNode.Position, 2.5f);
+
+                // Recheck walls along new edges
+                foreach (var edge in newEdges)
+                {
+                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
+                    {
+                        WallCollisionChecker.RecheckWallsAlongPath(edge.PolylinePoints, 1.5f);
+                    }
+                }
+
+                // Add walls around the new elements
+                if (synchronous)
+                {
+                    // Synchronous version for initial growth
+                    mazeRenderer.AddWallsIncremental(newEdges, newNode);
+                }
+                else
+                {
+                    // Yield before wall generation (the slowest part)
+                    yield return null;
+
+                    // Async version for runtime growth
+                    yield return StartCoroutine(mazeRenderer.AddWallsIncrementalAsync(newEdges, newNode));
+                }
             }
 
             // Spawn FaeLantern at the new node center
             SpawnPukaAtNode(newNode, newNodeId);
 
-            // Notify visitors who can see the growth location
-            Vector3 growthPosition = new Vector3(newNode.Position.x, newNode.Position.y, 0);
-            DazeVisitorsWhoCanSeeGrowth(growthPosition);
+            // Notify visitors who can see the growth location (skip during initial sync growth)
+            if (!synchronous)
+            {
+                Vector3 growthPosition = new Vector3(newNode.Position.x, newNode.Position.y, 0);
+                DazeVisitorsWhoCanSeeGrowth(growthPosition);
+            }
 
             yield break;
         }
@@ -785,15 +679,8 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Clear ALL existing portal walls (blocking walls at frontier endpoints)
-            foreach (var wallObj in portalWalls)
-            {
-                if (wallObj != null)
-                {
-                    DestroyImmediate(wallObj);
-                }
-            }
-            portalWalls.Clear();
+            // Note: Frontier end cap walls are now managed by MazeRenderer edge wall containers
+            // They are automatically removed when the edge wall container is regenerated
 
             // Reset spawn ID index
             nextSpawnIdIndex = 0;
@@ -825,10 +712,6 @@ namespace FaeMaze.Systems
                     directionOutward = (endpointPos - connectedNode.Position).normalized;
                 }
 
-                // Wall is placed 0.5 units PAST the endpoint (away from node, to connect with surrounding walls)
-                Vector3 wallOffset = new Vector3(directionOutward.x, directionOutward.y, 0f) * 0.5f;
-                Vector3 wallWorldPos = endpointWorld + wallOffset;
-
                 // Portal is placed 0.95 units INSIDE the path (toward node, away from endcap wall)
                 Vector3 portalOffset = new Vector3(-directionOutward.x, -directionOutward.y, 0f) * 0.95f;
                 Vector3 portalWorldPos = endpointWorld + portalOffset;
@@ -840,86 +723,9 @@ namespace FaeMaze.Systems
                     break;
                 }
 
-                // Calculate orientation for wall (perpendicular to path direction to block the path)
-                // Add 90 degrees to rotate from along-path to across-path orientation
-                float orientationDegrees = Mathf.Atan2(directionOutward.y, directionOutward.x) * Mathf.Rad2Deg + 90f;
-
-                // Calculate perpendicular direction for three-tile-wide wall section
-                Vector3 perpendicular = new Vector3(-directionOutward.y, directionOutward.x, 0f);
-                float tileSize = mazeGridBehaviour.WorldSpaceTileSize;
-
-                // Create side walls (left and right of the path) and rear walls
-                // Track these walls so they can be removed when frontier changes
-                if (mazeRenderer != null)
-                {
-                    // Side wall orientation is parallel to path (not perpendicular like rear walls)
-                    float sideWallOrientation = Mathf.Atan2(directionOutward.y, directionOutward.x) * Mathf.Rad2Deg;
-                    // Rear wall orientation is perpendicular to path (blocking the path)
-                    float rearWallOrientation = sideWallOrientation + 90f;
-
-                    // Match border wall constants exactly:
-                    // WALL_DEPTH = 3 layers
-                    // PATH_HALF_WIDTH = 0.5f
-                    // WALL_SPACING = 0.3f
-                    // wallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1)
-                    // Layer 0: 0.8, Layer 1: 1.1, Layer 2: 1.4
-                    const int WALL_DEPTH = 3;
-                    const float PATH_HALF_WIDTH = 0.5f;
-                    const float WALL_SPACING = 0.3f;
-                    const float STEP_SIZE = 0.5f;
-
-                    Vector3 outwardDir = new Vector3(directionOutward.x, directionOutward.y, 0f);
-
-                    // Side walls: 3 layers deep (layer 0, 1, 2), multiple positions along path
-                    // Positions along path: from -1 to +1 in 0.5 steps
-                    for (float alongPathDist = -1f; alongPathDist <= 1f; alongPathDist += STEP_SIZE)
-                    {
-                        Vector3 alongPath = outwardDir * alongPathDist;
-
-                        // 3 layers of depth for each side
-                        for (int layer = 0; layer < WALL_DEPTH; layer++)
-                        {
-                            float sideWallOffset = PATH_HALF_WIDTH + WALL_SPACING * (layer + 1);
-
-                            // Left side wall (positive perpendicular)
-                            Vector3 leftWallPos = wallWorldPos + alongPath + perpendicular * sideWallOffset;
-                            if (!mazeGridBehaviour.IsWalkableAtWorldPos(leftWallPos))
-                            {
-                                var leftWall = mazeRenderer.CreateWallAtPosition(leftWallPos, sideWallOrientation);
-                                if (leftWall != null) portalWalls.Add(leftWall);
-                            }
-
-                            // Right side wall (negative perpendicular)
-                            Vector3 rightWallPos = wallWorldPos + alongPath - perpendicular * sideWallOffset;
-                            if (!mazeGridBehaviour.IsWalkableAtWorldPos(rightWallPos))
-                            {
-                                var rightWall = mazeRenderer.CreateWallAtPosition(rightWallPos, sideWallOrientation);
-                                if (rightWall != null) portalWalls.Add(rightWall);
-                            }
-                        }
-                    }
-
-                    // Rear walls: 3 layers deep (outward), spanning width
-                    // Width spans the full wall depth on each side
-                    float maxWidth = PATH_HALF_WIDTH + WALL_SPACING * WALL_DEPTH;
-                    for (int layer = 0; layer < WALL_DEPTH; layer++)
-                    {
-                        float outwardDist = layer * WALL_SPACING + STEP_SIZE;
-                        Vector3 layerOffset = outwardDir * outwardDist;
-
-                        for (float width = -maxWidth; width <= maxWidth; width += STEP_SIZE)
-                        {
-                            Vector3 rearWallPos = wallWorldPos + layerOffset + perpendicular * width;
-                            if (!mazeGridBehaviour.IsWalkableAtWorldPos(rearWallPos))
-                            {
-                                var rearWall = mazeRenderer.CreateWallAtPosition(rearWallPos, rearWallOrientation);
-                                if (rearWall != null) portalWalls.Add(rearWall);
-                            }
-                        }
-                    }
-                }
-
                 // Create portal at the frontier endpoint
+                // Note: Frontier end cap walls are handled by MazeRenderer.RenderFrontierEndCap
+                // as part of the edge wall container - no duplicate wall generation needed here
                 Vector3 directionIntoMaze = new Vector3(-directionOutward.x, -directionOutward.y, 0f);
                 CreatePortalAtWorldPosition(spawnId, portalWorldPos, directionIntoMaze);
             }

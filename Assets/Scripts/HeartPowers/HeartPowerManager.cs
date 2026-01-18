@@ -442,7 +442,8 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public bool IsTogglePower(HeartPowerType powerType)
         {
-            return powerType == HeartPowerType.MurmuringPaths;
+            return powerType == HeartPowerType.MurmuringPaths ||
+                   powerType == HeartPowerType.HeartwardGrasp;
         }
 
         /// <summary>
@@ -633,9 +634,9 @@ namespace FaeMaze.HeartPowers
 
                 effect.OnStart();
 
-                // Toggle powers (like MurmuringPaths) use consumption-based expiration, not duration
+                // Toggle powers use consumption-based expiration, not duration
                 // They need to be in activePowers even if Duration is 0
-                bool isTogglePower = powerType == HeartPowerType.MurmuringPaths;
+                bool isTogglePower = IsTogglePower(powerType);
 
                 if (effect.Duration > 0 || isTogglePower)
                 {

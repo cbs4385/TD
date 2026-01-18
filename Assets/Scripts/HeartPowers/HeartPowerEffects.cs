@@ -1570,201 +1570,1530 @@ namespace FaeMaze.HeartPowers
     #region Heartward Grasp
 
     /// <summary>
-    /// Pulls a visitor through a wall toward the Heart.
-    /// Uses world-space positioning and simplified animation.
+    /// Creates two grasp zones (grabbing and pushing) at walls along the heart-to-focal-point ray.
+    /// Grabbing HGZ captures visitors and pulls them into the wall.
+    /// Pushing HGZ releases visitors near the heart with a daze effect.
+    /// Toggle power: deactivates after firing its effect (tier-count captures).
+    /// Animation is frame-based using the Animator component.
     /// </summary>
     public class HeartwardGraspEffect : ActivePowerEffect
     {
-        private enum AnimationPhase
+        // Grabbing HGZ states
+        private enum GrabPhase
         {
-            InitialPause,
-            PullToActivation,
-            Repositioning,
-            PushToDestination,
-            FinalPause,
-            Complete
+            Idle,           // Animation paused, no translation
+            Reaching,       // Model X directed at visitor, animation frames 0-20
+            Grabbing,       // Animation frames 20-46, visitor stops at frame 46
+            Pulling,        // Animation frames 46-62, visitor translates with grabbing mesh into wall
+            Transporting    // 1 second duration, visitor relocated to pushing HGZ
         }
 
-        private GameObject graspVisual;
-        private VisitorControllerBase targetVisitor;
-        private Vector3 activationWorldPos;
-        private Vector3 visitorStartWorldPos;
-        private Vector3 pullDestinationWorldPos;
-        private const string ModifierSourceId = "HeartwardGrasp";
+        // Pushing HGZ states
+        private enum PushPhase
+        {
+            Idle,           // Animation paused, no translation
+            Pushing,        // Model translates 1 unit toward heart, hand stays closed (frame 24)
+            Releasing,      // Model paused, animation plays reverse 24→0, visitor becomes visible and dazed
+            Withdrawing     // Model translates back to wall, holds frame 1
+        }
 
-        private AnimationPhase currentPhase = AnimationPhase.InitialPause;
-        private float phaseStartTime = 0f;
-        private Vector3 lerpStartPosition;
-        private Vector3 lerpEndPosition;
-        private bool visitorMovementStopped = false;
+        // Constants
+        private const float GRASP_ZONE_RADIUS = 2f;
+        private const int MIN_WALL_THICKNESS = 3;         // Minimum wall models required for valid wall intersection
+        private const float TRANSPORT_DURATION = 1.0f;    // Duration of transport phase
+        private const float HGZ_WALL_OFFSET = 0.5f;       // How far to offset HGZ into the wall (away from path)
+        private const float MIN_EDGE_DISTANCE = 3.0f;     // Minimum distance from path/node edge (~4 wall tiles * 0.8 spacing)
+        private const float ANIMATION_FPS = 60f;          // Animation framerate (24 frames / 0.417 seconds ≈ 60fps)
+        private const float GRAB_ANIMATION_DURATION = 1.0f;  // Duration to play grab animation
+        private const float PULL_DURATION = 1.0f;         // Duration of pull phase
 
-        private Vector3 graspBasePosition;
-        private Vector3 graspAnimationDirection;
+        // Animation frame constants (animation is 24 frames total)
+        private const int GRAB_ANIMATION_FRAMES = 24;     // Total frames in grasp animation
+        private const int PUSH_REACH_END_FRAME = 0;       // Pushing: reach ends (reverse from 24 to 0)
+        private const int PUSH_RELEASE_END_FRAME = 12;    // Pushing: release ends, visitor dazed
+        private const int PUSH_WITHDRAW_END_FRAME = 24;   // Pushing: withdraw ends (animation end)
+
+        // Grabbing HGZ
+        private GameObject grabbingZoneObject;
+        private SphereCollider grabbingCollider;
+        private GameObject grabbingVisual;
+        private Animator grabbingAnimator;
+        private SphereCollider grabbingTouchCollider;  // "touch" collider on grasp model
+        private Vector3 grabbingWallPos;
+        private Vector3 grabbingWallNormal;
+        private Vector3 grabbingStartPos;  // Initial position for reach translation
+        private GrabPhase grabPhase = GrabPhase.Idle;
+        private float grabPhaseStartTime = 0f;
+        private int grabCurrentFrame = 0;
+        private const float REACH_SPEED = 8f;  // Units per second for reach translation
+
+        // Pushing HGZ
+        private GameObject pushingZoneObject;
+        private SphereCollider pushingCollider;
+        private GameObject pushingVisual;
+        private Animator pushingAnimator;
+        private SphereCollider pushingTouchCollider;  // "touch" collider on pushing grasp model
+        private Vector3 pushingWallPos;
+        private Vector3 pushingWallNormal;
+        private Vector3 pushingStartPos;   // Initial position for push translation (at wall)
+        private Vector3 pushingTargetPos;  // Target position after pushing (1 unit toward heart)
+        private PushPhase pushPhase = PushPhase.Idle;
+        private float pushPhaseStartTime = 0f;
+        private int pushCurrentFrame = 24;  // Starts at end for reverse play
+        private const float PUSH_DISTANCE = 1.0f;     // Distance to push toward heart
+        private const float PUSH_DURATION = 0.5f;     // Duration of push translation
+        private const float WITHDRAW_DURATION = 0.5f; // Duration of withdraw translation
+
+        // Visitor processing
+        private Queue<VisitorControllerBase> pendingVisitors = new Queue<VisitorControllerBase>();
+        private VisitorControllerBase currentVisitor;
+        private Vector3 visitorGrabOffset;  // Offset from grabbing HGZ when grabbed
+        private Vector3 visitorPushOffset;  // Transformed offset for pushing HGZ
+        private Vector3 heartNodePosition;
+        private bool visitorVisible = true;
+        private Vector3 grabStartPosition;  // Position where model was when it grabbed visitor
+
+        // Particle effects
+        private ParticleSystem grabbingParticles;
+        private ParticleSystem pushingParticles;
+
+        // Affected wall tiles in grabbing zone
+        private List<GameObject> affectedGrabbingWalls = new List<GameObject>();
+        private Dictionary<GameObject, Vector3> originalWallPositions = new Dictionary<GameObject, Vector3>();
+
+        // Debug visualization
+        private GameObject debugRayColumn;
+        private GameObject debugGrabbingHitSphere;
+        private GameObject debugPushingHitSphere;
+        private GameObject debugGrabbingZoneCylinder;
+        private GameObject debugPushingZoneCylinder;
+
+        // Toggle power expiration
+        private int capturedCount = 0;
+        private int requiredCaptures = 1;
+        private bool hasExpired = false;
+
+        // Particle colors
+        private static readonly Color LeafGreen = new Color(0.3f, 0.7f, 0.2f, 1f);
+        private static readonly Color BarkBrown = new Color(0.6f, 0.4f, 0.15f, 1f);
 
         public HeartwardGraspEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
 
+        public override bool IsExpired => hasExpired;
+
         public override void OnStart()
         {
-            activationWorldPos = targetPosition;
-            Vector3 heartWorldPos = manager.MazeGrid.HeartWorldPosition;
+            requiredCaptures = manager.GetPowerTier(HeartPowerType.HeartwardGrasp);
+            capturedCount = 0;
+            hasExpired = false;
 
-            // Find nearest visitor within range of activation position
-            float pullRange = definition.param1 > 0 ? definition.param1 : 3f;
-            targetVisitor = FindNearestVisitor(activationWorldPos, pullRange);
+            Debug.Log($"[HeartwardGrasp] OnStart - Click position: {targetPosition}, Tier: {requiredCaptures}");
 
-            if (targetVisitor == null)
+            // Get heart node position
+            if (manager.MazeGrid != null)
             {
+                heartNodePosition = manager.MazeGrid.HeartWorldPosition;
+                Debug.Log($"[HeartwardGrasp] Heart position: {heartNodePosition}");
+            }
+
+            // Find wall positions for both HGZs along the heart-to-focal ray
+            FindWallPositions(targetPosition);
+
+            Debug.Log($"[HeartwardGrasp] Grabbing wall: {grabbingWallPos}, Pushing wall: {pushingWallPos}");
+
+            // Create both HGZs
+            CreateGrabbingHGZ();
+            CreatePushingHGZ();
+
+            // Create particle effects for both zones
+            CreateParticleSystem(grabbingZoneObject, ref grabbingParticles);
+            CreateParticleSystem(pushingZoneObject, ref pushingParticles);
+
+            // Find and affect wall tiles in grabbing zone
+            FindAffectedGrabbingWalls();
+
+            // Create debug ray visualization
+            CreateDebugRayColumn(targetPosition);
+
+            Debug.Log($"[HeartwardGrasp] Initialization complete. Zone radius: {GRASP_ZONE_RADIUS}, affected walls: {affectedGrabbingWalls.Count}");
+        }
+
+        /// <summary>
+        /// Finds wall positions for both grabbing (near focal point) and pushing (near heart) HGZs.
+        /// Uses Physics.RaycastAll to find wall colliders along the heart-to-focal ray.
+        /// First hit = pushing HGZ, last hit before focal = grabbing HGZ.
+        /// </summary>
+        private void FindWallPositions(Vector3 focalPos)
+        {
+            Vector3 rayOrigin = new Vector3(heartNodePosition.x, heartNodePosition.y, 0f);
+            Vector3 focalPos3D = new Vector3(focalPos.x, focalPos.y, 0f);
+            Vector3 rayDirection = (focalPos3D - rayOrigin).normalized;
+            float distToFocal = Vector3.Distance(rayOrigin, focalPos3D);
+
+            // Raycast only to the focal point - no walls past focal should be hit
+            // Use QueryTriggerInteraction.Collide to hit trigger colliders
+            RaycastHit[] allHits = Physics.RaycastAll(rayOrigin, rayDirection, distToFocal, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            // Filter to only include wall tiles (name starts with "WorldTile_#")
+            var wallHitsList = new System.Collections.Generic.List<RaycastHit>();
+            foreach (var hit in allHits)
+            {
+                if (hit.collider != null && hit.collider.gameObject.name.StartsWith("WorldTile_#"))
+                {
+                    wallHitsList.Add(hit);
+                }
+            }
+            RaycastHit[] hits = wallHitsList.ToArray();
+            Debug.Log($"[HeartwardGrasp] Raycast: allHits={allHits.Length}, wallHits={hits.Length}");
+
+            // Sort hits by distance from ray origin (heart)
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            // Log all wall hits for debugging
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Debug.Log($"[HeartwardGrasp] Wall hit {i}: dist={hits[i].distance:F2}, pos={hits[i].point}, obj={hits[i].collider.gameObject.name}");
+            }
+
+            // HGZ is placed directly at the wall center (no offset)
+            const float MAX_PUSHING_DISTANCE_FROM_HEART = 3.5f;
+            const float MAX_GRABBING_DISTANCE_FROM_FOCAL = 3.5f;
+
+            Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
+            Vector2 focalPos2D = new Vector2(focalPos.x, focalPos.y);
+
+            if (hits.Length >= 1)
+            {
+                // Get first and last wall model transforms
+                var firstHit = hits[0];
+                var lastHit = hits[hits.Length - 1];
+
+                // Get wall model centers
+                Transform firstWallTransform = firstHit.collider.transform;
+                Transform lastWallTransform = lastHit.collider.transform;
+
+                Vector3 firstWallCenter = firstWallTransform.position;
+                Vector3 lastWallCenter = lastWallTransform.position;
+
+                // For pushing: place at wall center
+                Vector2 pushingPos = new Vector2(firstWallCenter.x, firstWallCenter.y);
+
+                // Check if pushing position is too far from heart (ray missed node border wall)
+                float distFromHeart = Vector2.Distance(pushingPos, heartPos2D);
+
+                if (distFromHeart > MAX_PUSHING_DISTANCE_FROM_HEART)
+                {
+                    Debug.Log($"[HeartwardGrasp] First hit too far from heart ({distFromHeart:F2} > {MAX_PUSHING_DISTANCE_FROM_HEART}), finding closest node border wall");
+
+                    // Find closest wall on heart node border to the ray
+                    Transform closestNodeWall = FindClosestNodeBorderWallToRay(heartPos2D, rayDirection);
+                    if (closestNodeWall != null)
+                    {
+                        firstWallCenter = closestNodeWall.position;
+                        pushingPos = new Vector2(firstWallCenter.x, firstWallCenter.y);
+                        Debug.Log($"[HeartwardGrasp] Using node border wall at {firstWallCenter}");
+                    }
+                }
+
+                // For grabbing: place at wall center
+                Vector2 grabbingPos = new Vector2(lastWallCenter.x, lastWallCenter.y);
+
+                // Check if grabbing position is too far from focal point (ray missed edge border wall)
+                float distFromFocal = Vector2.Distance(grabbingPos, focalPos2D);
+
+                if (distFromFocal > MAX_GRABBING_DISTANCE_FROM_FOCAL)
+                {
+                    Debug.Log($"[HeartwardGrasp] Last hit too far from focal ({distFromFocal:F2} > {MAX_GRABBING_DISTANCE_FROM_FOCAL}), finding closest edge border wall");
+
+                    // Find closest wall to the focal point
+                    Transform closestEdgeWall = FindClosestWallToPoint(focalPos2D, rayDirection);
+                    if (closestEdgeWall != null)
+                    {
+                        lastWallCenter = closestEdgeWall.position;
+                        grabbingPos = new Vector2(lastWallCenter.x, lastWallCenter.y);
+                        Debug.Log($"[HeartwardGrasp] Using edge border wall at {lastWallCenter}");
+                    }
+                }
+
+                // Calculate "into forest" direction using sampling approach for both
+                // Sampling works for both node borders and edge walls
+                Vector2 pushingIntoForest = GetIntoForestDirectionForEdge(pushingPos);
+                Vector2 grabbingIntoForest = GetIntoForestDirectionForEdge(grabbingPos);
+
+                // Offset into forest
+                Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
+                pushingWallPos = new Vector3(pushingPos.x + pushingOffset.x, pushingPos.y + pushingOffset.y, -0.4f);
+
+                Vector2 grabbingOffset = grabbingIntoForest * HGZ_WALL_OFFSET;
+                grabbingWallPos = new Vector3(grabbingPos.x + grabbingOffset.x, grabbingPos.y + grabbingOffset.y, -0.4f);
+
+                // Store for later use (perpendicular is the into-forest direction)
+                Vector2 pushingWallPerp = pushingIntoForest;
+                Vector2 grabbingWallPerp = grabbingIntoForest;
+
+                pushingWallNormal = new Vector3(pushingWallPerp.x, pushingWallPerp.y, 0f);
+                grabbingWallNormal = new Vector3(grabbingWallPerp.x, grabbingWallPerp.y, 0f);
+
+                Debug.Log($"[HeartwardGrasp] Pushing: intoForest={pushingIntoForest}, offset={pushingOffset}");
+                Debug.Log($"[HeartwardGrasp] Grabbing: intoForest={grabbingIntoForest}, offset={grabbingOffset}");
+                Debug.Log($"[HeartwardGrasp] First wall center: {firstWallCenter}, pushing at {pushingWallPos}");
+                Debug.Log($"[HeartwardGrasp] Last wall center: {lastWallCenter}, grabbing at {grabbingWallPos}");
+
+                // Create debug spheres at wall centers
+                debugPushingHitSphere = CreateDebugSphere(new Vector3(firstWallCenter.x, firstWallCenter.y, 0f), Color.cyan, "Debug_PushingWallHit");
+                debugGrabbingHitSphere = CreateDebugSphere(new Vector3(lastWallCenter.x, lastWallCenter.y, 0f), Color.magenta, "Debug_GrabbingWallHit");
+            }
+            else
+            {
+                // No walls hit along ray - find closest walls to heart and focal point
+                Debug.Log($"[HeartwardGrasp] No walls hit along ray, searching for nearby walls");
+
+                Vector2 rayDir2D = new Vector2(rayDirection.x, rayDirection.y).normalized;
+
+                // Find closest wall to heart node border
+                Transform closestNodeWall = FindClosestNodeBorderWallToRay(heartPos2D, rayDirection);
+                if (closestNodeWall != null)
+                {
+                    Vector2 pushingPos = new Vector2(closestNodeWall.position.x, closestNodeWall.position.y);
+                    // Use sampling approach for all wall types
+                    Vector2 pushingIntoForest = GetIntoForestDirectionForEdge(pushingPos);
+                    Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
+
+                    pushingWallPos = new Vector3(
+                        closestNodeWall.position.x + pushingOffset.x,
+                        closestNodeWall.position.y + pushingOffset.y,
+                        -0.4f);
+                    pushingWallNormal = new Vector3(pushingIntoForest.x, pushingIntoForest.y, 0f);
+                    Debug.Log($"[HeartwardGrasp] Found pushing wall at node border: {pushingWallPos}, intoForest={pushingIntoForest}");
+                }
+                else
+                {
+                    // Default fallback - just use ray direction (radially outward from heart)
+                    Vector2 pushingIntoForest = rayDir2D;  // Ray goes from heart to focal, so same direction
+                    Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
+                    pushingWallPos = new Vector3(rayOrigin.x + rayDirection.x * 3.5f + pushingOffset.x, rayOrigin.y + rayDirection.y * 3.5f + pushingOffset.y, -0.4f);
+                    pushingWallNormal = rayDirection;
+                    Debug.Log($"[HeartwardGrasp] No node border wall found, using default pushing position");
+                }
+
+                // Find closest wall to focal point
+                Transform closestFocalWall = FindClosestWallToPoint(focalPos2D, rayDirection);
+                if (closestFocalWall != null)
+                {
+                    Vector2 grabbingPos = new Vector2(closestFocalWall.position.x, closestFocalWall.position.y);
+                    // Use sampling approach for edge walls
+                    Vector2 grabbingIntoForest = GetIntoForestDirectionForEdge(grabbingPos);
+                    Vector2 grabbingOffset = grabbingIntoForest * HGZ_WALL_OFFSET;
+
+                    grabbingWallPos = new Vector3(
+                        closestFocalWall.position.x + grabbingOffset.x,
+                        closestFocalWall.position.y + grabbingOffset.y,
+                        -0.4f);
+                    grabbingWallNormal = new Vector3(grabbingIntoForest.x, grabbingIntoForest.y, 0f);
+                    Debug.Log($"[HeartwardGrasp] Found grabbing wall near focal: {grabbingWallPos}, intoForest={grabbingIntoForest}");
+                }
+                else
+                {
+                    // Default fallback - just use ray direction
+                    Vector2 grabbingOffset = rayDir2D * HGZ_WALL_OFFSET;
+                    grabbingWallPos = new Vector3(focalPos3D.x + grabbingOffset.x, focalPos3D.y + grabbingOffset.y, -0.4f);
+                    grabbingWallNormal = -rayDirection;
+                    Debug.Log($"[HeartwardGrasp] No focal wall found, using focal point as grabbing position");
+                }
+
+                // Create debug spheres at the offset positions
+                debugPushingHitSphere = CreateDebugSphere(pushingWallPos, Color.cyan, "Debug_PushingWallHit");
+                debugGrabbingHitSphere = CreateDebugSphere(grabbingWallPos, Color.magenta, "Debug_GrabbingWallHit");
+            }
+
+            Debug.Log($"[HeartwardGrasp] Final positions: pushing={pushingWallPos}, grabbing={grabbingWallPos}");
+        }
+
+        private Transform FindClosestNodeBorderWallToRay(Vector2 heartPos, Vector3 rayDir)
+        {
+            // Find all wall models near the heart node border (NodeWalls_0 contains heart node walls)
+            GameObject nodeWallsContainer = GameObject.Find("NodeWalls_0");
+            if (nodeWallsContainer == null)
+            {
+                Debug.LogWarning("[HeartwardGrasp] Could not find NodeWalls_0");
+                return null;
+            }
+
+            Transform closestWall = null;
+            float closestDistToRay = float.MaxValue;
+
+            Vector2 rayDir2D = new Vector2(rayDir.x, rayDir.y).normalized;
+
+            // Iterate through all child wall models
+            foreach (Transform child in nodeWallsContainer.transform)
+            {
+                // Only consider wall tiles (WorldTile_#)
+                if (!child.name.StartsWith("WorldTile_#")) continue;
+
+                Vector2 wallPos = new Vector2(child.position.x, child.position.y);
+
+                // Calculate distance from wall to the ray line
+                // Ray starts at heart and goes in rayDir direction
+                Vector2 heartToWall = wallPos - heartPos;
+                float projectionLength = Vector2.Dot(heartToWall, rayDir2D);
+
+                // Only consider walls in the direction of the ray (positive projection)
+                if (projectionLength < 0) continue;
+
+                // Point on ray closest to the wall
+                Vector2 closestPointOnRay = heartPos + rayDir2D * projectionLength;
+                float distToRay = Vector2.Distance(wallPos, closestPointOnRay);
+
+                if (distToRay < closestDistToRay)
+                {
+                    closestDistToRay = distToRay;
+                    closestWall = child;
+                }
+            }
+
+            Debug.Log($"[HeartwardGrasp] Closest node border wall: {(closestWall != null ? closestWall.name : "none")} at dist {closestDistToRay:F2}");
+            return closestWall;
+        }
+
+        /// <summary>
+        /// Finds the closest wall to a given point, preferring walls on the correct side of the ray.
+        /// Used when the ray doesn't directly hit a wall near the focal point.
+        /// </summary>
+        private Transform FindClosestWallToPoint(Vector2 targetPoint, Vector3 rayDir)
+        {
+            // Search for walls near the target point using physics
+            const float SEARCH_RADIUS = 5f;
+            Collider[] colliders = Physics.OverlapSphere(
+                new Vector3(targetPoint.x, targetPoint.y, 0f),
+                SEARCH_RADIUS,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Collide
+            );
+
+            Transform closestWall = null;
+            float closestDist = float.MaxValue;
+
+            Vector2 rayDir2D = new Vector2(rayDir.x, rayDir.y).normalized;
+
+            foreach (var collider in colliders)
+            {
+                // Only consider wall tiles
+                if (!collider.gameObject.name.StartsWith("WorldTile_#")) continue;
+
+                Vector2 wallPos = new Vector2(collider.transform.position.x, collider.transform.position.y);
+                float dist = Vector2.Distance(wallPos, targetPoint);
+
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closestWall = collider.transform;
+                }
+            }
+
+            Debug.Log($"[HeartwardGrasp] Closest wall to focal: {(closestWall != null ? closestWall.name : "none")} at dist {closestDist:F2}");
+            return closestWall;
+        }
+
+        /// <summary>
+        /// Calculates the "into forest" direction for grabbing HGZ (near focal/edge).
+        /// Wall tiles have transform.right pointing TOWARD the path (their normal).
+        /// The OPPOSITE of the average normal = "into forest" direction.
+        /// </summary>
+        private Vector2 GetIntoForestDirectionForEdge(Vector2 position)
+        {
+            const float SAMPLE_RADIUS = 2.5f;  // Radius to sample nearby walls
+
+            Vector3 pos3D = new Vector3(position.x, position.y, 0f);
+            Collider[] nearbyColliders = Physics.OverlapSphere(pos3D, SAMPLE_RADIUS, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            Vector2 sumNormals = Vector2.zero;
+            int wallCount = 0;
+
+            foreach (var collider in nearbyColliders)
+            {
+                // Only include wall tiles
+                if (!collider.gameObject.name.StartsWith("WorldTile_#")) continue;
+
+                // Wall's transform.right points TOWARD the path (the wall's normal/front face)
+                Vector2 wallNormal = new Vector2(collider.transform.right.x, collider.transform.right.y);
+                sumNormals += wallNormal;
+                wallCount++;
+            }
+
+            if (wallCount == 0)
+            {
+                // Fallback: use direction away from heart
+                Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
+                Vector2 awayFromHeart = (position - heartPos2D).normalized;
+                Debug.Log($"[HeartwardGrasp] GetIntoForestDirectionForEdge: no walls found, using away-from-heart direction {awayFromHeart}");
+                return awayFromHeart;
+            }
+
+            // Wall's transform.right actually points AWAY from path (into forest)
+            // So the average IS the "into forest" direction
+            Vector2 avgNormal = (sumNormals / wallCount).normalized;
+            Vector2 intoForest = avgNormal;  // Not negated - walls point into forest
+
+            Debug.Log($"[HeartwardGrasp] GetIntoForestDirectionForEdge at {position}: sampled {wallCount} walls, avgNormal={avgNormal}, intoForest={intoForest}");
+            return intoForest;
+        }
+
+        /// <summary>
+        /// Calculates the "into forest" direction for pushing HGZ (near heart/node border).
+        /// For node borders, "into forest" = AWAY from heart center (radially outward).
+        /// </summary>
+        private Vector2 GetIntoForestDirectionForNode(Vector2 position)
+        {
+            Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
+            Vector2 awayFromHeart = (position - heartPos2D).normalized;
+            Debug.Log($"[HeartwardGrasp] GetIntoForestDirectionForNode at {position}: awayFromHeart={awayFromHeart}");
+            return awayFromHeart;
+        }
+
+        /// <summary>
+        /// Validates that a position is at least MIN_EDGE_DISTANCE from any path/node edge.
+        /// Returns a corrected position if the original is too close to an edge.
+        /// For nodes, accounts for node radius (distance to edge = distance to center - radius).
+        /// </summary>
+        private Vector3 ValidateHGZPosition(Vector3 proposedPos, Vector2 offsetDir, float minEdgeDistance)
+        {
+            const float CHECK_RADIUS = 6.0f;  // Must be large enough to detect heart node center (radius 3.0 + buffer)
+            const float NODE_RADIUS = 3.0f;   // Node radius from MazeRenderer
+
+            Debug.Log($"[HeartwardGrasp] ValidateHGZPosition: checking pos={proposedPos}, offsetDir={offsetDir}, minDist={minEdgeDistance}");
+
+            // Check if there are any path or node tiles near the proposed position
+            Collider[] nearbyColliders = Physics.OverlapSphere(proposedPos, CHECK_RADIUS, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            Debug.Log($"[HeartwardGrasp] ValidateHGZPosition: found {nearbyColliders.Length} colliders within radius {CHECK_RADIUS}");
+
+            float closestEdgeDist = float.MaxValue;
+            string closestName = "";
+            int pathCount = 0;
+            int nodeCount = 0;
+
+            foreach (var collider in nearbyColliders)
+            {
+                // Check for path tiles (MazePath tag) or node tiles (MazeNode tag)
+                bool isPath = collider.CompareTag("MazePath") || collider.gameObject.name.Contains("PathTile");
+                bool isNode = collider.CompareTag("MazeNode") || collider.gameObject.name.Contains("NodeColumn") || collider.gameObject.name.Contains("NodeCylinder");
+
+                if (isPath) pathCount++;
+                if (isNode) nodeCount++;
+
+                if (isPath || isNode)
+                {
+                    float distToCenter = Vector3.Distance(proposedPos, collider.transform.position);
+                    float distToEdge;
+
+                    if (isNode)
+                    {
+                        // For nodes, the edge is NODE_RADIUS away from center
+                        distToEdge = distToCenter - NODE_RADIUS;
+                        Debug.Log($"[HeartwardGrasp] Found node: {collider.gameObject.name}, tag={collider.tag}, center={collider.transform.position}, distToCenter={distToCenter:F2}, distToEdge={distToEdge:F2}");
+                    }
+                    else
+                    {
+                        // For path tiles, the center IS approximately the edge (tiles are small)
+                        distToEdge = distToCenter;
+                    }
+
+                    if (distToEdge < closestEdgeDist)
+                    {
+                        closestEdgeDist = distToEdge;
+                        closestName = collider.gameObject.name;
+                    }
+                }
+            }
+
+            Debug.Log($"[HeartwardGrasp] ValidateHGZPosition: pathCount={pathCount}, nodeCount={nodeCount}, closestEdgeDist={closestEdgeDist:F2}, closestName={closestName}");
+
+            // If we're too close to a path/node edge, push further in the offset direction
+            if (closestEdgeDist < minEdgeDistance)
+            {
+                float additionalOffset = minEdgeDistance - closestEdgeDist + 0.5f;  // Add extra margin
+                Vector3 correctedPos = proposedPos + new Vector3(offsetDir.x, offsetDir.y, 0f) * additionalOffset;
+                Debug.Log($"[HeartwardGrasp] HGZ position too close to edge ({closestEdgeDist:F2} < {minEdgeDistance}), pushing {additionalOffset:F2} further. Nearest: {closestName}");
+                return correctedPos;
+            }
+
+            Debug.Log($"[HeartwardGrasp] HGZ position validated: {closestEdgeDist:F2} >= {minEdgeDistance} from nearest edge ({closestName})");
+            return proposedPos;
+        }
+
+        private void FindAffectedGrabbingWalls()
+        {
+            affectedGrabbingWalls.Clear();
+            originalWallPositions.Clear();
+
+            Vector2 grabPos2D = new Vector2(grabbingWallPos.x, grabbingWallPos.y);
+
+            // Use Physics.OverlapSphere to find all colliders in the grabbing zone
+            Collider[] colliders = Physics.OverlapSphere(grabbingWallPos, GRASP_ZONE_RADIUS, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            foreach (var collider in colliders)
+            {
+                // Only include wall tiles
+                if (collider.gameObject.name.StartsWith("WorldTile_#"))
+                {
+                    affectedGrabbingWalls.Add(collider.gameObject);
+                    originalWallPositions[collider.gameObject] = collider.transform.position;
+                }
+            }
+
+            Debug.Log($"[HeartwardGrasp] Found {affectedGrabbingWalls.Count} wall tiles in grabbing zone");
+        }
+
+        private void UpdateWallShakeEffect()
+        {
+            if (affectedGrabbingWalls.Count == 0) return;
+
+            // Only shake when in idle/reaching phase (waiting for or grabbing visitor)
+            bool shouldShake = grabPhase == GrabPhase.Idle || grabPhase == GrabPhase.Reaching || grabPhase == GrabPhase.Grabbing;
+
+            foreach (var wall in affectedGrabbingWalls)
+            {
+                if (wall == null) continue;
+
+                if (shouldShake && originalWallPositions.TryGetValue(wall, out Vector3 originalPos))
+                {
+                    // Apply random shake offset
+                    float shakeIntensity = 0.03f;
+                    float offsetX = (UnityEngine.Random.value - 0.5f) * 2f * shakeIntensity;
+                    float offsetY = (UnityEngine.Random.value - 0.5f) * 2f * shakeIntensity;
+                    wall.transform.position = originalPos + new Vector3(offsetX, offsetY, 0f);
+                }
+                else if (originalWallPositions.TryGetValue(wall, out Vector3 origPos))
+                {
+                    // Reset to original position when not shaking
+                    wall.transform.position = origPos;
+                }
+            }
+        }
+
+        private void ResetWallPositions()
+        {
+            foreach (var wall in affectedGrabbingWalls)
+            {
+                if (wall != null && originalWallPositions.TryGetValue(wall, out Vector3 originalPos))
+                {
+                    wall.transform.position = originalPos;
+                }
+            }
+        }
+
+        private void CreateGrabbingHGZ()
+        {
+            // Create grabbing zone at wall near focal point
+            grabbingZoneObject = new GameObject("GrabbingHGZ");
+            grabbingZoneObject.transform.position = grabbingWallPos;
+
+            // Add trigger collider
+            grabbingCollider = grabbingZoneObject.AddComponent<SphereCollider>();
+            grabbingCollider.radius = GRASP_ZONE_RADIUS;
+            grabbingCollider.isTrigger = true;
+
+            // Add rigidbody for trigger detection
+            var rb = grabbingZoneObject.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            // Spawn and configure visual - oriented TOWARD focal point (away from heart)
+            // Model +X axis should point toward where visitors approach from
+            Vector3 dirTowardFocal = (targetPosition - grabbingWallPos).normalized;
+            SpawnGraspVisual(grabbingZoneObject, grabbingWallPos, dirTowardFocal, ref grabbingVisual, ref grabbingAnimator, ref grabbingTouchCollider, "GrabbingHand");
+
+            // Debug: create cylinder showing collision zone
+            debugGrabbingZoneCylinder = CreateDebugZoneCylinder(grabbingWallPos, GRASP_ZONE_RADIUS, Color.green, "Debug_GrabbingZone");
+        }
+
+        private void CreatePushingHGZ()
+        {
+            // Create pushing zone at wall near heart
+            pushingZoneObject = new GameObject("PushingHGZ");
+            pushingZoneObject.transform.position = pushingWallPos;
+
+            // Add trigger collider
+            pushingCollider = pushingZoneObject.AddComponent<SphereCollider>();
+            pushingCollider.radius = GRASP_ZONE_RADIUS;
+            pushingCollider.isTrigger = true;
+
+            // Add rigidbody for trigger detection
+            var rb = pushingZoneObject.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            // Spawn and configure visual - oriented TOWARD heart
+            // Model +X axis should point toward the heart where visitors are pushed
+            Vector3 dirTowardHeart = (heartNodePosition - pushingWallPos).normalized;
+            SpawnGraspVisual(pushingZoneObject, pushingWallPos, dirTowardHeart, ref pushingVisual, ref pushingAnimator, ref pushingTouchCollider, "PushingHand");
+
+            // Debug: create cylinder showing collision zone
+            debugPushingZoneCylinder = CreateDebugZoneCylinder(pushingWallPos, GRASP_ZONE_RADIUS, Color.red, "Debug_PushingZone");
+        }
+
+        private void SpawnGraspVisual(GameObject parent, Vector3 position, Vector3 forwardDir, ref GameObject visual, ref Animator animator, ref SphereCollider touchCollider, string name)
+        {
+            GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/Grasp/grasp");
+            if (graspPrefab == null)
+            {
+                Debug.LogWarning("[HeartwardGrasp] Could not load grasp prefab");
                 return;
             }
 
-            visitorStartWorldPos = targetVisitor.transform.position;
+            // The grasp prefab's default orientation (with its baked-in rotation) has:
+            // - Palm facing camera (-Z direction)
+            // - Fingers pointing +X direction
+            // This is correct for this game's coordinate system (XY plane, -Z up).
+            // We only need to rotate around Z to point fingers toward the target direction.
+            float angle = Mathf.Atan2(forwardDir.y, forwardDir.x) * Mathf.Rad2Deg;
+            Quaternion finalRotation = Quaternion.Euler(0f, 0f, angle);
 
-            // Find destination: position toward heart from activation point
-            pullDestinationWorldPos = FindDestinationTowardHeart(activationWorldPos, heartWorldPos);
+            Debug.Log($"[HeartwardGrasp] {name} forwardDir={forwardDir}, angle={angle}deg, rotation={finalRotation.eulerAngles}");
 
-            // Spawn grasp prefab
-            SpawnGraspPrefab(activationWorldPos, visitorStartWorldPos);
+            visual = Object.Instantiate(graspPrefab, position, finalRotation);
+            visual.name = name;
+            visual.transform.SetParent(parent.transform, worldPositionStays: true);
 
-            // Stop visitor movement
-            StopVisitor();
+            // Get animator and disable it (no animations during reaching)
+            animator = visual.GetComponent<Animator>();
+            if (animator == null)
+            {
+                animator = visual.GetComponentInChildren<Animator>();
+            }
 
-            currentPhase = AnimationPhase.InitialPause;
-            phaseStartTime = elapsedTime;
+            if (animator != null)
+            {
+                // Log animator details
+                var controller = animator.runtimeAnimatorController;
+                Debug.Log($"[HeartwardGrasp] {name} animator found. Controller: {(controller != null ? controller.name : "NULL")}, enabled: {animator.enabled}");
+
+                if (controller != null)
+                {
+                    // Keep animator enabled but paused at frame 0
+                    animator.speed = 0f;
+                    animator.Play("GraspFinal", 0, 0f);
+                    animator.Update(0f);
+
+                    // Verify the state was set
+                    var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+                    Debug.Log($"[HeartwardGrasp] {name} initialized. State hash: {stateInfo.fullPathHash}, normalizedTime: {stateInfo.normalizedTime:F3}, length: {stateInfo.length:F3}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[HeartwardGrasp] {name} animator has no controller assigned!");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[HeartwardGrasp] {name} has no Animator component");
+            }
+
+            // Find or create the "touch" collider on the grasp model
+            // The touch collider should be positioned at the palm/fingertips
+            touchCollider = null;
+            Transform touchTransform = visual.transform.Find("touch");
+            if (touchTransform == null)
+            {
+                // Search recursively
+                foreach (Transform child in visual.GetComponentsInChildren<Transform>())
+                {
+                    if (child.name == "touch")
+                    {
+                        touchTransform = child;
+                        break;
+                    }
+                }
+            }
+
+            if (touchTransform != null)
+            {
+                touchCollider = touchTransform.GetComponent<SphereCollider>();
+                if (touchCollider != null)
+                {
+                    touchCollider.isTrigger = true;
+                    Debug.Log($"[HeartwardGrasp] {name} touch collider found, isTrigger={touchCollider.isTrigger}");
+                }
+            }
+
+            // If no touch collider found, create one at runtime
+            if (touchCollider == null)
+            {
+                // Create touch collider as sibling to visual (not child) to avoid scale inheritance issues
+                // Position it at visual's XY position but at Z=-0.3 (closer to ground plane where visitors are)
+                GameObject touchObj = new GameObject("touch");
+                touchObj.transform.SetParent(visual.transform.parent, worldPositionStays: false);
+                touchObj.transform.position = new Vector3(visual.transform.position.x, visual.transform.position.y, -0.3f);
+                touchObj.transform.localScale = Vector3.one;
+
+                touchCollider = touchObj.AddComponent<SphereCollider>();
+                touchCollider.radius = 0.1f;  // Small radius for precise detection
+                touchCollider.isTrigger = true;
+
+                // Store reference so we can update position during reaching
+                touchObj.name = $"touch_{name}";
+
+                Debug.Log($"[HeartwardGrasp] {name} created touch collider at runtime, pos={touchObj.transform.position}, radius={touchCollider.radius}");
+            }
+        }
+
+        private void CreateParticleSystem(GameObject parent, ref ParticleSystem particles)
+        {
+            if (parent == null) return;
+
+            GameObject particleObj = new GameObject("DebrisParticles");
+            particleObj.transform.position = parent.transform.position;
+            particleObj.transform.SetParent(parent.transform);
+
+            particles = particleObj.AddComponent<ParticleSystem>();
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            var main = particles.main;
+            main.loop = true;
+            main.startLifetime = 2f;
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 0.8f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
+            main.startColor = new ParticleSystem.MinMaxGradient(LeafGreen, BarkBrown);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 100;
+            main.playOnAwake = false;
+
+            var emission = particles.emission;
+            emission.enabled = true;
+            emission.rateOverTime = 8f;
+
+            var shape = particles.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = GRASP_ZONE_RADIUS * 0.5f;
+
+            var sizeOverLifetime = particles.sizeOverLifetime;
+            sizeOverLifetime.enabled = true;
+            AnimationCurve sizeCurve = AnimationCurve.Linear(0f, 1f, 1f, 0.3f);
+            sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
+
+            var colorOverLifetime = particles.colorOverLifetime;
+            colorOverLifetime.enabled = true;
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new GradientColorKey[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.5f, 0.7f), new GradientAlphaKey(0f, 1f) }
+            );
+            colorOverLifetime.color = gradient;
+
+            var renderer = particleObj.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+
+            Shader particleShader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                ?? Shader.Find("Particles/Standard Unlit")
+                ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended")
+                ?? Shader.Find("Sprites/Default");
+
+            if (particleShader != null)
+            {
+                renderer.material = new Material(particleShader);
+            }
+
+            particles.Play();
+        }
+
+        private void CreateDebugRayColumn(Vector3 focalPos)
+        {
+            Vector3 rayOrigin = new Vector3(heartNodePosition.x, heartNodePosition.y, -0.5f);
+            Vector3 focalPos3D = new Vector3(focalPos.x, focalPos.y, -0.5f);
+            Vector3 midpoint = (rayOrigin + focalPos3D) / 2f;
+            float rayLength = Vector3.Distance(rayOrigin, focalPos3D);
+            Vector3 rayDirection = (focalPos3D - rayOrigin).normalized;
+
+            // Create cylinder along the ray
+            debugRayColumn = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            debugRayColumn.name = "HeartwardGrasp_DebugRay";
+
+            // Remove collider
+            var collider = debugRayColumn.GetComponent<Collider>();
+            if (collider != null) Object.Destroy(collider);
+
+            // Position at midpoint of ray
+            debugRayColumn.transform.position = midpoint;
+
+            // Cylinder default: height 2, radius 0.5, oriented along Y axis
+            // Scale: radius 0.1 means radiusScale = 0.1/0.5 = 0.2, height = rayLength/2
+            float radiusScale = 0.1f / 0.5f;  // radius 0.1
+            float heightScale = rayLength / 2f;
+            debugRayColumn.transform.localScale = new Vector3(radiusScale, heightScale, radiusScale);
+
+            // Orient cylinder along ray direction (default Y axis -> ray direction)
+            float angle = Mathf.Atan2(rayDirection.y, rayDirection.x) * Mathf.Rad2Deg;
+            debugRayColumn.transform.rotation = Quaternion.Euler(0f, 0f, angle - 90f);
+
+            // Bright yellow material
+            var renderer = debugRayColumn.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                    ?? Shader.Find("Unlit/Color")
+                    ?? Shader.Find("Standard");
+
+                if (shader != null)
+                {
+                    var mat = new Material(shader);
+                    Color brightYellow = new Color(1f, 1f, 0f, 1f);
+                    if (mat.HasProperty("_BaseColor"))
+                        mat.SetColor("_BaseColor", brightYellow);
+                    if (mat.HasProperty("_Color"))
+                        mat.SetColor("_Color", brightYellow);
+                    renderer.material = mat;
+                }
+            }
+
+            Debug.Log($"[HeartwardGrasp] Debug ray created from {rayOrigin} to {focalPos3D}, length={rayLength}");
+        }
+
+        private GameObject CreateDebugSphere(Vector3 position, Color color, string name)
+        {
+            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sphere.name = name;
+
+            // Remove collider
+            var collider = sphere.GetComponent<Collider>();
+            if (collider != null) Object.Destroy(collider);
+
+            // Position at z=-0.5, radius ~0.5
+            sphere.transform.position = new Vector3(position.x, position.y, -0.5f);
+            sphere.transform.localScale = new Vector3(1f, 1f, 1f);
+
+            // Set color
+            var renderer = sphere.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                    ?? Shader.Find("Unlit/Color")
+                    ?? Shader.Find("Standard");
+
+                if (shader != null)
+                {
+                    var mat = new Material(shader);
+                    if (mat.HasProperty("_BaseColor"))
+                        mat.SetColor("_BaseColor", color);
+                    if (mat.HasProperty("_Color"))
+                        mat.SetColor("_Color", color);
+                    renderer.material = mat;
+                }
+            }
+
+            return sphere;
+        }
+
+        private GameObject CreateDebugZoneCylinder(Vector3 position, float radius, Color color, string name)
+        {
+            var cylinder = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            cylinder.name = name;
+
+            // Remove collider
+            var collider = cylinder.GetComponent<Collider>();
+            if (collider != null) Object.Destroy(collider);
+
+            // Position at playing surface (z=0), height 0.1 along Z axis
+            cylinder.transform.position = new Vector3(position.x, position.y, 0f);
+
+            // Unity cylinder: height along local Y, radius in local XZ
+            // We want: height along world Z, radius in world XY
+            // Rotate -90° around X to map local Y to world Z
+            cylinder.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+
+            // Cylinder default: height 2, radius 0.5
+            // After rotation: local Y (height) -> world Z, local X -> world X, local Z -> world Y
+            // Scale: X and Z control radius in world XY plane, Y controls height in world Z
+            float radiusScale = radius / 0.5f;
+            float heightScale = 0.1f / 2f;
+            cylinder.transform.localScale = new Vector3(radiusScale, heightScale, radiusScale);
+
+            // Set color
+            var renderer = cylinder.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                    ?? Shader.Find("Unlit/Color")
+                    ?? Shader.Find("Standard");
+
+                if (shader != null)
+                {
+                    var mat = new Material(shader);
+                    if (mat.HasProperty("_BaseColor"))
+                        mat.SetColor("_BaseColor", color);
+                    if (mat.HasProperty("_Color"))
+                        mat.SetColor("_Color", color);
+                    renderer.material = mat;
+                }
+            }
+
+            return cylinder;
         }
 
         public override void Update(float deltaTime)
         {
             base.Update(deltaTime);
 
-            if (targetVisitor == null || currentPhase == AnimationPhase.Complete)
+            // Process grabbing HGZ state machine
+            UpdateGrabbingHGZ(deltaTime);
+
+            // Process pushing HGZ state machine
+            UpdatePushingHGZ(deltaTime);
+
+            // Update particle emission
+            UpdateParticles();
+
+            // Update wall shake effect in grabbing zone
+            UpdateWallShakeEffect();
+        }
+
+        private void CheckForVisitorsInGrabbingZone()
+        {
+            if (hasExpired || grabPhase != GrabPhase.Idle) return;
+
+            var visitors = VisitorRegistry.All;
+            foreach (var visitor in visitors)
             {
+                if (visitor == null) continue;
+                if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
+                    continue;
+                if (visitor == currentVisitor || pendingVisitors.Contains(visitor))
+                    continue;
+
+                float distance = Vector3.Distance(visitor.transform.position, grabbingWallPos);
+                if (distance <= GRASP_ZONE_RADIUS)
+                {
+                    pendingVisitors.Enqueue(visitor);
+                }
+            }
+
+            if (grabPhase == GrabPhase.Idle && pendingVisitors.Count > 0)
+            {
+                StartGrabbingVisitor(pendingVisitors.Dequeue());
+            }
+        }
+
+        private void StartGrabbingVisitor(VisitorControllerBase visitor)
+        {
+            if (visitor == null || hasExpired) return;
+
+            Debug.Log($"[HeartwardGrasp] Starting grab on visitor at {visitor.transform.position}");
+
+            currentVisitor = visitor;
+            visitorVisible = true;
+            // NOTE: Do NOT stop visitor here - they continue walking until grabbed at frame 46
+
+            // Orient grabbing hand toward visitor
+            OrientHandTowardTarget(grabbingVisual, visitor.transform.position);
+
+            // Start reaching phase - animation frames 0-20
+            grabPhase = GrabPhase.Reaching;
+            grabPhaseStartTime = elapsedTime;
+            grabCurrentFrame = 0;
+            SetAnimatorFrame(grabbingAnimator, 0);
+
+            if (grabbingParticles != null) grabbingParticles.Emit(25);
+
+            Debug.Log($"[HeartwardGrasp] Grab phase: Idle -> Reaching");
+        }
+
+        private void UpdateGrabbingHGZ(float deltaTime)
+        {
+            // Check for visitors when idle
+            if (grabPhase == GrabPhase.Idle)
+            {
+                CheckForVisitorsInGrabbingZone();
                 return;
             }
 
-            float phaseElapsed = elapsedTime - phaseStartTime;
-
-            switch (currentPhase)
+            if (currentVisitor == null)
             {
-                case AnimationPhase.InitialPause:
-                    if (phaseElapsed >= 0.75f)
+                grabPhase = GrabPhase.Idle;
+                return;
+            }
+
+            float phaseElapsed = elapsedTime - grabPhaseStartTime;
+
+            switch (grabPhase)
+            {
+                case GrabPhase.Reaching:
+                    // Translate grasp model toward visitor until touch collider hits
+                    if (grabbingVisual != null && currentVisitor != null)
                     {
-                        currentPhase = AnimationPhase.PullToActivation;
-                        phaseStartTime = elapsedTime;
-                        lerpStartPosition = targetVisitor.transform.position;
-                        lerpEndPosition = activationWorldPos;
-                    }
-                    break;
+                        // Calculate direction to visitor (XY plane only)
+                        Vector3 visitorPos = currentVisitor.transform.position;
+                        Vector3 graspPos = grabbingVisual.transform.position;
+                        Vector2 direction = new Vector2(visitorPos.x - graspPos.x, visitorPos.y - graspPos.y).normalized;
 
-                case AnimationPhase.PullToActivation:
-                    float pullT = Mathf.Clamp01(phaseElapsed / 0.25f);
-                    targetVisitor.transform.position = Vector3.Lerp(lerpStartPosition, lerpEndPosition, pullT);
+                        // Update orientation to track visitor as we move
+                        OrientHandTowardTarget(grabbingVisual, visitorPos);
 
-                    if (phaseElapsed >= 0.25f)
-                    {
-                        currentPhase = AnimationPhase.Repositioning;
-                        targetVisitor.transform.position = activationWorldPos;
+                        // Move grasp model toward visitor
+                        float moveAmount = REACH_SPEED * deltaTime;
+                        grabbingVisual.transform.position += new Vector3(direction.x * moveAmount, direction.y * moveAmount, 0f);
 
-                        UpdateGraspDirection(activationWorldPos, pullDestinationWorldPos);
-
-                        currentPhase = AnimationPhase.PushToDestination;
-                        phaseStartTime = elapsedTime;
-                        lerpStartPosition = activationWorldPos;
-                        lerpEndPosition = pullDestinationWorldPos;
-                    }
-                    break;
-
-                case AnimationPhase.PushToDestination:
-                    float pushT = Mathf.Clamp01(phaseElapsed / 0.25f);
-                    targetVisitor.transform.position = Vector3.Lerp(lerpStartPosition, lerpEndPosition, pushT);
-
-                    if (phaseElapsed >= 0.25f)
-                    {
-                        currentPhase = AnimationPhase.FinalPause;
-                        phaseStartTime = elapsedTime;
-                        targetVisitor.RecalculatePath();
-                        ApplyTierEffects();
-                    }
-                    break;
-
-                case AnimationPhase.FinalPause:
-                    if (phaseElapsed >= 0.75f)
-                    {
-                        currentPhase = AnimationPhase.Complete;
-                        ResumeVisitor();
-
-                        if (graspVisual != null)
+                        // Update touch collider position to follow the hand (it's a sibling, not child)
+                        if (grabbingTouchCollider != null)
                         {
-                            Object.Destroy(graspVisual);
-                            graspVisual = null;
+                            grabbingTouchCollider.transform.position = new Vector3(
+                                grabbingVisual.transform.position.x,
+                                grabbingVisual.transform.position.y,
+                                -0.3f);  // Keep at Z=-0.3 to be on same plane as visitors
+                        }
+
+                        // Check if touch collider overlaps visitor
+                        bool touchedVisitor = false;
+                        if (grabbingTouchCollider != null)
+                        {
+                            // Get world position and radius of touch collider
+                            Vector3 touchCenter = grabbingTouchCollider.transform.TransformPoint(grabbingTouchCollider.center);
+                            float touchRadius = grabbingTouchCollider.radius * Mathf.Max(
+                                grabbingTouchCollider.transform.lossyScale.x,
+                                grabbingTouchCollider.transform.lossyScale.y,
+                                grabbingTouchCollider.transform.lossyScale.z);
+
+                            // Check for overlap with visitor colliders
+                            Collider[] hits = Physics.OverlapSphere(touchCenter, touchRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+                            foreach (var hit in hits)
+                            {
+                                if (hit.transform.IsChildOf(currentVisitor.transform) || hit.transform == currentVisitor.transform)
+                                {
+                                    touchedVisitor = true;
+                                    Debug.Log($"[HeartwardGrasp] Touch detected! Hit: {hit.name}");
+                                    break;
+                                }
+                            }
+
+                            // Debug every frame to see what's happening
+                            if (Time.frameCount % 30 == 0) // Every 30 frames
+                            {
+                                float distToVisitor = Vector2.Distance(new Vector2(touchCenter.x, touchCenter.y), new Vector2(visitorPos.x, visitorPos.y));
+                                Debug.Log($"[HeartwardGrasp] Touch check: center={touchCenter}, radius={touchRadius:F3}, distToVisitor={distToVisitor:F2}, hits={hits.Length}");
+                            }
+                        }
+                        else
+                        {
+                            if (Time.frameCount % 60 == 0)
+                                Debug.LogWarning("[HeartwardGrasp] grabbingTouchCollider is NULL!");
+                        }
+
+                        if (touchedVisitor)
+                        {
+                            Debug.Log($"[HeartwardGrasp] SUCCESS: Touch collider triggered on visitor! Transitioning to Grabbing");
+                            // Stop visitor movement immediately
+                            currentVisitor.Stop();
+                            // Store the grab position and visitor offset
+                            grabStartPosition = grabbingVisual.transform.position;
+                            visitorGrabOffset = currentVisitor.transform.position - grabStartPosition;
+                            // Enable animator and start grab animation
+                            if (grabbingAnimator != null)
+                            {
+                                SetAnimatorFrame(grabbingAnimator, 0);  // Start from beginning
+                            }
+                            // Transition to Grabbing phase
+                            grabPhase = GrabPhase.Grabbing;
+                            grabPhaseStartTime = elapsedTime;
+                        }
+                    }
+                    break;
+
+                case GrabPhase.Grabbing:
+                    // Model stays still, animation plays for 1 second (24 frames)
+                    // Visitor is already stopped
+                    {
+                        float grabProgress = Mathf.Clamp01(phaseElapsed / GRAB_ANIMATION_DURATION);
+                        grabCurrentFrame = Mathf.FloorToInt(grabProgress * GRAB_ANIMATION_FRAMES);
+                        SetAnimatorFrame(grabbingAnimator, grabCurrentFrame);
+
+                        if (phaseElapsed >= GRAB_ANIMATION_DURATION)
+                        {
+                            Debug.Log($"[HeartwardGrasp] Grab phase: Grabbing -> Pulling (animation complete at frame {grabCurrentFrame})");
+                            grabPhase = GrabPhase.Pulling;
+                            grabPhaseStartTime = elapsedTime;
+                            if (grabbingParticles != null) grabbingParticles.Emit(20);
+                        }
+                    }
+                    break;
+
+                case GrabPhase.Pulling:
+                    // Model and visitor translate back to starting wall position over PULL_DURATION
+                    // Hand stays closed (frame 24) - no animation change during pull
+                    {
+                        float pullProgress = Mathf.Clamp01(phaseElapsed / PULL_DURATION);
+
+                        // Keep hand closed at frame 24
+                        SetAnimatorFrame(grabbingAnimator, GRAB_ANIMATION_FRAMES);
+
+                        // Move model back to starting wall position
+                        Vector3 pullTarget = grabbingWallPos;
+                        grabbingVisual.transform.position = Vector3.Lerp(grabStartPosition, pullTarget, pullProgress);
+
+                        // Update touch collider position
+                        if (grabbingTouchCollider != null)
+                        {
+                            grabbingTouchCollider.transform.position = new Vector3(
+                                grabbingVisual.transform.position.x,
+                                grabbingVisual.transform.position.y,
+                                -0.3f);
+                        }
+
+                        // Move visitor with the hand
+                        currentVisitor.transform.position = grabbingVisual.transform.position + visitorGrabOffset;
+
+                        if (pullProgress >= 1f)
+                        {
+                            Debug.Log($"[HeartwardGrasp] Grab phase: Pulling -> Transporting");
+                            SetVisitorVisible(currentVisitor, false);
+                            visitorVisible = false;
+                            grabPhase = GrabPhase.Transporting;
+                            grabPhaseStartTime = elapsedTime;
+                        }
+                    }
+                    break;
+
+                case GrabPhase.Transporting:
+                    // 1 second duration, then relocate visitor to pushing HGZ
+                    if (phaseElapsed >= TRANSPORT_DURATION)
+                    {
+                        Debug.Log($"[HeartwardGrasp] Transport complete, starting push sequence");
+                        Debug.Log($"[HeartwardGrasp] visitorGrabOffset={visitorGrabOffset}, pushingWallPos={pushingWallPos}");
+
+                        // Transform the grab offset to pushing hand's orientation
+                        // Grabbing hand points away from heart, pushing hand points toward heart
+                        // Convert offset from grabbing hand's local space to pushing hand's local space
+                        Vector3 grabbingDir = (grabbingWallPos - heartNodePosition).normalized;
+                        Vector3 pushingDir = (heartNodePosition - pushingWallPos).normalized;
+
+                        // Calculate the rotation difference between the two orientations
+                        float grabbingAngle = Mathf.Atan2(grabbingDir.y, grabbingDir.x);
+                        float pushingAngle = Mathf.Atan2(pushingDir.y, pushingDir.x);
+                        float angleDiff = pushingAngle - grabbingAngle;
+
+                        Debug.Log($"[HeartwardGrasp] grabbingDir={grabbingDir}, pushingDir={pushingDir}");
+                        Debug.Log($"[HeartwardGrasp] grabbingAngle={grabbingAngle * Mathf.Rad2Deg}°, pushingAngle={pushingAngle * Mathf.Rad2Deg}°, angleDiff={angleDiff * Mathf.Rad2Deg}°");
+
+                        // Rotate the offset to match pushing hand's orientation
+                        visitorPushOffset = new Vector3(
+                            visitorGrabOffset.x * Mathf.Cos(angleDiff) - visitorGrabOffset.y * Mathf.Sin(angleDiff),
+                            visitorGrabOffset.x * Mathf.Sin(angleDiff) + visitorGrabOffset.y * Mathf.Cos(angleDiff),
+                            visitorGrabOffset.z
+                        );
+
+                        Debug.Log($"[HeartwardGrasp] visitorPushOffset={visitorPushOffset}");
+
+                        Vector3 newVisitorPos = pushingWallPos + visitorPushOffset;
+                        Debug.Log($"[HeartwardGrasp] Setting visitor position to {newVisitorPos}");
+                        currentVisitor.transform.position = newVisitorPos;
+
+                        // Start pushing sequence
+                        StartPushingSequence();
+
+                        // Reset grabbing state
+                        grabPhase = GrabPhase.Idle;
+                        SetAnimatorFrame(grabbingAnimator, 0);
+                    }
+                    break;
+
+            }
+        }
+
+        private void StartPushingSequence()
+        {
+            // Orient pushing hand toward heart
+            OrientHandTowardTarget(pushingVisual, heartNodePosition);
+
+            // Set animator to end of animation (frame 24 = closed hand)
+            if (pushingAnimator != null)
+            {
+                SetAnimatorFrame(pushingAnimator, GRAB_ANIMATION_FRAMES);  // Frame 24
+            }
+
+            // Calculate push translation positions
+            pushingStartPos = pushingWallPos;
+            Vector3 dirToHeart = (heartNodePosition - pushingWallPos).normalized;
+            pushingTargetPos = pushingStartPos + dirToHeart * PUSH_DISTANCE;
+
+            // Start with Pushing phase (translate toward heart)
+            pushPhase = PushPhase.Pushing;
+            pushPhaseStartTime = elapsedTime;
+            pushCurrentFrame = GRAB_ANIMATION_FRAMES;
+
+            if (pushingParticles != null) pushingParticles.Emit(25);
+
+            Debug.Log($"[HeartwardGrasp] Push phase: Idle -> Pushing (translating {PUSH_DISTANCE} unit toward heart)");
+        }
+
+        private void UpdatePushingHGZ(float deltaTime)
+        {
+            if (pushPhase == PushPhase.Idle) return;
+            if (currentVisitor == null)
+            {
+                pushPhase = PushPhase.Idle;
+                return;
+            }
+
+            float phaseElapsed = elapsedTime - pushPhaseStartTime;
+
+            switch (pushPhase)
+            {
+                case PushPhase.Pushing:
+                    // Model translates 1 unit toward heart, hand stays closed (frame 24)
+                    {
+                        float pushProgress = Mathf.Clamp01(phaseElapsed / PUSH_DURATION);
+
+                        // Keep hand closed at frame 24
+                        SetAnimatorFrame(pushingAnimator, GRAB_ANIMATION_FRAMES);
+
+                        // Translate model toward heart
+                        pushingVisual.transform.position = Vector3.Lerp(pushingStartPos, pushingTargetPos, pushProgress);
+
+                        // Update touch collider position
+                        if (pushingTouchCollider != null)
+                        {
+                            pushingTouchCollider.transform.position = new Vector3(
+                                pushingVisual.transform.position.x,
+                                pushingVisual.transform.position.y,
+                                -0.3f);
+                        }
+
+                        // Move visitor with the hand
+                        currentVisitor.transform.position = pushingVisual.transform.position + visitorPushOffset;
+
+                        if (pushProgress >= 1f)
+                        {
+                            Debug.Log($"[HeartwardGrasp] Push phase: Pushing -> Releasing");
+                            pushPhase = PushPhase.Releasing;
+                            pushPhaseStartTime = elapsedTime;
+                        }
+                    }
+                    break;
+
+                case PushPhase.Releasing:
+                    // Model paused, animation plays in reverse from frame 24 to 0 over 1 second
+                    // Visitor becomes visible and dazed at end
+                    {
+                        float releaseProgress = Mathf.Clamp01(phaseElapsed / GRAB_ANIMATION_DURATION);
+
+                        // Animation in reverse: 24 -> 0
+                        pushCurrentFrame = Mathf.FloorToInt((1f - releaseProgress) * GRAB_ANIMATION_FRAMES);
+                        SetAnimatorFrame(pushingAnimator, pushCurrentFrame);
+
+                        // Make visitor visible partway through
+                        if (!visitorVisible && releaseProgress > 0.3f)
+                        {
+                            SetVisitorVisible(currentVisitor, true);
+                            visitorVisible = true;
+                        }
+
+                        if (releaseProgress >= 1f)
+                        {
+                            Debug.Log($"[HeartwardGrasp] Push phase: Releasing -> Withdrawing, visitor dazed");
+                            // Apply daze to visitor
+                            float dazeDuration = definition.param1 > 0 ? definition.param1 : 2f;
+                            currentVisitor.OnWitnessMazeGrowth(dazeDuration);
+
+                            pushPhase = PushPhase.Withdrawing;
+                            pushPhaseStartTime = elapsedTime;
+                            if (pushingParticles != null) pushingParticles.Emit(15);
+                        }
+                    }
+                    break;
+
+                case PushPhase.Withdrawing:
+                    // Model translates back to wall, holds frame 1
+                    {
+                        float withdrawProgress = Mathf.Clamp01(phaseElapsed / WITHDRAW_DURATION);
+
+                        // Hold at frame 1 (not 0 to avoid T-pose)
+                        SetAnimatorFrame(pushingAnimator, 1);
+
+                        // Translate model back to wall
+                        pushingVisual.transform.position = Vector3.Lerp(pushingTargetPos, pushingStartPos, withdrawProgress);
+
+                        // Update touch collider position
+                        if (pushingTouchCollider != null)
+                        {
+                            pushingTouchCollider.transform.position = new Vector3(
+                                pushingVisual.transform.position.x,
+                                pushingVisual.transform.position.y,
+                                -0.3f);
+                        }
+
+                        if (withdrawProgress >= 1f)
+                        {
+                            Debug.Log($"[HeartwardGrasp] Push phase: Withdrawing complete");
+                            FinalizeCapture();
                         }
                     }
                     break;
             }
+        }
 
-            if (graspVisual != null)
+        private void FinalizeCapture()
+        {
+            if (currentVisitor != null)
             {
-                UpdateGraspVisualAnimation();
+                Debug.Log($"[HeartwardGrasp] FinalizeCapture - visitor position before resume: {currentVisitor.transform.position}");
+                currentVisitor.Resume();
+                currentVisitor.RecalculatePath();
+                Debug.Log($"[HeartwardGrasp] FinalizeCapture - visitor position after resume: {currentVisitor.transform.position}");
+                Debug.Log($"[HeartwardGrasp] Visitor released and dazed at heart area");
+            }
+
+            capturedCount++;
+            Debug.Log($"[HeartwardGrasp] Capture complete. Count: {capturedCount}/{requiredCaptures}");
+
+            if (capturedCount >= requiredCaptures)
+            {
+                hasExpired = true;
+                Debug.Log($"[HeartwardGrasp] Power expired after {capturedCount} captures");
+            }
+
+            currentVisitor = null;
+            pushPhase = PushPhase.Idle;
+
+            // Reset pushing visual to wall position and closed hand for next capture
+            if (pushingVisual != null)
+            {
+                pushingVisual.transform.position = pushingWallPos;
+            }
+            if (pushingTouchCollider != null)
+            {
+                pushingTouchCollider.transform.position = new Vector3(pushingWallPos.x, pushingWallPos.y, -0.3f);
+            }
+            SetAnimatorFrame(pushingAnimator, GRAB_ANIMATION_FRAMES);  // Reset to closed hand for next reverse play
+        }
+
+        private void OrientHandTowardTarget(GameObject visual, Vector3 targetPos)
+        {
+            if (visual == null) return;
+
+            Vector3 direction = (targetPos - visual.transform.position).normalized;
+            if (direction.sqrMagnitude < 0.0001f) direction = Vector3.right;
+
+            // The prefab's default has fingers pointing +X, palm facing -Z.
+            // Just rotate around Z to point fingers toward target.
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            visual.transform.rotation = Quaternion.Euler(0f, 0f, angle);
+        }
+
+        private void SetAnimatorFrame(Animator animator, int frame)
+        {
+            if (animator == null)
+            {
+                Debug.LogWarning($"[HeartwardGrasp] SetAnimatorFrame called with null animator!");
+                return;
+            }
+
+            // Ensure animator is enabled
+            if (!animator.enabled)
+            {
+                animator.enabled = true;
+                Debug.Log($"[HeartwardGrasp] SetAnimatorFrame: re-enabled animator");
+            }
+
+            // The GLB animation reports length: Infinity, so normalized time doesn't work.
+            // Instead, use the actual animation time. The animation is ~0.4 seconds at 60fps (24 frames).
+            // Frame 0 = time 0, Frame 24 = time 0.4
+            const float ANIMATION_DURATION_SECONDS = 0.4f;  // 24 frames at 60fps
+            float targetTime = (frame / (float)GRAB_ANIMATION_FRAMES) * ANIMATION_DURATION_SECONDS;
+
+            // Play the animation and immediately jump to the target time
+            animator.speed = 1f;  // Enable playback temporarily
+            animator.Play("GraspFinal", 0, 0f);  // Start from beginning
+            animator.Update(targetTime);  // Advance to target time
+            animator.speed = 0f;  // Pause
+
+            Debug.Log($"[HeartwardGrasp] SetAnimatorFrame: frame={frame}/{GRAB_ANIMATION_FRAMES}, targetTime={targetTime:F3}s");
+        }
+
+        private void SetVisitorVisible(VisitorControllerBase visitor, bool visible)
+        {
+            if (visitor == null) return;
+
+            var renderers = visitor.GetComponentsInChildren<Renderer>();
+            foreach (var renderer in renderers)
+            {
+                renderer.enabled = visible;
             }
         }
 
-        private void UpdateGraspVisualAnimation()
+        private void UpdateParticles()
         {
-            float animTime = elapsedTime;
-            Vector3 offset = Vector3.zero;
+            bool grabActive = grabPhase != GrabPhase.Idle;
+            bool pushActive = pushPhase != PushPhase.Idle;
 
-            if (animTime < 1.0f)
+            if (grabbingParticles != null)
             {
-                if (animTime < 0.25f)
-                {
-                    float t = animTime / 0.25f;
-                    offset = graspAnimationDirection * t;
-                }
-                else if (animTime < 0.75f)
-                {
-                    offset = graspAnimationDirection;
-                }
-                else
-                {
-                    float t = (1.0f - animTime) / 0.25f;
-                    offset = graspAnimationDirection * t;
-                }
-            }
-            else if (animTime < 2.0f)
-            {
-                float secondHalfTime = animTime - 1.0f;
-
-                if (secondHalfTime < 0.25f)
-                {
-                    float t = secondHalfTime / 0.25f;
-                    offset = graspAnimationDirection * t;
-                }
-                else if (secondHalfTime < 0.75f)
-                {
-                    offset = graspAnimationDirection;
-                }
-                else
-                {
-                    float t = (1.0f - secondHalfTime) / 0.25f;
-                    offset = graspAnimationDirection * t;
-                }
+                var emission = grabbingParticles.emission;
+                emission.rateOverTime = grabActive ? 25f : 8f;
             }
 
-            graspVisual.transform.position = graspBasePosition + offset;
+            if (pushingParticles != null)
+            {
+                var emission = pushingParticles.emission;
+                emission.rateOverTime = pushActive ? 25f : 8f;
+            }
         }
 
         public override void OnEnd()
         {
-            if (targetVisitor != null && visitorMovementStopped)
+            Debug.Log($"[HeartwardGrasp] OnEnd - Cleaning up. Captured: {capturedCount}");
+
+            if (grabbingZoneObject != null)
             {
-                ResumeVisitor();
+                Object.Destroy(grabbingZoneObject);
+                grabbingZoneObject = null;
             }
 
-            if (graspVisual != null)
+            if (pushingZoneObject != null)
             {
-                Object.Destroy(graspVisual);
-                graspVisual = null;
+                Object.Destroy(pushingZoneObject);
+                pushingZoneObject = null;
             }
+
+            // Clean up debug visualizations
+            if (debugRayColumn != null)
+            {
+                Object.Destroy(debugRayColumn);
+                debugRayColumn = null;
+            }
+            if (debugGrabbingHitSphere != null)
+            {
+                Object.Destroy(debugGrabbingHitSphere);
+                debugGrabbingHitSphere = null;
+            }
+            if (debugPushingHitSphere != null)
+            {
+                Object.Destroy(debugPushingHitSphere);
+                debugPushingHitSphere = null;
+            }
+            if (debugGrabbingZoneCylinder != null)
+            {
+                Object.Destroy(debugGrabbingZoneCylinder);
+                debugGrabbingZoneCylinder = null;
+            }
+            if (debugPushingZoneCylinder != null)
+            {
+                Object.Destroy(debugPushingZoneCylinder);
+                debugPushingZoneCylinder = null;
+            }
+
+            if (currentVisitor != null)
+            {
+                SetVisitorVisible(currentVisitor, true);
+                currentVisitor.Resume();
+                currentVisitor = null;
+            }
+
+            pendingVisitors.Clear();
+
+            // Reset wall positions before cleanup
+            ResetWallPositions();
+            affectedGrabbingWalls.Clear();
+            originalWallPositions.Clear();
 
             if (manager.TileVisualizer != null)
             {
@@ -1775,140 +3104,30 @@ namespace FaeMaze.HeartPowers
         public override void ApplyWorldOffset(Vector3 worldOffset)
         {
             targetPosition += worldOffset;
-            activationWorldPos += worldOffset;
-            visitorStartWorldPos += worldOffset;
-            pullDestinationWorldPos += worldOffset;
-            lerpStartPosition += worldOffset;
-            lerpEndPosition += worldOffset;
-            graspBasePosition += worldOffset;
+            heartNodePosition += worldOffset;
+            grabbingWallPos += worldOffset;
+            pushingWallPos += worldOffset;
 
-            if (graspVisual != null)
-            {
-                graspVisual.transform.position += worldOffset;
-            }
+            if (grabbingZoneObject != null)
+                grabbingZoneObject.transform.position += worldOffset;
+            if (pushingZoneObject != null)
+                pushingZoneObject.transform.position += worldOffset;
+
+            // Move debug visualizations
+            if (debugRayColumn != null)
+                debugRayColumn.transform.position += worldOffset;
+            if (debugGrabbingHitSphere != null)
+                debugGrabbingHitSphere.transform.position += worldOffset;
+            if (debugPushingHitSphere != null)
+                debugPushingHitSphere.transform.position += worldOffset;
+            if (debugGrabbingZoneCylinder != null)
+                debugGrabbingZoneCylinder.transform.position += worldOffset;
+            if (debugPushingZoneCylinder != null)
+                debugPushingZoneCylinder.transform.position += worldOffset;
         }
 
-        private void StopVisitor()
-        {
-            if (targetVisitor == null || visitorMovementStopped)
-            {
-                return;
-            }
-
-            targetVisitor.Stop();
-            visitorMovementStopped = true;
-        }
-
-        private void ResumeVisitor()
-        {
-            if (targetVisitor == null || !visitorMovementStopped)
-            {
-                return;
-            }
-
-            targetVisitor.Resume();
-            visitorMovementStopped = false;
-        }
-
-        private void SpawnGraspPrefab(Vector3 position, Vector3 pointToward)
-        {
-            GameObject graspPrefab = Resources.Load<GameObject>("Prefabs/Props/Grasp/grasp");
-
-            if (graspPrefab == null)
-            {
-                return;
-            }
-
-            Vector3 graspPosition = position;
-            graspPosition.z = 0f;
-
-            Vector3 direction = pointToward - graspPosition;
-            direction.z = 0f;
-
-            if (direction.sqrMagnitude < 0.0001f)
-            {
-                direction = Vector3.up;
-            }
-            else
-            {
-                direction.Normalize();
-            }
-
-            Quaternion rotation = Quaternion.LookRotation(Vector3.forward, direction);
-
-            graspVisual = Object.Instantiate(graspPrefab, graspPosition, rotation);
-            graspVisual.name = "GraspEffect";
-
-            graspBasePosition = graspPosition;
-            graspAnimationDirection = direction;
-        }
-
-        private void UpdateGraspDirection(Vector3 from, Vector3 to)
-        {
-            if (graspVisual == null)
-            {
-                return;
-            }
-
-            Vector3 direction = to - from;
-            direction.z = 0f;
-
-            if (direction.sqrMagnitude > 0.0001f)
-            {
-                direction.Normalize();
-                Quaternion rotation = Quaternion.LookRotation(Vector3.forward, direction);
-                graspVisual.transform.rotation = rotation;
-                graspAnimationDirection = direction;
-            }
-        }
-
-        private Vector3 FindDestinationTowardHeart(Vector3 from, Vector3 heartPos)
-        {
-            Vector3 direction = (heartPos - from).normalized;
-            float pullDistance = 3f;
-            return from + direction * pullDistance;
-        }
-
-        private void ApplyTierEffects()
-        {
-            if (targetVisitor == null)
-            {
-                return;
-            }
-
-            if (definition.tier >= 3 && definition.flag1)
-            {
-                float mesmerizeDuration = definition.param3 > 0 ? definition.param3 : 3f;
-                targetVisitor.SetMesmerized(mesmerizeDuration);
-            }
-        }
-
-        private VisitorControllerBase FindNearestVisitor(Vector3 worldPos, float range)
-        {
-            var visitors = VisitorRegistry.All;
-            VisitorControllerBase nearest = null;
-            float minDistance = float.MaxValue;
-
-            foreach (var visitor in visitors)
-            {
-                if (visitor == null ||
-                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
-                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
-                {
-                    continue;
-                }
-
-                float distance = Vector3.Distance(visitor.transform.position, worldPos);
-
-                if (distance <= range && distance < minDistance)
-                {
-                    nearest = visitor;
-                    minDistance = distance;
-                }
-            }
-
-            return nearest;
-        }
+        public int GetCapturedCount() => capturedCount;
+        public int GetRequiredCaptures() => requiredCaptures;
     }
 
     #endregion

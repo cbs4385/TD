@@ -1050,57 +1050,48 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Renders complete end cap walls at the end of a frontier edge.
-        /// Creates a U-shape around the portal with rear wall and side walls.
+        /// Fills a rectangular area past the frontier endpoint with walls at regular intervals.
         /// Portal at origin, frontierDir is +Y direction (into unexplored area).
-        /// Only renders LEFT side wall to avoid intersection at narrow frontier ends.
         /// </summary>
         private int RenderFrontierEndCap(Vector2 frontierEnd, Vector2 frontierDir, Transform mazeOrigin,
             float stepSize, float pathHalfWidth, int wallDepth, float wallSpacing, GraphElementWallContainer wallContainer)
         {
             int tileCount = 0;
-            // perpendicular: +X is to the right when facing frontierDir
             Vector2 perpendicular = new Vector2(-frontierDir.y, frontierDir.x);
 
-            // Wall positions relative to portal (frontierEnd):
-            // - frontierDir is +Y (into unexplored)
-            // - perpendicular is +X (right side)
-            // - Portal faces -Y (back toward node)
+            // Fill a rectangular area past the frontier endpoint
+            // Width: from -maxWidth to +maxWidth (covers path + wall depth on each side)
+            // Depth: from 0 to extensionDistance (past the endpoint)
+            float maxWidth = pathHalfWidth + wallSpacing * wallDepth;
+            float extensionDistance = wallSpacing * (wallDepth + 1);
 
-            // Rear wall segments: Y=1, X from -1 to 1 (5 segments)
-            // Orientation: wall faces back toward the path (-frontierDir)
+            // Calculate number of steps in each direction
+            int widthSteps = Mathf.CeilToInt((maxWidth * 2) / stepSize);
+            int depthSteps = Mathf.CeilToInt(extensionDistance / stepSize);
+
+            // Rear wall orientation (faces back toward the path)
             float rearOrientationDegrees = Mathf.Atan2(-frontierDir.y, -frontierDir.x) * Mathf.Rad2Deg;
-            float[] rearX = { -1f, -0.5f, 0f, 0.5f, 1f };
-            foreach (float x in rearX)
-            {
-                Vector2 wallPos = frontierEnd + frontierDir * 1f + perpendicular * x;
-                Vector3 worldPos = ToVector3(wallPos);
-                CreateWorldSpaceTile(worldPos, rearOrientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: 1, wallContainer: wallContainer);
-                tileCount++;
-            }
 
-            // Left wall segments: X=-1, Y from 1 to -1 (5 segments)
-            // Orientation: wall faces right (toward +perpendicular)
-            float leftOrientationDegrees = Mathf.Atan2(perpendicular.y, perpendicular.x) * Mathf.Rad2Deg;
-            float[] sideY = { 1f, 0.5f, 0f, -0.5f, -1f };
-            foreach (float y in sideY)
+            // Fill the rectangular area with walls
+            for (int depthStep = 0; depthStep <= depthSteps; depthStep++)
             {
-                Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * -1f;
-                Vector3 worldPos = ToVector3(wallPos);
-                int layer = y > 0f ? 1 : 0;
-                CreateWorldSpaceTile(worldPos, leftOrientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: layer, wallContainer: wallContainer);
-                tileCount++;
-            }
+                float alongPath = depthStep * stepSize;
+                Vector2 rowCenter = frontierEnd + frontierDir * alongPath;
 
-            // Right wall segments: X=1, Y from 1 to -1 (5 segments)
-            // Orientation: wall faces left (toward -perpendicular)
-            float rightOrientationDegrees = Mathf.Atan2(-perpendicular.y, -perpendicular.x) * Mathf.Rad2Deg;
-            foreach (float y in sideY)
-            {
-                Vector2 wallPos = frontierEnd + frontierDir * y + perpendicular * 1f;
-                Vector3 worldPos = ToVector3(wallPos);
-                int layer = y > 0f ? 1 : 0;
-                CreateWorldSpaceTile(worldPos, rightOrientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: layer, wallContainer: wallContainer);
-                tileCount++;
+                for (int widthStep = 0; widthStep <= widthSteps; widthStep++)
+                {
+                    float t = widthSteps > 0 ? (float)widthStep / widthSteps : 0.5f;
+                    float xOffset = Mathf.Lerp(-maxWidth, maxWidth, t);
+                    Vector2 wallPos = rowCenter + perpendicular * xOffset;
+
+                    // Determine wall layer based on distance from center (for LOD)
+                    float distFromCenter = Mathf.Abs(xOffset);
+                    int layer = Mathf.Clamp(Mathf.FloorToInt(distFromCenter / wallSpacing), 0, wallDepth - 1);
+
+                    Vector3 worldPos = ToVector3(wallPos);
+                    CreateWorldSpaceTile(worldPos, rearOrientationDegrees, '#', mazeOrigin, isWall: true, wallLayer: layer, wallContainer: wallContainer);
+                    tileCount++;
+                }
             }
 
             return tileCount;
@@ -1299,6 +1290,52 @@ namespace FaeMaze.Systems
 
             // Render walls for this node - WallCollisionChecker handles collision-based removal
             RenderNodeWalls(node, allEdges, tilesParent);
+        }
+
+        /// <summary>
+        /// Triggers wall collision checks for a specific edge's wall container.
+        /// Call this after adding new geometry that may collide with existing walls.
+        /// </summary>
+        public void TriggerEdgeWallCollisionChecks(int edgeIndex)
+        {
+            if (tilesParent == null) return;
+
+            string containerName = $"EdgeWalls_{edgeIndex}";
+            foreach (Transform child in tilesParent)
+            {
+                if (child.name == containerName)
+                {
+                    var wallContainer = child.GetComponent<GraphElementWallContainer>();
+                    if (wallContainer != null)
+                    {
+                        wallContainer.TriggerWallCollisionChecks();
+                    }
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Triggers wall collision checks for a specific node's wall container.
+        /// Call this after adding new geometry that may collide with existing walls.
+        /// </summary>
+        public void TriggerNodeWallCollisionChecks(int nodeId)
+        {
+            if (tilesParent == null) return;
+
+            string containerName = $"NodeWalls_{nodeId}";
+            foreach (Transform child in tilesParent)
+            {
+                if (child.name == containerName)
+                {
+                    var wallContainer = child.GetComponent<GraphElementWallContainer>();
+                    if (wallContainer != null)
+                    {
+                        wallContainer.TriggerWallCollisionChecks();
+                    }
+                    return;
+                }
+            }
         }
 
         /// <summary>

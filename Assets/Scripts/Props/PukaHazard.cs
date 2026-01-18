@@ -381,7 +381,14 @@ namespace FaeMaze.Props
 
             foreach (var visitor in allVisitors)
             {
-                if (visitor == null || processedVisitors.Contains(visitor.gameObject))
+                // Unity objects can be in a destroyed state where == null returns false
+                // but accessing properties still throws. Use ReferenceEquals + Unity null check.
+                if (visitor == null || !visitor)
+                    continue;
+
+                // Safely check if already processed
+                GameObject visitorGO = visitor.gameObject;
+                if (visitorGO == null || processedVisitors.Contains(visitorGO))
                     continue;
 
                 if (!IsVisitorActive(visitor.State))

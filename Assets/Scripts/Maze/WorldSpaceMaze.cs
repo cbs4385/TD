@@ -686,6 +686,10 @@ namespace ForestMaze
                         tile.NodeIndex = nodeIndex;
 
                         // Mark special node tiles and handle center walkability
+                        // The central 1 unit radius of each node is unwalkable (for props/hazards)
+                        float distFromCenter = offset.magnitude;
+                        bool isInCentralCircle = distFromCenter < 1.0f;
+
                         if (dx == 0 && dy == 0)
                         {
                             if (node.Kind == "root")
@@ -695,9 +699,13 @@ namespace ForestMaze
                             else
                             {
                                 tile.Symbol = 'N'; // Node hazard
-                                // Mark node center as unwalkable (props/hazards are there)
-                                tile.Walkable = false;
                             }
+                        }
+
+                        // Mark tiles within 1 unit radius of node center as unwalkable (except root/heart)
+                        if (isInCentralCircle && node.Kind != "root")
+                        {
+                            tile.Walkable = false;
                         }
 
                         data.AddTile(tile);

@@ -88,6 +88,7 @@ namespace FaeMaze.Audio
 
             musicSource.volume = 1f;
             musicSource.playOnAwake = false;
+            musicSource.spatialBlend = 0f;  // 2D sound - consistent volume regardless of listener position
 
             if (ambientLoopClip == null)
             {

@@ -2193,6 +2193,15 @@ namespace FaeMaze.Visitors
         public virtual void Stop()
         {
             state = VisitorState.Idle;
+
+            // Clear fairy ring fascination so Update doesn't continue circling
+            if (currentFairyRing != null)
+            {
+                isFascinated = false;
+                currentFairyRing = null;
+                fairyRingFascinationTimer = 0f;
+                speedMultiplier = 1f;
+            }
         }
 
         /// <summary>
@@ -2556,9 +2565,16 @@ namespace FaeMaze.Visitors
                     worldPath.RemoveRange(firstBadIndex, worldPath.Count - firstBadIndex);
                 }
 
-                // Ensure the stop position is the final waypoint
-                if (worldPath.Count == 0 || Vector3.Distance(worldPath[worldPath.Count - 1], stopPosition) > 0.01f)
+                // Use the last valid path waypoint as the stop position instead of adding
+                // the calculated stop position, which might be in an unwalkable zone (node center)
+                if (worldPath.Count > 0)
                 {
+                    stopPosition = worldPath[worldPath.Count - 1];
+                }
+                else
+                {
+                    // No valid path waypoints remain, stay at current position
+                    stopPosition = transform.position;
                     worldPath.Add(stopPosition);
                 }
             }

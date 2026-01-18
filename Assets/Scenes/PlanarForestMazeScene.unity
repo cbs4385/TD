@@ -1118,10 +1118,14 @@ MonoBehaviour:
   heartColor: {r: 1, g: 0.2, b: 0.2, a: 1}
   visitorColor: {r: 0.3, g: 1, b: 0.3, a: 1}
   edgeIndicatorColor: {r: 1, g: 0.8, b: 0.2, a: 1}
+  graphNodeColor: {r: 0.4, g: 0.6, b: 0.8, a: 0.6}
+  graphEdgeColor: {r: 0.3, g: 0.5, b: 0.3, a: 0.4}
   heartDotSize: 8
   visitorDotSize: 4
   crosshairSize: 10
   edgeIndicatorSize: 8
+  graphNodeSize: 8
+  graphEdgeWidth: 2
 --- !u!4 &1644971210
 Transform:
   m_ObjectHideFlags: 0
