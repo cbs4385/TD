@@ -5,6 +5,53 @@ These rules exist because violations have caused repeated bugs that took hours t
 
 ---
 
+# 🚨🚨🚨 CRITICAL: NO RESOURCES.LOAD - SEARCH FIRST 🚨🚨🚨
+
+## NEVER USE Resources.Load() - ALWAYS SEARCH FOR EXISTING PATTERNS FIRST
+
+**Before writing ANY asset loading code:**
+1. **STOP and SEARCH** the codebase for how similar assets are already loaded
+2. **COPY the EXACT pattern** from existing working code
+3. **DO NOT invent new approaches or use Resources.Load**
+
+### Existing Patterns to Copy:
+
+**EarthenGroundTexture (COPY FROM MazeRenderer.cs line ~222):**
+```csharp
+Texture2D texture = null;
+
+#if UNITY_EDITOR
+texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/EarthenGroundTexture.png");
+#endif
+```
+
+**Prefabs (COPY FROM HeartPowerManager):**
+```csharp
+[SerializeField] private GameObject devourPrefab;
+public GameObject DevourPrefab => devourPrefab;
+```
+
+### VIOLATIONS - NEVER DO THESE:
+```csharp
+// WRONG - Resources.Load fails, assets not in Resources folder
+Resources.Load<GameObject>("Prefabs/Props/devour");
+Resources.Load<Texture2D>("EarthenGroundTexture");
+
+// WRONG - Never copy files to Resources folder
+// WRONG - Never create new SerializeField when AssetDatabase pattern exists for that asset
+```
+
+### Reference Files:
+| Need to load... | Look at this file first |
+|-----------------|------------------------|
+| EarthenGroundTexture | `MazeRenderer.cs` ExtractHeartGroundMaterial() |
+| Prefabs | `HeartPowerManager.cs` serialized fields |
+| Shaders | `Shader.Find("Custom/ShaderName")` |
+
+**SEARCH THE CODEBASE BEFORE WRITING ASSET LOADING CODE!**
+
+---
+
 # 🚨🚨🚨 CRITICAL: COORDINATE SYSTEM 🚨🚨🚨
 
 ## WORLD UP IS **-Z**, NOT Y!
@@ -300,7 +347,290 @@ int samplesPerNode = Mathf.Min(6, tiles.Count); // NO! Fog needs ALL tiles, not 
 
 ---
 
+## CRITICAL RULE 6: DevouringMaw (Heart Power 3) Animation
+
+**The devour animation uses frame-based control with a 62-frame animation at 60fps.**
+
+### Animation sequence:
+1. **Emerging phase** (1.04s): Model translates z=0 → z=-0.5 while animation plays frames 1→62 (bite cycle)
+2. **Paused phase** (1.0s): Model holds at z=-0.5, animation holds at frame 62 (closed mouth)
+3. **Sinking phase** (0.5s): Model translates z=-0.5 → z=+1.0, animation holds at frame 62, visitors follow
+
+### Key files and assets:
+| Asset | Path | Purpose |
+|-------|------|---------|
+| Prefab | `Assets/Prefabs/Props/devour.prefab` | Devour visual model |
+| GLB model | `Assets/Animations/Devour/devour.glb` | Source model with FaceRig |
+| Controller | `Assets/Animations/Devour/devour.controller` | Animator controller with FaceRigAction state |
+| Animation clip | `FaceRigAction` (inside devour.glb) | 62 frames at 60fps, 1.042s duration |
+
+### Asset loading pattern:
+```csharp
+// In HeartPowerManager.Awake() - LoadPrefabsIfNeeded()
+#if UNITY_EDITOR
+if (devourPrefab == null)
+{
+    devourPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/devour.prefab");
+}
+#endif
+
+// In DevouringMawEffect.InstantiateDevourVisual() - load controller if missing
+#if UNITY_EDITOR
+controller = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Animations/Devour/devour.controller");
+if (controller != null)
+{
+    devourAnimator.runtimeAnimatorController = controller;
+}
+#endif
+```
+
+### Animation constants:
+| Constant | Value | Description |
+|----------|-------|-------------|
+| DEVOUR_ANIMATION_NAME | "FaceRigAction" | Animation state name in controller |
+| DEVOUR_ANIMATION_FRAMES | 62 | Total frames (1-62 at 60fps) |
+| EMERGE_DURATION | 1.04f | Matches animation length |
+| PAUSE_DURATION | 1.0f | Hold time with mouth closed |
+| SINK_DURATION | 0.5f | Time to sink into ground |
+| TRIGGER_RADIUS | 2.5f | Visitor detection radius |
+
+### Frame-based animation control:
+```csharp
+private void SetDevourAnimatorFrame(int frame)
+{
+    if (devourAnimator == null) return;
+
+    // Frame is 1-based (1-62), convert to normalized time (0-1)
+    float normalizedTime = Mathf.Min(frame / (float)DEVOUR_ANIMATION_FRAMES, 0.999f);
+
+    devourAnimator.Play(DEVOUR_ANIMATION_NAME, 0, normalizedTime);
+    devourAnimator.Update(0f);
+}
+```
+
+### VIOLATION - DO NOT DO THIS:
+```csharp
+// WRONG - Using old animation name
+private const string DEVOUR_ANIMATION_NAME = "Devour_24fps_1_25"; // NO! Use "FaceRigAction"
+
+// WRONG - Using old frame count
+private const int DEVOUR_ANIMATION_FRAMES = 25; // NO! Animation is 62 frames at 60fps
+
+// WRONG - Resources.Load for controller
+Resources.Load<RuntimeAnimatorController>("devour"); // NO! Use AssetDatabase pattern
+```
+
+---
+
+## CRITICAL RULE 7: Heart of the Maze Model Structure
+
+**The Heart of the Maze is a two-part model: a static base ring and an animated tongue.**
+
+### Two-part model architecture:
+1. **heartbase** - Static ring/base, no animations
+2. **heart tongue** - Procedurally animated tentacle/tongue with reach and grab colliders
+
+### Tongue model orientation:
+**The tongue model has base at origin with bones extending along +X toward the tip.**
+- Bones extend in local +X direction in model space
+- At spawn, tongue instance is rotated -90° around Y: `Quaternion.Euler(0f, -90f, 0f)`
+- This transforms model +X to world -Z, so tongue points up when emerging
+- Colliders are positioned relative to bone local +X axis
+
+### Key files and assets:
+| Asset | Path | Purpose |
+|-------|------|---------|
+| Base prefab | `Assets/Prefabs/Tile/heartbase.prefab` | Static ring model |
+| Tongue prefab | `Assets/Prefabs/Tile/heart tongue.prefab` | Tongue with colliders (no animation controller) |
+| Base GLB | `Assets/Animations/heart/heartbase.glb` | Source model for ring (GUID: aaa0818b631d950429276c037c33ddf4) |
+| Tongue FBX | `Assets/Animations/heart/heart tongue.glb` | Source model with armature (GUID: c7f35852d61045f4b82d89d34171c99e) |
+
+### Procedural animation (no animation controller):
+The tongue is controlled procedurally via direct bone manipulation in `HeartOfTheMaze.cs`.
+Bones are rotated to make the tongue emerge, bend toward visitor, curl around them, and retract.
+
+| Phase | Description |
+|-------|-------------|
+| Emerging | Tongue translates up from z=3 to lip level, bones at rest pose |
+| Reaching | Bones above lip rotate to point toward visitor |
+| Touching | Tip bones curl around visitor (180° half-circle) |
+| Pulling | Tongue retracts, curl rotations locked |
+| Sinking | Tongue sinks below ground, visitor consumed |
+
+### Prefab components:
+The `heart tongue.prefab` includes:
+- **reach** child object with SphereCollider (radius 0.5, trigger) - reparented to tip bone (Bone_539) at runtime
+- **grab** child object with SphereCollider (radius 0.5, trigger) - reparented to grab bone (~25% from tip, Bone_404) at runtime
+
+### Collider reparenting at runtime:
+```csharp
+// Reach collider -> tip bone (Bone_539), positioned at far end along +X
+reachColliderTransform.localPosition = new Vector3(1.0f, 0, 0);
+
+// Grab collider -> GRAB_BONE_OFFSET bones from tip (~25%, Bone_404), positioned at bone origin
+grabColliderTransform.localPosition = new Vector3(0, 0, 0);
+```
+
+### HeartOfTheMaze State Machine:
+The `HeartOfTheMaze.cs` implements a three-state system:
+
+| State | Description |
+|-------|-------------|
+| Idle | Only heartbase visible, monitoring for visitors in detection radius |
+| Reaching | Tongue spawned, procedural bone animation toward visitor |
+| Grabbing | Visitor locked to grab collider, tongue retracting |
+
+### State transitions:
+1. **Idle → Reaching**: Visitor enters detection radius (default 2.5 units)
+2. **Reaching → Grabbing**: Grab collider touches visitor and curl progress >= 80%
+3. **Grabbing → Idle**: Tongue fully retracted below ground, visitor consumed
+
+### Key implementation details:
+```csharp
+// Detection radius for visitor proximity
+private float detectionRadius = 2.5f;
+
+// Bone direction calculation (bones extend in local +X)
+Vector3 boneLocalDir = Vector3.right;  // local +X
+Vector3 boneWorldDir = parentWorldRot * boneRestRotations[i] * boneLocalDir;
+
+// Move visitor with grab collider (all axes for sinking)
+Vector3 grabPos = grabColliderTransform.position;
+targetVisitor.transform.position = grabPos;
+```
+
+### Asset loading pattern:
+```csharp
+#if UNITY_EDITOR
+heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heartbase.prefab");
+heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
+#endif
+```
+
+### VIOLATION - DO NOT DO THIS:
+```csharp
+// WRONG - Using Resources.Load
+Resources.Load<GameObject>("heart tongue"); // NO! Use AssetDatabase pattern
+
+// WRONG - Assuming bones extend in +Y (old model orientation)
+Vector3 boneLocalY = Vector3.up; // NO! Bones extend in +X
+
+// WRONG - Spawning tongue without detection
+// Tongue should ONLY spawn when visitor enters detection radius
+```
+
+### Key constants:
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| detectionRadius | 2.5 | Radius to detect visitors and trigger reaching state |
+| TONGUE_START_Z | 6.0 | Starting Z position (below ground, increased for longer model) |
+| TONGUE_LIP_Z | -0.5 | Z where tip emerges above lip (triggers Reaching phase) |
+| GRAB_BONE_OFFSET | 135 | Grab bone is ~25% from tip (bone 404 out of 540) |
+| TONGUE_EMERGE_SPEED | 1.5 | Units per second for vertical movement |
+| TONGUE_CURL_SPEED | 2.0 | Rate of curl progress (0→1) |
+
+### Bone hierarchy:
+The tongue has 540 bones (indices 0-539), named Bone_000 through Bone_539:
+- Bone_000: Base of tongue (root)
+- Bone_001 through Bone_538: Segments along tongue
+- Bone_539: Tip of tongue
+- Grab bone: Index 404 (GRAB_BONE_OFFSET=135 from tip, ~25% back from end)
+- All bones have localPosition (0,0,0) - bone chain extends in local +X
+
+---
+
 ## TODO
+
+### In Progress - Heart Tongue Visitor Consumption
+
+**Current State**: Tongue emerges, bends toward visitor, curls around them horizontally. The initial curl (180° one direction) works perfectly. When grab collider touches visitor, the reverse curl should engage to wrap around the other side - this is implemented but needs testing/tuning.
+
+**Model details:**
+- 540 bones named Bone_000 through Bone_539
+- Base at origin, tip extends along +X
+- Bones use local +X as forward direction (boneLocalDir = Vector3.up after rest rotation)
+- All bones have localPosition (0,0,0)
+- Tongue length ~8.4 world units (scaled)
+- Colliders positioned using bone world positions directly
+
+**What works:**
+- Tongue spawns at z=9 (below ground) ✓
+- Tongue emerges straight during Emerging phase ✓
+- Bones stay at rest pose until Reaching phase begins ✓
+- When tip reaches TONGUE_LIP_Z (-0.25), transitions to Reaching phase ✓
+- During Reaching phase, bones above lipBoneIndex rotate toward visitor ✓
+- Tongue prefab's lights are removed at spawn ✓
+- Visitor dazed when tongue emerges ✓
+- **Initial curl works** - 180° horizontal curl in XY plane (parallel to ground) ✓
+- Curl direction determined by visitor angle (CCW if upper half, CW if lower) ✓
+- Debug spheres visualize reach (cyan) and grab (magenta) colliders ✓
+- Collider positions update using bone.position (tracks deformed mesh) ✓
+- Grab hold timer delays pulling after grab contact ✓
+
+**Current implementation - Two-phase curl:**
+1. **Initial curl**: When reach collider touches visitor, curl 180° in `curlDirection` (horizontal, XY plane)
+2. **Reverse curl**: When grab collider touches visitor, curl continues 180° in `-curlDirection` (opposite direction)
+3. This should wrap the tongue around both sides of the visitor
+
+**Remaining issues:**
+- [ ] **Test and tune reverse curl** - The reverse curl is implemented but may need adjustment. Current logic: after grab contact, bones get `initialPart (180° * curlDirection) + reversePart (progress * 180° * -curlDirection)`
+- [ ] Verify the curl forms a proper wrap around visitor
+- [ ] Fine-tune GRAB_BONE_OFFSET (currently 50, was 27) for correct curl radius
+
+**Key implementation details:**
+- File: `HeartOfTheMaze.cs`
+- State machine: `HeartState` (Idle, Reaching, Grabbing)
+- Tongue phase: `TonguePhase` (Emerging, Reaching, Touching, Pulling, Sinking)
+- Bones from SkinnedMeshRenderer: 540 bones
+- Bone direction: `Vector3.up` (local +Y points toward next bone after rest rotation)
+- Curl is HORIZONTAL (parallel to ground, in XY plane, rotates around Z axis)
+
+**Key constants:**
+| Constant | Value | Description |
+|----------|-------|-------------|
+| TONGUE_START_Z | 9.0 | Starting Z position (below ground) |
+| TONGUE_LIP_Z | -0.25 | Z where tip emerges (triggers Reaching phase) |
+| TONGUE_EMERGE_SPEED | 1.5 | Units per second for vertical movement |
+| TONGUE_CURL_SPEED | 2.0 | Rate of curl progress (0→1) |
+| GRAB_BONE_OFFSET | 50 | Bones from tip for grab collider (~9% from tip) |
+| CURL_DIAMETER | 0.5 | Target diameter of curl around visitor |
+| GRAB_HOLD_DURATION | 0.5 | Seconds to hold after grab before pulling |
+| detectionRadius | 2.5 | Visitor detection radius |
+
+**Curl state tracking:**
+```csharp
+private int curlDirection = 1;           // +1 = CCW (left), -1 = CW (right)
+private bool grabContactMade = false;     // True when grab collider touches visitor
+private float reverseCurlProgress = 0f;   // Progress of reverse curl (0-1)
+private float grabCurlProgress = 0f;      // Progress of initial curl (0-1)
+```
+
+**Curl angle calculation (in ApplyTongueBoneState):**
+```csharp
+// Before grab contact:
+cumulativeAngle = boneProgress * initialCurlAngle * curlDirection;
+
+// After grab contact:
+float initialPart = 180f * curlDirection;  // Full initial curl locked
+float reversePart = boneProgress * reverseCurlAngle * (-curlDirection);  // Reverse
+cumulativeAngle = initialPart + reversePart;
+
+// Final direction in XY plane:
+float rotatedAngle = lockedVisitorAngle + cumulativeAngle;
+desiredDir = new Vector3(Cos(rotatedAngle), Sin(rotatedAngle), 0f);
+```
+
+**Collider positions:**
+- Reach collider: `tongueBones[boneCount - 1].position` (tip bone world pos)
+- Grab collider: `tongueBones[boneCount - 1 - GRAB_BONE_OFFSET].position`
+
+**Phase transitions:**
+1. **Reaching → Touching**: Reach collider touches visitor (via trigger callback)
+2. **Touching (grab contact)**: Grab collider touches visitor, `grabContactMade = true`
+3. **Touching → Grabbing**: `reverseCurlProgress >= 1.0` (reverse curl complete)
+4. **Grabbing → Idle**: Tongue fully retracted (`tongueZPosition >= TONGUE_START_Z`)
+
+---
 
 ### In Progress - HeartwardGrasp (Heart Power 2)
 
@@ -339,9 +669,7 @@ int samplesPerNode = Mathf.Min(6, tiles.Count); // NO! Fog needs ALL tiles, not 
 - [ ] Ensure other visitor types work as intended with heart powers
 
 ### Heart & Powers
-- [ ] Fix heart prefab - separate into two parts:
-  - Static ring (base)
-  - Tongue with animations: idle, reach, grab, retract
+- [x] Fix heart prefab - separated into two parts (heartbase + heart tongue) with state machine
 - [ ] Make icons for heart power buttons
 - [ ] Finalize heart power essence use costs
 - [ ] Push magic numbers and constants to configurable settings

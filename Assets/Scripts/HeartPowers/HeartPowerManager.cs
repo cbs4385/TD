@@ -56,6 +56,15 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Automatically create the Heart Powers UI panel if not present")]
         private bool autoCreateUI = true;
 
+        [Header("Power Prefabs")]
+        [SerializeField]
+        [Tooltip("Prefab for the grasp hand visual (Heart Power 2)")]
+        private GameObject graspPrefab;
+
+        [SerializeField]
+        [Tooltip("Prefab for the devour visual (Heart Power 3)")]
+        private GameObject devourPrefab;
+
         #endregion
 
         #region Private Fields
@@ -93,6 +102,12 @@ namespace FaeMaze.HeartPowers
         /// <summary>Gets the game controller</summary>
         public GameController GameController => gameController;
 
+        /// <summary>Gets the grasp prefab for HeartwardGrasp power</summary>
+        public GameObject GraspPrefab => graspPrefab;
+
+        /// <summary>Gets the devour prefab for DevouringMaw power</summary>
+        public GameObject DevourPrefab => devourPrefab;
+
         #endregion
 
         #region Events
@@ -120,6 +135,9 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
+            // Load prefabs dynamically if not assigned via inspector
+            LoadPrefabsIfNeeded();
+
             // Load power definitions from Resources if not set
             LoadPowerDefinitionsFromResources();
 
@@ -130,6 +148,20 @@ namespace FaeMaze.HeartPowers
                 powerTiers[powerType] = 1;
                 unlockedPowers[powerType] = true; // Start with all unlocked for testing
             }
+        }
+
+        private void LoadPrefabsIfNeeded()
+        {
+#if UNITY_EDITOR
+            if (graspPrefab == null)
+            {
+                graspPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/grasp.prefab");
+            }
+            if (devourPrefab == null)
+            {
+                devourPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/devour.prefab");
+            }
+#endif
         }
 
         private void LoadPowerDefinitionsFromResources()

@@ -11,15 +11,16 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2b3856b15c4aaf442992d941adab3ae3, type: 3}
   m_Name: DevouringMaw_T1
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   powerType: 8
   displayName: Devouring Maw
   description: 'Instantly consumes a visitor on the targeted tile, granting essence.
 
-    Tier I - Echoing Terror: Applies fear to nearby visitors (3 tile radius).'
+    Tier
+    I - Echoing Terror: Applies fear to nearby visitors (3 tile radius).'
   tier: 1
-  chargeCost: 2
-  cooldown: 20
+  essenceCost: 0
+  cooldown: 30
   duration: 0
   radius: 0
   param1: 3

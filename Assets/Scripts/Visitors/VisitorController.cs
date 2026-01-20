@@ -26,7 +26,7 @@ namespace FaeMaze.Visitors
         [Header("Confusion Settings")]
         [SerializeField]
         [Tooltip("Whether confusion is enabled")]
-        private bool confusionEnabled = true;
+        private bool _confusionEnabled = true;
 
         [SerializeField]
         [Tooltip("Draw debug info in the scene view")]
@@ -59,6 +59,7 @@ namespace FaeMaze.Visitors
         protected override void Awake()
         {
             base.Awake();
+            confusionEnabled = _confusionEnabled;
             isConfused = confusionEnabled;
         }
 
@@ -72,39 +73,6 @@ namespace FaeMaze.Visitors
         {
             base.OnDisable();
             _activeVisitors.Remove(this);
-        }
-
-        #endregion
-
-        #region State Management
-
-        protected override void RefreshStateFromFlags()
-        {
-            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
-            {
-                return;
-            }
-
-            if (isFrightened)
-            {
-                state = VisitorState.Frightened;
-            }
-            else if (isFascinated)
-            {
-                state = VisitorState.Fascinated;
-            }
-            else if (isConfused && confusionEnabled)
-            {
-                state = VisitorState.Confused;
-            }
-            else if (isLured)
-            {
-                state = VisitorState.Lured;
-            }
-            else
-            {
-                state = VisitorState.Walking;
-            }
         }
 
         #endregion

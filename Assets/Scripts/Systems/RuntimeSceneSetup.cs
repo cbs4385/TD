@@ -19,7 +19,7 @@ namespace FaeMaze.Systems
         {
             string sceneName = scene.name;
 
-            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "Options")
+            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "PlanarForestMazeScene" || sceneName == "Options")
             {
                 GameObject escapeHandlerObj = GameObject.Find("EscapeHandler");
                 if (escapeHandlerObj == null)
@@ -29,12 +29,12 @@ namespace FaeMaze.Systems
                 }
             }
 
-            if (sceneName == "ProceduralMazeScene")
+            if (sceneName == "ProceduralMazeScene" || sceneName == "PlanarForestMazeScene")
             {
                 SetupProceduralMazeScene();
             }
 
-            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene")
+            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "PlanarForestMazeScene")
             {
                 GameObject gameRoot = GameObject.Find("GameRoot");
                 if (gameRoot == null)
@@ -62,12 +62,13 @@ namespace FaeMaze.Systems
                     heartPowerManagerObj.AddComponent<FaeMaze.HeartPowers.HeartPowerManager>();
                 }
 
-                GameObject heartModelPrefab = null;
+                // Load heart prefabs (two-part model: base + tongue)
+                GameObject heartBasePrefab = null;
+                GameObject heartTonguePrefab = null;
 
 #if UNITY_EDITOR
-                heartModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/heartofmaze.prefab");
-#else
-                heartModelPrefab = UnityEngine.Resources.Load<GameObject>("Prefabs/heartofmaze");
+                heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heartbase.prefab");
+                heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
 #endif
 
                 FaeMaze.Maze.HeartOfTheMaze heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
@@ -78,37 +79,31 @@ namespace FaeMaze.Systems
                     heartObj.transform.SetParent(gameRoot.transform);
                     heartObj.SetActive(false);
                     heart = heartObj.AddComponent<FaeMaze.Maze.HeartOfTheMaze>();
+                    heartObj.SetActive(true);
+                }
 
-                    if (heartModelPrefab != null)
+                // Assign prefabs via reflection
+                if (heart != null)
+                {
+                    var heartType = typeof(FaeMaze.Maze.HeartOfTheMaze);
+
+                    if (heartBasePrefab != null)
                     {
-                        var heartType = typeof(FaeMaze.Maze.HeartOfTheMaze);
-                        var heartModelPrefabField = heartType.GetField("heartModelPrefab",
+                        var baseField = heartType.GetField("heartBasePrefab",
                             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        if (heartModelPrefabField != null)
+                        if (baseField != null)
                         {
-                            heartModelPrefabField.SetValue(heart, heartModelPrefab);
+                            baseField.SetValue(heart, heartBasePrefab);
                         }
                     }
 
-                    heartObj.SetActive(true);
-                }
-                else
-                {
-                    if (heartModelPrefab != null)
+                    if (heartTonguePrefab != null)
                     {
-                        var heartType = typeof(FaeMaze.Maze.HeartOfTheMaze);
-                        var heartModelPrefabField = heartType.GetField("heartModelPrefab",
+                        var tongueField = heartType.GetField("heartTonguePrefab",
                             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        if (heartModelPrefabField != null)
+                        if (tongueField != null)
                         {
-                            heartModelPrefabField.SetValue(heart, heartModelPrefab);
-                        }
-
-                        var setupModelMethod = heartType.GetMethod("SetupModel",
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        if (setupModelMethod != null)
-                        {
-                            setupModelMethod.Invoke(heart, null);
+                            tongueField.SetValue(heart, heartTonguePrefab);
                         }
                     }
                 }
@@ -157,8 +152,50 @@ namespace FaeMaze.Systems
                         starter.StartFirstWave(waveSpawner, 0.5f);
                     }
                 }
+
+                // Setup debug heart tongue spawner for PlanarForestMazeScene (Editor only)
+#if UNITY_EDITOR
+                if (sceneName == "PlanarForestMazeScene")
+                {
+                    SetupDebugHeartTongueSpawner(gameRoot);
+                }
+#endif
             }
         }
+
+#if UNITY_EDITOR
+        private static void SetupDebugHeartTongueSpawner(GameObject gameRoot)
+        {
+            // Check if already exists
+            var existingSpawner = Object.FindFirstObjectByType<FaeMaze.DebugTools.DebugHeartTongueSpawner>();
+            if (existingSpawner != null) return;
+
+            // Create the debug spawner
+            GameObject spawnerObj = new GameObject("DebugHeartTongueSpawner");
+            spawnerObj.transform.SetParent(gameRoot.transform);
+            var spawner = spawnerObj.AddComponent<FaeMaze.DebugTools.DebugHeartTongueSpawner>();
+
+            // Load visitor prefab
+            GameObject visitorPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Visitors/Visitor_FestivalTourist.prefab");
+
+            if (visitorPrefab != null)
+            {
+                var visitorController = visitorPrefab.GetComponent<FaeMaze.Visitors.VisitorController>();
+                if (visitorController != null)
+                {
+                    var spawnerType = typeof(FaeMaze.DebugTools.DebugHeartTongueSpawner);
+                    var prefabField = spawnerType.GetField("visitorPrefab",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (prefabField != null)
+                    {
+                        prefabField.SetValue(spawner, visitorController);
+                    }
+                }
+            }
+
+            Debug.Log("[RuntimeSceneSetup] Created DebugHeartTongueSpawner - visitor will spawn at heart edge in 10 seconds");
+        }
+#endif
 
         private static void SetupProceduralMazeScene()
         {

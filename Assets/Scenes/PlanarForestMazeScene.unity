@@ -748,7 +748,8 @@ MonoBehaviour:
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   waterPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
   nodeHazardPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
-  heartPrefab: {fileID: 2840011433830041782, guid: ac136506474835441974c40d77449982, type: 3}
+  heartBasePrefab: {fileID: 7471110801577825724, guid: c78182e2deb73084c9af012322a059bf, type: 3}
+  heartTonguePrefab: {fileID: 3341149077883020625, guid: 45ed31f6e106bd441a72bfe8cdbbd771, type: 3}
   useHeartMaterialForPaths: 1
   pathColor: {r: 0.8, g: 0.9, b: 0.8, a: 1}
   wallColor: {r: 1, g: 1, b: 1, a: 1}
@@ -1022,6 +1023,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 903e134c3576fa74c87c73f381e568db, type: 2}
   debugLog: 1
   autoCreateUI: 1
+  graspPrefab: {fileID: 6225537257164506695, guid: 2e176672e0acf0c488f8bb40daebb76d, type: 3}
+  devourPrefab: {fileID: 3946631708089124196, guid: 9bb3c1d4dbc68b74792dc8064cee3574, type: 3}
 --- !u!114 &1534669905
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1387,6 +1390,75 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!1001 &1975989915
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: -90
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
+      propertyPath: m_Name
+      value: heart tongue
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: c7f35852d61045f4b82d89d34171c99e, type: 3}
 --- !u!1 &2096385507
 GameObject:
   m_ObjectHideFlags: 0
@@ -1547,3 +1619,4 @@ SceneRoots:
   - {fileID: 879032714}
   - {fileID: 820251996}
   - {fileID: 1644971210}
+  - {fileID: 1975989915}

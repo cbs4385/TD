@@ -519,11 +519,8 @@ namespace FaeMaze.Systems
                 // Create the single 3D cylinder - this is the only visual object for the node
                 CreateNodeColumnCylinder(node, mazeOrigin);
 
-                // Spawn heart prefabs at seed node (node 0)
-                if (nodeIndex == 0 && (heartBasePrefab != null || heartTonguePrefab != null))
-                {
-                    SpawnHeartAtNode(node);
-                }
+                // Heart prefabs are now spawned by HeartOfTheMaze component, not MazeRenderer
+                // The HeartOfTheMaze handles the heartbase (static ring) and heart tongue (animated)
 
                 // Mark node area as occupied for pathfinding (no visible tiles needed)
                 // Use coarse step for logical positions only
@@ -614,32 +611,6 @@ namespace FaeMaze.Systems
 
             // DO NOT add to pathTiles - keep cylinder as separate object to avoid batching distortion
             // Cylinders cannot be combined with cube meshes properly
-        }
-
-        /// <summary>
-        /// Spawns the heart prefabs (base + tongue) at the given node (seed node / node 0).
-        /// Positions them at the node center, preserving prefab position offset, scale and rotation.
-        /// </summary>
-        private void SpawnHeartAtNode(PlanarForestMazeGenerator.Node node)
-        {
-            // Get world position of node center
-            Vector3 nodeWorldPos = ToVector3(node.Position);
-
-            // Spawn heart base (static ring)
-            if (heartBasePrefab != null)
-            {
-                Vector3 baseWorldPos = nodeWorldPos + heartBasePrefab.transform.position;
-                GameObject heartBase = Instantiate(heartBasePrefab, baseWorldPos, heartBasePrefab.transform.rotation, tilesParent);
-                heartBase.name = "Heart_Base";
-            }
-
-            // Spawn heart tongue (animated)
-            if (heartTonguePrefab != null)
-            {
-                Vector3 tongueWorldPos = nodeWorldPos + heartTonguePrefab.transform.position;
-                GameObject heartTongue = Instantiate(heartTonguePrefab, tongueWorldPos, heartTonguePrefab.transform.rotation, tilesParent);
-                heartTongue.name = "Heart_Tongue";
-            }
         }
 
         /// <summary>

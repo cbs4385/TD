@@ -25,6 +25,7 @@ namespace FaeMaze.Visitors
             Frightened,
             Lured,         // Drawn toward the Heart by Murmuring Paths
             Dazed,         // Stunned from witnessing maze growth
+            Grabbed,       // Being held by the heart tongue (not yet consumed)
             Consumed,
             Escaping       // Leaving the game (includes drowning)
         }
@@ -190,6 +191,7 @@ namespace FaeMaze.Visitors
 
         // Confusion state (simplified for world-space navigation)
         protected bool isConfused;
+        protected bool confusionEnabled = true;  // Can be disabled by derived classes
 
         // World-space navigation
         protected Vector3 worldDestination;
@@ -655,18 +657,13 @@ namespace FaeMaze.Visitors
             {
                 state = VisitorState.Fascinated;
             }
-            else if (isConfused)
+            else if (isConfused && confusionEnabled)
             {
                 state = VisitorState.Confused;
             }
             else if (isLured)
             {
                 state = VisitorState.Lured;
-            }
-            else if (state == VisitorState.Confused)
-            {
-                // Confused state managed by derived classes, don't override
-                return;
             }
             else
             {
@@ -2072,6 +2069,49 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Sets the visitor to be grabbed by the heart tongue, stopping all movement.
+        /// Called by HeartOfTheMaze when the tongue grabs the visitor.
+        /// </summary>
+        public virtual void SetGrabbedByHeart()
+        {
+            // Don't grab if already grabbed, consumed, or escaping
+            if (state == VisitorState.Grabbed || state == VisitorState.Consumed || state == VisitorState.Escaping)
+            {
+                return;
+            }
+
+            // Clear all state flags
+            isFascinated = false;
+            isFrightened = false;
+            isLured = false;
+            isDazed = false;
+            isConfused = false;
+
+            // Set grabbed state to stop all movement (lights stay on until consumed)
+            state = VisitorState.Grabbed;
+        }
+
+        /// <summary>
+        /// Disables all Light components on the visitor and its children.
+        /// Called when the visitor is grabbed by the heart tongue.
+        /// </summary>
+        protected virtual void DisableAllLights()
+        {
+            // Disable the state aura light
+            if (stateAuraLight != null)
+            {
+                stateAuraLight.enabled = false;
+            }
+
+            // Disable any other lights on the visitor model (from prefabs, etc.)
+            Light[] allLights = GetComponentsInChildren<Light>();
+            foreach (Light light in allLights)
+            {
+                light.enabled = false;
+            }
+        }
+
+        /// <summary>
         /// Called when visitor is consumed by the heart.
         /// Delegates to Heart for essence reward and destruction.
         /// </summary>
@@ -2914,33 +2954,38 @@ namespace FaeMaze.Visitors
             rb3D.isKinematic = true;
             rb3D.useGravity = false;
 
-            // Use existing 3D collider (SphereCollider or CapsuleCollider) or add SphereCollider
+            // Use CapsuleCollider as a vertical column for the visitor's body
             // NOTE: Visitor colliders should NOT be triggers - they need to be detected by
             // trigger colliders on props (FairyRing, FaeLantern, Heart, etc.)
-            // For top-down XY-plane games, use SphereCollider centered at Z=0 for reliable collision
+            // CapsuleCollider aligned with Z-axis (direction=2) for vertical column in XY-plane game
             SphereCollider sphereCollider = GetComponent<SphereCollider>();
             CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
 
+            // Remove any existing SphereCollider - we want CapsuleCollider for vertical column
             if (sphereCollider != null)
             {
-                sphereCollider.isTrigger = false;
-                // Ensure center is at Z=0 for XY-plane collision
-                sphereCollider.center = Vector3.zero;
+                Destroy(sphereCollider);
+                sphereCollider = null;
             }
-            else if (capsuleCollider != null)
+
+            if (capsuleCollider != null)
             {
+                // Configure existing capsule as vertical column
                 capsuleCollider.isTrigger = false;
-                // Ensure center is at Z=0 for XY-plane collision
+                capsuleCollider.radius = 0.15f;  // Half the previous 0.3 radius
+                capsuleCollider.height = 1.0f;   // Vertical height along Z-axis
+                capsuleCollider.direction = 2;   // Z-axis (vertical in our coordinate system)
                 capsuleCollider.center = Vector3.zero;
             }
             else
             {
-                // Add SphereCollider for reliable XY-plane collision detection
-                // SphereCollider works better than CapsuleCollider for top-down 2D games
-                sphereCollider = gameObject.AddComponent<SphereCollider>();
-                sphereCollider.radius = 0.3f;
-                sphereCollider.center = Vector3.zero;
-                sphereCollider.isTrigger = false;
+                // Add CapsuleCollider as vertical column for reliable collision detection
+                capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
+                capsuleCollider.radius = 0.15f;  // Half the previous 0.3 radius
+                capsuleCollider.height = 1.0f;   // Vertical height along Z-axis
+                capsuleCollider.direction = 2;   // Z-axis (vertical in our coordinate system)
+                capsuleCollider.center = Vector3.zero;
+                capsuleCollider.isTrigger = false;
             }
         }
 
@@ -3063,6 +3108,7 @@ namespace FaeMaze.Visitors
 
                 case VisitorState.Walking:
                 case VisitorState.Idle:
+                case VisitorState.Grabbed:   // Lights disabled directly by HeartOfTheMaze
                 case VisitorState.Consumed:
                 case VisitorState.Escaping:
                 default:

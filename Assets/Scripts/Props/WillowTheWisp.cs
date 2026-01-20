@@ -1372,6 +1372,11 @@ namespace FaeMaze.Props
                     modelInstance = childAnimator.gameObject;
                     animator = childAnimator;
 
+                    // Ensure model faces direction of movement (-Z forward in game coordinates)
+                    // The model is imported facing backwards, so rotate 180° around Z axis
+                    // Preserve the X=-90 rotation that converts Y-up model to -Z-up game coords
+                    modelInstance.transform.localRotation = Quaternion.Euler(-90f, 0f, 180f);
+
                     if (sprite != null)
                     {
                         sprite.enabled = false;
@@ -1393,7 +1398,9 @@ namespace FaeMaze.Props
 
             modelInstance = instantiatedObject;
             modelInstance.transform.localPosition = Vector3.zero;
-            modelInstance.transform.localRotation = Quaternion.identity;
+            // Rotate 180° around Z axis so model's -Z faces the direction of movement
+            // The model is imported facing backwards, so we flip it
+            modelInstance.transform.localRotation = Quaternion.Euler(0f, 0f, 180f);
             modelInstance.transform.localScale = Vector3.one;
 
             var modelAnimator = modelInstance.GetComponentInChildren<Animator>(true);

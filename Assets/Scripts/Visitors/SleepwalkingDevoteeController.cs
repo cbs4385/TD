@@ -80,35 +80,6 @@ namespace FaeMaze.Visitors
 
         #region State Management
 
-        protected override void RefreshStateFromFlags()
-        {
-            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
-            {
-                return;
-            }
-
-            if (isFrightened)
-            {
-                state = VisitorState.Frightened;
-            }
-            else if (isFascinated)
-            {
-                state = VisitorState.Fascinated;
-            }
-            else if (isConfused)
-            {
-                state = VisitorState.Confused;
-            }
-            else if (isLured)
-            {
-                state = VisitorState.Lured;
-            }
-            else
-            {
-                state = VisitorState.Walking;
-            }
-        }
-
         /// <summary>
         /// Called when a timed state expires.
         /// Devotees transition based on context when mesmerized ends.

@@ -77,7 +77,7 @@ namespace FaeMaze.Editor
                 }
             }
 
-            // If not found as standalone, look in heart.glb sub-assets
+            // If not found as standalone, look in heartbase.glb or other heart model sub-assets
             string[] glbGuids = AssetDatabase.FindAssets("heart t:Model", new[] { "Assets/Animations" });
             foreach (var guid in glbGuids)
             {
