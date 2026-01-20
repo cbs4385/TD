@@ -543,7 +543,7 @@ The tongue has 540 bones (indices 0-539), named Bone_000 through Bone_539:
 
 ### In Progress - Heart Tongue Visitor Consumption
 
-**Current State**: Tongue emerges, bends toward visitor, curls around them horizontally. The initial curl (180° one direction) works perfectly. When grab collider touches visitor, the reverse curl should engage to wrap around the other side - this is implemented but needs testing/tuning.
+**Current State**: Full grab/consume sequence is working. Tongue emerges, reaches toward visitor, curls around them, pulls them back horizontally, then rotates the curl section 90° while sinking to consume the visitor.
 
 **Model details:**
 - 540 bones named Bone_000 through Bone_539
@@ -566,16 +566,33 @@ The tongue has 540 bones (indices 0-539), named Bone_000 through Bone_539:
 - Debug spheres visualize reach (cyan) and grab (magenta) colliders ✓
 - Collider positions update using bone.position (tracks deformed mesh) ✓
 - Grab hold timer delays pulling after grab contact ✓
+- **Pulling phase** - Horizontal retraction by reversing reaching motion ✓
+- **Sinking phase** - Pivot bone rotates, curl follows via locked local rotations ✓
+- **Visitor tracking** - Position at midpoint of grab/reach, rotation via delta ✓
 
-**Current implementation - Two-phase curl:**
-1. **Initial curl**: When reach collider touches visitor, curl 180° in `curlDirection` (horizontal, XY plane)
-2. **Reverse curl**: When grab collider touches visitor, curl continues 180° in `-curlDirection` (opposite direction)
-3. This should wrap the tongue around both sides of the visitor
+**Five-phase tongue sequence:**
+1. **Emerging**: Tongue translates up from z=9 until tip reaches lip (z=-0.25)
+2. **Reaching**: Bones above lip rotate toward visitor in XY plane
+3. **Touching**: Tip contacts visitor, curl progresses 180° around them
+4. **Pulling**: Tongue retracts horizontally (lip bone recalculated dynamically as tongue sinks)
+5. **Sinking**: When grab reaches lip, pivot bone rotates 90°, curl follows via locked rotations
 
-**Remaining issues:**
-- [ ] **Test and tune reverse curl** - The reverse curl is implemented but may need adjustment. Current logic: after grab contact, bones get `initialPart (180° * curlDirection) + reversePart (progress * 180° * -curlDirection)`
-- [ ] Verify the curl forms a proper wrap around visitor
-- [ ] Fine-tune GRAB_BONE_OFFSET (currently 50, was 27) for correct curl radius
+**Pivot bone pattern (Sinking phase):**
+The curl section maintains its shape during the 90° rotation from horizontal to vertical:
+- **Pivot bone** (grabBoneIndex - 1): Rotates from horizontal to vertical via `desiredDir`
+- **Curl bones** (grabBoneIndex and beyond): Use locked local rotations, cascading from pivot
+- This causes the entire curl section (with visitor) to rotate as a unit
+
+**Visitor position and rotation tracking:**
+```csharp
+// Position: midpoint between grab and reach colliders
+Vector3 midpoint = (grabPos + reachPos) * 0.5f;
+targetVisitor.transform.position = midpoint;
+
+// Rotation: delta from grab bone applied incrementally
+Quaternion rotationDelta = currentGrabBoneRotation * Quaternion.Inverse(previousGrabBoneRotation);
+targetVisitor.transform.rotation = rotationDelta * targetVisitor.transform.rotation;
+```
 
 **Key implementation details:**
 - File: `HeartOfTheMaze.cs`
@@ -603,21 +620,27 @@ private int curlDirection = 1;           // +1 = CCW (left), -1 = CW (right)
 private bool grabContactMade = false;     // True when grab collider touches visitor
 private float reverseCurlProgress = 0f;   // Progress of reverse curl (0-1)
 private float grabCurlProgress = 0f;      // Progress of initial curl (0-1)
+private Quaternion previousGrabBoneRotation;  // For rotation delta calculation
+private bool hasPreviousGrabBoneRotation = false;
 ```
 
-**Curl angle calculation (in ApplyTongueBoneState):**
+**Locked curl rotations:**
 ```csharp
-// Before grab contact:
-cumulativeAngle = boneProgress * initialCurlAngle * curlDirection;
+// LockCurlBoneRotations includes pivot bone (grabBoneIndex - 1) plus all curl bones
+int pivotBoneIndex = grabBoneIndex - 1;
+lockedCurlRotations = new Quaternion[boneCount - pivotBoneIndex];
 
-// After grab contact:
-float initialPart = 180f * curlDirection;  // Full initial curl locked
-float reversePart = boneProgress * reverseCurlAngle * (-curlDirection);  // Reverse
-cumulativeAngle = initialPart + reversePart;
-
-// Final direction in XY plane:
-float rotatedAngle = lockedVisitorAngle + cumulativeAngle;
-desiredDir = new Vector3(Cos(rotatedAngle), Sin(rotatedAngle), 0f);
+// During Sinking, pivot bone rotates via desiredDir, others use locked local rotations
+if (tonguePhase == TonguePhase.Sinking && i == pivotBoneIndex)
+{
+    float t = sinkingRotationProgress;
+    desiredDir = Vector3.Slerp(targetDirWorld, downDir, t);
+}
+else if (curlRotationsLocked && curlIndex >= 0)
+{
+    tongueBones[i].localRotation = lockedCurlRotations[curlIndex];
+    continue;
+}
 ```
 
 **Collider positions:**
@@ -625,10 +648,15 @@ desiredDir = new Vector3(Cos(rotatedAngle), Sin(rotatedAngle), 0f);
 - Grab collider: `tongueBones[boneCount - 1 - GRAB_BONE_OFFSET].position`
 
 **Phase transitions:**
-1. **Reaching → Touching**: Reach collider touches visitor (via trigger callback)
-2. **Touching (grab contact)**: Grab collider touches visitor, `grabContactMade = true`
-3. **Touching → Grabbing**: `reverseCurlProgress >= 1.0` (reverse curl complete)
-4. **Grabbing → Idle**: Tongue fully retracted (`tongueZPosition >= TONGUE_START_Z`)
+1. **Emerging → Reaching**: Tip reaches TONGUE_LIP_Z
+2. **Reaching → Touching**: Reach collider touches visitor (via trigger callback)
+3. **Touching → Pulling**: Grab collider touches visitor, grab hold timer completes
+4. **Pulling → Sinking**: Grab bone reaches lip level (freeze lip bone index)
+5. **Sinking → Idle**: Tongue fully retracted (`tongueZPosition >= TONGUE_START_Z`), visitor consumed
+
+**Remaining polish:**
+- [ ] Fine-tune timing and speeds for satisfying feel
+- [ ] Add visual/audio feedback for consumption
 
 ---
 

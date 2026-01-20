@@ -111,3 +111,7 @@ forest_comparison.png
 
 # Claude Code temp files
 tmpclaude-*
+
+# 3D model source files (imported by Unity, not needed in version control)
+*.glb
+*.fbx
