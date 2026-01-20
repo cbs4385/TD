@@ -14,6 +14,7 @@ namespace FaeMaze.HeartPowers
         // PukasBargain,           // Bias PukaHazard teleports
         // RingOfInvitations,      // Enhance FairyRing entrancement
         HeartwardGrasp,         // Pull visitor through wall to Heart
-        DevouringMaw            // Instantly consume visitor on tile
+        DevouringMaw,           // Instantly consume visitor on tile
+        Sculpting               // Change node prop type
     }
 }

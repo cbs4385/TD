@@ -46,11 +46,11 @@ namespace FaeMaze.UI
 
         #region Private Fields
 
-        // Reduced to 3 active powers (MurmuringPaths, HeartwardGrasp, DevouringMaw)
-        private Button[] powerButtons = new Button[3];
-        private Image[] buttonImages = new Image[3];
-        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[3];
-        private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[3];
+        // 4 active powers (MurmuringPaths, HeartwardGrasp, DevouringMaw, Sculpting)
+        private Button[] powerButtons = new Button[4];
+        private Image[] buttonImages = new Image[4];
+        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[4];
+        private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[4];
 
         // Right panel UI elements
         private TextMeshProUGUI waveText;
@@ -59,66 +59,42 @@ namespace FaeMaze.UI
 
         private readonly string[] powerNames = new string[]
         {
-            // Commented out - focusing on powers 2, 8, 9 for now
-            // "1: Heartbeat\nof Longing",
             "1: Murmuring\nPaths",
-            // "3: Dream\nSnare",
-            // "4: Feastward\nPanic",
-            // "5: Covenant\nwith Wisps",
-            // "6: Puka's\nBargain",
-            // "7: Ring of\nInvitations",
             "2: Heartward\nGrasp",
-            "3: Devouring\nMaw"
+            "3: Devouring\nMaw",
+            "4: Sculpting"
         };
 
         private readonly HeartPowerType[] powerTypes = new HeartPowerType[]
         {
-            // Commented out - focusing on powers 2, 8, 9 for now
-            // HeartPowerType.HeartbeatOfLonging,
             HeartPowerType.MurmuringPaths,
-            // HeartPowerType.DreamSnare,
-            // HeartPowerType.FeastwardPanic,
-            // HeartPowerType.CovenantWithWisps,
-            // HeartPowerType.PukasBargain,
-            // HeartPowerType.RingOfInvitations,
             HeartPowerType.HeartwardGrasp,
-            HeartPowerType.DevouringMaw
+            HeartPowerType.DevouringMaw,
+            HeartPowerType.Sculpting
         };
 
-        // ROYGBIV spectrum colors for each power (reduced to 3 active powers)
+        // ROYGBIV spectrum colors for each power (4 active powers)
         private readonly Color[] roygbivColors = new Color[]
         {
-            // Commented out - focusing on powers 2, 8, 9 for now
-            // new Color(0.8f, 0.1f, 0.1f, 1f),  // Power 1: Deep Red
             new Color(1.0f, 0.5f, 0.0f, 1f),  // MurmuringPaths: Warm Orange
-            // new Color(1.0f, 0.9f, 0.1f, 1f),  // Power 3: Bright Yellow
-            // new Color(0.2f, 0.8f, 0.2f, 1f),  // Power 4: Vivid Green
-            // new Color(0.2f, 0.5f, 1.0f, 1f),  // Power 5: Cool Blue
-            // new Color(0.3f, 0.0f, 0.5f, 1f),  // Power 6: Indigo
-            // new Color(0.6f, 0.2f, 0.8f, 1f),  // Power 7: Vibrant Violet
             new Color(0.9f, 0.1f, 0.5f, 1f),  // HeartwardGrasp: Crimson
-            new Color(0.5f, 0.0f, 0.2f, 1f)   // DevouringMaw: Dark Burgundy
+            new Color(0.5f, 0.0f, 0.2f, 1f),  // DevouringMaw: Dark Burgundy
+            new Color(0.2f, 0.6f, 0.4f, 1f)   // Sculpting: Forest Green
         };
 
         // Base colors (darker versions for inactive state)
         private readonly Color[] baseColors = new Color[]
         {
-            // Commented out - focusing on powers 2, 8, 9 for now
-            // new Color(0.3f, 0.05f, 0.05f, 1f),  // Dim Red
             new Color(0.35f, 0.18f, 0.0f, 1f),  // Dim Orange (MurmuringPaths)
-            // new Color(0.35f, 0.32f, 0.05f, 1f), // Dim Yellow
-            // new Color(0.08f, 0.3f, 0.08f, 1f),  // Dim Green
-            // new Color(0.08f, 0.18f, 0.35f, 1f), // Dim Blue
-            // new Color(0.12f, 0.0f, 0.2f, 1f),   // Dim Indigo
-            // new Color(0.22f, 0.08f, 0.3f, 1f),  // Dim Violet
             new Color(0.32f, 0.05f, 0.18f, 1f), // Dim Crimson (HeartwardGrasp)
-            new Color(0.18f, 0.0f, 0.08f, 1f)   // Dim Dark Burgundy (DevouringMaw)
+            new Color(0.18f, 0.0f, 0.08f, 1f),  // Dim Dark Burgundy (DevouringMaw)
+            new Color(0.08f, 0.22f, 0.15f, 1f)  // Dim Forest Green (Sculpting)
         };
 
-        // Glow animation tracking (reduced to 3 active powers)
-        private float[] glowPhase = new float[3];
-        private float[] glowIntensity = new float[3];
-        private float[] flashIntensity = new float[3]; // Flash effect when power is activated
+        // Glow animation tracking (4 active powers)
+        private float[] glowPhase = new float[4];
+        private float[] glowIntensity = new float[4];
+        private float[] flashIntensity = new float[4]; // Flash effect when power is activated
         private float glowSpeed = 2.0f;
         private float glowPulseSpeed = 3.0f;
         private float flashDecaySpeed = 5.0f;
@@ -323,7 +299,7 @@ namespace FaeMaze.UI
         /// <summary>
         /// Automatically creates the Heart Powers panel UI hierarchy.
         /// Creates a unified HUD bar spanning the bottom of the screen with:
-        /// - Left half: 9 heart power buttons
+        /// - Left half: 4 heart power buttons
         /// - Right half: wave count and essence display with slider
         /// </summary>
         private void CreateHeartPowersPanelUI()
@@ -353,14 +329,14 @@ namespace FaeMaze.UI
             float leftPadding = 10f;
             float buttonSpacing = 3f;
             float buttonHeight = panelHeight - 10f; // Leave 5px padding top/bottom
-            // Calculate button width to fit 3 buttons in left half (assume half screen = 960px)
+            // Calculate button width to fit 4 buttons in left half (assume half screen = 960px)
             float leftHalfWidth = 960f; // Half of 1920 reference resolution
-            float buttonWidth = (leftHalfWidth - leftPadding * 2 - buttonSpacing * 2) / 3f;
+            float buttonWidth = (leftHalfWidth - leftPadding * 2 - buttonSpacing * 3) / 4f;
             float buttonsStartX = -960f + leftPadding; // Start from left edge of screen
             float buttonYPos = 0f; // Vertically centered (0 is center when pivot is at center)
 
-            // Reduced to 3 active powers
-            for (int i = 0; i < 3; i++)
+            // 4 active powers
+            for (int i = 0; i < 4; i++)
             {
                 float xPos = buttonsStartX + (i * (buttonWidth + buttonSpacing)) + buttonWidth / 2f;
                 powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, buttonYPos, buttonWidth, buttonHeight);
@@ -698,13 +674,10 @@ namespace FaeMaze.UI
         {
             if (cameraController != null)
             {
-                Vector3 pos = cameraController.FocalPointPosition;
-                Debug.Log($"[HeartPowerPanel] GetFocalPointPosition from camera: {pos}");
-                return pos;
+                return cameraController.FocalPointPosition;
             }
 
             // Fallback to Heart position if camera controller is not available
-            Debug.LogWarning("[HeartPowerPanel] cameraController is null, falling back to heart position");
             if (GameController.Instance != null && GameController.Instance.Heart != null)
             {
                 return GameController.Instance.Heart.transform.position;
@@ -759,7 +732,7 @@ namespace FaeMaze.UI
         {
             if (Keyboard.current == null) return;
 
-            // Reduced to 3 active powers - keys 1, 2, 3
+            // 4 active powers - keys 1, 2, 3, 4
             if (Keyboard.current.digit1Key.wasPressedThisFrame || Keyboard.current.numpad1Key.wasPressedThisFrame)
             {
                 OnPowerButtonClicked(0); // MurmuringPaths
@@ -772,31 +745,10 @@ namespace FaeMaze.UI
             {
                 OnPowerButtonClicked(2); // DevouringMaw
             }
-            // Commented out - focusing on powers 2, 8, 9 for now
-            // else if (Keyboard.current.digit4Key.wasPressedThisFrame || Keyboard.current.numpad4Key.wasPressedThisFrame)
-            // {
-            //     OnPowerButtonClicked(3);
-            // }
-            // else if (Keyboard.current.digit5Key.wasPressedThisFrame || Keyboard.current.numpad5Key.wasPressedThisFrame)
-            // {
-            //     OnPowerButtonClicked(4);
-            // }
-            // else if (Keyboard.current.digit6Key.wasPressedThisFrame || Keyboard.current.numpad6Key.wasPressedThisFrame)
-            // {
-            //     OnPowerButtonClicked(5);
-            // }
-            // else if (Keyboard.current.digit7Key.wasPressedThisFrame || Keyboard.current.numpad7Key.wasPressedThisFrame)
-            // {
-            //     OnPowerButtonClicked(6);
-            // }
-            // else if (Keyboard.current.digit8Key.wasPressedThisFrame || Keyboard.current.numpad8Key.wasPressedThisFrame)
-            // {
-            //     OnPowerButtonClicked(7);
-            // }
-            // else if (Keyboard.current.digit9Key.wasPressedThisFrame || Keyboard.current.numpad9Key.wasPressedThisFrame)
-            // {
-            //     OnPowerButtonClicked(8);
-            // }
+            else if (Keyboard.current.digit4Key.wasPressedThisFrame || Keyboard.current.numpad4Key.wasPressedThisFrame)
+            {
+                OnPowerButtonClicked(3); // Sculpting
+            }
         }
 
         #endregion
@@ -875,6 +827,9 @@ namespace FaeMaze.UI
         {
             if (heartPowerManager == null) return;
 
+            // Get focal point position for position-dependent checks
+            Vector3 focalPointPos = GetFocalPointPosition();
+
             for (int i = 0; i < powerButtons.Length; i++)
             {
                 if (powerButtons[i] == null) continue;
@@ -885,6 +840,13 @@ namespace FaeMaze.UI
                 bool canActivate = heartPowerManager.CanActivatePower(powerType, out string reason);
                 bool isTogglePower = heartPowerManager.IsTogglePower(powerType);
                 bool isActive = heartPowerManager.IsPowerActive(powerType);
+
+                // Special check for Sculpting - requires valid node position
+                bool sculptingPositionValid = true;
+                if (powerType == HeartPowerType.Sculpting && !isActive)
+                {
+                    sculptingPositionValid = heartPowerManager.CanUseSculptingAt(focalPointPos);
+                }
 
                 // Keep buttons always clickable so we can see debug messages
                 // But provide visual feedback about availability
@@ -897,8 +859,15 @@ namespace FaeMaze.UI
                     if (isActive)
                     {
                         // Show "ACTIVE" and consumption progress
-                        cooldownTexts[i].text = "ACTIVE";
+                        cooldownTexts[i].text = "ACTIV";
                         cooldownTexts[i].color = new Color(0.3f, 1f, 0.3f, 1f); // Green for active
+                        cooldownTexts[i].gameObject.SetActive(true);
+                    }
+                    else if (powerType == HeartPowerType.Sculpting && !sculptingPositionValid)
+                    {
+                        // Sculpting not at valid position - show indicator
+                        cooldownTexts[i].text = "NODE";
+                        cooldownTexts[i].color = new Color(0.7f, 0.7f, 0.7f, 1f); // Gray - needs node
                         cooldownTexts[i].gameObject.SetActive(true);
                     }
                     else
@@ -923,6 +892,9 @@ namespace FaeMaze.UI
                     }
                 }
 
+                // Determine if power is truly available (including position checks)
+                bool fullyAvailable = canActivate && sculptingPositionValid;
+
                 // Update glow intensity based on availability
                 // Glow effects will be applied by UpdateGlowEffects()
                 if (isTogglePower && isActive)
@@ -930,7 +902,7 @@ namespace FaeMaze.UI
                     // Active toggle power - keep high glow intensity
                     glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.2f, Time.deltaTime * glowSpeed);
                 }
-                else if (canActivate)
+                else if (fullyAvailable)
                 {
                     // Power is ready - increase glow intensity
                     glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.0f, Time.deltaTime * glowSpeed);
@@ -938,7 +910,7 @@ namespace FaeMaze.UI
                 else
                 {
                     // Power not ready - decrease glow intensity
-                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 0.0f, Time.deltaTime * glowSpeed);
+                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 0.3f, Time.deltaTime * glowSpeed);
                 }
             }
         }

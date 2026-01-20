@@ -153,49 +153,8 @@ namespace FaeMaze.Systems
                     }
                 }
 
-                // Setup debug heart tongue spawner for PlanarForestMazeScene (Editor only)
-#if UNITY_EDITOR
-                if (sceneName == "PlanarForestMazeScene")
-                {
-                    SetupDebugHeartTongueSpawner(gameRoot);
-                }
-#endif
             }
         }
-
-#if UNITY_EDITOR
-        private static void SetupDebugHeartTongueSpawner(GameObject gameRoot)
-        {
-            // Check if already exists
-            var existingSpawner = Object.FindFirstObjectByType<FaeMaze.DebugTools.DebugHeartTongueSpawner>();
-            if (existingSpawner != null) return;
-
-            // Create the debug spawner
-            GameObject spawnerObj = new GameObject("DebugHeartTongueSpawner");
-            spawnerObj.transform.SetParent(gameRoot.transform);
-            var spawner = spawnerObj.AddComponent<FaeMaze.DebugTools.DebugHeartTongueSpawner>();
-
-            // Load visitor prefab
-            GameObject visitorPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Visitors/Visitor_FestivalTourist.prefab");
-
-            if (visitorPrefab != null)
-            {
-                var visitorController = visitorPrefab.GetComponent<FaeMaze.Visitors.VisitorController>();
-                if (visitorController != null)
-                {
-                    var spawnerType = typeof(FaeMaze.DebugTools.DebugHeartTongueSpawner);
-                    var prefabField = spawnerType.GetField("visitorPrefab",
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if (prefabField != null)
-                    {
-                        prefabField.SetValue(spawner, visitorController);
-                    }
-                }
-            }
-
-            Debug.Log("[RuntimeSceneSetup] Created DebugHeartTongueSpawner - visitor will spawn at heart edge in 10 seconds");
-        }
-#endif
 
         private static void SetupProceduralMazeScene()
         {

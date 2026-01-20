@@ -232,6 +232,12 @@ namespace FaeMaze.Visitors
         /// <summary>Gets whether this visitor is fascinated (entranced/mesmerized)</summary>
         public abstract bool IsFascinated { get; }
 
+        /// <summary>Gets the FaeLantern currently fascinating this visitor, or null if none</summary>
+        public FaeMaze.Props.FaeLantern CurrentFaeLantern => currentFaeLantern;
+
+        /// <summary>Gets the FairyRing currently fascinating this visitor, or null if none</summary>
+        public FaeMaze.Props.FairyRing CurrentFairyRing => currentFairyRing;
+
         /// <summary>Gets the visitor's archetype (from config if available)</summary>
         public VisitorArchetype Archetype => config != null ? config.Archetype : VisitorArchetype.LanternDrunk;
 
@@ -376,7 +382,12 @@ namespace FaeMaze.Visitors
             // Handle fascination timer (pause at lantern)
             if (isFascinated && hasReachedLantern)
             {
-                if (fascinationTimer > 0)
+                // If the lantern was destroyed, end fascination immediately
+                if (currentFaeLantern == null)
+                {
+                    EndFascination();
+                }
+                else if (fascinationTimer > 0)
                 {
                     fascinationTimer -= Time.deltaTime;
                     return; // Don't move while fascinated timer is active
@@ -386,6 +397,12 @@ namespace FaeMaze.Visitors
                     // Fascination timer ended - resume wandering
                     EndFascination();
                 }
+            }
+
+            // If walking to a lantern that was destroyed, end fascination
+            if (isFascinated && !hasReachedLantern && currentFaeLantern == null)
+            {
+                EndFascination();
             }
 
             if (IsMovementState(state))
@@ -2117,10 +2134,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void HandleConsumption()
         {
-            Debug.Log($"[VisitorController] HandleConsumption called for {name}. gameController={gameController != null}, Heart={gameController?.Heart != null}");
             if (gameController != null && gameController.Heart != null)
             {
-                Debug.Log($"[VisitorController] Calling HeartOfTheMaze.OnVisitorConsumed for {name}");
                 gameController.Heart.OnVisitorConsumed(this);
             }
             else
@@ -2129,7 +2144,6 @@ namespace FaeMaze.Visitors
                 // Still notify HeartPowerManager if possible
                 if (HeartPowers.HeartPowerManager.Instance != null)
                 {
-                    Debug.Log($"[VisitorController] Notifying HeartPowerManager directly for {name}");
                     HeartPowers.HeartPowerManager.Instance.NotifyVisitorConsumed();
                 }
                 Destroy(gameObject);
@@ -2662,6 +2676,63 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Public method to forcibly end lantern fascination.
+        /// Called when a lantern is destroyed/disabled while the visitor is fascinated by it.
+        /// </summary>
+        public virtual void EndLanternFascination()
+        {
+            if (currentFaeLantern == null && !isFascinated)
+            {
+                return; // Not fascinated by a lantern
+            }
+
+            // Don't set cooldown since the lantern is being destroyed
+            isFascinated = false;
+            hasReachedLantern = false;
+            fascinationTimer = 0f;
+            ClearLanternInteraction();
+
+            // Resume normal behavior
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && originalDestination != Vector3.zero)
+            {
+                worldPath = BuildWorldPath(transform.position, originalDestination);
+                worldPathIndex = 0;
+                worldDestination = originalDestination;
+                ResetSplineState();
+                state = VisitorState.Walking;
+            }
+            else
+            {
+                Vector3 randomDestination = GetRandomWanderDestination();
+                worldPath = BuildWorldPath(transform.position, randomDestination);
+                worldPathIndex = 0;
+                ResetSplineState();
+                state = VisitorState.Walking;
+            }
+        }
+
+        /// <summary>
+        /// Public method to forcibly end FairyRing fascination.
+        /// Called when a FairyRing is destroyed/disabled while the visitor is circling it.
+        /// </summary>
+        public virtual void EndRingFascination()
+        {
+            if (currentFairyRing == null)
+            {
+                return; // Not fascinated by a ring
+            }
+
+            // Clear without setting immunity (ring is being destroyed)
+            isFascinated = false;
+            currentFairyRing = null;
+            fairyRingFascinationTimer = 0f;
+            speedMultiplier = 1f;
+
+            // Visitor becomes lost after fascination ends
+            SetLost();
+        }
+
+        /// <summary>
         /// Gets a random walkable node position for wandering after fascination ends.
         /// </summary>
         protected virtual Vector3 GetRandomWanderDestination()
@@ -3182,9 +3253,6 @@ namespace FaeMaze.Visitors
                 return false;
             }
 
-            if (logVisitorPathfinding)
-                Debug.Log($"[Confusion:Detour] Starting from node {nearestNodeId} at {graphState.Nodes[nearestNodeId].Position}");
-
             // Build a list of detour nodes by randomly walking the graph
             var detourNodeIds = new List<int>();
             var visitedNodeIds = new HashSet<int>();
@@ -3257,12 +3325,6 @@ namespace FaeMaze.Visitors
                 return false;
             }
 
-            if (logVisitorPathfinding)
-            {
-                string nodeList = string.Join(" -> ", detourNodeIds);
-                Debug.Log($"[Confusion:Detour] Detour nodes selected: {nodeList}");
-            }
-
             // Build path: current position -> each detour node -> final destination
             var fullPath = new List<Vector3>();
             Vector3 pathStart = transform.position;
@@ -3312,9 +3374,6 @@ namespace FaeMaze.Visitors
             worldPath = fullPath;
             worldPathIndex = 0;
             ResetSplineState();
-
-            if (logVisitorPathfinding)
-                Debug.Log($"[Confusion:Detour] SUCCESS - Detour path built with {fullPath.Count} waypoints through {detourNodeIds.Count} nodes");
 
             return true;
         }

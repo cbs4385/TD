@@ -63,6 +63,10 @@ namespace FaeMaze.Editor
                 "Instantly consumes a visitor at the targeted position.",
                 assetPath, cooldown: 15f, duration: 1f, radius: 1f);
 
+            CreatePowerDefinition(HeartPowerType.Sculpting, "Sculpting",
+                "Change the prop type on a node. Must be activated on a node (not an edge).",
+                assetPath, cooldown: 0f, duration: 0f, radius: 3f);
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 

@@ -487,12 +487,17 @@ public class LanternGlow : MonoBehaviour
     /// </summary>
     private void DisableModelEmissions()
     {
+        // Skip in edit mode to avoid material leaks
+#if UNITY_EDITOR
+        if (!Application.isPlaying) return;
+#endif
+
         var renderers = GetComponentsInChildren<Renderer>(true);
         foreach (var renderer in renderers)
         {
             if (renderer == null) continue;
 
-            // Get materials (creates instances, which is what we want)
+            // Get materials (creates instances, which is what we want at runtime)
             var materials = renderer.materials;
 
             foreach (var mat in materials)

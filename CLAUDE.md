@@ -693,11 +693,58 @@ else if (curlRotationsLocked && curlIndex >= 0)
 
 ---
 
+### Completed - Sculpting (Heart Power 4)
+
+**Status**: Fully implemented and working.
+
+**What it does**: Toggle power that opens a radial menu to change a node's prop type (Pond, Lantern, FairyRing, or Remove).
+
+**Key files:**
+- `HeartPowerEffects.cs` - `SculptingEffect` class (line ~3960)
+- `DynamicMazeGrowth.cs` - `SetNodeProp()` and `RemovePropFromNode()` methods
+- `FaeLantern.cs` - `ReleaseAllFascinatedVisitors()` on disable
+- `FairyRing.cs` - `ReleaseAllFascinatedVisitors()` on disable
+- `VisitorControllerBase.cs` - `EndLanternFascination()` and `EndRingFascination()` public methods
+
+**Implementation details:**
+- Radial menu with 5 circular buttons (center cancel + 4 prop options)
+- Menu size is 50% of screen height (uses reference height 1080 for CanvasScaler)
+- Prop preview images loaded from `Assets/Textures/PropPreviews/` (pond_preview.png, lantern_preview.png, ring_preview.png)
+- Remove option uses EarthenGroundTexture
+- Smoke particle effect spawns on prop change (0.5 second duration, expands to NODE_RADIUS)
+
+**Prop effect cleanup on change:**
+When a prop is changed/removed:
+1. `RemovePropFromNode()` destroys the old prop GameObject
+2. Prop's `OnDisable()` calls `ReleaseAllFascinatedVisitors()`
+3. All visitors affected by that prop have their fascination ended immediately
+4. Visitors resume normal walking behavior
+5. New prop (if any) starts fresh with no historical effects
+
+**Key constants:**
+| Constant | Value | Description |
+|----------|-------|-------------|
+| MENU_SCREEN_HEIGHT_FRACTION | 0.5 | Menu is 50% of screen height |
+| BUTTON_SIZE_FRACTION | 0.30 | Buttons are 30% of menu size |
+| CENTER_BUTTON_FRACTION | 0.22 | Center button is 22% of menu size |
+| MENU_RADIUS_FRACTION | 0.33 | Button positions at 33% from center |
+| NODE_RADIUS | 3.0 | Node size for smoke effect coverage |
+| SMOKE_DURATION | 0.5 | Smoke effect duration in seconds |
+
+**Visitor state cleanup:**
+- `VisitorControllerBase.CurrentFaeLantern` - public property to check which lantern is fascinating visitor
+- `VisitorControllerBase.CurrentFairyRing` - public property to check which ring is fascinating visitor
+- `VisitorControllerBase.EndLanternFascination()` - forcibly ends lantern fascination without cooldown
+- `VisitorControllerBase.EndRingFascination()` - forcibly ends ring fascination without immunity
+
+---
+
 ### Other In Progress
 - [ ] Ensure other visitor types work as intended with heart powers
 
 ### Heart & Powers
 - [x] Fix heart prefab - separated into two parts (heartbase + heart tongue) with state machine
+- [x] Sculpting power (Heart Power 4) - radial menu to change node props
 - [ ] Make icons for heart power buttons
 - [ ] Finalize heart power essence use costs
 - [ ] Push magic numbers and constants to configurable settings
@@ -711,3 +758,35 @@ else if (curlRotationsLocked && curlIndex >= 0)
 ### Game State
 - [ ] Enable game over state
 - [ ] Implement difficulty progression
+
+---
+
+## Session Notes (January 2026)
+
+### Recent Changes This Session
+
+1. **Sculpting Power Menu Sizing**: Changed from fixed pixel sizes to screen-relative sizing (50% of screen height). Uses reference height 1080 since CanvasScaler is set to ScaleWithScreenSize.
+
+2. **Prop Preview Images**: Switched from runtime rendering to pre-saved PNG textures in `Assets/Textures/PropPreviews/`. User needs to save screenshots of props from editor scene at (0,0,0), (8,0,0), (12,0,0).
+
+3. **Visitor Fascination Cleanup**: When props are destroyed/changed:
+   - Added `OnDisable()` to `FaeLantern.cs` and `FairyRing.cs` that calls `ReleaseAllFascinatedVisitors()`
+   - Added public properties `CurrentFaeLantern` and `CurrentFairyRing` to `VisitorControllerBase`
+   - Added public methods `EndLanternFascination()` and `EndRingFascination()` to `VisitorControllerBase`
+   - Existing check in Update loop already handles lantern destroyed mid-fascination
+
+4. **Smoke Effect**: Added `SpawnSmokeEffect()` method in SculptingEffect that creates a particle system:
+   - 80 particles burst from center
+   - Expands to NODE_RADIUS (3.0) over 0.5 seconds
+   - Uses noise for organic swirling motion
+   - Pale cream/smoke colors
+   - Auto-destroys after completion
+
+5. **LanternGlow Material Leak Fix**: Added early return in edit mode to prevent material instantiation warnings.
+
+### Files Modified This Session
+- `HeartPowerEffects.cs` - SculptingEffect class, smoke effect, menu sizing
+- `VisitorControllerBase.cs` - CurrentFaeLantern/CurrentFairyRing properties, EndLanternFascination/EndRingFascination methods, null lantern check in Update
+- `FaeLantern.cs` - OnDisable with ReleaseAllFascinatedVisitors
+- `FairyRing.cs` - OnDisable with ReleaseAllFascinatedVisitors
+- `LanternGlow.cs` - Edit mode material leak fix

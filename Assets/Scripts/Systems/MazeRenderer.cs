@@ -242,7 +242,6 @@ namespace FaeMaze.Systems
                     heartGroundMaterial.SetFloat("_Metallic", 0.0f); // Match glTF-pbrMetallic defaults
                     heartGroundMaterial.SetFloat("_Smoothness", 0.2f); // Matte earthy surface
                     heartGroundMaterial.SetFloat("_EdgeDarkening", 0.0f); // Disabled to match heart material
-                    Debug.Log("Using extracted EarthenGroundTexture for path material");
                     return;
                 }
             }

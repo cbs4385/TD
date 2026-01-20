@@ -153,7 +153,26 @@ namespace FaeMaze.Props
 
         private void OnDisable()
         {
+            // Release all visitors fascinated by this lantern before removing from registry
+            ReleaseAllFascinatedVisitors();
             _activeLanterns.Remove(this);
+        }
+
+        /// <summary>
+        /// Releases all visitors currently fascinated by this lantern.
+        /// Called when the lantern is destroyed or disabled.
+        /// </summary>
+        public void ReleaseAllFascinatedVisitors()
+        {
+            // Find all visitors and release any fascinated by this lantern
+            var allVisitors = FindObjectsByType<FaeMaze.Visitors.VisitorControllerBase>(FindObjectsSortMode.None);
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor != null && visitor.CurrentFaeLantern == this)
+                {
+                    visitor.EndLanternFascination();
+                }
+            }
         }
 
         private void Update()

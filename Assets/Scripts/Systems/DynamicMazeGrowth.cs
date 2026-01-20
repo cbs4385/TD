@@ -1597,6 +1597,189 @@ namespace FaeMaze.Systems
             growthInterval = Mathf.Max(1f, seconds);
         }
 
+        /// <summary>
+        /// Gets the type of prop currently spawned at the specified node index.
+        /// </summary>
+        /// <returns>The prop type, or null if no prop is spawned at this node</returns>
+        public NodePropType? GetNodePropType(int nodeIndex)
+        {
+            if (nodeProps.TryGetValue(nodeIndex, out NodePropType propType))
+            {
+                return propType;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Removes any existing prop at the specified node index.
+        /// </summary>
+        /// <returns>True if a prop was removed, false if no prop existed</returns>
+        public bool RemovePropFromNode(int nodeIndex)
+        {
+            bool removed = false;
+
+            // Remove from unified tracking
+            if (nodeProps.ContainsKey(nodeIndex))
+            {
+                nodeProps.Remove(nodeIndex);
+            }
+
+            // Remove pond
+            if (nodePonds.TryGetValue(nodeIndex, out GameObject pond))
+            {
+                if (pond != null) Destroy(pond);
+                nodePonds.Remove(nodeIndex);
+                removed = true;
+            }
+
+            // Remove fairy ring
+            if (nodeFairyRings.TryGetValue(nodeIndex, out GameObject ring))
+            {
+                if (ring != null) Destroy(ring);
+                nodeFairyRings.Remove(nodeIndex);
+                removed = true;
+            }
+
+            // Remove lantern
+            if (nodeLanterns.TryGetValue(nodeIndex, out GameObject lantern))
+            {
+                if (lantern != null) Destroy(lantern);
+                nodeLanterns.Remove(nodeIndex);
+                removed = true;
+            }
+
+            // Remove wisp
+            if (nodeWisps.TryGetValue(nodeIndex, out GameObject wisp))
+            {
+                if (wisp != null) Destroy(wisp);
+                nodeWisps.Remove(nodeIndex);
+                removed = true;
+            }
+
+            // Remove puka
+            if (nodePukas.TryGetValue(nodeIndex, out GameObject puka))
+            {
+                if (puka != null) Destroy(puka);
+                nodePukas.Remove(nodeIndex);
+                removed = true;
+            }
+
+            return removed;
+        }
+
+        /// <summary>
+        /// Sets the prop type at the specified node index.
+        /// Removes any existing prop first, then spawns the new one.
+        /// </summary>
+        /// <param name="nodeIndex">The index of the node to modify</param>
+        /// <param name="propType">The type of prop to spawn, or null to just remove existing</param>
+        /// <returns>True if the operation was successful</returns>
+        public bool SetNodeProp(int nodeIndex, NodePropType? propType)
+        {
+            var forestMapState = mazeGridBehaviour?.ForestMapState;
+            if (forestMapState == null || nodeIndex < 0 || nodeIndex >= forestMapState.Nodes.Count)
+            {
+                return false;
+            }
+
+            // Remove existing prop
+            RemovePropFromNode(nodeIndex);
+
+            // If propType is null, we just wanted to remove the prop
+            if (!propType.HasValue)
+            {
+                return true;
+            }
+
+            // Get the node
+            var node = forestMapState.Nodes[nodeIndex];
+
+            // Spawn the new prop
+            bool success = false;
+            switch (propType.Value)
+            {
+                case NodePropType.Pond:
+                    success = SpawnStandalonePondAtNode(node, nodeIndex);
+                    break;
+                case NodePropType.FairyRing:
+                    success = SpawnFairyRingAtNode(node, nodeIndex);
+                    break;
+                case NodePropType.FaeLantern:
+                    success = SpawnLanternAtNode(node, nodeIndex);
+                    break;
+                case NodePropType.WillowTheWisp:
+                    success = SpawnWispAtNode(node, nodeIndex);
+                    break;
+                case NodePropType.Puka:
+                    success = SpawnPondPropAtNode(node, nodeIndex);
+                    break;
+            }
+
+            // Track what was spawned
+            if (success)
+            {
+                nodeProps[nodeIndex] = propType.Value;
+            }
+
+            return success;
+        }
+
+        /// <summary>
+        /// Finds the node index at or near the specified world position.
+        /// </summary>
+        /// <param name="worldPosition">The world position to search near</param>
+        /// <param name="searchRadius">Maximum distance to search</param>
+        /// <returns>The node index, or -1 if no node found</returns>
+        public int FindNodeIndexAtPosition(Vector3 worldPosition, float searchRadius = 3f)
+        {
+            var mazeData = mazeGridBehaviour?.WorldSpaceMazeData;
+            if (mazeData == null) return -1;
+
+            Vector2 targetPos2D = new Vector2(worldPosition.x, worldPosition.y);
+            var nearbyTiles = mazeData.GetTilesNear(targetPos2D, searchRadius);
+
+            // Find the nearest tile that belongs to a node
+            float minDist = float.MaxValue;
+            int foundNodeIndex = -1;
+
+            foreach (var tile in nearbyTiles)
+            {
+                if (!tile.Walkable || tile.NodeIndex < 0) continue;
+
+                float dist = Vector2.Distance(targetPos2D, tile.Position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    foundNodeIndex = tile.NodeIndex;
+                }
+            }
+
+            return foundNodeIndex;
+        }
+
+        /// <summary>
+        /// Checks if the specified world position is on a node (not an edge).
+        /// </summary>
+        public bool IsPositionOnNode(Vector3 worldPosition, float searchRadius = 3f)
+        {
+            return FindNodeIndexAtPosition(worldPosition, searchRadius) >= 0;
+        }
+
+        /// <summary>
+        /// Gets the center position of a node in world space.
+        /// </summary>
+        /// <param name="nodeIndex">The node index</param>
+        /// <returns>The node center position, or null if node not found</returns>
+        public Vector3? GetNodeCenterPosition(int nodeIndex)
+        {
+            var mapState = mazeGridBehaviour?.ForestMapState;
+            if (mapState == null || nodeIndex < 0 || nodeIndex >= mapState.Nodes.Count)
+                return null;
+
+            var node = mapState.Nodes[nodeIndex];
+            return new Vector3(node.Position.x, node.Position.y, 0);
+        }
+
         #endregion
     }
 }

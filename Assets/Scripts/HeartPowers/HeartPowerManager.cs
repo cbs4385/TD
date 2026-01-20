@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
+using Object = UnityEngine.Object;
 
 namespace FaeMaze.HeartPowers
 {
@@ -45,11 +46,6 @@ namespace FaeMaze.HeartPowers
         [SerializeField]
         [Tooltip("Array of power definitions for each power type")]
         private HeartPowerDefinition[] powerDefinitions;
-
-        [Header("Debug")]
-        [SerializeField]
-        [Tooltip("Enable debug logging")]
-        private bool debugLog = true;
 
         [Header("UI Settings")]
         [SerializeField]
@@ -225,13 +221,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            if (gameController == null)
-            {
-            }
-            else if (debugLog)
-            {
-            }
-
             // Find MazeGridBehaviour if not assigned
             if (mazeGridBehaviour == null)
             {
@@ -261,10 +250,6 @@ namespace FaeMaze.HeartPowers
                 GameObject visualizerObj = new GameObject("HeartPowerTileVisualizer");
                 visualizerObj.transform.SetParent(transform);
                 tileVisualizer = visualizerObj.AddComponent<HeartPowerTileVisualizer>();
-
-                if (debugLog)
-                {
-                }
             }
         }
 
@@ -277,16 +262,21 @@ namespace FaeMaze.HeartPowers
                 // Create a new GameObject for the panel controller
                 GameObject panelObj = new GameObject("HeartPowerPanelController");
                 panelObj.transform.SetParent(transform);
-                var panelController = panelObj.AddComponent<UI.HeartPowerPanelController>();
-
-                if (debugLog)
-                {
-                }
+                panelObj.AddComponent<UI.HeartPowerPanelController>();
             }
         }
 
+        private static int screenshotCounter = 0;
+
         private void Update()
         {
+            // Screenshot capture - F12 key (always available)
+            var keyboard = UnityEngine.InputSystem.Keyboard.current;
+            if (keyboard != null && keyboard.f12Key.wasPressedThisFrame)
+            {
+                CaptureScreenshot();
+            }
+
             if (!isGameActive)
             {
                 return;
@@ -323,6 +313,35 @@ namespace FaeMaze.HeartPowers
             }
         }
 
+        private void CaptureScreenshot()
+        {
+            StartCoroutine(CaptureScreenshotCoroutine());
+        }
+
+        private System.Collections.IEnumerator CaptureScreenshotCoroutine()
+        {
+            yield return new WaitForEndOfFrame();
+
+            string basePath = System.IO.Path.Combine(Application.persistentDataPath, "Screenshots");
+            System.IO.Directory.CreateDirectory(basePath);
+
+            screenshotCounter++;
+            string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string filename = $"screenshot_{timestamp}_{screenshotCounter:D3}.png";
+            string fullPath = System.IO.Path.Combine(basePath, filename);
+
+            Texture2D screenshot = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+            screenshot.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+            screenshot.Apply();
+
+            byte[] bytes = screenshot.EncodeToPNG();
+            System.IO.File.WriteAllBytes(fullPath, bytes);
+
+            Object.Destroy(screenshot);
+
+            Debug.Log($"[Screenshot] Saved to: {fullPath}");
+        }
+
         #endregion
 
         #region Public Methods - Wave Integration
@@ -333,10 +352,6 @@ namespace FaeMaze.HeartPowers
         public void OnWaveStart()
         {
             isGameActive = true;
-
-            if (debugLog)
-            {
-            }
         }
 
         /// <summary>
@@ -346,10 +361,6 @@ namespace FaeMaze.HeartPowers
         {
             isGameActive = false;
             CleanupAllEffects();
-
-            if (debugLog)
-            {
-            }
         }
 
         #endregion
@@ -361,15 +372,8 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public bool TryActivatePower(HeartPowerType powerType, Vector3 worldPosition)
         {
-            if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
-            {
-            }
-
             if (!CanActivatePower(powerType, out string reason))
             {
-                if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
-                {
-                }
                 return false;
             }
 
@@ -377,10 +381,6 @@ namespace FaeMaze.HeartPowers
             if (definition == null)
             {
                 return false;
-            }
-
-            if (debugLog)
-            {
             }
 
             // Consume essence
@@ -404,10 +404,6 @@ namespace FaeMaze.HeartPowers
             if (PowerAffectsPathfinding(powerType))
             {
                 TriggerVisitorPathRecalculation(powerType);
-            }
-
-            if (debugLog)
-            {
             }
 
             return true;
@@ -475,7 +471,8 @@ namespace FaeMaze.HeartPowers
         public bool IsTogglePower(HeartPowerType powerType)
         {
             return powerType == HeartPowerType.MurmuringPaths ||
-                   powerType == HeartPowerType.HeartwardGrasp;
+                   powerType == HeartPowerType.HeartwardGrasp ||
+                   powerType == HeartPowerType.Sculpting;
         }
 
         /// <summary>
@@ -495,6 +492,20 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
+        /// Checks if the Sculpting power can be used at the given position.
+        /// Returns true if position is on a non-heart node.
+        /// </summary>
+        public bool CanUseSculptingAt(Vector3 worldPosition)
+        {
+            var dynamicMazeGrowth = Object.FindFirstObjectByType<DynamicMazeGrowth>();
+            if (dynamicMazeGrowth == null) return false;
+
+            int nodeIndex = dynamicMazeGrowth.FindNodeIndexAtPosition(worldPosition);
+            // Must be on a node (>= 0) and not the heart node (0)
+            return nodeIndex > 0;
+        }
+
+        /// <summary>
         /// Gets the current tier for a power type.
         /// </summary>
         public int GetPowerTier(HeartPowerType powerType)
@@ -508,33 +519,13 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void NotifyVisitorConsumed()
         {
-            Debug.Log($"[HeartPowerManager] NotifyVisitorConsumed called. Active powers count: {activePowers.Count}");
-            foreach (var kvp in activePowers)
-            {
-                Debug.Log($"[HeartPowerManager] Active power: {kvp.Key}, Effect type: {kvp.Value?.GetType().Name}");
-            }
-
-            bool hasMurmuringPaths = activePowers.ContainsKey(HeartPowerType.MurmuringPaths);
-            Debug.Log($"[HeartPowerManager] MurmuringPaths active: {hasMurmuringPaths}");
-
             // Notify any active toggle power effects about the consumption
             if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect))
             {
-                Debug.Log($"[HeartPowerManager] Found MurmuringPaths in activePowers. Effect is null: {effect == null}");
                 if (effect is MurmuringPathsEffect murmuringEffect)
                 {
-                    Debug.Log("[HeartPowerManager] Casting succeeded, calling OnVisitorConsumed on MurmuringPathsEffect");
                     murmuringEffect.OnVisitorConsumed();
-                    Debug.Log("[HeartPowerManager] OnVisitorConsumed call completed");
                 }
-                else
-                {
-                    Debug.LogWarning($"[HeartPowerManager] Effect is not MurmuringPathsEffect! Actual type: {effect?.GetType().Name}");
-                }
-            }
-            else
-            {
-                Debug.Log("[HeartPowerManager] MurmuringPaths NOT found in activePowers dictionary");
             }
         }
 
@@ -574,10 +565,6 @@ namespace FaeMaze.HeartPowers
             {
                 gameController.AddEssence(amount);
 
-                if (debugLog)
-                {
-                }
-
                 // Notify listeners (for UI updates)
                 OnEssenceChanged?.Invoke(CurrentEssence);
             }
@@ -590,10 +577,6 @@ namespace FaeMaze.HeartPowers
         {
             if (gameController != null && gameController.TrySpendEssence(amount))
             {
-                if (debugLog)
-                {
-                }
-
                 // Notify listeners (for UI updates)
                 OnEssenceChanged?.Invoke(CurrentEssence);
                 return true;
@@ -610,10 +593,6 @@ namespace FaeMaze.HeartPowers
         {
             // Dispatch to specific power implementations
             ActivePowerEffect effect = null;
-
-            if (debugLog)
-            {
-            }
 
             switch (powerType)
             {
@@ -654,16 +633,16 @@ namespace FaeMaze.HeartPowers
                     effect = new DevouringMawEffect(this, definition, worldPosition);
                     break;
 
+                case HeartPowerType.Sculpting:
+                    effect = new SculptingEffect(this, definition, worldPosition);
+                    break;
+
                 default:
                     return;
             }
 
             if (effect != null)
             {
-                if (debugLog)
-                {
-                }
-
                 effect.OnStart();
 
                 // Toggle powers use consumption-based expiration, not duration
@@ -673,17 +652,10 @@ namespace FaeMaze.HeartPowers
                 if (effect.Duration > 0 || isTogglePower)
                 {
                     activePowers[powerType] = effect;
-                    Debug.Log($"[HeartPowerManager] Added {powerType} to activePowers. Duration={effect.Duration}, IsToggle={isTogglePower}");
-                    if (debugLog)
-                    {
-                    }
                 }
                 else
                 {
                     // Instant effect, trigger OnEnd immediately
-                    if (debugLog)
-                    {
-                    }
                     effect.OnEnd();
                 }
             }
@@ -746,13 +718,9 @@ namespace FaeMaze.HeartPowers
 
             if (activeVisitors == null || activeVisitors.Count == 0)
             {
-                if (debugLog)
-                {
-                }
                 return;
             }
 
-            int recalculatedCount = 0;
             bool isMurmuringPaths = (powerType == HeartPowerType.MurmuringPaths);
 
             foreach (var visitor in activeVisitors)
@@ -765,19 +733,13 @@ namespace FaeMaze.HeartPowers
                     if (isMurmuringPaths && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking)
                     {
                         visitor.SetLured(true);  // SetLured internally calls RecalculatePath()
-                        recalculatedCount++;
                     }
                     else if (!isMurmuringPaths)
                     {
                         // For other powers, just recalculate paths due to attraction changes
                         visitor.RecalculatePath();
-                        recalculatedCount++;
                     }
                 }
-            }
-
-            if (debugLog)
-            {
             }
         }
 

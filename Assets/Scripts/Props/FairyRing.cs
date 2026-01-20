@@ -111,9 +111,32 @@ namespace FaeMaze.Props
             }
         }
 
+        private void OnDisable()
+        {
+            // Release all visitors fascinated by this ring before it's destroyed
+            ReleaseAllFascinatedVisitors();
+        }
+
         #endregion
 
         #region Visitor Interaction
+
+        /// <summary>
+        /// Releases all visitors currently fascinated by this ring.
+        /// Called when the ring is destroyed or disabled.
+        /// </summary>
+        public void ReleaseAllFascinatedVisitors()
+        {
+            // Find all visitors and release any fascinated by this ring
+            var allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor != null && visitor.CurrentFairyRing == this)
+                {
+                    visitor.EndRingFascination();
+                }
+            }
+        }
 
         /// <summary>
         /// Called when a visitor enters the Fairy Ring.

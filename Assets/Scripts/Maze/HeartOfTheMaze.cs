@@ -259,8 +259,6 @@ namespace FaeMaze.Maze
         {
             if (visitor == null) return;
 
-            Debug.Log($"[HeartOfTheMaze] Consuming visitor: {visitor.name}");
-
             // Track stats
             if (GameStatsTracker.Instance != null)
             {
@@ -272,7 +270,6 @@ namespace FaeMaze.Maze
             {
                 int essence = visitor.GetEssenceReward();
                 GameController.Instance.AddEssence(essence);
-                Debug.Log($"[HeartOfTheMaze] Added {essence} essence");
             }
 
             // Notify HeartPowerManager
@@ -306,15 +303,11 @@ namespace FaeMaze.Maze
                 PositionFromMazeGrid();
             }
 
-            Debug.Log($"[HeartOfTheMaze] Positioned at: {transform.position}");
-
             // THEN: Load prefabs and setup visuals (they will be children at the correct position)
             LoadPrefabs();
             SetupHeartBase();
             SetupGlowLight();
 
-            Debug.Log($"[HeartOfTheMaze] Start complete. HeartBase: {heartBaseInstance != null}, " +
-                      $"BasePrefab: {heartBasePrefab != null}, TonguePrefab: {heartTonguePrefab != null}");
         }
 
         private void Update()
@@ -332,8 +325,6 @@ namespace FaeMaze.Maze
 
             // Ignore if visitor is already being processed or consumed
             if (visitor.State == VisitorControllerBase.VisitorState.Consumed) return;
-
-            Debug.Log($"[HeartOfTheMaze] Visitor entered detection zone: {visitor.name}");
 
             // Add to pending queue if not already tracked
             if (visitor != targetVisitor && !pendingVisitors.Contains(visitor))
@@ -408,7 +399,6 @@ namespace FaeMaze.Maze
                 if (IsGrabColliderTouchingVisitor() && !grabContactMade && tonguePhase == TonguePhase.Touching)
                 {
                     grabContactMade = true;
-                    Debug.Log($"[HeartOfTheMaze] Grab collider touched! Starting continuation curl to wrap around visitor.");
 
                     // Stop the visitor's movement when grab contact is made
                     if (targetVisitor != null)
@@ -426,7 +416,6 @@ namespace FaeMaze.Maze
                 // Complete grab when continuation curl is done (full 360° wrap)
                 if (grabContactMade && reverseCurlProgress >= 1.0f)
                 {
-                    Debug.Log($"[HeartOfTheMaze] Continuation curl complete! Transitioning to pulling.");
                     TransitionToGrabbing();
                 }
                 else if (IsReachColliderTouchingVisitor() && tonguePhase == TonguePhase.Reaching)
@@ -434,7 +423,6 @@ namespace FaeMaze.Maze
                     // Decide curl direction: perpendicular to visitor direction, pick one randomly or based on some logic
                     // For now, use a simple rule: curl left (CCW) if visitor is in upper half, right (CW) if lower
                     curlDirection = (lockedVisitorAngle >= 0 && lockedVisitorAngle < 180) ? 1 : -1;
-                    Debug.Log($"[HeartOfTheMaze] Reach touched visitor, starting curl (direction: {(curlDirection > 0 ? "left/CCW" : "right/CW")})");
                     tonguePhase = TonguePhase.Touching;
                 }
             }
@@ -464,7 +452,6 @@ namespace FaeMaze.Maze
             // Check if tongue is fully below ground (sinking complete)
             if (tonguePhase == TonguePhase.Sinking && tongueZPosition >= TONGUE_START_Z)
             {
-                Debug.Log("[HeartOfTheMaze] Tongue fully retracted - consuming visitor");
                 OnVisitorConsumed(targetVisitor);
                 targetVisitor = null;
                 TransitionToIdle();
@@ -488,7 +475,6 @@ namespace FaeMaze.Maze
                     float tipZ = tongueZPosition - tongueLength;
                     if (tipZ <= TONGUE_LIP_Z)
                     {
-                        Debug.Log($"[HeartOfTheMaze] Tongue emerged, tip at z={tipZ:F2}, starting reach");
                         tonguePhase = TonguePhase.Reaching;
 
                         // Daze the visitor when they see the tongue emerge and bend toward them
@@ -496,7 +482,6 @@ namespace FaeMaze.Maze
                         if (targetVisitor != null)
                         {
                             targetVisitor.OnWitnessMazeGrowth(30f);  // Long daze - tongue will grab before it expires
-                            Debug.Log($"[HeartOfTheMaze] Visitor dazed upon seeing tongue emerge");
                         }
                     }
                     break;
@@ -510,13 +495,6 @@ namespace FaeMaze.Maze
                     tongueExtension += TONGUE_EXTEND_SPEED * dt;
                     tongueExtension = Mathf.Clamp01(tongueExtension);
 
-                    // Debug log extension progress and reach collider position
-                    if (Mathf.FloorToInt(tongueExtension * 10) != Mathf.FloorToInt((tongueExtension - TONGUE_EXTEND_SPEED * dt) * 10))
-                    {
-                        string reachPosStr = reachColliderTransform != null ? reachColliderTransform.position.ToString("F2") : "null";
-                        string visitorPosStr = targetVisitor != null ? targetVisitor.transform.position.ToString("F2") : "null";
-                        Debug.Log($"[HeartOfTheMaze] Reaching: extension={tongueExtension:F2}, tongueZ={tongueZPosition:F2}, reachPos={reachPosStr}, visitorPos={visitorPosStr}");
-                    }
                     break;
 
                 case TonguePhase.Touching:
@@ -538,11 +516,6 @@ namespace FaeMaze.Maze
                         reverseCurlProgress = Mathf.Clamp01(reverseCurlProgress);
                     }
 
-                    // Debug log curl progress
-                    if (Mathf.FloorToInt(grabCurlProgress * 10) != Mathf.FloorToInt((grabCurlProgress - TONGUE_CURL_SPEED * dt) * 10))
-                    {
-                        Debug.Log($"[HeartOfTheMaze] Touching: curlProgress={grabCurlProgress:F2}, reverseCurl={reverseCurlProgress:F2}, tongueZ={tongueZPosition:F2}");
-                    }
                     break;
 
                 case TonguePhase.Pulling:
@@ -563,16 +536,9 @@ namespace FaeMaze.Maze
                     // When this reaches TONGUE_LIP_Z, the grab bone is at the lip level
                     float grabBoneZPull = tongueZPosition - (grabBoneIndexPull * boneSpacingPull);
 
-                    // Debug log retraction progress
-                    if (Time.frameCount % 30 == 0)
-                    {
-                        Debug.Log($"[HeartOfTheMaze] Pulling: tongueZ={tongueZPosition:F2}, grabBoneZ={grabBoneZPull:F2}, lipZ={TONGUE_LIP_Z:F2}");
-                    }
-
                     // When the grab bone reaches the lip level, start sinking with curl rotation
                     if (grabBoneZPull >= TONGUE_LIP_Z)
                     {
-                        Debug.Log("[HeartOfTheMaze] Grab bone reached lip, starting sink rotation");
                         // Freeze the lip bone index now so the curl shape stays stable during sinking
                         FreezeCurrentLipBoneIndex();
                         tonguePhase = TonguePhase.Sinking;
@@ -588,12 +554,6 @@ namespace FaeMaze.Maze
                     // This happens over a short duration as the tongue sinks
                     sinkingRotationProgress += TONGUE_CURL_SPEED * dt;
                     sinkingRotationProgress = Mathf.Clamp01(sinkingRotationProgress);
-
-                    // Debug log sinking progress periodically
-                    if (Time.frameCount % 30 == 0)
-                    {
-                        Debug.Log($"[HeartOfTheMaze] Sinking: tongueZ={tongueZPosition:F2}, rotation={sinkingRotationProgress:F2}");
-                    }
                     break;
             }
 
@@ -608,7 +568,6 @@ namespace FaeMaze.Maze
 
         private void TransitionToIdle()
         {
-            Debug.Log("[HeartOfTheMaze] Transition to Idle");
             currentState = HeartState.Idle;
             targetVisitor = null;
 
@@ -652,7 +611,6 @@ namespace FaeMaze.Maze
 
         private void TransitionToReaching()
         {
-            Debug.Log($"[HeartOfTheMaze] Transition to Reaching - targeting {targetVisitor.name}");
             currentState = HeartState.Reaching;
 
             // Initialize tongue state
@@ -667,7 +625,6 @@ namespace FaeMaze.Maze
             Vector2 visitorPos2D = new Vector2(targetVisitor.transform.position.x, targetVisitor.transform.position.y);
             Vector2 dirToVisitor = (visitorPos2D - heartPos2D).normalized;
             lockedVisitorAngle = Mathf.Atan2(dirToVisitor.y, dirToVisitor.x) * Mathf.Rad2Deg;
-            Debug.Log($"[HeartOfTheMaze] Locked visitor angle: {lockedVisitorAngle:F1}°");
 
             // Spawn tongue
             SpawnTongue();
@@ -675,7 +632,6 @@ namespace FaeMaze.Maze
 
         private void TransitionToGrabbing()
         {
-            Debug.Log($"[HeartOfTheMaze] Transition to Grabbing - grabbing {targetVisitor.name}");
             currentState = HeartState.Grabbing;
 
             // Tongue phase is now Pulling - starts immediately after reverse curl completes
@@ -713,7 +669,6 @@ namespace FaeMaze.Maze
                 if (unrotatedBoneZ > lipWorldZ)
                 {
                     frozenLipBoneIndex = i;
-                    Debug.Log($"[HeartOfTheMaze] Froze lip bone index at {frozenLipBoneIndex}");
                     return;
                 }
             }
@@ -752,8 +707,6 @@ namespace FaeMaze.Maze
             localPos.z = tongueZPosition;
             heartTongueInstance.transform.localPosition = localPos;
 
-            Debug.Log($"[HeartOfTheMaze] HeartTongue instantiated at z={tongueZPosition}, scale: {heartTongueInstance.transform.localScale}");
-
             // Remove any Light components from the tongue model (spotlight etc)
             RemoveTongueLights();
 
@@ -771,8 +724,6 @@ namespace FaeMaze.Maze
 
             // Apply initial bone state (all bones at rest, tongue below ground)
             ApplyTongueBoneState();
-
-            Debug.Log($"[HeartOfTheMaze] Tongue spawned - bones: {tongueBones?.Length ?? 0}, length: {tongueLength:F2}, reach: {reachColliderTransform != null}, grab: {grabColliderTransform != null}");
         }
 
         private void CalculateTongueLength()
@@ -795,8 +746,6 @@ namespace FaeMaze.Maze
                 float avgBoneSpacing = tongueLength / (tongueBones.Length - 1);
                 tongueLength += avgBoneSpacing;
             }
-
-            Debug.Log($"[HeartOfTheMaze] Calculated tongue length: {tongueLength:F2} (world-space, {tongueBones.Length} bones)");
         }
 
         private void FindTongueBones()
@@ -811,8 +760,6 @@ namespace FaeMaze.Maze
                 // Use bones from SkinnedMeshRenderer - these are the actual bones that deform the mesh
                 tongueBones = tongueSkinnedRenderer.bones;
                 tongueArmatureRoot = tongueSkinnedRenderer.rootBone;
-
-                Debug.Log($"[HeartOfTheMaze] Found SkinnedMeshRenderer with {tongueBones.Length} bones, root: {tongueArmatureRoot?.name ?? "null"}");
             }
             else
             {
@@ -820,11 +767,8 @@ namespace FaeMaze.Maze
                 var allTransforms = heartTongueInstance.GetComponentsInChildren<Transform>();
                 var boneList = new List<Transform>();
 
-                Debug.Log("[HeartOfTheMaze] Tongue hierarchy (no SkinnedMeshRenderer bones found):");
                 foreach (var t in allTransforms)
                 {
-                    Debug.Log($"  - {t.name} (parent: {(t.parent != null ? t.parent.name : "none")}, localPos: {t.localPosition})");
-
                     // Common bone naming patterns
                     string nameLower = t.name.ToLower();
                     if (nameLower.Contains("bone") || nameLower.Contains("joint") ||
@@ -850,18 +794,9 @@ namespace FaeMaze.Maze
                     {
                         boneRestPositions[i] = tongueBones[i].localPosition;
                         boneRestRotations[i] = tongueBones[i].localRotation;
-                        // Only log first 5 and last 5 bones to avoid spam, but include rotation info
-                        if (i < 5 || i >= tongueBones.Length - 5)
-                        {
-                            Vector3 euler = boneRestRotations[i].eulerAngles;
-                            Vector3 worldPos = tongueBones[i].position;
-                            Debug.Log($"[HeartOfTheMaze] Bone {i}: '{tongueBones[i].name}' worldPos={worldPos}, localRot=({euler.x:F1}, {euler.y:F1}, {euler.z:F1})");
-                        }
                     }
                 }
             }
-
-            Debug.Log($"[HeartOfTheMaze] Total bones found: {tongueBones?.Length ?? 0}");
         }
 
         private void FindTongueColliders()
@@ -886,7 +821,6 @@ namespace FaeMaze.Maze
             // If colliders weren't found in prefab, create them dynamically
             if (reachColliderTransform == null)
             {
-                Debug.Log("[HeartOfTheMaze] Creating reach collider dynamically (not found in prefab)");
                 GameObject reachObj = new GameObject("reach");
                 reachObj.transform.SetParent(heartTongueInstance.transform);
                 reachObj.transform.localPosition = Vector3.zero;
@@ -898,7 +832,6 @@ namespace FaeMaze.Maze
 
             if (grabColliderTransform == null)
             {
-                Debug.Log("[HeartOfTheMaze] Creating grab collider dynamically (not found in prefab)");
                 GameObject grabObj = new GameObject("grab");
                 grabObj.transform.SetParent(heartTongueInstance.transform);
                 grabObj.transform.localPosition = Vector3.zero;
@@ -923,8 +856,6 @@ namespace FaeMaze.Maze
         /// </summary>
         private void ReparentCollidersToArmature()
         {
-            Debug.Log($"[HeartOfTheMaze] ReparentCollidersToArmature called. Bones: {tongueBones?.Length ?? 0}, reach: {reachColliderTransform != null}, grab: {grabColliderTransform != null}");
-
             if (tongueBones == null || tongueBones.Length == 0)
             {
                 Debug.LogWarning("[HeartOfTheMaze] Cannot reparent colliders - no bones found");
@@ -934,12 +865,10 @@ namespace FaeMaze.Maze
             // Use bone indices directly - model has Bone_000 through Bone_539
             // Last bone (tip) for reach collider
             Transform lastBone = tongueBones[tongueBones.Length - 1];
-            Debug.Log($"[HeartOfTheMaze] Using last bone (tip): {lastBone?.name} (index {tongueBones.Length - 1})");
 
             // Grab bone at GRAB_BONE_OFFSET from tip (~25% from end)
             int grabBoneIndex = Mathf.Max(0, tongueBones.Length - 1 - GRAB_BONE_OFFSET);
             Transform grabBone = tongueBones[grabBoneIndex];
-            Debug.Log($"[HeartOfTheMaze] Using grab bone: {grabBone?.name} (index {grabBoneIndex}, offset {GRAB_BONE_OFFSET} from tip)");
 
             // Reparent reach collider to last bone (tip)
             if (reachColliderTransform != null && lastBone != null)
@@ -949,7 +878,6 @@ namespace FaeMaze.Maze
                 reachColliderTransform.localPosition = new Vector3(1.0f, 0, 0);  // Far end of bone along +X
                 reachColliderTransform.localRotation = Quaternion.identity;
                 reachColliderTransform.localScale = Vector3.one;
-                Debug.Log($"[HeartOfTheMaze] Reach collider reparented to {lastBone.name} at localPos (1, 0, 0)");
             }
             else
             {
@@ -964,7 +892,6 @@ namespace FaeMaze.Maze
                 grabColliderTransform.localPosition = new Vector3(0, 0, 0);  // Root end of bone
                 grabColliderTransform.localRotation = Quaternion.identity;
                 grabColliderTransform.localScale = Vector3.one;
-                Debug.Log($"[HeartOfTheMaze] Grab collider reparented to {grabBone.name} at localPos (0, 0, 0)");
             }
             else
             {
@@ -982,7 +909,6 @@ namespace FaeMaze.Maze
             {
                 reachCollider.isTrigger = true;
                 reachCollider.radius = reachTriggerDistance;
-                Debug.Log($"[HeartOfTheMaze] Reach collider radius set to {reachCollider.radius:F2}");
 
                 // Add trigger handler component
                 var handler = reachColliderTransform.gameObject.AddComponent<TongueColliderHandler>();
@@ -1000,7 +926,6 @@ namespace FaeMaze.Maze
             {
                 grabCollider.isTrigger = true;
                 grabCollider.radius = grabTriggerDistance;
-                Debug.Log($"[HeartOfTheMaze] Grab collider radius set to {grabCollider.radius:F2}");
 
                 // Add trigger handler component
                 var handler = grabColliderTransform.gameObject.AddComponent<TongueColliderHandler>();
@@ -1036,7 +961,6 @@ namespace FaeMaze.Maze
 
             // Now check what the world scale would be
             Vector3 currentLossyScale = sphere.transform.lossyScale;
-            Debug.Log($"[HeartOfTheMaze] AddDebugSphere: sphere lossyScale at scale 1 = {currentLossyScale}");
 
             // Target world diameter: 0.1 units (small debug marker)
             // Current world diameter at localScale 1 = max of lossyScale (since sphere diameter = 1 at scale 1)
@@ -1045,8 +969,6 @@ namespace FaeMaze.Maze
 
             // Scale down by the ratio
             float scaleFactor = targetWorldDiameter / Mathf.Max(0.001f, currentWorldDiameter);
-
-            Debug.Log($"[HeartOfTheMaze] AddDebugSphere: currentWorldDiameter={currentWorldDiameter}, targetWorldDiameter={targetWorldDiameter}, scaleFactor={scaleFactor}");
 
             sphere.transform.localScale = Vector3.one * scaleFactor;
 
@@ -1109,18 +1031,6 @@ namespace FaeMaze.Maze
                 grabColliderTransform.position = grabBone.position;
             }
 
-            // Debug logging
-            if (Time.frameCount % 30 == 0 && targetVisitor != null)
-            {
-                Vector3 visitorPos = targetVisitor.transform.position;
-                Vector3 tipPos = tipBone != null ? tipBone.position : Vector3.zero;
-                Vector3 grabPos = grabBone != null ? grabBone.position : Vector3.zero;
-                float reachToVisitorDist = Vector3.Distance(tipPos, visitorPos);
-                float grabToVisitorDist = Vector3.Distance(grabPos, visitorPos);
-                float reachToGrabDist = Vector3.Distance(tipPos, grabPos);
-                Debug.Log($"[HeartOfTheMaze] BonePos: tip[{tipBoneIndex}]={tipPos:F2}, grab[{grabBoneIndex}]={grabPos:F2}, " +
-                          $"visitor={visitorPos:F2}, reachToVisitor={reachToVisitorDist:F2}, grabToVisitor={grabToVisitorDist:F2}, reachToGrab={reachToGrabDist:F2}");
-            }
         }
 
         /// <summary>
@@ -1131,7 +1041,6 @@ namespace FaeMaze.Maze
             if (visitor == targetVisitor)
             {
                 reachTouchedVisitor = true;
-                Debug.Log($"[HeartOfTheMaze] Reach collider touched target visitor!");
             }
         }
 
@@ -1143,7 +1052,6 @@ namespace FaeMaze.Maze
             if (visitor == targetVisitor)
             {
                 grabTouchedVisitor = true;
-                Debug.Log($"[HeartOfTheMaze] Grab collider touched target visitor!");
             }
         }
 
@@ -1157,7 +1065,6 @@ namespace FaeMaze.Maze
             Light[] lights = heartTongueInstance.GetComponentsInChildren<Light>();
             foreach (var light in lights)
             {
-                Debug.Log($"[HeartOfTheMaze] Removing light '{light.name}' from tongue model");
                 Destroy(light);
             }
         }
@@ -1400,7 +1307,6 @@ namespace FaeMaze.Maze
                     {
                         LockCurlBoneRotations(grabBoneIndex, boneCount);
                         lastLipBoneIndexForCurlLock = lipBoneIndex;
-                        Debug.Log($"[HeartOfTheMaze] Locked curl rotations at lipBoneIndex={lipBoneIndex}, grabBoneIndex={grabBoneIndex}");
                     }
 
                     // If curl rotations are locked, use them directly
@@ -1505,11 +1411,6 @@ namespace FaeMaze.Maze
                 tongueBones[i].localRotation = newLocalRot;
             }
 
-            // Debug periodically
-            if (tongueExtension > 0.1f && tongueExtension < 0.15f)
-            {
-                Debug.Log($"[HeartOfTheMaze] ApplyTongueBoneState: phase={tonguePhase}, extension={tongueExtension:F2}, lipBoneIndex={lipBoneIndex}, targetDir={targetDirWorld}");
-            }
         }
 
         /// <summary>
@@ -1533,7 +1434,6 @@ namespace FaeMaze.Maze
                 {
                     // Store the current local rotation
                     lockedCurlRotations[i] = tongueBones[boneIndex].localRotation;
-                    Debug.Log($"[HeartOfTheMaze] Locked curl bone {boneIndex} ({tongueBones[boneIndex].name}): localRot={lockedCurlRotations[i].eulerAngles}");
                 }
                 else
                 {
@@ -1542,7 +1442,6 @@ namespace FaeMaze.Maze
             }
 
             curlRotationsLocked = true;
-            Debug.Log($"[HeartOfTheMaze] Curl rotations locked: {lockedBoneCount} bones from pivot index {pivotBoneIndex}");
         }
 
         private bool IsReachColliderTouchingVisitor()
@@ -1592,11 +1491,6 @@ namespace FaeMaze.Maze
                 }
             }
 
-            // Debug log periodically
-            if (Time.frameCount % 30 == 0)
-            {
-                Debug.Log($"[HeartOfTheMaze] Visitor tracking midpoint: grab={grabPos:F2}, reach={reachPos:F2}, midpoint={midpoint:F2}");
-            }
         }
 
         #endregion
@@ -1655,20 +1549,16 @@ namespace FaeMaze.Maze
 
         private void LoadPrefabs()
         {
-            Debug.Log($"[HeartOfTheMaze] LoadPrefabs called. Base already set: {heartBasePrefab != null}, Tongue already set: {heartTonguePrefab != null}");
-
 #if UNITY_EDITOR
             if (heartBasePrefab == null)
             {
                 heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
                     "Assets/Prefabs/Tile/heartbase.prefab");
-                Debug.Log($"[HeartOfTheMaze] Loaded heartbase via AssetDatabase: {heartBasePrefab != null}");
             }
             if (heartTonguePrefab == null)
             {
                 heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
                     "Assets/Prefabs/Tile/heart tongue.prefab");
-                Debug.Log($"[HeartOfTheMaze] Loaded heart tongue via AssetDatabase: {heartTonguePrefab != null}");
             }
 #endif
 
@@ -1695,8 +1585,6 @@ namespace FaeMaze.Maze
             heartBaseInstance.name = "HeartBase";
             // The prefab has z=0.7 with scale=0.1, which positions it correctly at ground level
             // Do NOT override localPosition - the prefab's position is already correct
-
-            Debug.Log($"[HeartOfTheMaze] HeartBase instantiated with scale: {heartBaseInstance.transform.localScale}");
 
             // Collect materials for pulsing (skip material replacement for GLB models)
             // CollectMaterials(heartBaseInstance); // Disabled - GLB uses its own shader
