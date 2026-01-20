@@ -568,7 +568,7 @@ namespace FaeMaze.Cameras
                     // Positive scroll = increase angle (move toward top-down)
                     // Negative scroll = decrease angle (move toward level)
                     focalViewAngle += scroll * angleChangeSpeed;
-                    focalViewAngle = Mathf.Clamp(focalViewAngle, 37f, 89f);
+                    focalViewAngle = Mathf.Clamp(focalViewAngle, 40f, 85f); // 40°-85° range
                 }
                 return;
             }

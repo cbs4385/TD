@@ -919,8 +919,6 @@ namespace FaeMaze.Maze
                 rb.isKinematic = true;
                 rb.useGravity = false;
 
-                // Add debug visualization sphere (cyan for reach)
-                AddDebugSphere(reachColliderTransform.gameObject, reachTriggerDistance, Color.cyan);
             }
             if (grabCollider != null)
             {
@@ -936,66 +934,6 @@ namespace FaeMaze.Maze
                 rb.isKinematic = true;
                 rb.useGravity = false;
 
-                // Add debug visualization sphere (magenta for grab)
-                AddDebugSphere(grabColliderTransform.gameObject, grabTriggerDistance, Color.magenta);
-            }
-        }
-
-        /// <summary>
-        /// Adds a debug visualization sphere mesh to a collider GameObject.
-        /// </summary>
-        private void AddDebugSphere(GameObject parent, float radius, Color color)
-        {
-            // Create sphere primitive
-            // Unity's sphere primitive has diameter 1 (radius 0.5), so to get radius R we need scale = R * 2
-            // We want a small debug visual - approximately 0.1 world units diameter
-
-            GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            sphere.name = "DebugSphere";
-
-            // Parent first, then compute scale based on the resulting lossy scale
-            sphere.transform.SetParent(parent.transform, false);
-            sphere.transform.localPosition = Vector3.zero;
-            sphere.transform.localRotation = Quaternion.identity;
-            sphere.transform.localScale = Vector3.one;  // Start with identity
-
-            // Now check what the world scale would be
-            Vector3 currentLossyScale = sphere.transform.lossyScale;
-
-            // Target world diameter: 0.1 units (small debug marker)
-            // Current world diameter at localScale 1 = max of lossyScale (since sphere diameter = 1 at scale 1)
-            float currentWorldDiameter = Mathf.Max(currentLossyScale.x, Mathf.Max(currentLossyScale.y, currentLossyScale.z));
-            float targetWorldDiameter = 0.1f;
-
-            // Scale down by the ratio
-            float scaleFactor = targetWorldDiameter / Mathf.Max(0.001f, currentWorldDiameter);
-
-            sphere.transform.localScale = Vector3.one * scaleFactor;
-
-            // Remove the collider from the debug sphere (we only want the visual)
-            var sphereCollider = sphere.GetComponent<SphereCollider>();
-            if (sphereCollider != null)
-            {
-                Destroy(sphereCollider);
-            }
-
-            // Set up transparent material
-            var renderer = sphere.GetComponent<MeshRenderer>();
-            if (renderer != null)
-            {
-                Material mat = new Material(Shader.Find("Standard"));
-                mat.SetFloat("_Mode", 3);  // Transparent mode
-                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                mat.SetInt("_ZWrite", 0);
-                mat.DisableKeyword("_ALPHATEST_ON");
-                mat.EnableKeyword("_ALPHABLEND_ON");
-                mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                mat.renderQueue = 3000;
-
-                Color transparentColor = new Color(color.r, color.g, color.b, 0.5f);
-                mat.color = transparentColor;
-                renderer.material = mat;
             }
         }
 

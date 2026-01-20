@@ -338,8 +338,6 @@ namespace FaeMaze.HeartPowers
             System.IO.File.WriteAllBytes(fullPath, bytes);
 
             Object.Destroy(screenshot);
-
-            Debug.Log($"[Screenshot] Saved to: {fullPath}");
         }
 
         #endregion

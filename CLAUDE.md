@@ -563,7 +563,6 @@ The tongue has 540 bones (indices 0-539), named Bone_000 through Bone_539:
 - Visitor dazed when tongue emerges ✓
 - **Initial curl works** - 180° horizontal curl in XY plane (parallel to ground) ✓
 - Curl direction determined by visitor angle (CCW if upper half, CW if lower) ✓
-- Debug spheres visualize reach (cyan) and grab (magenta) colliders ✓
 - Collider positions update using bone.position (tracks deformed mesh) ✓
 - Grab hold timer delays pulling after grab contact ✓
 - **Pulling phase** - Horizontal retraction by reversing reaching motion ✓
@@ -660,12 +659,9 @@ else if (curlRotationsLocked && curlIndex >= 0)
 
 ---
 
-### In Progress - HeartwardGrasp (Heart Power 2)
+### Completed - HeartwardGrasp (Heart Power 2)
 
-**Current State**: Core grab/transport/push sequence is fully implemented and working. Animation plays smoothly through all phases. Push phase now dynamically extends until visitor is on valid walkable area (not in walls).
-
-**Remaining issue:**
-- [ ] **Visitor despawns upon release** - Likely related to dazed state logic. When `OnWitnessMazeGrowth()` is called at the end of the release phase, the visitor despawns instead of becoming dazed. Investigate visitor daze/despawn logic in `VisitorControllerBase.cs`.
+**Status**: Fully implemented and working. Core grab/transport/push sequence complete. Animation plays smoothly through all phases. Push phase dynamically extends until visitor is on valid walkable area.
 
 **What works:**
 - Grab sequence: Idle → Reaching → Grabbing → Pulling → Transporting ✓
@@ -753,7 +749,7 @@ When a prop is changed/removed:
 - [ ] Synchronize, consolidate, and rationalize options scene
 - [ ] Clean up game over scene
 - [ ] Improve player UI layout
-- [ ] Replace the focus point indicator
+- [x] Replace the focus point indicator - now uses conic section with spiraling energy bolts
 
 ### Game State
 - [ ] Enable game over state
@@ -790,3 +786,25 @@ When a prop is changed/removed:
 - `FaeLantern.cs` - OnDisable with ReleaseAllFascinatedVisitors
 - `FairyRing.cs` - OnDisable with ReleaseAllFascinatedVisitors
 - `LanternGlow.cs` - Edit mode material leak fix
+
+6. **Focal Point Indicator Replacement** (FocalPointGlow.cs):
+   - Replaced pink cylinder with a conic section surface following z = -1/(10*r^1.5)
+   - Energy bolts spiral along the cone surface with jagged lightning appearance
+   - Colors alternate between dark red and purple (previously blue/purple)
+   - Dynamic fog occlusion: when over walkable area, extends to ground (z=0); when over fog, stops at fog level (z=-1)
+   - Points above fog cutoff collapse to previous valid point (bolt disappears into fog, no pooling)
+   - Bolts and branches regenerate jitter every 0.08s for flickering effect
+
+7. **Heart Tongue Debug Visualization Removed** (HeartOfTheMaze.cs):
+   - Removed `AddDebugSphere()` method entirely
+   - Removed cyan (reach) and magenta (grab) debug sphere meshes
+   - Colliders remain functional (SphereCollider triggers still work for detection)
+
+### Key Constants (FocalPointGlow.cs)
+| Constant | Value | Description |
+|----------|-------|-------------|
+| GROUND_Z_LEVEL | 0 | Z cutoff when over walkable area |
+| FOG_Z_LEVEL | -1 | Z cutoff when over fog |
+| BOLT_REGENERATE_INTERVAL | 0.08f | Seconds between jitter regeneration |
+| deepPurple | (0.4, 0.1, 0.6) | Purple bolt color |
+| darkRed | (0.6, 0.1, 0.15) | Dark red bolt color |
