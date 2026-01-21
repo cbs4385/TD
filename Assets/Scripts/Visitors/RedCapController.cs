@@ -130,6 +130,11 @@ namespace FaeMaze.Visitors
         // Starting essence reference (for flee threshold)
         private int startingEssence;
 
+        // Path recalculation tracking
+        private float pathRecalculationTimer;
+        private const float PATH_RECALCULATION_INTERVAL = 0.25f;
+        private Vector3 lastTargetPosition;
+
         #endregion
 
         #region Properties
@@ -275,12 +280,17 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Updates target selection at regular intervals.
         /// Finds the closest visitor or switches to a closer one.
+        /// Also recalculates path if target has moved significantly.
         /// </summary>
         private void UpdateTargetSelection()
         {
             targetUpdateTimer -= Time.deltaTime;
+            pathRecalculationTimer -= Time.deltaTime;
 
-            if (targetUpdateTimer <= 0f)
+            bool needsTargetUpdate = targetUpdateTimer <= 0f;
+            bool needsPathRecalculation = pathRecalculationTimer <= 0f;
+
+            if (needsTargetUpdate)
             {
                 targetUpdateTimer = targetUpdateInterval;
 
@@ -317,6 +327,19 @@ namespace FaeMaze.Visitors
                 {
                     targetVisitor = closestVisitor;
                     RecalculatePathToTarget();
+                    needsPathRecalculation = false; // Already recalculated
+                }
+            }
+
+            // Recalculate path if target has moved significantly
+            if (needsPathRecalculation && targetVisitor != null)
+            {
+                pathRecalculationTimer = PATH_RECALCULATION_INTERVAL;
+
+                float targetMovement = Vector3.Distance(targetVisitor.transform.position, lastTargetPosition);
+                if (targetMovement > 1.0f) // Target moved more than 1 unit
+                {
+                    RecalculatePathToTarget();
                 }
             }
         }
@@ -332,139 +355,209 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Use world-space pathfinding
+            // Store target position for movement tracking
+            lastTargetPosition = targetVisitor.transform.position;
+
+            // Use tile-based world-space pathfinding (same as visitors)
             worldPath = BuildWorldPath(transform.position, targetVisitor.transform.position);
             currentWaypointIndex = 0;
         }
 
         /// <summary>
-        /// Builds a world-space path from start to end using graph edges.
-        /// Returns a list of world positions to traverse.
+        /// Builds a world-space path from start to end using A* through walkable tiles.
+        /// Uses actual tile positions from WorldSpaceMazeData to guarantee paths stay on walkable terrain.
+        /// This is the same pathfinding approach used by visitors.
         /// </summary>
         private List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
-            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
-                // Fallback: direct path
-                return new List<Vector3> { end };
+                // No pathfinding data available - return empty list (no fallback to direct path)
+                return new List<Vector3>();
             }
 
-            var graphState = mazeGridBehaviour.ForestMapState;
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
             var result = new List<Vector3>();
 
-            // Find nearest node to start
-            int startNodeIndex = FindNearestNodeIndex(graphState, new Vector2(start.x, start.y));
-            int endNodeIndex = FindNearestNodeIndex(graphState, new Vector2(end.x, end.y));
+            Vector2 startPos2D = new Vector2(start.x, start.y);
+            Vector2 endPos2D = new Vector2(end.x, end.y);
 
-            if (startNodeIndex < 0 || endNodeIndex < 0)
+            // Find nearest walkable tile to start position
+            var startTile = FindNearestWalkableTile(mazeData, startPos2D);
+            if (startTile == null)
             {
-                // Fallback: direct path
-                return new List<Vector3> { end };
+                return new List<Vector3>();
             }
 
-            // BFS to find path through nodes
-            var nodePath = FindNodePath(graphState, startNodeIndex, endNodeIndex);
-
-            if (nodePath == null || nodePath.Count == 0)
+            // Find nearest walkable tile to end position
+            var endTile = FindNearestWalkableTile(mazeData, endPos2D);
+            if (endTile == null)
             {
-                // Fallback: direct path
-                return new List<Vector3> { end };
+                return new List<Vector3>();
             }
 
-            // Convert node path to world positions following edge polylines
-            for (int i = 0; i < nodePath.Count - 1; i++)
-            {
-                int fromNode = nodePath[i];
-                int toNode = nodePath[i + 1];
+            // A* through walkable tiles
+            var tilePath = FindTilePath(mazeData, startTile, endTile);
 
-                // Find edge between these nodes
-                var edgePoints = GetEdgePoints(graphState, fromNode, toNode);
-                if (edgePoints != null)
-                {
-                    result.AddRange(edgePoints);
-                }
+            if (tilePath == null || tilePath.Count == 0)
+            {
+                // No valid path found - return empty list
+                return new List<Vector3>();
             }
 
-            // Add final destination
-            result.Add(end);
+            // Convert tile path to world positions
+            // Add current position first if close to start tile
+            float distToStartTile = Vector2.Distance(startPos2D, startTile.Position);
+            if (distToStartTile < 1.5f)
+            {
+                result.Add(start);
+            }
+
+            // Add all tile positions
+            foreach (var tile in tilePath)
+            {
+                result.Add(new Vector3(tile.Position.x, tile.Position.y, start.z));
+            }
+
+            // Add final destination if close to end tile
+            float distFromLastTile = Vector2.Distance(endPos2D, endTile.Position);
+            if (distFromLastTile > 0.1f && distFromLastTile < 1.5f)
+            {
+                result.Add(end);
+            }
 
             return result;
         }
 
         /// <summary>
-        /// Finds the nearest node index to a world position.
+        /// Finds the nearest walkable tile to a position.
         /// </summary>
-        private int FindNearestNodeIndex(PlanarForestMazeGenerator.ForestMapState graphState, Vector2 worldPos)
+        private WorldSpaceTile FindNearestWalkableTile(WorldSpaceMazeData mazeData, Vector2 position)
         {
-            if (graphState.Nodes == null || graphState.Nodes.Count == 0)
-            {
-                return -1;
-            }
+            float searchRadius = 5f;
+            float minDist = float.MaxValue;
+            WorldSpaceTile nearest = null;
 
-            int nearestIndex = -1;
-            float nearestDist = float.MaxValue;
-
-            for (int i = 0; i < graphState.Nodes.Count; i++)
+            // Expand search radius if needed
+            for (int attempt = 0; attempt < 3 && nearest == null; attempt++)
             {
-                var node = graphState.Nodes[i];
-                float dist = Vector2.Distance(worldPos, node.Position);
-                if (dist < nearestDist)
+                var nearbyTiles = mazeData.GetTilesNear(position, searchRadius);
+                foreach (var tile in nearbyTiles)
                 {
-                    nearestDist = dist;
-                    nearestIndex = i;
+                    if (!tile.Walkable) continue;
+
+                    float dist = Vector2.Distance(position, tile.Position);
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        nearest = tile;
+                    }
                 }
+                searchRadius *= 2f;
             }
 
-            return nearestIndex;
+            return nearest;
         }
 
         /// <summary>
-        /// BFS to find path through graph nodes.
+        /// Finds a path through walkable tiles using A* algorithm.
+        /// Uses Euclidean distance as heuristic to prefer geometrically shorter paths.
         /// </summary>
-        private List<int> FindNodePath(PlanarForestMazeGenerator.ForestMapState graphState, int startIndex, int endIndex)
+        private List<WorldSpaceTile> FindTilePath(WorldSpaceMazeData mazeData,
+            WorldSpaceTile startTile, WorldSpaceTile endTile)
         {
-            if (startIndex == endIndex)
+            if (startTile == endTile)
             {
-                return new List<int> { startIndex };
+                return new List<WorldSpaceTile> { startTile };
             }
 
-            var visited = new HashSet<int>();
-            var queue = new Queue<List<int>>();
-            queue.Enqueue(new List<int> { startIndex });
-            visited.Add(startIndex);
+            // A* algorithm using distance-based costs
+            var gScore = new Dictionary<WorldSpaceTile, float>();
+            var fScore = new Dictionary<WorldSpaceTile, float>();
+            var parent = new Dictionary<WorldSpaceTile, WorldSpaceTile>();
+            var closedSet = new HashSet<WorldSpaceTile>();
+            var openSet = new List<WorldSpaceTile>();
 
-            while (queue.Count > 0)
+            gScore[startTile] = 0f;
+            fScore[startTile] = Vector2.Distance(startTile.Position, endTile.Position);
+            openSet.Add(startTile);
+            parent[startTile] = null;
+
+            // Tiles are placed at ~0.5 unit intervals along curves and 1.0 in nodes
+            float neighborRadius = mazeData.TileSize * 1.42f;
+
+            int iterations = 0;
+            int maxIterations = 50000;
+
+            while (openSet.Count > 0 && iterations < maxIterations)
             {
-                var currentPath = queue.Dequeue();
-                int currentNode = currentPath[currentPath.Count - 1];
+                iterations++;
 
-                // Get neighbors from edges
-                foreach (var edge in graphState.Edges)
+                // Find node with lowest fScore in open set
+                WorldSpaceTile current = null;
+                float lowestF = float.MaxValue;
+                foreach (var tile in openSet)
                 {
-                    if (edge.Partial || !edge.NodeB.HasValue)
+                    float f = fScore.TryGetValue(tile, out float fs) ? fs : float.MaxValue;
+                    if (f < lowestF)
+                    {
+                        lowestF = f;
+                        current = tile;
+                    }
+                }
+
+                if (current == null) break;
+
+                // Check if reached destination
+                float distToEnd = Vector2.Distance(current.Position, endTile.Position);
+                if (distToEnd < mazeData.TileSize * 0.5f || current == endTile)
+                {
+                    // Reconstruct path
+                    var path = new List<WorldSpaceTile>();
+                    var node = current;
+                    while (node != null)
+                    {
+                        path.Add(node);
+                        parent.TryGetValue(node, out node);
+                    }
+                    path.Reverse();
+                    return path;
+                }
+
+                openSet.Remove(current);
+                closedSet.Add(current);
+
+                // Get neighboring walkable tiles
+                var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
+                float currentG = gScore.TryGetValue(current, out float cg) ? cg : float.MaxValue;
+
+                foreach (var neighbor in neighbors)
+                {
+                    if (!neighbor.Walkable) continue;
+                    if (closedSet.Contains(neighbor)) continue;
+
+                    // Must be within neighbor radius
+                    float stepDist = Vector2.Distance(current.Position, neighbor.Position);
+                    if (stepDist > neighborRadius) continue;
+
+                    // Topology check: verify tiles are connected through graph structure
+                    if (!mazeData.AreTilesConnected(current, neighbor))
                         continue;
 
-                    int neighborIndex = -1;
-                    if (edge.NodeA == currentNode && !visited.Contains(edge.NodeB.Value))
-                    {
-                        neighborIndex = edge.NodeB.Value;
-                    }
-                    else if (edge.NodeB.Value == currentNode && !visited.Contains(edge.NodeA))
-                    {
-                        neighborIndex = edge.NodeA;
-                    }
+                    // Calculate tentative gScore
+                    float tentativeG = currentG + stepDist;
+                    float neighborG = gScore.TryGetValue(neighbor, out float ng) ? ng : float.MaxValue;
 
-                    if (neighborIndex >= 0)
+                    if (tentativeG < neighborG)
                     {
-                        var newPath = new List<int>(currentPath) { neighborIndex };
+                        parent[neighbor] = current;
+                        gScore[neighbor] = tentativeG;
+                        fScore[neighbor] = tentativeG + Vector2.Distance(neighbor.Position, endTile.Position);
 
-                        if (neighborIndex == endIndex)
+                        if (!openSet.Contains(neighbor))
                         {
-                            return newPath;
+                            openSet.Add(neighbor);
                         }
-
-                        visited.Add(neighborIndex);
-                        queue.Enqueue(newPath);
                     }
                 }
             }
@@ -473,59 +566,8 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Gets the world-space points along an edge between two nodes.
-        /// Positions are stored directly in world space - just needs Vector2 to Vector3 conversion.
-        /// </summary>
-        private List<Vector3> GetEdgePoints(PlanarForestMazeGenerator.ForestMapState graphState, int fromNode, int toNode)
-        {
-            foreach (var edge in graphState.Edges)
-            {
-                if (edge.Partial || !edge.NodeB.HasValue)
-                    continue;
-
-                bool matchesForward = edge.NodeA == fromNode && edge.NodeB.Value == toNode;
-                bool matchesReverse = edge.NodeA == toNode && edge.NodeB.Value == fromNode;
-
-                if (matchesForward || matchesReverse)
-                {
-                    var points = new List<Vector3>();
-
-                    if (edge.PolylinePoints != null && edge.PolylinePoints.Count > 0)
-                    {
-                        // Polyline points are already in world space
-                        if (matchesReverse)
-                        {
-                            // Reverse the order for traversal
-                            for (int i = edge.PolylinePoints.Count - 1; i >= 0; i--)
-                            {
-                                var pt = edge.PolylinePoints[i];
-                                points.Add(new Vector3(pt.x, pt.y, 0f));
-                            }
-                        }
-                        else
-                        {
-                            foreach (var pt in edge.PolylinePoints)
-                            {
-                                points.Add(new Vector3(pt.x, pt.y, 0f));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Direct line from node to node (position already in world space)
-                        var targetNode = matchesForward ? graphState.Nodes[toNode] : graphState.Nodes[fromNode];
-                        points.Add(new Vector3(targetNode.Position.x, targetNode.Position.y, 0f));
-                    }
-
-                    return points;
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>
         /// Follows the current path toward the target.
+        /// Does NOT fall back to direct movement - stays on walkable tiles only.
         /// </summary>
         private void FollowPath()
         {
@@ -534,12 +576,11 @@ namespace FaeMaze.Visitors
                 // No path or reached end - recalculate
                 RecalculatePathToTarget();
 
-                // If we still don't have a path, move directly toward the visitor as a fallback
-                if (worldPath.Count == 0 && targetVisitor != null)
+                // If we still don't have a path, wait (don't cut through walls)
+                if (worldPath.Count == 0)
                 {
-                    MoveDirectlyToward(targetVisitor.transform.position);
+                    return;
                 }
-                return;
             }
 
             // Get current waypoint in world space
@@ -565,14 +606,6 @@ namespace FaeMaze.Visitors
                     RecalculatePathToTarget();
                 }
             }
-        }
-
-        private void MoveDirectlyToward(Vector3 targetPosition)
-        {
-            Vector3 direction = (targetPosition - transform.position).normalized;
-            Vector3 movement = direction * moveSpeed * Time.deltaTime;
-            transform.position += movement;
-            UpdateAnimationDirection(direction);
         }
 
         /// <summary>

@@ -792,25 +792,66 @@ When a prop is changed/removed:
 
 ---
 
-### Other In Progress
+### Completed - Game Over Statistics
+
+**Status**: Implemented. Game Over scene displays visitor fates and essence summary.
+
+**Key files:**
+- `GameStatsTracker.cs` - Singleton that tracks visitor fates by archetype
+- `GameOverManager.cs` - Displays statistics on Game Over scene
+- `VisitorControllerBase.cs` - Records fates when visitors exit/die
+
+**VisitorFate enum** (defined in `GameStatsTracker.cs`):
+| Fate | Description | Recorded By |
+|------|-------------|-------------|
+| Consumed | Consumed by Heart tongue | `HeartOfTheMaze.OnVisitorConsumed()` |
+| Devoured | Devoured by Maw power | `HeartPowerEffects.DevouringMawEffect.ConsumeVisitor()` |
+| FairyRing | Essence depleted at fairy ring | `VisitorControllerBase.OnEssenceDepleted()` |
+| Lantern | Essence depleted at lantern | `VisitorControllerBase.OnEssenceDepleted()` |
+| Escaped | Escaped through exit portal | `VisitorControllerBase.OnExitedThroughPortal()` |
+| RedCapKill | Killed by RedCap | `RedCapController.CompleteKill()` |
+| Drowned | Drowned by Puka/Kelpie | `PukaHazard.DrownVisitorCoroutine()` |
+
+**Recording a visitor fate:**
+```csharp
+GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consumed, essenceValue);
+```
+
+**Game Over display shows:**
+1. Max wave reached
+2. Game length (MM:SS format)
+3. Visitor fates with counts and essence per fate
+4. Essence summary by source (from GameController.EssenceAuditLog)
+5. Net essence change
+
+**Note**: Props placed tracking was removed - players no longer place props manually.
+
+---
+
+### In Progress
 - [ ] Ensure other visitor types work as intended with heart powers
 
 ### Heart & Powers
 - [x] Fix heart prefab - separated into two parts (heartbase + heart tongue) with state machine
 - [x] Sculpting power (Heart Power 4) - radial menu to change node props
 - [x] Make icons for heart power buttons - used in sculpt power selection menu
-- [x] Finalize heart power essence use costs - see Heart Power Essence Costs section below
+- [x] Finalize heart power essence use costs - see Heart Power Essence Costs section
+- [x] Heart tongue visitor consumption cycle - complete with 5-phase sequence
 - [ ] Push magic numbers and constants to configurable settings
 
 ### UI & Scenes
-- [ ] Synchronize, consolidate, and rationalize options scene (IN PROGRESS - see Options Scene Restructure section below)
-- [ ] Clean up game over scene
+- [ ] Synchronize, consolidate, and rationalize options scene (ON HOLD - see Options Scene Restructure section below)
+- [x] Clean up game over scene - redesigned with visitor fates and essence summary (see Game Over Statistics section)
 - [ ] Improve player UI layout
 - [x] Replace the focus point indicator - now uses conic section with spiraling energy bolts
 
 ### Game State
 - [ ] Enable game over state
 - [ ] Implement difficulty progression
+
+### Visitors
+- [x] Enable all visitor types - removed individual enable/disable toggles from options
+- [x] All visitor archetypes now always spawn (LanternDrunk, WaryWayfarer, SleepwalkingDevotee)
 
 ---
 
