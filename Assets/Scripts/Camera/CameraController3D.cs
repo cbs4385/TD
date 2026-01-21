@@ -206,6 +206,24 @@ namespace FaeMaze.Cameras
             transform.position += worldOffset;
         }
 
+        /// <summary>
+        /// Applies camera settings from GameSettings at runtime.
+        /// Call this after changing settings to apply them without reloading the scene.
+        /// </summary>
+        public void ApplySettingsFromGameSettings()
+        {
+            focalMoveSpeed = GameSettings.FocusSpeed;
+            panSpeed = GameSettings.CameraPanSpeed;
+            dollySpeed = GameSettings.CameraZoomSpeed;
+            minDistance = GameSettings.CameraMinZoom;
+            maxDistance = GameSettings.CameraMaxZoom;
+
+            if (cam != null)
+            {
+                cam.fieldOfView = GameSettings.CameraFieldOfView;
+            }
+        }
+
         #endregion
 
         #region Unity Lifecycle
@@ -254,8 +272,17 @@ namespace FaeMaze.Cameras
 
         private void Start()
         {
-            // Load camera movement speed from settings
-            focalMoveSpeed = GameSettings.CameraMovementSpeed;
+            // Load camera settings from GameSettings
+            focalMoveSpeed = GameSettings.FocusSpeed;
+            panSpeed = GameSettings.CameraPanSpeed;
+            dollySpeed = GameSettings.CameraZoomSpeed;
+            minDistance = GameSettings.CameraMinZoom;
+            maxDistance = GameSettings.CameraMaxZoom;
+
+            if (cam != null)
+            {
+                cam.fieldOfView = GameSettings.CameraFieldOfView;
+            }
 
             if (useFocalPointMode)
             {

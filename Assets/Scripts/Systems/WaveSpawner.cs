@@ -19,7 +19,7 @@ namespace FaeMaze.Systems
     {
         #region Events
 
-        public event System.Action OnWaveSuccess;
+        public event System.Action OnGameOver;
 
         #endregion
 
@@ -45,19 +45,13 @@ namespace FaeMaze.Systems
         [Tooltip("The Red Cap prefab")]
         private RedCapController redCapPrefab;
 
-        [Header("Wave Settings")]
-        [SerializeField]
-        private int visitorsPerWave = 10;
-
+        [Header("Spawning Settings")]
         [SerializeField]
         private float spawnInterval = 1.0f;
 
         [Header("Red Cap Settings")]
         [SerializeField]
         private bool enableRedCap = true;
-
-        [SerializeField]
-        private float redCapSpawnDelay = 60f;
 
         [Header("UI Configuration")]
         [SerializeField]
@@ -84,15 +78,14 @@ namespace FaeMaze.Systems
         private HeartPowerManager heartPowerManager;
         private bool isSpawning;
         private bool isWaveActive;
-        private bool isWaveSuccessful;
+        private bool isGameOver;
         private int currentWaveNumber;
         private int visitorsSpawnedThisWave;
         private int totalVisitorsSpawned;
         private List<GameObject> activeVisitors = new List<GameObject>();
 
-        private float redCapSpawnTimer;
-        private bool hasSpawnedRedCap;
         private RedCapController currentRedCap;
+        private int startingEssence;
 
         private TextMeshProUGUI visitorCountText;
         private TextMeshProUGUI waveStatusText;
@@ -106,11 +99,11 @@ namespace FaeMaze.Systems
 
         public bool IsSpawning => isSpawning;
         public bool IsWaveActive => isWaveActive;
+        public bool IsGameOver => isGameOver;
         public int CurrentWaveNumber => currentWaveNumber;
         public int TotalVisitorsSpawned => totalVisitorsSpawned;
         public int ActiveVisitorCount => activeVisitors.Count;
-        public float RedCapSpawnTimeRemaining => hasSpawnedRedCap ? 0f : Mathf.Max(0f, redCapSpawnTimer);
-        public bool HasSpawnedRedCap => hasSpawnedRedCap;
+        public bool HasRedCapOnGraph => currentRedCap != null;
         public RedCapController CurrentRedCap => currentRedCap;
 
         #endregion
@@ -176,10 +169,9 @@ namespace FaeMaze.Systems
 
         private void LoadSettings()
         {
-            visitorsPerWave = GameSettings.VisitorsPerWave;
             spawnInterval = GameSettings.SpawnInterval;
             enableRedCap = GameSettings.EnableRedCap;
-            redCapSpawnDelay = GameSettings.RedCapSpawnDelay;
+            startingEssence = GameSettings.StartingEssence;
         }
 
         private void Update()
@@ -187,22 +179,26 @@ namespace FaeMaze.Systems
             if (!isWaveActive)
                 return;
 
-            if (enableRedCap && !hasSpawnedRedCap)
+            // Check for game over (essence depleted)
+            if (GameController.Instance != null && GameController.Instance.CurrentEssence <= 0)
             {
-                redCapSpawnTimer -= Time.deltaTime;
+                HandleGameOver();
+                return;
+            }
 
-                if (redCapSpawnTimer <= 0f)
+            // RedCap spawns when: enabled, no current RedCap, and essence >= 2x starting essence
+            if (enableRedCap && currentRedCap == null && GameController.Instance != null)
+            {
+                int currentEssence = GameController.Instance.CurrentEssence;
+                int spawnThreshold = startingEssence * 2;
+
+                if (currentEssence >= spawnThreshold)
                 {
                     SpawnRedCap();
                 }
             }
 
             activeVisitors.RemoveAll(v => v == null);
-
-            if (!isSpawning && activeVisitors.Count == 0 && visitorsSpawnedThisWave > 0)
-            {
-                HandleWaveSuccess();
-            }
 
             UpdateUI();
         }
@@ -232,15 +228,14 @@ namespace FaeMaze.Systems
             visitorsSpawnedThisWave = 0;
             activeVisitors.Clear();
             isWaveActive = true;
-            isWaveSuccessful = false;
+            isGameOver = false;
 
             if (heartPowerManager != null)
             {
                 heartPowerManager.OnWaveStart();
             }
 
-            redCapSpawnTimer = redCapSpawnDelay;
-            hasSpawnedRedCap = false;
+            // Clear any existing RedCap from previous games
             if (currentRedCap != null)
             {
                 Destroy(currentRedCap.gameObject);
@@ -253,7 +248,7 @@ namespace FaeMaze.Systems
 
         public void ResetWaveState()
         {
-            isWaveSuccessful = false;
+            isGameOver = false;
             isWaveActive = false;
 
             if (currentRedCap != null)
@@ -261,22 +256,25 @@ namespace FaeMaze.Systems
                 Destroy(currentRedCap.gameObject);
                 currentRedCap = null;
             }
-            hasSpawnedRedCap = false;
         }
 
         private IEnumerator SpawnWaveCoroutine()
         {
             isSpawning = true;
 
-            for (int i = 0; i < visitorsPerWave; i++)
+            // Spawn visitors continuously while game is active (essence > 0)
+            while (isWaveActive)
             {
+                // Check if game should end (essence depleted)
+                if (GameController.Instance != null && GameController.Instance.CurrentEssence <= 0)
+                {
+                    break;
+                }
+
                 SpawnVisitor();
                 visitorsSpawnedThisWave++;
 
-                if (i < visitorsPerWave - 1)
-                {
-                    yield return new WaitForSeconds(spawnInterval);
-                }
+                yield return new WaitForSeconds(spawnInterval);
             }
 
             isSpawning = false;
@@ -430,7 +428,6 @@ namespace FaeMaze.Systems
         {
             if (redCapPrefab == null || mazeGridBehaviour == null)
             {
-                hasSpawnedRedCap = true;
                 return;
             }
 
@@ -452,16 +449,17 @@ namespace FaeMaze.Systems
             currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
             currentRedCap.name = $"RedCap_Wave{currentWaveNumber}";
 
-            hasSpawnedRedCap = true;
+            Debug.Log($"[WaveSpawner] RedCap spawned - essence reached {GameController.Instance?.CurrentEssence ?? 0} (threshold: {startingEssence * 2})");
         }
 
-        private void HandleWaveSuccess()
+        private void HandleGameOver()
         {
             if (!isWaveActive)
                 return;
 
             isWaveActive = false;
-            isWaveSuccessful = true;
+            isSpawning = false;
+            isGameOver = true;
 
             if (currentRedCap != null)
             {
@@ -469,7 +467,8 @@ namespace FaeMaze.Systems
                 currentRedCap = null;
             }
 
-            OnWaveSuccess?.Invoke();
+            Debug.Log("[WaveSpawner] Game Over - Essence depleted");
+            OnGameOver?.Invoke();
         }
 
         #endregion
@@ -555,26 +554,26 @@ namespace FaeMaze.Systems
 
             if (waveStatusText != null)
             {
-                if (isWaveSuccessful)
+                if (isGameOver)
                 {
-                    waveStatusText.text = $"Wave {currentWaveNumber} Complete!";
-                    waveStatusText.color = new Color(0.3f, 1f, 0.3f, 1f);
+                    waveStatusText.text = "Game Over";
+                    waveStatusText.color = new Color(1f, 0.3f, 0.3f, 1f);
                 }
                 else if (!isWaveActive)
                 {
-                    waveStatusText.text = "No Active Wave";
+                    waveStatusText.text = "Press Start";
                     waveStatusText.color = new Color(0.6f, 0.6f, 0.6f, 1f);
                 }
                 else
                 {
-                    waveStatusText.text = $"Wave {currentWaveNumber}";
-                    waveStatusText.color = new Color(1f, 0.85f, 0.3f, 1f);
+                    waveStatusText.text = "Game Active";
+                    waveStatusText.color = new Color(0.3f, 1f, 0.3f, 1f);
                 }
             }
 
             if (visitorCountText != null)
             {
-                visitorCountText.text = $"Visitors: {visitorsSpawnedThisWave}/{visitorsPerWave} (Active: {activeVisitors.Count})";
+                visitorCountText.text = $"Visitors Spawned: {visitorsSpawnedThisWave} (Active: {activeVisitors.Count})";
             }
         }
 

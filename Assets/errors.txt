@@ -1,0 +1,62 @@
+=== Options Scene Restructure ===
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:40)
+
+NOTE: For best results, restore Options.unity from git before running this script.
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:41)
+
+If AudioSection or CameraSection are missing, their content won't be moved.
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:42)
+
+Found sections - Audio: False, Camera: False, Visitor: True, VisitorType: True, Wave: True, Flow: True
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:109)
+
+Removing duplicate TabBar: TabBar
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:CleanupExistingTabBars (UnityEngine.Transform) (at Assets/Editor/OptionsSceneRestructure.cs:307)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:114)
+
+Removing duplicate panel: VideoPanel
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:CleanupDuplicatePanels (UnityEngine.Transform) (at Assets/Editor/OptionsSceneRestructure.cs:352)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:117)
+
+Removing duplicate panel: AudioPanel
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:CleanupDuplicatePanels (UnityEngine.Transform) (at Assets/Editor/OptionsSceneRestructure.cs:352)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:117)
+
+Creating display rows in Content (parent: DISPLAYSETTINGSSection)
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:187)
+
+Created toggle row 'Fullscreen' under Content
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:CreateToggleRow (UnityEngine.Transform,string) (at Assets/Editor/OptionsSceneRestructure.cs:643)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:189)
+
+Created dropdown row 'Resolution' under Content
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:CreateDropdownRow (UnityEngine.Transform,string) (at Assets/Editor/OptionsSceneRestructure.cs:727)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:190)
+
+Display content now has 3 children
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:192)
+
+Gameplay sections remain in GameplayPanel
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:242)
+
+OptionsManager wired up successfully!
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:WireUpOptionsManager (FaeMaze.UI.OptionsManager,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject) (at Assets/Editor/OptionsSceneRestructure.cs:1092)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:257)
+
+Options scene restructured successfully! Save the scene to preserve changes.
+UnityEngine.Debug:Log (object)
+FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:263)
+

@@ -1,5 +1,6 @@
 using UnityEngine;
 using FaeMaze.Visitors;
+using FaeMaze.Audio;
 
 namespace FaeMaze.Props
 {
@@ -48,6 +49,7 @@ namespace FaeMaze.Props
         #region Private Fields
 
         private Vector3 originalScale;
+        private PropAudioSource propAudio;
 
         #endregion
 
@@ -83,6 +85,39 @@ namespace FaeMaze.Props
             {
                 SetupSpheres();
             }
+
+            // Setup audio
+            SetupAudio();
+        }
+
+        private void SetupAudio()
+        {
+            propAudio = GetComponent<PropAudioSource>();
+            if (propAudio == null)
+            {
+                propAudio = gameObject.AddComponent<PropAudioSource>();
+            }
+            propAudio.SetSoundType(PropAudioSource.PropSoundType.FairyRing);
+            propAudio.SetMaxDistance(10f);
+            // Only play sound when actively fascinating a visitor
+            propAudio.SetActiveStateCallback(HasFascinatedVisitor);
+        }
+
+        /// <summary>
+        /// Returns true if any visitor is currently fascinated by this ring.
+        /// Used by PropAudioSource to determine when sound should play.
+        /// </summary>
+        private bool HasFascinatedVisitor()
+        {
+            // Use VisitorRegistry to include all visitor types
+            foreach (var visitor in VisitorRegistry.All)
+            {
+                if (visitor != null && visitor.CurrentFairyRing == this)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void Update()

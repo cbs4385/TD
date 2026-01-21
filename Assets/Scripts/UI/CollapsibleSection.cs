@@ -46,7 +46,8 @@ namespace FaeMaze.UI
 
             if (arrowText != null)
             {
-                arrowText.text = isExpanded ? "▼" : "▶";
+                // Use ASCII characters that all fonts support (▼/▶ may not render in LiberationSans)
+                arrowText.text = isExpanded ? "v" : ">";
             }
         }
 

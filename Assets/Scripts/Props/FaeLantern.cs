@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
+using FaeMaze.Audio;
 
 namespace FaeMaze.Props
 {
@@ -70,6 +71,7 @@ namespace FaeMaze.Props
         private SpriteRenderer _spriteRenderer;
         private Animator _animator;
         private Vector3 _initialScale;
+        private PropAudioSource _propAudio;
 
         private const string DirectionParameter = "Direction";
 
@@ -121,6 +123,40 @@ namespace FaeMaze.Props
 
             // Create exclusion zone to prevent visitors from entering lantern center
             CreateExclusionZone();
+
+            // Setup audio
+            SetupAudio();
+        }
+
+        private void SetupAudio()
+        {
+            _propAudio = GetComponent<PropAudioSource>();
+            if (_propAudio == null)
+            {
+                _propAudio = gameObject.AddComponent<PropAudioSource>();
+            }
+            _propAudio.SetSoundType(PropAudioSource.PropSoundType.Lantern);
+            _propAudio.SetMaxDistance(influenceRadius * 1.5f);
+            // Only play sound when actively fascinating a visitor
+            _propAudio.SetActiveStateCallback(HasFascinatedVisitor);
+        }
+
+        /// <summary>
+        /// Returns true if any visitor is currently being targeted or fascinated by this lantern.
+        /// Used by PropAudioSource to determine when sound should play.
+        /// Sound plays while: visitor is walking toward lantern OR standing fascinated at lantern.
+        /// </summary>
+        private bool HasFascinatedVisitor()
+        {
+            // Use VisitorRegistry to include all visitor types (not just base VisitorController)
+            foreach (var visitor in FaeMaze.Visitors.VisitorRegistry.All)
+            {
+                if (visitor != null && visitor.CurrentFaeLantern == this)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void CreateExclusionZone()

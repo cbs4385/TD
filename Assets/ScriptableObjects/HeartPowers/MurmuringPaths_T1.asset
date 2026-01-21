@@ -18,7 +18,7 @@ MonoBehaviour:
 
     Tier I - Twin Murmurs: Maintain 2 active path segments simultaneously.'
   tier: 1
-  chargeCost: 1
+  essenceCost: 100
   cooldown: 10
   duration: 15
   radius: 0

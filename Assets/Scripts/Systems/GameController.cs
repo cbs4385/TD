@@ -2,9 +2,45 @@ using UnityEngine;
 using FaeMaze.Maze;
 using FaeMaze.UI;
 using FaeMaze.Visitors;
+using System.Collections.Generic;
 
 namespace FaeMaze.Systems
 {
+    /// <summary>
+    /// Identifies the source of an essence transaction for audit logging.
+    /// </summary>
+    public enum EssenceSource
+    {
+        Unknown,
+        StartingEssence,
+        EssenceDecay,
+        LanternFascination,
+        VisitorConsumedByHeart,
+        VisitorConsumedByMaw,
+        RedCapPenalty,
+        PropPlacement,
+        HeartPowerCost,
+        HeartPowerBonus
+    }
+
+    /// <summary>
+    /// Represents a single essence transaction for audit purposes.
+    /// </summary>
+    public struct EssenceTransaction
+    {
+        public float Timestamp;
+        public EssenceSource Source;
+        public int Amount;
+        public int RunningTotal;
+        public string Details;
+
+        public override string ToString()
+        {
+            string sign = Amount >= 0 ? "+" : "";
+            return $"[{Timestamp:F2}s] {Source}: {sign}{Amount} (Total: {RunningTotal}) {Details}";
+        }
+    }
+
     /// <summary>
     /// Core game controller managing the Fae Maze gameplay.
     /// Singleton pattern for easy access from other systems.
@@ -61,6 +97,10 @@ namespace FaeMaze.Systems
         private static int? persistentEssence = null;
         private static bool hasInitializedEssence = false;
 
+        // Essence audit log
+        private List<EssenceTransaction> essenceAuditLog = new List<EssenceTransaction>();
+        private const int MAX_AUDIT_LOG_ENTRIES = 500;
+
         #endregion
 
         #region Events
@@ -95,6 +135,11 @@ namespace FaeMaze.Systems
         /// </summary>
         public int CurrentEssence => currentEssence;
 
+        /// <summary>
+        /// Gets a read-only view of the essence audit log.
+        /// </summary>
+        public IReadOnlyList<EssenceTransaction> EssenceAuditLog => essenceAuditLog;
+
         #endregion
 
         #region Unity Lifecycle
@@ -122,6 +167,8 @@ namespace FaeMaze.Systems
                 currentEssence = Mathf.Max(0, startingEssence);
                 hasInitializedEssence = true;
                 persistentEssence = currentEssence;
+                // Log starting essence
+                LogEssenceTransaction(EssenceSource.StartingEssence, currentEssence, "Game start");
             }
         }
 
@@ -158,8 +205,17 @@ namespace FaeMaze.Systems
         /// </summary>
         public void AddEssence(int amount)
         {
+            AddEssence(amount, EssenceSource.Unknown, null);
+        }
+
+        /// <summary>
+        /// Adds essence to the current total with source tracking for audit log.
+        /// </summary>
+        public void AddEssence(int amount, EssenceSource source, string details = null)
+        {
             currentEssence += amount;
             persistentEssence = currentEssence;
+            LogEssenceTransaction(source, amount, details);
             OnEssenceChanged?.Invoke(currentEssence);
         }
 
@@ -167,6 +223,15 @@ namespace FaeMaze.Systems
         /// Attempts to spend essence. Returns true and deducts if enough, otherwise returns false.
         /// </summary>
         public bool TrySpendEssence(int cost)
+        {
+            return TrySpendEssence(cost, EssenceSource.Unknown, null);
+        }
+
+        /// <summary>
+        /// Attempts to spend essence with source tracking for audit log.
+        /// Returns true and deducts if enough, otherwise returns false.
+        /// </summary>
+        public bool TrySpendEssence(int cost, EssenceSource source, string details = null)
         {
             if (cost < 0)
             {
@@ -177,6 +242,7 @@ namespace FaeMaze.Systems
             {
                 currentEssence -= cost;
                 persistentEssence = currentEssence;
+                LogEssenceTransaction(source, -cost, details);
                 OnEssenceChanged?.Invoke(currentEssence);
                 return true;
             }
@@ -197,9 +263,13 @@ namespace FaeMaze.Systems
         /// </summary>
         public void ResetEssenceToStart()
         {
+            // Clear audit log on reset
+            essenceAuditLog.Clear();
+
             currentEssence = Mathf.Max(0, startingEssence);
             persistentEssence = currentEssence;
             hasInitializedEssence = true;
+            LogEssenceTransaction(EssenceSource.StartingEssence, currentEssence, "Reset to start");
             OnEssenceChanged?.Invoke(currentEssence);
         }
 
@@ -210,6 +280,15 @@ namespace FaeMaze.Systems
         {
             persistentEssence = null;
             hasInitializedEssence = false;
+        }
+
+        /// <summary>
+        /// Clears the essence audit log.
+        /// </summary>
+        public void ClearAuditLog()
+        {
+            essenceAuditLog.Clear();
+            Debug.Log("[EssenceAudit] Audit log cleared");
         }
 
         #endregion
@@ -227,6 +306,79 @@ namespace FaeMaze.Systems
             {
                 entrance = FindFirstObjectByType<MazeEntrance>();
             }
+        }
+
+        private void LogEssenceTransaction(EssenceSource source, int amount, string details)
+        {
+            var transaction = new EssenceTransaction
+            {
+                Timestamp = Time.time,
+                Source = source,
+                Amount = amount,
+                RunningTotal = currentEssence,
+                Details = details ?? ""
+            };
+
+            essenceAuditLog.Add(transaction);
+
+            // Trim log if it exceeds max size
+            if (essenceAuditLog.Count > MAX_AUDIT_LOG_ENTRIES)
+            {
+                essenceAuditLog.RemoveAt(0);
+            }
+
+            // Log to console
+            Debug.Log($"[EssenceAudit] {transaction}");
+        }
+
+        #endregion
+
+        #region Debug Methods
+
+        /// <summary>
+        /// Prints the full audit log to the console.
+        /// </summary>
+        public void PrintAuditLog()
+        {
+            Debug.Log($"=== Essence Audit Log ({essenceAuditLog.Count} entries) ===");
+            foreach (var entry in essenceAuditLog)
+            {
+                Debug.Log(entry.ToString());
+            }
+            Debug.Log("=== End Audit Log ===");
+        }
+
+        /// <summary>
+        /// Gets a summary of essence transactions by source.
+        /// </summary>
+        public Dictionary<EssenceSource, int> GetAuditSummary()
+        {
+            var summary = new Dictionary<EssenceSource, int>();
+            foreach (var entry in essenceAuditLog)
+            {
+                if (!summary.ContainsKey(entry.Source))
+                {
+                    summary[entry.Source] = 0;
+                }
+                summary[entry.Source] += entry.Amount;
+            }
+            return summary;
+        }
+
+        /// <summary>
+        /// Prints a summary of essence transactions by source.
+        /// </summary>
+        public void PrintAuditSummary()
+        {
+            var summary = GetAuditSummary();
+            Debug.Log("=== Essence Audit Summary ===");
+            foreach (var kvp in summary)
+            {
+                string sign = kvp.Value >= 0 ? "+" : "";
+                Debug.Log($"  {kvp.Key}: {sign}{kvp.Value}");
+            }
+            Debug.Log($"  Current Total: {currentEssence}");
+            Debug.Log("=== End Summary ===");
         }
 
         #endregion

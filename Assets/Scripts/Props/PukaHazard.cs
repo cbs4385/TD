@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
+using FaeMaze.Audio;
 
 namespace FaeMaze.Props
 {
@@ -116,6 +117,7 @@ namespace FaeMaze.Props
         private Animator animator;
         private Animation legacyAnimation;
         private GameObject currentVictim;
+        private PropAudioSource propAudio;
 
         #endregion
 
@@ -214,6 +216,20 @@ namespace FaeMaze.Props
                 else
                     animator.Play("ArmatureAction", 0, 0f);
             }
+
+            // Setup audio
+            SetupAudio();
+        }
+
+        private void SetupAudio()
+        {
+            propAudio = GetComponent<PropAudioSource>();
+            if (propAudio == null)
+            {
+                propAudio = gameObject.AddComponent<PropAudioSource>();
+            }
+            propAudio.SetSoundType(PropAudioSource.PropSoundType.Pond);
+            propAudio.SetMaxDistance(detectionRadius * 4f);
         }
 
         private void OnEnable()

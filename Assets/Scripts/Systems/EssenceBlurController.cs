@@ -23,12 +23,16 @@ namespace FaeMaze.Systems
 
         [Header("Essence Decay Settings")]
         [SerializeField]
-        [Tooltip("Amount of essence to lose per second")]
+        [Tooltip("Amount of essence to lose per second (used when useGameSettings is false)")]
         private float essenceDecayRate = 1f;
 
         [SerializeField]
-        [Tooltip("Enable essence decay")]
+        [Tooltip("Enable essence decay (used when useGameSettings is false)")]
         private bool enableEssenceDecay = true;
+
+        [SerializeField]
+        [Tooltip("Use GameSettings for decay settings instead of serialized fields")]
+        private bool useGameSettings = true;
 
         [Header("Blur Maximization")]
         [SerializeField]
@@ -38,11 +42,6 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Maximize blur samples to 16")]
         private bool maximizeBlurSamples = true;
-
-        [Header("Debug")]
-        [SerializeField]
-        [Tooltip("Enable debug logging")]
-        private bool debugLog = false;
 
         #endregion
 
@@ -68,63 +67,80 @@ namespace FaeMaze.Systems
 
                 if (gameController == null)
                 {
+                    Debug.LogWarning("[EssenceBlurController] No GameController found - disabling");
                     enabled = false;
                     return;
                 }
             }
 
-            // Find global volume if not assigned
+            // Find global volume if not assigned - search for one with RadialBlur
             if (globalVolume == null)
             {
-                globalVolume = FindFirstObjectByType<Volume>();
+                // Find all volumes and pick the one with RadialBlur
+                var volumes = FindObjectsByType<Volume>(FindObjectsSortMode.None);
+                foreach (var vol in volumes)
+                {
+                    if (vol.profile != null && vol.profile.TryGet<RadialBlur>(out _))
+                    {
+                        globalVolume = vol;
+                        break;
+                    }
+                }
             }
 
-            if (globalVolume == null)
+            // Try to get RadialBlur component from volume (optional - decay still works without it)
+            if (globalVolume != null && globalVolume.profile != null)
             {
-                enabled = false;
-                return;
+                globalVolume.profile.TryGet(out radialBlur);
             }
 
-            // Get RadialBlur component from volume
-            if (!globalVolume.profile.TryGet(out radialBlur))
+            // Setup blur effects if available
+            if (radialBlur != null)
             {
-                enabled = false;
-                return;
+                if (maximizeBlurIntensity)
+                {
+                    radialBlur.blurIntensity.overrideState = true;
+                    radialBlur.blurIntensity.value = 1.0f;
+                }
+
+                if (maximizeBlurSamples)
+                {
+                    radialBlur.blurSamples.overrideState = true;
+                    radialBlur.blurSamples.value = 16;
+                }
+
+                // Enable the blur effect
+                radialBlur.enabled.overrideState = true;
+                radialBlur.enabled.value = true;
+
+                // Also ensure vignette intensity is set
+                radialBlur.vignetteIntensity.overrideState = true;
+                radialBlur.vignetteIntensity.value = 0.8f;
+
+                // Initial update
+                UpdateBlurFromEssence();
             }
-
-            // Maximize blur effects if enabled
-            if (maximizeBlurIntensity)
-            {
-                radialBlur.blurIntensity.value = 1.0f;
-            }
-
-            if (maximizeBlurSamples)
-            {
-                radialBlur.blurSamples.value = 16;
-            }
-
-            // Enable the blur effect
-            radialBlur.enabled.value = true;
-
-            // Initial update
-            UpdateBlurFromEssence();
         }
 
         private void Update()
         {
-            if (gameController == null || radialBlur == null)
+            if (gameController == null)
             {
                 return;
             }
 
-            // Decay essence over time
-            if (enableEssenceDecay)
+            // Decay essence over time (use GameSettings if enabled)
+            bool decayEnabled = useGameSettings ? GameSettings.EssenceDecayEnabled : enableEssenceDecay;
+            if (decayEnabled)
             {
                 DecayEssence();
             }
 
-            // Update blur parameters based on current essence
-            UpdateBlurFromEssence();
+            // Update blur parameters based on current essence (only if blur is available)
+            if (radialBlur != null)
+            {
+                UpdateBlurFromEssence();
+            }
         }
 
         #endregion
@@ -135,7 +151,9 @@ namespace FaeMaze.Systems
         {
             essenceDecayTimer += Time.deltaTime;
 
-            // Decay 1 essence per second (or at configured rate)
+            // Decay essence per second (use GameSettings rate if enabled)
+            float rate = useGameSettings ? GameSettings.EssenceDecayRate : essenceDecayRate;
+
             while (essenceDecayTimer >= 1f)
             {
                 essenceDecayTimer -= 1f;
@@ -143,8 +161,8 @@ namespace FaeMaze.Systems
                 int currentEssence = gameController.CurrentEssence;
                 if (currentEssence > 0)
                 {
-                    int decayAmount = Mathf.RoundToInt(essenceDecayRate);
-                    gameController.TrySpendEssence(decayAmount);
+                    int decayAmount = Mathf.RoundToInt(rate);
+                    gameController.TrySpendEssence(decayAmount, EssenceSource.EssenceDecay);
                 }
             }
         }
@@ -162,6 +180,7 @@ namespace FaeMaze.Systems
             // 200 essence = 100% clear (no blur)
             // Formula: clearArea = essence * 0.5 = (essence / 2)%
             float clearAreaPercentage = Mathf.Clamp(currentEssence * 0.5f, 0f, 100f);
+            radialBlur.blurAngleDegrees.overrideState = true;
             radialBlur.blurAngleDegrees.value = clearAreaPercentage;
 
             // Calculate vignette coverage (linear from 0-200 essence)
@@ -169,11 +188,9 @@ namespace FaeMaze.Systems
             // 200 essence = 0% coverage (no vignette)
             // Formula: vignetteCoverage = 100 - (essence * 0.5) = (200 - 2*essence) / 2 %
             float vignetteCoveragePercentage = Mathf.Clamp(100f - (currentEssence * 0.5f), 0f, 100f);
+            radialBlur.vignetteCoverage.overrideState = true;
             radialBlur.vignetteCoverage.value = vignetteCoveragePercentage;
 
-            if (debugLog && Time.frameCount % 60 == 0) // Log every 60 frames to avoid spam
-            {
-            }
         }
 
         #endregion

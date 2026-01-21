@@ -261,17 +261,21 @@ namespace FaeMaze.HeartPowers
             // {
             //     ActivatePower(HeartPowerType.HeartbeatOfLonging);
             // }
-            if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))
+            if (Input.GetKeyDown(GameSettings.HeartPower1Key))
             {
                 ActivatePower(HeartPowerType.MurmuringPaths);
             }
-            else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2))
+            else if (Input.GetKeyDown(GameSettings.HeartPower2Key))
             {
                 ActivatePower(HeartPowerType.HeartwardGrasp);
             }
-            else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
+            else if (Input.GetKeyDown(GameSettings.HeartPower3Key))
             {
                 ActivatePower(HeartPowerType.DevouringMaw);
+            }
+            else if (Input.GetKeyDown(GameSettings.HeartPower4Key))
+            {
+                ActivatePower(HeartPowerType.Sculpting);
             }
             // else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
             // {

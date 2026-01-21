@@ -153,6 +153,13 @@ namespace FaeMaze.Systems
         /// </summary>
         public event System.Action OnInitialGrowthComplete;
 
+        /// <summary>
+        /// Static event invoked when maze growth occurs at a specific position.
+        /// Visitors can subscribe to this to become dazed when they witness growth.
+        /// Parameter is the world position where growth occurred.
+        /// </summary>
+        public static event System.Action<Vector3> OnMazeGrowthOccurred;
+
         #endregion
 
         #region Properties

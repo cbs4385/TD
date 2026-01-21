@@ -18,7 +18,7 @@ MonoBehaviour:
 
     Tier I - Extended Reach: Increased pull range to 3 tiles.'
   tier: 1
-  chargeCost: 1
+  essenceCost: 10
   cooldown: 12
   duration: 4
   radius: 0

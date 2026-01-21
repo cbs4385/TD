@@ -407,7 +407,7 @@ namespace FaeMaze.Props
                 return;
             }
 
-            if (!GameController.Instance.TrySpendEssence(currentSelection.essenceCost))
+            if (!GameController.Instance.TrySpendEssence(currentSelection.essenceCost, EssenceSource.PropPlacement, currentSelection.displayName))
             {
                 return;
             }

@@ -1021,7 +1021,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9d5d5ee231cb86d4e9f26e833d9f0a57, type: 2}
   - {fileID: 11400000, guid: 7f3197d983b0117488a0595829ad5b98, type: 2}
   - {fileID: 11400000, guid: 903e134c3576fa74c87c73f381e568db, type: 2}
-  debugLog: 1
   autoCreateUI: 1
   graspPrefab: {fileID: 6225537257164506695, guid: 2e176672e0acf0c488f8bb40daebb76d, type: 3}
   devourPrefab: {fileID: 3946631708089124196, guid: 9bb3c1d4dbc68b74792dc8064cee3574, type: 3}
@@ -1041,9 +1040,10 @@ MonoBehaviour:
   gameController: {fileID: 0}
   essenceDecayRate: 1
   enableEssenceDecay: 1
+  useGameSettings: 1
   maximizeBlurIntensity: 1
   maximizeBlurSamples: 1
-  debugLog: 0
+  debugLog: 1
 --- !u!114 &1534669906
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1056,7 +1056,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc64d9bed749e8c4bb3bc98463c72ca5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Systems.EnvironmentDecorator
-  mazeGridBehaviour: {fileID: 963194231}
+  mazeGridBehaviour: {fileID: 0}
   treePrefab: {fileID: 6518315873642402470, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
   enableLOD: 0
   lod0Prefab: {fileID: 0}

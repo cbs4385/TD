@@ -17,6 +17,17 @@ namespace FaeMaze.Maze
     /// </summary>
     public class HeartOfTheMaze : MonoBehaviour
     {
+        #region Static Events
+
+        /// <summary>
+        /// Static event invoked when a visitor is grabbed by the heart tongue.
+        /// Nearby visitors can subscribe to this to become frightened when they witness a grab.
+        /// Parameter is the world position where the grab occurred.
+        /// </summary>
+        public static event System.Action<Vector3> OnVisitorGrabbed;
+
+        #endregion
+
         #region Enums
 
         private enum HeartState
@@ -269,7 +280,7 @@ namespace FaeMaze.Maze
             if (GameController.Instance != null)
             {
                 int essence = visitor.GetEssenceReward();
-                GameController.Instance.AddEssence(essence);
+                GameController.Instance.AddEssence(essence, EssenceSource.VisitorConsumedByHeart, $"Reward: {essence}");
             }
 
             // Notify HeartPowerManager
@@ -404,6 +415,9 @@ namespace FaeMaze.Maze
                     if (targetVisitor != null)
                     {
                         targetVisitor.SetGrabbedByHeart();
+
+                        // Notify nearby visitors that a grab occurred - they become frightened
+                        OnVisitorGrabbed?.Invoke(targetVisitor.transform.position);
                     }
                 }
 

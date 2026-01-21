@@ -343,8 +343,8 @@ namespace FaeMaze.Cameras
             lr.positionCount = points;
             lr.useWorldSpace = false;
 
-            // Purple to blue gradient - start (outer) is blue, end (inner) is purple
-            lr.startColor = new Color(richBlue.r, richBlue.g, richBlue.b, 0.9f);
+            // Dark red to purple gradient - start (outer) is dark red, end (inner) is purple
+            lr.startColor = new Color(darkRed.r, darkRed.g, darkRed.b, 0.9f);
             lr.endColor = new Color(deepPurple.r, deepPurple.g, deepPurple.b, 0.5f);
         }
 

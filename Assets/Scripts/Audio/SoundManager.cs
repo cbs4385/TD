@@ -1,4 +1,5 @@
 using UnityEngine;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Audio
 {
@@ -75,7 +76,7 @@ namespace FaeMaze.Audio
             if (sfxSource != null)
             {
                 sfxSource.playOnAwake = false;
-                sfxSource.volume = 1f;
+                sfxSource.volume = GameSettings.SfxVolume;
             }
         }
 
@@ -86,7 +87,7 @@ namespace FaeMaze.Audio
                 musicSource = gameObject.AddComponent<AudioSource>();
             }
 
-            musicSource.volume = 1f;
+            musicSource.volume = GameSettings.MusicVolume;
             musicSource.playOnAwake = false;
             musicSource.spatialBlend = 0f;  // 2D sound - consistent volume regardless of listener position
 

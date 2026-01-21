@@ -19,7 +19,7 @@ MonoBehaviour:
     Tier
     I - Echoing Terror: Applies fear to nearby visitors (3 tile radius).'
   tier: 1
-  essenceCost: 0
+  essenceCost: 50
   cooldown: 30
   duration: 0
   radius: 0

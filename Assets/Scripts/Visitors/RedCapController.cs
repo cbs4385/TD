@@ -20,7 +20,8 @@ namespace FaeMaze.Visitors
         {
             Idle,
             Hunting,
-            Returning
+            Killing,
+            Fleeing
         }
 
         #endregion
@@ -57,6 +58,20 @@ namespace FaeMaze.Visitors
         [SerializeField]
         [Tooltip("Base essence value per visitor (should match HeartOfTheMaze setting)")]
         private int baseEssencePerVisitor = 10;
+
+        [Header("Killing Settings")]
+        [SerializeField]
+        [Tooltip("Duration of the killing animation in seconds")]
+        private float killingDuration = 1.0f;
+
+        [Header("Frightening Settings")]
+        [SerializeField]
+        [Tooltip("Radius within which visitors become frightened when they see the Red Cap")]
+        private float frightenRadius = 5.0f;
+
+        [SerializeField]
+        [Tooltip("How often to check for visitors to frighten (in seconds)")]
+        private float frightenCheckInterval = 0.25f;
 
         [Header("Visual Settings")]
         [SerializeField]
@@ -105,6 +120,16 @@ namespace FaeMaze.Visitors
         private Quaternion baseRotation;
         private bool baseRotationCaptured = false;
 
+        // Killing state tracking
+        private float killingTimer;
+        private VisitorControllerBase killingTarget;
+
+        // Frightening tracking
+        private float frightenCheckTimer;
+
+        // Starting essence reference (for flee threshold)
+        private int startingEssence;
+
         #endregion
 
         #region Properties
@@ -142,11 +167,33 @@ namespace FaeMaze.Visitors
 
             TryInitialize();
 
-            if (state == RedCapState.Hunting)
+            // Check essence threshold - flee if below starting essence
+            if (state != RedCapState.Fleeing && state != RedCapState.Killing)
             {
-                UpdateTargetSelection();
-                FollowPath();
-                CheckForVisitorContact();
+                if (gameController != null && gameController.CurrentEssence < startingEssence)
+                {
+                    StartFleeing();
+                }
+            }
+
+            switch (state)
+            {
+                case RedCapState.Hunting:
+                    UpdateTargetSelection();
+                    FollowPath();
+                    CheckForVisitorContact();
+                    CheckForVisitorsToFrighten();
+                    break;
+
+                case RedCapState.Killing:
+                    UpdateKilling();
+                    break;
+
+                case RedCapState.Fleeing:
+                    FollowPath();
+                    CheckForReachedExit();
+                    CheckForVisitorsToFrighten();
+                    break;
             }
         }
 
@@ -190,6 +237,9 @@ namespace FaeMaze.Visitors
 
                 SetAnimatorDirection(IdleDirection);
             }
+
+            // Capture starting essence for flee threshold
+            startingEssence = GameSettings.StartingEssence;
 
             // Start hunting
             state = RedCapState.Hunting;
@@ -645,7 +695,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Captures a visitor, despawns them, and charges the essence penalty.
+        /// Captures a visitor and starts the killing process.
         /// </summary>
         /// <param name="visitor">The visitor to capture</param>
         private void CaptureVisitor(VisitorControllerBase visitor)
@@ -655,23 +705,184 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Calculate essence penalty
-            int essencePenalty = Mathf.RoundToInt(baseEssencePerVisitor * essencePenaltyMultiplier);
+            // Start killing state
+            state = RedCapState.Killing;
+            killingTarget = visitor;
+            killingTimer = killingDuration;
 
-            // Deduct essence from player
-            if (gameController != null)
+            // Immobilize the visitor (daze them for the kill duration so they can't move)
+            visitor.OnWitnessMazeGrowth(killingDuration + 1f);
+
+            // Stop the RedCap's movement
+            worldPath.Clear();
+            targetVisitor = null;
+        }
+
+        /// <summary>
+        /// Updates the killing state, completing the kill after the duration.
+        /// </summary>
+        private void UpdateKilling()
+        {
+            killingTimer -= Time.deltaTime;
+
+            if (killingTimer <= 0f)
             {
-                // Use TrySpendEssence to deduct, but we want to force the deduction even if not enough
-                // So we'll use AddEssence with negative value to bypass the spending check
-                gameController.AddEssence(-essencePenalty);
+                CompleteKill();
+            }
+        }
+
+        /// <summary>
+        /// Completes the kill, despawns the visitor, and charges the essence penalty.
+        /// </summary>
+        private void CompleteKill()
+        {
+            if (killingTarget != null)
+            {
+                // Calculate essence penalty
+                int essencePenalty = Mathf.RoundToInt(baseEssencePerVisitor * essencePenaltyMultiplier);
+
+                // Deduct essence from player
+                if (gameController != null)
+                {
+                    gameController.AddEssence(-essencePenalty, EssenceSource.RedCapPenalty, $"Visitor killed");
+                }
+
+                // Despawn the visitor
+                Destroy(killingTarget.gameObject);
+                killingTarget = null;
             }
 
-            // Despawn the visitor
-            Destroy(visitor.gameObject);
+            // Return to hunting (or flee if essence is low)
+            if (gameController != null && gameController.CurrentEssence < startingEssence)
+            {
+                StartFleeing();
+            }
+            else
+            {
+                state = RedCapState.Hunting;
+            }
+        }
 
-            // Clear target and find a new one
+        #endregion
+
+        #region Fleeing Behavior
+
+        /// <summary>
+        /// Starts the fleeing state, causing the Red Cap to path to an exit.
+        /// </summary>
+        private void StartFleeing()
+        {
+            if (state == RedCapState.Fleeing)
+                return;
+
+            state = RedCapState.Fleeing;
             targetVisitor = null;
-            worldPath.Clear();
+
+            // Find and path to nearest exit
+            BuildPathToNearestExit();
+
+            Debug.Log("[RedCap] Fleeing - essence dropped below starting value");
+        }
+
+        /// <summary>
+        /// Builds a path to the nearest exit spawn point.
+        /// </summary>
+        private void BuildPathToNearestExit()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+            {
+                worldPath.Clear();
+                return;
+            }
+
+            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
+            if (spawnPoints.Count == 0)
+            {
+                worldPath.Clear();
+                return;
+            }
+
+            // Find nearest spawn point (exit)
+            Vector3 nearestExit = Vector3.zero;
+            float nearestDist = float.MaxValue;
+
+            foreach (var kvp in spawnPoints)
+            {
+                float dist = Vector3.Distance(transform.position, kvp.Value);
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearestExit = kvp.Value;
+                }
+            }
+
+            // Build path to exit
+            worldPath = BuildWorldPath(transform.position, nearestExit);
+            currentWaypointIndex = 0;
+        }
+
+        /// <summary>
+        /// Checks if the Red Cap has reached an exit and should despawn.
+        /// </summary>
+        private void CheckForReachedExit()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+                return;
+
+            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
+            foreach (var kvp in spawnPoints)
+            {
+                float dist = Vector3.Distance(transform.position, kvp.Value);
+                if (dist < waypointReachedDistance * 2f)
+                {
+                    // Reached exit - despawn
+                    Debug.Log("[RedCap] Reached exit - despawning");
+                    Destroy(gameObject);
+                    return;
+                }
+            }
+
+            // If we've run out of path, rebuild it
+            if (worldPath.Count == 0 || currentWaypointIndex >= worldPath.Count)
+            {
+                BuildPathToNearestExit();
+            }
+        }
+
+        #endregion
+
+        #region Frightening Visitors
+
+        /// <summary>
+        /// Checks for nearby visitors and frightens them.
+        /// </summary>
+        private void CheckForVisitorsToFrighten()
+        {
+            frightenCheckTimer -= Time.deltaTime;
+            if (frightenCheckTimer > 0f)
+                return;
+
+            frightenCheckTimer = frightenCheckInterval;
+
+            // Find all visitors in frighten radius
+            VisitorControllerBase[] allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor == null || visitor.gameObject == null)
+                    continue;
+
+                // Skip the visitor we're currently killing
+                if (visitor == killingTarget)
+                    continue;
+
+                float distance = Vector3.Distance(transform.position, visitor.transform.position);
+                if (distance <= frightenRadius)
+                {
+                    // Frighten the visitor - they flee away from the Red Cap
+                    visitor.SetFrightened(transform.position);
+                }
+            }
         }
 
         #endregion

@@ -686,6 +686,28 @@ else if (curlRotationsLocked && curlIndex >= 0)
 | MAX_PUSH_DISTANCE | 10.0 | Safety limit for push distance |
 | PUSH_SPEED | 2.0 | Units per second during push |
 | VISITOR_CHECK_RADIUS | 0.3 | Collision check radius for walkable area |
+| GRAB_ESSENCE_COST | 25 | Essence deducted from visitor when grabbed |
+
+---
+
+### Heart Power Essence Costs
+
+**Player essence costs to activate powers (defined in ScriptableObject assets):**
+
+| Power | Essence Cost | Asset File |
+|-------|-------------|------------|
+| Power 1 (MurmuringPaths) | 100 | `MurmuringPaths_T1.asset` |
+| Power 2 (HeartwardGrasp) | 10 | `HeartwardGrasp_T1.asset` |
+| Power 3 (DevouringMaw) | 50 | `DevouringMaw_T1.asset` |
+| Power 4 (Sculpting) | 0 | Free to use |
+
+**Visitor essence costs:**
+
+| Effect | Essence Cost | Location |
+|--------|-------------|----------|
+| Grabbed by HeartwardGrasp | 25 | `HeartPowerEffects.cs` GRAB_ESSENCE_COST |
+
+The visitor essence deduction uses `VisitorControllerBase.DeductEssence(float amount)` which triggers `OnEssenceDepleted()` if essence drops to 0.
 
 ---
 
@@ -735,6 +757,45 @@ When a prop is changed/removed:
 
 ---
 
+### Completed - RedCap Essence-Based Behavior
+
+**Status**: Implemented. RedCap now spawns/despawns based on essence thresholds, not time.
+
+**Spawn condition**: RedCap spawns when:
+- `enableRedCap` is true (in GameSettings)
+- No RedCap currently exists on the graph
+- Player essence >= 2× starting essence
+
+**Flee condition**: RedCap flees to exit when:
+- Player essence drops below starting essence
+- Paths to nearest exit and despawns upon arrival
+
+**Killing behavior**:
+- When RedCap catches a visitor, enters Killing state for 1 second
+- Visitor is dazed (immobilized) during kill
+- After 1 second, visitor is destroyed and essence penalty applied
+- RedCap then returns to Hunting (or Fleeing if essence is low)
+
+**Frightening visitors**:
+- Visitors within `frightenRadius` (default 5.0 units) become Frightened
+- Checked every `frightenCheckInterval` (default 0.25 seconds)
+- Frightened visitors flee away from RedCap
+
+**Key constants (RedCapController.cs):**
+| Constant | Value | Description |
+|----------|-------|-------------|
+| killingDuration | 1.0f | Seconds to complete a kill |
+| frightenRadius | 5.0f | Radius to frighten visitors |
+| frightenCheckInterval | 0.25f | Seconds between frighten checks |
+
+**Files modified:**
+- `RedCapController.cs` - New states (Killing, Fleeing), frightening logic
+- `WaveSpawner.cs` - Essence-based spawn logic
+- `GameSettings.cs` - Removed `RedCapSpawnDelay`
+- `OptionsManager.cs` - Removed spawn delay UI
+
+---
+
 ### Other In Progress
 - [ ] Ensure other visitor types work as intended with heart powers
 
@@ -742,11 +803,11 @@ When a prop is changed/removed:
 - [x] Fix heart prefab - separated into two parts (heartbase + heart tongue) with state machine
 - [x] Sculpting power (Heart Power 4) - radial menu to change node props
 - [ ] Make icons for heart power buttons
-- [ ] Finalize heart power essence use costs
+- [x] Finalize heart power essence use costs - see Heart Power Essence Costs section below
 - [ ] Push magic numbers and constants to configurable settings
 
 ### UI & Scenes
-- [ ] Synchronize, consolidate, and rationalize options scene
+- [ ] Synchronize, consolidate, and rationalize options scene (IN PROGRESS - see Options Scene Restructure section below)
 - [ ] Clean up game over scene
 - [ ] Improve player UI layout
 - [x] Replace the focus point indicator - now uses conic section with spiraling energy bolts
@@ -808,3 +869,69 @@ When a prop is changed/removed:
 | BOLT_REGENERATE_INTERVAL | 0.08f | Seconds between jitter regeneration |
 | deepPurple | (0.4, 0.1, 0.6) | Purple bolt color |
 | darkRed | (0.6, 0.1, 0.15) | Dark red bolt color |
+
+---
+
+### On Hold - Options Scene Restructure
+
+**Status**: On hold. Partially implemented. Key issues identified but not fully resolved.
+
+**Goal**: Reorganize the Options scene into a tabbed interface with three tabs (Gameplay, Video, Audio), each containing collapsible sections with consistent styling.
+
+**Key files:**
+- `Assets/Editor/OptionsSceneRestructure.cs` - Editor script to restructure the scene
+- `Assets/Scripts/UI/CollapsibleSection.cs` - Component for expandable/collapsible sections
+- `Assets/Scripts/UI/OptionsManager.cs` - Manages options panel state and settings
+- `Assets/Scenes/Options.unity` - The Options scene file
+
+**Editor script usage:**
+Run from Unity menu: `FaeMaze > Restructure Options Scene`
+
+**IMPORTANT**: Before running the script, restore Options.unity from git:
+```bash
+git checkout HEAD -- Assets/Scenes/Options.unity
+```
+This ensures AudioSection and CameraSection exist in the scene for content to be moved properly.
+
+**Tab structure:**
+| Tab | Content |
+|-----|---------|
+| Gameplay | VisitorSection, VisitorTypeSection, WaveSection, FlowSection |
+| Video | DISPLAYSETTINGSSection (Fullscreen toggle, Resolution dropdown) |
+| Audio | MASTER VOLUME (SFX, Music), PROP SOUNDS (Lantern, Fairy Ring, Pond, Sculpt) |
+
+**Style constants (must match existing Gameplay sections):**
+| Element | Value |
+|---------|-------|
+| Header background color | `new Color(0.2f, 0.3f, 0.4f, 1f)` (blue/teal) |
+| Header font size | 28px |
+| Header height | 50px |
+| Content font size | 20px |
+| Scroll view bottom padding | 120px (clearance for Apply/Reset/Back buttons) |
+
+**Known issues being addressed:**
+1. **AudioSection/CameraSection not found**: Scene needs to be restored from git before running script. Fallback code creates settings from scratch but may not match original styling perfectly.
+
+2. **Style inconsistency across tabs**: Fixed header color from green (0.2, 0.4, 0.3) to blue/teal (0.2, 0.3, 0.4). Fixed header font size from 20px to 28px.
+
+3. **Scroll view overlap with bottom buttons**: Increased `offsetMin` from 60px to 120px for proper clearance.
+
+**Prop sound volume controls:**
+Individual volume sliders for each prop type, combined with master SFX volume:
+```csharp
+// In PropAudioSource.UpdateVolume()
+float finalVolume = propVolume * masterSfxVolume * distanceVolume * (isActive ? 1f : 0f);
+```
+
+**CollapsibleSection component:**
+- Uses `v` and `>` ASCII characters for expand/collapse indicators (not Unicode arrows which may not render)
+- Structure: Header (Button + ArrowText + HeaderText) → ContentPanel
+- `startExpanded` serialized field controls initial state
+
+**Next steps when resuming:**
+1. Restore Options.unity from git
+2. Run the restructure script
+3. Verify all settings appear in correct sections
+4. Verify scroll view no longer overlaps bottom buttons
+5. Test font consistency across all tabs
+6. Save scene and test in play mode

@@ -8,6 +8,54 @@ using FaeMaze.Audio;
 
 namespace FaeMaze.HeartPowers
 {
+    /// <summary>
+    /// Static events for heart power effects that notify other systems when visitors are affected.
+    /// </summary>
+    public static class HeartPowerEvents
+    {
+        /// <summary>
+        /// Invoked when a visitor is grabbed by HeartwardGrasp (Power 2).
+        /// Parameter is the world position where the grab occurred.
+        /// </summary>
+        public static event System.Action<Vector3> OnVisitorGrabbedByGrasp;
+
+        /// <summary>
+        /// Invoked when a visitor is pushed/released by HeartwardGrasp (Power 2).
+        /// Parameter is the world position where the push occurred.
+        /// </summary>
+        public static event System.Action<Vector3> OnVisitorPushedByGrasp;
+
+        /// <summary>
+        /// Invoked when a visitor is consumed by DevouringMaw (Power 3).
+        /// Parameter is the world position where consumption occurred.
+        /// </summary>
+        public static event System.Action<Vector3> OnVisitorConsumedByMaw;
+
+        /// <summary>
+        /// Invoke the grab event from HeartwardGrasp.
+        /// </summary>
+        public static void NotifyVisitorGrabbedByGrasp(Vector3 position)
+        {
+            OnVisitorGrabbedByGrasp?.Invoke(position);
+        }
+
+        /// <summary>
+        /// Invoke the push event from HeartwardGrasp.
+        /// </summary>
+        public static void NotifyVisitorPushedByGrasp(Vector3 position)
+        {
+            OnVisitorPushedByGrasp?.Invoke(position);
+        }
+
+        /// <summary>
+        /// Invoke the consumption event from DevouringMaw.
+        /// </summary>
+        public static void NotifyVisitorConsumedByMaw(Vector3 position)
+        {
+            OnVisitorConsumedByMaw?.Invoke(position);
+        }
+    }
+
     /*
     #region Heartbeat of Longing
 
@@ -1364,7 +1412,7 @@ namespace FaeMaze.HeartPowers
             }
 
             int bonusEssence = definition.intParam1 > 0 ? definition.intParam1 : 2;
-            manager.AddEssence(bonusEssence);
+            manager.AddEssence(bonusEssence, EssenceSource.HeartPowerBonus, "Wisp delivery bonus");
         }
     }
 
@@ -2473,6 +2521,13 @@ namespace FaeMaze.HeartPowers
                             // Transition to Grabbing phase
                             grabPhase = GrabPhase.Grabbing;
                             grabPhaseStartTime = elapsedTime;
+
+                            // Deduct essence cost from the visitor for being grabbed
+                            const float GRAB_ESSENCE_COST = 25f;
+                            currentVisitor.DeductEssence(GRAB_ESSENCE_COST);
+
+                            // Notify nearby visitors that a grab occurred - they become frightened
+                            HeartPowerEvents.NotifyVisitorGrabbedByGrasp(currentVisitor.transform.position);
                         }
                     }
                     break;
@@ -2658,6 +2713,9 @@ namespace FaeMaze.HeartPowers
                         {
                             SetVisitorVisible(currentVisitor, true);
                             visitorVisible = true;
+
+                            // Notify nearby visitors that a push/release occurred - they become frightened
+                            HeartPowerEvents.NotifyVisitorPushedByGrasp(currentVisitor.transform.position);
                         }
 
                         if (releaseProgress >= 1f)
@@ -3864,13 +3922,16 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
+            // Capture position before destroying
+            Vector3 consumptionPosition = visitor.transform.position;
+
             // Award 0.5 * essence value as specified
             int baseEssence = visitor.GetEssenceReward();
             int essence = Mathf.RoundToInt(baseEssence * 0.5f);
 
             if (manager.GameController != null)
             {
-                manager.GameController.AddEssence(essence);
+                manager.GameController.AddEssence(essence, EssenceSource.VisitorConsumedByMaw, $"50% of {baseEssence}");
             }
             else
             {
@@ -3883,6 +3944,9 @@ namespace FaeMaze.HeartPowers
             }
 
             SoundManager.Instance?.PlayVisitorConsumed();
+
+            // Notify nearby visitors that consumption occurred - they become frightened
+            HeartPowerEvents.NotifyVisitorConsumedByMaw(consumptionPosition);
 
             Object.Destroy(visitor.gameObject);
         }
@@ -3943,7 +4007,7 @@ namespace FaeMaze.HeartPowers
 
             if (manager.GameController != null)
             {
-                manager.GameController.AddEssence(bonusEssence);
+                manager.GameController.AddEssence(bonusEssence, EssenceSource.HeartPowerBonus, "Soul Harvest");
             }
         }
     }
@@ -4378,8 +4442,39 @@ namespace FaeMaze.HeartPowers
             const float SMOKE_DURATION = 0.8f;
             const float FOG_Z = -0.3f; // Above ground plane (-Z is up)
 
+            // Play sculpt sound effect
+            PlaySculptSound(nodeCenter);
+
             // Start the fog animation coroutine
             manager.StartCoroutine(AnimateSculptingFog(nodeCenter, NODE_RADIUS, SMOKE_DURATION, FOG_Z));
+        }
+
+        /// <summary>
+        /// Plays the sculpt sound effect at the given position.
+        /// </summary>
+        private void PlaySculptSound(Vector3 position)
+        {
+            float volume = FaeMaze.Systems.GameSettings.SculptVolume * FaeMaze.Systems.GameSettings.SfxVolume;
+            if (volume <= 0f) return;
+
+#if UNITY_EDITOR
+            AudioClip sculptClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX/sculpt.mp3");
+            if (sculptClip != null)
+            {
+                // Create a temporary audio source for 3D positional audio
+                GameObject audioObj = new GameObject("SculptSound");
+                audioObj.transform.position = position;
+                AudioSource audioSource = audioObj.AddComponent<AudioSource>();
+                audioSource.clip = sculptClip;
+                audioSource.spatialBlend = 1f; // 3D audio
+                audioSource.volume = volume;
+                audioSource.minDistance = 2f;
+                audioSource.maxDistance = 15f;
+                audioSource.rolloffMode = AudioRolloffMode.Linear;
+                audioSource.Play();
+                Object.Destroy(audioObj, sculptClip.length + 0.1f);
+            }
+#endif
         }
 
         /// <summary>

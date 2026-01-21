@@ -4,6 +4,7 @@ using System.Text;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
+using FaeMaze.HeartPowers;
 
 namespace FaeMaze.Visitors
 {
@@ -157,6 +158,13 @@ namespace FaeMaze.Visitors
         protected const float FairyRingCircleRadius = 1.5f; // Distance from ring center to circle at
         protected const float FairyRingCircleSpeed = 1.5f; // Radians per second
 
+        // Visitor essence tracking (drained by props, visitor escapes when depleted)
+        protected float currentEssence;  // Current essence remaining (starts at GetEssenceReward())
+        protected float lanternEssenceAwardAccumulator;  // Accumulates fractional essence to award whole amounts
+        protected const float RING_ESSENCE_DRAIN_PER_SECOND = 5f;  // Essence lost per second while at fairy ring
+        protected const float LANTERN_ESSENCE_DRAIN_PER_SECOND = 5f;  // Essence lost per second while at lantern
+        protected const float LANTERN_ESSENCE_AWARD_PER_SECOND = 2f;  // Essence awarded to player per second while at lantern
+
         // Cooldown tracking per lantern (prevents immediate re-triggering)
         protected Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
 
@@ -185,6 +193,12 @@ namespace FaeMaze.Visitors
         protected bool isFrightened;
         protected bool isLured;
         protected bool isDazed;
+
+        // Frightened state tracking
+        protected Vector3 frightSourcePosition;  // Position of what frightened the visitor (to flee away from)
+        protected int frightRecoveryNodeCount;   // Number of nodes visited while frightened (for accumulating recovery chance)
+        protected const float FRIGHTENED_SPEED_MULTIPLIER = 2.0f;  // Double speed when frightened
+        protected const float FRIGHTENED_RECOVERY_CHANCE_PER_NODE = 0.25f;  // 25% cumulative chance to recover at each node
 
         // Red Cap detection tracking
         protected float redCapDetectionTimer;
@@ -237,6 +251,23 @@ namespace FaeMaze.Visitors
 
         /// <summary>Gets the FairyRing currently fascinating this visitor, or null if none</summary>
         public FaeMaze.Props.FairyRing CurrentFairyRing => currentFairyRing;
+
+        /// <summary>Gets the visitor's current essence (remaining value that can be drained)</summary>
+        public float CurrentEssence => currentEssence;
+
+        /// <summary>
+        /// Deducts essence from the visitor. If essence drops to 0 or below, triggers OnEssenceDepleted.
+        /// </summary>
+        /// <param name="amount">Amount of essence to deduct</param>
+        public void DeductEssence(float amount)
+        {
+            currentEssence -= amount;
+            if (currentEssence <= 0f)
+            {
+                currentEssence = 0f;
+                OnEssenceDepleted();
+            }
+        }
 
         /// <summary>Gets the visitor's archetype (from config if available)</summary>
         public VisitorArchetype Archetype => config != null ? config.Archetype : VisitorArchetype.LanternDrunk;
@@ -304,18 +335,33 @@ namespace FaeMaze.Visitors
 
             // Apply player's speed setting (as multiplier, default 3f = 1x speed)
             moveSpeed *= (GameSettings.VisitorSpeed / 3f);
+
+            // Initialize visitor's essence pool (drained by props)
+            currentEssence = GetEssenceReward();
         }
 
         protected virtual void OnEnable()
         {
             // Register with the visitor registry for efficient lookups
             VisitorRegistry.Register(this);
+
+            // Subscribe to frightening events
+            HeartOfTheMaze.OnVisitorGrabbed += OnWitnessVisitorGrabbed;
+            HeartPowerEvents.OnVisitorGrabbedByGrasp += OnWitnessVisitorGrabbed;
+            HeartPowerEvents.OnVisitorPushedByGrasp += OnWitnessVisitorGrabbed;
+            HeartPowerEvents.OnVisitorConsumedByMaw += OnWitnessVisitorGrabbed;
         }
 
         protected virtual void OnDisable()
         {
             // Unregister from the visitor registry
             VisitorRegistry.Unregister(this);
+
+            // Unsubscribe from frightening events
+            HeartOfTheMaze.OnVisitorGrabbed -= OnWitnessVisitorGrabbed;
+            HeartPowerEvents.OnVisitorGrabbedByGrasp -= OnWitnessVisitorGrabbed;
+            HeartPowerEvents.OnVisitorPushedByGrasp -= OnWitnessVisitorGrabbed;
+            HeartPowerEvents.OnVisitorConsumedByMaw -= OnWitnessVisitorGrabbed;
         }
 
         protected virtual void Update()
@@ -390,6 +436,31 @@ namespace FaeMaze.Visitors
                 else if (fascinationTimer > 0)
                 {
                     fascinationTimer -= Time.deltaTime;
+
+                    // Drain visitor essence while at the lantern
+                    currentEssence -= LANTERN_ESSENCE_DRAIN_PER_SECOND * Time.deltaTime;
+
+                    // Award essence to the player while visitor is at the lantern
+                    if (GameController.Instance != null)
+                    {
+                        // Accumulate fractional essence and award whole amounts
+                        lanternEssenceAwardAccumulator += LANTERN_ESSENCE_AWARD_PER_SECOND * Time.deltaTime;
+                        if (lanternEssenceAwardAccumulator >= 1f)
+                        {
+                            int wholeEssence = Mathf.FloorToInt(lanternEssenceAwardAccumulator);
+                            lanternEssenceAwardAccumulator -= wholeEssence;
+                            GameController.Instance.AddEssence(wholeEssence, EssenceSource.LanternFascination);
+                        }
+                    }
+
+                    // Check if visitor's essence is depleted
+                    if (currentEssence <= 0f)
+                    {
+                        currentEssence = 0f;
+                        OnEssenceDepleted();
+                        return;
+                    }
+
                     return; // Don't move while fascinated timer is active
                 }
                 else
@@ -670,6 +741,11 @@ namespace FaeMaze.Visitors
             {
                 state = VisitorState.Frightened;
             }
+            else if (isLured)
+            {
+                // Lured has higher priority than Fascinated so players can rescue visitors from props
+                state = VisitorState.Lured;
+            }
             else if (isFascinated)
             {
                 state = VisitorState.Fascinated;
@@ -677,10 +753,6 @@ namespace FaeMaze.Visitors
             else if (isConfused && confusionEnabled)
             {
                 state = VisitorState.Confused;
-            }
-            else if (isLured)
-            {
-                state = VisitorState.Lured;
             }
             else
             {
@@ -1654,11 +1726,15 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Use 50% speed if fascinated and walking to lantern
+            // Calculate effective speed with state-based multipliers
             float effectiveSpeed = moveSpeed * speedMultiplier;
             if (isFascinated && !hasReachedLantern)
             {
                 effectiveSpeed *= FascinationSpeedMultiplier;
+            }
+            else if (isFrightened)
+            {
+                effectiveSpeed *= FRIGHTENED_SPEED_MULTIPLIER;
             }
 
             // Use spline smoothing if enabled and path has enough waypoints
@@ -1676,6 +1752,23 @@ namespace FaeMaze.Visitors
             {
                 rb3D.MovePosition(transform.position);
                 Physics.SyncTransforms();
+            }
+
+            // Check if fascinated visitor has reached close enough to lantern (0.5 units)
+            if (isFascinated && !hasReachedLantern && currentFaeLantern != null)
+            {
+                float distToLantern = Vector3.Distance(transform.position, currentFaeLantern.transform.position);
+                if (distToLantern <= 0.5f)
+                {
+                    // Stop here, don't continue walking
+                    hasReachedLantern = true;
+                    float duration = currentFaeLantern.FascinationDuration;
+                    fascinationTimer = duration;
+                    state = VisitorState.Idle;
+                    worldPath?.Clear();
+                    worldPathIndex = 0;
+                    return;
+                }
             }
 
             // Check if we've completed the path
@@ -2014,6 +2107,13 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            // Check if frightened - visitor reached a node, handle recovery/fleeing
+            if (isFrightened)
+            {
+                HandleFrightenedAtNode();
+                return;
+            }
+
             // Check if at the heart (destination is near the heart)
             if (mazeGridBehaviour != null)
             {
@@ -2076,6 +2176,34 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Called when a visitor's essence is depleted (drained to 0 by props).
+        /// The visitor is considered escaped and despawns.
+        /// </summary>
+        protected virtual void OnEssenceDepleted()
+        {
+            // Clear any fascination state
+            isFascinated = false;
+            isFrightened = false;
+            frightRecoveryNodeCount = 0;
+            isLured = false;
+            isConfused = false;
+            hasReachedLantern = false;
+
+            // Clear references
+            currentFaeLantern = null;
+            currentFairyRing = null;
+            lanternEssenceAwardAccumulator = 0f;
+
+            // Set state to Escaping
+            state = VisitorState.Escaping;
+
+            // Visual feedback could be added here (fade out, particle effect, etc.)
+
+            // Destroy the visitor
+            Destroy(gameObject, 0.1f);
+        }
+
+        /// <summary>
         /// Called when a visitor is consumed by the Heart of the Maze.
         /// Override in derived classes for specific behavior.
         /// </summary>
@@ -2100,6 +2228,7 @@ namespace FaeMaze.Visitors
             // Clear all state flags
             isFascinated = false;
             isFrightened = false;
+            frightRecoveryNodeCount = 0;
             isLured = false;
             isDazed = false;
             isConfused = false;
@@ -2223,6 +2352,7 @@ namespace FaeMaze.Visitors
             fascinationLanternPosition = lanternWorldPos;
             hasReachedLantern = false;
             fascinationTimer = 0f; // Will be set when reaching lantern
+            lanternEssenceAwardAccumulator = 0f; // Reset essence award accumulator
 
             // Set archetype-specific cooldown for this lantern
             lanternCooldowns[lantern] = cooldown;
@@ -2230,8 +2360,28 @@ namespace FaeMaze.Visitors
             // Reset detour state
             ResetDetourState();
 
-            // Navigate to lantern using world-space path
-            worldPath = BuildWorldPath(transform.position, lanternWorldPos);
+            // Calculate stop position at edge of exclusion zone (1 unit from lantern center)
+            // Direction from lantern to visitor in XY plane
+            const float LANTERN_EXCLUSION_RADIUS = 1f;
+            Vector3 visitorPos = transform.position;
+            Vector2 dirToVisitor = new Vector2(visitorPos.x - lanternWorldPos.x, visitorPos.y - lanternWorldPos.y);
+            if (dirToVisitor.sqrMagnitude < 0.01f)
+            {
+                // Visitor is at lantern center, pick a random direction
+                float randomAngle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                dirToVisitor = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
+            }
+            dirToVisitor.Normalize();
+
+            // Stop position is at the edge of the exclusion zone, toward the visitor
+            Vector3 stopPosition = new Vector3(
+                lanternWorldPos.x + dirToVisitor.x * LANTERN_EXCLUSION_RADIUS,
+                lanternWorldPos.y + dirToVisitor.y * LANTERN_EXCLUSION_RADIUS,
+                lanternWorldPos.z
+            );
+
+            // Navigate to the stop position (not the lantern center)
+            worldPath = BuildWorldPath(transform.position, stopPosition);
             worldPathIndex = 0;
             ResetSplineState();
             RefreshStateFromFlags();
@@ -2408,27 +2558,75 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Sets the visitor to Frightened state for a specified duration.
+        /// The visitor will flee from their current position (source unknown).
         /// </summary>
         public virtual void SetFrightened(float duration = 0f)
         {
-            if (duration <= 0f)
+            SetFrightened(transform.position, duration);
+        }
+
+        /// <summary>
+        /// Sets the visitor to Frightened state, fleeing from a specific source position.
+        /// The visitor will double their speed and move away from the source.
+        /// At each node, they have an accumulating 25% chance to recover.
+        /// If they reach a portal while frightened, they escape and despawn.
+        /// </summary>
+        /// <param name="sourcePosition">The position of what frightened the visitor (to flee away from)</param>
+        /// <param name="duration">Duration is ignored - frightened state ends via node recovery or portal escape</param>
+        public virtual void SetFrightened(Vector3 sourcePosition, float duration = 0f)
+        {
+            // Already frightened or in terminal state - ignore
+            if (isFrightened || state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
-                duration = frightenedDuration;
+                return;
             }
 
             isFrightened = true;
-            SetTimedState(VisitorState.Frightened, duration);
+            frightSourcePosition = sourcePosition;
+            frightRecoveryNodeCount = 0;
+
+            // Don't use timed state - frightened ends via node recovery or portal escape
+            // SetTimedState clears on timer, but we want manual control
+            currentTimedState = VisitorState.Frightened;
+            currentStateDuration = float.MaxValue;  // Effectively infinite - recovery handled separately
+            currentStateTimer = float.MaxValue;
+
             RefreshStateFromFlags();
+
+            // Build a path to flee: find a random adjacent node away from the fright source
+            BuildFrightenedFleePath();
         }
 
         /// <summary>
         /// Sets the visitor to Lured state, drawn toward the Heart.
+        /// Lured overrides Fascinated state so players can rescue visitors from fairy rings.
         /// </summary>
         public virtual void SetLured(bool value)
         {
             if (isLured != value)
             {
                 isLured = value;
+
+                // Lured overrides fascination - clear fascination state when becoming lured
+                if (value && isFascinated)
+                {
+                    // Clear lantern fascination
+                    if (currentFaeLantern != null)
+                    {
+                        ClearLanternInteraction();
+                    }
+                    // Clear fairy ring fascination
+                    if (currentFairyRing != null)
+                    {
+                        currentFairyRing = null;
+                        fairyRingFascinationTimer = 0f;
+                        speedMultiplier = 1f;
+                    }
+                    isFascinated = false;
+                    hasReachedLantern = false;
+                    fascinationTimer = 0f;
+                }
+
                 RefreshStateFromFlags();
 
                 if (value)
@@ -2447,6 +2645,7 @@ namespace FaeMaze.Visitors
             // Clear any existing states
             isFascinated = false;
             isFrightened = false;
+            frightRecoveryNodeCount = 0;
             isLured = false;
             isConfused = false;
 
@@ -2478,6 +2677,51 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Called when another visitor is grabbed, pushed, or consumed.
+        /// If this visitor can see the event, they become frightened and flee.
+        /// </summary>
+        /// <param name="eventPosition">The world position where the frightening event occurred</param>
+        protected virtual void OnWitnessVisitorGrabbed(Vector3 eventPosition)
+        {
+            // Don't react if already in a terminal or frightened state
+            if (isFrightened || state == VisitorState.Consumed || state == VisitorState.Escaping ||
+                state == VisitorState.Grabbed || state == VisitorState.Dazed)
+            {
+                return;
+            }
+
+            // Check if within viewing distance (use same radius as red cap detection)
+            float distance = Vector3.Distance(transform.position, eventPosition);
+            if (distance > redCapDetectionRadius * 2f) // Double the red cap detection radius for witnessing events
+            {
+                return;
+            }
+
+            // Simple line-of-sight check using raycast in XY plane
+            Vector3 direction = eventPosition - transform.position;
+            direction.z = 0; // XY plane only
+            float xyDistance = direction.magnitude;
+
+            if (xyDistance > 0.1f)
+            {
+                // Cast ray to check for walls
+                RaycastHit[] hits = Physics.RaycastAll(transform.position, direction.normalized, xyDistance);
+                foreach (var hit in hits)
+                {
+                    // If we hit a wall before reaching the event, we can't see it
+                    if (hit.collider.gameObject.name.Contains("Wall") ||
+                        hit.collider.gameObject.name.Contains("wall"))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            // Visitor can see the event - become frightened
+            SetFrightened(eventPosition);
+        }
+
+        /// <summary>
         /// Checks for nearby Red Caps and triggers frightened state if detected.
         /// </summary>
         protected virtual void CheckForNearbyRedCaps()
@@ -2498,7 +2742,8 @@ namespace FaeMaze.Visitors
 
                 if (distance <= redCapDetectionRadius)
                 {
-                    SetFrightened(frightenedDuration);
+                    // Pass the Red Cap's position as the fright source
+                    SetFrightened(redCap.transform.position);
                     return;
                 }
             }
@@ -2529,6 +2774,7 @@ namespace FaeMaze.Visitors
                     break;
                 case VisitorState.Frightened:
                     isFrightened = false;
+                    frightRecoveryNodeCount = 0;
                     break;
                 case VisitorState.Dazed:
                     isDazed = false;
@@ -2550,6 +2796,8 @@ namespace FaeMaze.Visitors
             state = VisitorState.Escaping;
 
             isFascinated = false;
+            isFrightened = false;
+            frightRecoveryNodeCount = 0;
             hasReachedLantern = false;
             ClearLanternInteraction();
 
@@ -2577,6 +2825,7 @@ namespace FaeMaze.Visitors
             isFascinated = true;
             fascinationLanternPosition = lanternWorldPosition;
             hasReachedLantern = false;
+            lanternEssenceAwardAccumulator = 0f; // Reset essence award accumulator
             RefreshStateFromFlags();
 
             ResetDetourState();
@@ -2839,6 +3088,16 @@ namespace FaeMaze.Visitors
             if (fairyRingFascinationTimer <= 0f)
             {
                 EndFairyRingFascination();
+                return;
+            }
+
+            // Drain visitor essence while circling the ring
+            currentEssence -= RING_ESSENCE_DRAIN_PER_SECOND * Time.deltaTime;
+            if (currentEssence <= 0f)
+            {
+                // Visitor's essence is depleted - they escape
+                currentEssence = 0f;
+                OnEssenceDepleted();
                 return;
             }
 
@@ -3376,6 +3635,149 @@ namespace FaeMaze.Visitors
             ResetSplineState();
 
             return true;
+        }
+
+        /// <summary>
+        /// Builds a path for a frightened visitor to flee from the fright source.
+        /// Picks a random adjacent node (excluding backtracking toward the fright source).
+        /// </summary>
+        protected virtual void BuildFrightenedFleePath()
+        {
+            if (mazeGridBehaviour == null)
+            {
+                return;
+            }
+
+            var graphState = mazeGridBehaviour.ForestMapState;
+            if (graphState == null || graphState.Nodes.Count == 0)
+            {
+                return;
+            }
+
+            // Find nearest node to current position
+            Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+            int nearestNodeId = FindNearestNodeIndex(graphState, currentPos2D);
+            if (nearestNodeId < 0)
+            {
+                return;
+            }
+
+            // Get destination node (random adjacent node, preferring away from fright source)
+            int destNodeId = PickRandomAdjacentNodeAwayFromSource(graphState, nearestNodeId);
+            if (destNodeId < 0)
+            {
+                return;
+            }
+
+            var destNode = graphState.Nodes[destNodeId];
+            Vector3 destWorldPos = new Vector3(destNode.Position.x, destNode.Position.y, transform.position.z);
+
+            // Build path to the chosen node
+            worldPath = BuildWorldPath(transform.position, destWorldPos);
+            worldPathIndex = 0;
+            worldDestination = destWorldPos;
+            ResetSplineState();
+        }
+
+        /// <summary>
+        /// Picks a random adjacent node from the given node, preferring nodes away from the fright source.
+        /// Never picks the node that would backtrack toward where the visitor came from.
+        /// </summary>
+        protected int PickRandomAdjacentNodeAwayFromSource(
+            ForestMaze.PlanarForestMazeGenerator.ForestMapState graphState,
+            int currentNodeId)
+        {
+            if (currentNodeId < 0 || currentNodeId >= graphState.Nodes.Count)
+                return -1;
+
+            var currentNode = graphState.Nodes[currentNodeId];
+            Vector2 currentPos = currentNode.Position;
+            Vector2 frightSource2D = new Vector2(frightSourcePosition.x, frightSourcePosition.y);
+
+            // Collect all connected nodes
+            var candidates = new List<(int nodeId, float distFromFright)>();
+
+            foreach (int edgeId in currentNode.IncidentEdges)
+            {
+                if (edgeId < 0 || edgeId >= graphState.Edges.Count)
+                    continue;
+
+                var edge = graphState.Edges[edgeId];
+
+                // Get the other node of this edge
+                int otherNodeId = -1;
+                if (edge.NodeA == currentNodeId && edge.NodeB.HasValue)
+                    otherNodeId = edge.NodeB.Value;
+                else if (edge.NodeB.HasValue && edge.NodeB.Value == currentNodeId)
+                    otherNodeId = edge.NodeA;
+
+                if (otherNodeId < 0 || otherNodeId >= graphState.Nodes.Count)
+                    continue;
+
+                var otherNode = graphState.Nodes[otherNodeId];
+                float distFromFright = Vector2.Distance(otherNode.Position, frightSource2D);
+
+                candidates.Add((otherNodeId, distFromFright));
+            }
+
+            if (candidates.Count == 0)
+                return -1;
+
+            // If only one option, take it
+            if (candidates.Count == 1)
+                return candidates[0].nodeId;
+
+            // Sort by distance from fright source (farthest first)
+            candidates.Sort((a, b) => b.distFromFright.CompareTo(a.distFromFright));
+
+            // Remove the candidate closest to fright source (no backtracking)
+            // But keep at least one option
+            if (candidates.Count > 1)
+            {
+                candidates.RemoveAt(candidates.Count - 1);
+            }
+
+            // Pick randomly from remaining candidates
+            int randomIndex = Random.Range(0, candidates.Count);
+            return candidates[randomIndex].nodeId;
+        }
+
+        /// <summary>
+        /// Called when a frightened visitor arrives at a node.
+        /// Handles recovery check and picking the next random edge.
+        /// </summary>
+        protected virtual void HandleFrightenedAtNode()
+        {
+            frightRecoveryNodeCount++;
+
+            // Check for portal - if at a portal, escape immediately
+            if (IsAtPortal())
+            {
+                state = VisitorState.Escaping;
+                OnExitedThroughPortal();
+                return;
+            }
+
+            // Accumulating recovery chance: 25% per node visited
+            // At node 1: 25%, node 2: 50%, node 3: 75%, node 4: 100%
+            float recoveryChance = frightRecoveryNodeCount * FRIGHTENED_RECOVERY_CHANCE_PER_NODE;
+            if (Random.value <= recoveryChance)
+            {
+                // Recovered from fright
+                isFrightened = false;
+                frightRecoveryNodeCount = 0;
+                currentTimedState = VisitorState.Idle;
+                currentStateDuration = 0f;
+                currentStateTimer = 0f;
+                RefreshStateFromFlags();
+
+                // Resume normal path to destination
+                RecalculatePath();
+                return;
+            }
+
+            // Still frightened - pick a new random edge to flee down
+            BuildFrightenedFleePath();
         }
 
         #endregion

@@ -7,7 +7,9 @@
       "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(git checkout:*)",
-      "Bash(ls -la \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\Assets\\\\Scripts\\\\DebugTools\"\" 2>/dev/null || dir \"C:UserschrissourcereposTDAssetsScriptsDebugTools\"\")"
+      "Bash(ls -la \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\Assets\\\\Scripts\\\\DebugTools\"\" 2>/dev/null || dir \"C:UserschrissourcereposTDAssetsScriptsDebugTools\"\")",
+      "Bash(dotnet script:*)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

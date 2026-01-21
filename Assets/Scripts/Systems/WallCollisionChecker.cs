@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FaeMaze.Systems
 {
@@ -8,6 +9,7 @@ namespace FaeMaze.Systems
     /// Walls are children of GraphElementWallContainer and may ONLY be destroyed by:
     /// 1. Physics collision with MazePath/MazeNode tagged objects
     /// 2. Complete maze regeneration (IsMazeRegenerating = true)
+    /// 3. Scene unloading (transitioning to another scene)
     /// Any other destruction is an ARCHITECTURE VIOLATION and throws an exception.
     /// </summary>
     public class WallCollisionChecker : MonoBehaviour
@@ -37,6 +39,30 @@ namespace FaeMaze.Systems
         /// True when application is quitting - allows wall destruction without errors.
         /// </summary>
         private static bool isApplicationQuitting = false;
+
+        /// <summary>
+        /// True when a scene is being unloaded - allows wall destruction without errors.
+        /// </summary>
+        private static bool isSceneUnloading = false;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Initialize()
+        {
+            SceneManager.sceneUnloaded += OnSceneUnloaded;
+            SceneManager.activeSceneChanged += OnActiveSceneChanged;
+        }
+
+        private static void OnActiveSceneChanged(Scene oldScene, Scene newScene)
+        {
+            // Scene is about to change - set flag before any destruction happens
+            isSceneUnloading = true;
+        }
+
+        private static void OnSceneUnloaded(Scene scene)
+        {
+            // Reset flag after scene unload completes
+            isSceneUnloading = false;
+        }
 
         private void Awake()
         {
@@ -69,7 +95,7 @@ namespace FaeMaze.Systems
             }
 
             // Validate that destruction is legitimate
-            if (!isBeingDestroyedLegitimately && !IsMazeRegenerating && !isApplicationQuitting)
+            if (!isBeingDestroyedLegitimately && !IsMazeRegenerating && !isApplicationQuitting && !isSceneUnloading)
             {
                 string wallInfo = $"Wall '{gameObject.name}' at {transform.position}";
                 string containerInfo = parentContainer != null

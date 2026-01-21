@@ -164,7 +164,7 @@ namespace FaeMaze.Systems
         {
             if (waveSpawner != null)
             {
-                waveSpawner.OnWaveSuccess += HandleWaveSuccess;
+                waveSpawner.OnGameOver += HandleSpawnerGameOver;
             }
 
             if (gameController != null)
@@ -177,7 +177,7 @@ namespace FaeMaze.Systems
         {
             if (waveSpawner != null)
             {
-                waveSpawner.OnWaveSuccess -= HandleWaveSuccess;
+                waveSpawner.OnGameOver -= HandleSpawnerGameOver;
             }
 
             if (gameController != null)
@@ -202,46 +202,15 @@ namespace FaeMaze.Systems
 
         #region Event Handlers
 
-        private void HandleWaveSuccess()
+        /// <summary>
+        /// Called when WaveSpawner detects game over (essence depleted).
+        /// </summary>
+        private void HandleSpawnerGameOver()
         {
-            // Check if game is already over (essence depleted during wave)
-            if (isGameOver)
+            // WaveSpawner already detected essence depletion, trigger game over
+            if (!isGameOver)
             {
-                return;
-            }
-
-            // Update last completed wave
-            lastCompletedWave = waveSpawner.CurrentWaveNumber;
-
-            // Track stats
-            if (GameStatsTracker.Instance != null)
-            {
-                GameStatsTracker.Instance.RecordWaveReached(waveSpawner.CurrentWaveNumber);
-            }
-
-            // Invoke event
-            OnWaveCompleted?.Invoke(lastCompletedWave);
-
-            // Persist latest wave progress for scene transitions
-            UpdatePersistentWaveProgress();
-
-            // Transition to procedural mazes after the initial FaeMazeScene wave
-            if (ShouldTransitionToProceduralScene())
-            {
-                if (TryLoadProceduralMazeScene())
-                {
-                    return;
-                }
-            }
-
-            // Show wave complete UI
-            ShowWaveCompletePanel();
-
-            // Handle auto-start
-            if (autoStartNextWave)
-            {
-                autoStartTimer = autoStartDelay;
-                waitingForAutoStart = true;
+                HandleGameOver();
             }
         }
 

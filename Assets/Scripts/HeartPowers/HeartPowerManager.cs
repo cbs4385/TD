@@ -270,9 +270,8 @@ namespace FaeMaze.HeartPowers
 
         private void Update()
         {
-            // Screenshot capture - F12 key (always available)
-            var keyboard = UnityEngine.InputSystem.Keyboard.current;
-            if (keyboard != null && keyboard.f12Key.wasPressedThisFrame)
+            // Screenshot capture - configurable key (always available)
+            if (Input.GetKeyDown(GameSettings.ScreenshotKey))
             {
                 CaptureScreenshot();
             }
@@ -322,7 +321,7 @@ namespace FaeMaze.HeartPowers
         {
             yield return new WaitForEndOfFrame();
 
-            string basePath = System.IO.Path.Combine(Application.persistentDataPath, "Screenshots");
+            string basePath = FaeMaze.Systems.GameSettings.ScreenshotPath;
             System.IO.Directory.CreateDirectory(basePath);
 
             screenshotCounter++;
@@ -337,6 +336,7 @@ namespace FaeMaze.HeartPowers
             byte[] bytes = screenshot.EncodeToPNG();
             System.IO.File.WriteAllBytes(fullPath, bytes);
 
+            Debug.Log($"Screenshot saved: {fullPath}");
             Object.Destroy(screenshot);
         }
 
@@ -559,9 +559,17 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public void AddEssence(int amount)
         {
+            AddEssence(amount, EssenceSource.HeartPowerBonus, null);
+        }
+
+        /// <summary>
+        /// Adds essence to the player's pool via GameController with source tracking.
+        /// </summary>
+        public void AddEssence(int amount, EssenceSource source, string details = null)
+        {
             if (gameController != null)
             {
-                gameController.AddEssence(amount);
+                gameController.AddEssence(amount, source, details);
 
                 // Notify listeners (for UI updates)
                 OnEssenceChanged?.Invoke(CurrentEssence);
@@ -573,7 +581,15 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public bool SpendEssence(int amount)
         {
-            if (gameController != null && gameController.TrySpendEssence(amount))
+            return SpendEssence(amount, EssenceSource.HeartPowerCost, null);
+        }
+
+        /// <summary>
+        /// Spends essence via GameController with source tracking (returns true if successful).
+        /// </summary>
+        public bool SpendEssence(int amount, EssenceSource source, string details = null)
+        {
+            if (gameController != null && gameController.TrySpendEssence(amount, source, details))
             {
                 // Notify listeners (for UI updates)
                 OnEssenceChanged?.Invoke(CurrentEssence);
