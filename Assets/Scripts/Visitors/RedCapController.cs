@@ -747,6 +747,12 @@ namespace FaeMaze.Visitors
                     gameController.AddEssence(-essencePenalty, EssenceSource.RedCapPenalty, $"Visitor killed");
                 }
 
+                // Track visitor fate - negative essence since it's a penalty
+                if (GameStatsTracker.Instance != null)
+                {
+                    GameStatsTracker.Instance.RecordVisitorFate(killingTarget.Archetype, VisitorFate.RedCapKill, -essencePenalty);
+                }
+
                 // Despawn the visitor
                 Destroy(killingTarget.gameObject);
                 killingTarget = null;

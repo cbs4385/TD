@@ -77,13 +77,6 @@ namespace FaeMaze.UI
         [SerializeField] private Slider startingEssenceSlider;
         [SerializeField] private TextMeshProUGUI startingEssenceText;
 
-        [Header("Gameplay - Visitor Type Settings")]
-        [SerializeField] private Toggle enableBasicVisitorToggle;
-        [SerializeField] private Toggle enableMistakingVisitorToggle;
-        [SerializeField] private Toggle enableLanternDrunkVisitorToggle;
-        [SerializeField] private Toggle enableWaryWayfarerVisitorToggle;
-        [SerializeField] private Toggle enableSleepwalkingVisitorToggle;
-
         [Header("Gameplay - Player Controls")]
         [SerializeField] private Slider focusSpeedSlider;
         [SerializeField] private TextMeshProUGUI focusSpeedText;
@@ -347,18 +340,6 @@ namespace FaeMaze.UI
             if (startingEssenceSlider != null)
                 startingEssenceSlider.onValueChanged.AddListener(OnStartingEssenceChanged);
 
-            // Visitor Types
-            if (enableBasicVisitorToggle != null)
-                enableBasicVisitorToggle.onValueChanged.AddListener(OnEnableBasicVisitorChanged);
-            if (enableMistakingVisitorToggle != null)
-                enableMistakingVisitorToggle.onValueChanged.AddListener(OnEnableMistakingVisitorChanged);
-            if (enableLanternDrunkVisitorToggle != null)
-                enableLanternDrunkVisitorToggle.onValueChanged.AddListener(OnEnableLanternDrunkVisitorChanged);
-            if (enableWaryWayfarerVisitorToggle != null)
-                enableWaryWayfarerVisitorToggle.onValueChanged.AddListener(OnEnableWaryWayfarerVisitorChanged);
-            if (enableSleepwalkingVisitorToggle != null)
-                enableSleepwalkingVisitorToggle.onValueChanged.AddListener(OnEnableSleepwalkingVisitorChanged);
-
             // Player Controls
             if (focusSpeedSlider != null)
                 focusSpeedSlider.onValueChanged.AddListener(OnFocusSpeedChanged);
@@ -438,18 +419,6 @@ namespace FaeMaze.UI
             UpdateValueText(autoStartDelayText, GameSettings.AutoStartDelay, "{0:F1}s");
             SetSliderValue(startingEssenceSlider, GameSettings.StartingEssence, 0f, 1000f);
             UpdateValueText(startingEssenceText, GameSettings.StartingEssence, "{0:F0}");
-
-            // Visitor Types
-            if (enableBasicVisitorToggle != null)
-                enableBasicVisitorToggle.isOn = GameSettings.EnableVisitorType_Basic;
-            if (enableMistakingVisitorToggle != null)
-                enableMistakingVisitorToggle.isOn = GameSettings.EnableVisitorType_Mistaking;
-            if (enableLanternDrunkVisitorToggle != null)
-                enableLanternDrunkVisitorToggle.isOn = GameSettings.EnableVisitorType_LanternDrunk;
-            if (enableWaryWayfarerVisitorToggle != null)
-                enableWaryWayfarerVisitorToggle.isOn = GameSettings.EnableVisitorType_WaryWayfarer;
-            if (enableSleepwalkingVisitorToggle != null)
-                enableSleepwalkingVisitorToggle.isOn = GameSettings.EnableVisitorType_Sleepwalking;
 
             // Player Controls
             SetSliderValue(focusSpeedSlider, GameSettings.FocusSpeed, 5f, 15f);
@@ -605,32 +574,6 @@ namespace FaeMaze.UI
             UpdateValueText(startingEssenceText, value, "{0:F0}");
         }
 
-        // Visitor Type callbacks
-        private void OnEnableBasicVisitorChanged(bool value)
-        {
-            // Toggle is handled directly
-        }
-
-        private void OnEnableMistakingVisitorChanged(bool value)
-        {
-            // Toggle is handled directly
-        }
-
-        private void OnEnableLanternDrunkVisitorChanged(bool value)
-        {
-            // Toggle is handled directly
-        }
-
-        private void OnEnableWaryWayfarerVisitorChanged(bool value)
-        {
-            // Toggle is handled directly
-        }
-
-        private void OnEnableSleepwalkingVisitorChanged(bool value)
-        {
-            // Toggle is handled directly
-        }
-
         // Player Controls callbacks
         private void OnFocusSpeedChanged(float value)
         {
@@ -709,18 +652,6 @@ namespace FaeMaze.UI
                 GameSettings.AutoStartNextWave = autoStartNextWaveToggle.isOn;
             GameSettings.AutoStartDelay = GetSliderValue(autoStartDelaySlider);
             GameSettings.StartingEssence = (int)GetSliderValue(startingEssenceSlider);
-
-            // Visitor Types
-            if (enableBasicVisitorToggle != null)
-                GameSettings.EnableVisitorType_Basic = enableBasicVisitorToggle.isOn;
-            if (enableMistakingVisitorToggle != null)
-                GameSettings.EnableVisitorType_Mistaking = enableMistakingVisitorToggle.isOn;
-            if (enableLanternDrunkVisitorToggle != null)
-                GameSettings.EnableVisitorType_LanternDrunk = enableLanternDrunkVisitorToggle.isOn;
-            if (enableWaryWayfarerVisitorToggle != null)
-                GameSettings.EnableVisitorType_WaryWayfarer = enableWaryWayfarerVisitorToggle.isOn;
-            if (enableSleepwalkingVisitorToggle != null)
-                GameSettings.EnableVisitorType_Sleepwalking = enableSleepwalkingVisitorToggle.isOn;
 
             // Player Controls
             GameSettings.FocusSpeed = GetSliderValue(focusSpeedSlider);

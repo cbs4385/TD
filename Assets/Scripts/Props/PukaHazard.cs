@@ -577,10 +577,10 @@ namespace FaeMaze.Props
                 // Play sound effect
                 FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
 
-                // Track statistic
+                // Track visitor fate - drowned by Puka/Kelpie, no essence gained
                 if (GameStatsTracker.Instance != null)
                 {
-                    GameStatsTracker.Instance.RecordVisitorConsumed();
+                    GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Drowned, 0);
                 }
 
                 // Destroy the visitor

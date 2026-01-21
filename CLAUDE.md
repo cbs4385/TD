@@ -541,9 +541,9 @@ The tongue has 540 bones (indices 0-539), named Bone_000 through Bone_539:
 
 ## TODO
 
-### In Progress - Heart Tongue Visitor Consumption
+### Completed - Heart Tongue Visitor Consumption
 
-**Current State**: Full grab/consume sequence is working. Tongue emerges, reaches toward visitor, curls around them, pulls them back horizontally, then rotates the curl section 90° while sinking to consume the visitor.
+**Status**: Fully implemented and working. Full grab/consume sequence complete. Tongue emerges, reaches toward visitor, curls around them, pulls them back horizontally, then rotates the curl section 90° while sinking to consume the visitor.
 
 **Model details:**
 - 540 bones named Bone_000 through Bone_539
@@ -652,10 +652,6 @@ else if (curlRotationsLocked && curlIndex >= 0)
 3. **Touching → Pulling**: Grab collider touches visitor, grab hold timer completes
 4. **Pulling → Sinking**: Grab bone reaches lip level (freeze lip bone index)
 5. **Sinking → Idle**: Tongue fully retracted (`tongueZPosition >= TONGUE_START_Z`), visitor consumed
-
-**Remaining polish:**
-- [ ] Fine-tune timing and speeds for satisfying feel
-- [ ] Add visual/audio feedback for consumption
 
 ---
 
@@ -802,7 +798,7 @@ When a prop is changed/removed:
 ### Heart & Powers
 - [x] Fix heart prefab - separated into two parts (heartbase + heart tongue) with state machine
 - [x] Sculpting power (Heart Power 4) - radial menu to change node props
-- [ ] Make icons for heart power buttons
+- [x] Make icons for heart power buttons - used in sculpt power selection menu
 - [x] Finalize heart power essence use costs - see Heart Power Essence Costs section below
 - [ ] Push magic numbers and constants to configurable settings
 

@@ -427,12 +427,6 @@ namespace FaeMaze.Props
             GameObject prop = Instantiate(item.prefab, worldPos, Quaternion.identity);
             prop.name = $"{item.id}_{worldPos.x:F1}_{worldPos.y:F1}";
 
-            // Track prop placement for statistics
-            if (Systems.GameStatsTracker.Instance != null)
-            {
-                Systems.GameStatsTracker.Instance.RecordPropPlaced(item.displayName);
-            }
-
             // Track placed prop
             placedProps.Add(new PlacedProp(worldPos, prop, item.id));
 

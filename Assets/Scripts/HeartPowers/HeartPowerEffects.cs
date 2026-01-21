@@ -3938,9 +3938,10 @@ namespace FaeMaze.HeartPowers
                 Debug.LogWarning("[DevouringMaw] GameController is null, cannot add essence");
             }
 
+            // Track visitor fate with essence value
             if (Systems.GameStatsTracker.Instance != null)
             {
-                Systems.GameStatsTracker.Instance.RecordVisitorConsumed();
+                Systems.GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, Systems.VisitorFate.Devoured, essence);
             }
 
             SoundManager.Instance?.PlayVisitorConsumed();

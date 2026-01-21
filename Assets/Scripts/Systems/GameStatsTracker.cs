@@ -1,8 +1,61 @@
 using UnityEngine;
 using System.Collections.Generic;
+using FaeMaze.Visitors;
 
 namespace FaeMaze.Systems
 {
+    /// <summary>
+    /// Defines the different fates a visitor can meet
+    /// </summary>
+    public enum VisitorFate
+    {
+        Consumed,       // Consumed by the Heart (tongue)
+        Devoured,       // Devoured by the Maw power
+        FairyRing,      // Essence depleted at fairy ring
+        Lantern,        // Essence depleted at lantern
+        Escaped,        // Escaped through exit portal
+        RedCapKill,     // Killed by RedCap
+        Drowned         // Drowned by Puka/Kelpie in pond
+    }
+
+    /// <summary>
+    /// Tracks statistics for a specific visitor archetype
+    /// </summary>
+    public class ArchetypeStats
+    {
+        public Dictionary<VisitorFate, int> FateCounts = new Dictionary<VisitorFate, int>();
+        public Dictionary<VisitorFate, int> EssenceByFate = new Dictionary<VisitorFate, int>();
+
+        public ArchetypeStats()
+        {
+            // Initialize all fates to 0
+            foreach (VisitorFate fate in System.Enum.GetValues(typeof(VisitorFate)))
+            {
+                FateCounts[fate] = 0;
+                EssenceByFate[fate] = 0;
+            }
+        }
+
+        public int TotalCount => GetTotalCount();
+        public int TotalEssence => GetTotalEssence();
+
+        private int GetTotalCount()
+        {
+            int total = 0;
+            foreach (var count in FateCounts.Values)
+                total += count;
+            return total;
+        }
+
+        private int GetTotalEssence()
+        {
+            int total = 0;
+            foreach (var essence in EssenceByFate.Values)
+                total += essence;
+            return total;
+        }
+    }
+
     /// <summary>
     /// Tracks game statistics for display on Game Over screen
     /// </summary>
@@ -18,10 +71,14 @@ namespace FaeMaze.Systems
         #region Statistics
 
         private int maxWaveReached = 0;
-        private int visitorsConsumed = 0;
         private float totalTimePlayed = 0f;
-        private Dictionary<string, int> propsPlaced = new Dictionary<string, int>();
         private float sessionStartTime;
+
+        // Visitor fate tracking by archetype
+        private Dictionary<VisitorArchetype, ArchetypeStats> archetypeStats = new Dictionary<VisitorArchetype, ArchetypeStats>();
+
+        // Aggregate essence tracking by source
+        private Dictionary<EssenceSource, int> essenceBySource = new Dictionary<EssenceSource, int>();
 
         #endregion
 
@@ -30,14 +87,14 @@ namespace FaeMaze.Systems
         /// <summary>Gets the maximum wave number reached in this session</summary>
         public int MaxWaveReached => maxWaveReached;
 
-        /// <summary>Gets the total number of visitors consumed by the Heart</summary>
-        public int VisitorsConsumed => visitorsConsumed;
-
         /// <summary>Gets the total time played in this session (seconds)</summary>
         public float TotalTimePlayed => totalTimePlayed;
 
-        /// <summary>Gets the dictionary of props placed (prop name -> count)</summary>
-        public Dictionary<string, int> PropsPlaced => new Dictionary<string, int>(propsPlaced);
+        /// <summary>Gets the archetype statistics dictionary</summary>
+        public Dictionary<VisitorArchetype, ArchetypeStats> ArchetypeStats => archetypeStats;
+
+        /// <summary>Gets the essence by source dictionary</summary>
+        public Dictionary<EssenceSource, int> EssenceBySource => essenceBySource;
 
         #endregion
 
@@ -83,29 +140,17 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Records that a visitor was consumed by the Heart
+        /// Records a visitor's fate with their archetype and essence value
         /// </summary>
-        public void RecordVisitorConsumed()
+        public void RecordVisitorFate(VisitorArchetype archetype, VisitorFate fate, int essenceValue)
         {
-            visitorsConsumed++;
-        }
-
-        /// <summary>
-        /// Records that a prop was placed
-        /// </summary>
-        public void RecordPropPlaced(string propName)
-        {
-            if (string.IsNullOrEmpty(propName))
-                return;
-
-            if (propsPlaced.ContainsKey(propName))
+            if (!archetypeStats.ContainsKey(archetype))
             {
-                propsPlaced[propName]++;
+                archetypeStats[archetype] = new ArchetypeStats();
             }
-            else
-            {
-                propsPlaced[propName] = 1;
-            }
+
+            archetypeStats[archetype].FateCounts[fate]++;
+            archetypeStats[archetype].EssenceByFate[fate] += essenceValue;
         }
 
         /// <summary>
@@ -114,9 +159,9 @@ namespace FaeMaze.Systems
         public void ResetStats()
         {
             maxWaveReached = 0;
-            visitorsConsumed = 0;
             totalTimePlayed = 0f;
-            propsPlaced.Clear();
+            archetypeStats.Clear();
+            essenceBySource.Clear();
             sessionStartTime = Time.time;
         }
 
@@ -131,20 +176,64 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets a summary of all props placed as a formatted string
+        /// Gets the total count of visitors for a specific fate across all archetypes
         /// </summary>
-        public string GetPropsSummary()
+        public int GetTotalByFate(VisitorFate fate)
         {
-            if (propsPlaced.Count == 0)
-                return "No props placed";
-
-            System.Text.StringBuilder sb = new System.Text.StringBuilder();
-            foreach (var kvp in propsPlaced)
+            int total = 0;
+            foreach (var stats in archetypeStats.Values)
             {
-                sb.AppendLine($"{kvp.Key}: {kvp.Value}");
+                total += stats.FateCounts[fate];
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// Gets the total essence for a specific fate across all archetypes
+        /// </summary>
+        public int GetTotalEssenceByFate(VisitorFate fate)
+        {
+            int total = 0;
+            foreach (var stats in archetypeStats.Values)
+            {
+                total += stats.EssenceByFate[fate];
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// Gets essence totals by source from the GameController's audit log
+        /// </summary>
+        public Dictionary<EssenceSource, int> GetEssenceTotalsBySource()
+        {
+            var totals = new Dictionary<EssenceSource, int>();
+
+            if (GameController.Instance == null)
+                return totals;
+
+            foreach (var transaction in GameController.Instance.EssenceAuditLog)
+            {
+                if (!totals.ContainsKey(transaction.Source))
+                {
+                    totals[transaction.Source] = 0;
+                }
+                totals[transaction.Source] += transaction.Amount;
             }
 
-            return sb.ToString().TrimEnd();
+            return totals;
+        }
+
+        /// <summary>
+        /// Gets the total number of visitors across all archetypes and fates
+        /// </summary>
+        public int GetTotalVisitors()
+        {
+            int total = 0;
+            foreach (var stats in archetypeStats.Values)
+            {
+                total += stats.TotalCount;
+            }
+            return total;
         }
 
         #endregion

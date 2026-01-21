@@ -351,36 +351,27 @@ namespace FaeMaze.Systems
 
         private VisitorControllerBase SelectAndSpawnRandomVisitorType(Vector3 spawnPosition)
         {
-            List<VisitorControllerBase> enabledVisitorPrefabs = new List<VisitorControllerBase>();
+            // Collect all available visitor prefabs
+            List<VisitorControllerBase> availableVisitorPrefabs = new List<VisitorControllerBase>();
 
-            if (GameSettings.EnableVisitorType_Basic && basicVisitorPrefab != null)
-            {
-                enabledVisitorPrefabs.Add(basicVisitorPrefab);
-            }
-            if (GameSettings.EnableVisitorType_Mistaking && mistakingVisitorPrefab != null)
-            {
-                enabledVisitorPrefabs.Add(mistakingVisitorPrefab);
-            }
-            if (GameSettings.EnableVisitorType_LanternDrunk && lanternDrunkVisitorPrefab != null)
-            {
-                enabledVisitorPrefabs.Add(lanternDrunkVisitorPrefab);
-            }
-            if (GameSettings.EnableVisitorType_WaryWayfarer && waryWayfarerVisitorPrefab != null)
-            {
-                enabledVisitorPrefabs.Add(waryWayfarerVisitorPrefab);
-            }
-            if (GameSettings.EnableVisitorType_Sleepwalking && sleepwalkingVisitorPrefab != null)
-            {
-                enabledVisitorPrefabs.Add(sleepwalkingVisitorPrefab);
-            }
+            if (basicVisitorPrefab != null)
+                availableVisitorPrefabs.Add(basicVisitorPrefab);
+            if (mistakingVisitorPrefab != null)
+                availableVisitorPrefabs.Add(mistakingVisitorPrefab);
+            if (lanternDrunkVisitorPrefab != null)
+                availableVisitorPrefabs.Add(lanternDrunkVisitorPrefab);
+            if (waryWayfarerVisitorPrefab != null)
+                availableVisitorPrefabs.Add(waryWayfarerVisitorPrefab);
+            if (sleepwalkingVisitorPrefab != null)
+                availableVisitorPrefabs.Add(sleepwalkingVisitorPrefab);
 
-            if (enabledVisitorPrefabs.Count == 0)
+            if (availableVisitorPrefabs.Count == 0)
             {
                 return null;
             }
 
-            int randomIndex = Random.Range(0, enabledVisitorPrefabs.Count);
-            VisitorControllerBase selectedPrefab = enabledVisitorPrefabs[randomIndex];
+            int randomIndex = Random.Range(0, availableVisitorPrefabs.Count);
+            VisitorControllerBase selectedPrefab = availableVisitorPrefabs[randomIndex];
 
             VisitorControllerBase spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.Euler(0, 0, 180));
 

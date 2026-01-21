@@ -2168,6 +2168,12 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void OnExitedThroughPortal()
         {
+            // Record fate - escaped with no essence gained
+            if (FaeMaze.Systems.GameStatsTracker.Instance != null)
+            {
+                FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorFate(Archetype, FaeMaze.Systems.VisitorFate.Escaped, 0);
+            }
+
             // Visitor escaped - no essence reward for the player
             // Visual feedback could be added here (particle effect, sound, etc.)
 
@@ -2181,6 +2187,29 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void OnEssenceDepleted()
         {
+            // Determine the fate based on what was draining essence
+            FaeMaze.Systems.VisitorFate fate;
+            if (currentFairyRing != null)
+            {
+                fate = FaeMaze.Systems.VisitorFate.FairyRing;
+            }
+            else if (currentFaeLantern != null)
+            {
+                fate = FaeMaze.Systems.VisitorFate.Lantern;
+            }
+            else
+            {
+                // Fallback - shouldn't happen but default to lantern
+                fate = FaeMaze.Systems.VisitorFate.Lantern;
+            }
+
+            // Record fate - essence was gained through the prop interaction (tracked via EssenceSource)
+            // The essence value here is 0 since essence was gained incrementally during fascination
+            if (FaeMaze.Systems.GameStatsTracker.Instance != null)
+            {
+                FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorFate(Archetype, fate, 0);
+            }
+
             // Clear any fascination state
             isFascinated = false;
             isFrightened = false;

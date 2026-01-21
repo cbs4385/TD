@@ -270,16 +270,17 @@ namespace FaeMaze.Maze
         {
             if (visitor == null) return;
 
-            // Track stats
+            int essence = visitor.GetEssenceReward();
+
+            // Track stats - record visitor fate with essence value
             if (GameStatsTracker.Instance != null)
             {
-                GameStatsTracker.Instance.RecordVisitorConsumed();
+                GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consumed, essence);
             }
 
             // Add essence
             if (GameController.Instance != null)
             {
-                int essence = visitor.GetEssenceReward();
                 GameController.Instance.AddEssence(essence, EssenceSource.VisitorConsumedByHeart, $"Reward: {essence}");
             }
 
