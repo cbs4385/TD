@@ -333,33 +333,36 @@ namespace FaeMaze.Cameras
 
         private void HandleKeyboardInput()
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
-            {
-                return;
-            }
-
             if (isOrbiting)
             {
                 return;
             }
 
+            Keyboard keyboard = Keyboard.current;
+
             // Cancel focus when user manually controls camera
-            if (isFocusing && (keyboard.wKey.isPressed || keyboard.sKey.isPressed ||
-                               keyboard.aKey.isPressed || keyboard.dKey.isPressed ||
-                               keyboard.upArrowKey.isPressed || keyboard.downArrowKey.isPressed ||
-                               keyboard.leftArrowKey.isPressed || keyboard.rightArrowKey.isPressed))
+            bool anyMovementPressed =
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
+                (keyboard != null && (keyboard.upArrowKey.isPressed || keyboard.downArrowKey.isPressed ||
+                                      keyboard.leftArrowKey.isPressed || keyboard.rightArrowKey.isPressed));
+
+            if (isFocusing && anyMovementPressed)
             {
                 isFocusing = false;
             }
 
-            // W/S: Move focus point forward/backward
+            // W/S (or configured binding): Move focus point forward/backward
             float forwardInput = 0f;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
+                (keyboard != null && keyboard.upArrowKey.isPressed))
             {
                 forwardInput += 1f;
             }
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
+                (keyboard != null && keyboard.downArrowKey.isPressed))
             {
                 forwardInput -= 1f;
             }
@@ -375,13 +378,15 @@ namespace FaeMaze.Cameras
                 _focusPoint += movement;
             }
 
-            // A/D or ←/→: Orbit yaw (keyboard orbit)
+            // A/D or ←/→ (or configured binding): Orbit yaw (keyboard orbit)
             float yawInput = 0f;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
+                (keyboard != null && keyboard.rightArrowKey.isPressed))
             {
                 yawInput += 1f;
             }
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
+                (keyboard != null && keyboard.leftArrowKey.isPressed))
             {
                 yawInput -= 1f;
             }
@@ -408,30 +413,30 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            // Use configurable bindings + arrow key fallback
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
-            {
-                return;
-            }
-
             float moveInput = 0f;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
+                (keyboard != null && keyboard.upArrowKey.isPressed))
             {
                 moveInput += 1f;
             }
 
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
+                (keyboard != null && keyboard.downArrowKey.isPressed))
             {
                 moveInput -= 1f;
             }
 
             float turnInput = 0f;
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
+                (keyboard != null && keyboard.leftArrowKey.isPressed))
             {
                 turnInput -= 1f;
             }
 
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
+                (keyboard != null && keyboard.rightArrowKey.isPressed))
             {
                 turnInput += 1f;
             }
@@ -466,23 +471,18 @@ namespace FaeMaze.Cameras
 
         private void HandleFocusShortcuts()
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
-            {
-                return;
-            }
-
-            if (keyboard.digit1Key.wasPressedThisFrame)
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusHeartBinding))
             {
                 FocusOnHeart(true);
             }
 
-            if (keyboard.digit2Key.wasPressedThisFrame)
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusEntranceBinding))
             {
                 FocusOnEntrance(true);
             }
 
-            if (keyboard.digit3Key.wasPressedThisFrame && GameController.Instance != null)
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusVisitorBinding) &&
+                GameController.Instance != null)
             {
                 VisitorController lastVisitor = GameController.Instance.LastSpawnedVisitor;
                 if (lastVisitor != null)
@@ -500,29 +500,29 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // Right mouse button = orbit
-            if (mouse.rightButton.wasPressedThisFrame)
+            // Orbit control (configurable, default: right mouse button)
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraOrbitBinding))
             {
                 isOrbiting = true;
             }
-            if (mouse.rightButton.wasReleasedThisFrame)
+            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraOrbitBinding))
             {
                 isOrbiting = false;
             }
 
-            // Middle mouse button = pan
-            if (mouse.middleButton.wasPressedThisFrame)
+            // Pan control (configurable, default: middle mouse button)
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraPanBinding))
             {
                 isPanning = true;
                 lastMouseWorldPosition = GetMouseWorldPosition();
             }
-            if (mouse.middleButton.wasReleasedThisFrame)
+            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraPanBinding))
             {
                 isPanning = false;
             }
 
             // Handle orbit drag
-            if (isOrbiting && mouse.rightButton.isPressed)
+            if (isOrbiting && InputBindingHelper.IsBindingPressed(GameSettings.CameraOrbitBinding))
             {
                 Vector2 mouseDelta = mouse.delta.ReadValue();
                 _yawDeg += mouseDelta.x * orbitSpeed * Time.deltaTime;
@@ -537,7 +537,7 @@ namespace FaeMaze.Cameras
             }
 
             // Handle pan drag
-            if (isPanning && mouse.middleButton.isPressed)
+            if (isPanning && InputBindingHelper.IsBindingPressed(GameSettings.CameraPanBinding))
             {
                 Vector3 currentMouseWorldPosition = GetMouseWorldPosition();
                 Vector3 delta = lastMouseWorldPosition - currentMouseWorldPosition;

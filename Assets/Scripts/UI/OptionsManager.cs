@@ -16,9 +16,12 @@ namespace FaeMaze.UI
         [SerializeField] private Button gameplayTabButton;
         [SerializeField] private Button videoTabButton;
         [SerializeField] private Button audioTabButton;
+        [SerializeField] private Button controlsTabButton;
         [SerializeField] private GameObject gameplayPanel;
         [SerializeField] private GameObject videoPanel;
         [SerializeField] private GameObject audioPanel;
+        [SerializeField] private GameObject controlsPanel;
+        [SerializeField] private ScrollRect mainScrollRect;
         [SerializeField] private Color activeTabColor = new Color(0.3f, 0.3f, 0.3f, 1f);
         [SerializeField] private Color inactiveTabColor = new Color(0.15f, 0.15f, 0.15f, 1f);
 
@@ -98,6 +101,29 @@ namespace FaeMaze.UI
         private SceneLoader sceneLoader;
         private int currentTab = 0;
         private List<Resolution> availableResolutions = new List<Resolution>();
+
+        // Key binding capture state
+        private KeyBindingCapture activeCapture = null;
+
+        // Binding values (cached from UI, saved on Apply)
+        private string bindingHeartPower1;
+        private string bindingHeartPower2;
+        private string bindingHeartPower3;
+        private string bindingHeartPower4;
+        private string bindingSculptPond;
+        private string bindingSculptLantern;
+        private string bindingSculptRing;
+        private string bindingSculptRemove;
+        private string bindingCameraMoveForward;
+        private string bindingCameraMoveBackward;
+        private string bindingCameraTurnLeft;
+        private string bindingCameraTurnRight;
+        private string bindingCameraFocusHeart;
+        private string bindingCameraFocusEntrance;
+        private string bindingCameraFocusVisitor;
+        private string bindingCameraOrbit;
+        private string bindingCameraPan;
+        private string bindingScreenshot;
 
         // Common keybinding options for dropdowns
         private static readonly KeyCode[] keybindOptions = new KeyCode[]
@@ -243,13 +269,53 @@ namespace FaeMaze.UI
         {
             currentTab = tabIndex;
 
-            // Show/hide panels - Tab order: Gameplay (0), Video (1), Audio (2)
+            // Show/hide panels - Tab order: Gameplay (0), Video (1), Audio (2), Controls (3)
             if (gameplayPanel != null) gameplayPanel.SetActive(tabIndex == 0);
             if (videoPanel != null) videoPanel.SetActive(tabIndex == 1);
             if (audioPanel != null) audioPanel.SetActive(tabIndex == 2);
+            if (controlsPanel != null) controlsPanel.SetActive(tabIndex == 3);
+
+            // Update ScrollRect content to the active panel so scrolling works
+            UpdateScrollRectContent(tabIndex);
+
+            // Cancel any active binding capture when switching tabs
+            if (activeCapture != null)
+            {
+                activeCapture.CancelCapture();
+                activeCapture = null;
+            }
 
             // Update tab button visuals
             UpdateTabButtonColors();
+        }
+
+        private void UpdateScrollRectContent(int tabIndex)
+        {
+            if (mainScrollRect == null) return;
+
+            RectTransform content = null;
+            switch (tabIndex)
+            {
+                case 0:
+                    content = gameplayPanel?.GetComponent<RectTransform>();
+                    break;
+                case 1:
+                    content = videoPanel?.GetComponent<RectTransform>();
+                    break;
+                case 2:
+                    content = audioPanel?.GetComponent<RectTransform>();
+                    break;
+                case 3:
+                    content = controlsPanel?.GetComponent<RectTransform>();
+                    break;
+            }
+
+            if (content != null)
+            {
+                mainScrollRect.content = content;
+                // Reset scroll position to top when switching tabs
+                mainScrollRect.verticalNormalizedPosition = 1f;
+            }
         }
 
         private void UpdateTabButtonColors()
@@ -257,6 +323,7 @@ namespace FaeMaze.UI
             SetTabButtonColor(gameplayTabButton, currentTab == 0);
             SetTabButtonColor(videoTabButton, currentTab == 1);
             SetTabButtonColor(audioTabButton, currentTab == 2);
+            SetTabButtonColor(controlsTabButton, currentTab == 3);
         }
 
         private void SetTabButtonColor(Button button, bool isActive)
@@ -272,13 +339,15 @@ namespace FaeMaze.UI
 
         private void SetupUIListeners()
         {
-            // Tab buttons - Tab order: Gameplay (0), Video (1), Audio (2)
+            // Tab buttons - Tab order: Gameplay (0), Video (1), Audio (2), Controls (3)
             if (gameplayTabButton != null)
                 gameplayTabButton.onClick.AddListener(() => SelectTab(0));
             if (videoTabButton != null)
                 videoTabButton.onClick.AddListener(() => SelectTab(1));
             if (audioTabButton != null)
                 audioTabButton.onClick.AddListener(() => SelectTab(2));
+            if (controlsTabButton != null)
+                controlsTabButton.onClick.AddListener(() => SelectTab(3));
 
             // Video settings
             if (fullscreenToggle != null)
@@ -432,6 +501,9 @@ namespace FaeMaze.UI
             if (screenshotPathInput != null)
                 screenshotPathInput.text = GameSettings.ScreenshotPath;
             SetDropdownValue(screenshotKeyDropdown, KeyCodeToDropdownIndex(GameSettings.ScreenshotKey));
+
+            // Key Bindings (Controls tab)
+            LoadBindingSettings();
         }
 
         private void SetDropdownValue(TMP_Dropdown dropdown, int value)
@@ -583,10 +655,39 @@ namespace FaeMaze.UI
         // Screenshot callbacks
         private void OnBrowseScreenshotPath()
         {
-            // Note: Unity doesn't have a built-in folder browser dialog
-            // In a real implementation, you'd use a native file dialog plugin
-            // For now, the user can manually type the path in the input field
-            Debug.Log("Browse button clicked - manual path entry required");
+#if UNITY_EDITOR
+            // In editor, use EditorUtility folder panel
+            string currentPath = screenshotPathInput != null ? screenshotPathInput.text : "";
+            if (string.IsNullOrEmpty(currentPath))
+            {
+                currentPath = Application.persistentDataPath;
+            }
+
+            string selectedPath = UnityEditor.EditorUtility.OpenFolderPanel("Select Screenshot Directory", currentPath, "");
+            if (!string.IsNullOrEmpty(selectedPath))
+            {
+                if (screenshotPathInput != null)
+                {
+                    screenshotPathInput.text = selectedPath;
+                }
+                Debug.Log($"Screenshot directory set to: {selectedPath}");
+            }
+#else
+            // At runtime, use a simple file browser or show current path
+            // For standalone builds, we'd need a runtime file browser asset
+            // For now, open the folder in the system file explorer so user can copy the path
+            string currentPath = screenshotPathInput != null ? screenshotPathInput.text : Application.persistentDataPath;
+            if (System.IO.Directory.Exists(currentPath))
+            {
+                Application.OpenURL("file://" + currentPath);
+                Debug.Log($"Opened folder: {currentPath} - Copy desired path and paste into the text field");
+            }
+            else
+            {
+                Application.OpenURL("file://" + Application.persistentDataPath);
+                Debug.Log($"Opened default folder - Copy desired path and paste into the text field");
+            }
+#endif
         }
 
         // Button handlers
@@ -658,20 +759,50 @@ namespace FaeMaze.UI
 
             // Player Controls
             GameSettings.FocusSpeed = GetSliderValue(focusSpeedSlider);
-            if (heartPower1KeyDropdown != null)
-                GameSettings.HeartPower1Key = DropdownIndexToKeyCode(heartPower1KeyDropdown.value);
-            if (heartPower2KeyDropdown != null)
-                GameSettings.HeartPower2Key = DropdownIndexToKeyCode(heartPower2KeyDropdown.value);
-            if (heartPower3KeyDropdown != null)
-                GameSettings.HeartPower3Key = DropdownIndexToKeyCode(heartPower3KeyDropdown.value);
-            if (heartPower4KeyDropdown != null)
-                GameSettings.HeartPower4Key = DropdownIndexToKeyCode(heartPower4KeyDropdown.value);
+            // Note: HeartPower key dropdowns are deprecated - use Controls tab bindings instead
 
             // Screenshot Settings
             if (screenshotPathInput != null)
                 GameSettings.ScreenshotPath = screenshotPathInput.text;
-            if (screenshotKeyDropdown != null)
-                GameSettings.ScreenshotKey = DropdownIndexToKeyCode(screenshotKeyDropdown.value);
+            // Note: Screenshot key dropdown is deprecated - use Controls tab binding instead
+
+            // Key Bindings (from Controls tab)
+            if (!string.IsNullOrEmpty(bindingHeartPower1))
+                GameSettings.HeartPower1Binding = bindingHeartPower1;
+            if (!string.IsNullOrEmpty(bindingHeartPower2))
+                GameSettings.HeartPower2Binding = bindingHeartPower2;
+            if (!string.IsNullOrEmpty(bindingHeartPower3))
+                GameSettings.HeartPower3Binding = bindingHeartPower3;
+            if (!string.IsNullOrEmpty(bindingHeartPower4))
+                GameSettings.HeartPower4Binding = bindingHeartPower4;
+            if (!string.IsNullOrEmpty(bindingSculptPond))
+                GameSettings.SculptPondBinding = bindingSculptPond;
+            if (!string.IsNullOrEmpty(bindingSculptLantern))
+                GameSettings.SculptLanternBinding = bindingSculptLantern;
+            if (!string.IsNullOrEmpty(bindingSculptRing))
+                GameSettings.SculptRingBinding = bindingSculptRing;
+            if (!string.IsNullOrEmpty(bindingSculptRemove))
+                GameSettings.SculptRemoveBinding = bindingSculptRemove;
+            if (!string.IsNullOrEmpty(bindingCameraMoveForward))
+                GameSettings.CameraMoveForwardBinding = bindingCameraMoveForward;
+            if (!string.IsNullOrEmpty(bindingCameraMoveBackward))
+                GameSettings.CameraMoveBackwardBinding = bindingCameraMoveBackward;
+            if (!string.IsNullOrEmpty(bindingCameraTurnLeft))
+                GameSettings.CameraTurnLeftBinding = bindingCameraTurnLeft;
+            if (!string.IsNullOrEmpty(bindingCameraTurnRight))
+                GameSettings.CameraTurnRightBinding = bindingCameraTurnRight;
+            if (!string.IsNullOrEmpty(bindingCameraFocusHeart))
+                GameSettings.CameraFocusHeartBinding = bindingCameraFocusHeart;
+            if (!string.IsNullOrEmpty(bindingCameraFocusEntrance))
+                GameSettings.CameraFocusEntranceBinding = bindingCameraFocusEntrance;
+            if (!string.IsNullOrEmpty(bindingCameraFocusVisitor))
+                GameSettings.CameraFocusVisitorBinding = bindingCameraFocusVisitor;
+            if (!string.IsNullOrEmpty(bindingCameraOrbit))
+                GameSettings.CameraOrbitBinding = bindingCameraOrbit;
+            if (!string.IsNullOrEmpty(bindingCameraPan))
+                GameSettings.CameraPanBinding = bindingCameraPan;
+            if (!string.IsNullOrEmpty(bindingScreenshot))
+                GameSettings.ScreenshotBinding = bindingScreenshot;
 
             GameSettings.Save();
         }
@@ -699,5 +830,216 @@ namespace FaeMaze.UI
                 text.text = string.Format(format, value);
             }
         }
+
+        #region Key Binding Capture Handling
+
+        /// <summary>
+        /// Called when a KeyBindingCapture starts capturing input.
+        /// </summary>
+        public void OnBindingCaptureStarted(KeyBindingCapture capture)
+        {
+            // Cancel any existing capture
+            if (activeCapture != null && activeCapture != capture)
+            {
+                activeCapture.CancelCapture();
+            }
+            activeCapture = capture;
+        }
+
+        /// <summary>
+        /// Called when a KeyBindingCapture completes capturing input.
+        /// </summary>
+        public void OnBindingCaptureCompleted(KeyBindingCapture capture)
+        {
+            if (activeCapture == capture)
+            {
+                activeCapture = null;
+            }
+        }
+
+        /// <summary>
+        /// Loads binding values from GameSettings into the cached binding variables.
+        /// Called during LoadSettings.
+        /// </summary>
+        private void LoadBindingSettings()
+        {
+            bindingHeartPower1 = GameSettings.HeartPower1Binding;
+            bindingHeartPower2 = GameSettings.HeartPower2Binding;
+            bindingHeartPower3 = GameSettings.HeartPower3Binding;
+            bindingHeartPower4 = GameSettings.HeartPower4Binding;
+            bindingSculptPond = GameSettings.SculptPondBinding;
+            bindingSculptLantern = GameSettings.SculptLanternBinding;
+            bindingSculptRing = GameSettings.SculptRingBinding;
+            bindingSculptRemove = GameSettings.SculptRemoveBinding;
+            bindingCameraMoveForward = GameSettings.CameraMoveForwardBinding;
+            bindingCameraMoveBackward = GameSettings.CameraMoveBackwardBinding;
+            bindingCameraTurnLeft = GameSettings.CameraTurnLeftBinding;
+            bindingCameraTurnRight = GameSettings.CameraTurnRightBinding;
+            bindingCameraFocusHeart = GameSettings.CameraFocusHeartBinding;
+            bindingCameraFocusEntrance = GameSettings.CameraFocusEntranceBinding;
+            bindingCameraFocusVisitor = GameSettings.CameraFocusVisitorBinding;
+            bindingCameraOrbit = GameSettings.CameraOrbitBinding;
+            bindingCameraPan = GameSettings.CameraPanBinding;
+            bindingScreenshot = GameSettings.ScreenshotBinding;
+
+            // Update any KeyBindingCapture components in the controls panel
+            UpdateBindingCaptureDisplays();
+        }
+
+        /// <summary>
+        /// Finds KeyBindingCapture components in all panels and updates their display values.
+        /// </summary>
+        private void UpdateBindingCaptureDisplays()
+        {
+            // Collect captures from all panels (Controls, Video, Gameplay, Audio)
+            var allCaptures = new List<KeyBindingCapture>();
+
+            if (controlsPanel != null)
+                allCaptures.AddRange(controlsPanel.GetComponentsInChildren<KeyBindingCapture>(true));
+            if (videoPanel != null)
+                allCaptures.AddRange(videoPanel.GetComponentsInChildren<KeyBindingCapture>(true));
+            if (gameplayPanel != null)
+                allCaptures.AddRange(gameplayPanel.GetComponentsInChildren<KeyBindingCapture>(true));
+            if (audioPanel != null)
+                allCaptures.AddRange(audioPanel.GetComponentsInChildren<KeyBindingCapture>(true));
+
+            var captures = allCaptures;
+            foreach (var capture in captures)
+            {
+                string objName = capture.gameObject.name.ToLower();
+
+                // Match by object name to determine which binding to use
+                if (objName.Contains("heartpower1") || objName.Contains("murmuring"))
+                {
+                    capture.SetBinding(bindingHeartPower1);
+                    capture.OnBindingCaptured -= OnHeartPower1BindingChanged;
+                    capture.OnBindingCaptured += OnHeartPower1BindingChanged;
+                }
+                else if (objName.Contains("heartpower2") || objName.Contains("grasp"))
+                {
+                    capture.SetBinding(bindingHeartPower2);
+                    capture.OnBindingCaptured -= OnHeartPower2BindingChanged;
+                    capture.OnBindingCaptured += OnHeartPower2BindingChanged;
+                }
+                else if (objName.Contains("heartpower3") || objName.Contains("devour"))
+                {
+                    capture.SetBinding(bindingHeartPower3);
+                    capture.OnBindingCaptured -= OnHeartPower3BindingChanged;
+                    capture.OnBindingCaptured += OnHeartPower3BindingChanged;
+                }
+                else if (objName.Contains("heartpower4") || objName.Contains("sculpting"))
+                {
+                    capture.SetBinding(bindingHeartPower4);
+                    capture.OnBindingCaptured -= OnHeartPower4BindingChanged;
+                    capture.OnBindingCaptured += OnHeartPower4BindingChanged;
+                }
+                else if (objName.Contains("sculptpond") || objName.Contains("placepond"))
+                {
+                    capture.SetBinding(bindingSculptPond);
+                    capture.OnBindingCaptured -= OnSculptPondBindingChanged;
+                    capture.OnBindingCaptured += OnSculptPondBindingChanged;
+                }
+                else if (objName.Contains("sculptlantern") || objName.Contains("placelantern"))
+                {
+                    capture.SetBinding(bindingSculptLantern);
+                    capture.OnBindingCaptured -= OnSculptLanternBindingChanged;
+                    capture.OnBindingCaptured += OnSculptLanternBindingChanged;
+                }
+                else if (objName.Contains("sculptring") || objName.Contains("placering"))
+                {
+                    capture.SetBinding(bindingSculptRing);
+                    capture.OnBindingCaptured -= OnSculptRingBindingChanged;
+                    capture.OnBindingCaptured += OnSculptRingBindingChanged;
+                }
+                else if (objName.Contains("sculptremove") || objName.Contains("removeprop"))
+                {
+                    capture.SetBinding(bindingSculptRemove);
+                    capture.OnBindingCaptured -= OnSculptRemoveBindingChanged;
+                    capture.OnBindingCaptured += OnSculptRemoveBindingChanged;
+                }
+                else if (objName.Contains("moveforward") || objName.Contains("cameraforward"))
+                {
+                    capture.SetBinding(bindingCameraMoveForward);
+                    capture.OnBindingCaptured -= OnCameraMoveForwardBindingChanged;
+                    capture.OnBindingCaptured += OnCameraMoveForwardBindingChanged;
+                }
+                else if (objName.Contains("movebackward") || objName.Contains("camerabackward"))
+                {
+                    capture.SetBinding(bindingCameraMoveBackward);
+                    capture.OnBindingCaptured -= OnCameraMoveBackwardBindingChanged;
+                    capture.OnBindingCaptured += OnCameraMoveBackwardBindingChanged;
+                }
+                else if (objName.Contains("turnleft") || objName.Contains("cameraleft"))
+                {
+                    capture.SetBinding(bindingCameraTurnLeft);
+                    capture.OnBindingCaptured -= OnCameraTurnLeftBindingChanged;
+                    capture.OnBindingCaptured += OnCameraTurnLeftBindingChanged;
+                }
+                else if (objName.Contains("turnright") || objName.Contains("cameraright"))
+                {
+                    capture.SetBinding(bindingCameraTurnRight);
+                    capture.OnBindingCaptured -= OnCameraTurnRightBindingChanged;
+                    capture.OnBindingCaptured += OnCameraTurnRightBindingChanged;
+                }
+                else if (objName.Contains("focusheart"))
+                {
+                    capture.SetBinding(bindingCameraFocusHeart);
+                    capture.OnBindingCaptured -= OnCameraFocusHeartBindingChanged;
+                    capture.OnBindingCaptured += OnCameraFocusHeartBindingChanged;
+                }
+                else if (objName.Contains("focusentrance"))
+                {
+                    capture.SetBinding(bindingCameraFocusEntrance);
+                    capture.OnBindingCaptured -= OnCameraFocusEntranceBindingChanged;
+                    capture.OnBindingCaptured += OnCameraFocusEntranceBindingChanged;
+                }
+                else if (objName.Contains("focusvisitor"))
+                {
+                    capture.SetBinding(bindingCameraFocusVisitor);
+                    capture.OnBindingCaptured -= OnCameraFocusVisitorBindingChanged;
+                    capture.OnBindingCaptured += OnCameraFocusVisitorBindingChanged;
+                }
+                else if (objName.Contains("orbit"))
+                {
+                    capture.SetBinding(bindingCameraOrbit);
+                    capture.OnBindingCaptured -= OnCameraOrbitBindingChanged;
+                    capture.OnBindingCaptured += OnCameraOrbitBindingChanged;
+                }
+                else if (objName.Contains("pan"))
+                {
+                    capture.SetBinding(bindingCameraPan);
+                    capture.OnBindingCaptured -= OnCameraPanBindingChanged;
+                    capture.OnBindingCaptured += OnCameraPanBindingChanged;
+                }
+                else if (objName.Contains("screenshot"))
+                {
+                    capture.SetBinding(bindingScreenshot);
+                    capture.OnBindingCaptured -= OnScreenshotBindingChanged;
+                    capture.OnBindingCaptured += OnScreenshotBindingChanged;
+                }
+            }
+        }
+
+        // Binding change callbacks
+        private void OnHeartPower1BindingChanged(string binding) => bindingHeartPower1 = binding;
+        private void OnHeartPower2BindingChanged(string binding) => bindingHeartPower2 = binding;
+        private void OnHeartPower3BindingChanged(string binding) => bindingHeartPower3 = binding;
+        private void OnHeartPower4BindingChanged(string binding) => bindingHeartPower4 = binding;
+        private void OnSculptPondBindingChanged(string binding) => bindingSculptPond = binding;
+        private void OnSculptLanternBindingChanged(string binding) => bindingSculptLantern = binding;
+        private void OnSculptRingBindingChanged(string binding) => bindingSculptRing = binding;
+        private void OnSculptRemoveBindingChanged(string binding) => bindingSculptRemove = binding;
+        private void OnCameraMoveForwardBindingChanged(string binding) => bindingCameraMoveForward = binding;
+        private void OnCameraMoveBackwardBindingChanged(string binding) => bindingCameraMoveBackward = binding;
+        private void OnCameraTurnLeftBindingChanged(string binding) => bindingCameraTurnLeft = binding;
+        private void OnCameraTurnRightBindingChanged(string binding) => bindingCameraTurnRight = binding;
+        private void OnCameraFocusHeartBindingChanged(string binding) => bindingCameraFocusHeart = binding;
+        private void OnCameraFocusEntranceBindingChanged(string binding) => bindingCameraFocusEntrance = binding;
+        private void OnCameraFocusVisitorBindingChanged(string binding) => bindingCameraFocusVisitor = binding;
+        private void OnCameraOrbitBindingChanged(string binding) => bindingCameraOrbit = binding;
+        private void OnCameraPanBindingChanged(string binding) => bindingCameraPan = binding;
+        private void OnScreenshotBindingChanged(string binding) => bindingScreenshot = binding;
+
+        #endregion
     }
 }

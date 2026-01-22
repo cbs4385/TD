@@ -47,7 +47,11 @@ namespace FaeMaze.Systems
 
         [Header("Spawning Settings")]
         [SerializeField]
-        private float spawnInterval = 1.0f;
+        private float baseSpawnInterval = 5.0f;
+
+        [SerializeField]
+        [Tooltip("Each spawn increases interval by this percentage (0.05 = 5%)")]
+        private float spawnIntervalIncreaseRate = 0.05f;
 
         [Header("Red Cap Settings")]
         [SerializeField]
@@ -86,6 +90,7 @@ namespace FaeMaze.Systems
 
         private RedCapController currentRedCap;
         private int startingEssence;
+        private float currentSpawnInterval;
 
         private TextMeshProUGUI visitorCountText;
         private TextMeshProUGUI waveStatusText;
@@ -169,7 +174,8 @@ namespace FaeMaze.Systems
 
         private void LoadSettings()
         {
-            spawnInterval = GameSettings.SpawnInterval;
+            baseSpawnInterval = GameSettings.SpawnInterval > 0 ? GameSettings.SpawnInterval : 5.0f;
+            currentSpawnInterval = baseSpawnInterval;
             enableRedCap = GameSettings.EnableRedCap;
             startingEssence = GameSettings.StartingEssence;
         }
@@ -262,6 +268,9 @@ namespace FaeMaze.Systems
         {
             isSpawning = true;
 
+            // Reset spawn interval at start of wave
+            currentSpawnInterval = baseSpawnInterval;
+
             // Spawn visitors continuously while game is active (essence > 0)
             while (isWaveActive)
             {
@@ -274,10 +283,12 @@ namespace FaeMaze.Systems
                 SpawnVisitor();
                 visitorsSpawnedThisWave++;
 
-                // Read spawn interval from settings each time to respect changes made in options
-                // Enforce minimum of 0.1 seconds to prevent runaway spawning if settings are corrupted
-                float currentSpawnInterval = Mathf.Max(0.1f, GameSettings.SpawnInterval);
-                yield return new WaitForSeconds(currentSpawnInterval);
+                // Wait for current interval (minimum 0.1 seconds for safety)
+                float waitTime = Mathf.Max(0.1f, currentSpawnInterval);
+                yield return new WaitForSeconds(waitTime);
+
+                // Increase spawn interval by configured percentage after each spawn
+                currentSpawnInterval *= (1f + spawnIntervalIncreaseRate);
             }
 
             isSpawning = false;

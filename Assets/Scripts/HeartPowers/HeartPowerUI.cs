@@ -255,56 +255,25 @@ namespace FaeMaze.HeartPowers
 
         private void HandleKeyboardInput()
         {
-            // Commented out - focusing on powers 2, 8, 9 for now
-            // Remapped to keys 1, 2, 3 for the active powers
-            // if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))
-            // {
-            //     ActivatePower(HeartPowerType.HeartbeatOfLonging);
-            // }
-            if (Input.GetKeyDown(GameSettings.HeartPower1Key))
+            // Use InputBindingHelper for configurable key/mouse bindings
+            string power1Binding = GameSettings.HeartPower1Binding;
+            if (InputBindingHelper.WasBindingPressedThisFrame(power1Binding))
             {
+                Debug.Log($"[HeartPowerUI] Power 1 binding '{power1Binding}' pressed - activating MurmuringPaths");
                 ActivatePower(HeartPowerType.MurmuringPaths);
             }
-            else if (Input.GetKeyDown(GameSettings.HeartPower2Key))
+            else if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.HeartPower2Binding))
             {
                 ActivatePower(HeartPowerType.HeartwardGrasp);
             }
-            else if (Input.GetKeyDown(GameSettings.HeartPower3Key))
+            else if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.HeartPower3Binding))
             {
                 ActivatePower(HeartPowerType.DevouringMaw);
             }
-            else if (Input.GetKeyDown(GameSettings.HeartPower4Key))
+            else if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.HeartPower4Binding))
             {
                 ActivatePower(HeartPowerType.Sculpting);
             }
-            // else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
-            // {
-            //     ActivatePower(HeartPowerType.DreamSnare);
-            // }
-            // else if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4))
-            // {
-            //     ActivatePower(HeartPowerType.FeastwardPanic);
-            // }
-            // else if (Input.GetKeyDown(KeyCode.Alpha5) || Input.GetKeyDown(KeyCode.Keypad5))
-            // {
-            //     ActivatePower(HeartPowerType.CovenantWithWisps);
-            // }
-            // else if (Input.GetKeyDown(KeyCode.Alpha6) || Input.GetKeyDown(KeyCode.Keypad6))
-            // {
-            //     ActivatePower(HeartPowerType.PukasBargain);
-            // }
-            // else if (Input.GetKeyDown(KeyCode.Alpha7) || Input.GetKeyDown(KeyCode.Keypad7))
-            // {
-            //     ActivatePower(HeartPowerType.RingOfInvitations);
-            // }
-            // else if (Input.GetKeyDown(KeyCode.Alpha8) || Input.GetKeyDown(KeyCode.Keypad8))
-            // {
-            //     ActivatePower(HeartPowerType.HeartwardGrasp);
-            // }
-            // else if (Input.GetKeyDown(KeyCode.Alpha9) || Input.GetKeyDown(KeyCode.Keypad9))
-            // {
-            //     ActivatePower(HeartPowerType.DevouringMaw);
-            // }
         }
 
         #endregion

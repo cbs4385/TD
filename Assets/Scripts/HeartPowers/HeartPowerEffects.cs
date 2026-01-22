@@ -4304,11 +4304,38 @@ namespace FaeMaze.HeartPowers
         {
             base.Update(deltaTime);
 
-            // Check for escape key to cancel
+            if (!menuActive)
+                return;
+
             var keyboard = UnityEngine.InputSystem.Keyboard.current;
-            if (menuActive && keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+
+            // Check for escape key to cancel
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             {
                 CancelMenu();
+                return;
+            }
+
+            // Keyboard shortcuts for sculpt menu options
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptPondBinding))
+            {
+                OnPondClicked();
+                return;
+            }
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptLanternBinding))
+            {
+                OnLanternClicked();
+                return;
+            }
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRingBinding))
+            {
+                OnRingClicked();
+                return;
+            }
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRemoveBinding))
+            {
+                OnRemoveClicked();
+                return;
             }
         }
 

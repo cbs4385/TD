@@ -131,7 +131,7 @@ namespace FaeMaze.Systems
         // Spawning Settings
         public static float SpawnInterval
         {
-            get => Mathf.Max(0.1f, PlayerPrefs.GetFloat("SpawnInterval", 1f));
+            get => Mathf.Max(0.1f, PlayerPrefs.GetFloat("SpawnInterval", 5f));
             set => PlayerPrefs.SetFloat("SpawnInterval", Mathf.Max(0.1f, value));
         }
 
@@ -185,12 +185,6 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetString("ScreenshotPath", value ?? "");
         }
 
-        public static KeyCode ScreenshotKey
-        {
-            get => (KeyCode)PlayerPrefs.GetInt("ScreenshotKey", (int)KeyCode.F12);
-            set => PlayerPrefs.SetInt("ScreenshotKey", (int)value);
-        }
-
         // Player Control Settings
         public static float FocusSpeed
         {
@@ -198,29 +192,150 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetFloat("FocusSpeed", Mathf.Clamp(value, 5f, 15f));
         }
 
-        // Heart Power Keybindings
+        // Heart Power Keybindings (string-based for flexibility with keyboard/mouse)
+        public static string HeartPower1Binding
+        {
+            get => PlayerPrefs.GetString("HeartPower1Binding", "Alpha1");
+            set => PlayerPrefs.SetString("HeartPower1Binding", value);
+        }
+
+        public static string HeartPower2Binding
+        {
+            get => PlayerPrefs.GetString("HeartPower2Binding", "Alpha2");
+            set => PlayerPrefs.SetString("HeartPower2Binding", value);
+        }
+
+        public static string HeartPower3Binding
+        {
+            get => PlayerPrefs.GetString("HeartPower3Binding", "Alpha3");
+            set => PlayerPrefs.SetString("HeartPower3Binding", value);
+        }
+
+        public static string HeartPower4Binding
+        {
+            get => PlayerPrefs.GetString("HeartPower4Binding", "Alpha4");
+            set => PlayerPrefs.SetString("HeartPower4Binding", value);
+        }
+
+        // Legacy KeyCode properties for backwards compatibility
         public static KeyCode HeartPower1Key
         {
-            get => (KeyCode)PlayerPrefs.GetInt("HeartPower1Key", (int)KeyCode.Alpha1);
-            set => PlayerPrefs.SetInt("HeartPower1Key", (int)value);
+            get => InputBindingHelper.ParseKeyCode(HeartPower1Binding);
+            set => HeartPower1Binding = InputBindingHelper.KeyCodeToBindingString(value);
         }
 
         public static KeyCode HeartPower2Key
         {
-            get => (KeyCode)PlayerPrefs.GetInt("HeartPower2Key", (int)KeyCode.Alpha2);
-            set => PlayerPrefs.SetInt("HeartPower2Key", (int)value);
+            get => InputBindingHelper.ParseKeyCode(HeartPower2Binding);
+            set => HeartPower2Binding = InputBindingHelper.KeyCodeToBindingString(value);
         }
 
         public static KeyCode HeartPower3Key
         {
-            get => (KeyCode)PlayerPrefs.GetInt("HeartPower3Key", (int)KeyCode.Alpha3);
-            set => PlayerPrefs.SetInt("HeartPower3Key", (int)value);
+            get => InputBindingHelper.ParseKeyCode(HeartPower3Binding);
+            set => HeartPower3Binding = InputBindingHelper.KeyCodeToBindingString(value);
         }
 
         public static KeyCode HeartPower4Key
         {
-            get => (KeyCode)PlayerPrefs.GetInt("HeartPower4Key", (int)KeyCode.Alpha4);
-            set => PlayerPrefs.SetInt("HeartPower4Key", (int)value);
+            get => InputBindingHelper.ParseKeyCode(HeartPower4Binding);
+            set => HeartPower4Binding = InputBindingHelper.KeyCodeToBindingString(value);
+        }
+
+        // Sculpt Menu Keybindings (when sculpt radial menu is open)
+        public static string SculptPondBinding
+        {
+            get => PlayerPrefs.GetString("SculptPondBinding", "Q");
+            set => PlayerPrefs.SetString("SculptPondBinding", value);
+        }
+
+        public static string SculptLanternBinding
+        {
+            get => PlayerPrefs.GetString("SculptLanternBinding", "S");
+            set => PlayerPrefs.SetString("SculptLanternBinding", value);
+        }
+
+        public static string SculptRingBinding
+        {
+            get => PlayerPrefs.GetString("SculptRingBinding", "E");
+            set => PlayerPrefs.SetString("SculptRingBinding", value);
+        }
+
+        public static string SculptRemoveBinding
+        {
+            get => PlayerPrefs.GetString("SculptRemoveBinding", "W");
+            set => PlayerPrefs.SetString("SculptRemoveBinding", value);
+        }
+
+        // Camera Movement Keybindings
+        public static string CameraMoveForwardBinding
+        {
+            get => PlayerPrefs.GetString("CameraMoveForwardBinding", "W");
+            set => PlayerPrefs.SetString("CameraMoveForwardBinding", value);
+        }
+
+        public static string CameraMoveBackwardBinding
+        {
+            get => PlayerPrefs.GetString("CameraMoveBackwardBinding", "S");
+            set => PlayerPrefs.SetString("CameraMoveBackwardBinding", value);
+        }
+
+        public static string CameraTurnLeftBinding
+        {
+            get => PlayerPrefs.GetString("CameraTurnLeftBinding", "A");
+            set => PlayerPrefs.SetString("CameraTurnLeftBinding", value);
+        }
+
+        public static string CameraTurnRightBinding
+        {
+            get => PlayerPrefs.GetString("CameraTurnRightBinding", "D");
+            set => PlayerPrefs.SetString("CameraTurnRightBinding", value);
+        }
+
+        // Camera Focus Shortcuts
+        public static string CameraFocusHeartBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusHeartBinding", "Digit1");
+            set => PlayerPrefs.SetString("CameraFocusHeartBinding", value);
+        }
+
+        public static string CameraFocusEntranceBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusEntranceBinding", "Digit2");
+            set => PlayerPrefs.SetString("CameraFocusEntranceBinding", value);
+        }
+
+        public static string CameraFocusVisitorBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusVisitorBinding", "Digit3");
+            set => PlayerPrefs.SetString("CameraFocusVisitorBinding", value);
+        }
+
+        // Camera Mouse Bindings
+        public static string CameraOrbitBinding
+        {
+            get => PlayerPrefs.GetString("CameraOrbitBinding", "Mouse1");
+            set => PlayerPrefs.SetString("CameraOrbitBinding", value);
+        }
+
+        public static string CameraPanBinding
+        {
+            get => PlayerPrefs.GetString("CameraPanBinding", "Mouse2");
+            set => PlayerPrefs.SetString("CameraPanBinding", value);
+        }
+
+        // Screenshot Binding (string-based)
+        public static string ScreenshotBinding
+        {
+            get => PlayerPrefs.GetString("ScreenshotBinding", "F12");
+            set => PlayerPrefs.SetString("ScreenshotBinding", value);
+        }
+
+        // Legacy ScreenshotKey for backwards compatibility
+        public static KeyCode ScreenshotKey
+        {
+            get => InputBindingHelper.ParseKeyCode(ScreenshotBinding);
+            set => ScreenshotBinding = InputBindingHelper.KeyCodeToBindingString(value);
         }
 
         /// <summary>

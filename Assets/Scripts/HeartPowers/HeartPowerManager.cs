@@ -271,7 +271,7 @@ namespace FaeMaze.HeartPowers
         private void Update()
         {
             // Screenshot capture - configurable key (always available)
-            if (Input.GetKeyDown(GameSettings.ScreenshotKey))
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.ScreenshotBinding))
             {
                 CaptureScreenshot();
             }
