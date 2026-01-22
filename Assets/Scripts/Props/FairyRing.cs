@@ -130,7 +130,7 @@ namespace FaeMaze.Props
 
         private void OnTriggerEnter(Collider other)
         {
-            var visitor = other.GetComponent<VisitorController>();
+            var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
                 OnVisitorEnter(visitor);
@@ -139,7 +139,7 @@ namespace FaeMaze.Props
 
         private void OnTriggerExit(Collider other)
         {
-            var visitor = other.GetComponent<VisitorController>();
+            var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor != null)
             {
                 OnVisitorExit(visitor);

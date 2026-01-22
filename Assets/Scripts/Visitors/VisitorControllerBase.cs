@@ -230,6 +230,9 @@ namespace FaeMaze.Visitors
         protected const float AURA_LIGHT_RANGE = 2.0f;
         protected const float AURA_Z_OFFSET = -0.3f; // Above the visitor
 
+        // Animator speed tracking
+        protected VisitorState lastAnimatorSpeedState = VisitorState.Idle;
+
         #endregion
 
         #region Properties
@@ -484,6 +487,7 @@ namespace FaeMaze.Visitors
                 {
                     // Wisp is controlling movement
                     UpdateStateAura();
+                    UpdateAnimatorSpeed();
                     return;
                 }
 
@@ -495,6 +499,9 @@ namespace FaeMaze.Visitors
 
             // Update state aura visual
             UpdateStateAura();
+
+            // Update animator speed based on state
+            UpdateAnimatorSpeed();
         }
 
         #endregion
@@ -1767,6 +1774,7 @@ namespace FaeMaze.Visitors
                     state = VisitorState.Idle;
                     worldPath?.Clear();
                     worldPathIndex = 0;
+                    splineInitialized = false;
                     return;
                 }
             }
@@ -1830,10 +1838,19 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // If we've reached the end, snap to final position
+            // If we've reached the end, smoothly arrive at final position
             if (splineStartIndex >= worldPath.Count - 1)
             {
-                transform.position = worldPath[worldPath.Count - 1];
+                // Only snap if we're already very close; otherwise let the spline finish naturally
+                Vector3 finalPos = worldPath[worldPath.Count - 1];
+                finalPos.z = transform.position.z; // Preserve Z
+                float distToFinal = Vector3.Distance(transform.position, finalPos);
+                if (distToFinal < 0.1f)
+                {
+                    // Close enough - snap to avoid floating point drift
+                    transform.position = finalPos;
+                }
+                // Otherwise, the current position is fine - we've arrived
                 worldPathIndex = worldPath.Count;
                 splineInitialized = false;
                 return;
@@ -2933,6 +2950,9 @@ namespace FaeMaze.Visitors
             fascinationTimer = 0f;
             ClearLanternInteraction();
 
+            // Ensure visitor is on a walkable tile before resuming pathing
+            MoveToNearestWalkableTile();
+
             // Resume from stop point toward the original destination
             if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && originalDestination != Vector3.zero)
             {
@@ -2970,6 +2990,9 @@ namespace FaeMaze.Visitors
             fascinationTimer = 0f;
             ClearLanternInteraction();
 
+            // Ensure visitor is on a walkable tile before resuming pathing
+            MoveToNearestWalkableTile();
+
             // Resume normal behavior
             if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && originalDestination != Vector3.zero)
             {
@@ -3005,6 +3028,9 @@ namespace FaeMaze.Visitors
             currentFairyRing = null;
             fairyRingFascinationTimer = 0f;
             speedMultiplier = 1f;
+
+            // Ensure visitor is on a walkable tile before resuming pathing
+            MoveToNearestWalkableTile();
 
             // Visitor becomes lost after fascination ends
             SetLost();
@@ -3203,8 +3229,52 @@ namespace FaeMaze.Visitors
             fairyRingFascinationTimer = 0f;
             speedMultiplier = 1f;
 
+            // Ensure visitor is on a walkable tile before resuming pathing
+            // The circling behavior may have left them in an unwalkable position
+            MoveToNearestWalkableTile();
+
             // Visitor becomes lost after fascination ends
             SetLost();
+        }
+
+        /// <summary>
+        /// Moves the visitor to the nearest walkable tile if they are currently
+        /// in an unwalkable position (e.g., node center).
+        /// </summary>
+        protected virtual void MoveToNearestWalkableTile()
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+            {
+                return;
+            }
+
+            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
+            Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+
+            // Check if current position is on a walkable tile
+            var nearbyTiles = mazeData.GetTilesNear(currentPos2D, 0.5f);
+            bool isOnWalkable = false;
+            foreach (var tile in nearbyTiles)
+            {
+                if (tile.Walkable && Vector2.Distance(currentPos2D, tile.Position) < 0.5f)
+                {
+                    isOnWalkable = true;
+                    break;
+                }
+            }
+
+            // If already on walkable tile, no need to move
+            if (isOnWalkable)
+            {
+                return;
+            }
+
+            // Find nearest walkable tile and move there
+            var nearestTile = FindNearestWalkableTile(mazeData, currentPos2D);
+            if (nearestTile != null)
+            {
+                transform.position = new Vector3(nearestTile.Position.x, nearestTile.Position.y, transform.position.z);
+            }
         }
 
         /// <summary>
@@ -3473,6 +3543,49 @@ namespace FaeMaze.Visitors
                 default:
                     // No aura for normal/terminal states
                     return Color.clear;
+            }
+        }
+
+        /// <summary>
+        /// Updates animator playback speed based on visitor state.
+        /// Pauses animation when idle, plays at 2x when frightened/fleeing.
+        /// </summary>
+        protected virtual void UpdateAnimatorSpeed()
+        {
+            if (animator == null)
+                return;
+
+            // Only update if state changed
+            if (state == lastAnimatorSpeedState)
+                return;
+
+            lastAnimatorSpeedState = state;
+
+            // Set animator speed based on state
+            switch (state)
+            {
+                case VisitorState.Idle:
+                case VisitorState.Grabbed:
+                case VisitorState.Dazed:
+                    // Pause animation when not moving
+                    animator.speed = 0f;
+                    break;
+
+                case VisitorState.Frightened:
+                    // Play at 2x speed when fleeing
+                    animator.speed = 2f;
+                    break;
+
+                case VisitorState.Walking:
+                case VisitorState.Fascinated:
+                case VisitorState.Confused:
+                case VisitorState.Lured:
+                case VisitorState.Escaping:
+                case VisitorState.Consumed:
+                default:
+                    // Normal speed for regular movement
+                    animator.speed = 1f;
+                    break;
             }
         }
 

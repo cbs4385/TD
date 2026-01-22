@@ -643,15 +643,18 @@ namespace FaeMaze.UI
             GameSettings.ConfusionDistanceMax = (int)GetSliderValue(confusionDistanceMaxSlider);
 
             // Spawning Settings
-            GameSettings.SpawnInterval = GetSliderValue(spawnIntervalSlider);
+            if (spawnIntervalSlider != null)
+                GameSettings.SpawnInterval = spawnIntervalSlider.value;
             if (enableRedCapToggle != null)
                 GameSettings.EnableRedCap = enableRedCapToggle.isOn;
 
             // Game Flow
             if (autoStartNextWaveToggle != null)
                 GameSettings.AutoStartNextWave = autoStartNextWaveToggle.isOn;
-            GameSettings.AutoStartDelay = GetSliderValue(autoStartDelaySlider);
-            GameSettings.StartingEssence = (int)GetSliderValue(startingEssenceSlider);
+            if (autoStartDelaySlider != null)
+                GameSettings.AutoStartDelay = autoStartDelaySlider.value;
+            if (startingEssenceSlider != null)
+                GameSettings.StartingEssence = (int)startingEssenceSlider.value;
 
             // Player Controls
             GameSettings.FocusSpeed = GetSliderValue(focusSpeedSlider);

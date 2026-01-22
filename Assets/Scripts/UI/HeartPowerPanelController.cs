@@ -54,8 +54,6 @@ namespace FaeMaze.UI
 
         // Right panel UI elements
         private TextMeshProUGUI waveText;
-        private TextMeshProUGUI essenceValueText;
-        private Slider essenceBar;
 
         private readonly string[] powerNames = new string[]
         {
@@ -95,11 +93,18 @@ namespace FaeMaze.UI
         private float[] glowPhase = new float[4];
         private float[] glowIntensity = new float[4];
         private float[] flashIntensity = new float[4]; // Flash effect when power is activated
+        private bool[] isActivePower = new bool[4]; // Track which toggle powers are currently active
         private float glowSpeed = 2.0f;
         private float glowPulseSpeed = 3.0f;
         private float flashDecaySpeed = 5.0f;
 
         private Camera mainCamera;
+
+        // Power button sprites (loaded at runtime)
+        private Sprite[] powerButtonSprites = new Sprite[4];
+
+        // Circular sprite for round button backgrounds
+        private Sprite circleSprite;
 
         #endregion
 
@@ -108,6 +113,9 @@ namespace FaeMaze.UI
         private void Start()
         {
             mainCamera = Camera.main;
+
+            // Load power button sprites
+            LoadPowerButtonSprites();
 
             // Auto-find HeartPowerManager if not assigned
             if (heartPowerManager == null)
@@ -297,10 +305,95 @@ namespace FaeMaze.UI
         #region UI Creation
 
         /// <summary>
-        /// Automatically creates the Heart Powers panel UI hierarchy.
-        /// Creates a unified HUD bar spanning the bottom of the screen with:
-        /// - Left half: 4 heart power buttons
-        /// - Right half: wave count and essence display with slider
+        /// Loads sprites for power buttons from the Assets/Textures/PowerModels folder.
+        /// Uses AssetDatabase in editor, falls back to Resources in builds.
+        /// Also creates a procedural circle sprite for round button backgrounds.
+        /// </summary>
+        private void LoadPowerButtonSprites()
+        {
+#if UNITY_EDITOR
+            string[] paths = new string[]
+            {
+                "Assets/Textures/PowerModels/path.png",
+                "Assets/Textures/PowerModels/grasp.png",
+                "Assets/Textures/PowerModels/devour.png",
+                "Assets/Textures/PowerModels/sculpt.png"
+            };
+
+            for (int i = 0; i < 4; i++)
+            {
+                // First try loading as Sprite (if texture type is set correctly and Sprite Mode is Single)
+                powerButtonSprites[i] = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(paths[i]);
+
+                // If that fails, try loading all sprites at that path (handles Multiple sprite mode)
+                if (powerButtonSprites[i] == null)
+                {
+                    Object[] allSprites = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(paths[i]);
+                    foreach (Object obj in allSprites)
+                    {
+                        if (obj is Sprite sprite)
+                        {
+                            powerButtonSprites[i] = sprite;
+                            break;
+                        }
+                    }
+                }
+
+                // If still null, load as Texture2D and create sprite manually
+                if (powerButtonSprites[i] == null)
+                {
+                    Texture2D tex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(paths[i]);
+                    if (tex != null)
+                    {
+                        powerButtonSprites[i] = Sprite.Create(
+                            tex,
+                            new Rect(0, 0, tex.width, tex.height),
+                            new Vector2(0.5f, 0.5f),
+                            100f
+                        );
+                    }
+                }
+            }
+#endif
+
+            // Create a procedural circle sprite for round button backgrounds
+            circleSprite = CreateCircleSprite(128);
+        }
+
+        /// <summary>
+        /// Creates a procedural circular sprite texture.
+        /// </summary>
+        private Sprite CreateCircleSprite(int resolution)
+        {
+            Texture2D texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Bilinear;
+
+            float center = resolution / 2f;
+            float radius = center - 1f; // Leave 1px for anti-aliasing
+
+            for (int y = 0; y < resolution; y++)
+            {
+                for (int x = 0; x < resolution; x++)
+                {
+                    float dx = x - center + 0.5f;
+                    float dy = y - center + 0.5f;
+                    float distance = Mathf.Sqrt(dx * dx + dy * dy);
+
+                    // Anti-aliased circle edge
+                    float alpha = Mathf.Clamp01(radius - distance + 0.5f);
+                    texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+
+            texture.Apply();
+
+            return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// <summary>
+        /// Automatically creates the Heart Powers UI.
+        /// Places round power buttons in a row at the bottom-left of the screen (no panel background).
+        /// Wave display is positioned to the right.
         /// </summary>
         private void CreateHeartPowersPanelUI()
         {
@@ -321,29 +414,33 @@ namespace FaeMaze.UI
                 }
             }
 
-            // Create the panel spanning the bottom
-            heartPowersPanel = CreatePanel(canvas.transform);
-            float panelHeight = 60f; // Single line height
+            // Create a container for the buttons (no visible panel, just for organization)
+            heartPowersPanel = new GameObject("HeartPowersPanel");
+            heartPowersPanel.transform.SetParent(canvas.transform, false);
 
-            // Left half: Create power buttons in a compact horizontal row
-            float leftPadding = 10f;
-            float buttonSpacing = 3f;
-            float buttonHeight = panelHeight - 10f; // Leave 5px padding top/bottom
-            // Calculate button width to fit 4 buttons in left half (assume half screen = 960px)
-            float leftHalfWidth = 960f; // Half of 1920 reference resolution
-            float buttonWidth = (leftHalfWidth - leftPadding * 2 - buttonSpacing * 3) / 4f;
-            float buttonsStartX = -960f + leftPadding; // Start from left edge of screen
-            float buttonYPos = 0f; // Vertically centered (0 is center when pivot is at center)
+            RectTransform panelRect = heartPowersPanel.AddComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0f, 0f); // Bottom left
+            panelRect.anchorMax = new Vector2(1f, 0f); // Bottom right
+            panelRect.pivot = new Vector2(0.5f, 0f);
+            panelRect.anchoredPosition = Vector2.zero;
+            panelRect.sizeDelta = new Vector2(0f, 200f); // Height for buttons
 
-            // 4 active powers
+            // Button settings - 3x scale (50 base * 3 = 150)
+            float buttonSize = 150f;
+            float buttonSpacing = 40f; // Increased spacing between buttons
+            float bottomPadding = 40f; // Move buttons up from bottom
+            float leftPadding = 30f;
+
+            // Create 4 power buttons in a horizontal row at bottom-left
             for (int i = 0; i < 4; i++)
             {
-                float xPos = buttonsStartX + (i * (buttonWidth + buttonSpacing)) + buttonWidth / 2f;
-                powerButtons[i] = CreatePowerButton(heartPowersPanel.transform, i, xPos, buttonYPos, buttonWidth, buttonHeight);
+                float xPos = leftPadding + (i * (buttonSize + buttonSpacing)) + buttonSize / 2f;
+                float yPos = bottomPadding + buttonSize / 2f;
+                powerButtons[i] = CreatePowerButton(canvas.transform, i, xPos, yPos, buttonSize, buttonSize);
             }
 
-            // Right half: Create wave and essence display
-            CreateRightPanelUI(heartPowersPanel.transform, panelHeight);
+            // Create wave display and essence bar controller
+            CreateRightPanelUI(canvas.transform, buttonSize);
         }
 
         /// <summary>
@@ -370,144 +467,44 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Creates the main panel background spanning the entire bottom of the screen.
-        /// Height is the larger of 5% of viewport or 200px.
+        /// Creates the wave display at bottom-right and essence bar controller.
         /// </summary>
-        private GameObject CreatePanel(Transform parent)
+        private void CreateRightPanelUI(Transform parent, float buttonSize)
         {
-            GameObject panel = new GameObject("HeartPowersPanel");
-            panel.transform.SetParent(parent, false);
-
-            RectTransform rect = panel.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f); // Bottom left
-            rect.anchorMax = new Vector2(1f, 0f); // Bottom right (spans full width)
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = new Vector2(0f, 0f); // Aligned to bottom
-
-            // Single line height
-            float panelHeight = 60f;
-            rect.sizeDelta = new Vector2(0f, panelHeight); // Width 0 means it uses anchors (full width)
-
-            Image image = panel.AddComponent<Image>();
-            image.color = new Color(0.15f, 0.05f, 0.2f, 0.9f); // Dark purple/magenta tint
-
-
-            return panel;
-        }
-
-        /// <summary>
-        /// Creates the right half of the bottom panel with wave and essence displays on one horizontal line.
-        /// Layout: [Wave Text] [Essence Value] [Essence Slider]
-        /// </summary>
-        private void CreateRightPanelUI(Transform parent, float panelHeight)
-        {
-            float padding = 10f;
-
-            // Create container for right panel elements
-            GameObject rightContainer = new GameObject("RightPanelContainer");
-            rightContainer.transform.SetParent(parent, false);
-
-            RectTransform containerRect = rightContainer.AddComponent<RectTransform>();
-            containerRect.anchorMin = new Vector2(0.5f, 0f); // Center bottom
-            containerRect.anchorMax = new Vector2(1f, 1f); // Right top (right half of panel)
-            containerRect.offsetMin = new Vector2(padding, 0f);
-            containerRect.offsetMax = new Vector2(-padding, 0f);
-
-            // Add horizontal layout group for single-line layout
-            HorizontalLayoutGroup layoutGroup = rightContainer.AddComponent<HorizontalLayoutGroup>();
-            layoutGroup.childAlignment = TextAnchor.MiddleCenter;
-            layoutGroup.spacing = 10f;
-            layoutGroup.childForceExpandWidth = false;
-            layoutGroup.childForceExpandHeight = true;
-            layoutGroup.childControlWidth = false;
-            layoutGroup.childControlHeight = false;
-
-            // Create Wave display (left in right panel)
+            // Create Wave display at bottom-right
             GameObject waveObj = new GameObject("WaveDisplay");
-            waveObj.transform.SetParent(rightContainer.transform, false);
+            waveObj.transform.SetParent(parent, false);
+
+            RectTransform waveRect = waveObj.AddComponent<RectTransform>();
+            waveRect.anchorMin = new Vector2(1f, 0f); // Bottom right
+            waveRect.anchorMax = new Vector2(1f, 0f);
+            waveRect.pivot = new Vector2(1f, 0f);
+            waveRect.anchoredPosition = new Vector2(-30f, 20f); // 30px from right, 20px from bottom
+            waveRect.sizeDelta = new Vector2(200f, 50f);
 
             waveText = waveObj.AddComponent<TextMeshProUGUI>();
             waveText.text = "Wave 0";
-            waveText.fontSize = 18;
+            waveText.fontSize = 24;
             waveText.fontStyle = FontStyles.Bold;
-            waveText.alignment = TextAlignmentOptions.Center;
+            waveText.alignment = TextAlignmentOptions.MidlineRight;
             waveText.color = new Color(1f, 0.85f, 0.3f, 1f); // Gold
 
-            LayoutElement waveLayout = waveObj.AddComponent<LayoutElement>();
-            waveLayout.preferredWidth = 120f;
-            waveLayout.flexibleWidth = 0f;
+            // Create EssenceBarController for the top-of-screen essence bar
+            CreateEssenceBarController();
+        }
 
-            // Create Essence Value Text (middle in right panel)
-            GameObject essenceValueObj = new GameObject("EssenceValue");
-            essenceValueObj.transform.SetParent(rightContainer.transform, false);
+        /// <summary>
+        /// Creates the EssenceBarController component for the top-of-screen essence bar.
+        /// </summary>
+        private void CreateEssenceBarController()
+        {
+            // Check if one already exists
+            EssenceBarController existingController = FindFirstObjectByType<EssenceBarController>();
+            if (existingController != null) return;
 
-            essenceValueText = essenceValueObj.AddComponent<TextMeshProUGUI>();
-            essenceValueText.text = "Essence: 0/400";
-            essenceValueText.fontSize = 16;
-            essenceValueText.fontStyle = FontStyles.Bold;
-            essenceValueText.alignment = TextAlignmentOptions.Center;
-            essenceValueText.color = new Color(1f, 0.84f, 0f, 1f); // Gold
-
-            LayoutElement essenceValueLayout = essenceValueObj.AddComponent<LayoutElement>();
-            essenceValueLayout.preferredWidth = 160f;
-            essenceValueLayout.flexibleWidth = 0f;
-
-            // Create Essence Bar (slider) (right in right panel)
-            GameObject essenceBarObj = new GameObject("EssenceBar");
-            essenceBarObj.transform.SetParent(rightContainer.transform, false);
-
-            RectTransform essenceBarRect = essenceBarObj.AddComponent<RectTransform>();
-            essenceBarRect.sizeDelta = new Vector2(200f, 20f);
-
-            essenceBar = essenceBarObj.AddComponent<Slider>();
-            essenceBar.minValue = 0f;
-            essenceBar.maxValue = 400f;
-            essenceBar.value = 0f;
-            essenceBar.interactable = false;
-
-            LayoutElement barLayout = essenceBarObj.AddComponent<LayoutElement>();
-            barLayout.preferredWidth = 250f;
-            barLayout.preferredHeight = 20f;
-            barLayout.flexibleWidth = 1f;
-
-            // Create slider background
-            GameObject bgObj = new GameObject("Background");
-            bgObj.transform.SetParent(essenceBarObj.transform, false);
-
-            RectTransform bgRect = bgObj.AddComponent<RectTransform>();
-            bgRect.anchorMin = Vector2.zero;
-            bgRect.anchorMax = Vector2.one;
-            bgRect.offsetMin = Vector2.zero;
-            bgRect.offsetMax = Vector2.zero;
-
-            Image bgImage = bgObj.AddComponent<Image>();
-            bgImage.color = new Color(0.2f, 0.2f, 0.2f, 1f);
-
-            // Create slider fill area
-            GameObject fillAreaObj = new GameObject("Fill Area");
-            fillAreaObj.transform.SetParent(essenceBarObj.transform, false);
-
-            RectTransform fillAreaRect = fillAreaObj.AddComponent<RectTransform>();
-            fillAreaRect.anchorMin = Vector2.zero;
-            fillAreaRect.anchorMax = Vector2.one;
-            fillAreaRect.offsetMin = Vector2.zero;
-            fillAreaRect.offsetMax = Vector2.zero;
-
-            // Create slider fill
-            GameObject fillObj = new GameObject("Fill");
-            fillObj.transform.SetParent(fillAreaObj.transform, false);
-
-            RectTransform fillRect = fillObj.AddComponent<RectTransform>();
-            fillRect.anchorMin = Vector2.zero;
-            fillRect.anchorMax = Vector2.one;
-            fillRect.offsetMin = Vector2.zero;
-            fillRect.offsetMax = Vector2.zero;
-
-            Image fillImage = fillObj.AddComponent<Image>();
-            fillImage.color = new Color(0.3f, 0.7f, 1f, 1f); // Blue fill
-
-            essenceBar.fillRect = fillRect;
-            essenceBar.targetGraphic = fillImage;
+            // Create a new GameObject for the EssenceBarController
+            GameObject essenceBarControllerObj = new GameObject("EssenceBarController");
+            essenceBarControllerObj.AddComponent<EssenceBarController>();
         }
 
         /// <summary>
@@ -559,53 +556,99 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Creates a power button with label and cooldown text.
+        /// Creates a round power button with icon sprite and circular background.
+        /// All buttons are round with a colored circular background for glow effects.
         /// </summary>
         private Button CreatePowerButton(Transform parent, int index, float xPos, float yPos, float width, float height)
         {
             GameObject buttonObj = new GameObject($"PowerButton_{index}");
             buttonObj.transform.SetParent(parent, false);
 
-            RectTransform rect = buttonObj.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 1f);
-            rect.anchorMax = new Vector2(0.5f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(xPos, yPos);
-            rect.sizeDelta = new Vector2(width, height);
+            // All buttons are square/round
+            float buttonSize = height;
 
-            Image image = buttonObj.AddComponent<Image>();
-            image.color = baseColors[index]; // Set initial ROYGBIV base color
-            image.raycastTarget = true; // Ensure it can be clicked
+            RectTransform rect = buttonObj.AddComponent<RectTransform>();
+            // Anchor to bottom-left corner
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 0f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(xPos, yPos);
+            rect.sizeDelta = new Vector2(buttonSize, buttonSize);
+
+            // Create circular background (for glow effects and clickable area)
+            Image bgImage = buttonObj.AddComponent<Image>();
+            if (circleSprite != null)
+            {
+                bgImage.sprite = circleSprite;
+            }
+            bgImage.color = baseColors[index];
+            bgImage.raycastTarget = true;
+
+            // Store background image for glow effects
+            buttonImages[index] = bgImage;
+
+            // Create the icon sprite on top if available
+            bool hasSprite = powerButtonSprites[index] != null;
+            if (hasSprite)
+            {
+                GameObject iconObj = new GameObject("Icon");
+                iconObj.transform.SetParent(buttonObj.transform, false);
+
+                RectTransform iconRect = iconObj.AddComponent<RectTransform>();
+                // Center the icon in the button
+                iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+                iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+                iconRect.pivot = new Vector2(0.5f, 0.5f);
+
+                // No offset - icons should be centered in their source images
+                // If an icon appears off-center, the PNG file should be recropped
+                iconRect.anchoredPosition = Vector2.zero;
+
+                // Icon size is 80% of button size, with per-icon multipliers
+                float[] iconSizeMultipliers = { 1.0f, 1.5f, 1.0f, 1.0f }; // Power 2 (grasp) is 50% larger
+                float iconSize = buttonSize * 0.8f * iconSizeMultipliers[index];
+                iconRect.sizeDelta = new Vector2(iconSize, iconSize);
+
+                Image iconImage = iconObj.AddComponent<Image>();
+                iconImage.sprite = powerButtonSprites[index];
+                iconImage.color = Color.white;
+                iconImage.preserveAspect = true;
+                iconImage.raycastTarget = false;
+
+                // Use Sliced or Simple image type to ensure proper scaling
+                iconImage.type = Image.Type.Simple;
+            }
 
             Button button = buttonObj.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.interactable = true; // Ensure button is interactable
+            button.targetGraphic = bgImage;
+            button.interactable = true;
 
-            // Store image reference for glow animations
-            buttonImages[index] = image;
-
-            // Add navigation to make it clear it's a button
+            // Disable navigation
             var navigation = button.navigation;
             navigation.mode = Navigation.Mode.None;
             button.navigation = navigation;
 
-            // Create button text (compact label showing just the number)
+            // Create button text (hotkey number outside bottom-right of button)
             GameObject textObj = new GameObject("Text");
             textObj.transform.SetParent(buttonObj.transform, false);
 
             RectTransform textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(1f, 1f);
-            textRect.offsetMax = new Vector2(-1f, -1f);
+            // Position number outside the button, bottom-right corner
+            textRect.anchorMin = new Vector2(1f, 0f);
+            textRect.anchorMax = new Vector2(1f, 0f);
+            textRect.pivot = new Vector2(0f, 1f); // Anchor from top-left of text
+            textRect.anchoredPosition = new Vector2(5f, -5f); // 5px right and 5px below button edge
+            textRect.sizeDelta = new Vector2(40f, 40f);
 
             TextMeshProUGUI text = textObj.AddComponent<TextMeshProUGUI>();
-            text.text = (index + 1).ToString(); // Just show the number 1-9
-            text.fontSize = Mathf.Max(8, width * 0.4f); // Scale font with button size
-            text.alignment = TextAlignmentOptions.Center;
+            text.text = (index + 1).ToString();
+            text.fontSize = Mathf.Max(10, buttonSize * 0.3f);
+            text.alignment = TextAlignmentOptions.TopLeft;
             text.color = Color.white;
             text.fontStyle = FontStyles.Bold;
-            text.raycastTarget = false; // Don't block button clicks
+            text.raycastTarget = false;
+            text.outlineWidth = 0.2f;
+            text.outlineColor = Color.black;
 
             buttonLabels[index] = text;
 
@@ -621,11 +664,13 @@ namespace FaeMaze.UI
 
             TextMeshProUGUI cooldownText = cooldownObj.AddComponent<TextMeshProUGUI>();
             cooldownText.text = "";
-            cooldownText.fontSize = Mathf.Max(6, width * 0.3f); // Scale with button size
+            cooldownText.fontSize = Mathf.Max(8, buttonSize * 0.25f);
             cooldownText.fontStyle = FontStyles.Bold;
             cooldownText.alignment = TextAlignmentOptions.Center;
             cooldownText.color = new Color(1f, 0.3f, 0.3f, 1f);
-            cooldownText.raycastTarget = false; // Don't block button clicks
+            cooldownText.raycastTarget = false;
+            cooldownText.outlineWidth = 0.2f;
+            cooldownText.outlineColor = Color.black;
 
             cooldownTexts[index] = cooldownText;
             cooldownObj.SetActive(false);
@@ -769,7 +814,8 @@ namespace FaeMaze.UI
         #region Display Updates
 
         /// <summary>
-        /// Updates wave and essence displays in the right panel.
+        /// Updates wave display in the right panel.
+        /// Essence bar is now handled by EssenceBarController at the top of the screen.
         /// </summary>
         private void UpdateWaveAndEssenceDisplays()
         {
@@ -786,22 +832,6 @@ namespace FaeMaze.UI
                     waveText.text = currentWave > 0 ? $"Wave {currentWave} Complete" : "No Active Wave";
                 }
             }
-
-            // Update essence display
-            if (GameController.Instance != null)
-            {
-                int essence = GameController.Instance.CurrentEssence;
-
-                if (essenceValueText != null)
-                {
-                    essenceValueText.text = $"Essence: {essence}/400";
-                }
-
-                if (essenceBar != null)
-                {
-                    essenceBar.value = essence;
-                }
-            }
         }
 
         /// <summary>
@@ -813,11 +843,12 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Updates the essence display (event handler).
+        /// Updates the essence display (event handler - kept for event subscription compatibility).
+        /// Actual essence display is now handled by EssenceBarController.
         /// </summary>
         private void UpdateEssenceDisplay(int essence)
         {
-            UpdateWaveAndEssenceDisplays();
+            // No-op: Essence display is now handled by EssenceBarController
         }
 
         /// <summary>
@@ -852,29 +883,14 @@ namespace FaeMaze.UI
                 // But provide visual feedback about availability
                 powerButtons[i].interactable = true;
 
+                // Track active state for glow effects
+                isActivePower[i] = isTogglePower && isActive;
+
                 // Update display based on power type
                 if (isTogglePower)
                 {
-                    // Toggle power: show active state or ready state
-                    if (isActive)
-                    {
-                        // Show "ACTIVE" and consumption progress
-                        cooldownTexts[i].text = "ACTIV";
-                        cooldownTexts[i].color = new Color(0.3f, 1f, 0.3f, 1f); // Green for active
-                        cooldownTexts[i].gameObject.SetActive(true);
-                    }
-                    else if (powerType == HeartPowerType.Sculpting && !sculptingPositionValid)
-                    {
-                        // Sculpting not at valid position - show indicator
-                        cooldownTexts[i].text = "NODE";
-                        cooldownTexts[i].color = new Color(0.7f, 0.7f, 0.7f, 1f); // Gray - needs node
-                        cooldownTexts[i].gameObject.SetActive(true);
-                    }
-                    else
-                    {
-                        // Toggle power is ready (no cooldown)
-                        cooldownTexts[i].gameObject.SetActive(false);
-                    }
+                    // Toggle power: active state shown via button color (no text)
+                    cooldownTexts[i].gameObject.SetActive(false);
                 }
                 else
                 {
@@ -918,9 +934,14 @@ namespace FaeMaze.UI
         /// <summary>
         /// Updates the ROYGBIV glow effects for each power button.
         /// Each button pulses with its assigned color from the spectrum.
+        /// Unavailable powers show flat grey instead of pulsing colors.
+        /// Active toggle powers show flat (non-pulsing) background color.
         /// </summary>
         private void UpdateGlowEffects()
         {
+            // Flat grey color for unavailable powers
+            Color unavailableGrey = new Color(0.25f, 0.25f, 0.25f, 1f);
+
             for (int i = 0; i < buttonImages.Length; i++)
             {
                 if (buttonImages[i] == null) continue;
@@ -931,35 +952,53 @@ namespace FaeMaze.UI
                     flashIntensity[i] = Mathf.Max(0, flashIntensity[i] - Time.deltaTime * flashDecaySpeed);
                 }
 
-                // Update glow phase with staggered timing for visual variety
-                // Each button starts at a different phase for a cascading effect
-                float phaseOffset = i * 0.5f; // Stagger by 0.5 seconds
-                glowPhase[i] = Time.time * glowPulseSpeed + phaseOffset;
+                // Check if power is unavailable (low glow intensity means not ready)
+                bool isUnavailable = glowIntensity[i] < 0.5f;
 
-                // Calculate pulse using sine wave (0 to 1)
-                float pulse = (Mathf.Sin(glowPhase[i]) + 1f) * 0.5f;
+                Color finalColor;
 
-                // Smooth the pulse to make it more gentle
-                pulse = Mathf.Pow(pulse, 0.7f);
+                if (isUnavailable && flashIntensity[i] <= 0)
+                {
+                    // Power is unavailable - use flat grey (no pulsing)
+                    finalColor = unavailableGrey;
+                }
+                else if (isActivePower[i])
+                {
+                    // Power is currently active - use flat (non-pulsing) ROYGBIV color
+                    finalColor = roygbivColors[i];
+                }
+                else
+                {
+                    // Update glow phase with staggered timing for visual variety
+                    // Each button starts at a different phase for a cascading effect
+                    float phaseOffset = i * 0.5f; // Stagger by 0.5 seconds
+                    glowPhase[i] = Time.time * glowPulseSpeed + phaseOffset;
 
-                // Interpolate between base color and full ROYGBIV color
-                // glowIntensity controls how bright the effect is (0 = dim base, 1 = full glow)
-                Color baseColor = baseColors[i];
-                Color glowColor = roygbivColors[i];
+                    // Calculate pulse using sine wave (0 to 1)
+                    float pulse = (Mathf.Sin(glowPhase[i]) + 1f) * 0.5f;
 
-                // Calculate pulsing color
-                Color pulsingColor = Color.Lerp(
-                    baseColor,
-                    Color.Lerp(baseColor, glowColor, pulse),
-                    glowIntensity[i]
-                );
+                    // Smooth the pulse to make it more gentle
+                    pulse = Mathf.Pow(pulse, 0.7f);
 
-                // Add flash effect (brightens the color significantly when activated)
-                Color finalColor = Color.Lerp(
-                    pulsingColor,
-                    glowColor * 1.3f, // Extra bright for flash
-                    flashIntensity[i]
-                );
+                    // Interpolate between base color and full ROYGBIV color
+                    // glowIntensity controls how bright the effect is (0 = dim base, 1 = full glow)
+                    Color baseColor = baseColors[i];
+                    Color glowColor = roygbivColors[i];
+
+                    // Calculate pulsing color
+                    Color pulsingColor = Color.Lerp(
+                        baseColor,
+                        Color.Lerp(baseColor, glowColor, pulse),
+                        glowIntensity[i]
+                    );
+
+                    // Add flash effect (brightens the color significantly when activated)
+                    finalColor = Color.Lerp(
+                        pulsingColor,
+                        glowColor * 1.3f, // Extra bright for flash
+                        flashIntensity[i]
+                    );
+                }
 
                 // Apply the color to the button image
                 buttonImages[i].color = finalColor;

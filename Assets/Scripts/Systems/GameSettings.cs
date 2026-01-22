@@ -131,7 +131,7 @@ namespace FaeMaze.Systems
         // Spawning Settings
         public static float SpawnInterval
         {
-            get => PlayerPrefs.GetFloat("SpawnInterval", 1f);
+            get => Mathf.Max(0.1f, PlayerPrefs.GetFloat("SpawnInterval", 1f));
             set => PlayerPrefs.SetFloat("SpawnInterval", Mathf.Max(0.1f, value));
         }
 

@@ -157,6 +157,9 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            // Load starting essence from settings (overrides serialized default)
+            startingEssence = GameSettings.StartingEssence;
+
             // Initialize essence: use persistent value if available, otherwise use starting essence
             if (hasInitializedEssence && persistentEssence.HasValue)
             {
@@ -265,6 +268,9 @@ namespace FaeMaze.Systems
         {
             // Clear audit log on reset
             essenceAuditLog.Clear();
+
+            // Re-read starting essence from settings in case it changed
+            startingEssence = GameSettings.StartingEssence;
 
             currentEssence = Mathf.Max(0, startingEssence);
             persistentEssence = currentEssence;

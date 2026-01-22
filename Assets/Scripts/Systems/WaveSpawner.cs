@@ -274,7 +274,10 @@ namespace FaeMaze.Systems
                 SpawnVisitor();
                 visitorsSpawnedThisWave++;
 
-                yield return new WaitForSeconds(spawnInterval);
+                // Read spawn interval from settings each time to respect changes made in options
+                // Enforce minimum of 0.1 seconds to prevent runaway spawning if settings are corrupted
+                float currentSpawnInterval = Mathf.Max(0.1f, GameSettings.SpawnInterval);
+                yield return new WaitForSeconds(currentSpawnInterval);
             }
 
             isSpawning = false;

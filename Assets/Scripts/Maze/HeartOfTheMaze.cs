@@ -439,6 +439,12 @@ namespace FaeMaze.Maze
                     // For now, use a simple rule: curl left (CCW) if visitor is in upper half, right (CW) if lower
                     curlDirection = (lockedVisitorAngle >= 0 && lockedVisitorAngle < 180) ? 1 : -1;
                     tonguePhase = TonguePhase.Touching;
+
+                    // Stop the visitor's movement when the tongue tip touches them
+                    if (targetVisitor != null)
+                    {
+                        targetVisitor.SetGrabbedByHeart();
+                    }
                 }
             }
         }
@@ -491,13 +497,7 @@ namespace FaeMaze.Maze
                     if (tipZ <= TONGUE_LIP_Z)
                     {
                         tonguePhase = TonguePhase.Reaching;
-
-                        // Daze the visitor when they see the tongue emerge and bend toward them
-                        // This stops their movement so the tongue can reach them
-                        if (targetVisitor != null)
-                        {
-                            targetVisitor.OnWitnessMazeGrowth(30f);  // Long daze - tongue will grab before it expires
-                        }
+                        // Visitor keeps moving until the reach collider actually touches them
                     }
                     break;
 
