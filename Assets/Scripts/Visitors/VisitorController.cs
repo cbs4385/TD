@@ -98,6 +98,10 @@ namespace FaeMaze.Visitors
             // Check if state has changed since last waypoint
             if (state != previousState)
             {
+                if (debugSplineRotation)
+                {
+                    Debug.Log($"[SplineDebug] {name} HandleDetourAtWaypoint - STATE CHANGED from {previousState} to {state}, recalculating path");
+                }
                 previousState = state;
                 RecalculatePath();
                 return;
@@ -120,6 +124,10 @@ namespace FaeMaze.Visitors
 
                     if (triggered)
                     {
+                        if (debugSplineRotation)
+                        {
+                            Debug.Log($"[SplineDebug] {name} HandleDetourAtWaypoint - CONFUSION triggered at node, building detour");
+                        }
                         // Confused at intersection! Build a detour path through at least 2 random nodes
                         if (BuildConfusionDetourPath(2))
                         {
@@ -131,11 +139,10 @@ namespace FaeMaze.Visitors
                         }
                         else
                         {
-                            if (logVisitorPathfinding)
+                            if (debugSplineRotation)
                             {
-                                Debug.LogWarning($"[Confusion] Failed to build detour path - recalculating normal path");
+                                Debug.Log($"[SplineDebug] {name} HandleDetourAtWaypoint - CONFUSION detour failed, recalculating normal path");
                             }
-
                             // Couldn't build detour, just recalculate normal path
                             RecalculatePath();
                         }

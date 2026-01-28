@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Props;
 
@@ -14,8 +15,22 @@ namespace FaeMaze.Visitors
         #region Private Fields
 
         private WillowTheWisp targetWisp;
-        private VisitorController visitorController;
+        private VisitorControllerBase visitorController;
+        private Rigidbody rb3D;
         private bool isFollowing;
+
+        // Physics-based movement: calculate in Update, apply in FixedUpdate
+        private Vector3 desiredPosition;
+        private bool hasDesiredPosition;
+
+        // Path-based following
+        private List<Vector3> followPath = new List<Vector3>();
+        private int followPathIndex = 0;
+        private Vector3 lastWispPosition;
+        private float pathRecalculateTimer = 0f;
+        private const float PATH_RECALCULATE_INTERVAL = 0.5f; // Recalculate path every 0.5 seconds
+        private const float WISP_MOVE_THRESHOLD = 1.0f; // Recalculate if wisp moved more than this distance
+        private const float WAYPOINT_REACHED_DISTANCE = 0.5f;
 
         [SerializeField]
         [Tooltip("Distance to maintain from the wisp")]
@@ -41,7 +56,8 @@ namespace FaeMaze.Visitors
 
         private void Awake()
         {
-            visitorController = GetComponent<VisitorController>();
+            visitorController = GetComponent<VisitorControllerBase>();
+            rb3D = GetComponent<Rigidbody>();
         }
 
         private void Update()
@@ -65,6 +81,28 @@ namespace FaeMaze.Visitors
             UpdateFollowing();
         }
 
+        /// <summary>
+        /// FixedUpdate handles physics-based movement.
+        /// Movement is calculated in Update() and stored in desiredPosition,
+        /// then applied here using MovePosition() which works correctly with non-kinematic Rigidbodies.
+        /// </summary>
+        private void FixedUpdate()
+        {
+            if (rb3D != null && hasDesiredPosition)
+            {
+                // Wake the Rigidbody in case it's sleeping
+                if (rb3D.IsSleeping())
+                {
+                    rb3D.WakeUp();
+                }
+
+                // Use MovePosition only - do NOT override with transform.position
+                // This allows the physics engine to handle collision resolution
+                rb3D.MovePosition(desiredPosition);
+                hasDesiredPosition = false;
+            }
+        }
+
         #endregion
 
         #region Public Methods
@@ -77,12 +115,16 @@ namespace FaeMaze.Visitors
         {
             if (wisp == null)
             {
-                Debug.LogWarning($"[FollowWisp] StartFollowing called with null wisp");
                 return;
             }
 
             targetWisp = wisp;
             isFollowing = true;
+            lastWispPosition = wisp.transform.position;
+            pathRecalculateTimer = 0f;
+
+            // Build initial path to the wisp
+            RecalculatePath();
         }
 
         /// <summary>
@@ -109,28 +151,78 @@ namespace FaeMaze.Visitors
             if (visitorController == null || targetWisp == null)
                 return;
 
-            // Get wisp position as the target
             Vector3 wispPosition = targetWisp.transform.position;
 
-            // Get distance to wisp
-            float distance = Vector3.Distance(transform.position, wispPosition);
+            // Check if we need to recalculate the path
+            pathRecalculateTimer += Time.deltaTime;
+            float wispMoved = Vector3.Distance(wispPosition, lastWispPosition);
 
-            // Only move if we're too far from the wisp
-            if (distance > followDistance)
+            if (pathRecalculateTimer >= PATH_RECALCULATE_INTERVAL || wispMoved > WISP_MOVE_THRESHOLD)
             {
-                // Calculate direction to wisp
-                Vector3 direction = (wispPosition - transform.position).normalized;
-
-                // Move toward the wisp (wisp is now on walkable paths, so direct movement is valid)
-                float speed = visitorController.MoveSpeed * followSpeedMultiplier;
-                Vector3 newPosition = transform.position + direction * speed * Time.deltaTime;
-
-                // Update facing direction
-                visitorController.ApplyExternalAnimatorDirection(direction);
-
-                // Move directly
-                transform.position = newPosition;
+                RecalculatePath();
+                pathRecalculateTimer = 0f;
+                lastWispPosition = wispPosition;
             }
+
+            // If no path or reached end of path, just stay put
+            if (followPath == null || followPath.Count == 0 || followPathIndex >= followPath.Count)
+            {
+                return;
+            }
+
+            // Get current waypoint
+            Vector3 currentWaypoint = followPath[followPathIndex];
+
+            // Check distance to wisp - if close enough, stop moving
+            float distanceToWisp = Vector3.Distance(transform.position, wispPosition);
+            if (distanceToWisp <= followDistance)
+            {
+                return;
+            }
+
+            // Check if we've reached the current waypoint
+            float distanceToWaypoint = Vector3.Distance(transform.position, currentWaypoint);
+            if (distanceToWaypoint <= WAYPOINT_REACHED_DISTANCE)
+            {
+                followPathIndex++;
+                if (followPathIndex >= followPath.Count)
+                {
+                    return;
+                }
+                currentWaypoint = followPath[followPathIndex];
+            }
+
+            // Move toward current waypoint
+            Vector3 direction = (currentWaypoint - transform.position).normalized;
+            float speed = visitorController.MoveSpeed * followSpeedMultiplier;
+            Vector3 newPosition = transform.position + direction * speed * Time.deltaTime;
+
+            // Update facing direction
+            visitorController.ApplyExternalAnimatorDirection(direction);
+
+            // Record move cause for diagnostic logging
+            visitorController.RecordMoveCause($"FollowWisp(waypoint={followPathIndex}/{followPath.Count})");
+
+            // Store position for physics to apply in FixedUpdate
+            desiredPosition = newPosition;
+            hasDesiredPosition = true;
+        }
+
+        /// <summary>
+        /// Recalculates the path from the visitor to the wisp using proper pathfinding.
+        /// </summary>
+        private void RecalculatePath()
+        {
+            if (visitorController == null || targetWisp == null)
+            {
+                followPath.Clear();
+                followPathIndex = 0;
+                return;
+            }
+
+            // Use the visitor's BuildWorldPath method to get a proper walkable path
+            followPath = visitorController.BuildWorldPath(transform.position, targetWisp.transform.position);
+            followPathIndex = 0;
         }
 
         #endregion

@@ -54,8 +54,12 @@ namespace FaeMaze.HeartPowers
 
         [Header("Power Prefabs")]
         [SerializeField]
-        [Tooltip("Prefab for the grasp hand visual (Heart Power 2)")]
+        [Tooltip("Prefab for the grasp hand visual (Heart Power 2) - DEPRECATED, use TonguePrefab")]
         private GameObject graspPrefab;
+
+        [SerializeField]
+        [Tooltip("Prefab for the tongue/tentacle visual (Heart Power 2)")]
+        private GameObject tonguePrefab;
 
         [SerializeField]
         [Tooltip("Prefab for the devour visual (Heart Power 3)")]
@@ -98,8 +102,11 @@ namespace FaeMaze.HeartPowers
         /// <summary>Gets the game controller</summary>
         public GameController GameController => gameController;
 
-        /// <summary>Gets the grasp prefab for HeartwardGrasp power</summary>
+        /// <summary>Gets the grasp prefab for HeartwardGrasp power - DEPRECATED</summary>
         public GameObject GraspPrefab => graspPrefab;
+
+        /// <summary>Gets the tongue prefab for HeartwardGrasp power</summary>
+        public GameObject TonguePrefab => tonguePrefab;
 
         /// <summary>Gets the devour prefab for DevouringMaw power</summary>
         public GameObject DevourPrefab => devourPrefab;
@@ -152,6 +159,10 @@ namespace FaeMaze.HeartPowers
             if (graspPrefab == null)
             {
                 graspPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/grasp.prefab");
+            }
+            if (tonguePrefab == null)
+            {
+                tonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
             }
             if (devourPrefab == null)
             {
@@ -336,7 +347,6 @@ namespace FaeMaze.HeartPowers
             byte[] bytes = screenshot.EncodeToPNG();
             System.IO.File.WriteAllBytes(fullPath, bytes);
 
-            Debug.Log($"Screenshot saved: {fullPath}");
             Object.Destroy(screenshot);
         }
 

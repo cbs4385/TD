@@ -161,7 +161,6 @@ namespace FaeMaze.Props
 
         // Legacy node-based pathfinding (kept for idle state)
         private List<int> reactingPath = new List<int>(); // Path of node indices from current to Puka
-        private int reactingPathIndex = 0; // Current index in the path
         private Vector3 reactingCurrentTarget; // Current movement target position
 
         private const string DirectionParameter = "Direction";
@@ -212,7 +211,6 @@ namespace FaeMaze.Props
 
             if (!AcquireDependencies())
             {
-                Debug.LogWarning($"[Wisp:{name}] Start: Dependencies not ready");
                 return;
             }
 
@@ -332,7 +330,6 @@ namespace FaeMaze.Props
 
             if (mapState == null || nodeIndex < 0 || nodeIndex >= mapState.Nodes.Count)
             {
-                Debug.LogWarning($"[Wisp:{name}] GetNeighborNodes: Invalid nodeIndex={nodeIndex} (mapState={(mapState == null ? "null" : $"valid, {mapState.Nodes.Count} nodes")})");
                 return neighbors;
             }
 
@@ -365,11 +362,6 @@ namespace FaeMaze.Props
                 }
             }
 
-            if (neighbors.Count == 0)
-            {
-                Debug.LogWarning($"[Wisp:{name}] GetNeighborNodes: Node {nodeIndex} has {node.IncidentEdges.Count} edges but 0 valid neighbors (skipped: {skippedPartial} partial, {skippedInvalid} invalid)");
-            }
-
             return neighbors;
         }
 
@@ -385,7 +377,6 @@ namespace FaeMaze.Props
 
             if (p1Neighbors.Count == 0)
             {
-                Debug.LogWarning($"[Wisp:{name}] InitializeCatmullRomSpline: Node {p1} has no neighbors!");
                 return;
             }
 
@@ -543,7 +534,6 @@ namespace FaeMaze.Props
             }
 
             // No path found
-            Debug.LogWarning($"[Wisp:{name}] FindPathToNode: No path from {startNode} to {targetNode}");
             return new List<int>();
         }
 
@@ -599,7 +589,6 @@ namespace FaeMaze.Props
             // Check if we have a valid spline setup
             if (splineNodeIndices[1] < 0 || mapState == null)
             {
-                Debug.LogWarning($"[Wisp:{name}] UpdateIdle: Invalid state - P1={splineNodeIndices[1]}, mapState={(mapState == null ? "null" : "valid")}");
                 return;
             }
 
@@ -697,7 +686,9 @@ namespace FaeMaze.Props
         /// </summary>
         private void ScanForNearbyVisitors()
         {
+            FrameProfiler.Checkpoint("WillowTheWisp.ScanForNearbyVisitors.Start");
             VisitorControllerBase[] allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            FrameProfiler.Checkpoint("WillowTheWisp.ScanForNearbyVisitors.AfterFindObjects");
 
             foreach (var visitor in allVisitors)
             {
@@ -1115,7 +1106,6 @@ namespace FaeMaze.Props
 
             // Clear reacting path state (both legacy node-based and new world path)
             reactingPath.Clear();
-            reactingPathIndex = 0;
             reactingCurrentTarget = Vector3.zero;
             reactingWorldPath.Clear();
             reactingWorldPathIndex = 0;
@@ -1343,7 +1333,9 @@ namespace FaeMaze.Props
             glowLight.color = glowColor;
             glowLight.range = glowRange;
             glowLight.intensity = glowMaxIntensity;
+#if UNITY_EDITOR
             glowLight.lightmapBakeType = LightmapBakeType.Realtime;
+#endif
             glowLight.shadows = LightShadows.None;
         }
 

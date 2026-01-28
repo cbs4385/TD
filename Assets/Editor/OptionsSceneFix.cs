@@ -1092,7 +1092,7 @@ public class OptionsSceneFix : EditorWindow
                 {
                     headerTMP.text = headerText;
                     // Prevent word wrap - header should be single line
-                    headerTMP.enableWordWrapping = false;
+                    headerTMP.textWrappingMode = TextWrappingModes.NoWrap;
                     headerTMP.overflowMode = TextOverflowModes.Overflow;
 
                     // Ensure the header text can expand to fill available width
@@ -1557,7 +1557,7 @@ public class OptionsSceneFix : EditorWindow
             {
                 Undo.RecordObject(inputField.textComponent, "Fix Input Text Overflow");
                 inputField.textComponent.overflowMode = TextOverflowModes.Ellipsis;
-                inputField.textComponent.enableWordWrapping = false;
+                inputField.textComponent.textWrappingMode = TextWrappingModes.NoWrap;
                 EditorUtility.SetDirty(inputField.textComponent);
             }
 

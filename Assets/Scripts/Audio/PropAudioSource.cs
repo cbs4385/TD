@@ -44,7 +44,6 @@ namespace FaeMaze.Audio
         #region Private Fields
 
         private AudioSource audioSource;
-        private float baseVolume = 1f;
         private bool isPlaying = false;
         private bool wasActive = false;  // Track previous active state to detect transitions
         private int inactiveFrameCount = 0;  // Count frames of inactivity to bridge gaps

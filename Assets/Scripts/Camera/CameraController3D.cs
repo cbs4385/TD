@@ -27,13 +27,6 @@ namespace FaeMaze.Cameras
         [Tooltip("Degrees to rotate the focal point per key press")]
         private float focalTurnSpeed = 90f;
 
-        [SerializeField]
-        [Tooltip("Constant camera distance behind the focal point")]
-        private float focalFollowDistance = 3f;
-
-        [SerializeField]
-        [Tooltip("Constant camera height above the focal point")]
-        private float focalHeightOffset = 2f;
 
         [SerializeField]
         [Tooltip("Camera viewing angle in degrees (15 = low angle, 89 = near top-down)")]
@@ -797,9 +790,6 @@ namespace FaeMaze.Cameras
             Vector3 euler = transform.rotation.eulerAngles;
             euler.z = 0f;
             transform.rotation = Quaternion.Euler(euler);
-
-            focalFollowDistance = 3f;
-            focalHeightOffset = -3f;
 
             focalCameraPoseInitialized = true;
         }

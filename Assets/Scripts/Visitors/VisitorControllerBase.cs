@@ -54,6 +54,10 @@ namespace FaeMaze.Visitors
         [Tooltip("Enable verbose logging for visitor pathfinding diagnostics")]
         protected bool logVisitorPathfinding = false;
 
+        [SerializeField]
+        [Tooltip("Enable debug logging for spline rotation issues")]
+        protected bool debugSplineRotation = false;
+
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("Use 3D model instead of sprite-based rendering")]
@@ -213,14 +217,39 @@ namespace FaeMaze.Visitors
         protected List<Vector3> worldPath;
         protected int worldPathIndex;
 
+        // Movement diagnostic tracking - logs when visitor ends up off walkable tiles
+        protected Vector3 lastValidPosition;
+        protected string lastMoveCause = "Initial";
+        protected bool wasOnWalkableTile = true;
+        protected float offTileLogCooldown = 0f;
+        protected const float OFF_TILE_LOG_INTERVAL = 1.0f; // Only log once per second to avoid spam
+
+        // Stuck detection - logs when visitor is in Walking state but not moving
+        protected Vector3 lastStuckCheckPosition;
+        protected float stuckCheckTimer = 0f;
+        protected float stuckDuration = 0f;
+        protected const float STUCK_CHECK_INTERVAL = 0.5f; // Check every 0.5 seconds
+        protected const float STUCK_THRESHOLD = 0.1f; // Must move at least 0.1 units per check
+        protected const float STUCK_LOG_THRESHOLD = 2.0f; // Log after 2 seconds of being stuck
+
+        // Pathfinding cost penalties
+        // Heart node penalty: visitors strongly prefer paths that don't cross through the heart center
+        protected const float HEART_NODE_PATHFINDING_PENALTY = 20f;
+
         // Catmull-Rom spline smoothing for path following (similar to WillowTheWisp idle behavior)
         // Uses 4 control points: P0 influences entry tangent, P1 is current start, P2 is target, P3 influences exit tangent
-        protected bool useSplineSmoothing = true;
+        // DISABLED: Spline smoothing caused visitors to drift off walkable tiles and get stuck
+        // Now using direct tile-to-tile movement via UpdateDirectWalking()
+        protected bool useSplineSmoothing = false;
         protected float splineProgress = 0f;
         protected float splineSegmentLength = 1f;
         protected int splineStartIndex = 0; // Index in worldPath for P1 (current segment start)
         protected Vector3[] splineControlPoints = new Vector3[4]; // P0, P1, P2, P3
         protected bool splineInitialized = false;
+
+        // Physics-based movement: calculate in Update, apply in FixedUpdate
+        protected Vector3 desiredPosition;
+        protected bool hasDesiredPosition = false;
 
         // State aura visual feedback
         protected GameObject stateAuraObject;
@@ -257,6 +286,7 @@ namespace FaeMaze.Visitors
 
         /// <summary>Gets the visitor's current essence (remaining value that can be drained)</summary>
         public float CurrentEssence => currentEssence;
+
 
         /// <summary>
         /// Deducts essence from the visitor. If essence drops to 0 or below, triggers OnEssenceDepleted.
@@ -369,12 +399,20 @@ namespace FaeMaze.Visitors
 
         protected virtual void Update()
         {
+            FrameProfiler.Checkpoint($"Visitor.Update.Start({name})");
+
+            var frameTimer = System.Diagnostics.Stopwatch.StartNew();
+
             if (pendingPathRecalculation)
             {
                 pendingPathRecalculation = false;
                 UpdateDestinationIfExitRemoved();
                 RecalculatePath();
+                FrameProfiler.Checkpoint($"Visitor.PathRecalc({name})");
             }
+
+            long pathRecalcMs = frameTimer.ElapsedMilliseconds;
+            FrameProfiler.Checkpoint($"Visitor.AfterPathRecalc({name})");
 
             // Update state duration timers for timed states
             if (currentTimedState != VisitorState.Idle && currentStateDuration > 0)
@@ -403,6 +441,8 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            FrameProfiler.Checkpoint($"Visitor.AfterLanternCooldown({name})");
+
             // Check for nearby Red Caps
             redCapDetectionTimer -= Time.deltaTime;
             if (redCapDetectionTimer <= 0f)
@@ -411,12 +451,43 @@ namespace FaeMaze.Visitors
                 CheckForNearbyRedCaps();
             }
 
+            FrameProfiler.Checkpoint($"Visitor.AfterRedCapCheck({name})");
+
+            // CRITICAL: Don't process any movement when grabbed, consumed, or escaping
+            // The heart controls position directly when grabbed
+            if (state == VisitorState.Grabbed || state == VisitorState.Consumed || state == VisitorState.Escaping)
+            {
+                UpdateStateAura();
+                UpdateAnimatorSpeed();
+                return;
+            }
+
+            // Check if we're being blocked by tongue colliders and need to be pushed out
+            // This runs every frame to ensure visitors can't walk through the tongue
+            Vector3 tongueBlockedPos;
+            if (IsBlockedByTongue(transform.position, out tongueBlockedPos))
+            {
+                // Push visitor to the blocked position (outside the tongue)
+                if (rb3D != null)
+                {
+                    rb3D.MovePosition(tongueBlockedPos);
+                    rb3D.linearVelocity = Vector3.zero;
+                }
+                else
+                {
+                    transform.position = tongueBlockedPos;
+                }
+                RecordMoveCause("TonguePush");
+            }
+
             // Handle FairyRing circling (takes priority over lantern fascination)
             if (currentFairyRing != null)
             {
                 UpdateFairyRingCircling();
                 return; // Don't process other movement while circling
             }
+
+            FrameProfiler.Checkpoint($"Visitor.AfterRingCheck({name})");
 
             // Check for FaeLantern influence (world-space detection)
             if (IsMovementState(state))
@@ -427,6 +498,8 @@ namespace FaeMaze.Visitors
                     CheckFaeLanternInfluence();
                 }
             }
+
+            FrameProfiler.Checkpoint($"Visitor.AfterLanternInfluence({name})");
 
             // Handle fascination timer (pause at lantern)
             if (isFascinated && hasReachedLantern)
@@ -479,6 +552,8 @@ namespace FaeMaze.Visitors
                 EndFascination();
             }
 
+            FrameProfiler.Checkpoint($"Visitor.BeforeMovement({name})");
+
             if (IsMovementState(state))
             {
                 // Don't update normal walking if being lured by a wisp
@@ -491,10 +566,14 @@ namespace FaeMaze.Visitors
                     return;
                 }
 
+                FrameProfiler.Checkpoint($"Visitor.BeforeUpdateWalking({name})");
+
                 if (!isCalculatingPath)
                 {
                     UpdateWalking();
                 }
+
+                FrameProfiler.Checkpoint($"Visitor.AfterUpdateWalking({name})");
             }
 
             // Update state aura visual
@@ -502,6 +581,245 @@ namespace FaeMaze.Visitors
 
             // Update animator speed based on state
             UpdateAnimatorSpeed();
+
+            // Performance logging
+            long totalMs = frameTimer.ElapsedMilliseconds;
+            if (totalMs > 100)
+            {
+                Debug.LogWarning($"[VisitorPerf] SLOW FRAME in {name}.Update: totalMs={totalMs}, pathRecalcMs={pathRecalcMs}");
+            }
+        }
+
+        /// <summary>
+        /// FixedUpdate handles physics-based movement.
+        /// Movement is calculated in Update() and stored in desiredPosition,
+        /// then applied here using MovePosition() which works correctly with non-kinematic Rigidbodies.
+        /// </summary>
+        protected virtual void FixedUpdate()
+        {
+            if (rb3D != null)
+            {
+                // CRITICAL: Only apply desired position if we're in a movement-allowed state
+                // This prevents stale positions from being applied after state changes (e.g., becoming Dazed)
+                bool canMove = state == VisitorState.Walking || state == VisitorState.Confused ||
+                               state == VisitorState.Frightened || state == VisitorState.Lured ||
+                               state == VisitorState.Fascinated || state == VisitorState.Grabbed ||
+                               state == VisitorState.Consumed;
+
+                if (hasDesiredPosition && canMove)
+                {
+                    // Wake the Rigidbody in case it's sleeping (non-kinematic bodies can sleep)
+                    if (rb3D.IsSleeping())
+                    {
+                        rb3D.WakeUp();
+                    }
+
+                    // Use MovePosition only - do NOT override with transform.position
+                    // This allows the physics engine to handle collision resolution with tongue colliders
+                    rb3D.MovePosition(desiredPosition);
+                    hasDesiredPosition = false;
+                }
+                else if (hasDesiredPosition && !canMove)
+                {
+                    // Clear stale desired position for non-movement states
+                    hasDesiredPosition = false;
+                }
+
+                // CRITICAL: Zero velocity for ALL non-terminal states to prevent physics drift
+                // This includes Dazed, Idle, and walking states without a desired position
+                if (state != VisitorState.Grabbed && state != VisitorState.Consumed && state != VisitorState.Escaping)
+                {
+                    if (rb3D.linearVelocity.sqrMagnitude > 0.001f)
+                    {
+                        Debug.Log($"[PhysicsPush] {name} (state={state}) had velocity ({rb3D.linearVelocity.x:F2}, {rb3D.linearVelocity.y:F2}, {rb3D.linearVelocity.z:F2}) - zeroing");
+                        rb3D.linearVelocity = Vector3.zero;
+                        rb3D.angularVelocity = Vector3.zero;
+                    }
+                }
+            }
+
+            // Check if we're on a walkable tile and log if not
+            CheckAndLogWalkability();
+
+            // Check if visitor is stuck (in Walking state but not moving)
+            CheckAndLogIfStuck();
+        }
+
+        /// <summary>
+        /// Checks if the visitor is currently on a walkable tile and logs diagnostic info if not.
+        /// </summary>
+        protected void CheckAndLogWalkability()
+        {
+            // Decrease cooldown
+            if (offTileLogCooldown > 0f)
+            {
+                offTileLogCooldown -= Time.fixedDeltaTime;
+            }
+
+            // Skip check if we don't have maze data yet
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+            {
+                return;
+            }
+
+            // Skip if grabbed or consumed - we're supposed to be moved by external forces
+            if (state == VisitorState.Grabbed || state == VisitorState.Consumed || state == VisitorState.Escaping)
+            {
+                return;
+            }
+
+            // Skip if blocked by tongue or node center - visitor is being pushed by collision avoidance
+            // These are expected to temporarily push visitors slightly off-path
+            if (lastMoveCause != null && (lastMoveCause.Contains("BlockedByTongue") || lastMoveCause.Contains("BlockedByNodeCenter")))
+            {
+                return;
+            }
+
+            Vector3 currentPos = transform.position;
+
+            // Use wider search to find the nearest walkable tile (same as movement validation)
+            // But use a slightly stricter tolerance (0.6) for diagnosis - if we're further than this,
+            // something is wrong even though movement allows up to 0.8
+            ForestMaze.WorldSpaceTile nearestTile;
+            bool isTrulyOnTile = IsPositionNearWalkableTile(currentPos, out nearestTile, 0.6f);
+            float distanceToTile = nearestTile != null
+                ? Vector2.Distance(new Vector2(currentPos.x, currentPos.y), nearestTile.Position)
+                : float.MaxValue;
+            bool isOnWalkable = nearestTile != null && nearestTile.Walkable;
+
+            if (isTrulyOnTile)
+            {
+                // Update last valid position when on walkable tile
+                lastValidPosition = currentPos;
+                wasOnWalkableTile = true;
+            }
+            else
+            {
+                // We're off the walkable area
+                // Recovery is disabled - it was causing infinite loops and making things worse.
+                // Instead, we just log the issue for debugging. The root cause needs to be fixed
+                // in the pathfinding/movement code, not papered over with teleportation.
+
+                // Log diagnostic info (rate limited)
+                if (offTileLogCooldown <= 0f)
+                {
+                    offTileLogCooldown = OFF_TILE_LOG_INTERVAL;
+
+                    string tileInfo = nearestTile != null
+                        ? $"NearestTile: ({nearestTile.Position.x:F2}, {nearestTile.Position.y:F2}), Walkable={nearestTile.Walkable}, Dist={distanceToTile:F2}"
+                        : "NearestTile: null";
+
+                    Debug.LogWarning($"[VisitorDiag] {gameObject.name} OFF WALKABLE TILE!\n" +
+                        $"  Current: ({currentPos.x:F2}, {currentPos.y:F2}, {currentPos.z:F2})\n" +
+                        $"  LastValid: ({lastValidPosition.x:F2}, {lastValidPosition.y:F2}, {lastValidPosition.z:F2})\n" +
+                        $"  LastMoveCause: {lastMoveCause}\n" +
+                        $"  State: {state}\n" +
+                        $"  {tileInfo}\n" +
+                        $"  WasOnWalkable: {wasOnWalkableTile}");
+                }
+
+                wasOnWalkableTile = false;
+            }
+        }
+
+        /// <summary>
+        /// Records the cause of the current movement for diagnostic tracking.
+        /// Call this before setting desiredPosition.
+        /// </summary>
+        public void RecordMoveCause(string cause)
+        {
+            lastMoveCause = cause;
+        }
+
+        /// <summary>
+        /// Checks if the visitor is stuck (in Walking/Confused state but not moving).
+        /// Logs diagnostic info after being stuck for STUCK_LOG_THRESHOLD seconds.
+        /// </summary>
+        protected void CheckAndLogIfStuck()
+        {
+            // Only check if in a state where we expect movement
+            if (state != VisitorState.Walking && state != VisitorState.Confused && state != VisitorState.Lured)
+            {
+                // Reset stuck tracking when not in a walking state
+                stuckDuration = 0f;
+                stuckCheckTimer = 0f;
+                return;
+            }
+
+            stuckCheckTimer += Time.fixedDeltaTime;
+
+            if (stuckCheckTimer >= STUCK_CHECK_INTERVAL)
+            {
+                stuckCheckTimer = 0f;
+
+                Vector3 currentPos = transform.position;
+                float distanceMoved = Vector3.Distance(currentPos, lastStuckCheckPosition);
+
+                if (distanceMoved < STUCK_THRESHOLD)
+                {
+                    // Not moving enough - accumulate stuck time
+                    stuckDuration += STUCK_CHECK_INTERVAL;
+
+                    if (stuckDuration >= STUCK_LOG_THRESHOLD)
+                    {
+                        // Log stuck warning
+                        string pathInfo = worldPath != null
+                            ? $"PathLength={worldPath.Count}, PathIndex={worldPathIndex}"
+                            : "Path=null";
+
+                        string nextWaypoint = worldPath != null && worldPathIndex < worldPath.Count
+                            ? $"({worldPath[worldPathIndex].x:F2}, {worldPath[worldPathIndex].y:F2})"
+                            : "none";
+
+                        Debug.LogWarning($"[VisitorDiag] {gameObject.name} STUCK for {stuckDuration:F1}s!\n" +
+                            $"  Current: ({currentPos.x:F2}, {currentPos.y:F2}, {currentPos.z:F2})\n" +
+                            $"  State: {state}\n" +
+                            $"  LastMoveCause: {lastMoveCause}\n" +
+                            $"  {pathInfo}\n" +
+                            $"  NextWaypoint: {nextWaypoint}\n" +
+                            $"  HasDesiredPosition: {hasDesiredPosition}");
+                        Debug.Break();  // Pause editor to allow inspection
+
+                        // If stuck due to node center or no valid movement, try to recalculate path
+                        if (lastMoveCause != null &&
+                            (lastMoveCause.Contains("BlockedByNodeCenter") ||
+                             lastMoveCause.Contains("StayInPlace") ||
+                             lastMoveCause.Contains("NoRecoveryTile")))
+                        {
+                            Debug.Log($"[VisitorDiag] {gameObject.name} attempting path recalculation due to stuck state");
+
+                            // Log the old path details before recalculation
+                            int oldPathCount = worldPath?.Count ?? 0;
+                            Vector3 oldFirstWaypoint = worldPath != null && worldPath.Count > 0 ? worldPath[0] : Vector3.zero;
+
+                            RecalculatePath();
+                            splineInitialized = false; // Force spline reinitialization
+
+                            // Log the new path details after recalculation
+                            int newPathCount = worldPath?.Count ?? 0;
+                            Vector3 newFirstWaypoint = worldPath != null && worldPath.Count > 0 ? worldPath[0] : Vector3.zero;
+                            float distToFirstWaypoint = worldPath != null && worldPath.Count > 0
+                                ? Vector3.Distance(currentPos, worldPath[0])
+                                : float.MaxValue;
+
+                            Debug.Log($"[VisitorDiag] {gameObject.name} path recalculation complete:\n" +
+                                $"  OldPath: {oldPathCount} waypoints, first=({oldFirstWaypoint.x:F2}, {oldFirstWaypoint.y:F2})\n" +
+                                $"  NewPath: {newPathCount} waypoints, first=({newFirstWaypoint.x:F2}, {newFirstWaypoint.y:F2})\n" +
+                                $"  DistToFirstWaypoint: {distToFirstWaypoint:F2}");
+                        }
+
+                        // Reset to avoid spamming (will log again after another STUCK_LOG_THRESHOLD)
+                        stuckDuration = 0f;
+                    }
+                }
+                else
+                {
+                    // Moving normally - reset stuck tracking
+                    stuckDuration = 0f;
+                }
+
+                lastStuckCheckPosition = currentPos;
+            }
         }
 
         #endregion
@@ -544,22 +862,56 @@ namespace FaeMaze.Visitors
 
         private void UpdateDestinationIfExitRemoved()
         {
-            // In world-space mode, navigate to heart if destination is invalid
-            if (mazeGridBehaviour != null)
-            {
-                SetWorldDestination(mazeGridBehaviour.HeartWorldPosition);
-            }
+            // In world-space mode, navigate to heart edge if destination is invalid
+            RetargetToHeart();
         }
 
         /// <summary>
-        /// Retargets visitor to the heart. Called when exits are removed.
+        /// Retargets visitor to approach the heart.
+        /// Destination is at the EDGE of the heart node (not the center).
+        /// The HeartOfTheMaze will detect the visitor when they enter its detection radius.
         /// </summary>
         public void RetargetToHeart()
         {
             if (mazeGridBehaviour != null)
             {
-                SetWorldDestination(mazeGridBehaviour.HeartWorldPosition);
+                Vector3 heartApproachPos = GetHeartApproachPosition();
+                SetWorldDestination(heartApproachPos);
             }
+        }
+
+        /// <summary>
+        /// Gets a position at the edge of the heart node for the visitor to approach.
+        /// This is calculated as a point NODE_RADIUS units from heart center in the
+        /// direction from heart toward the visitor's current position.
+        /// Visitors NEVER path to node centers - they approach the edge and are detected by triggers.
+        /// </summary>
+        protected Vector3 GetHeartApproachPosition()
+        {
+            if (mazeGridBehaviour == null)
+                return transform.position;
+
+            Vector3 heartCenter = mazeGridBehaviour.HeartWorldPosition;
+
+            // Direction from heart to visitor (in XY plane)
+            Vector2 visitorPos2D = new Vector2(transform.position.x, transform.position.y);
+            Vector2 heartPos2D = new Vector2(heartCenter.x, heartCenter.y);
+            Vector2 dirFromHeart = (visitorPos2D - heartPos2D).normalized;
+
+            // If visitor is at heart center, pick an arbitrary direction
+            if (dirFromHeart.sqrMagnitude < 0.01f)
+            {
+                dirFromHeart = Vector2.up;
+            }
+
+            // Approach position is at the edge of the heart node (NODE_RADIUS = 3.0)
+            // Subtract 0.5 to stop just inside the detection zone
+            const float HEART_NODE_RADIUS = 3.0f;
+            const float APPROACH_BUFFER = 0.5f;
+            float approachRadius = HEART_NODE_RADIUS - APPROACH_BUFFER;
+
+            Vector2 approachPos2D = heartPos2D + dirFromHeart * approachRadius;
+            return new Vector3(approachPos2D.x, approachPos2D.y, heartCenter.z);
         }
 
         /// <summary>
@@ -707,6 +1059,15 @@ namespace FaeMaze.Visitors
             {
                 isCurrentlyStalled = true;
                 stalledDuration += Time.deltaTime;
+
+                // If stalled for too long (2 seconds), force path recalculation
+                // This helps visitors escape when they get stuck against colliders
+                if (stalledDuration > 2.0f && !pendingPathRecalculation && worldPath != null && worldPath.Count > 0)
+                {
+                    pendingPathRecalculation = true;
+                    stalledDuration = 0f;  // Reset to avoid repeated recalculations
+                    Debug.LogWarning($"{name} stalled for 2+ seconds, forcing path recalculation");
+                }
             }
             else
             {
@@ -730,11 +1091,65 @@ namespace FaeMaze.Visitors
                 || visitorState == VisitorState.Lured;
         }
 
+        /// <summary>
+        /// Checks if a position is near a walkable tile using a wider search radius than GetWorldSpaceTileAt.
+        /// Returns true if position is within tolerance of a walkable tile.
+        /// </summary>
+        /// <param name="position">World position to check</param>
+        /// <param name="nearestWalkable">Output: the nearest walkable tile found, or null</param>
+        /// <param name="tolerance">How close the position must be to a walkable tile (default 0.8 units)</param>
+        protected bool IsPositionNearWalkableTile(Vector3 position, out ForestMaze.WorldSpaceTile nearestWalkable, float tolerance = 0.8f)
+        {
+            nearestWalkable = null;
+
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+            {
+                return false;
+            }
+
+            Vector2 pos2D = new Vector2(position.x, position.y);
+
+            // Use a wider search radius (1.5 units) to find nearby tiles
+            var nearbyTiles = mazeGridBehaviour.WorldSpaceMazeData.GetTilesNear(pos2D, 1.5f);
+
+            float closestDist = float.MaxValue;
+            ForestMaze.WorldSpaceTile closestWalkable = null;
+
+            foreach (var tile in nearbyTiles)
+            {
+                if (!tile.Walkable) continue;
+
+                float dist = Vector2.Distance(tile.Position, pos2D);
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closestWalkable = tile;
+                }
+            }
+
+            nearestWalkable = closestWalkable;
+
+            // Position is valid if it's within tolerance of a walkable tile
+            return closestWalkable != null && closestDist <= tolerance;
+        }
+
+        // DEBUG: Set to true to disable all visitor states except Idle and Walking
+        // This helps isolate pathfinding issues from state-related behavior
+        protected static bool debugOnlyWalkingState = false;
+
         protected virtual void RefreshStateFromFlags()
         {
-            // Terminal states that cannot be overridden
-            if (state == VisitorState.Consumed || state == VisitorState.Escaping)
+            // Terminal states cannot be overridden by UpdateState logic
+            // Grabbed, Consumed, and Escaping are controlled externally (by heart, powers, etc.)
+            if (state == VisitorState.Grabbed || state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
+                return;
+            }
+
+            // DEBUG: Skip all state logic and just walk (does NOT affect terminal states above)
+            if (debugOnlyWalkingState)
+            {
+                state = VisitorState.Walking;
                 return;
             }
 
@@ -822,6 +1237,46 @@ namespace FaeMaze.Visitors
             return config != null ? config.EssenceReward : 100;
         }
 
+        /// <summary>
+        /// Predicts the visitor's future position based on their current movement direction and speed.
+        /// Used by the heart tongue to aim ahead of moving visitors.
+        /// </summary>
+        /// <param name="timeAhead">Seconds into the future to predict</param>
+        /// <returns>Predicted world position</returns>
+        public virtual Vector3 GetPredictedPosition(float timeAhead)
+        {
+            // If no path or at end of path, return current position
+            if (worldPath == null || worldPath.Count == 0 || worldPathIndex >= worldPath.Count)
+            {
+                return transform.position;
+            }
+
+            // Calculate direction toward current waypoint
+            Vector3 currentTarget = worldPath[worldPathIndex];
+            Vector3 direction = (currentTarget - transform.position).normalized;
+
+            // If direction is nearly zero (at waypoint), try next waypoint
+            if (direction.sqrMagnitude < 0.001f && worldPathIndex + 1 < worldPath.Count)
+            {
+                currentTarget = worldPath[worldPathIndex + 1];
+                direction = (currentTarget - transform.position).normalized;
+            }
+
+            // Calculate effective speed with all state modifiers
+            float effectiveSpeed = moveSpeed * speedMultiplier;
+            if (isFascinated && !hasReachedLantern)
+            {
+                effectiveSpeed *= FascinationSpeedMultiplier;
+            }
+            else if (isFrightened)
+            {
+                effectiveSpeed *= FRIGHTENED_SPEED_MULTIPLIER;
+            }
+
+            // Predict position
+            return transform.position + direction * effectiveSpeed * timeAhead;
+        }
+
         #endregion
 
         #region Initialization
@@ -889,64 +1344,32 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Builds a world-space path from start to end using BFS through walkable tiles.
+        /// Builds a world-space path from start to end using A* through walkable tiles.
         /// Uses actual tile positions from WorldSpaceMazeData to guarantee paths stay on walkable terrain.
+        /// Path is simplified to remove intermediate collinear points for smooth movement.
         /// </summary>
         public virtual List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
-                return new List<Vector3> { end };
-            }
-
-            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
-            var result = new List<Vector3>();
-
-            Vector2 startPos2D = new Vector2(start.x, start.y);
-            Vector2 endPos2D = new Vector2(end.x, end.y);
-
-            // Find nearest walkable tile to start position
-            var startTile = FindNearestWalkableTile(mazeData, startPos2D);
-            if (startTile == null)
-            {
-                return new List<Vector3> { end };
-            }
-
-            // Find nearest walkable tile to end position
-            var endTile = FindNearestWalkableTile(mazeData, endPos2D);
-            if (endTile == null)
-            {
-                return new List<Vector3> { end };
-            }
-
-            // BFS through walkable tiles
-            var tilePath = FindTilePath(mazeData, startTile, endTile);
-
-            if (tilePath == null || tilePath.Count == 0)
-            {
-                // Return empty list to indicate failure - caller should handle fallback
+                // CRITICAL: Return empty list, not { end } - we can't validate if end is walkable
+                // An empty path will cause the visitor to stay in place, which is safer than
+                // potentially moving through unwalkable areas
                 return new List<Vector3>();
             }
 
-            // Convert tile path to world positions
-            // Add current position first if close to start tile
-            float distToStartTile = Vector2.Distance(startPos2D, startTile.Position);
-            if (distToStartTile < 1.5f)
-            {
-                result.Add(start);
-            }
+            var result = ForestMaze.MazePathfinding.BuildWorldPath(
+                mazeGridBehaviour.WorldSpaceMazeData,
+                start,
+                end,
+                heartNodePenalty: 0f,
+                penalizeHeartNode: false // Heart node centers are already unwalkable - no penalty needed
+            );
 
-            // Add all tile positions
-            foreach (var tile in tilePath)
+            // If pathfinding failed, return empty list - don't use unvalidated destination
+            if (result.Count == 0)
             {
-                result.Add(new Vector3(tile.Position.x, tile.Position.y, start.z));
-            }
-
-            // Add final destination if close to end tile
-            float distFromLastTile = Vector2.Distance(endPos2D, endTile.Position);
-            if (distFromLastTile > 0.1f && distFromLastTile < 1.5f)
-            {
-                result.Add(end);
+                return new List<Vector3>();
             }
 
             return result;
@@ -954,238 +1377,11 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Finds the nearest walkable tile to a position.
+        /// Wrapper around MazePathfinding.FindNearestWalkableTile for internal use.
         /// </summary>
         private ForestMaze.WorldSpaceTile FindNearestWalkableTile(ForestMaze.WorldSpaceMazeData mazeData, Vector2 position)
         {
-            float searchRadius = 5f;
-            float minDist = float.MaxValue;
-            ForestMaze.WorldSpaceTile nearest = null;
-
-            // Expand search radius if needed
-            for (int attempt = 0; attempt < 3 && nearest == null; attempt++)
-            {
-                var nearbyTiles = mazeData.GetTilesNear(position, searchRadius);
-                foreach (var tile in nearbyTiles)
-                {
-                    if (!tile.Walkable) continue;
-
-                    float dist = Vector2.Distance(position, tile.Position);
-                    if (dist < minDist)
-                    {
-                        minDist = dist;
-                        nearest = tile;
-                    }
-                }
-                searchRadius *= 2f;
-            }
-
-            return nearest;
-        }
-
-        /// <summary>
-        /// Finds a path through walkable tiles using A* algorithm.
-        /// Uses Euclidean distance as heuristic to prefer geometrically shorter paths.
-        /// This ensures visitors cut through nodes rather than going around them.
-        /// </summary>
-        private List<ForestMaze.WorldSpaceTile> FindTilePath(ForestMaze.WorldSpaceMazeData mazeData,
-            ForestMaze.WorldSpaceTile startTile, ForestMaze.WorldSpaceTile endTile)
-        {
-            try
-            {
-                if (startTile == endTile)
-                {
-                    return new List<ForestMaze.WorldSpaceTile> { startTile };
-                }
-
-                // A* algorithm using distance-based costs
-                // gScore = actual distance traveled from start
-                // hScore = Euclidean distance to goal (heuristic)
-                // fScore = gScore + hScore (priority)
-
-                var gScore = new Dictionary<ForestMaze.WorldSpaceTile, float>();
-                var fScore = new Dictionary<ForestMaze.WorldSpaceTile, float>();
-                var parent = new Dictionary<ForestMaze.WorldSpaceTile, ForestMaze.WorldSpaceTile>();
-                var closedSet = new HashSet<ForestMaze.WorldSpaceTile>();
-
-                // Open set as sorted list (simple priority queue)
-                var openSet = new List<ForestMaze.WorldSpaceTile>();
-
-                gScore[startTile] = 0f;
-                fScore[startTile] = Vector2.Distance(startTile.Position, endTile.Position);
-                openSet.Add(startTile);
-                parent[startTile] = null;
-
-                // Tiles are placed at ~0.5 unit intervals along curves and 1.0 in nodes
-                // Use 1.42 (sqrt(2)) to connect diagonal neighbors but not jump across paths
-                float neighborRadius = mazeData.TileSize * 1.42f;
-
-                int iterations = 0;
-                int maxIterations = 50000; // Safety limit
-
-                while (openSet.Count > 0 && iterations < maxIterations)
-                {
-                    iterations++;
-
-                    // Find node with lowest fScore in open set
-                    ForestMaze.WorldSpaceTile current = null;
-                    float lowestF = float.MaxValue;
-                    foreach (var tile in openSet)
-                    {
-                        float f = fScore.TryGetValue(tile, out float fs) ? fs : float.MaxValue;
-                        if (f < lowestF)
-                        {
-                            lowestF = f;
-                            current = tile;
-                        }
-                    }
-
-                    if (current == null) break;
-
-                    // Check if reached destination
-                    float distToEnd = Vector2.Distance(current.Position, endTile.Position);
-                    if (distToEnd < mazeData.TileSize * 0.5f || current == endTile)
-                    {
-                        // Reconstruct path
-                        var path = new List<ForestMaze.WorldSpaceTile>();
-                        var node = current;
-                        while (node != null)
-                        {
-                            path.Add(node);
-                            parent.TryGetValue(node, out node);
-                        }
-                        path.Reverse();
-
-                        return path;
-                    }
-
-                    openSet.Remove(current);
-                    closedSet.Add(current);
-
-                    // Get neighboring walkable tiles
-                    var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
-
-                    float currentG = gScore.TryGetValue(current, out float cg) ? cg : float.MaxValue;
-
-                    foreach (var neighbor in neighbors)
-                    {
-                        if (!neighbor.Walkable) continue;
-                        if (closedSet.Contains(neighbor)) continue;
-
-                        // Must be within neighbor radius (world-space distance)
-                        float stepDist = Vector2.Distance(current.Position, neighbor.Position);
-                        if (stepDist > neighborRadius) continue;
-
-                        // Topology check: verify tiles are connected through graph structure
-                        // This prevents jumping between parallel paths that happen to be close
-                        if (!mazeData.AreTilesConnected(current, neighbor))
-                            continue;
-
-                        // Calculate tentative gScore (actual distance traveled)
-                        float tentativeG = currentG + stepDist;
-
-                        float neighborG = gScore.TryGetValue(neighbor, out float ng) ? ng : float.MaxValue;
-                        if (tentativeG < neighborG)
-                        {
-                            // This path is better
-                            parent[neighbor] = current;
-                            gScore[neighbor] = tentativeG;
-                            fScore[neighbor] = tentativeG + Vector2.Distance(neighbor.Position, endTile.Position);
-
-                            if (!openSet.Contains(neighbor))
-                            {
-                                openSet.Add(neighbor);
-                            }
-                        }
-                    }
-                }
-
-                return null; // No path found
-            }
-            catch (System.Exception)
-            {
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Checks if there's a clear line-of-sight between two positions through walkable tiles.
-        /// Samples points along the line and verifies each is near a walkable tile.
-        /// </summary>
-        private bool HasLineOfSight(ForestMaze.WorldSpaceMazeData mazeData, Vector2 from, Vector2 to)
-        {
-            float distance = Vector2.Distance(from, to);
-            if (distance < 0.1f) return true; // Same position
-
-            // Sample at intervals smaller than tile size to catch walls
-            float sampleInterval = mazeData.TileSize * 0.4f;
-            int numSamples = Mathf.CeilToInt(distance / sampleInterval);
-            numSamples = Mathf.Max(numSamples, 2); // At least check midpoint
-
-            float checkRadius = mazeData.TileSize * 0.6f; // Slightly smaller than tile to be strict
-
-            for (int i = 1; i < numSamples; i++) // Skip start point (i=0), we know it's walkable
-            {
-                float t = (float)i / numSamples;
-                Vector2 samplePos = Vector2.Lerp(from, to, t);
-
-                // Check if this sample point is near a walkable tile
-                var nearbyTiles = mazeData.GetTilesNear(samplePos, checkRadius);
-                bool foundWalkable = false;
-                foreach (var tile in nearbyTiles)
-                {
-                    if (tile.Walkable && Vector2.Distance(samplePos, tile.Position) <= checkRadius)
-                    {
-                        foundWalkable = true;
-                        break;
-                    }
-                }
-
-                if (!foundWalkable)
-                {
-                    return false; // Path crosses unwalkable area
-                }
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Simplifies a tile path by removing intermediate collinear points.
-        /// Keeps direction changes and samples at regular intervals for smooth movement.
-        /// </summary>
-        private List<ForestMaze.WorldSpaceTile> SimplifyTilePath(List<ForestMaze.WorldSpaceTile> path)
-        {
-            if (path == null || path.Count <= 2)
-                return path;
-
-            var simplified = new List<ForestMaze.WorldSpaceTile>();
-            simplified.Add(path[0]);
-
-            const float angleThreshold = 15f * Mathf.Deg2Rad; // Keep points where direction changes by more than 15 degrees
-            const int maxSkip = 5; // Don't skip more than 5 consecutive tiles
-
-            int skipCount = 0;
-            for (int i = 1; i < path.Count - 1; i++)
-            {
-                Vector2 dirPrev = (path[i].Position - path[i - 1].Position).normalized;
-                Vector2 dirNext = (path[i + 1].Position - path[i].Position).normalized;
-
-                float angle = Mathf.Acos(Mathf.Clamp(Vector2.Dot(dirPrev, dirNext), -1f, 1f));
-
-                // Keep this point if direction changes significantly or we've skipped too many
-                if (angle > angleThreshold || skipCount >= maxSkip)
-                {
-                    simplified.Add(path[i]);
-                    skipCount = 0;
-                }
-                else
-                {
-                    skipCount++;
-                }
-            }
-
-            simplified.Add(path[path.Count - 1]);
-            return simplified;
+            return ForestMaze.MazePathfinding.FindNearestWalkableTile(mazeData, position);
         }
 
         /// <summary>
@@ -1754,12 +1950,8 @@ namespace FaeMaze.Visitors
                 UpdateDirectWalking(effectiveSpeed);
             }
 
-            // Sync physics if using rigidbody
-            if (rb3D != null)
-            {
-                rb3D.MovePosition(transform.position);
-                Physics.SyncTransforms();
-            }
+            // Note: Position is applied via FixedUpdate using MovePosition()
+            // This works correctly with non-kinematic Rigidbody for physics collisions
 
             // Check if fascinated visitor has reached close enough to lantern (0.5 units)
             if (isFascinated && !hasReachedLantern && currentFaeLantern != null)
@@ -1792,6 +1984,58 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void UpdateSplineWalking(float effectiveSpeed)
         {
+            // RECOVERY CHECK: If current position is far from any walkable tile, actively recover
+            // This prevents continued drift when already off-path
+            ForestMaze.WorldSpaceTile recoveryTile;
+            bool needsRecovery = !IsPositionNearWalkableTile(transform.position, out recoveryTile, 0.8f);
+
+            // If we didn't find a tile within normal range but need recovery, search wider
+            if (needsRecovery && recoveryTile == null && mazeGridBehaviour?.WorldSpaceMazeData != null)
+            {
+                Vector2 pos2D = new Vector2(transform.position.x, transform.position.y);
+                // Search up to 10 units - if we're further than that, something is very wrong
+                var nearbyTiles = mazeGridBehaviour.WorldSpaceMazeData.GetTilesNear(pos2D, 10f);
+                float closestDist = float.MaxValue;
+                foreach (var tile in nearbyTiles)
+                {
+                    if (!tile.Walkable) continue;
+                    float dist = Vector2.Distance(tile.Position, pos2D);
+                    if (dist < closestDist)
+                    {
+                        closestDist = dist;
+                        recoveryTile = tile;
+                    }
+                }
+            }
+
+            if (needsRecovery && recoveryTile != null)
+            {
+                // We're far from walkable area but found a tile - move toward it
+                Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+                Vector2 pullDir = (recoveryTile.Position - currentPos2D).normalized;
+                float pullDistance = effectiveSpeed * Time.deltaTime;
+                Vector2 recoveryPos2D = currentPos2D + pullDir * pullDistance;
+                Vector3 recoveryPos = new Vector3(recoveryPos2D.x, recoveryPos2D.y, transform.position.z);
+
+                RecordMoveCause("SplineMovement_Recovery");
+                desiredPosition = recoveryPos;
+                hasDesiredPosition = true;
+                return;
+            }
+            else if (needsRecovery && recoveryTile == null)
+            {
+                // No tile found at all - this is bad, but we can't do much
+                // Stay in place and hope path recalculation fixes it
+                // CRITICAL: Zero velocity to prevent physics from continuing to push us
+                if (rb3D != null)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                    rb3D.angularVelocity = Vector3.zero;
+                }
+                RecordMoveCause("SplineMovement_NoRecoveryTile");
+                return;
+            }
+
             // Initialize spline if needed
             if (!splineInitialized)
             {
@@ -1804,18 +2048,64 @@ namespace FaeMaze.Visitors
                 }
             }
 
+            // DIVERGENCE CHECK: If visitor has moved away from the current P1 control point,
+            // refresh control points to use actual position and reset progress.
+            // This catches cases where:
+            // 1. Physics pushed the visitor after spline was initialized
+            // 2. Previous frame's FixedUpdate moved us to a blocked position
+            // This check happens every frame to ensure spline always starts from actual position.
+            {
+                int p1Index = splineStartIndex;
+                if (p1Index >= 0 && p1Index < worldPath.Count)
+                {
+                    Vector3 currentPos = transform.position;
+
+                    // Compare with what we set P1 to - if visitor is far from P1, correct now
+                    float p1Divergence = Vector3.Distance(
+                        new Vector3(splineControlPoints[1].x, splineControlPoints[1].y, 0),
+                        new Vector3(currentPos.x, currentPos.y, 0));
+
+                    // If current position is far from P1 control point, refresh AND reset progress
+                    // CRITICAL: Must reset progress to 0 because P1 now equals current position,
+                    // so we want t=0 (which evaluates to P1) to match where we actually are
+                    if (p1Divergence > 0.5f)
+                    {
+                        if (debugSplineRotation)
+                        {
+                            Debug.Log($"[SplineDebug] {name} DIVERGENCE DETECTED: P1={splineControlPoints[1]:F2}, current={currentPos:F2}, divergence={p1Divergence:F2}, resetting progress from {splineProgress:F3} to 0");
+                        }
+                        UpdateSplineControlPoints();
+                        splineProgress = 0f; // CRITICAL: Reset progress so spline starts from current position
+                    }
+                }
+            }
+
             // Store previous position for direction calculation
             Vector3 previousPosition = transform.position;
 
             // Progress along spline based on speed (normalized by segment length)
             float speedFactor = effectiveSpeed / Mathf.Max(0.1f, splineSegmentLength);
+            float progressBefore = splineProgress;
             splineProgress += speedFactor * Time.deltaTime;
+
+            // DEBUG: Log if progress is abnormally slow
+            if (speedFactor < 0.1f && Time.frameCount % 60 == 0)
+            {
+                Debug.LogWarning($"[SplineDebug] {name} SLOW PROGRESS: speedFactor={speedFactor:F4} (speed={effectiveSpeed:F2}, segLen={splineSegmentLength:F2}), " +
+                    $"progress={progressBefore:F4}->{splineProgress:F4}, P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}");
+            }
 
             // Handle segment completion and advancement
             while (splineProgress >= 1f && splineStartIndex < worldPath.Count - 1)
             {
                 splineProgress -= 1f;
                 waypointsTraversedSinceSpawn++;
+
+                if (debugSplineRotation)
+                {
+                    Debug.Log($"[SplineDebug] {name} SEGMENT COMPLETE - splineStartIndex={splineStartIndex}, splineProgress wrapped to {splineProgress:F3}, " +
+                        $"currentPos={transform.position:F2}, currentRotZ={transform.eulerAngles.z:F1}");
+                }
 
                 // Allow derived classes to handle detour logic at waypoints
                 int previousIndex = splineStartIndex;
@@ -1824,6 +2114,11 @@ namespace FaeMaze.Visitors
                 // If path was changed by detour handling, reinitialize spline
                 if (worldPath == null || worldPathIndex != previousIndex + 1)
                 {
+                    if (debugSplineRotation)
+                    {
+                        Debug.Log($"[SplineDebug] {name} PATH CHANGED BY DETOUR - worldPath={worldPath != null}, worldPathIndex={worldPathIndex}, prevIndex+1={previousIndex + 1}, " +
+                            $"spline will reinitialize next frame");
+                    }
                     splineInitialized = false;
                     return;
                 }
@@ -1848,7 +2143,9 @@ namespace FaeMaze.Visitors
                 if (distToFinal < 0.1f)
                 {
                     // Close enough - snap to avoid floating point drift
-                    transform.position = finalPos;
+                    RecordMoveCause("SplineMovement_FinalSnap");
+                    desiredPosition = finalPos;
+                    hasDesiredPosition = true;
                 }
                 // Otherwise, the current position is fine - we've arrived
                 worldPathIndex = worldPath.Count;
@@ -1867,14 +2164,213 @@ namespace FaeMaze.Visitors
 
             // Preserve Z position
             newPosition.z = transform.position.z;
-            transform.position = newPosition;
+
+            // SANITY CHECK: If the spline calculated a position more than 2 units from current position,
+            // something is wrong with the spline control points. Reject the movement and stay in place.
+            float distanceFromCurrent = Vector3.Distance(newPosition, transform.position);
+            if (distanceFromCurrent > 2.0f)
+            {
+                Debug.LogWarning($"[SplineDebug] {name} SPLINE SANITY CHECK FAILED! Calculated position {newPosition} is {distanceFromCurrent:F2} units from current {transform.position}. " +
+                    $"Control points: P0={splineControlPoints[0]}, P1={splineControlPoints[1]}, P2={splineControlPoints[2]}, P3={splineControlPoints[3]}, progress={splineProgress:F3}");
+
+                // Zero velocity and stay in place - use immediate sync to prevent physics drift
+                if (rb3D != null)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                    rb3D.angularVelocity = Vector3.zero;
+                    // Force the rigidbody to use our current position, preventing any physics integration
+                    rb3D.position = transform.position;
+                }
+
+                // Force path recalculation
+                RecordMoveCause("SplineMovement_InsanePosition");
+                splineInitialized = false;
+                hasDesiredPosition = false;
+
+                // Immediately recalculate path to try to recover
+                RecalculatePath();
+                return;
+            }
+
+            // Check if movement is blocked by node center collider or tongue
+            Vector3 blockedPos;
+            bool wasBlocked = false;
+            if (IsBlockedByNodeCenter(newPosition, out blockedPos))
+            {
+                // Blocked by node center - move to blocked position and DON'T advance spline
+                // Zero velocity to prevent physics from pushing us further
+                if (rb3D != null)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                    rb3D.angularVelocity = Vector3.zero;
+                }
+                RecordMoveCause("SplineMovement_BlockedByNodeCenter");
+                desiredPosition = blockedPos;
+                hasDesiredPosition = true;
+                wasBlocked = true;
+
+                // Refresh spline control points to use blocked position as new P1
+                // This prevents sanity check failures on next frame
+                UpdateSplineControlPoints();
+            }
+            else if (IsBlockedByTongue(newPosition, out blockedPos))
+            {
+                // Blocked by tongue - stop movement
+                if (rb3D != null)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                    rb3D.angularVelocity = Vector3.zero;
+                }
+                RecordMoveCause("SplineMovement_BlockedByTongue");
+                desiredPosition = blockedPos;
+                hasDesiredPosition = true;
+                wasBlocked = true;
+
+                UpdateSplineControlPoints();
+            }
+            else
+            {
+                // Check if the new position would take us off the walkable area
+                // Use a tiered approach:
+                // - Within 0.5 units: safe, allow normal spline movement
+                // - 0.5-0.8 units: constrain toward tile center to prevent drift
+                // - Beyond 0.8 units: use direct movement fallback
+
+                ForestMaze.WorldSpaceTile nearestTile;
+                bool isNearWalkable = IsPositionNearWalkableTile(newPosition, out nearestTile, 1.0f);
+
+                if (!isNearWalkable || nearestTile == null)
+                {
+                    // Too far from any walkable tile - use direct movement toward next waypoint
+                    if (worldPath != null && splineStartIndex + 1 < worldPath.Count)
+                    {
+                        Vector3 targetWaypoint = worldPath[splineStartIndex + 1];
+                        Vector3 directDir = (targetWaypoint - previousPosition).normalized;
+                        Vector3 candidatePosition = previousPosition + directDir * effectiveSpeed * Time.deltaTime;
+                        candidatePosition.z = transform.position.z;
+
+                        // Validate the direct fallback position too
+                        ForestMaze.WorldSpaceTile candidateTile;
+                        bool candidateNearWalkable = IsPositionNearWalkableTile(candidatePosition, out candidateTile, 0.8f);
+
+                        if (candidateNearWalkable)
+                        {
+                            newPosition = candidatePosition;
+                            RecordMoveCause("SplineMovement_DirectFallback");
+                        }
+                        else
+                        {
+                            // Direct fallback also leads off-path - stay in place
+                            // Zero velocity to prevent physics from pushing us further
+                            if (rb3D != null)
+                            {
+                                rb3D.linearVelocity = Vector3.zero;
+                                rb3D.angularVelocity = Vector3.zero;
+                            }
+                            newPosition = previousPosition;
+                            RecordMoveCause("SplineMovement_StayInPlace");
+                            wasBlocked = true; // Don't advance spline
+                        }
+                    }
+                    else
+                    {
+                        // No valid waypoint - stay in place
+                        // Zero velocity to prevent physics from pushing us further
+                        if (rb3D != null)
+                        {
+                            rb3D.linearVelocity = Vector3.zero;
+                            rb3D.angularVelocity = Vector3.zero;
+                        }
+                        newPosition = previousPosition;
+                        RecordMoveCause("SplineMovement_NoValidTarget");
+                    }
+                }
+                else
+                {
+                    // We found a nearby walkable tile - check distance and constrain if drifting
+                    float distToTile = Vector2.Distance(
+                        new Vector2(newPosition.x, newPosition.y),
+                        nearestTile.Position);
+
+                    if (distToTile <= 0.5f)
+                    {
+                        // Safe zone - allow normal spline movement
+                        RecordMoveCause("SplineMovement_Normal");
+                    }
+                    else if (distToTile <= 0.8f)
+                    {
+                        // Drift zone - constrain toward tile center to prevent further drift
+                        // Blend position toward the tile center based on how far we've drifted
+                        float driftAmount = (distToTile - 0.5f) / 0.3f; // 0 at 0.5, 1 at 0.8
+                        Vector2 tileCenter = nearestTile.Position;
+                        Vector2 currentPos2D = new Vector2(newPosition.x, newPosition.y);
+
+                        // Pull toward tile center proportionally to drift
+                        Vector2 constrainedPos2D = Vector2.Lerp(currentPos2D, tileCenter, driftAmount * 0.5f);
+                        newPosition = new Vector3(constrainedPos2D.x, constrainedPos2D.y, newPosition.z);
+                        RecordMoveCause("SplineMovement_Constrained");
+                    }
+                    else
+                    {
+                        // Beyond safe drift zone - pull strongly toward tile center
+                        Vector2 tileCenter = nearestTile.Position;
+                        Vector2 currentPos2D = new Vector2(newPosition.x, newPosition.y);
+                        Vector2 pullDir = (tileCenter - currentPos2D).normalized;
+
+                        // Move toward tile center at movement speed
+                        float pullDistance = Mathf.Min(effectiveSpeed * Time.deltaTime, distToTile - 0.4f);
+                        Vector2 constrainedPos2D = currentPos2D + pullDir * pullDistance;
+                        newPosition = new Vector3(constrainedPos2D.x, constrainedPos2D.y, newPosition.z);
+                        RecordMoveCause("SplineMovement_Pulled");
+                    }
+                }
+                desiredPosition = newPosition;
+            }
+            hasDesiredPosition = true;
+
+            // If blocked, revert the spline progress so we don't skip ahead
+            // This prevents the visitor from "teleporting" when the block clears
+            if (wasBlocked)
+            {
+                // speedFactor was already calculated above
+                splineProgress -= speedFactor * Time.deltaTime;
+                if (splineProgress < 0f) splineProgress = 0f;
+            }
 
             // Update facing direction based on movement
-            Vector3 moveDirection = (newPosition - previousPosition).normalized;
-            if (moveDirection.sqrMagnitude > 0.001f)
+            // Check magnitude BEFORE normalizing to avoid noise when movement is tiny
+            Vector3 moveDirection = newPosition - previousPosition;
+
+            // Debug: Log every frame when enabled to track spinning
+            if (debugSplineRotation)
             {
-                Vector2 facingDirection = new Vector2(moveDirection.x, moveDirection.y);
+                Debug.Log($"[SplineDebug] {name} FRAME - pos={transform.position:F3}, prev={previousPosition:F3}, " +
+                    $"moveDir=({moveDirection.x:F4}, {moveDirection.y:F4}), moveSqrMag={moveDirection.sqrMagnitude:F6}, " +
+                    $"splineProgress={splineProgress:F4}, rotZ={transform.eulerAngles.z:F1}°, " +
+                    $"P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}");
+            }
+
+            if (moveDirection.sqrMagnitude > 0.0001f)  // Minimum movement threshold
+            {
+                Vector2 facingDirection = new Vector2(moveDirection.x, moveDirection.y).normalized;
+                float newAngle = Mathf.Atan2(facingDirection.y, facingDirection.x) * Mathf.Rad2Deg;
+                float angleDelta = Mathf.DeltaAngle(transform.eulerAngles.z, newAngle);
+
+                // Log if angle change is significant (potential spin)
+                if (debugSplineRotation && Mathf.Abs(angleDelta) > 30f)
+                {
+                    Debug.LogWarning($"[SplineDebug] {name} LARGE ROTATION DELTA - angleDelta={angleDelta:F1}°, " +
+                        $"currentRotZ={transform.eulerAngles.z:F1}°, targetAngle={newAngle:F1}°, " +
+                        $"moveDir=({moveDirection.x:F3}, {moveDirection.y:F3}), moveMag={moveDirection.magnitude:F4}, " +
+                        $"prevPos={previousPosition:F2}, newPos={newPosition:F2}, " +
+                        $"splineProgress={splineProgress:F3}, splineStartIndex={splineStartIndex}");
+                }
+
                 UpdateAnimatorDirection(facingDirection);
+            }
+            else if (debugSplineRotation)
+            {
+                Debug.Log($"[SplineDebug] {name} SKIPPING ROTATION - moveSqrMag={moveDirection.sqrMagnitude:F8} below threshold 0.0001");
             }
 
             // Sync worldPathIndex with spline progress for compatibility
@@ -1887,19 +2383,66 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void UpdateDirectWalking(float effectiveSpeed)
         {
+            // RECOVERY CHECK: If current position is far from any walkable tile, actively recover
+            ForestMaze.WorldSpaceTile recoveryTile;
+            bool needsRecovery = !IsPositionNearWalkableTile(transform.position, out recoveryTile, 0.8f);
+            if (needsRecovery && recoveryTile != null)
+            {
+                // We're far from walkable area but found a tile - move toward it
+                Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+                Vector2 pullDir = (recoveryTile.Position - currentPos2D).normalized;
+                float pullDistance = effectiveSpeed * Time.deltaTime;
+                Vector2 recoveryPos2D = currentPos2D + pullDir * pullDistance;
+                Vector3 recoveryPos = new Vector3(recoveryPos2D.x, recoveryPos2D.y, transform.position.z);
+
+                RecordMoveCause("DirectWalking_Recovery");
+                desiredPosition = recoveryPos;
+                hasDesiredPosition = true;
+                return;
+            }
+            else if (needsRecovery && recoveryTile == null)
+            {
+                // No tile found at all - stay in place
+                // CRITICAL: Zero velocity to prevent physics from continuing to push us
+                if (rb3D != null)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                    rb3D.angularVelocity = Vector3.zero;
+                }
+                RecordMoveCause("DirectWalking_NoRecoveryTile");
+                return;
+            }
+
             float remainingDistance = effectiveSpeed * Time.deltaTime;
+            Vector3 finalPosition = transform.position;
 
             // Move continuously, consuming distance across multiple waypoints if needed
             while (remainingDistance > 0f && worldPathIndex < worldPath.Count)
             {
                 Vector3 targetWorldPos = worldPath[worldPathIndex];
-                float distanceToTarget = Vector3.Distance(transform.position, targetWorldPos);
+                float distanceToTarget = Vector3.Distance(finalPosition, targetWorldPos);
 
                 if (distanceToTarget <= remainingDistance)
                 {
+                    // Check if movement to waypoint is blocked by node center or tongue
+                    Vector3 blockedPos;
+                    if (IsBlockedByNodeCenter(targetWorldPos, out blockedPos))
+                    {
+                        // Blocked by node center - move to blocked position and stop
+                        finalPosition = blockedPos;
+                        remainingDistance = 0f;
+                        break;
+                    }
+                    if (IsBlockedByTongue(targetWorldPos, out blockedPos))
+                    {
+                        // Blocked by tongue - move to blocked position and stop
+                        finalPosition = blockedPos;
+                        remainingDistance = 0f;
+                        break;
+                    }
                     // We can reach (or pass) this waypoint - move to it and continue
                     remainingDistance -= distanceToTarget;
-                    transform.position = targetWorldPos;
+                    finalPosition = targetWorldPos;
                     waypointsTraversedSinceSpawn++;
 
                     // Allow derived classes to handle detour logic at waypoints
@@ -1915,23 +2458,394 @@ namespace FaeMaze.Visitors
                 else
                 {
                     // Can't reach the next waypoint yet - move toward it
-                    Vector3 direction = (targetWorldPos - transform.position).normalized;
-                    transform.position += direction * remainingDistance;
+                    Vector3 direction = (targetWorldPos - finalPosition).normalized;
+                    Vector3 targetPos = finalPosition + direction * remainingDistance;
+
+                    // Check if movement is blocked by node center or tongue
+                    Vector3 blockedPos;
+                    if (IsBlockedByNodeCenter(targetPos, out blockedPos))
+                    {
+                        // Blocked by node center - move to blocked position instead
+                        finalPosition = blockedPos;
+                    }
+                    else if (IsBlockedByTongue(targetPos, out blockedPos))
+                    {
+                        // Blocked by tongue - move to blocked position instead
+                        finalPosition = blockedPos;
+                    }
+                    else
+                    {
+                        // Validate that target position is near a walkable tile
+                        // Use tiered approach same as spline movement
+                        ForestMaze.WorldSpaceTile nearestTile;
+                        bool isNearWalkable = IsPositionNearWalkableTile(targetPos, out nearestTile, 1.0f);
+
+                        if (!isNearWalkable || nearestTile == null)
+                        {
+                            // Target position is off walkable area
+                            // TRUST THE PATH: If we have a valid waypoint from A*, allow movement toward it
+                            // The path was built through walkable tiles, so the waypoint itself is valid
+                            // The issue is just that our small intermediate step lands slightly off-tile
+                            // Use the WAYPOINT tile check instead of intermediate position
+                            ForestMaze.WorldSpaceTile waypointTile;
+                            bool waypointNearWalkable = IsPositionNearWalkableTile(targetWorldPos, out waypointTile, 1.0f);
+
+                            if (waypointNearWalkable && waypointTile != null)
+                            {
+                                // Waypoint is valid - move toward it even though intermediate is off-tile
+                                // Move directly toward the nearest walkable tile's center
+                                Vector2 targetPos2D = new Vector2(targetPos.x, targetPos.y);
+                                Vector2 waypointDir = (waypointTile.Position - targetPos2D).normalized;
+                                // Move toward the waypoint tile, constrained to remain near walkable area
+                                Vector2 constrainedPos2D = targetPos2D + waypointDir * remainingDistance;
+                                finalPosition = new Vector3(constrainedPos2D.x, constrainedPos2D.y, targetPos.z);
+                            }
+                            else
+                            {
+                                // Even waypoint is not near walkable - path seems invalid
+                                // But the A* algorithm built this path, so trust it
+                                // Just move directly toward the waypoint anyway
+                                Debug.LogWarning($"[PathDebug] {name} waypoint ({targetWorldPos.x:F2}, {targetWorldPos.y:F2}) not near walkable tile, but trusting A* path. Current: ({finalPosition.x:F2}, {finalPosition.y:F2})");
+                                Debug.Break(); // Pause editor to examine state
+                                Vector2 currentPos2D = new Vector2(finalPosition.x, finalPosition.y);
+                                Vector2 waypointPos2D = new Vector2(targetWorldPos.x, targetWorldPos.y);
+                                Vector2 moveDir = (waypointPos2D - currentPos2D).normalized;
+                                Vector2 newPos2D = currentPos2D + moveDir * remainingDistance;
+                                finalPosition = new Vector3(newPos2D.x, newPos2D.y, finalPosition.z);
+                            }
+                        }
+                        else
+                        {
+                            // We found a walkable tile nearby (within 1.0 units)
+                            // TRUST THE A* PATH: Just move toward the waypoint
+                            // The old drift/constraint logic was pulling visitors toward tile centers
+                            // that were often in the wrong direction, causing them to get stuck
+                            finalPosition = targetPos;
+                        }
+                    }
                     remainingDistance = 0f;
                 }
             }
 
+            // Store final position for physics to apply in FixedUpdate
+            RecordMoveCause("WaypointMovement");
+            desiredPosition = finalPosition;
+            hasDesiredPosition = true;
+
             // Update facing direction based on current target waypoint (or last movement direction)
+            // Check magnitude BEFORE normalizing to avoid noise when at target
             if (worldPath != null && worldPathIndex < worldPath.Count)
             {
                 Vector3 targetWorldPos = worldPath[worldPathIndex];
-                Vector3 pathDirection = (targetWorldPos - transform.position).normalized;
-                if (pathDirection.sqrMagnitude > 0.001f)
+                Vector3 pathDirection = targetWorldPos - transform.position;
+                if (pathDirection.sqrMagnitude > 0.0001f)  // Minimum distance threshold
                 {
-                    Vector2 facingDirection = new Vector2(pathDirection.x, pathDirection.y);
+                    Vector2 facingDirection = new Vector2(pathDirection.x, pathDirection.y).normalized;
                     UpdateAnimatorDirection(facingDirection);
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks if movement to a target position is blocked by a node center collider.
+        /// Node center colliders prevent visitors from walking into the middle of nodes with props.
+        /// When blocked, tries to push visitor around the obstacle rather than just stopping.
+        /// </summary>
+        /// <param name="targetPosition">The position we want to move to</param>
+        /// <param name="blockedPosition">If blocked, a position that moves visitor around the obstacle</param>
+        /// <returns>True if movement is blocked by node center collider, false otherwise</returns>
+        // Static counter for diagnostic logging - how often are visitors hitting node centers
+        private static int nodeBlockedThisFrame = 0;
+        private static int lastNodeBlockedLogFrame = -1;
+
+        protected bool IsBlockedByNodeCenter(Vector3 targetPosition, out Vector3 blockedPosition)
+        {
+            blockedPosition = targetPosition;
+
+            // Don't block if we're already grabbed
+            if (state == VisitorState.Grabbed) return false;
+
+            Vector3 currentPos = transform.position;
+            Vector3 direction = targetPosition - currentPos;
+            float distance = direction.magnitude;
+
+            if (distance < 0.001f) return false;
+
+            // First, check if we're ALREADY inside a node center collider
+            // If so, push radially outward from the collider center
+            // Note: NodeCenterColliders are triggers, so we need QueryTriggerInteraction.Collide
+            //
+            // IMPORTANT: Use a small search radius (0.05) just to find nearby colliders, then check
+            // actual distance from collider center. Using visitorRadius (0.2) here would effectively
+            // expand the blocked zone by 0.2 units, blocking visitors on walkable tiles at 1.0-1.2
+            // distance when only tiles < 1.0 should be unwalkable.
+            const float nodeCenterBlockRadius = 1.0f; // Must match NODE_CENTER_COLLIDER_RADIUS in DynamicMazeGrowth
+            const float searchRadius = 1.5f; // Search area to find nearby node center colliders
+
+            Collider[] currentOverlaps = Physics.OverlapSphere(currentPos, searchRadius, ~0, QueryTriggerInteraction.Collide);
+            foreach (var col in currentOverlaps)
+            {
+                if (col != null && col.gameObject.name.StartsWith("NodeCenterCollider_"))
+                {
+                    // Check actual 2D distance from collider center (node center)
+                    Vector3 colliderCenter = col.bounds.center;
+                    Vector2 offset2D = new Vector2(currentPos.x - colliderCenter.x, currentPos.y - colliderCenter.y);
+                    float distFromCenter = offset2D.magnitude;
+
+                    // Only block if actually inside the blocked radius (not just touching with visitor radius)
+                    if (distFromCenter >= nodeCenterBlockRadius)
+                    {
+                        continue; // Not actually inside the blocked zone
+                    }
+
+                    // Track how many times this happens
+                    if (Time.frameCount != lastNodeBlockedLogFrame)
+                    {
+                        if (nodeBlockedThisFrame > 0)
+                        {
+                            Debug.Log($"[NodeBlock] Previous frame had {nodeBlockedThisFrame} node center blocks");
+                        }
+                        nodeBlockedThisFrame = 0;
+                        lastNodeBlockedLogFrame = Time.frameCount;
+                    }
+                    nodeBlockedThisFrame++;
+
+                    // We're inside a node center exclusion zone - push outward
+                    Vector2 pushDir2D = offset2D;
+
+                    if (pushDir2D.sqrMagnitude < 0.001f)
+                    {
+                        // At center - push in random direction
+                        float randomAngle = Random.value * Mathf.PI * 2f;
+                        pushDir2D = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
+                    }
+                    pushDir2D.Normalize();
+
+                    // Push out to just beyond the blocked radius
+                    float pushDist = nodeCenterBlockRadius - distFromCenter + 0.1f;
+                    blockedPosition = new Vector3(
+                        currentPos.x + pushDir2D.x * pushDist,
+                        currentPos.y + pushDir2D.y * pushDist,
+                        currentPos.z);
+
+                    // Log detailed info periodically
+                    if (nodeBlockedThisFrame == 1)
+                    {
+                        Debug.Log($"[NodeBlock] {name} INSIDE node center collider {col.gameObject.name}\n" +
+                            $"  VisitorPos: ({currentPos.x:F2}, {currentPos.y:F2})\n" +
+                            $"  ColliderCenter: ({colliderCenter.x:F2}, {colliderCenter.y:F2})\n" +
+                            $"  DistFromCenter: {distFromCenter:F2}\n" +
+                            $"  PushDir: ({pushDir2D.x:F2}, {pushDir2D.y:F2})\n" +
+                            $"  BlockedPos: ({blockedPosition.x:F2}, {blockedPosition.y:F2})");
+                    }
+                    return true;
+                }
+            }
+
+            // Check if movement toward target would pass through a node center blocked zone
+            // Use geometric line-circle intersection instead of SphereCast to avoid inflating the check area
+            Vector2 currentPos2D = new Vector2(currentPos.x, currentPos.y);
+            Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
+
+            // Check each nearby node center collider
+            foreach (var col in currentOverlaps)
+            {
+                if (col != null && col.gameObject.name.StartsWith("NodeCenterCollider_"))
+                {
+                    Vector3 colliderCenter = col.bounds.center;
+                    Vector2 colliderCenter2D = new Vector2(colliderCenter.x, colliderCenter.y);
+
+                    // Check if the line segment from current to target passes within nodeCenterBlockRadius of the center
+                    float distToLine = PointToLineSegmentDistance(colliderCenter2D, currentPos2D, targetPos2D);
+
+                    if (distToLine < nodeCenterBlockRadius)
+                    {
+                        // Movement would pass through blocked zone - slide around it
+                        Vector2 toTarget2D = (targetPos2D - currentPos2D).normalized;
+                        Vector2 toCollider2D = (colliderCenter2D - currentPos2D).normalized;
+
+                        // Perpendicular to collider direction - choose side that's more aligned with target
+                        Vector2 perpLeft = new Vector2(-toCollider2D.y, toCollider2D.x);
+                        Vector2 perpRight = new Vector2(toCollider2D.y, -toCollider2D.x);
+
+                        // Pick the perpendicular that's more aligned with our target direction
+                        Vector2 slideDir = Vector2.Dot(perpLeft, toTarget2D) > Vector2.Dot(perpRight, toTarget2D)
+                            ? perpLeft : perpRight;
+
+                        // Slide along the obstacle
+                        float slideAmount = distance * 0.5f; // Slide half the distance we were trying to move
+                        blockedPosition = new Vector3(
+                            currentPos.x + slideDir.x * slideAmount,
+                            currentPos.y + slideDir.y * slideAmount,
+                            currentPos.z);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Calculates the minimum distance from a point to a line segment in 2D.
+        /// </summary>
+        private float PointToLineSegmentDistance(Vector2 point, Vector2 lineStart, Vector2 lineEnd)
+        {
+            Vector2 line = lineEnd - lineStart;
+            float lineLenSq = line.sqrMagnitude;
+
+            if (lineLenSq < 0.0001f)
+            {
+                // Degenerate line - just return distance to start
+                return Vector2.Distance(point, lineStart);
+            }
+
+            // Project point onto line, clamped to segment
+            float t = Mathf.Clamp01(Vector2.Dot(point - lineStart, line) / lineLenSq);
+            Vector2 projection = lineStart + t * line;
+
+            return Vector2.Distance(point, projection);
+        }
+
+        /// <summary>
+        /// Checks if movement to target position is blocked by heart tongue colliders.
+        /// Uses OverlapSphere to find SolidCollider_* objects from the tongue prefab.
+        /// </summary>
+        /// <param name="targetPosition">The position we want to move to</param>
+        /// <param name="blockedPosition">Output: adjusted position if blocked</param>
+        /// <returns>True if blocked by tongue, false otherwise</returns>
+        protected bool IsBlockedByTongue(Vector3 targetPosition, out Vector3 blockedPosition)
+        {
+            blockedPosition = targetPosition;
+
+            // Don't block if already grabbed
+            if (state == VisitorState.Grabbed) return false;
+
+            // Early exit if no tongue is active - avoids expensive Physics.OverlapSphere
+            if (!Maze.HeartOfTheMaze.IsTongueActiveWithColliders) return false;
+
+            Vector3 currentPos = transform.position;
+
+            // Search for tongue colliders near CURRENT position (to detect if we're already inside)
+            // and near TARGET position (to prevent moving into a collider)
+            //
+            // The tongue colliders are at varying Z levels depending on the tongue's animation state.
+            // Use a very large search radius (includes Z variance) to catch colliders wherever they are.
+            // The 2D distance check (XY plane) determines if we're actually blocked.
+            const float searchRadius = 10.0f;  // Very large to catch all nearby colliders at any Z
+            const float visitorRadius = 0.2f;   // Visitor collision radius
+            // Collider world radii range from 0.3 (base) to 0.1 (tip) - use average
+            const float avgColliderRadius = 0.2f;
+            const float blockRadius = avgColliderRadius + visitorRadius;  // Total blocking radius ~0.4
+
+            // Search from visitor position with large radius to catch colliders at any Z level
+            Vector3 searchPos = currentPos;
+            Collider[] overlaps = Physics.OverlapSphere(searchPos, searchRadius, ~0, QueryTriggerInteraction.Ignore);
+
+            Collider nearestBlockingCollider = null;
+            float nearestDist = float.MaxValue;
+            Vector2 nearestColliderPos = Vector2.zero;
+
+            foreach (var col in overlaps)
+            {
+                if (col == null) continue;
+                if (!col.enabled) continue;
+                if (col.isTrigger) continue;
+
+                // Check for solid tongue colliders
+                if (!col.gameObject.name.StartsWith("SolidCollider_")) continue;
+
+                // Get 2D distance from current position to collider's transform position
+                // NOTE: Use transform.position, NOT bounds.center - bounds can be incorrect for
+                // scaled colliders parented to animated bones
+                Vector3 colliderWorldPos = col.transform.position;
+                Vector2 current2D = new Vector2(currentPos.x, currentPos.y);
+                Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
+                float dist2D = Vector2.Distance(current2D, collider2D);
+
+                // Track nearest collider that we're inside or close to
+                if (dist2D < blockRadius && dist2D < nearestDist)
+                {
+                    nearestDist = dist2D;
+                    nearestBlockingCollider = col;
+                    nearestColliderPos = collider2D;
+                }
+            }
+
+            if (nearestBlockingCollider != null)
+            {
+                // We're inside or very close to a collider - push away
+                Vector2 current2D = new Vector2(currentPos.x, currentPos.y);
+                Vector2 target2D = new Vector2(targetPosition.x, targetPosition.y);
+
+                // Push direction: away from collider center
+                Vector2 pushDir = (current2D - nearestColliderPos);
+                if (pushDir.sqrMagnitude < 0.001f)
+                {
+                    // At center - push toward target if possible, else random
+                    pushDir = (target2D - nearestColliderPos);
+                    if (pushDir.sqrMagnitude < 0.001f)
+                    {
+                        float randomAngle = Random.value * Mathf.PI * 2f;
+                        pushDir = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
+                    }
+                }
+                pushDir.Normalize();
+
+                // Push to just outside the blocking radius
+                float pushDist = blockRadius - nearestDist + 0.1f;
+                blockedPosition = new Vector3(
+                    currentPos.x + pushDir.x * pushDist,
+                    currentPos.y + pushDir.y * pushDist,
+                    currentPos.z
+                );
+
+                return true;
+            }
+
+            // Also check if moving TO target would enter a collider
+            // Use target position directly - the large searchRadius will catch colliders at any Z
+            Vector3 targetSearchPos = targetPosition;
+            Collider[] targetOverlaps = Physics.OverlapSphere(targetSearchPos, searchRadius, ~0, QueryTriggerInteraction.Ignore);
+
+            foreach (var col in targetOverlaps)
+            {
+                if (col == null) continue;
+                if (!col.enabled) continue;
+                if (col.isTrigger) continue;  // Skip trigger colliders
+
+                if (!col.gameObject.name.StartsWith("SolidCollider_")) continue;
+
+                // Use transform.position, NOT bounds.center
+                Vector3 colliderWorldPos = col.transform.position;
+                Vector2 target2D = new Vector2(targetPosition.x, targetPosition.y);
+                Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
+                float dist2D = Vector2.Distance(target2D, collider2D);
+
+                if (dist2D < blockRadius)
+                {
+                    // Target is inside a collider - don't move there
+                    // Push away from collider
+                    Vector2 current2D = new Vector2(currentPos.x, currentPos.y);
+                    Vector2 pushDir = (target2D - collider2D);
+                    if (pushDir.sqrMagnitude < 0.001f)
+                    {
+                        pushDir = (current2D - collider2D);
+                    }
+                    pushDir.Normalize();
+
+                    float pushDist = blockRadius - dist2D + 0.1f;
+                    blockedPosition = new Vector3(
+                        targetPosition.x + pushDir.x * pushDist,
+                        targetPosition.y + pushDir.y * pushDist,
+                        targetPosition.z
+                    );
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -1964,18 +2878,77 @@ namespace FaeMaze.Visitors
             if (worldPath == null || worldPath.Count < 2)
             {
                 splineInitialized = false;
+                if (debugSplineRotation)
+                {
+                    Debug.Log($"[SplineDebug] {name} InitializeSpline FAILED - worldPath null or too short (count={worldPath?.Count ?? 0})");
+                }
                 return;
             }
 
             splineStartIndex = worldPathIndex;
             splineProgress = 0f;
             UpdateSplineControlPoints();
+
+            // Skip initial segments that are too short to avoid rotation instability
+            int skippedCount = 0;
+            while (splineSegmentLength < MIN_SPLINE_SEGMENT_LENGTH && splineStartIndex < worldPath.Count - 1)
+            {
+                skippedCount++;
+                if (debugSplineRotation)
+                {
+                    Debug.Log($"[SplineDebug] {name} InitializeSpline SKIPPING SHORT SEGMENT - length={splineSegmentLength:F3} < {MIN_SPLINE_SEGMENT_LENGTH}, " +
+                        $"P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, advancing...");
+                }
+
+                // Snap position to P2 of the short segment before advancing
+                Vector3 snapPos = splineControlPoints[2];
+                snapPos.z = transform.position.z;
+                RecordMoveCause("SplineInit_ShortSegmentSnap_1");
+                desiredPosition = snapPos;
+                hasDesiredPosition = true;
+
+                splineStartIndex++;
+                splineProgress = 0f;
+
+                if (splineStartIndex >= worldPath.Count - 1)
+                {
+                    splineInitialized = false;
+                    worldPathIndex = worldPath.Count;
+                    if (debugSplineRotation)
+                    {
+                        Debug.Log($"[SplineDebug] {name} InitializeSpline - REACHED END after skipping {skippedCount} short segments");
+                    }
+                    return;
+                }
+
+                UpdateSplineControlPoints();
+            }
+
             splineInitialized = true;
+
+            if (debugSplineRotation)
+            {
+                if (skippedCount > 0)
+                {
+                    Debug.Log($"[SplineDebug] {name} InitializeSpline - Skipped {skippedCount} short segment(s)");
+                }
+                Debug.Log($"[SplineDebug] {name} InitializeSpline SUCCESS - startIndex={splineStartIndex}, pathCount={worldPath.Count}, " +
+                    $"P0={splineControlPoints[0]:F2}, P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, P3={splineControlPoints[3]:F2}, " +
+                    $"segmentLength={splineSegmentLength:F3}, currentPos={transform.position:F2}, currentRotZ={transform.eulerAngles.z:F1}");
+            }
         }
+
+        // Minimum segment length to avoid rotation instability from tiny movements
+        protected const float MIN_SPLINE_SEGMENT_LENGTH = 0.15f;
 
         /// <summary>
         /// Updates the 4 control points for the current spline segment.
         /// P0 = previous point (or extrapolated), P1 = current start, P2 = target, P3 = next point (or extrapolated)
+        ///
+        /// IMPORTANT: If the visitor's actual position diverges significantly from the path waypoint
+        /// (e.g., after being pushed by NodeCenterCollider), P1 is set to the visitor's current position
+        /// instead of the path waypoint. This ensures the spline interpolates FROM where the visitor
+        /// actually is, preventing the sanity check from failing.
         /// </summary>
         protected virtual void UpdateSplineControlPoints()
         {
@@ -1985,19 +2958,50 @@ namespace FaeMaze.Visitors
             int p1Index = splineStartIndex;
             int p2Index = Mathf.Min(p1Index + 1, worldPath.Count - 1);
 
-            // P1 and P2 are the current segment endpoints
-            splineControlPoints[1] = worldPath[p1Index];
+            // P2 is always the target waypoint
             splineControlPoints[2] = worldPath[p2Index];
 
-            // P0: previous point or extrapolate backward from P1
-            if (p1Index > 0)
+            // P1: Check if visitor has diverged from the path waypoint
+            // This can happen when pushed by NodeCenterCollider or other physics interactions
+            Vector3 pathP1 = worldPath[p1Index];
+            Vector3 currentPos = transform.position;
+            float divergence = Vector3.Distance(new Vector3(pathP1.x, pathP1.y, 0), new Vector3(currentPos.x, currentPos.y, 0));
+
+            // If diverged more than 0.5 units, use current position as P1 to create a recovery spline
+            // This threshold is lower than the sanity check (2.0 units) to catch divergence early
+            const float DIVERGENCE_THRESHOLD = 0.5f;
+            bool usingDivergenceRecovery = divergence > DIVERGENCE_THRESHOLD;
+
+            if (usingDivergenceRecovery)
             {
-                splineControlPoints[0] = worldPath[p1Index - 1];
+                // Use visitor's actual position as P1
+                splineControlPoints[1] = new Vector3(currentPos.x, currentPos.y, pathP1.z);
+
+                if (debugSplineRotation)
+                {
+                    Debug.Log($"[SplineDebug] {name} UpdateSplineControlPoints - DIVERGENCE RECOVERY: " +
+                        $"visitor at ({currentPos.x:F2}, {currentPos.y:F2}) is {divergence:F2} units from path waypoint ({pathP1.x:F2}, {pathP1.y:F2}). " +
+                        $"Using current position as P1 for recovery spline.");
+                }
             }
             else
             {
+                // Normal case: use path waypoint as P1
+                splineControlPoints[1] = pathP1;
+            }
+
+            // P0: previous point or extrapolate backward from P1
+            // IMPORTANT: When using divergence recovery, P0 should be extrapolated from current position
+            // to ensure the spline starts moving toward P2 immediately, not curving toward old path
+            if (usingDivergenceRecovery || p1Index == 0)
+            {
                 // Extrapolate backward: P0 = P1 - (P2 - P1)
+                // This makes the spline start moving directly toward P2
                 splineControlPoints[0] = splineControlPoints[1] - (splineControlPoints[2] - splineControlPoints[1]);
+            }
+            else
+            {
+                splineControlPoints[0] = worldPath[p1Index - 1];
             }
 
             // P3: next point after P2 or extrapolate forward
@@ -2020,21 +3024,79 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Advances to the next spline segment when current segment is complete.
+        /// Skips segments that are too short (P1 and P2 very close) to avoid rotation instability.
         /// </summary>
         protected virtual void AdvanceSplineSegment()
         {
+            int prevIndex = splineStartIndex;
             splineStartIndex++;
             splineProgress = 0f;
+
+            if (debugSplineRotation)
+            {
+                Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - from index {prevIndex} to {splineStartIndex}, pathCount={worldPath?.Count ?? 0}, " +
+                    $"currentPos={transform.position:F2}, currentRotZ={transform.eulerAngles.z:F1}");
+            }
 
             // Check if we've reached the end of the path
             if (splineStartIndex >= worldPath.Count - 1)
             {
                 splineInitialized = false;
                 worldPathIndex = worldPath.Count;
+                if (debugSplineRotation)
+                {
+                    Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - REACHED END, spline invalidated");
+                }
                 return;
             }
 
             UpdateSplineControlPoints();
+
+            // Skip segments that are too short - these cause rotation instability
+            // Keep advancing until we find a segment of adequate length or reach the end
+            int skippedCount = 0;
+            while (splineSegmentLength < MIN_SPLINE_SEGMENT_LENGTH && splineStartIndex < worldPath.Count - 1)
+            {
+                skippedCount++;
+                if (debugSplineRotation)
+                {
+                    Debug.Log($"[SplineDebug] {name} SKIPPING SHORT SEGMENT - length={splineSegmentLength:F3} < {MIN_SPLINE_SEGMENT_LENGTH}, " +
+                        $"P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, advancing...");
+                }
+
+                // Snap position to P2 of the short segment before advancing
+                Vector3 snapPos = splineControlPoints[2];
+                snapPos.z = transform.position.z;
+                RecordMoveCause("SplineAdvance_ShortSegmentSnap");
+                desiredPosition = snapPos;
+                hasDesiredPosition = true;
+
+                splineStartIndex++;
+                splineProgress = 0f;
+
+                if (splineStartIndex >= worldPath.Count - 1)
+                {
+                    splineInitialized = false;
+                    worldPathIndex = worldPath.Count;
+                    if (debugSplineRotation)
+                    {
+                        Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - REACHED END after skipping {skippedCount} short segments");
+                    }
+                    return;
+                }
+
+                UpdateSplineControlPoints();
+            }
+
+            if (debugSplineRotation)
+            {
+                if (skippedCount > 0)
+                {
+                    Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - Skipped {skippedCount} short segment(s), now at valid segment with length={splineSegmentLength:F3}");
+                }
+                Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - NEW CONTROL POINTS: " +
+                    $"P0={splineControlPoints[0]:F2}, P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, P3={splineControlPoints[3]:F2}");
+            }
         }
 
         /// <summary>
@@ -2083,6 +3145,10 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void ResetSplineState()
         {
+            if (debugSplineRotation && splineInitialized)
+            {
+                Debug.Log($"[SplineDebug] {name} ResetSplineState - was at splineStartIndex={splineStartIndex}, progress={splineProgress:F3}");
+            }
             splineInitialized = false;
             splineProgress = 0f;
             splineStartIndex = 0;
@@ -2131,25 +3197,14 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Check if at the heart (destination is near the heart)
-            if (mazeGridBehaviour != null)
+            // Check if at a portal (destination spawn point) - visitor exits the maze
+            // Note: Visitors are ONLY consumed by the heart tongue grabbing them.
+            // Visitors never path to the heart center - heart node centers are unwalkable.
+            if (mazeGridBehaviour != null && IsAtPortal())
             {
-                float distToHeart = Vector3.Distance(transform.position, mazeGridBehaviour.HeartWorldPosition);
-                if (distToHeart < 1.5f) // Within 1.5 units of heart
-                {
-                    // Visitor has reached the heart - trigger consumed
-                    state = VisitorState.Consumed;
-                    OnConsumedByHeart();
-                    return;
-                }
-
-                // Check if at a portal (destination spawn point) - visitor exits the maze
-                if (IsAtPortal())
-                {
-                    state = VisitorState.Escaping;
-                    OnExitedThroughPortal();
-                    return;
-                }
+                state = VisitorState.Escaping;
+                OnExitedThroughPortal();
+                return;
             }
 
             // Otherwise, just become idle
@@ -2278,6 +3333,18 @@ namespace FaeMaze.Visitors
             isLured = false;
             isDazed = false;
             isConfused = false;
+            currentFairyRing = null;  // Clear fairy ring reference to stop circling
+            currentFaeLantern = null; // Clear lantern reference
+
+            // CRITICAL: Clear any pending physics movement to prevent teleporting
+            // The heart will control position directly while grabbed
+            hasDesiredPosition = false;
+
+            // Remove Z constraint so tongue colliders can push us down during sinking
+            if (rb3D != null)
+            {
+                rb3D.constraints = RigidbodyConstraints.FreezeRotation;  // Remove FreezePositionZ
+            }
 
             // Set grabbed state to stop all movement (lights stay on until consumed)
             state = VisitorState.Grabbed;
@@ -2315,7 +3382,6 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                Debug.LogWarning($"[VisitorController] HandleConsumption: gameController or Heart is null! Destroying visitor {name} without proper consumption notification.");
                 // Still notify HeartPowerManager if possible
                 if (HeartPowers.HeartPowerManager.Instance != null)
                 {
@@ -2476,25 +3542,26 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Gets the destination for the current visitor state.
-        /// Lured visitors always go to the heart. Others return their set destination.
+        /// Lured visitors approach the heart edge. Others return their set destination.
+        /// Visitors NEVER path to node centers - they approach the edge.
         /// </summary>
         protected virtual Vector3 GetDestinationForCurrentState()
         {
-            // Lured visitors always head to the heart
+            // Lured visitors head toward the heart edge (not center)
             if (isLured && mazeGridBehaviour != null)
             {
-                return mazeGridBehaviour.HeartWorldPosition;
+                return GetHeartApproachPosition();
             }
 
             // Return the world destination that was set via SetWorldDestination
-            // Only fall back to heart if no destination was ever set
+            // Only fall back to heart edge if no destination was ever set
             if (worldDestination != Vector3.zero)
             {
                 return worldDestination;
             }
             if (mazeGridBehaviour != null)
             {
-                return mazeGridBehaviour.HeartWorldPosition;
+                return GetHeartApproachPosition();
             }
             return originalDestination;
         }
@@ -2506,6 +3573,16 @@ namespace FaeMaze.Visitors
         public Vector3 GetCurrentDestination()
         {
             return worldDestination;
+        }
+
+        /// <summary>
+        /// Gets the visitor's current world-space path and their current index in it.
+        /// Returns null if no path exists.
+        /// </summary>
+        public List<Vector3> GetCurrentPath(out int currentIndex)
+        {
+            currentIndex = worldPathIndex;
+            return worldPath;
         }
 
         /// <summary>
@@ -2553,10 +3630,24 @@ namespace FaeMaze.Visitors
 
             Vector3 destination = GetDestinationForCurrentState();
 
+            if (debugSplineRotation)
+            {
+                Debug.Log($"[SplineDebug] {name} RecalculatePath CALLED - " +
+                    $"from pos={transform.position:F2} to dest={destination:F2}, " +
+                    $"currentRotZ={transform.eulerAngles.z:F1}°, state={state}");
+            }
+
             worldPath = BuildWorldPath(transform.position, destination);
             worldPathIndex = 0;
             worldDestination = destination;
             ResetSplineState();
+
+            if (debugSplineRotation && worldPath != null)
+            {
+                Debug.Log($"[SplineDebug] {name} RecalculatePath COMPLETE - " +
+                    $"pathCount={worldPath.Count}, first waypoint={worldPath[0]:F2}, " +
+                    $"spline reset, will reinitialize on next frame");
+            }
 
             if (worldPath != null && worldPath.Count > 0)
             {
@@ -2729,6 +3820,11 @@ namespace FaeMaze.Visitors
         /// <param name="eventPosition">The world position where the frightening event occurred</param>
         protected virtual void OnWitnessVisitorGrabbed(Vector3 eventPosition)
         {
+            // TEMPORARILY DISABLED for performance debugging
+            // TODO: Re-enable after fixing performance issue
+            return;
+
+            /*
             // Don't react if already in a terminal or frightened state
             if (isFrightened || state == VisitorState.Consumed || state == VisitorState.Escaping ||
                 state == VisitorState.Grabbed || state == VisitorState.Dazed)
@@ -2765,6 +3861,7 @@ namespace FaeMaze.Visitors
 
             // Visitor can see the event - become frightened
             SetFrightened(eventPosition);
+            */
         }
 
         /// <summary>
@@ -2777,7 +3874,8 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            RedCapController[] redCaps = FindObjectsByType<RedCapController>(FindObjectsSortMode.None);
+            // Use cached registry instead of expensive FindObjectsByType
+            var redCaps = RedCapRegistry.All;
 
             foreach (var redCap in redCaps)
             {
@@ -3184,7 +4282,9 @@ namespace FaeMaze.Visitors
                     UpdateAnimatorDirection(moveDir);
                 }
 
-                transform.position = newPosition;
+                RecordMoveCause("FairyRing_Approach");
+                desiredPosition = newPosition;
+                hasDesiredPosition = true;
                 return;
             }
 
@@ -3212,8 +4312,10 @@ namespace FaeMaze.Visitors
                 UpdateAnimatorDirection(circleMoveDir);
             }
 
-            // Apply movement directly to transform
-            transform.position = circleNewPosition;
+            // Apply movement via physics
+            RecordMoveCause("FairyRing_Circle");
+            desiredPosition = circleNewPosition;
+            hasDesiredPosition = true;
         }
 
         /// <summary>
@@ -3273,7 +4375,10 @@ namespace FaeMaze.Visitors
             var nearestTile = FindNearestWalkableTile(mazeData, currentPos2D);
             if (nearestTile != null)
             {
-                transform.position = new Vector3(nearestTile.Position.x, nearestTile.Position.y, transform.position.z);
+                Vector3 newPos = new Vector3(nearestTile.Position.x, nearestTile.Position.y, transform.position.z);
+                RecordMoveCause("EscapeToNearestWalkable");
+                desiredPosition = newPos;
+                hasDesiredPosition = true;
             }
         }
 
@@ -3374,14 +4479,26 @@ namespace FaeMaze.Visitors
 
         protected virtual void SetupPhysics()
         {
+            // Set layer to "Visitor" (layer 6) so visitors don't collide with each other
+            // The physics collision matrix has Visitor-Visitor collisions disabled
+            gameObject.layer = 6;  // Visitor layer
+
             rb3D = GetComponent<Rigidbody>();
             if (rb3D == null)
             {
                 rb3D = gameObject.AddComponent<Rigidbody>();
             }
 
-            rb3D.isKinematic = true;
+            // Non-kinematic for physics collision response with solid colliders
+            rb3D.isKinematic = false;
             rb3D.useGravity = false;
+            rb3D.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ;
+            // PERFORMANCE: Use Discrete instead of ContinuousDynamic - continuous is extremely expensive
+            // when many colliders are created at once (tongue bone colliders). Discrete is sufficient
+            // since visitors move slowly and we use MovePosition which handles collision correctly.
+            rb3D.collisionDetectionMode = CollisionDetectionMode.Discrete;
+            rb3D.interpolation = RigidbodyInterpolation.Interpolate;
+            rb3D.sleepThreshold = 0f;  // Never sleep - we need MovePosition to always work
 
             // Use CapsuleCollider as a vertical column for the visitor's body
             // NOTE: Visitor colliders should NOT be triggers - they need to be detected by
@@ -3400,20 +4517,22 @@ namespace FaeMaze.Visitors
             if (capsuleCollider != null)
             {
                 // Configure existing capsule as vertical column
+                // Visitor models extend from z=0 to z=-1, so center at z=-0.5 with height 1.0
                 capsuleCollider.isTrigger = false;
-                capsuleCollider.radius = 0.15f;  // Half the previous 0.3 radius
-                capsuleCollider.height = 1.0f;   // Vertical height along Z-axis
+                capsuleCollider.radius = 0.15f;
+                capsuleCollider.height = 1.0f;   // Covers z=0 to z=-1 when centered at z=-0.5
                 capsuleCollider.direction = 2;   // Z-axis (vertical in our coordinate system)
-                capsuleCollider.center = Vector3.zero;
+                capsuleCollider.center = new Vector3(0f, 0f, -0.5f);  // Centered at z=-0.5
             }
             else
             {
                 // Add CapsuleCollider as vertical column for reliable collision detection
+                // Visitor models extend from z=0 to z=-1, so center at z=-0.5 with height 1.0
                 capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
-                capsuleCollider.radius = 0.15f;  // Half the previous 0.3 radius
-                capsuleCollider.height = 1.0f;   // Vertical height along Z-axis
+                capsuleCollider.radius = 0.15f;
+                capsuleCollider.height = 1.0f;   // Covers z=0 to z=-1 when centered at z=-0.5
                 capsuleCollider.direction = 2;   // Z-axis (vertical in our coordinate system)
-                capsuleCollider.center = Vector3.zero;
+                capsuleCollider.center = new Vector3(0f, 0f, -0.5f);  // Centered at z=-0.5
                 capsuleCollider.isTrigger = false;
             }
         }
@@ -3623,24 +4742,18 @@ namespace FaeMaze.Visitors
         {
             if (mazeGridBehaviour == null)
             {
-                if (logVisitorPathfinding)
-                    Debug.LogWarning("[Confusion:Detour] No mazeGridBehaviour");
                 return false;
             }
 
             var graphState = mazeGridBehaviour.ForestMapState;
             if (graphState == null || graphState.Nodes.Count < 3)
             {
-                if (logVisitorPathfinding)
-                    Debug.LogWarning($"[Confusion:Detour] Invalid graph state - Nodes: {graphState?.Nodes.Count ?? 0}");
                 return false;
             }
 
             var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
             if (mazeData == null)
             {
-                if (logVisitorPathfinding)
-                    Debug.LogWarning("[Confusion:Detour] No WorldSpaceMazeData");
                 return false;
             }
 
@@ -3649,8 +4762,6 @@ namespace FaeMaze.Visitors
             int nearestNodeId = FindNearestNodeIndex(graphState, currentPos2D);
             if (nearestNodeId < 0)
             {
-                if (logVisitorPathfinding)
-                    Debug.LogWarning("[Confusion:Detour] Could not find nearest node");
                 return false;
             }
 
@@ -3721,8 +4832,6 @@ namespace FaeMaze.Visitors
 
             if (detourNodeIds.Count < minDetourNodes)
             {
-                if (logVisitorPathfinding)
-                    Debug.LogWarning($"[Confusion:Detour] Not enough detour nodes found: {detourNodeIds.Count} < {minDetourNodes}");
                 return false;
             }
 
@@ -3766,8 +4875,6 @@ namespace FaeMaze.Visitors
 
             if (fullPath.Count == 0)
             {
-                if (logVisitorPathfinding)
-                    Debug.LogWarning("[Confusion:Detour] Failed to build full path - empty result");
                 return false;
             }
 

@@ -49,9 +49,6 @@ namespace FaeMaze.Systems
         private float zPosition = 0f;
 
         [SerializeField]
-        private float zRotationVariance = 5f;
-
-        [SerializeField]
         [Tooltip("Padding around maze in world units")]
         private float backgroundPadding = 5f;
 

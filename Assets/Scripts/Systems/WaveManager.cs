@@ -69,20 +69,9 @@ namespace FaeMaze.Systems
         #region Events
 
         /// <summary>
-        /// Event invoked when a wave is successfully completed.
-        /// Passes the wave number as a parameter.
-        /// </summary>
-        public event System.Action<int> OnWaveCompleted;
-
-        /// <summary>
         /// Event invoked when the game is over.
         /// </summary>
         public event System.Action OnGameOver;
-
-        /// <summary>
-        /// Event invoked when the game is restarted.
-        /// </summary>
-        public event System.Action OnGameRestart;
 
         #endregion
 

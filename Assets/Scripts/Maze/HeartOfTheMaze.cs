@@ -2,6 +2,7 @@ using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
+using System;
 using System.Collections.Generic;
 
 namespace FaeMaze.Maze
@@ -17,7 +18,7 @@ namespace FaeMaze.Maze
     /// </summary>
     public class HeartOfTheMaze : MonoBehaviour
     {
-        #region Static Events
+        #region Static Events and Properties
 
         /// <summary>
         /// Static event invoked when a visitor is grabbed by the heart tongue.
@@ -25,6 +26,12 @@ namespace FaeMaze.Maze
         /// Parameter is the world position where the grab occurred.
         /// </summary>
         public static event System.Action<Vector3> OnVisitorGrabbed;
+
+        /// <summary>
+        /// Static flag indicating if a tongue is currently active with blocking colliders.
+        /// Visitors check this to avoid expensive Physics.OverlapSphere calls when no tongue exists.
+        /// </summary>
+        public static bool IsTongueActiveWithColliders { get; private set; } = false;
 
         #endregion
 
@@ -68,14 +75,6 @@ namespace FaeMaze.Maze
         [SerializeField]
         [Tooltip("Detection radius for visitors (triggers reaching state)")]
         private float detectionRadius = 2.5f;
-
-        [SerializeField]
-        [Tooltip("Distance from heart at which reach collider triggers (instead of bone position)")]
-        private float reachTriggerDistance = 0.3f;
-
-        [SerializeField]
-        [Tooltip("Radius of grab collider to match mesh cross-section")]
-        private float grabTriggerDistance = 0.3f;
 
         [Header("Material Animation Settings")]
         [SerializeField]
@@ -130,11 +129,9 @@ namespace FaeMaze.Maze
         private GameObject heartBaseInstance;
         private GameObject heartTongueInstance;
 
-        // Collider references on tongue
-        private Transform reachColliderTransform;
-        private Transform grabColliderTransform;
-        private SphereCollider reachCollider;
-        private SphereCollider grabCollider;
+        // NOTE: Reach/grab trigger colliders have been removed.
+        // Visitor blocking is handled entirely by the solid bone colliders (SolidCollider_N)
+        // which physically prevent the visitor from moving through the tongue.
 
         // Visitor tracking
         private VisitorControllerBase targetVisitor;
@@ -164,23 +161,22 @@ namespace FaeMaze.Maze
         private float tongueExtension = 0f;  // How far bones are rotated to reach (0-1)
         private float grabCurlProgress = 0f; // How much the tip has curled for grab (0-1)
 
-        // Tongue movement speeds
-        private const float TONGUE_EMERGE_SPEED = 1.5f;   // Units per second for vertical movement
-        private const float TONGUE_EXTEND_SPEED = 1.0f;   // Rate of bone rotation for reaching
-        private const float TONGUE_CURL_SPEED = 2.0f;     // Rate of curl for grabbing
-        private const float TONGUE_SINK_SPEED = 2.0f;     // Speed when pulling visitor down
+        // Tongue movement speeds (increased 4x for snappier feel)
+        private const float TONGUE_EMERGE_SPEED = 18.0f;  // Units per second for vertical movement
+        private const float TONGUE_EXTEND_SPEED = 3.0f;   // Rate of bone rotation for reaching
+        private const float TONGUE_CURL_SPEED = 6.0f;     // Rate of curl for grabbing
+        private const float TONGUE_SINK_SPEED = 6.0f;     // Speed when pulling visitor down
 
         // Tongue geometry constants
-        // With uniform 0.3 scale, tongue length is ~8.4 units (28 * 0.3)
-        private const float TONGUE_START_Z = 9.0f;        // Starting Z (below ground, fits full tongue length)
-        private const float TONGUE_LIP_Z = -0.25f;        // Z where tip emerges above heartbase lip (lowered by half)
-        private const int BEND_BONE_COUNT = 3;            // Number of bones for the sharp 90° lip bend (very tight, stays near ground)
+        // Full tongue: 540 bones, prefab scale (1, 0.3, 0.3), ~8.1 units total length
+        private const float TONGUE_START_Z = 9.0f;        // Starting Z (below ground, full tongue length)
+        private const float TONGUE_LIP_Z = -0.25f;        // Z where tip emerges above heartbase lip
+        private const int BEND_BONE_COUNT = 3;            // Number of bones for the sharp 90° lip bend
         private const int RECURVE_BONE_COUNT = 5;         // Number of bones for the slight recurve
-        private const float RECURVE_ANGLE = 5f;           // Total angle of recurve (minimal dip to stay very close to ground)
+        private const float RECURVE_ANGLE = 5f;           // Total angle of recurve
         private const float TONGUE_GROUND_Z = 0.0f;       // Ground level
         private const float LIP_BEND_BONE_INDEX = 3;      // Which bone bends at the lip (approximate)
-        private const float REACH_TOUCH_DISTANCE = 1.0f;   // Distance threshold for reach collider touching visitor
-        private const float GRAB_TOUCH_DISTANCE = 0.8f;   // Distance threshold for grab collider touching visitor
+        private const float TIP_SHAFT_TOUCH_DISTANCE = 0.5f;  // Distance threshold for tip touching shaft (triggers pulling)
 
         // Tongue armature bone references
         private Transform[] tongueBones;  // Array of bone transforms in order from base to tip
@@ -198,9 +194,8 @@ namespace FaeMaze.Maze
         // Curl direction for touching phase: 1 = curl left (CCW), -1 = curl right (CW)
         private int curlDirection = 1;
 
-        // Track if we've started the continuation curl after grab contact
+        // Track if we've made grab contact during curl
         private bool grabContactMade = false;
-        private float reverseCurlProgress = 0f;  // Progress of continuation curl after grab (0-1), adds 0-180° more curl
 
         // Frozen lip bone index - set when grabbing starts to prevent curl relaxation during sinking
         private int frozenLipBoneIndex = -1;
@@ -209,18 +204,29 @@ namespace FaeMaze.Maze
         // This allows the curl to hinge up naturally as the lip bone rotates back to vertical
         private Quaternion[] lockedCurlRotations = null;
         private bool curlRotationsLocked = false;
-        private int lastLipBoneIndexForCurlLock = -1;  // Track when lip bone reaches grab-1 to trigger lock
 
         // Sinking rotation progress - tracks the 90° rotation of the curl section during sinking
         // Goes from 0 (horizontal, toward visitor) to 1 (vertical, pointing down into heart)
         private float sinkingRotationProgress = 0f;
 
-        // Grab bone index (where grab collider is attached, offset from tip)
-        // For a 0.5 diameter half-circle curl around the visitor:
-        // - Arc length = π × radius = π × 0.25 ≈ 0.785 units
-        // - With 540 bones over ~8.4 units (scaled), bone spacing ≈ 0.0156 units
-        // - Need ~50 bones to form the 0.785 unit arc
-        private const int GRAB_BONE_OFFSET = 50;  // ~9% from tip (bone ~490 out of 540)
+        // Dynamic grab bone index - set when curl completes (bone at lip when curl finishes)
+        // This is NOT a fixed offset - it's determined by which bone is at the lip level
+        // when the spiral closes and we transition to Pulling phase
+        private int dynamicGrabBoneIndex = -1;
+
+        // POOLING: Z position to hide the tongue when not in use
+        // This prevents physics broadphase rebuilds when spawning/despawning
+        private const float TONGUE_HIDDEN_Z = 1000f;
+
+        // Flag to track if tongue has been pre-created
+        private bool tonguePoolInitialized = false;
+
+        // BONE COLLIDERS: Solid colliders on every Nth bone for physics-based blocking
+        // Colliders are parented to bones in the prefab - they inherit bone transforms automatically
+        // Collider sizing: tapered from base (scale 0.015) to tip (scale 0.003), radius 0.15
+        private const int BONE_COLLIDER_SPACING = 10;        // Add collider every 10th bone (54 colliders for 540 bones)
+        private const float BONE_COLLIDER_RADIUS = 0.00225f; // Average world radius (0.015 * 0.15 at base)
+        private GameObject[] boneColliderObjects = null;  // Collider GameObjects (parented to bones)
 
         // Curl diameter for wrapping around visitor (horizontal curl in XY plane)
         private const float CURL_DIAMETER = 0.5f;
@@ -229,13 +235,6 @@ namespace FaeMaze.Maze
         // This shifts the grab point 0.25 units toward the visitor (half the curl diameter)
         private const float GRAB_RADIAL_SHIFT = 0.25f;
 
-        // Collision detection flags - set by trigger callbacks on collider GameObjects
-        private bool reachTouchedVisitor = false;
-        private bool grabTouchedVisitor = false;
-
-        // Previous frame's grab bone rotation - used to calculate rotation delta for visitor
-        private Quaternion previousGrabBoneRotation = Quaternion.identity;
-        private bool hasPreviousGrabBoneRotation = false;
 
         #endregion
 
@@ -320,6 +319,9 @@ namespace FaeMaze.Maze
             SetupHeartBase();
             SetupGlowLight();
 
+            // PRE-CREATE the tongue instance to avoid physics freezes during gameplay
+            // This creates all colliders/rigidbodies BEFORE gameplay starts
+            PreCreateTongueInstance();
         }
 
         private void Update()
@@ -380,6 +382,18 @@ namespace FaeMaze.Maze
             if (TryGetNextValidVisitor(out VisitorControllerBase visitor))
             {
                 targetVisitor = visitor;
+
+                // Detailed logging for tongue trigger
+                Vector2 heartPos = new Vector2(transform.position.x, transform.position.y);
+                Vector2 visitorPos = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+                float distToVisitor = Vector2.Distance(heartPos, visitorPos);
+
+                var path = visitor.GetCurrentPath(out int pathIndex);
+                Debug.Log($"[HeartTongue] TRIGGERED by {visitor.name}\n" +
+                    $"  Visitor pos: {visitorPos}, dist from heart: {distToVisitor:F2}\n" +
+                    $"  Visitor state: {visitor.State}, path length: {path?.Count ?? 0}, path index: {pathIndex}\n" +
+                    $"  Detection radius: {detectionRadius}");
+
                 TransitionToReaching();
             }
         }
@@ -391,8 +405,15 @@ namespace FaeMaze.Maze
             // Consumed state means they were already processed elsewhere
             if (targetVisitor == null || targetVisitor.State == VisitorControllerBase.VisitorState.Consumed)
             {
+                Debug.Log($"[UpdateReachingState] Transitioning to Idle: visitor={targetVisitor != null}, state={targetVisitor?.State}");
                 TransitionToIdle();
                 return;
+            }
+
+            // Log every frame during Emerging/Reaching to catch issues
+            if (tonguePhase == TonguePhase.Emerging || tonguePhase == TonguePhase.Reaching)
+            {
+                Debug.Log($"[UpdateReachingState] Frame {Time.frameCount}: phase={tonguePhase}, tongueZ={tongueZPosition:F2}, heartTongue={heartTongueInstance != null}");
             }
 
             // Update tongue based on current phase
@@ -401,50 +422,41 @@ namespace FaeMaze.Maze
             // Apply bone transformations
             ApplyTongueBoneState();
 
-            // Update collider positions to match where the mesh visually is
-            UpdateColliderPositions();
-
-            // Check for phase transitions based on collider contact
-            if (tonguePhase == TonguePhase.Reaching || tonguePhase == TonguePhase.Touching)
+            // Enable bone colliders for physics blocking during Reaching/Touching/Pulling/Sinking
+            // Colliders must be active during Reaching so the extending tongue blocks the visitor's path
+            // The visitor can't walk through the tongue - they must wait for it to curl around them
+            // Only disable colliders during Emerging (tongue is still below ground)
+            // NOTE: Colliders are parented to bones and inherit transforms automatically - no position updates needed
+            if (tonguePhase == TonguePhase.Reaching || tonguePhase == TonguePhase.Touching || tonguePhase == TonguePhase.Pulling || tonguePhase == TonguePhase.Sinking)
             {
-                // Check if grab collider touched - start reverse curl
-                if (IsGrabColliderTouchingVisitor() && !grabContactMade && tonguePhase == TonguePhase.Touching)
-                {
-                    grabContactMade = true;
+                EnableBoneColliders();
+            }
+            else
+            {
+                DisableBoneColliders();
+            }
 
-                    // Stop the visitor's movement when grab contact is made
+            // Check for phase transitions during Touching phase (curl/spiral)
+            // NOTE: Reaching -> Touching transition is handled in UpdateTonguePhase based on
+            // full extent (NOT based on collider touching visitor!)
+            if (tonguePhase == TonguePhase.Touching)
+            {
+                // Complete grab when tip touches the shaft (spiral has closed)
+                // The tongue keeps extending while curling, creating a growing spiral
+                // When the tip curls back and touches the shaft, the loop is complete
+                // NOTE: Visitor is constrained by solid bone colliders naturally via physics
+                if (IsTipTouchingShaft())
+                {
+                    Debug.Log($"[TongueTouching] >>> TIP TOUCHED SHAFT - TRANSITION TO GRABBING");
+
+                    // Notify nearby visitors that a grab occurred - they become frightened
                     if (targetVisitor != null)
                     {
-                        targetVisitor.SetGrabbedByHeart();
-
-                        // Notify nearby visitors that a grab occurred - they become frightened
                         OnVisitorGrabbed?.Invoke(targetVisitor.transform.position);
                     }
-                }
 
-                // At the midpoint of the reverse curl, visitor starts tracking the midpoint between grab and reach colliders
-                if (grabContactMade && reverseCurlProgress >= 0.5f)
-                {
-                    UpdateVisitorPositionToGrabCollider();
-                }
-
-                // Complete grab when continuation curl is done (full 360° wrap)
-                if (grabContactMade && reverseCurlProgress >= 1.0f)
-                {
+                    // TransitionToGrabbing() will set grabContactMade and call SetGrabbedByHeart()
                     TransitionToGrabbing();
-                }
-                else if (IsReachColliderTouchingVisitor() && tonguePhase == TonguePhase.Reaching)
-                {
-                    // Decide curl direction: perpendicular to visitor direction, pick one randomly or based on some logic
-                    // For now, use a simple rule: curl left (CCW) if visitor is in upper half, right (CW) if lower
-                    curlDirection = (lockedVisitorAngle >= 0 && lockedVisitorAngle < 180) ? 1 : -1;
-                    tonguePhase = TonguePhase.Touching;
-
-                    // Stop the visitor's movement when the tongue tip touches them
-                    if (targetVisitor != null)
-                    {
-                        targetVisitor.SetGrabbedByHeart();
-                    }
                 }
             }
         }
@@ -464,11 +476,11 @@ namespace FaeMaze.Maze
             // Apply bone transformations
             ApplyTongueBoneState();
 
-            // Update collider positions to match where the mesh visually is
-            UpdateColliderPositions();
+            // Ensure bone colliders are enabled for physics-based visitor blocking
+            // NOTE: Colliders are parented to bones and inherit transforms automatically
+            EnableBoneColliders();
 
-            // Make visitor follow the grab collider position
-            UpdateVisitorPositionToGrabCollider();
+            // NOTE: Visitor is constrained by colliders naturally, not by code forcing position
 
             // Check if tongue is fully below ground (sinking complete)
             if (tonguePhase == TonguePhase.Sinking && tongueZPosition >= TONGUE_START_Z)
@@ -481,9 +493,14 @@ namespace FaeMaze.Maze
 
         private void UpdateTonguePhase()
         {
-            if (heartTongueInstance == null) return;
+            if (heartTongueInstance == null)
+            {
+                Debug.LogWarning("[TonguePhase] heartTongueInstance is NULL!");
+                return;
+            }
 
             float dt = Time.deltaTime;
+            float zBefore = tongueZPosition;
 
             switch (tonguePhase)
             {
@@ -494,46 +511,81 @@ namespace FaeMaze.Maze
                     // Calculate where tip would be (tongue extends in local +Y, which after rotation points somewhere)
                     // For now, simple check: when root Z reaches a certain point based on tongue length
                     float tipZ = tongueZPosition - tongueLength;
+
+                    Debug.Log($"[TongueEmerging] Frame {Time.frameCount}: Z={tongueZPosition:F3} (was {zBefore:F3}, delta={tongueZPosition-zBefore:F3}), tipZ={tipZ:F3}, tongueLen={tongueLength:F2}, dt={dt:F4}, speed={TONGUE_EMERGE_SPEED}");
+
                     if (tipZ <= TONGUE_LIP_Z)
                     {
+                        Debug.Log($"[TongueEmerging] >>> TRANSITION TO REACHING: tipZ={tipZ:F2} <= TONGUE_LIP_Z={TONGUE_LIP_Z}");
                         tonguePhase = TonguePhase.Reaching;
                         // Visitor keeps moving until the reach collider actually touches them
                     }
                     break;
 
                 case TonguePhase.Reaching:
-                    // Continue moving tongue upward (-Z) to extend more of it past the lip
-                    // This makes the horizontal portion longer, reaching toward the visitor
+                    // Calculate how much horizontal length we have past the lip
+                    // The tongue bends 90° at the lip bone. After the bend, the tip extends horizontally.
+                    // The "virtual tip Z" if the tongue were straight = tongueZPosition - tongueLength
+                    // But once the lip bone bends 90°, that extra length goes horizontal, not vertical.
+                    //
+                    // Horizontal length = how much tongue length has passed the lip level
+                    // = tongueLength - (tongueZPosition - TONGUE_LIP_Z)
+                    // = tongueLength - tongueZPosition + TONGUE_LIP_Z
+                    //
+                    // When tongueZPosition = TONGUE_LIP_Z + tongueLength, horizontal = 0 (tip just at lip)
+                    // As tongueZPosition decreases (tongue rises), horizontal increases
+                    float horizontalLength = tongueLength - tongueZPosition + TONGUE_LIP_Z;
+                    if (horizontalLength < 0) horizontalLength = 0;  // Tip hasn't reached lip yet
+
+                    float zBeforeReaching = tongueZPosition;
+                    bool atDetectionRadius = horizontalLength >= detectionRadius;
+
+                    // Keep extending - this continues even after curl starts (in Touching phase)
                     tongueZPosition -= TONGUE_EMERGE_SPEED * dt;
 
                     // Also ramp up bend progress (controls how bent the lip bone is)
                     tongueExtension += TONGUE_EXTEND_SPEED * dt;
                     tongueExtension = Mathf.Clamp01(tongueExtension);
 
+                    // TRANSITION: Start curling when reaching detectionRadius
+                    // The tongue will keep extending during the Touching phase to make a bigger spiral
+                    if (atDetectionRadius)
+                    {
+                        Debug.Log($"[TongueReaching] >>> TRANSITION TO CURLING: horizLen={horizontalLength:F2} >= detectionRadius={detectionRadius}");
+
+                        // Decide curl direction based on visitor angle
+                        curlDirection = (lockedVisitorAngle >= 0 && lockedVisitorAngle < 180) ? 1 : -1;
+                        tonguePhase = TonguePhase.Touching;  // Touching phase handles the curl/spiral
+                    }
+
+                    Debug.Log($"[TongueReaching] Frame {Time.frameCount}: Z={tongueZPosition:F3} (was {zBeforeReaching:F3}, delta={tongueZPosition-zBeforeReaching:F3})\n" +
+                        $"  horizLen={horizontalLength:F2} vs detectionRadius={detectionRadius}, atDetectionRadius={atDetectionRadius}\n" +
+                        $"  ext={tongueExtension:F2}, dt={dt:F4}, speed={TONGUE_EMERGE_SPEED}");
+
                     break;
 
                 case TonguePhase.Touching:
-                    // Only continue extending the tongue BEFORE grab contact
-                    // Once grab collider touches visitor, stop Z translation
-                    if (!grabContactMade)
-                    {
-                        tongueZPosition -= TONGUE_EMERGE_SPEED * dt;
-                    }
+                    float zBeforeTouch = tongueZPosition;
 
-                    // Ramp up the curl progress for the tip-to-grab section
+                    // KEEP EXTENDING while curling to make a bigger spiral
+                    // The tongue extends until the tip touches the shaft
+                    tongueZPosition -= TONGUE_EMERGE_SPEED * dt;
+
+                    // Ramp up the spiral curl progress - entire horizontal section spirals
+                    // The spiral wraps 400°+ to ensure tip meets shaft, encircling the visitor
                     grabCurlProgress += TONGUE_CURL_SPEED * dt;
                     grabCurlProgress = Mathf.Clamp01(grabCurlProgress);
 
-                    // After grab contact, progress the reverse curl (mirror animation)
-                    if (grabContactMade)
-                    {
-                        reverseCurlProgress += TONGUE_CURL_SPEED * dt;
-                        reverseCurlProgress = Mathf.Clamp01(reverseCurlProgress);
-                    }
+                    // Check if tip has touched the shaft (triggers transition to Pulling)
+                    // We detect this by measuring distance from tip bone to the first horizontal bone
+                    bool tipTouchedShaft = IsTipTouchingShaft();
+
+                    Debug.Log($"[TongueTouching] Frame {Time.frameCount}: Z={tongueZPosition:F3} (was {zBeforeTouch:F3}), curlProg={grabCurlProgress:F2}, tipTouchedShaft={tipTouchedShaft}");
 
                     break;
 
                 case TonguePhase.Pulling:
+                    float zBeforePull = tongueZPosition;
                     // HORIZONTAL RETRACTION: Move the tongue down (+Z), but recalculate which bone
                     // is at the lip so the curl stays at lip level. The effect is that the curl
                     // slides horizontally back toward the heart while staying at lip height.
@@ -543,17 +595,21 @@ namespace FaeMaze.Maze
                     // This creates the visual effect of the horizontal portion shortening.
                     tongueZPosition += TONGUE_EMERGE_SPEED * dt;
 
-                    // Calculate where the grab bone is in Z (geometrically, before rotation)
+                    // Use the dynamically captured grab bone index (lip bone at curl completion)
+                    // NOT a fixed offset from tip
                     float boneSpacingPull = tongueLength / Mathf.Max(1, tongueBones.Length);
-                    int grabBoneIndexPull = tongueBones.Length - 1 - GRAB_BONE_OFFSET;
+                    int grabBoneIndexPull = dynamicGrabBoneIndex >= 0 ? dynamicGrabBoneIndex : tongueBones.Length / 2;
 
                     // The grab bone's unrotated Z position = tongueZPosition - (grabBoneIndex * boneSpacing)
-                    // When this reaches TONGUE_LIP_Z, the grab bone is at the lip level
+                    // When this reaches TONGUE_LIP_Z, the grab bone is at the lip level (curl is at heart)
                     float grabBoneZPull = tongueZPosition - (grabBoneIndexPull * boneSpacingPull);
+
+                    Debug.Log($"[TonguePulling] Frame {Time.frameCount}: Z={tongueZPosition:F3} (was {zBeforePull:F3}), grabBoneIdx={grabBoneIndexPull}, grabBoneZ={grabBoneZPull:F2} vs lipZ={TONGUE_LIP_Z}");
 
                     // When the grab bone reaches the lip level, start sinking with curl rotation
                     if (grabBoneZPull >= TONGUE_LIP_Z)
                     {
+                        Debug.Log($"[TonguePulling] >>> TRANSITION TO SINKING");
                         // Freeze the lip bone index now so the curl shape stays stable during sinking
                         FreezeCurrentLipBoneIndex();
                         tonguePhase = TonguePhase.Sinking;
@@ -562,6 +618,7 @@ namespace FaeMaze.Maze
                     break;
 
                 case TonguePhase.Sinking:
+                    float zBeforeSink = tongueZPosition;
                     // Continue moving tongue down (+Z) into the ground
                     tongueZPosition += TONGUE_SINK_SPEED * dt;
 
@@ -569,13 +626,22 @@ namespace FaeMaze.Maze
                     // This happens over a short duration as the tongue sinks
                     sinkingRotationProgress += TONGUE_CURL_SPEED * dt;
                     sinkingRotationProgress = Mathf.Clamp01(sinkingRotationProgress);
+
+                    Debug.Log($"[TongueSinking] Frame {Time.frameCount}: Z={tongueZPosition:F3} (was {zBeforeSink:F3}), sinkRotProg={sinkingRotationProgress:F2}, target={TONGUE_START_Z}");
                     break;
             }
 
             // Update tongue instance position
-            Vector3 localPos = heartTongueInstance.transform.localPosition;
+            Vector3 localPosBefore = heartTongueInstance.transform.localPosition;
+            Vector3 localPos = localPosBefore;
             localPos.z = tongueZPosition;
             heartTongueInstance.transform.localPosition = localPos;
+
+            // Log the actual transform update
+            if (Time.frameCount % 10 == 0 || tonguePhase == TonguePhase.Emerging)
+            {
+                Debug.Log($"[TongueTransform] Frame {Time.frameCount}: localPosition changed from {localPosBefore} to {heartTongueInstance.transform.localPosition}, phase={tonguePhase}");
+            }
 
             // NOTE: Do NOT modify heartTongueInstance.transform.localRotation here!
             // The prefab has a rotation baked in that's required for the coordinate system.
@@ -593,35 +659,31 @@ namespace FaeMaze.Maze
             grabCurlProgress = 0f;
             curlDirection = 1;
             grabContactMade = false;
-            reverseCurlProgress = 0f;
             frozenLipBoneIndex = -1;
+            dynamicGrabBoneIndex = -1;  // Reset dynamic grab bone
             lockedCurlRotations = null;
             curlRotationsLocked = false;
-            lastLipBoneIndexForCurlLock = -1;
             sinkingRotationProgress = 0f;
-            previousGrabBoneRotation = Quaternion.identity;
-            hasPreviousGrabBoneRotation = false;
 
-            // Destroy tongue instance
+            // POOLING: Hide tongue at TONGUE_HIDDEN_Z instead of destroying
+            // This avoids physics broadphase rebuilds that cause massive freezes
             if (heartTongueInstance != null)
             {
-                Destroy(heartTongueInstance);
-                heartTongueInstance = null;
-                reachColliderTransform = null;
-                grabColliderTransform = null;
-                reachCollider = null;
-                grabCollider = null;
-                tongueBones = null;
-                boneRestPositions = null;
-                boneRestRotations = null;
-                tongueArmatureRoot = null;
-                tongueSkinnedRenderer = null;
-                tongueLength = 0f;
-            }
+                heartTongueInstance.name = "HeartTongue_Pooled";
 
-            // Reset collision flags
-            reachTouchedVisitor = false;
-            grabTouchedVisitor = false;
+                // Disable bone colliders
+                DisableBoneColliders();
+
+                // Reset bones to rest pose
+                ResetTongueBonesToRest();
+
+                // Move to hidden position
+                Vector3 localPos = heartTongueInstance.transform.localPosition;
+                localPos.z = TONGUE_HIDDEN_Z;
+                heartTongueInstance.transform.localPosition = localPos;
+
+                // NOTE: Keep all references (tongueBones, etc.) - they're reused
+            }
         }
 
         private void TransitionToReaching()
@@ -634,15 +696,120 @@ namespace FaeMaze.Maze
             tongueExtension = 0f;
             grabCurlProgress = 0f;
 
-            // Lock in the visitor direction angle now - this won't change during the reach
-            // This prevents the tongue from rotating as different bones become the lip bone
+            // Calculate the visitor's EXIT POINT from the heart node, not their current position
+            // This is where the tongue should aim - visitors walk through the heart, they don't stop
             Vector2 heartPos2D = new Vector2(transform.position.x, transform.position.y);
-            Vector2 visitorPos2D = new Vector2(targetVisitor.transform.position.x, targetVisitor.transform.position.y);
-            Vector2 dirToVisitor = (visitorPos2D - heartPos2D).normalized;
-            lockedVisitorAngle = Mathf.Atan2(dirToVisitor.y, dirToVisitor.x) * Mathf.Rad2Deg;
+            Vector2 exitPoint = CalculateVisitorExitPoint(targetVisitor, heartPos2D, detectionRadius);
+
+            // Lock in the direction to the exit point
+            Vector2 dirToExit = (exitPoint - heartPos2D).normalized;
+            lockedVisitorAngle = Mathf.Atan2(dirToExit.y, dirToExit.x) * Mathf.Rad2Deg;
+
+            Debug.Log($"[HeartTongue] TransitionToReaching for {targetVisitor?.name}\n" +
+                $"  Heart pos: {heartPos2D}\n" +
+                $"  Exit point: {exitPoint}\n" +
+                $"  Locked angle: {lockedVisitorAngle:F1}°\n" +
+                $"  Tongue start Z: {TONGUE_START_Z}, lip Z: {TONGUE_LIP_Z}");
 
             // Spawn tongue
             SpawnTongue();
+        }
+
+        /// <summary>
+        /// Calculates where the visitor will EXIT the heart node's detection zone.
+        /// Uses the visitor's pre-calculated path to find the exact exit point.
+        /// </summary>
+        /// <param name="visitor">The target visitor</param>
+        /// <param name="heartPos">Heart position in 2D</param>
+        /// <param name="nodeRadius">Radius of the detection zone</param>
+        /// <returns>The 2D point where visitor's path exits the zone</returns>
+        private Vector2 CalculateVisitorExitPoint(VisitorControllerBase visitor, Vector2 heartPos, float nodeRadius)
+        {
+            if (visitor == null)
+            {
+                Debug.Log($"[ExitPoint] Visitor is null, using right direction");
+                return heartPos + Vector2.right * nodeRadius; // Fallback
+            }
+
+            // Get the visitor's actual path
+            List<Vector3> visitorPath = visitor.GetCurrentPath(out int currentPathIndex);
+
+            if (visitorPath == null || visitorPath.Count == 0 || currentPathIndex >= visitorPath.Count)
+            {
+                // Fallback: use visitor's current movement direction
+                Vector2 visitorPos = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+                Vector2 dirFromHeart = (visitorPos - heartPos).normalized;
+                Debug.Log($"[ExitPoint] No valid path (path={visitorPath?.Count ?? 0}, index={currentPathIndex}), using direction from heart: {dirFromHeart}");
+                return heartPos + dirFromHeart * nodeRadius;
+            }
+
+            // DEBUG: Log path points around current index
+            Debug.Log($"[ExitPoint] Searching path from index {currentPathIndex} to {visitorPath.Count - 1}");
+            for (int dbgI = currentPathIndex; dbgI < Mathf.Min(currentPathIndex + 5, visitorPath.Count); dbgI++)
+            {
+                Vector2 dbgPt = new Vector2(visitorPath[dbgI].x, visitorPath[dbgI].y);
+                float dbgDist = Vector2.Distance(dbgPt, heartPos);
+                Debug.Log($"[ExitPoint]   Path[{dbgI}] = {dbgPt}, dist from heart = {dbgDist:F2} (radius={nodeRadius})");
+            }
+
+            // Search forward from current path index to find where path exits the detection zone
+            Vector2 prevPoint = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+
+            for (int i = currentPathIndex; i < visitorPath.Count; i++)
+            {
+                Vector2 pathPoint = new Vector2(visitorPath[i].x, visitorPath[i].y);
+                float distFromHeart = Vector2.Distance(pathPoint, heartPos);
+
+                // Found a point outside the zone - calculate exact intersection
+                if (distFromHeart > nodeRadius)
+                {
+                    Debug.Log($"[ExitPoint] Found exit at path[{i}] = {pathPoint}, dist={distFromHeart:F2} > radius={nodeRadius}");
+                    Debug.Log($"[ExitPoint]   prevPoint={prevPoint}, segment to pathPoint");
+
+                    // Ray-circle intersection to find exact exit point
+                    Vector2 segmentDir = (pathPoint - prevPoint).normalized;
+                    Vector2 toCenter = heartPos - prevPoint;
+
+                    // Quadratic formula for ray-circle intersection
+                    float a = Vector2.Dot(segmentDir, segmentDir);  // Always 1 for normalized
+                    float b = 2f * Vector2.Dot(segmentDir, prevPoint - heartPos);
+                    float c = Vector2.Dot(prevPoint - heartPos, prevPoint - heartPos) - nodeRadius * nodeRadius;
+
+                    float discriminant = b * b - 4f * a * c;
+                    if (discriminant >= 0)
+                    {
+                        float sqrtDisc = Mathf.Sqrt(discriminant);
+                        // We want t2 (the exit point, farther intersection)
+                        float t2 = (-b + sqrtDisc) / (2f * a);
+                        if (t2 >= 0)
+                        {
+                            Vector2 exitPoint = prevPoint + t2 * segmentDir;
+                            Debug.Log($"[ExitPoint]   Calculated intersection: t2={t2:F2}, exitPoint={exitPoint}");
+                            return exitPoint;
+                        }
+                    }
+
+                    // Fallback if math fails
+                    Debug.Log($"[ExitPoint]   Math failed, using pathPoint directly");
+                    return pathPoint;
+                }
+
+                prevPoint = pathPoint;
+            }
+
+            // Path doesn't exit the zone? Use the last path point direction
+            if (visitorPath.Count > 0)
+            {
+                Vector2 lastPoint = new Vector2(visitorPath[visitorPath.Count - 1].x, visitorPath[visitorPath.Count - 1].y);
+                Vector2 dirFromHeart = (lastPoint - heartPos).normalized;
+                Debug.Log($"[ExitPoint] Path never exits zone, using last point direction: {dirFromHeart}");
+                return heartPos + dirFromHeart * nodeRadius;
+            }
+
+            // Final fallback
+            Vector2 fallbackDir = (new Vector2(visitor.transform.position.x, visitor.transform.position.y) - heartPos).normalized;
+            Debug.Log($"[ExitPoint] Final fallback, using visitor direction from heart: {fallbackDir}");
+            return heartPos + fallbackDir * nodeRadius;
         }
 
         private void TransitionToGrabbing()
@@ -652,9 +819,28 @@ namespace FaeMaze.Maze
             // Tongue phase is now Pulling - starts immediately after reverse curl completes
             tonguePhase = TonguePhase.Pulling;
 
-            // Disable all lights on the visitor - they're being consumed
+            // The "grab bone" is the bone in the CENTER of the curled section - where the visitor is held.
+            // We track when this center point reaches the lip level (curl has been pulled to heart).
+            // The curl uses the outer portion of the horizontal tongue section.
+            // GRAB_BONE_PERCENTAGE defines how far from the tip the grab bone is (10% = bone 490 for 540 bones)
+            int boneCount = tongueBones != null ? tongueBones.Length : 0;
+
+            // Grab bone is ~10% from the tip - the center of the curl where visitor is trapped
+            const float GRAB_BONE_PERCENTAGE = 0.10f;  // 10% from tip
+            int boneOffset = Mathf.RoundToInt(boneCount * GRAB_BONE_PERCENTAGE);
+            dynamicGrabBoneIndex = boneCount - 1 - boneOffset;  // e.g., 540 - 1 - 54 = 485
+
+            Debug.Log($"[TransitionToGrabbing] Dynamic grab bone index = {dynamicGrabBoneIndex} ({GRAB_BONE_PERCENTAGE*100}% from tip, offset={boneOffset})");
+
+            // CRITICAL: Always grab the visitor when transitioning to Grabbing state
+            // The spiral has closed around them - they MUST be immobilized
             if (targetVisitor != null)
             {
+                grabContactMade = true;
+                targetVisitor.SetGrabbedByHeart();
+                Debug.Log($"[TransitionToGrabbing] Spiral closed - grabbed {targetVisitor.name}, state should now be Grabbed");
+
+                // Disable all lights on the visitor - they're being consumed
                 DisableVisitorLights(targetVisitor);
             }
         }
@@ -696,49 +882,57 @@ namespace FaeMaze.Maze
 
         private void SpawnTongue()
         {
-            if (heartTonguePrefab == null)
+            Debug.Log($"[SpawnTongue] BEGIN - heartTongueInstance={heartTongueInstance != null}");
+
+            // POOLING: Don't instantiate - just move the pre-created instance into position
+            // This avoids physics broadphase rebuilds that cause 10-20+ second freezes
+            if (heartTongueInstance == null)
             {
-                Debug.LogWarning("[HeartOfTheMaze] Heart tongue prefab not assigned!");
-                return;
+                // Fallback: try to pre-create if it wasn't done in Start
+                Debug.Log($"[SpawnTongue] Instance is null, calling PreCreateTongueInstance");
+                PreCreateTongueInstance();
+                if (heartTongueInstance == null)
+                {
+                    Debug.LogWarning("[HeartOfTheMaze] Cannot spawn tongue - no instance available!");
+                    return;
+                }
             }
 
-            if (heartTongueInstance != null)
-            {
-                Destroy(heartTongueInstance);
-            }
-
-            // Instantiate tongue as child of heart
-            heartTongueInstance = Instantiate(heartTonguePrefab, transform);
             heartTongueInstance.name = "HeartTongue_Active";
 
-            // IMPORTANT: Use uniform scale to prevent shearing when bones rotate
-            // The prefab has non-uniform scale (1, 0.3, 0.3) which causes visual distortion
-            // when the tongue bends. We use uniform scale and adjust constants instead.
-            heartTongueInstance.transform.localScale = Vector3.one * 0.3f;
+            // Reset bone poses to rest state before positioning
+            ResetTongueBonesToRest();
 
-            // Position tongue at starting Z (below ground)
+            // Position tongue at starting Z (below ground, but in play area)
             tongueZPosition = TONGUE_START_Z;
             Vector3 localPos = heartTongueInstance.transform.localPosition;
+            Debug.Log($"[SpawnTongue] Before setting Z: localPosition={localPos}, tongueZPosition={tongueZPosition}");
             localPos.z = tongueZPosition;
             heartTongueInstance.transform.localPosition = localPos;
-
-            // Remove any Light components from the tongue model (spotlight etc)
-            RemoveTongueLights();
-
-            // Find and store bone references
-            FindTongueBones();
-
-            // Calculate total tongue length from bone positions
-            CalculateTongueLength();
-
-            // Find reach and grab collider transforms
-            FindTongueColliders();
-
-            // Enable colliders as triggers
-            SetupTongueColliders();
+            Debug.Log($"[SpawnTongue] After setting Z: localPosition={heartTongueInstance.transform.localPosition}");
 
             // Apply initial bone state (all bones at rest, tongue below ground)
             ApplyTongueBoneState();
+
+            Debug.Log($"[SpawnTongue] END - tongueLength={tongueLength:F2}, tongueZPosition={tongueZPosition:F2}, TONGUE_START_Z={TONGUE_START_Z}, TONGUE_LIP_Z={TONGUE_LIP_Z}");
+        }
+
+        /// <summary>
+        /// Resets all tongue bones to their rest pose.
+        /// Called when activating the pooled tongue to ensure clean state.
+        /// </summary>
+        private void ResetTongueBonesToRest()
+        {
+            if (tongueBones == null || boneRestPositions == null || boneRestRotations == null) return;
+
+            for (int i = 0; i < tongueBones.Length; i++)
+            {
+                if (tongueBones[i] != null)
+                {
+                    tongueBones[i].localPosition = boneRestPositions[i];
+                    tongueBones[i].localRotation = boneRestRotations[i];
+                }
+            }
         }
 
         private void CalculateTongueLength()
@@ -772,7 +966,8 @@ namespace FaeMaze.Maze
 
             if (tongueSkinnedRenderer != null && tongueSkinnedRenderer.bones != null && tongueSkinnedRenderer.bones.Length > 0)
             {
-                // Use bones from SkinnedMeshRenderer - these are the actual bones that deform the mesh
+                // Use ALL bones from SkinnedMeshRenderer - these are the actual bones that deform the mesh
+                // Performance note: bone TRANSFORMS don't cause physics lag, only bone COLLIDERS do (which are disabled)
                 tongueBones = tongueSkinnedRenderer.bones;
                 tongueArmatureRoot = tongueSkinnedRenderer.rootBone;
             }
@@ -797,7 +992,7 @@ namespace FaeMaze.Maze
                 tongueBones = boneList.ToArray();
             }
 
-            // Store rest poses for all bones
+            // Store rest poses for all bones we're using
             if (tongueBones != null && tongueBones.Length > 0)
             {
                 boneRestPositions = new Vector3[tongueBones.Length];
@@ -811,200 +1006,6 @@ namespace FaeMaze.Maze
                         boneRestRotations[i] = tongueBones[i].localRotation;
                     }
                 }
-            }
-        }
-
-        private void FindTongueColliders()
-        {
-            if (heartTongueInstance == null) return;
-
-            // Find "reach" and "grab" child objects
-            foreach (Transform child in heartTongueInstance.GetComponentsInChildren<Transform>())
-            {
-                if (child.name == "reach")
-                {
-                    reachColliderTransform = child;
-                    reachCollider = child.GetComponent<SphereCollider>();
-                }
-                else if (child.name == "grab")
-                {
-                    grabColliderTransform = child;
-                    grabCollider = child.GetComponent<SphereCollider>();
-                }
-            }
-
-            // If colliders weren't found in prefab, create them dynamically
-            if (reachColliderTransform == null)
-            {
-                GameObject reachObj = new GameObject("reach");
-                reachObj.transform.SetParent(heartTongueInstance.transform);
-                reachObj.transform.localPosition = Vector3.zero;
-                reachObj.transform.localRotation = Quaternion.identity;
-                reachColliderTransform = reachObj.transform;
-                reachCollider = reachObj.AddComponent<SphereCollider>();
-                // Radius will be set in SetupTongueColliders to match mesh
-            }
-
-            if (grabColliderTransform == null)
-            {
-                GameObject grabObj = new GameObject("grab");
-                grabObj.transform.SetParent(heartTongueInstance.transform);
-                grabObj.transform.localPosition = Vector3.zero;
-                grabObj.transform.localRotation = Quaternion.identity;
-                grabColliderTransform = grabObj.transform;
-                grabCollider = grabObj.AddComponent<SphereCollider>();
-                // Radius will be set in SetupTongueColliders to match mesh
-            }
-
-            // Note: We don't parent colliders to bones because bone transform.position
-            // doesn't reflect where the skinned mesh vertices actually are.
-            // Instead, we manually update collider positions each frame in UpdateColliderPositions().
-        }
-
-        /// <summary>
-        /// Reparents the reach and grab colliders to the correct bones in the armature.
-        /// - Reach collider -> last bone (Bone_539, tip), positioned at far end along +X
-        /// - Grab collider -> GRAB_BONE_OFFSET bones from end (~25% from tip), positioned at bone origin
-        ///
-        /// Note: The tongue model has base at origin with bones extending along +X toward the tip.
-        /// Bones are named Bone_000 through Bone_539 (540 total bones).
-        /// </summary>
-        private void ReparentCollidersToArmature()
-        {
-            if (tongueBones == null || tongueBones.Length == 0)
-            {
-                Debug.LogWarning("[HeartOfTheMaze] Cannot reparent colliders - no bones found");
-                return;
-            }
-
-            // Use bone indices directly - model has Bone_000 through Bone_539
-            // Last bone (tip) for reach collider
-            Transform lastBone = tongueBones[tongueBones.Length - 1];
-
-            // Grab bone at GRAB_BONE_OFFSET from tip (~25% from end)
-            int grabBoneIndex = Mathf.Max(0, tongueBones.Length - 1 - GRAB_BONE_OFFSET);
-            Transform grabBone = tongueBones[grabBoneIndex];
-
-            // Reparent reach collider to last bone (tip)
-            if (reachColliderTransform != null && lastBone != null)
-            {
-                reachColliderTransform.SetParent(lastBone, false);
-                // Position at the far end of the bone (bones extend in local +X)
-                reachColliderTransform.localPosition = new Vector3(1.0f, 0, 0);  // Far end of bone along +X
-                reachColliderTransform.localRotation = Quaternion.identity;
-                reachColliderTransform.localScale = Vector3.one;
-            }
-            else
-            {
-                Debug.LogWarning($"[HeartOfTheMaze] Could not reparent reach collider. reachCollider: {reachColliderTransform != null}, lastBone: {lastBone != null}");
-            }
-
-            // Reparent grab collider to 4th bone from end (MawSeg_020)
-            if (grabColliderTransform != null && grabBone != null)
-            {
-                grabColliderTransform.SetParent(grabBone, false);
-                // Position at the root end of the bone (origin)
-                grabColliderTransform.localPosition = new Vector3(0, 0, 0);  // Root end of bone
-                grabColliderTransform.localRotation = Quaternion.identity;
-                grabColliderTransform.localScale = Vector3.one;
-            }
-            else
-            {
-                Debug.LogWarning($"[HeartOfTheMaze] Could not reparent grab collider. grabCollider: {grabColliderTransform != null}, grabBone: {grabBone != null}");
-            }
-        }
-
-        private void SetupTongueColliders()
-        {
-            // Set collider radii to match the circular mesh cross-section
-            // reachTriggerDistance and grabTriggerDistance are the mesh radii at 0.3 scale
-            // (i.e., they already account for the tongue's scale)
-
-            if (reachCollider != null)
-            {
-                reachCollider.isTrigger = true;
-                reachCollider.radius = reachTriggerDistance;
-
-                // Add trigger handler component
-                var handler = reachColliderTransform.gameObject.AddComponent<TongueColliderHandler>();
-                handler.Initialize(this, true);
-
-                // Collider needs a Rigidbody to receive trigger events
-                var rb = reachColliderTransform.gameObject.AddComponent<Rigidbody>();
-                rb.isKinematic = true;
-                rb.useGravity = false;
-
-            }
-            if (grabCollider != null)
-            {
-                grabCollider.isTrigger = true;
-                grabCollider.radius = grabTriggerDistance;
-
-                // Add trigger handler component
-                var handler = grabColliderTransform.gameObject.AddComponent<TongueColliderHandler>();
-                handler.Initialize(this, false);
-
-                // Collider needs a Rigidbody to receive trigger events
-                var rb = grabColliderTransform.gameObject.AddComponent<Rigidbody>();
-                rb.isKinematic = true;
-                rb.useGravity = false;
-
-            }
-        }
-
-        /// <summary>
-        /// Updates the reach and grab collider positions using bone world positions.
-        /// We apply rotations to bones in ApplyTongueBoneState(), so their world positions
-        /// reflect the deformed tongue shape. The colliders (radius 0.3) are larger than
-        /// the bone spacing, so bone positions work fine for collision detection.
-        /// </summary>
-        private void UpdateColliderPositions()
-        {
-            if (reachColliderTransform == null || grabColliderTransform == null) return;
-            if (tonguePhase == TonguePhase.Emerging) return;  // Colliders stay at origin during emerge
-            if (tongueBones == null || tongueBones.Length == 0) return;
-
-            int boneCount = tongueBones.Length;
-
-            // Tip bone (last bone) - reach collider
-            int tipBoneIndex = boneCount - 1;
-            Transform tipBone = tongueBones[tipBoneIndex];
-
-            // Grab bone (GRAB_BONE_OFFSET bones back from tip) - 25% from end
-            int grabBoneIndex = Mathf.Max(0, boneCount - 1 - GRAB_BONE_OFFSET);
-            Transform grabBone = tongueBones[grabBoneIndex];
-
-            if (tipBone != null)
-            {
-                reachColliderTransform.position = tipBone.position;
-            }
-
-            if (grabBone != null)
-            {
-                grabColliderTransform.position = grabBone.position;
-            }
-
-        }
-
-        /// <summary>
-        /// Called by TongueColliderHandler when reach collider touches a visitor.
-        /// </summary>
-        public void OnReachColliderTrigger(VisitorControllerBase visitor)
-        {
-            if (visitor == targetVisitor)
-            {
-                reachTouchedVisitor = true;
-            }
-        }
-
-        /// <summary>
-        /// Called by TongueColliderHandler when grab collider touches a visitor.
-        /// </summary>
-        public void OnGrabColliderTrigger(VisitorControllerBase visitor)
-        {
-            if (visitor == targetVisitor)
-            {
-                grabTouchedVisitor = true;
             }
         }
 
@@ -1064,21 +1065,15 @@ namespace FaeMaze.Maze
             // World Z of the lip (in heart's coordinate space)
             float lipWorldZ = transform.position.z + TONGUE_LIP_Z;
 
-            // Calculate lip bone index based on geometry, not current bone positions
-            // During Pulling, this recalculates dynamically as the tongue retracts - higher-indexed
-            // bones become the lip bone as the tongue moves down, shortening the horizontal section.
-            // During Sinking, we use the frozen index to keep the curl shape stable as it rotates down.
+            // Calculate lip bone index based on geometry
             float boneSpacing = tongueLength / Mathf.Max(1, boneCount);
             int lipBoneIndex;
             if (tonguePhase == TonguePhase.Sinking && frozenLipBoneIndex >= 0)
             {
-                // Use frozen lip bone index during sinking to keep curl stable as it rotates
                 lipBoneIndex = frozenLipBoneIndex;
             }
             else
             {
-                // Calculate dynamically during emerging/reaching/touching/pulling
-                // As tongueZPosition increases (during pulling), higher bone indices reach the lip
                 lipBoneIndex = -1;
                 for (int i = boneCount - 1; i >= 0; i--)
                 {
@@ -1091,59 +1086,37 @@ namespace FaeMaze.Maze
                 }
             }
 
+            // Count how many bones are above the lip (horizontal section)
+            int horizontalBoneCount = (lipBoneIndex >= 0) ? (boneCount - lipBoneIndex) : 0;
+
+            // Debug logging for bone state
+            if (Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"[ApplyBoneState] Frame {Time.frameCount}: phase={tonguePhase}, lipBoneIndex={lipBoneIndex}, horizontalBones={horizontalBoneCount}\n" +
+                    $"  tongueZ={tongueZPosition:F2}, lipWorldZ={lipWorldZ:F2}, boneSpacing={boneSpacing:F4}\n" +
+                    $"  grabCurlProgress={grabCurlProgress:F2}, curlDirection={curlDirection}\n" +
+                    $"  heartPos={transform.position}, visitorPos={targetVisitor?.transform.position}");
+            }
+
             // bendProgress controls how much the lip bone has bent (0 = vertical, 1 = horizontal)
-            // During Pulling/Sinking, keep bendProgress at 1 so the tongue stays bent toward visitor
             float bendProgress;
             if (tonguePhase == TonguePhase.Pulling || tonguePhase == TonguePhase.Sinking)
             {
-                bendProgress = 1f;  // Stay fully bent toward visitor
+                bendProgress = 1f;
             }
             else
             {
                 bendProgress = Mathf.Clamp01(tongueExtension * 2f);
             }
 
-            // Target direction in world space (XY plane, Z=0)
-            // During Pulling/Sinking, use the locked visitor angle instead of current visitor position
-            //
-            // During reverse curl, apply a radial shift to move the grab point perpendicular to visitor direction
-            // This centers the visitor within the curl arc (shift 0.25 units = half the curl diameter)
-            float radialShiftAngle = 0f;
-            if (grabContactMade && (tonguePhase == TonguePhase.Touching || tonguePhase == TonguePhase.Pulling || tonguePhase == TonguePhase.Sinking))
-            {
-                // Shift perpendicular to visitor direction, in the curl direction
-                // At ~1.5 units from heart, 0.25 unit shift = atan(0.25/1.5) ≈ 9.5 degrees
-                radialShiftAngle = 9.5f * curlDirection * reverseCurlProgress;
-            }
+            // Target direction: toward exit point (for initial reach) or visitor (for curl)
+            Vector3 targetDirWorld = new Vector3(
+                Mathf.Cos(lockedVisitorAngle * Mathf.Deg2Rad),
+                Mathf.Sin(lockedVisitorAngle * Mathf.Deg2Rad),
+                0f
+            );
 
-            Vector3 targetDirWorld;
-            float effectiveAngle = lockedVisitorAngle + radialShiftAngle;
-            if (tonguePhase == TonguePhase.Pulling || tonguePhase == TonguePhase.Sinking)
-            {
-                // Use locked angle with radial shift - visitor position is now following grab collider
-                targetDirWorld = new Vector3(
-                    Mathf.Cos(effectiveAngle * Mathf.Deg2Rad),
-                    Mathf.Sin(effectiveAngle * Mathf.Deg2Rad),
-                    0f
-                );
-            }
-            else if (grabContactMade)
-            {
-                // During Touching with grab contact, use locked angle with radial shift
-                targetDirWorld = new Vector3(
-                    Mathf.Cos(effectiveAngle * Mathf.Deg2Rad),
-                    Mathf.Sin(effectiveAngle * Mathf.Deg2Rad),
-                    0f
-                );
-            }
-            else
-            {
-                Vector3 visitorPos = targetVisitor.transform.position;
-                Vector3 heartPos = transform.position;
-                targetDirWorld = new Vector3(visitorPos.x - heartPos.x, visitorPos.y - heartPos.y, 0f).normalized;
-            }
-
-            // First pass: set all bones to rest pose and apply rotations
+            // First pass: set all bones to rest pose
             for (int i = 0; i < boneCount; i++)
             {
                 if (tongueBones[i] == null) continue;
@@ -1151,219 +1124,115 @@ namespace FaeMaze.Maze
                 tongueBones[i].localRotation = boneRestRotations[i];
             }
 
-            // Grab bone index is GRAB_BONE_OFFSET bones before the tip
-            int grabBoneIndex = boneCount - 1 - GRAB_BONE_OFFSET;
-
-            // Calculate the bend zone: lipBoneIndex to lipBoneIndex + BEND_BONE_COUNT
-            // Each bone in this zone contributes a small rotation, creating a smooth curve
-            int bendEndIndex = Mathf.Min(lipBoneIndex + BEND_BONE_COUNT, boneCount - 1);
-            float anglePerBendBone = 90f / Mathf.Max(1, BEND_BONE_COUNT);  // Total 90° spread across bones
-
-            // Calculate the recurve zone: starts after bend zone, curves back down toward visitor
-            int recurveStartIndex = bendEndIndex + 1;
-            int recurveEndIndex = Mathf.Min(recurveStartIndex + RECURVE_BONE_COUNT, boneCount - 1);
-            float anglePerRecurveBone = RECURVE_ANGLE / Mathf.Max(1, RECURVE_BONE_COUNT);
-
-            // Calculate the direction that points down toward the visitor (from horizontal, dip down)
-            // This is the targetDirWorld rotated downward by RECURVE_ANGLE around the perpendicular axis
             Vector3 downDir = Vector3.forward;  // +Z is down
-            Vector3 recurveTargetDir = Vector3.Slerp(targetDirWorld, downDir, RECURVE_ANGLE / 90f);
+            Vector3 upDir = Vector3.back;  // -Z is up
 
-            // Second pass: from lip bone to tip, compute rotation to align toward visitor
-            // We process in order so each bone's world rotation is correct before computing the next
+            // Grab bone index - use dynamic if set, otherwise estimate from lip bone
+            int grabBoneIndex = dynamicGrabBoneIndex >= 0 ? dynamicGrabBoneIndex : lipBoneIndex;
+
+            // Calculate the bend zone (lip to lip+BEND_BONE_COUNT)
+            int bendEndIndex = Mathf.Min(lipBoneIndex + BEND_BONE_COUNT, boneCount - 1);
+
+            // Second pass: apply rotations from lip to tip
             for (int i = lipBoneIndex; i < boneCount && lipBoneIndex >= 0; i++)
             {
                 if (tongueBones[i] == null) continue;
 
-                // Get the bone's current world rotation (from parent chain)
                 Quaternion parentWorldRot = tongueBones[i].parent != null ? tongueBones[i].parent.rotation : Quaternion.identity;
-
-                // The bone's forward direction in world space
-                // From logs: bones extend from z=28 (base) to z=1 (tip), so they point in -Z direction
-                // After prefab -90° Y rotation + bone 0's 90° Z rotation, the bone local Y becomes world -Z
-                // For bones with identity local rotation, their forward is inherited from parent
-                Vector3 boneLocalDir = Vector3.up;  // local +Y points toward next bone (tip direction)
+                Vector3 boneLocalDir = Vector3.up;  // local +Y points toward next bone
                 Vector3 boneWorldDir = parentWorldRot * boneRestRotations[i] * boneLocalDir;
 
-                // Determine what direction this bone should point
                 Vector3 desiredDir;
 
-                // SINKING PHASE: The lip bone stays horizontal, the PIVOT BONE (grabBoneIndex - 1) rotates from horizontal to vertical
-                // All bones from grabBoneIndex onward use locked rotations and follow the pivot
+                // SINKING PHASE: special handling
                 int pivotBoneIndex = grabBoneIndex - 1;
                 if (tonguePhase == TonguePhase.Sinking && i >= frozenLipBoneIndex && i < pivotBoneIndex)
                 {
-                    // Bones from lip to just before pivot stay horizontal
                     if (i == frozenLipBoneIndex)
                     {
-                        // Lip bone: bent 90° from vertical to horizontal
-                        Vector3 upDir = Vector3.back;  // -Z is up
-                        desiredDir = Vector3.Slerp(upDir, targetDirWorld, 1f);  // Full 90° bend = horizontal
+                        desiredDir = Vector3.Slerp(upDir, targetDirWorld, 1f);
                     }
                     else
                     {
-                        // Bones between lip and pivot: point toward visitor (horizontal)
                         desiredDir = targetDirWorld;
                     }
                 }
                 else if (tonguePhase == TonguePhase.Sinking && i == pivotBoneIndex)
                 {
-                    // The PIVOT BONE rotates from horizontal to vertical
-                    // sinkingRotationProgress goes 0→1, angle goes from horizontal to down
-                    float sinkAngle = 90f * sinkingRotationProgress;  // 0° to 90° rotation downward
-
-                    // Start from horizontal (targetDirWorld), rotate toward down (+Z)
-                    // At progress=0: horizontal (toward visitor)
-                    // At progress=1: vertical down (+Z)
-                    float t = sinkAngle / 90f;
+                    float t = sinkingRotationProgress;
                     desiredDir = Vector3.Slerp(targetDirWorld, downDir, t);
+                }
+                else if (tonguePhase == TonguePhase.Sinking && i >= grabBoneIndex && curlRotationsLocked && lockedCurlRotations != null)
+                {
+                    // Use locked rotations during sinking
+                    int pivotIdx = grabBoneIndex - 1;
+                    int curlIndex = i - pivotIdx;
+                    if (curlIndex >= 0 && curlIndex < lockedCurlRotations.Length)
+                    {
+                        tongueBones[i].localRotation = lockedCurlRotations[curlIndex];
+                        continue;
+                    }
+                    desiredDir = targetDirWorld;
                 }
                 else if (i >= lipBoneIndex && i <= bendEndIndex)
                 {
-                    // Bones in the first bend zone: instant 90° bend at lip bone
-                    // This works for all phases: Emerging, Reaching, Touching, and Pulling
-                    // During Pulling, the lipBoneIndex dynamically increases as the tongue retracts
-                    float cumulativeAngle = 90f * bendProgress;
-
-                    // Slerp from vertical (-Z) toward horizontal (targetDirWorld) based on cumulative angle
-                    float t = cumulativeAngle / 90f;  // 0 = vertical, 1 = horizontal
-                    Vector3 upDir = Vector3.back;  // -Z is up
+                    // Bend zone: 90° from vertical to horizontal
+                    float t = bendProgress;
                     desiredDir = Vector3.Slerp(upDir, targetDirWorld, t);
                 }
-                else if (i >= recurveStartIndex && i <= recurveEndIndex && tonguePhase != TonguePhase.Sinking)
+                else if (tonguePhase == TonguePhase.Touching || tonguePhase == TonguePhase.Pulling)
                 {
-                    // Bones in the recurve zone: curve from horizontal back down toward visitor
-                    // Skip during Sinking - handled above
-                    int boneInRecurve = i - recurveStartIndex;
-                    float cumulativeRecurveAngle = (boneInRecurve + 1) * anglePerRecurveBone * bendProgress;
-                    cumulativeRecurveAngle = Mathf.Min(cumulativeRecurveAngle, RECURVE_ANGLE);
+                    // SPIRAL CURL: All horizontal bones participate in the spiral
+                    // The spiral wraps around the visitor's position
 
-                    // Slerp from horizontal (targetDirWorld) toward downward-angled direction
-                    float t = cumulativeRecurveAngle / RECURVE_ANGLE;
-                    desiredDir = Vector3.Slerp(targetDirWorld, recurveTargetDir, t);
-                }
-                else if ((tonguePhase == TonguePhase.Touching || tonguePhase == TonguePhase.Pulling || tonguePhase == TonguePhase.Sinking)
-                         && i >= grabBoneIndex && grabCurlProgress > 0)
-                {
-                    // During Touching/Pulling/Sinking phases: bones from grab collider to tip curl
-                    // to form a half-circle (180°) around the visitor's vertical body
-                    //
-                    // The curl must:
-                    // 1. Be HORIZONTAL (parallel to ground, in XY plane)
-                    // 2. Form a tight curve with diameter 0.5 around the visitor
-                    // 3. Visitor's long axis is always aligned with world Z (vertical)
-                    //
-                    // Curl rotates around Z axis (vertical), staying in the XY plane
+                    // Calculate this bone's position in the horizontal section (0 = first horizontal bone, 1 = tip)
+                    int boneIndexInHorizontal = i - (lipBoneIndex + BEND_BONE_COUNT);
+                    int totalHorizontalBones = boneCount - (lipBoneIndex + BEND_BONE_COUNT);
+                    float boneProgress = Mathf.Clamp01((float)boneIndexInHorizontal / Mathf.Max(1, totalHorizontalBones - 1));
 
-                    // Check if we need to lock curl rotations (when grab bone's parent becomes lip bone)
-                    if (!curlRotationsLocked && lipBoneIndex == grabBoneIndex - 1 && lastLipBoneIndexForCurlLock != lipBoneIndex)
-                    {
-                        LockCurlBoneRotations(grabBoneIndex, boneCount);
-                        lastLipBoneIndexForCurlLock = lipBoneIndex;
-                    }
+                    // The spiral should wrap around to form a closed circle
+                    // As grabCurlProgress goes 0→1, we curl up to 360°+ so tip meets shaft
+                    // Total spiral angle = 400° (slightly more than full circle to ensure closure)
+                    float totalSpiralAngle = 400f * grabCurlProgress;
 
-                    // If curl rotations are locked, use them directly
-                    // During Sinking: all curl bones (from grabBoneIndex onward) use locked rotations
-                    // The pivot bone (grabBoneIndex - 1) was handled above and rotates; curl bones follow it
-                    if (curlRotationsLocked && lockedCurlRotations != null)
-                    {
-                        // lockedCurlRotations now starts from pivotBoneIndex (grabBoneIndex - 1)
-                        int pivotIdx = grabBoneIndex - 1;
-                        int curlIndex = i - pivotIdx;
+                    // Each bone gets a proportional angle based on its position
+                    // Bones closer to the tip curl more (they travel the full spiral)
+                    // Bones closer to the lip curl less (they form the outer part of spiral)
+                    float boneAngle = boneProgress * totalSpiralAngle * curlDirection;
 
-                        // During Sinking, skip locked rotation for pivot bone (curlIndex=0) - it rotates via desiredDir above
-                        // All other bones (curlIndex >= 1) use locked rotations
-                        if (tonguePhase == TonguePhase.Sinking && curlIndex == 0)
-                        {
-                            // Pivot bone was already handled above with desiredDir
-                            // This shouldn't happen since i >= grabBoneIndex here, but just in case
-                        }
-                        else if (curlIndex >= 0 && curlIndex < lockedCurlRotations.Length)
-                        {
-                            tongueBones[i].localRotation = lockedCurlRotations[curlIndex];
-                            continue;
-                        }
-                    }
-
-                    // Calculate curl in HORIZONTAL plane (XY, parallel to ground)
-                    // The curl rotates around the Z axis (vertical/up-down)
-                    int bonesInCurl = (boneCount - 1) - grabBoneIndex;
-
-                    // Initial curl: 180° in curlDirection (curling around one side of visitor)
-                    float initialCurlAngle = 180f * grabCurlProgress;
-
-                    // After grab contact: curl in the OPPOSITE direction to wrap around the other side
-                    // If initial curl went left (CCW), reverse curl goes right (CW) to embrace visitor
-                    float reverseCurlAngle = 0f;
-                    if (grabContactMade)
-                    {
-                        // Reverse curl: curl in opposite direction to wrap around visitor
-                        // As reverseCurlProgress goes 0→1, we curl 0→180° in -curlDirection
-                        reverseCurlAngle = 180f * reverseCurlProgress;
-                    }
-
-                    // This bone's contribution to the curl
-                    float boneProgress = (float)(i - grabBoneIndex) / Mathf.Max(1, bonesInCurl);
-
-                    // Calculate angle for this bone:
-                    // The tongue wraps AROUND the visitor like arms hugging:
-                    // - First 180°: curl one direction to get around one side of visitor
-                    // - Next 180°: curl OPPOSITE direction to wrap around the other side
-                    //
-                    // This creates a U-shape that embraces the visitor from both sides
-                    float cumulativeAngle;
-                    if (!grabContactMade)
-                    {
-                        // Initial curl only: each bone gets proportional angle in curlDirection
-                        // As grabCurlProgress goes 0→1, angle goes 0→180°
-                        cumulativeAngle = boneProgress * initialCurlAngle * curlDirection;
-                    }
-                    else
-                    {
-                        // After grab contact: MIRROR the curl shape to wrap around the other side
-                        //
-                        // Initial curl: each bone has angle = boneProgress * 180° * curlDirection
-                        // This creates a curve where each bone adds a small positive angle (if curlDirection=1)
-                        //
-                        // To MIRROR this curve (reflect it), we need to INVERT each bone's relative angle
-                        // If bone was at +5° relative to previous, it should become -5° relative
-                        //
-                        // The cumulative angle at each bone:
-                        // - Initial: boneProgress * 180° * curlDirection (e.g., 0°, 36°, 72°, 108°, 144°, 180°)
-                        // - Mirrored: boneProgress * 180° * (-curlDirection) (e.g., 0°, -36°, -72°, -108°, -144°, -180°)
-                        //
-                        // We interpolate from initial to mirrored as reverseCurlProgress goes 0→1
-                        float initialBoneAngle = boneProgress * 180f * curlDirection;      // Original curl
-                        float mirroredBoneAngle = boneProgress * 180f * (-curlDirection);  // Mirrored curl
-
-                        // Lerp between initial and mirrored based on reverse progress
-                        cumulativeAngle = Mathf.Lerp(initialBoneAngle, mirroredBoneAngle, reverseCurlProgress);
-                    }
-
-                    // Curl in XY plane (horizontal, parallel to ground)
-                    // Use effectiveAngle (which includes radialShiftAngle) to shift curl with rest of tongue
-                    float rotatedAngle = effectiveAngle + cumulativeAngle;
+                    // Apply angle relative to the initial direction toward exit point
+                    float rotatedAngle = lockedVisitorAngle + boneAngle;
                     desiredDir = new Vector3(
                         Mathf.Cos(rotatedAngle * Mathf.Deg2Rad),
                         Mathf.Sin(rotatedAngle * Mathf.Deg2Rad),
-                        0f  // Stay in XY plane (horizontal)
+                        0f  // Stay horizontal in XY plane
                     );
+
+                    // Lock rotations when curl is complete and we're pulling
+                    if (tonguePhase == TonguePhase.Pulling && grabCurlProgress >= 1f && !curlRotationsLocked)
+                    {
+                        if (lipBoneIndex >= grabBoneIndex - 1)
+                        {
+                            LockCurlBoneRotations(grabBoneIndex, boneCount);
+                        }
+                    }
+                }
+                else if (tonguePhase == TonguePhase.Reaching)
+                {
+                    // During reaching: bones point straight toward exit point (no curl yet)
+                    desiredDir = targetDirWorld;
                 }
                 else
                 {
-                    // Bones past the recurve zone: maintain the recurve direction (angled down toward visitor)
-                    desiredDir = recurveTargetDir;
+                    // Default: point toward exit
+                    desiredDir = targetDirWorld;
                 }
 
-                // Compute the rotation needed to rotate boneWorldDir to desiredDir
+                // Compute the rotation needed
                 Quaternion worldCorrection = Quaternion.FromToRotation(boneWorldDir, desiredDir);
-
-                // Convert world correction to local space rotation
                 Quaternion newLocalRot = Quaternion.Inverse(parentWorldRot) * worldCorrection * parentWorldRot * boneRestRotations[i];
-
                 tongueBones[i].localRotation = newLocalRot;
             }
-
         }
 
         /// <summary>
@@ -1397,53 +1266,51 @@ namespace FaeMaze.Maze
             curlRotationsLocked = true;
         }
 
-        private bool IsReachColliderTouchingVisitor()
+        /// <summary>
+        /// Check if the tip of the tongue has curled back and touched the shaft.
+        /// Uses direct bone position comparison (no colliders needed).
+        /// When the tip touches the shaft, the spiral loop is complete.
+        /// </summary>
+        private bool IsTipTouchingShaft()
         {
-            return reachTouchedVisitor;
-        }
+            if (tongueBones == null || tongueBones.Length == 0) return false;
 
-        private bool IsGrabColliderTouchingVisitor()
-        {
-            return grabTouchedVisitor;
-        }
+            // Get tip bone position directly (last bone in the chain)
+            int tipBoneIndex = tongueBones.Length - 1;
+            if (tongueBones[tipBoneIndex] == null) return false;
+            Vector3 tipPos = tongueBones[tipBoneIndex].position;
 
-        private void UpdateVisitorPositionToGrabCollider()
-        {
-            if (targetVisitor == null) return;
-            if (grabColliderTransform == null || reachColliderTransform == null) return;
+            // Calculate the lip bone index (same logic as ApplyTongueBoneState)
+            int boneCount = tongueBones.Length;
+            float boneSpacing = tongueLength / Mathf.Max(1, boneCount);
+            int lipBoneIndex = Mathf.FloorToInt((tongueZPosition - TONGUE_LIP_Z) / boneSpacing);
+            lipBoneIndex = Mathf.Clamp(lipBoneIndex, 0, boneCount - BEND_BONE_COUNT - 1);
 
-            // Position visitor at the midpoint between grab and reach colliders
-            // This centers the visitor within the curl arc
-            Vector3 grabPos = grabColliderTransform.position;
-            Vector3 reachPos = reachColliderTransform.position;
-            Vector3 midpoint = (grabPos + reachPos) * 0.5f;
+            // The shaft starts at the first horizontal bone (after the bend zone)
+            // Check bones from shaft start to about 1/3 of horizontal section (not the curled tip portion)
+            int shaftStartIndex = lipBoneIndex + BEND_BONE_COUNT;
+            int horizontalBoneCount = boneCount - shaftStartIndex;
+            int shaftEndIndex = shaftStartIndex + horizontalBoneCount / 3;  // First 1/3 of horizontal (uncurled shaft)
 
-            // During sinking, the visitor also moves down with the tongue
-            // The midpoint Z already includes the sinking motion from bone positions
-            targetVisitor.transform.position = midpoint;
+            // Check if any shaft bone positions are within touching distance
+            // Use bone collider radius as touch distance (same size as the colliders on bones)
+            float touchRadius = TIP_SHAFT_TOUCH_DISTANCE + BONE_COLLIDER_RADIUS;
 
-            // During Pulling and Sinking, apply the rotation delta from the grab bone to the visitor
-            // The visitor follows the same rotational path as the grab point, just offset to the midpoint
-            if (tonguePhase == TonguePhase.Pulling || tonguePhase == TonguePhase.Sinking)
+            for (int i = shaftStartIndex; i <= shaftEndIndex && i < boneCount; i++)
             {
-                int grabBoneIndex = tongueBones.Length - 1 - GRAB_BONE_OFFSET;
-                if (grabBoneIndex >= 0 && grabBoneIndex < tongueBones.Length && tongueBones[grabBoneIndex] != null)
+                if (tongueBones[i] == null) continue;
+
+                Vector3 bonePos = tongueBones[i].position;
+                float distance = Vector3.Distance(tipPos, bonePos);
+
+                if (distance <= touchRadius)
                 {
-                    Quaternion currentGrabBoneRotation = tongueBones[grabBoneIndex].rotation;
-
-                    if (hasPreviousGrabBoneRotation)
-                    {
-                        // Calculate the rotation delta: how much the grab bone rotated this frame
-                        // Apply the same delta to the visitor so they rotate together
-                        Quaternion rotationDelta = currentGrabBoneRotation * Quaternion.Inverse(previousGrabBoneRotation);
-                        targetVisitor.transform.rotation = rotationDelta * targetVisitor.transform.rotation;
-                    }
-
-                    previousGrabBoneRotation = currentGrabBoneRotation;
-                    hasPreviousGrabBoneRotation = true;
+                    Debug.Log($"[IsTipTouchingShaft] TIP TOUCHED SHAFT at bone {i}! tipPos={tipPos}, bonePos={bonePos}, dist={distance:F3} <= {touchRadius:F3}");
+                    return true;
                 }
             }
 
+            return false;
         }
 
         #endregion
@@ -1634,6 +1501,128 @@ namespace FaeMaze.Maze
             rb.useGravity = false;
         }
 
+        /// <summary>
+        /// Pre-creates the tongue instance at Start() to avoid physics freezes during gameplay.
+        /// The tongue is hidden at TONGUE_HIDDEN_Z until needed.
+        /// Adding Rigidbodies/Colliders during gameplay causes Unity's physics broadphase to rebuild,
+        /// resulting in 10-20+ second freezes with many visitors.
+        /// </summary>
+        private void PreCreateTongueInstance()
+        {
+            if (heartTonguePrefab == null)
+            {
+                Debug.LogWarning("[HeartOfTheMaze] Heart tongue prefab not assigned - cannot pre-create!");
+                return;
+            }
+
+            if (tonguePoolInitialized) return;
+
+            // Instantiate tongue as child of heart, hidden far underground
+            heartTongueInstance = Instantiate(heartTonguePrefab, transform);
+            heartTongueInstance.name = "HeartTongue_Pooled";
+
+            // NOTE: No runtime scaling - prefab already has correct scale (1, 0.3, 0.3)
+            // Colliders are baked into the prefab with correct radii
+
+            // Position at hidden Z
+            Vector3 localPos = heartTongueInstance.transform.localPosition;
+            localPos.z = TONGUE_HIDDEN_Z;
+            heartTongueInstance.transform.localPosition = localPos;
+
+            // Remove any Light components from the tongue model
+            RemoveTongueLights();
+
+            // Find and store bone references (these won't change)
+            FindTongueBones();
+
+            // Calculate tongue length (won't change)
+            CalculateTongueLength();
+
+            // Find bone colliders that were baked into the prefab by TonguePrefabColliderSetup
+            FindBoneColliders();
+
+            tonguePoolInitialized = true;
+            Debug.Log($"[HeartOfTheMaze] Pre-created tongue instance with {tongueBones?.Length ?? 0} bones, length={tongueLength:F2}");
+        }
+
+        /// <summary>
+        /// Finds bone colliders that are baked into the prefab.
+        /// The colliders are SolidCollider_N objects created by the editor script TonguePrefabColliderSetup.
+        /// Colliders are parented to bones and inherit their transforms automatically.
+        /// This avoids creating physics objects at runtime which causes 15+ second freezes.
+        /// </summary>
+        private void FindBoneColliders()
+        {
+            if (heartTongueInstance == null) return;
+
+            // Find all SolidCollider_* objects anywhere in the hierarchy (they're parented to bones)
+            var colliderList = new List<GameObject>();
+
+            foreach (Transform child in heartTongueInstance.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name.StartsWith("SolidCollider_"))
+                {
+                    colliderList.Add(child.gameObject);
+                }
+            }
+
+            if (colliderList.Count == 0)
+            {
+                Debug.LogWarning("[HeartOfTheMaze] No SolidCollider_* objects found in tongue prefab! " +
+                    "Run FaeMaze > Setup Tongue Prefab Colliders in Unity to bake them.");
+                return;
+            }
+
+            boneColliderObjects = colliderList.ToArray();
+
+            // Disable colliders initially (tongue is hidden)
+            DisableBoneColliders();
+
+            Debug.Log($"[HeartOfTheMaze] Found {boneColliderObjects.Length} pre-baked bone colliders from prefab");
+        }
+
+        /// <summary>
+        /// Enables bone colliders for physics blocking.
+        /// Colliders are parented to bones and inherit their transforms automatically.
+        /// </summary>
+        private void EnableBoneColliders()
+        {
+            if (boneColliderObjects == null) return;
+
+            foreach (var colliderObj in boneColliderObjects)
+            {
+                if (colliderObj != null)
+                {
+                    var collider = colliderObj.GetComponent<SphereCollider>();
+                    if (collider != null) collider.enabled = true;
+                }
+            }
+
+            // Set static flag so visitors know to check for tongue collision
+            IsTongueActiveWithColliders = true;
+        }
+
+        /// <summary>
+        /// Disables bone colliders when tongue is not active.
+        /// Called when tongue is deactivated or hidden.
+        /// </summary>
+        private void DisableBoneColliders()
+        {
+            if (boneColliderObjects == null) return;
+
+            foreach (var colliderObj in boneColliderObjects)
+            {
+                if (colliderObj != null)
+                {
+                    var collider = colliderObj.GetComponent<SphereCollider>();
+                    if (collider != null) collider.enabled = false;
+                }
+            }
+
+            // Clear static flag so visitors skip expensive collision checks
+            IsTongueActiveWithColliders = false;
+        }
+
         #endregion
 
         #region Visual Updates
@@ -1736,50 +1725,6 @@ namespace FaeMaze.Maze
         }
 
         #endregion
-    }
 
-    /// <summary>
-    /// Helper component attached to tongue reach/grab colliders to forward trigger events
-    /// back to the HeartOfTheMaze.
-    /// </summary>
-    public class TongueColliderHandler : MonoBehaviour
-    {
-        private HeartOfTheMaze heart;
-        private bool isReachCollider;
-
-        public void Initialize(HeartOfTheMaze heart, bool isReachCollider)
-        {
-            this.heart = heart;
-            this.isReachCollider = isReachCollider;
-        }
-
-        private void OnTriggerEnter(Collider other)
-        {
-            HandleTrigger(other);
-        }
-
-        // Use OnTriggerStay as well since kinematic rigidbodies moved via transform
-        // may not reliably fire OnTriggerEnter
-        private void OnTriggerStay(Collider other)
-        {
-            HandleTrigger(other);
-        }
-
-        private void HandleTrigger(Collider other)
-        {
-            if (heart == null) return;
-
-            var visitor = other.GetComponentInParent<VisitorControllerBase>();
-            if (visitor == null) return;
-
-            if (isReachCollider)
-            {
-                heart.OnReachColliderTrigger(visitor);
-            }
-            else
-            {
-                heart.OnGrabColliderTrigger(visitor);
-            }
-        }
     }
 }

@@ -453,8 +453,6 @@ namespace FaeMaze.Systems
 
             currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
             currentRedCap.name = $"RedCap_Wave{currentWaveNumber}";
-
-            Debug.Log($"[WaveSpawner] RedCap spawned - essence reached {GameController.Instance?.CurrentEssence ?? 0} (threshold: {startingEssence * 2})");
         }
 
         private void HandleGameOver()
@@ -472,7 +470,6 @@ namespace FaeMaze.Systems
                 currentRedCap = null;
             }
 
-            Debug.Log("[WaveSpawner] Game Over - Essence depleted");
             OnGameOver?.Invoke();
         }
 

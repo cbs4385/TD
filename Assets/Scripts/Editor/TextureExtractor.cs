@@ -196,12 +196,12 @@ namespace FaeMaze.Editor
                 // List all texture properties for debugging
                 Debug.LogWarning("Could not find texture in common properties. Material properties:");
                 var shader = material.shader;
-                int propCount = ShaderUtil.GetPropertyCount(shader);
+                int propCount = shader.GetPropertyCount();
                 for (int i = 0; i < propCount; i++)
                 {
-                    if (ShaderUtil.GetPropertyType(shader, i) == ShaderUtil.ShaderPropertyType.TexEnv)
+                    if (shader.GetPropertyType(i) == UnityEngine.Rendering.ShaderPropertyType.Texture)
                     {
-                        string propName = ShaderUtil.GetPropertyName(shader, i);
+                        string propName = shader.GetPropertyName(i);
                         var tex = material.GetTexture(propName);
                         Debug.Log($"  Texture property: {propName} = {(tex != null ? tex.name : "null")}");
                         if (tex != null && sourceTexture == null)

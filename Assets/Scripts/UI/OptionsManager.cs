@@ -670,7 +670,6 @@ namespace FaeMaze.UI
                 {
                     screenshotPathInput.text = selectedPath;
                 }
-                Debug.Log($"Screenshot directory set to: {selectedPath}");
             }
 #else
             // At runtime, use a simple file browser or show current path
@@ -680,12 +679,10 @@ namespace FaeMaze.UI
             if (System.IO.Directory.Exists(currentPath))
             {
                 Application.OpenURL("file://" + currentPath);
-                Debug.Log($"Opened folder: {currentPath} - Copy desired path and paste into the text field");
             }
             else
             {
                 Application.OpenURL("file://" + Application.persistentDataPath);
-                Debug.Log($"Opened default folder - Copy desired path and paste into the text field");
             }
 #endif
         }

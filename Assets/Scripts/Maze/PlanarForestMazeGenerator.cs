@@ -23,8 +23,8 @@ namespace ForestMaze
         private const float EXCLUSION_ZONE = NODE_RADIUS + 2.0f; // 5.0 - minimum distance for frontier endpoints from nodes
 
         // Tunable parameters
-        private const float ANGLE_MIN_SEPARATION = 75.0f; // degrees - minimum separation between edges (normal growth)
-        private const float ANGLE_MAX_SEPARATION = 105.0f; // degrees - maximum separation between edges (for random interval)
+        private const float ANGLE_MIN_SEPARATION = 45.0f; // degrees - minimum separation between edges (normal growth)
+        private const float ANGLE_MAX_SEPARATION = 180.0f; // degrees - maximum separation between edges (for random interval)
         private const float CROSS_CONNECTION_MIN_SEPARATION = 35.0f; // degrees - minimum separation for cross-connections (more permissive)
         private const float ANGLE_EXCLUSION_TOWARD_NODES = 15.0f; // degrees - exclude orientations within this angle toward existing nodes
         private const float ROTATE_STEP = 6.0f; // degrees
@@ -684,7 +684,6 @@ namespace ForestMaze
 
             // Cross-connection: only on even steps with >2 existing nodes
             // This creates occasional loops without over-connecting the graph
-            bool hasExistingConnection = false;
             int otherNodesCount = state.Nodes.Count - 1; // Exclude the new node we just added
             bool isEvenStep = (state.TurnCount % 2 == 0);
 
@@ -694,7 +693,6 @@ namespace ForestMaze
                 // Pick from 3 closest, prefer the one with fewest connections
                 if (TryConnectToExistingWithCriteria(state, newNode, edge.NodeA))
                 {
-                    hasExistingConnection = true;
                     state.HasCrossConnection = true;
                 }
             }
@@ -996,8 +994,12 @@ namespace ForestMaze
                 forbiddenAngles.Add((angle, exclusionHalfWidth));
             }
 
-            // Try random angles, excluding forbidden zones
-            float theta0 = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
+            // Start with angle toward heart (node 0 at origin), then rotate to find valid angle
+            Vector2 toHeart = -node.Position; // Heart is at origin (0,0)
+            float theta0 = Mathf.Atan2(toHeart.y, toHeart.x);
+            // Add small random offset to prevent all edges pointing exactly at heart
+            theta0 += (float)(state.Random.NextDouble() - 0.5) * Mathf.PI * 0.5f; // ±45° offset
+            theta0 = ((theta0 % (2 * Mathf.PI)) + 2 * Mathf.PI) % (2 * Mathf.PI);
             float length0 = (float)(state.Random.NextDouble() * 15.0 + 12.0);
 
             int maxRotations = (int)(180 / ROTATE_STEP);
@@ -1146,7 +1148,12 @@ namespace ForestMaze
             if (!node.HasCapacity())
                 return false;
 
-            float theta0 = (float)(state.Random.NextDouble() * 2.0 * Math.PI);
+            // Start with angle toward heart (node 0 at origin), then rotate to find valid angle
+            Vector2 toHeart = -node.Position; // Heart is at origin (0,0)
+            float theta0 = Mathf.Atan2(toHeart.y, toHeart.x);
+            // Add small random offset to prevent all edges pointing exactly at heart
+            theta0 += (float)(state.Random.NextDouble() - 0.5) * Mathf.PI * 0.5f; // ±45° offset
+            theta0 = ((theta0 % (2 * Mathf.PI)) + 2 * Mathf.PI) % (2 * Mathf.PI);
             // Longer initial length to accommodate curved paths
             float length0 = (float)(state.Random.NextDouble() * 15.0 + 12.0);
 
@@ -1284,11 +1291,6 @@ namespace ForestMaze
 
             if (candidates.Count == 0)
             {
-                int totalNodes = state.Nodes.Count;
-                int excludedSelf = 1;
-                int excludedProhibited = prohibitedNodeId.HasValue ? 1 : 0;
-                int excludedConnected = connectedNodeIds.Count;
-                // Debug.Log($"[PlanarForest] TryConnect FAILED: 0 candidates. Total nodes={totalNodes}, excluded: self=1, prohibited={excludedProhibited}, alreadyConnected={excludedConnected}");
                 return false;
             }
 
@@ -3750,9 +3752,8 @@ namespace ForestMaze
                 (gridHeight - graphHeight * scale) / 2 - minY * scale
             );
 
-            // Store scale and offset for later dynamic growth
-            state.Scale = scale;
-            state.Offset = offset;
+            // Note: Scale and Offset are deprecated (graph positions are now world positions)
+            // These values are calculated but no longer stored in state
 
             // Initialize grid with forest
             char[,] grid = new char[gridHeight, gridWidth];
@@ -3822,10 +3823,7 @@ namespace ForestMaze
 
             // Mark unconnected edge endpoints with unique spawn IDs (A-Z excluding H/N, then a-z, then digits)
             int entranceExitCount = 0;
-            int partialEndpointCount = state.Edges.Count(e => e.Partial && e.PolylinePoints.Count > 0);
             var spawnIdQueue = new Queue<char>(GenerateSpawnIds());
-            int availableSpawnIdCount = spawnIdQueue.Count;
-            bool spawnIdsExhausted = false;
 
             foreach (var edge in state.Edges.Where(e => e.Partial && e.PolylinePoints.Count > 0))
             {
@@ -3857,7 +3855,6 @@ namespace ForestMaze
                 {
                     if (spawnIdQueue.Count == 0)
                     {
-                        spawnIdsExhausted = true;
                         break;
                     }
 
@@ -3907,7 +3904,6 @@ namespace ForestMaze
                 {
                     if (spawnIdQueue.Count == 0)
                     {
-                        spawnIdsExhausted = true;
                         break;
                     }
 
@@ -3977,8 +3973,9 @@ namespace ForestMaze
         /// <param name="gridHeight">Grid height</param>
         public static void RasterizeNodesToGrid(ForestMapState state, char[,] grid, List<int> nodeIds, int gridWidth, int gridHeight)
         {
-            float scale = state.Scale;
-            Vector2 offset = state.Offset;
+            // Graph positions are world positions (scale=1, offset=0)
+            const float scale = 1.0f;
+            Vector2 offset = Vector2.zero;
 
             // Calculate path width - use narrow 1-cell wide paths
             int pathWidth = 1;  // Always 1 cell wide for clean pathfinding
@@ -4354,8 +4351,9 @@ namespace ForestMaze
         /// </summary>
         private static void EnsureEdgeConnectivity(ForestMapState state, char[,] grid, int gridWidth, int gridHeight)
         {
-            float scale = state.Scale;
-            Vector2 offset = state.Offset;
+            // Graph positions are world positions (scale=1, offset=0)
+            const float scale = 1.0f;
+            Vector2 offset = Vector2.zero;
 
             foreach (var edge in state.Edges)
             {

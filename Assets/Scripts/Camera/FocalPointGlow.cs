@@ -35,25 +35,11 @@ namespace FaeMaze.Cameras
         [Tooltip("Minimum radius of the surface (inner edge, smaller = deeper cone)")]
         private float minRadius = 0.01f;
 
-        [SerializeField]
-        [Tooltip("Minimum Z (closest to ground, at outer edge)")]
-        private float minZ = -0.01f;
 
         [SerializeField]
         [Tooltip("Maximum Z clamp (furthest from ground, toward camera)")]
         private float maxZ = -10.0f;
 
-        [SerializeField]
-        [Tooltip("Number of radial segments")]
-        private int radialSegments = 48;
-
-        [SerializeField]
-        [Tooltip("Number of height segments")]
-        private int heightSegments = 24;
-
-        [SerializeField]
-        [Tooltip("Opacity of the surface at center (0-1)")]
-        private float opacity = 0.25f;
 
         [Header("Energy Bolt Settings")]
         [SerializeField]

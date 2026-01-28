@@ -70,9 +70,15 @@ namespace FaeMaze.Systems
         /// </summary>
         public void TriggerWallCollisionChecks()
         {
-            // Sync transforms and run a physics step so newly created colliders are detected
+            // Sync transforms so newly created colliders are detected
             Physics.SyncTransforms();
-            Physics.Simulate(Time.fixedDeltaTime);
+
+            // Only simulate if physics is set to Script mode, otherwise just sync transforms
+            // Unity 6+ requires simulation mode to be explicitly set before calling Simulate()
+            if (Physics.simulationMode == SimulationMode.Script)
+            {
+                Physics.Simulate(Time.fixedDeltaTime);
+            }
 
             // Iterate backwards since walls may be destroyed during iteration
             for (int i = childWalls.Count - 1; i >= 0; i--)

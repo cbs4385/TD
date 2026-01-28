@@ -294,7 +294,6 @@ namespace FaeMaze.Systems
         public void ClearAuditLog()
         {
             essenceAuditLog.Clear();
-            Debug.Log("[EssenceAudit] Audit log cleared");
         }
 
         #endregion
@@ -332,9 +331,6 @@ namespace FaeMaze.Systems
             {
                 essenceAuditLog.RemoveAt(0);
             }
-
-            // Log to console
-            Debug.Log($"[EssenceAudit] {transaction}");
         }
 
         #endregion
@@ -346,12 +342,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public void PrintAuditLog()
         {
-            Debug.Log($"=== Essence Audit Log ({essenceAuditLog.Count} entries) ===");
-            foreach (var entry in essenceAuditLog)
-            {
-                Debug.Log(entry.ToString());
-            }
-            Debug.Log("=== End Audit Log ===");
+            // Logging removed - use GetAuditLog() to access entries programmatically
         }
 
         /// <summary>
@@ -376,15 +367,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public void PrintAuditSummary()
         {
-            var summary = GetAuditSummary();
-            Debug.Log("=== Essence Audit Summary ===");
-            foreach (var kvp in summary)
-            {
-                string sign = kvp.Value >= 0 ? "+" : "";
-                Debug.Log($"  {kvp.Key}: {sign}{kvp.Value}");
-            }
-            Debug.Log($"  Current Total: {currentEssence}");
-            Debug.Log("=== End Summary ===");
+            // Logging removed - use GetAuditSummary() to access summary programmatically
         }
 
         #endregion

@@ -254,7 +254,6 @@ namespace FaeMaze.Systems
             var shader = Shader.Find("Custom/VoidFogMasked");
             if (shader == null)
             {
-                Debug.LogWarning("VoidFogMasked shader not found, falling back to default");
                 shader = Shader.Find("Sprites/Default");
             }
 

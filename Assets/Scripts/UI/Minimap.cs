@@ -133,8 +133,6 @@ namespace FaeMaze.UI
         private RectTransform graphContainer;
         private List<Image> graphNodeDots = new List<Image>();
         private List<List<RectTransform>> graphEdgeSegments = new List<List<RectTransform>>(); // Each edge has multiple segments
-        private int lastGraphNodeCount = 0;
-        private int lastGraphEdgeCount = 0;
 
         private void Awake()
         {

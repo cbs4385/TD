@@ -110,6 +110,11 @@ namespace FaeMaze.Visitors
         private Animator animator;
         private float moveSpeed;
         private bool initialized;
+        private Rigidbody rb3D;
+
+        // Physics-based movement: calculate in Update, apply in FixedUpdate
+        private Vector3 desiredPosition;
+        private bool hasDesiredPosition;
 
         // Direction tracking for animation
         private const int IdleDirection = 0;
@@ -135,6 +140,9 @@ namespace FaeMaze.Visitors
         private const float PATH_RECALCULATION_INTERVAL = 0.25f;
         private Vector3 lastTargetPosition;
 
+        // Pathfinding cost penalties (same as visitors)
+        private const float HEART_NODE_PATHFINDING_PENALTY = 20f;
+
         #endregion
 
         #region Properties
@@ -156,6 +164,16 @@ namespace FaeMaze.Visitors
         {
             // Calculate actual move speed
             moveSpeed = baseMoveSpeed * speedMultiplier;
+        }
+
+        private void OnEnable()
+        {
+            RedCapRegistry.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            RedCapRegistry.Unregister(this);
         }
 
         private void Start()
@@ -246,9 +264,72 @@ namespace FaeMaze.Visitors
             // Capture starting essence for flee threshold
             startingEssence = GameSettings.StartingEssence;
 
+            // Setup physics
+            SetupPhysics();
+
             // Start hunting
             state = RedCapState.Hunting;
             initialized = true;
+        }
+
+        /// <summary>
+        /// Sets up the Rigidbody for physics-based movement.
+        /// </summary>
+        private void SetupPhysics()
+        {
+            // Set layer to "Visitor" (layer 6) so RedCap doesn't push visitors via physics
+            // RedCap catching visitors is handled via distance checks, not physics collisions
+            gameObject.layer = 6;  // Visitor layer
+
+            rb3D = GetComponent<Rigidbody>();
+            if (rb3D == null)
+            {
+                rb3D = gameObject.AddComponent<Rigidbody>();
+            }
+
+            // Non-kinematic for physics collision response with solid colliders
+            rb3D.isKinematic = false;
+            rb3D.useGravity = false;
+            rb3D.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ;
+            // PERFORMANCE: Use Discrete instead of ContinuousDynamic - continuous is extremely expensive
+            // when many colliders are created at once (tongue bone colliders). Discrete is sufficient
+            // since entities move slowly and we use MovePosition which handles collision correctly.
+            rb3D.collisionDetectionMode = CollisionDetectionMode.Discrete;
+            rb3D.interpolation = RigidbodyInterpolation.Interpolate;
+            rb3D.sleepThreshold = 0f;  // Never sleep - we need MovePosition to always work
+
+            // Add capsule collider if not present
+            CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
+            if (capsuleCollider == null)
+            {
+                capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
+                capsuleCollider.radius = 0.15f;
+                capsuleCollider.height = 1.0f;
+                capsuleCollider.direction = 2;   // Z-axis
+                capsuleCollider.center = new Vector3(0f, 0f, -0.5f);
+                capsuleCollider.isTrigger = false;
+            }
+        }
+
+        /// <summary>
+        /// FixedUpdate handles physics-based movement.
+        /// Movement is calculated in Update() and stored in desiredPosition,
+        /// then applied here using MovePosition() which works correctly with non-kinematic Rigidbodies.
+        /// </summary>
+        private void FixedUpdate()
+        {
+            if (rb3D != null && hasDesiredPosition)
+            {
+                // Wake the Rigidbody in case it's sleeping
+                if (rb3D.IsSleeping())
+                {
+                    rb3D.WakeUp();
+                }
+
+                rb3D.MovePosition(desiredPosition);
+                transform.position = desiredPosition;
+                hasDesiredPosition = false;
+            }
         }
 
         private bool AcquireDependencies()
@@ -365,204 +446,22 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Builds a world-space path from start to end using A* through walkable tiles.
-        /// Uses actual tile positions from WorldSpaceMazeData to guarantee paths stay on walkable terrain.
-        /// This is the same pathfinding approach used by visitors.
+        /// Uses the shared MazePathfinding utility for consistent pathfinding behavior.
         /// </summary>
         private List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
-                // No pathfinding data available - return empty list (no fallback to direct path)
                 return new List<Vector3>();
             }
 
-            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
-            var result = new List<Vector3>();
-
-            Vector2 startPos2D = new Vector2(start.x, start.y);
-            Vector2 endPos2D = new Vector2(end.x, end.y);
-
-            // Find nearest walkable tile to start position
-            var startTile = FindNearestWalkableTile(mazeData, startPos2D);
-            if (startTile == null)
-            {
-                return new List<Vector3>();
-            }
-
-            // Find nearest walkable tile to end position
-            var endTile = FindNearestWalkableTile(mazeData, endPos2D);
-            if (endTile == null)
-            {
-                return new List<Vector3>();
-            }
-
-            // A* through walkable tiles
-            var tilePath = FindTilePath(mazeData, startTile, endTile);
-
-            if (tilePath == null || tilePath.Count == 0)
-            {
-                // No valid path found - return empty list
-                return new List<Vector3>();
-            }
-
-            // Convert tile path to world positions
-            // Add current position first if close to start tile
-            float distToStartTile = Vector2.Distance(startPos2D, startTile.Position);
-            if (distToStartTile < 1.5f)
-            {
-                result.Add(start);
-            }
-
-            // Add all tile positions
-            foreach (var tile in tilePath)
-            {
-                result.Add(new Vector3(tile.Position.x, tile.Position.y, start.z));
-            }
-
-            // Add final destination if close to end tile
-            float distFromLastTile = Vector2.Distance(endPos2D, endTile.Position);
-            if (distFromLastTile > 0.1f && distFromLastTile < 1.5f)
-            {
-                result.Add(end);
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Finds the nearest walkable tile to a position.
-        /// </summary>
-        private WorldSpaceTile FindNearestWalkableTile(WorldSpaceMazeData mazeData, Vector2 position)
-        {
-            float searchRadius = 5f;
-            float minDist = float.MaxValue;
-            WorldSpaceTile nearest = null;
-
-            // Expand search radius if needed
-            for (int attempt = 0; attempt < 3 && nearest == null; attempt++)
-            {
-                var nearbyTiles = mazeData.GetTilesNear(position, searchRadius);
-                foreach (var tile in nearbyTiles)
-                {
-                    if (!tile.Walkable) continue;
-
-                    float dist = Vector2.Distance(position, tile.Position);
-                    if (dist < minDist)
-                    {
-                        minDist = dist;
-                        nearest = tile;
-                    }
-                }
-                searchRadius *= 2f;
-            }
-
-            return nearest;
-        }
-
-        /// <summary>
-        /// Finds a path through walkable tiles using A* algorithm.
-        /// Uses Euclidean distance as heuristic to prefer geometrically shorter paths.
-        /// </summary>
-        private List<WorldSpaceTile> FindTilePath(WorldSpaceMazeData mazeData,
-            WorldSpaceTile startTile, WorldSpaceTile endTile)
-        {
-            if (startTile == endTile)
-            {
-                return new List<WorldSpaceTile> { startTile };
-            }
-
-            // A* algorithm using distance-based costs
-            var gScore = new Dictionary<WorldSpaceTile, float>();
-            var fScore = new Dictionary<WorldSpaceTile, float>();
-            var parent = new Dictionary<WorldSpaceTile, WorldSpaceTile>();
-            var closedSet = new HashSet<WorldSpaceTile>();
-            var openSet = new List<WorldSpaceTile>();
-
-            gScore[startTile] = 0f;
-            fScore[startTile] = Vector2.Distance(startTile.Position, endTile.Position);
-            openSet.Add(startTile);
-            parent[startTile] = null;
-
-            // Tiles are placed at ~0.5 unit intervals along curves and 1.0 in nodes
-            float neighborRadius = mazeData.TileSize * 1.42f;
-
-            int iterations = 0;
-            int maxIterations = 50000;
-
-            while (openSet.Count > 0 && iterations < maxIterations)
-            {
-                iterations++;
-
-                // Find node with lowest fScore in open set
-                WorldSpaceTile current = null;
-                float lowestF = float.MaxValue;
-                foreach (var tile in openSet)
-                {
-                    float f = fScore.TryGetValue(tile, out float fs) ? fs : float.MaxValue;
-                    if (f < lowestF)
-                    {
-                        lowestF = f;
-                        current = tile;
-                    }
-                }
-
-                if (current == null) break;
-
-                // Check if reached destination
-                float distToEnd = Vector2.Distance(current.Position, endTile.Position);
-                if (distToEnd < mazeData.TileSize * 0.5f || current == endTile)
-                {
-                    // Reconstruct path
-                    var path = new List<WorldSpaceTile>();
-                    var node = current;
-                    while (node != null)
-                    {
-                        path.Add(node);
-                        parent.TryGetValue(node, out node);
-                    }
-                    path.Reverse();
-                    return path;
-                }
-
-                openSet.Remove(current);
-                closedSet.Add(current);
-
-                // Get neighboring walkable tiles
-                var neighbors = mazeData.GetTilesNear(current.Position, neighborRadius);
-                float currentG = gScore.TryGetValue(current, out float cg) ? cg : float.MaxValue;
-
-                foreach (var neighbor in neighbors)
-                {
-                    if (!neighbor.Walkable) continue;
-                    if (closedSet.Contains(neighbor)) continue;
-
-                    // Must be within neighbor radius
-                    float stepDist = Vector2.Distance(current.Position, neighbor.Position);
-                    if (stepDist > neighborRadius) continue;
-
-                    // Topology check: verify tiles are connected through graph structure
-                    if (!mazeData.AreTilesConnected(current, neighbor))
-                        continue;
-
-                    // Calculate tentative gScore
-                    float tentativeG = currentG + stepDist;
-                    float neighborG = gScore.TryGetValue(neighbor, out float ng) ? ng : float.MaxValue;
-
-                    if (tentativeG < neighborG)
-                    {
-                        parent[neighbor] = current;
-                        gScore[neighbor] = tentativeG;
-                        fScore[neighbor] = tentativeG + Vector2.Distance(neighbor.Position, endTile.Position);
-
-                        if (!openSet.Contains(neighbor))
-                        {
-                            openSet.Add(neighbor);
-                        }
-                    }
-                }
-            }
-
-            return null; // No path found
+            return MazePathfinding.BuildWorldPath(
+                mazeGridBehaviour.WorldSpaceMazeData,
+                start,
+                end,
+                heartNodePenalty: HEART_NODE_PATHFINDING_PENALTY,
+                penalizeHeartNode: true
+            );
         }
 
         /// <summary>
@@ -589,7 +488,11 @@ namespace FaeMaze.Visitors
             // Move toward waypoint
             Vector3 direction = (waypointWorldPos - transform.position).normalized;
             Vector3 movement = direction * moveSpeed * Time.deltaTime;
-            transform.position += movement;
+            Vector3 newPosition = transform.position + movement;
+
+            // Store position for physics to apply in FixedUpdate
+            desiredPosition = newPosition;
+            hasDesiredPosition = true;
 
             // Update animation direction based on movement
             UpdateAnimationDirection(direction);
@@ -819,8 +722,6 @@ namespace FaeMaze.Visitors
 
             // Find and path to nearest exit
             BuildPathToNearestExit();
-
-            Debug.Log("[RedCap] Fleeing - essence dropped below starting value");
         }
 
         /// <summary>
@@ -875,7 +776,6 @@ namespace FaeMaze.Visitors
                 if (dist < waypointReachedDistance * 2f)
                 {
                     // Reached exit - despawn
-                    Debug.Log("[RedCap] Reached exit - despawning");
                     Destroy(gameObject);
                     return;
                 }

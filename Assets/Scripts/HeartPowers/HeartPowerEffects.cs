@@ -970,7 +970,6 @@ namespace FaeMaze.HeartPowers
             var shader = Shader.Find("Custom/PowerFog");
             if (shader == null)
             {
-                Debug.LogWarning("PowerFog shader not found, falling back to default");
                 shader = Shader.Find("Sprites/Default");
             }
 
@@ -1946,23 +1945,25 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public class HeartwardGraspEffect : ActivePowerEffect
     {
-        // Grabbing HGZ states
+        // Grabbing HGZ states - Tongue-based grab using similar mechanics to HeartOfTheMaze
         private enum GrabPhase
         {
-            Idle,           // Animation paused, no translation
-            Reaching,       // Model X directed at visitor, animation frames 0-20
-            Grabbing,       // Animation frames 20-46, visitor stops at frame 46
-            Pulling,        // Animation frames 46-62, visitor translates with grabbing mesh into wall
-            Transporting    // 1 second duration, visitor relocated to pushing HGZ
+            Idle,           // Waiting for visitors to enter the zone
+            Emerging,       // Tongue translates from wall toward path
+            Extending,      // Tongue bones bend to extend horizontally toward visitor
+            Curling,        // Tongue curls into a 360° circle around visitor
+            Pulling,        // Curl tightens while retracting toward wall
+            Transporting    // 1 second duration, visitor becomes invisible, relocated to pushing zone
         }
 
-        // Pushing HGZ states
+        // Pushing HGZ states - Tongue emerges and uncurls to release visitor
         private enum PushPhase
         {
-            Idle,           // Animation paused, no translation
-            Pushing,        // Model translates 1 unit toward heart, hand stays closed (frame 24)
-            Releasing,      // Model paused, animation plays reverse 24→0, visitor becomes visible and dazed
-            Withdrawing     // Model translates back to wall, holds frame 1
+            Idle,           // Tongue hidden in wall
+            Paused,         // Visitor just teleported, waiting before tongue emerges
+            Emerging,       // Tongue translates from wall with visitor curled
+            Uncurling,      // Tongue uncurls to release visitor (reverse of grab)
+            Withdrawing     // Tongue retracts back into wall
         }
 
         // Constants
@@ -1971,44 +1972,72 @@ namespace FaeMaze.HeartPowers
         private const float TRANSPORT_DURATION = 1.0f;    // Duration of transport phase
         private const float HGZ_WALL_OFFSET = 0.5f;       // How far to offset HGZ into the wall (away from path)
         private const float MIN_EDGE_DISTANCE = 3.0f;     // Minimum distance from path/node edge (~4 wall tiles * 0.8 spacing)
-        private const float ANIMATION_FPS = 60f;          // Animation framerate (24 frames / 0.417 seconds ≈ 60fps)
-        private const float GRAB_ANIMATION_DURATION = 1.0f;  // Duration to play grab animation
-        private const float PULL_DURATION = 1.0f;         // Duration of pull phase
 
-        // Animation frame constants (animation is 24 frames total)
-        private const int GRAB_ANIMATION_FRAMES = 24;     // Total frames in grasp animation
-        private const int PUSH_REACH_END_FRAME = 0;       // Pushing: reach ends (reverse from 24 to 0)
-        private const int PUSH_RELEASE_END_FRAME = 12;    // Pushing: release ends, visitor dazed
-        private const int PUSH_WITHDRAW_END_FRAME = 24;   // Pushing: withdraw ends (animation end)
+        // Tongue movement constants (matching HeartOfTheMaze)
+        private const float TONGUE_EMERGE_SPEED = 6.0f;   // Units per second for vertical movement
+        private const float TONGUE_EXTEND_SPEED = 4.0f;   // Rate of bone rotation for extending
+        private const float TONGUE_CURL_SPEED = 3.0f;     // Rate of curl for grabbing
+        private const float TONGUE_RETRACT_SPEED = 4.0f;  // Speed when retracting
+        // NOTE: No runtime scaling - prefab already has correct scale (1, 0.3, 0.3)
+        private const float TONGUE_START_Z = 9.0f;        // Starting Z position (below ground)
+        private const float TONGUE_LIP_Z = -0.25f;        // Z where tip emerges above lip
+        private const float TONGUE_WALL_DEPTH = 3.0f;     // How far pushing tongue hides in wall (horizontal)
+        private const int BEND_BONE_COUNT = 3;            // Bones for the 90° bend at lip
+        private const int GRAB_BONE_OFFSET = 50;          // Grab point offset from tip (~9% from tip)
+        private const float CURL_DIAMETER = 0.5f;         // Target curl diameter around visitor
+        private const int BONE_COLLIDER_SPACING = 10;        // Add collider every 10th bone (54 colliders)
+        private const float BONE_COLLIDER_RADIUS = 0.00225f; // Average world radius (tapered)
+
+        // Tongue bone tracking for grabbing HGZ
+        private Transform[] grabbingTongueBones;              // Array of bone transforms from base to tip
+        private Vector3[] grabbingBoneRestPositions;          // Original local positions
+        private Quaternion[] grabbingBoneRestRotations;       // Original local rotations
+        private SkinnedMeshRenderer grabbingTongueRenderer;   // Skinned mesh for the tongue
+        private float grabbingTongueLength = 0f;              // Total length of armature
+        private float grabbingTongueExtension = 0f;           // How far tongue has extended (0-1)
+        private float grabbingCurlProgress = 0f;              // How much the tongue has curled (0-1 = 0-360°)
+        private int grabbingCurlDirection = 1;                // 1 = CCW (curl left), -1 = CW (curl right)
+        private bool grabbingCurlDirectionLocked = false;     // True once curl direction determined
+        private bool grabbingContactMade = false;             // Has tongue touched visitor?
+        private int grabbingContactBoneIndex = -1;            // Which bone made first contact
+        private float grabbingPullingProgress = 0f;           // Progress of curl tightening (0-1)
+        private GameObject[] grabbingBoneColliders;           // Collider objects attached to bones
 
         // Grabbing HGZ
         private GameObject grabbingZoneObject;
         private SphereCollider grabbingCollider;
-        private GameObject grabbingVisual;
-        private Animator grabbingAnimator;
-        private SphereCollider grabbingTouchCollider;  // "touch" collider on grasp model
-        private Vector3 grabbingWallPos;
+        private GameObject grabbingTongueInstance;         // Instantiated tongue prefab
+        private Vector3 grabbingWallPos;                   // Wall tile position (spawn point, acts like heart center)
         private Vector3 grabbingWallNormal;
-        private Vector3 grabbingStartPos;  // Initial position for reach translation
+        private float grabbingTongueZPosition = TONGUE_START_Z;  // Z position of tongue root (high = below ground, low = emerged)
+        private float grabbingLockedAngle = 0f;            // Angle toward visitor (locked when reaching starts)
+        private int grabbingFrozenLipBoneIndex = -1;       // Frozen lip bone index during pulling/hinging
         private GrabPhase grabPhase = GrabPhase.Idle;
         private float grabPhaseStartTime = 0f;
-        private int grabCurrentFrame = 0;
-        private const float REACH_SPEED = 8f;  // Units per second for reach translation
 
-        // Pushing HGZ
+        // Pushing HGZ - also uses tongue for reverse animation
         private GameObject pushingZoneObject;
         private SphereCollider pushingCollider;
-        private GameObject pushingVisual;
-        private Animator pushingAnimator;
-        private SphereCollider pushingTouchCollider;  // "touch" collider on pushing grasp model
+        private GameObject pushingTongueInstance;          // Instantiated tongue prefab
+        private Transform[] pushingTongueBones;            // Bone transforms for pushing tongue
+        private Vector3[] pushingBoneRestPositions;        // Rest positions for pushing tongue
+        private Quaternion[] pushingBoneRestRotations;     // Rest rotations for pushing tongue
+        private SkinnedMeshRenderer pushingTongueRenderer; // Skinned mesh for pushing tongue
+        private float pushingTongueLength = 0f;            // Total length of pushing tongue
+        private float pushingTongueZPosition = TONGUE_LIP_Z;    // Z position of tongue root (at lip level for horizontal push)
+        private float pushingExtensionDistance = 0f;           // How far tongue has extended horizontally toward heart
+        private int pushingFrozenLipBoneIndex = -1;            // Lip bone index frozen when pushing starts
+        private float pushingUncurlProgress = 0f;              // Progress of uncurling (0-1, reverse of curl)
+        private float pushingLockedAngle = 0f;             // Angle toward heart
+        private GameObject[] pushingBoneColliders;         // Collider objects for pushing tongue
         private Vector3 pushingWallPos;
         private Vector3 pushingWallNormal;
-        private Vector3 pushingStartPos;   // Initial position for push translation (at wall)
+        private Vector3 pushingHiddenPos;  // Hidden position deep in wall (tongue spawn position)
+        private Vector3 pushingStartPos;   // Wall edge position (where push begins from)
         private Vector3 pushingTargetPos;  // Target position after pushing (dynamically calculated)
         private Vector3 pushingDir;        // Direction of push (toward heart)
         private PushPhase pushPhase = PushPhase.Idle;
         private float pushPhaseStartTime = 0f;
-        private int pushCurrentFrame = 24;  // Starts at end for reverse play
         private const float MIN_PUSH_DISTANCE = 1.0f;     // Minimum distance to push toward heart
         private const float MAX_PUSH_DISTANCE = 10.0f;    // Maximum push distance (safety limit)
         private const float PUSH_SPEED = 2.0f;            // Units per second during push
@@ -2018,11 +2047,10 @@ namespace FaeMaze.HeartPowers
         // Visitor processing
         private Queue<VisitorControllerBase> pendingVisitors = new Queue<VisitorControllerBase>();
         private VisitorControllerBase currentVisitor;
-        private Vector3 visitorGrabOffset;  // Offset from grabbing HGZ when grabbed
-        private Vector3 visitorPushOffset;  // Transformed offset for pushing HGZ
+        private Vector3 visitorGrabOffset;  // Offset from grab collider when grabbed
         private Vector3 heartNodePosition;
         private bool visitorVisible = true;
-        private Vector3 grabStartPosition;  // Position where model was when it grabbed visitor
+        private Vector3 visitorGrabbedPosition;  // World position where visitor was grabbed
 
         // Particle effects
         private ParticleSystem grabbingParticles;
@@ -2157,24 +2185,21 @@ namespace FaeMaze.HeartPowers
                     }
                 }
 
-                // Calculate "into forest" direction using sampling approach for both
-                // Sampling works for both node borders and edge walls
-                Vector2 pushingIntoForest = GetIntoForestDirectionForEdge(pushingPos);
-                Vector2 grabbingIntoForest = GetIntoForestDirectionForEdge(grabbingPos);
+                // Test hemisphere of points to find the one furthest from graph elements
+                // One side of the path is walkable, the other is forest. Find forest side.
+                Vector2 rayDir2D = new Vector2(rayDirection.x, rayDirection.y).normalized;
 
-                // Offset into forest
-                Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
-                pushingWallPos = new Vector3(pushingPos.x + pushingOffset.x, pushingPos.y + pushingOffset.y, -0.4f);
-
-                Vector2 grabbingOffset = grabbingIntoForest * HGZ_WALL_OFFSET;
+                // Find best grabbing position using hemisphere search
+                Vector2 grabbingBestDir = FindForestDirection(grabbingPos, rayDir2D, heartPos2D);
+                Vector2 grabbingOffset = grabbingBestDir * HGZ_WALL_OFFSET;
                 grabbingWallPos = new Vector3(grabbingPos.x + grabbingOffset.x, grabbingPos.y + grabbingOffset.y, -0.4f);
+                grabbingWallNormal = new Vector3(grabbingBestDir.x, grabbingBestDir.y, 0f);
 
-                // Store for later use (perpendicular is the into-forest direction)
-                Vector2 pushingWallPerp = pushingIntoForest;
-                Vector2 grabbingWallPerp = grabbingIntoForest;
-
-                pushingWallNormal = new Vector3(pushingWallPerp.x, pushingWallPerp.y, 0f);
-                grabbingWallNormal = new Vector3(grabbingWallPerp.x, grabbingWallPerp.y, 0f);
+                // Find best pushing position using hemisphere search
+                Vector2 pushingBestDir = FindForestDirection(pushingPos, rayDir2D, heartPos2D);
+                Vector2 pushingOffset = pushingBestDir * HGZ_WALL_OFFSET;
+                pushingWallPos = new Vector3(pushingPos.x + pushingOffset.x, pushingPos.y + pushingOffset.y, -0.4f);
+                pushingWallNormal = new Vector3(pushingBestDir.x, pushingBestDir.y, 0f);
             }
             else
             {
@@ -2186,8 +2211,9 @@ namespace FaeMaze.HeartPowers
                 if (closestNodeWall != null)
                 {
                     Vector2 pushingPos = new Vector2(closestNodeWall.position.x, closestNodeWall.position.y);
-                    // Use sampling approach for all wall types
-                    Vector2 pushingIntoForest = GetIntoForestDirectionForEdge(pushingPos);
+                    // Use sampling with hint = radially outward from heart
+                    Vector2 pushingHint = (pushingPos - heartPos2D).normalized;
+                    Vector2 pushingIntoForest = GetIntoForestDirectionForEdge(pushingPos, pushingHint);
                     Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
 
                     pushingWallPos = new Vector3(
@@ -2210,8 +2236,8 @@ namespace FaeMaze.HeartPowers
                 if (closestFocalWall != null)
                 {
                     Vector2 grabbingPos = new Vector2(closestFocalWall.position.x, closestFocalWall.position.y);
-                    // Use sampling approach for edge walls
-                    Vector2 grabbingIntoForest = GetIntoForestDirectionForEdge(grabbingPos);
+                    // Use sampling with hint = ray direction (from heart toward focal)
+                    Vector2 grabbingIntoForest = GetIntoForestDirectionForEdge(grabbingPos, rayDir2D);
                     Vector2 grabbingOffset = grabbingIntoForest * HGZ_WALL_OFFSET;
 
                     grabbingWallPos = new Vector3(
@@ -2313,45 +2339,67 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Calculates the "into forest" direction for grabbing HGZ (near focal/edge).
-        /// Wall tiles have transform.right pointing TOWARD the path (their normal).
-        /// The OPPOSITE of the average normal = "into forest" direction.
+        /// Calculates the "into forest" direction by averaging nearby wall normals.
+        /// Wall's transform.right points TOWARD the path (front face of wall).
+        /// So "into forest" = -transform.right (back of wall).
+        /// Filters to only include walls on the correct side using the hint direction.
         /// </summary>
-        private Vector2 GetIntoForestDirectionForEdge(Vector2 position)
+        /// <param name="position">Position to sample walls around</param>
+        /// <param name="hintDirection">Expected "into forest" direction (used to filter walls)</param>
+        private Vector2 GetIntoForestDirectionForEdge(Vector2 position, Vector2 hintDirection)
         {
             const float SAMPLE_RADIUS = 2.5f;  // Radius to sample nearby walls
+            const float MIN_DOT_PRODUCT = 0.0f;  // Only include walls whose "into forest" aligns with hint
+
+            Debug.Log($"[GetIntoForestDirectionForEdge] position: {position}, hintDirection: {hintDirection}");
 
             Vector3 pos3D = new Vector3(position.x, position.y, 0f);
             Collider[] nearbyColliders = Physics.OverlapSphere(pos3D, SAMPLE_RADIUS, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
 
+            Debug.Log($"[GetIntoForestDirectionForEdge] Found {nearbyColliders.Length} colliders within {SAMPLE_RADIUS} units");
+
             Vector2 sumNormals = Vector2.zero;
             int wallCount = 0;
+            int filteredOutCount = 0;
 
             foreach (var collider in nearbyColliders)
             {
                 // Only include wall tiles
                 if (!collider.gameObject.name.StartsWith("WorldTile_#")) continue;
 
-                // Wall's transform.right points TOWARD the path (the wall's normal/front face)
-                Vector2 wallNormal = new Vector2(collider.transform.right.x, collider.transform.right.y);
-                sumNormals += wallNormal;
+                // Wall's transform.right points TOWARD the path (wall's front face)
+                // "Into forest" = OPPOSITE direction = -transform.right
+                Vector2 intoForest = new Vector2(-collider.transform.right.x, -collider.transform.right.y);
+
+                // Only include walls whose "into forest" direction aligns with the hint
+                // This filters out walls on the opposite side of the path
+                float dot = Vector2.Dot(intoForest.normalized, hintDirection.normalized);
+
+                if (dot < MIN_DOT_PRODUCT)
+                {
+                    filteredOutCount++;
+                    continue;
+                }
+
+                Debug.Log($"[GetIntoForestDirectionForEdge] Wall at {collider.transform.position}, transform.right: {collider.transform.right}, intoForest: {intoForest}, dot: {dot}");
+
+                sumNormals += intoForest;
                 wallCount++;
             }
 
+            Debug.Log($"[GetIntoForestDirectionForEdge] wallCount: {wallCount}, filteredOutCount: {filteredOutCount}");
+
             if (wallCount == 0)
             {
-                // Fallback: use direction away from heart
-                Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
-                Vector2 awayFromHeart = (position - heartPos2D).normalized;
-                return awayFromHeart;
+                // Fallback: use the hint direction
+                Debug.Log($"[GetIntoForestDirectionForEdge] NO WALLS MATCHED! Using hint direction: {hintDirection.normalized}");
+                return hintDirection.normalized;
             }
 
-            // Wall's transform.right actually points AWAY from path (into forest)
-            // So the average IS the "into forest" direction
+            // Average of "into forest" directions from filtered walls
             Vector2 avgNormal = (sumNormals / wallCount).normalized;
-            Vector2 intoForest = avgNormal;  // Not negated - walls point into forest
-
-            return intoForest;
+            Debug.Log($"[GetIntoForestDirectionForEdge] Returning avgNormal: {avgNormal}");
+            return avgNormal;
         }
 
         /// <summary>
@@ -2363,6 +2411,93 @@ namespace FaeMaze.HeartPowers
             Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
             Vector2 awayFromHeart = (position - heartPos2D).normalized;
             return awayFromHeart;
+        }
+
+        /// <summary>
+        /// Finds the direction from an HGZ position into the forest (non-walkable area).
+        /// The "inside" of the forest is the direction where a point at fixed distance
+        /// has the greatest minimum distance from all nearby walkable path tiles.
+        /// </summary>
+        /// <param name="hgzPosition">The HGZ position on the path</param>
+        /// <param name="rayDir">Direction of the focal ray (heart to focal point)</param>
+        /// <param name="heartPos">Position of the heart node</param>
+        private Vector2 FindForestDirection(Vector2 hgzPosition, Vector2 rayDir, Vector2 heartPos)
+        {
+            const float ANGLE_STEP = 5f;           // Degrees between test directions
+            const float SEARCH_RADIUS = 5f;        // 2x GRASP_ZONE_RADIUS (2.5)
+            const float CANDIDATE_DISTANCE = 3f;   // Distance to place candidate points
+            const float TILE_SCAN_STEP = 0.5f;     // Step for finding walkable tiles
+
+            // Get the maze data for walkability checks
+            var mazeData = manager.MazeGrid?.WorldSpaceMazeData;
+
+            // Default perpendicular (fallback)
+            Vector2 perpCCW = new Vector2(-rayDir.y, rayDir.x).normalized;
+
+            if (mazeData == null)
+            {
+                return perpCCW;
+            }
+
+            // First, collect all walkable tile positions within search radius
+            List<Vector2> walkableTiles = new List<Vector2>();
+            for (float dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx += TILE_SCAN_STEP)
+            {
+                for (float dy = -SEARCH_RADIUS; dy <= SEARCH_RADIUS; dy += TILE_SCAN_STEP)
+                {
+                    Vector2 testPoint = hgzPosition + new Vector2(dx, dy);
+                    if (Vector2.Distance(testPoint, hgzPosition) <= SEARCH_RADIUS && mazeData.IsWalkable(testPoint))
+                    {
+                        walkableTiles.Add(testPoint);
+                    }
+                }
+            }
+
+            // If no walkable tiles found, use fallback
+            if (walkableTiles.Count == 0)
+            {
+                return perpCCW;
+            }
+
+            // Test all directions around the HGZ position
+            // For each direction, place a candidate point at CANDIDATE_DISTANCE
+            // Calculate the minimum distance from that point to any walkable tile
+            // The direction with the greatest minimum distance is the "inside" of the forest
+            Vector2 bestDir = perpCCW;
+            float bestMinDist = -1f;
+
+            for (float angle = 0f; angle < 360f; angle += ANGLE_STEP)
+            {
+                float rad = angle * Mathf.Deg2Rad;
+                Vector2 testDir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+                Vector2 candidatePoint = hgzPosition + testDir * CANDIDATE_DISTANCE;
+
+                // Skip if the candidate point itself is walkable (we want forest)
+                if (mazeData.IsWalkable(candidatePoint))
+                {
+                    continue;
+                }
+
+                // Find minimum distance from candidate point to any walkable tile
+                float minDistToWalkable = float.MaxValue;
+                foreach (var tile in walkableTiles)
+                {
+                    float dist = Vector2.Distance(candidatePoint, tile);
+                    if (dist < minDistToWalkable)
+                    {
+                        minDistToWalkable = dist;
+                    }
+                }
+
+                // Track the direction with the greatest minimum distance to walkable area
+                if (minDistToWalkable > bestMinDist)
+                {
+                    bestMinDist = minDistToWalkable;
+                    bestDir = testDir;
+                }
+            }
+
+            return bestDir.normalized;
         }
 
         /// <summary>
@@ -2439,8 +2574,11 @@ namespace FaeMaze.HeartPowers
         {
             if (affectedGrabbingWalls.Count == 0) return;
 
-            // Only shake when in idle/reaching phase (waiting for or grabbing visitor)
-            bool shouldShake = grabPhase == GrabPhase.Idle || grabPhase == GrabPhase.Reaching || grabPhase == GrabPhase.Grabbing;
+            // Only shake when in idle or early grab phases (waiting for or grabbing visitor)
+            bool shouldShake = grabPhase == GrabPhase.Idle ||
+                               grabPhase == GrabPhase.Emerging ||
+                               grabPhase == GrabPhase.Extending ||
+                               grabPhase == GrabPhase.Curling;
 
             if (shouldShake)
             {
@@ -2459,11 +2597,12 @@ namespace FaeMaze.HeartPowers
 
         private void CreateGrabbingHGZ()
         {
-            // Create grabbing zone at wall near focal point
+            // Create grabbing zone at wall tile position
+            // The wall tile position acts as the "heart" center - tongue emerges vertically from here
             grabbingZoneObject = new GameObject("GrabbingHGZ");
             grabbingZoneObject.transform.position = grabbingWallPos;
 
-            // Add trigger collider
+            // Add trigger collider for visitor detection
             grabbingCollider = grabbingZoneObject.AddComponent<SphereCollider>();
             grabbingCollider.radius = GRASP_ZONE_RADIUS;
             grabbingCollider.isTrigger = true;
@@ -2473,10 +2612,10 @@ namespace FaeMaze.HeartPowers
             rb.isKinematic = true;
             rb.useGravity = false;
 
-            // Spawn and configure visual - oriented TOWARD focal point (away from heart)
-            // Model +X axis should point toward where visitors approach from
-            Vector3 dirTowardFocal = (targetPosition - grabbingWallPos).normalized;
-            SpawnGraspVisual(grabbingZoneObject, grabbingWallPos, dirTowardFocal, ref grabbingVisual, ref grabbingAnimator, ref grabbingTouchCollider, "GrabbingHand");
+            // The tongue will be spawned as a child of this object when a visitor enters
+            // It will emerge vertically from below ground (like HeartOfTheMaze)
+            grabbingTongueInstance = null;
+            grabbingTongueZPosition = TONGUE_START_Z;
         }
 
         private void CreatePushingHGZ()
@@ -2495,108 +2634,334 @@ namespace FaeMaze.HeartPowers
             rb.isKinematic = true;
             rb.useGravity = false;
 
-            // Spawn and configure visual - oriented TOWARD heart
-            // Model +X axis should point toward the heart where visitors are pushed
+            // Calculate hidden starting position - offset deeper into the wall
+            pushingHiddenPos = pushingWallPos + pushingWallNormal * TONGUE_WALL_DEPTH;
+
+            // Calculate direction toward heart for push orientation
             Vector3 dirTowardHeart = (heartNodePosition - pushingWallPos).normalized;
-            SpawnGraspVisual(pushingZoneObject, pushingWallPos, dirTowardHeart, ref pushingVisual, ref pushingAnimator, ref pushingTouchCollider, "PushingHand");
+            pushingLockedAngle = Mathf.Atan2(dirTowardHeart.y, dirTowardHeart.x) * Mathf.Rad2Deg;
+
+            // Tongue will be spawned when visitor is transported here
+            pushingTongueInstance = null;
+            pushingTongueZPosition = TONGUE_LIP_Z;  // At lip level for horizontal extension
+            pushingExtensionDistance = 0f;
+            pushingFrozenLipBoneIndex = -1;
         }
 
-        private void SpawnGraspVisual(GameObject parent, Vector3 position, Vector3 forwardDir, ref GameObject visual, ref Animator animator, ref SphereCollider touchCollider, string name)
+        /// <summary>
+        /// Spawns a tongue instance for grabbing. Based on HeartOfTheMaze.SpawnTongue().
+        /// The tongue emerges from the wall toward the visitor.
+        /// </summary>
+        private void SpawnGrabbingTongue(Vector3 visitorPos)
         {
-            GameObject graspPrefab = manager.GraspPrefab;
-            if (graspPrefab == null)
+            GameObject tonguePrefab = manager.TonguePrefab;
+            if (tonguePrefab == null)
             {
-                Debug.LogWarning("[HeartwardGrasp] Grasp prefab not assigned on HeartPowerManager");
+                Debug.LogError("[HeartwardGrasp] TonguePrefab is null!");
                 return;
             }
 
-            // The grasp prefab's default orientation (with its baked-in rotation) has:
-            // - Palm facing camera (-Z direction)
-            // - Fingers pointing +X direction
-            // This is correct for this game's coordinate system (XY plane, -Z up).
-            // We only need to rotate around Z to point fingers toward the target direction.
-            float angle = Mathf.Atan2(forwardDir.y, forwardDir.x) * Mathf.Rad2Deg;
-            Quaternion finalRotation = Quaternion.Euler(0f, 0f, angle);
-
-
-            visual = Object.Instantiate(graspPrefab, position, finalRotation);
-            visual.name = name;
-            visual.transform.SetParent(parent.transform, worldPositionStays: true);
-
-            // Get animator and disable it (no animations during reaching)
-            animator = visual.GetComponent<Animator>();
-            if (animator == null)
+            if (grabbingTongueInstance != null)
             {
-                animator = visual.GetComponentInChildren<Animator>();
+                Object.Destroy(grabbingTongueInstance);
             }
 
-            if (animator != null)
+            // Calculate angle toward visitor's PREDICTED position (aim ahead like HeartOfTheMaze)
+            Vector2 wallPos2D = new Vector2(grabbingWallPos.x, grabbingWallPos.y);
+            Vector2 interceptionPoint = CalculateGrabbingInterceptionPoint(currentVisitor, wallPos2D, GRASP_ZONE_RADIUS);
+            Vector2 dirToIntercept = (interceptionPoint - wallPos2D).normalized;
+            grabbingLockedAngle = Mathf.Atan2(dirToIntercept.y, dirToIntercept.x) * Mathf.Rad2Deg;
+
+            Debug.Log($"[HeartwardGrasp] Spawn tongue - wallPos=({wallPos2D.x:F2}, {wallPos2D.y:F2}), intercept=({interceptionPoint.x:F2}, {interceptionPoint.y:F2}), dir=({dirToIntercept.x:F2}, {dirToIntercept.y:F2}), angle={grabbingLockedAngle:F1}°");
+
+            // Instantiate tongue as child of grabbing zone at wall tile position
+            // Like HeartOfTheMaze, the tongue is a child positioned at the "heart" (wall tile)
+            grabbingTongueInstance = Object.Instantiate(tonguePrefab, grabbingZoneObject.transform);
+            grabbingTongueInstance.name = "GrabbingTongue";
+
+            // NOTE: No runtime scaling - prefab already has correct scale (1, 0.3, 0.3)
+
+            // Initialize Z position (below ground, like HeartOfTheMaze)
+            grabbingTongueZPosition = TONGUE_START_Z;
+            Vector3 localPos = Vector3.zero;
+            localPos.z = grabbingTongueZPosition;
+            grabbingTongueInstance.transform.localPosition = localPos;
+
+            // Rotate tongue to point UP (-Z) then orient toward visitor
+            // -90° Y rotation makes model +X → world -Z (tongue points UP toward camera)
+            // Then rotate around world Z axis to align reach direction toward visitor
+            grabbingTongueInstance.transform.localRotation =
+                Quaternion.Euler(0f, 0f, grabbingLockedAngle) * Quaternion.Euler(0f, -90f, 0f);
+
+            // Remove any Light components
+            foreach (var light in grabbingTongueInstance.GetComponentsInChildren<Light>())
             {
-                // Log animator details
-                var controller = animator.runtimeAnimatorController;
+                Object.Destroy(light);
+            }
 
-                if (controller != null)
-                {
-                    // Keep animator enabled but paused at frame 0
-                    animator.speed = 0f;
-                    animator.Play("GraspFinal", 0, 0f);
-                    animator.Update(0f);
+            // Find and store bone references
+            SetupGrabbingTongueBones();
 
-                    // Verify the state was set
-                    var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
-                }
-                else
-                {
-                }
+            // Find bone colliders that are baked into the prefab
+            FindGrabbingBoneColliders();
+
+            // Reset state
+            grabbingTongueExtension = 0f;
+            grabbingCurlProgress = 0f;
+            grabbingContactMade = false;
+            grabbingContactBoneIndex = -1;
+            grabbingPullingProgress = 0f;
+            grabbingFrozenLipBoneIndex = -1;
+
+            Debug.Log($"[HeartwardGrasp] Spawned grabbing tongue at wall tile {grabbingWallPos}, Z={grabbingTongueZPosition}, angle {grabbingLockedAngle:F1}°");
+        }
+
+        /// <summary>
+        /// Spawns a tongue instance for pushing (releasing visitor near heart).
+        /// The tongue starts fully extended horizontally with a tight curl at the tip containing the visitor.
+        /// It then extends toward the heart, pushing the visitor onto walkable area.
+        /// </summary>
+        private void SpawnPushingTongue()
+        {
+            GameObject tonguePrefab = manager.TonguePrefab;
+            if (tonguePrefab == null)
+            {
+                Debug.LogError("[HeartwardGrasp] TonguePrefab is null!");
+                return;
+            }
+
+            if (pushingTongueInstance != null)
+            {
+                Object.Destroy(pushingTongueInstance);
+            }
+
+            // Instantiate tongue as child of pushing zone
+            pushingTongueInstance = Object.Instantiate(tonguePrefab);
+            pushingTongueInstance.name = "PushingTongue";
+            pushingTongueInstance.transform.SetParent(pushingZoneObject.transform, worldPositionStays: false);
+
+            // NOTE: No runtime scaling - prefab already has correct scale (1, 0.3, 0.3)
+
+            // Position at pushing zone with Z at lip level (horizontal tongue)
+            pushingTongueZPosition = TONGUE_LIP_Z;
+            pushingExtensionDistance = 0f;
+
+            Vector3 localPos = Vector3.zero;
+            localPos.z = pushingTongueZPosition;
+            pushingTongueInstance.transform.localPosition = localPos;
+
+            // Rotate toward heart
+            pushingTongueInstance.transform.localRotation =
+                Quaternion.Euler(0f, 0f, pushingLockedAngle) * Quaternion.Euler(0f, -90f, 0f);
+
+            // Remove lights
+            foreach (var light in pushingTongueInstance.GetComponentsInChildren<Light>())
+            {
+                Object.Destroy(light);
+            }
+
+            // Find bones
+            SetupPushingTongueBones();
+
+            // Create bone colliders
+            FindPushingBoneColliders();
+
+            // For pushing: lip bone is at 10% (tongue already horizontal), curl starts right after
+            pushingFrozenLipBoneIndex = Mathf.FloorToInt(pushingTongueBones.Length * 0.1f);
+
+            // Reset state
+            pushingUncurlProgress = 0f;
+
+            Debug.Log($"[HeartwardGrasp] Spawned pushing tongue at Z={pushingTongueZPosition:F2}, lipBone={pushingFrozenLipBoneIndex}, angle={pushingLockedAngle:F1}°");
+        }
+
+        /// <summary>
+        /// Finds and stores bone references for the grabbing tongue.
+        /// </summary>
+        private void SetupGrabbingTongueBones()
+        {
+            if (grabbingTongueInstance == null) return;
+
+            // Find SkinnedMeshRenderer for bone info
+            grabbingTongueRenderer = grabbingTongueInstance.GetComponentInChildren<SkinnedMeshRenderer>();
+
+            if (grabbingTongueRenderer != null && grabbingTongueRenderer.bones != null && grabbingTongueRenderer.bones.Length > 0)
+            {
+                grabbingTongueBones = grabbingTongueRenderer.bones;
             }
             else
             {
-            }
-
-            // Find or create the "touch" collider on the grasp model
-            // The touch collider should be positioned at the palm/fingertips
-            touchCollider = null;
-            Transform touchTransform = visual.transform.Find("touch");
-            if (touchTransform == null)
-            {
-                // Search recursively
-                foreach (Transform child in visual.GetComponentsInChildren<Transform>())
+                // Fallback: find transforms with "bone" in name
+                var allTransforms = grabbingTongueInstance.GetComponentsInChildren<Transform>();
+                var boneList = new List<Transform>();
+                foreach (var t in allTransforms)
                 {
-                    if (child.name == "touch")
+                    if (t.name.ToLower().Contains("bone"))
                     {
-                        touchTransform = child;
-                        break;
+                        boneList.Add(t);
                     }
                 }
+                grabbingTongueBones = boneList.ToArray();
             }
 
-            if (touchTransform != null)
+            // Store rest poses
+            if (grabbingTongueBones != null && grabbingTongueBones.Length > 0)
             {
-                touchCollider = touchTransform.GetComponent<SphereCollider>();
-                if (touchCollider != null)
+                grabbingBoneRestPositions = new Vector3[grabbingTongueBones.Length];
+                grabbingBoneRestRotations = new Quaternion[grabbingTongueBones.Length];
+
+                for (int i = 0; i < grabbingTongueBones.Length; i++)
                 {
-                    touchCollider.isTrigger = true;
+                    if (grabbingTongueBones[i] != null)
+                    {
+                        grabbingBoneRestPositions[i] = grabbingTongueBones[i].localPosition;
+                        grabbingBoneRestRotations[i] = grabbingTongueBones[i].localRotation;
+                    }
+                }
+
+                // Calculate tongue length
+                CalculateGrabbingTongueLength();
+            }
+
+            Debug.Log($"[HeartwardGrasp] Found {grabbingTongueBones?.Length ?? 0} bones, length {grabbingTongueLength:F2}");
+        }
+
+        /// <summary>
+        /// Finds and stores bone references for the pushing tongue.
+        /// </summary>
+        private void SetupPushingTongueBones()
+        {
+            if (pushingTongueInstance == null) return;
+
+            pushingTongueRenderer = pushingTongueInstance.GetComponentInChildren<SkinnedMeshRenderer>();
+
+            if (pushingTongueRenderer != null && pushingTongueRenderer.bones != null && pushingTongueRenderer.bones.Length > 0)
+            {
+                pushingTongueBones = pushingTongueRenderer.bones;
+            }
+            else
+            {
+                var allTransforms = pushingTongueInstance.GetComponentsInChildren<Transform>();
+                var boneList = new List<Transform>();
+                foreach (var t in allTransforms)
+                {
+                    if (t.name.ToLower().Contains("bone"))
+                    {
+                        boneList.Add(t);
+                    }
+                }
+                pushingTongueBones = boneList.ToArray();
+            }
+
+            if (pushingTongueBones != null && pushingTongueBones.Length > 0)
+            {
+                pushingBoneRestPositions = new Vector3[pushingTongueBones.Length];
+                pushingBoneRestRotations = new Quaternion[pushingTongueBones.Length];
+
+                for (int i = 0; i < pushingTongueBones.Length; i++)
+                {
+                    if (pushingTongueBones[i] != null)
+                    {
+                        pushingBoneRestPositions[i] = pushingTongueBones[i].localPosition;
+                        pushingBoneRestRotations[i] = pushingTongueBones[i].localRotation;
+                    }
+                }
+
+                CalculatePushingTongueLength();
+            }
+        }
+
+        private void CalculateGrabbingTongueLength()
+        {
+            grabbingTongueLength = 0f;
+            if (grabbingTongueBones == null || grabbingTongueBones.Length < 2) return;
+
+            Vector3 firstBoneWorld = grabbingTongueBones[0].position;
+            Vector3 lastBoneWorld = grabbingTongueBones[grabbingTongueBones.Length - 1].position;
+            grabbingTongueLength = Vector3.Distance(firstBoneWorld, lastBoneWorld);
+
+            // Add approximate length of last bone segment
+            if (grabbingTongueBones.Length > 1)
+            {
+                float avgBoneSpacing = grabbingTongueLength / (grabbingTongueBones.Length - 1);
+                grabbingTongueLength += avgBoneSpacing;
+            }
+        }
+
+        private void CalculatePushingTongueLength()
+        {
+            pushingTongueLength = 0f;
+            if (pushingTongueBones == null || pushingTongueBones.Length < 2) return;
+
+            Vector3 firstBoneWorld = pushingTongueBones[0].position;
+            Vector3 lastBoneWorld = pushingTongueBones[pushingTongueBones.Length - 1].position;
+            pushingTongueLength = Vector3.Distance(firstBoneWorld, lastBoneWorld);
+
+            if (pushingTongueBones.Length > 1)
+            {
+                float avgBoneSpacing = pushingTongueLength / (pushingTongueBones.Length - 1);
+                pushingTongueLength += avgBoneSpacing;
+            }
+        }
+
+        /// <summary>
+        /// Creates colliders on every Nth bone for contact detection.
+        /// Uses fewer colliders to reduce physics overhead.
+        /// </summary>
+        private void FindGrabbingBoneColliders()
+        {
+            // Colliders are now baked into the prefab - just find them
+            if (grabbingTongueInstance == null) return;
+
+            var colliders = new List<GameObject>();
+            Transform[] allTransforms = grabbingTongueInstance.GetComponentsInChildren<Transform>(true);
+
+            foreach (Transform t in allTransforms)
+            {
+                if (t.name.StartsWith("BoneCollider_"))
+                {
+                    colliders.Add(t.gameObject);
                 }
             }
 
-            // If no touch collider found, create one at runtime
-            if (touchCollider == null)
+            grabbingBoneColliders = colliders.ToArray();
+            Debug.Log($"[HeartwardGrasp] Found {grabbingBoneColliders.Length} bone colliders in prefab");
+        }
+
+        /// <summary>
+        /// Finds colliders for the pushing tongue (baked into prefab).
+        /// </summary>
+        private void FindPushingBoneColliders()
+        {
+            // Colliders are now baked into the prefab - just find them
+            if (pushingTongueInstance == null) return;
+
+            var colliders = new List<GameObject>();
+            Transform[] allTransforms = pushingTongueInstance.GetComponentsInChildren<Transform>(true);
+
+            foreach (Transform t in allTransforms)
             {
-                // Create touch collider as sibling to visual (not child) to avoid scale inheritance issues
-                // Position it at visual's XY position but at Z=-0.3 (closer to ground plane where visitors are)
-                GameObject touchObj = new GameObject("touch");
-                touchObj.transform.SetParent(visual.transform.parent, worldPositionStays: false);
-                touchObj.transform.position = new Vector3(visual.transform.position.x, visual.transform.position.y, -0.3f);
-                touchObj.transform.localScale = Vector3.one;
-
-                touchCollider = touchObj.AddComponent<SphereCollider>();
-                touchCollider.radius = 0.1f;  // Small radius for precise detection
-                touchCollider.isTrigger = true;
-
-                // Store reference so we can update position during reaching
-                touchObj.name = $"touch_{name}";
-
+                if (t.name.StartsWith("BoneCollider_"))
+                {
+                    colliders.Add(t.gameObject);
+                }
             }
+
+            pushingBoneColliders = colliders.ToArray();
+            Debug.Log($"[HeartwardGrasp] Found {pushingBoneColliders.Length} pushing bone colliders in prefab");
+        }
+
+        /// <summary>
+        /// Updates the grabbing tongue's Z position (vertical emergence like HeartOfTheMaze).
+        /// </summary>
+        private void UpdateGrabbingTongueZPosition()
+        {
+            if (grabbingTongueInstance == null) return;
+
+            // Update local Z position (tongue is child of grabbing zone at wall tile)
+            Vector3 localPos = grabbingTongueInstance.transform.localPosition;
+            localPos.z = grabbingTongueZPosition;
+            grabbingTongueInstance.transform.localPosition = localPos;
         }
 
         private void CreateParticleSystem(GameObject parent, ref ParticleSystem particles)
@@ -2707,22 +3072,68 @@ namespace FaeMaze.HeartPowers
         {
             if (visitor == null || hasExpired) return;
 
-
             currentVisitor = visitor;
             visitorVisible = true;
-            // NOTE: Do NOT stop visitor here - they continue walking until grabbed at frame 46
+            // NOTE: Do NOT stop visitor here - they continue walking until tongue contacts them
 
-            // Orient grabbing hand toward visitor
-            OrientHandTowardTarget(grabbingVisual, visitor.transform.position);
+            // Spawn the tongue aimed at the visitor's PREDICTED position
+            SpawnGrabbingTongue(visitor.transform.position);
 
-            // Start reaching phase - animation frames 0-20
-            grabPhase = GrabPhase.Reaching;
+            // Curl direction will be determined during Extending phase based on which side
+            // of the tongue line the visitor is on (like HeartOfTheMaze)
+            grabbingCurlDirection = 0;  // Will be set when tongue extends
+            grabbingCurlDirectionLocked = false;
+
+            // Start emerging phase - tongue translates up from ground
+            grabPhase = GrabPhase.Emerging;
             grabPhaseStartTime = elapsedTime;
-            grabCurrentFrame = 0;
-            SetAnimatorFrame(grabbingAnimator, 0);
+
+            Debug.Log($"[HeartwardGrasp] Starting grab - visitor at ({visitor.transform.position.x:F2}, {visitor.transform.position.y:F2}), angle={grabbingLockedAngle:F1}°");
 
             if (grabbingParticles != null) grabbingParticles.Emit(25);
+        }
 
+        /// <summary>
+        /// Resets the grabbing tongue to rest state.
+        /// </summary>
+        private void ResetGrabbingTongue()
+        {
+            if (grabbingTongueBones == null || grabbingBoneRestRotations == null) return;
+
+            for (int i = 0; i < grabbingTongueBones.Length; i++)
+            {
+                if (grabbingTongueBones[i] != null)
+                {
+                    grabbingTongueBones[i].localPosition = grabbingBoneRestPositions[i];
+                    grabbingTongueBones[i].localRotation = grabbingBoneRestRotations[i];
+                }
+            }
+        }
+
+        /// <summary>
+        /// Destroys the grabbing tongue instance and cleans up.
+        /// </summary>
+        private void DestroyGrabbingTongue()
+        {
+            if (grabbingBoneColliders != null)
+            {
+                foreach (var obj in grabbingBoneColliders)
+                {
+                    if (obj != null) Object.Destroy(obj);
+                }
+                grabbingBoneColliders = null;
+            }
+
+            if (grabbingTongueInstance != null)
+            {
+                Object.Destroy(grabbingTongueInstance);
+                grabbingTongueInstance = null;
+            }
+
+            grabbingTongueBones = null;
+            grabbingBoneRestPositions = null;
+            grabbingBoneRestRotations = null;
+            grabbingCurlDirectionLocked = false;
         }
 
         private void UpdateGrabbingHGZ(float deltaTime)
@@ -2736,6 +3147,7 @@ namespace FaeMaze.HeartPowers
 
             if (currentVisitor == null)
             {
+                DestroyGrabbingTongue();
                 grabPhase = GrabPhase.Idle;
                 return;
             }
@@ -2744,186 +3156,631 @@ namespace FaeMaze.HeartPowers
 
             switch (grabPhase)
             {
-                case GrabPhase.Reaching:
-                    // Translate grasp model toward visitor until touch collider hits
-                    if (grabbingVisual != null && currentVisitor != null)
-                    {
-                        // Calculate direction to visitor (XY plane only)
-                        Vector3 visitorPos = currentVisitor.transform.position;
-                        Vector3 graspPos = grabbingVisual.transform.position;
-                        Vector2 direction = new Vector2(visitorPos.x - graspPos.x, visitorPos.y - graspPos.y).normalized;
-
-                        // Update orientation to track visitor as we move
-                        OrientHandTowardTarget(grabbingVisual, visitorPos);
-
-                        // Move grasp model toward visitor
-                        float moveAmount = REACH_SPEED * deltaTime;
-                        grabbingVisual.transform.position += new Vector3(direction.x * moveAmount, direction.y * moveAmount, 0f);
-
-                        // Update touch collider position to follow the hand (it's a sibling, not child)
-                        if (grabbingTouchCollider != null)
-                        {
-                            grabbingTouchCollider.transform.position = new Vector3(
-                                grabbingVisual.transform.position.x,
-                                grabbingVisual.transform.position.y,
-                                -0.3f);  // Keep at Z=-0.3 to be on same plane as visitors
-                        }
-
-                        // Check if touch collider overlaps visitor
-                        bool touchedVisitor = false;
-                        if (grabbingTouchCollider != null)
-                        {
-                            // Get world position and radius of touch collider
-                            Vector3 touchCenter = grabbingTouchCollider.transform.TransformPoint(grabbingTouchCollider.center);
-                            float touchRadius = grabbingTouchCollider.radius * Mathf.Max(
-                                grabbingTouchCollider.transform.lossyScale.x,
-                                grabbingTouchCollider.transform.lossyScale.y,
-                                grabbingTouchCollider.transform.lossyScale.z);
-
-                            // Check for overlap with visitor colliders
-                            Collider[] hits = Physics.OverlapSphere(touchCenter, touchRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
-                            foreach (var hit in hits)
-                            {
-                                if (hit.transform.IsChildOf(currentVisitor.transform) || hit.transform == currentVisitor.transform)
-                                {
-                                    touchedVisitor = true;
-                                    break;
-                                }
-                            }
-
-                        }
-
-                        if (touchedVisitor)
-                        {
-                            // Stop visitor movement immediately
-                            currentVisitor.Stop();
-                            // Store the grab position and visitor offset
-                            grabStartPosition = grabbingVisual.transform.position;
-                            visitorGrabOffset = currentVisitor.transform.position - grabStartPosition;
-                            // Enable animator and start grab animation
-                            if (grabbingAnimator != null)
-                            {
-                                SetAnimatorFrame(grabbingAnimator, 0);  // Start from beginning
-                            }
-                            // Transition to Grabbing phase
-                            grabPhase = GrabPhase.Grabbing;
-                            grabPhaseStartTime = elapsedTime;
-
-                            // Deduct essence cost from the visitor for being grabbed
-                            const float GRAB_ESSENCE_COST = 25f;
-                            currentVisitor.DeductEssence(GRAB_ESSENCE_COST);
-
-                            // Notify nearby visitors that a grab occurred - they become frightened
-                            HeartPowerEvents.NotifyVisitorGrabbedByGrasp(currentVisitor.transform.position);
-                        }
-                    }
+                case GrabPhase.Emerging:
+                    // Tongue translates from wall toward path
+                    // Transition to Extending when emerged far enough
+                    UpdateEmergingPhase(deltaTime);
                     break;
 
-                case GrabPhase.Grabbing:
-                    // Model stays still, animation plays for 1 second (24 frames)
-                    // Visitor is already stopped
-                    {
-                        float grabProgress = Mathf.Clamp01(phaseElapsed / GRAB_ANIMATION_DURATION);
-                        grabCurrentFrame = Mathf.FloorToInt(grabProgress * GRAB_ANIMATION_FRAMES);
-                        SetAnimatorFrame(grabbingAnimator, grabCurrentFrame);
+                case GrabPhase.Extending:
+                    // Tongue bones bend to extend horizontally toward visitor
+                    // Transition to Curling when extended far enough
+                    UpdateExtendingPhase(deltaTime);
+                    break;
 
-                        if (phaseElapsed >= GRAB_ANIMATION_DURATION)
-                        {
-                            grabPhase = GrabPhase.Pulling;
-                            grabPhaseStartTime = elapsedTime;
-                            if (grabbingParticles != null) grabbingParticles.Emit(20);
-                        }
-                    }
+                case GrabPhase.Curling:
+                    // Tongue curls into a 360° circle around visitor
+                    // Transition to Pulling when curl is complete
+                    UpdateCurlingPhase(deltaTime);
                     break;
 
                 case GrabPhase.Pulling:
-                    // Model and visitor translate back to starting wall position over PULL_DURATION
-                    // Hand stays closed (frame 24) - no animation change during pull
-                    {
-                        float pullProgress = Mathf.Clamp01(phaseElapsed / PULL_DURATION);
-
-                        // Keep hand closed at frame 24
-                        SetAnimatorFrame(grabbingAnimator, GRAB_ANIMATION_FRAMES);
-
-                        // Move model back to starting wall position
-                        Vector3 pullTarget = grabbingWallPos;
-                        grabbingVisual.transform.position = Vector3.Lerp(grabStartPosition, pullTarget, pullProgress);
-
-                        // Update touch collider position
-                        if (grabbingTouchCollider != null)
-                        {
-                            grabbingTouchCollider.transform.position = new Vector3(
-                                grabbingVisual.transform.position.x,
-                                grabbingVisual.transform.position.y,
-                                -0.3f);
-                        }
-
-                        // Move visitor with the hand
-                        currentVisitor.transform.position = grabbingVisual.transform.position + visitorGrabOffset;
-
-                        if (pullProgress >= 1f)
-                        {
-                            SetVisitorVisible(currentVisitor, false);
-                            visitorVisible = false;
-                            grabPhase = GrabPhase.Transporting;
-                            grabPhaseStartTime = elapsedTime;
-                        }
-                    }
+                    // Curl tightens while retracting toward wall
+                    // Transition to Transporting when fully retracted
+                    UpdateTonguePullingPhase(deltaTime, phaseElapsed);
                     break;
 
                 case GrabPhase.Transporting:
-                    // 1 second duration, then relocate visitor to pushing HGZ
-                    if (phaseElapsed >= TRANSPORT_DURATION)
+                    // Immediately teleport visitor to pushing HGZ (no pause here - pause happens in pushing phase)
                     {
-                        // Position visitor in front of pushing hand, along the push direction (toward heart)
-                        // The visitor should be in contact with the touch collider and ahead of the hand
+                        // Position visitor near pushing HGZ
                         Vector3 pushingDir = (heartNodePosition - pushingWallPos).normalized;
-
-                        // Offset distance: place visitor slightly in front of hand (along push direction)
-                        // Use a small offset so visitor is in contact with touch collider
-                        float forwardOffset = 0.3f;  // Distance in front of hand along push axis
-                        visitorPushOffset = pushingDir * forwardOffset;
-                        visitorPushOffset.z = visitorGrabOffset.z;  // Preserve Z offset from grab
-
-                        Vector3 newVisitorPos = pushingWallPos + visitorPushOffset;
+                        float forwardOffset = 0.3f;
+                        Vector3 newVisitorPos = pushingWallPos - pushingWallNormal * 0.5f + pushingDir * forwardOffset;
+                        newVisitorPos.z = currentVisitor.transform.position.z;
                         currentVisitor.transform.position = newVisitorPos;
 
-                        // Start pushing sequence
+                        // Destroy grabbing tongue
+                        DestroyGrabbingTongue();
+
+                        // Start pushing sequence (begins with Paused phase)
                         StartPushingSequence();
 
-                        // Reset grabbing state
                         grabPhase = GrabPhase.Idle;
-                        SetAnimatorFrame(grabbingAnimator, 0);
                     }
                     break;
+            }
+        }
 
+        /// <summary>
+        /// Emerging phase: Tongue translates from wall toward path.
+        /// Transitions to Extending when emerged far enough.
+        /// </summary>
+        private void UpdateEmergingPhase(float deltaTime)
+        {
+            if (grabbingTongueInstance == null || currentVisitor == null) return;
+
+            // Move tongue up (-Z) until tip is above lip (like HeartOfTheMaze)
+            grabbingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            UpdateGrabbingTongueZPosition();
+
+            // Apply bone state (keep tongue straight during emergence)
+            ApplyGrabbingTongueBoneState();
+
+            // Calculate where tip would be
+            float tipZ = grabbingTongueZPosition - grabbingTongueLength;
+            if (tipZ <= TONGUE_LIP_Z)
+            {
+                Debug.Log($"[HeartwardGrasp] Emerged (tipZ={tipZ:F2}), transitioning to Extending");
+                grabPhase = GrabPhase.Extending;
+                grabPhaseStartTime = elapsedTime;
+            }
+        }
+
+        /// <summary>
+        /// Extending phase: Tongue bones bend to extend horizontally toward visitor.
+        /// Transitions to Curling when extended to detection radius.
+        /// </summary>
+        private void UpdateExtendingPhase(float deltaTime)
+        {
+            if (grabbingTongueInstance == null || currentVisitor == null) return;
+
+            // Continue moving tongue up (-Z) to extend more past the lip
+            grabbingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            UpdateGrabbingTongueZPosition();
+
+            // Progress extension (controls how bent the lip bone is)
+            grabbingTongueExtension += TONGUE_EXTEND_SPEED * deltaTime;
+            grabbingTongueExtension = Mathf.Clamp01(grabbingTongueExtension);
+
+            // Apply bone rotations for extension
+            ApplyGrabbingTongueBoneState();
+
+            // Calculate horizontal extension length (like HeartOfTheMaze)
+            float horizontalLength = CalculateGrabbingHorizontalTongueLength();
+
+            // Determine curl direction based on which side of tongue LINE the visitor is on
+            // (like HeartOfTheMaze) - do this when tongue is sufficiently extended
+            if (!grabbingCurlDirectionLocked && horizontalLength >= GRASP_ZONE_RADIUS * 0.5f && currentVisitor != null)
+            {
+                Vector2 wallPos2D = new Vector2(grabbingWallPos.x, grabbingWallPos.y);
+                Vector2 visitorPos2D = new Vector2(currentVisitor.transform.position.x, currentVisitor.transform.position.y);
+
+                // The tongue extends from wall position in direction grabbingLockedAngle
+                Vector2 tongueDir = new Vector2(
+                    Mathf.Cos(grabbingLockedAngle * Mathf.Deg2Rad),
+                    Mathf.Sin(grabbingLockedAngle * Mathf.Deg2Rad)
+                );
+
+                // Vector from wall to visitor
+                Vector2 wallToVisitor = visitorPos2D - wallPos2D;
+
+                // 2D cross product: tongueDir × wallToVisitor
+                // Positive = visitor is to the LEFT of tongue direction
+                // Negative = visitor is to the RIGHT of tongue direction
+                float cross = tongueDir.x * wallToVisitor.y - tongueDir.y * wallToVisitor.x;
+
+                // Curl TOWARD the visitor to wrap around them
+                // If visitor is to the LEFT (cross > 0), curl LEFT (CCW, +1)
+                // If visitor is to the RIGHT (cross < 0), curl RIGHT (CW, -1)
+                grabbingCurlDirection = cross >= 0 ? 1 : -1;
+                grabbingCurlDirectionLocked = true;
+
+                Debug.Log($"[HeartwardGrasp] Curl direction determined: {(grabbingCurlDirection > 0 ? "CCW" : "CW")} (cross={cross:F2}), tongueDir=({tongueDir.x:F2}, {tongueDir.y:F2}), wallToVisitor=({wallToVisitor.x:F2}, {wallToVisitor.y:F2})");
+            }
+
+            // Transition to Curling when extended to GRASP_ZONE_RADIUS (node edge equivalent)
+            if (horizontalLength >= GRASP_ZONE_RADIUS)
+            {
+                Debug.Log($"[HeartwardGrasp] Extended (horizontal={horizontalLength:F2}), transitioning to Curling");
+                grabPhase = GrabPhase.Curling;
+                grabPhaseStartTime = elapsedTime;
+                grabbingCurlProgress = 0f;
+            }
+        }
+
+        /// <summary>
+        /// Calculates the horizontal length of the tongue (portion above the lip).
+        /// Bones with unrotatedBoneZ <= lipWorldZ have emerged above the lip level.
+        /// </summary>
+        private float CalculateGrabbingHorizontalTongueLength()
+        {
+            if (grabbingTongueBones == null || grabbingTongueBones.Length == 0) return 0f;
+
+            float lipWorldZ = grabbingZoneObject.transform.position.z + TONGUE_LIP_Z;
+            float boneSpacing = grabbingTongueLength / Mathf.Max(1, grabbingTongueBones.Length);
+
+            // Count bones that have emerged above the lip (lower Z = higher in world, toward -Z = up)
+            // A bone is "above lip" when its unrotatedBoneZ <= lipWorldZ
+            int bonesAboveLip = 0;
+            for (int i = grabbingTongueBones.Length - 1; i >= 0; i--)
+            {
+                float unrotatedBoneZ = grabbingTongueZPosition - (i * boneSpacing);
+                if (unrotatedBoneZ <= lipWorldZ)
+                {
+                    bonesAboveLip++;
+                }
+                else
+                {
+                    // Once we hit a bone still below ground, stop counting
+                    break;
+                }
+            }
+
+            // Horizontal length = bones above lip × bone spacing
+            return bonesAboveLip * boneSpacing;
+        }
+
+        /// <summary>
+        /// Calculates the current lip bone index based on tongue Z position.
+        /// </summary>
+        private int CalculateGrabbingLipBoneIndex()
+        {
+            if (grabbingTongueBones == null || grabbingTongueBones.Length == 0) return 0;
+
+            int boneCount = grabbingTongueBones.Length;
+            float lipWorldZ = grabbingZoneObject.transform.position.z + TONGUE_LIP_Z;
+            float boneSpacing = grabbingTongueLength / Mathf.Max(1, boneCount);
+
+            for (int i = boneCount - 1; i >= 0; i--)
+            {
+                float unrotatedBoneZ = grabbingTongueZPosition - (i * boneSpacing);
+                if (unrotatedBoneZ > lipWorldZ)
+                {
+                    // DEBUG: Log on first few bones checked
+                    if (i > boneCount - 5)
+                    {
+                        Debug.Log($"[HeartwardGrasp] LipBone calc: bone {i}, unrotZ={unrotatedBoneZ:F2}, lipZ={lipWorldZ:F2}, tongueZ={grabbingTongueZPosition:F2}");
+                    }
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Calculates the target point for the grabbing tongue.
+        /// Aims at where the visitor will EXIT the grab zone - the tongue extends ahead of the visitor,
+        /// then curls back toward them to wrap around.
+        /// </summary>
+        private Vector2 CalculateGrabbingInterceptionPoint(VisitorControllerBase visitor, Vector2 wallPos, float zoneRadius)
+        {
+            if (visitor == null)
+            {
+                return wallPos + Vector2.up * zoneRadius;
+            }
+
+            // Get the visitor's actual path
+            int currentPathIndex;
+            List<Vector3> visitorPath = visitor.GetCurrentPath(out currentPathIndex);
+
+            if (visitorPath == null || visitorPath.Count == 0 || currentPathIndex >= visitorPath.Count)
+            {
+                // No path - aim at visitor's current position projected to zone boundary
+                Vector2 visitorPos2D = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+                Vector2 dirToVisitor = (visitorPos2D - wallPos).normalized;
+                return wallPos + dirToVisitor * zoneRadius;
+            }
+
+            // Find where the visitor's path EXITS the zone boundary
+            // This is ahead of the visitor - the tongue extends there, then curls back
+            for (int i = currentPathIndex; i < visitorPath.Count; i++)
+            {
+                Vector2 pathPoint2D = new Vector2(visitorPath[i].x, visitorPath[i].y);
+                float distFromWall = Vector2.Distance(pathPoint2D, wallPos);
+
+                if (distFromWall > zoneRadius)
+                {
+                    // This path point is outside the zone - find the exact exit point
+                    Vector2 prevPoint2D;
+                    if (i > 0)
+                    {
+                        prevPoint2D = new Vector2(visitorPath[i - 1].x, visitorPath[i - 1].y);
+                    }
+                    else
+                    {
+                        prevPoint2D = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+                    }
+
+                    // Ray-circle intersection from prevPoint toward pathPoint
+                    Vector2 segmentDir = (pathPoint2D - prevPoint2D).normalized;
+                    Vector2 d = prevPoint2D - wallPos;
+                    float b = Vector2.Dot(d, segmentDir);
+                    float c = d.sqrMagnitude - zoneRadius * zoneRadius;
+                    float discriminant = b * b - c;
+
+                    if (discriminant >= 0)
+                    {
+                        float sqrtDisc = Mathf.Sqrt(discriminant);
+                        float t2 = -b + sqrtDisc; // Exit point (farther intersection)
+
+                        if (t2 > 0)
+                        {
+                            Vector2 exitPoint = prevPoint2D + t2 * segmentDir;
+                            Debug.Log($"[HeartwardGrasp] Intercept calc: exit point at ({exitPoint.x:F2}, {exitPoint.y:F2})");
+                            return exitPoint;
+                        }
+                    }
+
+                    // Fallback - return the path point direction clamped to zone boundary
+                    Vector2 dirToPathPoint = (pathPoint2D - wallPos).normalized;
+                    return wallPos + dirToPathPoint * zoneRadius;
+                }
+            }
+
+            // All path points are inside the zone - aim at the last point direction
+            Vector2 lastPoint2D = new Vector2(visitorPath[visitorPath.Count - 1].x, visitorPath[visitorPath.Count - 1].y);
+            Vector2 dirToLast = (lastPoint2D - wallPos).normalized;
+            Debug.Log($"[HeartwardGrasp] Intercept calc: all points inside, aiming at last point dir");
+            return wallPos + dirToLast * zoneRadius;
+        }
+
+        /// <summary>
+        /// Curling phase: Tongue curls into a 360° circle around visitor.
+        /// Transitions to Pulling when curl is complete.
+        /// </summary>
+        private void UpdateCurlingPhase(float deltaTime)
+        {
+            if (grabbingTongueInstance == null || currentVisitor == null) return;
+
+            // Progress curling
+            grabbingCurlProgress = Mathf.Min(1f, grabbingCurlProgress + TONGUE_CURL_SPEED * deltaTime);
+
+            // Apply bone rotations for curl
+            ApplyGrabbingTongueBoneState();
+
+            // Check for contact with visitor
+            if (!grabbingContactMade)
+            {
+                int contactBone = CheckTongueBoneContact();
+                if (contactBone >= 0)
+                {
+                    grabbingContactMade = true;
+                    grabbingContactBoneIndex = contactBone;
+
+                    // Stop visitor movement
+                    currentVisitor.Stop();
+
+                    // Store the grab position
+                    visitorGrabbedPosition = currentVisitor.transform.position;
+
+                    // Deduct essence cost
+                    const float GRAB_ESSENCE_COST = 25f;
+                    currentVisitor.DeductEssence(GRAB_ESSENCE_COST);
+
+                    // Notify nearby visitors
+                    HeartPowerEvents.NotifyVisitorGrabbedByGrasp(currentVisitor.transform.position);
+
+                    Debug.Log($"[HeartwardGrasp] Contact made at bone {contactBone}!");
+                }
+            }
+
+            // Keep visitor locked if contact was made
+            if (grabbingContactMade && grabbingContactBoneIndex >= 0 && grabbingContactBoneIndex < grabbingTongueBones.Length)
+            {
+                // Position visitor at the contact bone location
+                Transform contactBone = grabbingTongueBones[grabbingContactBoneIndex];
+                if (contactBone != null)
+                {
+                    currentVisitor.transform.position = new Vector3(
+                        contactBone.position.x,
+                        contactBone.position.y,
+                        currentVisitor.transform.position.z);
+                }
+            }
+
+            // Transition to Pulling when curl is complete and contact was made
+            if (grabbingCurlProgress >= 1f && grabbingContactMade)
+            {
+                Debug.Log($"[HeartwardGrasp] Curl complete, transitioning to Pulling");
+                grabPhase = GrabPhase.Pulling;
+                grabPhaseStartTime = elapsedTime;
+                if (grabbingParticles != null) grabbingParticles.Emit(20);
+            }
+            else if (grabbingCurlProgress >= 1f && !grabbingContactMade)
+            {
+                // Missed - curl completed without contact
+                Debug.Log($"[HeartwardGrasp] Curl complete but no contact - missed visitor");
+                DestroyGrabbingTongue();
+                grabPhase = GrabPhase.Idle;
+                currentVisitor = null;
+            }
+        }
+
+        /// <summary>
+        /// Pulling phase (tongue): Curl tightens while tongue sinks back into ground.
+        /// Like HeartOfTheMaze pulling - increase Z position to retract.
+        /// </summary>
+        private void UpdateTonguePullingPhase(float deltaTime, float phaseElapsed)
+        {
+            if (grabbingTongueInstance == null || currentVisitor == null) return;
+
+            // Freeze lip bone index when pulling starts
+            if (grabbingFrozenLipBoneIndex < 0)
+            {
+                grabbingFrozenLipBoneIndex = CalculateGrabbingLipBoneIndex();
+            }
+
+            // Progress pulling (curl tightening + retraction)
+            grabbingPullingProgress = Mathf.Min(1f, grabbingPullingProgress + TONGUE_RETRACT_SPEED * 0.5f * deltaTime);
+
+            // Retract tongue by increasing Z position (tongue sinks back into ground)
+            // This mimics HeartOfTheMaze pulling behavior
+            float retractDistance = grabbingTongueLength * grabbingPullingProgress * 0.7f;
+            float startZ = grabbingTongueZPosition;  // Current position when pulling started
+            grabbingTongueZPosition += TONGUE_RETRACT_SPEED * deltaTime;
+            UpdateGrabbingTongueZPosition();
+
+            // Apply bone state (maintains curl while retracting)
+            ApplyGrabbingTongueBoneState();
+
+            // Keep visitor with the tongue (at the grab bone position)
+            int grabBoneIndex = Mathf.Max(0, grabbingTongueBones.Length - 1 - GRAB_BONE_OFFSET);
+            if (grabBoneIndex >= 0 && grabBoneIndex < grabbingTongueBones.Length)
+            {
+                Transform grabBone = grabbingTongueBones[grabBoneIndex];
+                if (grabBone != null)
+                {
+                    currentVisitor.transform.position = new Vector3(
+                        grabBone.position.x,
+                        grabBone.position.y,
+                        currentVisitor.transform.position.z);
+                }
+            }
+
+            // Transition to Transporting when tongue is mostly retracted
+            if (grabbingTongueZPosition >= TONGUE_START_Z * 0.7f || grabbingPullingProgress >= 1f)
+            {
+                SetVisitorVisible(currentVisitor, false);
+                visitorVisible = false;
+                grabPhase = GrabPhase.Transporting;
+                grabPhaseStartTime = elapsedTime;
+                Debug.Log($"[HeartwardGrasp] Fully retracted (Z={grabbingTongueZPosition:F2}), transitioning to Transporting");
+            }
+        }
+
+        /// <summary>
+        /// Checks if any tongue bone collider is touching the visitor.
+        /// Returns the bone index that made contact, or -1 if no contact.
+        /// </summary>
+        private int CheckTongueBoneContact()
+        {
+            if (grabbingTongueBones == null || currentVisitor == null) return -1;
+
+            Vector3 visitorPos = currentVisitor.transform.position;
+            float contactRadius = 0.4f;  // Slightly larger than bone collider for detection
+
+            // Check bones from tip toward base (more likely to contact at tip)
+            for (int i = grabbingTongueBones.Length - 1; i >= 0; i--)
+            {
+                if (grabbingTongueBones[i] == null) continue;
+
+                Vector3 bonePos = grabbingTongueBones[i].position;
+                float dist = Vector2.Distance(
+                    new Vector2(bonePos.x, bonePos.y),
+                    new Vector2(visitorPos.x, visitorPos.y));
+
+                if (dist < contactRadius)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Applies bone rotations to the grabbing tongue based on current phase and progress.
+        /// Mirrors HeartOfTheMaze.ApplyTongueBoneState() with lip bone calculation.
+        /// </summary>
+        private void ApplyGrabbingTongueBoneState()
+        {
+            if (grabbingTongueBones == null || grabbingTongueBones.Length == 0 || grabbingTongueInstance == null) return;
+
+            int boneCount = grabbingTongueBones.Length;
+
+            // During Emerging phase, keep all bones at rest pose (straight tongue)
+            if (grabPhase == GrabPhase.Emerging)
+            {
+                // Maintain rotation toward visitor
+                grabbingTongueInstance.transform.localRotation =
+                    Quaternion.Euler(0f, 0f, grabbingLockedAngle) * Quaternion.Euler(0f, -90f, 0f);
+
+                for (int i = 0; i < boneCount; i++)
+                {
+                    if (grabbingTongueBones[i] == null) continue;
+                    grabbingTongueBones[i].localPosition = grabbingBoneRestPositions[i];
+                    grabbingTongueBones[i].localRotation = grabbingBoneRestRotations[i];
+                }
+                return;
+            }
+
+            // Calculate lip bone index based on geometry (like HeartOfTheMaze)
+            float boneSpacing = grabbingTongueLength / Mathf.Max(1, boneCount);
+            int lipBoneIndex;
+            if (grabPhase == GrabPhase.Pulling && grabbingFrozenLipBoneIndex >= 0)
+            {
+                lipBoneIndex = grabbingFrozenLipBoneIndex;
+            }
+            else
+            {
+                lipBoneIndex = CalculateGrabbingLipBoneIndex();
+            }
+
+            int bendEndIndex = Mathf.Min(lipBoneIndex + BEND_BONE_COUNT, boneCount - 1);
+
+            // bendProgress controls how much the lip bone has bent (0 = vertical, 1 = horizontal)
+            float bendProgress;
+            if (grabPhase == GrabPhase.Pulling)
+            {
+                bendProgress = 1f;  // Stay fully bent during pulling
+            }
+            else
+            {
+                bendProgress = Mathf.Clamp01(grabbingTongueExtension * 2f);
+            }
+
+            // DEBUG: Log lip bone info occasionally (every 0.5 seconds)
+            if (Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"[HeartwardGrasp] BoneState: phase={grabPhase}, lipBone={lipBoneIndex}, bendEnd={bendEndIndex}, bend={bendProgress:F2}, ext={grabbingTongueExtension:F2}, curl={grabbingCurlProgress:F2}, curlDir={grabbingCurlDirection}");
+            }
+
+            // Direction toward visitor (locked angle)
+            Vector3 targetDirWorld = new Vector3(
+                Mathf.Cos(grabbingLockedAngle * Mathf.Deg2Rad),
+                Mathf.Sin(grabbingLockedAngle * Mathf.Deg2Rad),
+                0f
+            );
+
+            // First pass: reset all bones to rest pose
+            for (int i = 0; i < boneCount; i++)
+            {
+                if (grabbingTongueBones[i] == null) continue;
+                grabbingTongueBones[i].localPosition = grabbingBoneRestPositions[i];
+                grabbingTongueBones[i].localRotation = grabbingBoneRestRotations[i];
+            }
+
+            // Second pass: from lip bone to tip, compute rotation to align toward visitor
+            for (int i = lipBoneIndex; i < boneCount && lipBoneIndex >= 0; i++)
+            {
+                if (grabbingTongueBones[i] == null) continue;
+
+                Quaternion parentWorldRot = grabbingTongueBones[i].parent != null ?
+                    grabbingTongueBones[i].parent.rotation : Quaternion.identity;
+
+                // Bone forward direction (local +Y points toward next bone)
+                Vector3 boneLocalDir = Vector3.up;
+                Vector3 boneWorldDir = parentWorldRot * grabbingBoneRestRotations[i] * boneLocalDir;
+
+                Vector3 desiredDir;
+
+                if (i >= lipBoneIndex && i <= bendEndIndex)
+                {
+                    // Bones in bend zone: 90° bend at lip bone
+                    float cumulativeAngle = 90f * bendProgress;
+                    float t = cumulativeAngle / 90f;
+                    Vector3 upDir = Vector3.back;  // -Z is up
+                    desiredDir = Vector3.Slerp(upDir, targetDirWorld, t);
+                }
+                else if (grabPhase == GrabPhase.Extending && i > bendEndIndex)
+                {
+                    // During Extending: bones past bend zone point toward visitor
+                    desiredDir = targetDirWorld;
+                }
+                else if ((grabPhase == GrabPhase.Curling || grabPhase == GrabPhase.Pulling) && i > bendEndIndex)
+                {
+                    // Curling/Pulling phase: bones curl into a 360° horizontal circle
+                    int bonesInHorizontal = (boneCount - 1) - bendEndIndex;
+                    float boneProgressAlongHorizontal = (float)(i - bendEndIndex) / Mathf.Max(1, bonesInHorizontal);
+
+                    // Total curl is 360° × curlProgress × curlDirection
+                    float targetCumulativeAngle = boneProgressAlongHorizontal * 360f * grabbingCurlDirection;
+                    float cumulativeAngle = targetCumulativeAngle * grabbingCurlProgress;
+
+                    float rotatedAngle = grabbingLockedAngle + cumulativeAngle;
+                    desiredDir = new Vector3(
+                        Mathf.Cos(rotatedAngle * Mathf.Deg2Rad),
+                        Mathf.Sin(rotatedAngle * Mathf.Deg2Rad),
+                        0f  // Stay in XY plane (horizontal curl)
+                    );
+                }
+                else
+                {
+                    // Default: point toward visitor
+                    desiredDir = targetDirWorld;
+                }
+
+                // Compute rotation to align bone toward desired direction
+                if (desiredDir.sqrMagnitude > 0.0001f && boneWorldDir.sqrMagnitude > 0.0001f)
+                {
+                    desiredDir = desiredDir.normalized;
+                    boneWorldDir = boneWorldDir.normalized;
+
+                    float dot = Vector3.Dot(boneWorldDir, desiredDir);
+                    Quaternion worldCorrection;
+
+                    if (dot > 0.9999f)
+                    {
+                        worldCorrection = Quaternion.identity;
+                    }
+                    else if (dot < -0.9999f)
+                    {
+                        Vector3 perpAxis = Vector3.Cross(boneWorldDir, Vector3.up);
+                        if (perpAxis.sqrMagnitude < 0.0001f)
+                            perpAxis = Vector3.Cross(boneWorldDir, Vector3.right);
+                        perpAxis.Normalize();
+                        worldCorrection = Quaternion.AngleAxis(180f, perpAxis);
+                    }
+                    else
+                    {
+                        worldCorrection = Quaternion.FromToRotation(boneWorldDir, desiredDir);
+                    }
+
+                    Quaternion newLocalRot = Quaternion.Inverse(parentWorldRot) * worldCorrection * parentWorldRot * grabbingBoneRestRotations[i];
+
+                    if (!float.IsNaN(newLocalRot.x) && !float.IsNaN(newLocalRot.y) && !float.IsNaN(newLocalRot.z) && !float.IsNaN(newLocalRot.w))
+                    {
+                        grabbingTongueBones[i].localRotation = newLocalRot;
+                    }
+                }
             }
         }
 
         private void StartPushingSequence()
         {
-            // Orient pushing hand toward heart
-            OrientHandTowardTarget(pushingVisual, heartNodePosition);
+            // Make visitor visible at pushing location
+            SetVisitorVisible(currentVisitor, true);
+            visitorVisible = true;
 
-            // Set animator to end of animation (frame 24 = closed hand)
-            if (pushingAnimator != null)
-            {
-                SetAnimatorFrame(pushingAnimator, GRAB_ANIMATION_FRAMES);  // Frame 24
-            }
-
-            // Calculate push translation positions
+            // Calculate push direction for later
             pushingStartPos = pushingWallPos;
             pushingDir = (heartNodePosition - pushingWallPos).normalized;
-            // Initial target is minimum distance, but will extend dynamically if visitor still in walls
             pushingTargetPos = pushingStartPos + pushingDir * MIN_PUSH_DISTANCE;
 
-            // Start with Pushing phase (translate toward heart)
-            pushPhase = PushPhase.Pushing;
+            // Start with Paused phase - wait before tongue emerges
+            // Tongue will be spawned when Paused phase ends
+            pushPhase = PushPhase.Paused;
             pushPhaseStartTime = elapsedTime;
-            pushCurrentFrame = GRAB_ANIMATION_FRAMES;
+
+            Debug.Log($"[HeartwardGrasp] Visitor teleported, starting pause before push");
+
+            // DEBUG: Pause editor to inspect visitor teleport position
+            Debug.Break();
+        }
+
+        /// <summary>
+        /// Spawns the pushing tongue and begins the Emerging phase.
+        /// Called after the Paused phase completes.
+        /// </summary>
+        private void BeginPushingEmerge()
+        {
+            // Spawn pushing tongue (horizontal with tight curl at tip)
+            SpawnPushingTongue();
+
+            // Apply initial tongue state (tight curl, no extension yet)
+            ApplyPushingTongueBoneState(0f);
+
+            // Position visitor at curl center
+            UpdateVisitorPushPosition();
+
+            // Start Emerging phase (tongue extends horizontally toward heart)
+            pushPhase = PushPhase.Emerging;
+            pushPhaseStartTime = elapsedTime;
 
             if (pushingParticles != null) pushingParticles.Emit(25);
 
+            Debug.Log($"[HeartwardGrasp] Starting push emerge, extension={pushingExtensionDistance:F2}");
         }
 
         private void UpdatePushingHGZ(float deltaTime)
@@ -2931,6 +3788,7 @@ namespace FaeMaze.HeartPowers
             if (pushPhase == PushPhase.Idle) return;
             if (currentVisitor == null)
             {
+                DestroyPushingTongue();
                 pushPhase = PushPhase.Idle;
                 return;
             }
@@ -2939,112 +3797,301 @@ namespace FaeMaze.HeartPowers
 
             switch (pushPhase)
             {
-                case PushPhase.Pushing:
-                    // Model translates toward heart at constant speed until visitor is clear of walls and on path
+                case PushPhase.Paused:
+                    // Wait for TRANSPORT_DURATION before tongue emerges
+                    if (phaseElapsed >= TRANSPORT_DURATION)
                     {
-                        // Keep hand closed at frame 24
-                        SetAnimatorFrame(pushingAnimator, GRAB_ANIMATION_FRAMES);
-
-                        // Move at constant speed toward heart
-                        Vector3 currentPos = pushingVisual.transform.position;
-                        Vector3 newPos = currentPos + pushingDir * PUSH_SPEED * deltaTime;
-
-                        // Calculate how far we've traveled
-                        float distanceTraveled = Vector3.Distance(pushingStartPos, newPos);
-
-                        // Check if we've hit max distance (safety limit)
-                        if (distanceTraveled >= MAX_PUSH_DISTANCE)
-                        {
-                            newPos = pushingStartPos + pushingDir * MAX_PUSH_DISTANCE;
-                            pushingTargetPos = newPos;
-                            pushingVisual.transform.position = newPos;
-                            // Update touch collider and visitor positions
-                            UpdatePushPositions(newPos);
-                            // Force transition to releasing
-                            pushPhase = PushPhase.Releasing;
-                            pushPhaseStartTime = elapsedTime;
-                            break;
-                        }
-
-                        // Update positions
-                        pushingVisual.transform.position = newPos;
-                        UpdatePushPositions(newPos);
-
-                        // Check if visitor is clear of walls and on a valid walkable area
-                        // Only check after minimum distance traveled
-                        if (distanceTraveled >= MIN_PUSH_DISTANCE)
-                        {
-                            Vector3 visitorPos = currentVisitor.transform.position;
-                            if (IsVisitorOnValidWalkableArea(visitorPos))
-                            {
-                                pushingTargetPos = newPos;
-                                pushPhase = PushPhase.Releasing;
-                                pushPhaseStartTime = elapsedTime;
-                            }
-                        }
+                        BeginPushingEmerge();
                     }
                     break;
 
-                case PushPhase.Releasing:
-                    // Model paused, animation plays in reverse from frame 24 to 0 over 1 second
-                    // Visitor becomes visible and dazed at end
-                    {
-                        float releaseProgress = Mathf.Clamp01(phaseElapsed / GRAB_ANIMATION_DURATION);
+                case PushPhase.Emerging:
+                    // Tongue emerges from wall with visitor curled inside
+                    UpdatePushingEmergingPhase(deltaTime);
+                    break;
 
-                        // Animation in reverse: 24 -> 0
-                        pushCurrentFrame = Mathf.FloorToInt((1f - releaseProgress) * GRAB_ANIMATION_FRAMES);
-                        SetAnimatorFrame(pushingAnimator, pushCurrentFrame);
-
-                        // Make visitor visible partway through
-                        if (!visitorVisible && releaseProgress > 0.3f)
-                        {
-                            SetVisitorVisible(currentVisitor, true);
-                            visitorVisible = true;
-
-                            // Notify nearby visitors that a push/release occurred - they become frightened
-                            HeartPowerEvents.NotifyVisitorPushedByGrasp(currentVisitor.transform.position);
-                        }
-
-                        if (releaseProgress >= 1f)
-                        {
-                            // Apply daze to visitor
-                            float dazeDuration = definition.param1 > 0 ? definition.param1 : 2f;
-                            currentVisitor.OnWitnessMazeGrowth(dazeDuration);
-
-                            pushPhase = PushPhase.Withdrawing;
-                            pushPhaseStartTime = elapsedTime;
-                            if (pushingParticles != null) pushingParticles.Emit(15);
-                        }
-                    }
+                case PushPhase.Uncurling:
+                    // Tongue uncurls to release visitor (reverse of grabbing curl)
+                    UpdatePushingUncurlingPhase(deltaTime);
                     break;
 
                 case PushPhase.Withdrawing:
-                    // Model translates back to wall, holds frame 1
-                    {
-                        float withdrawProgress = Mathf.Clamp01(phaseElapsed / WITHDRAW_DURATION);
-
-                        // Hold at frame 1 (not 0 to avoid T-pose)
-                        SetAnimatorFrame(pushingAnimator, 1);
-
-                        // Translate model back to wall
-                        pushingVisual.transform.position = Vector3.Lerp(pushingTargetPos, pushingStartPos, withdrawProgress);
-
-                        // Update touch collider position
-                        if (pushingTouchCollider != null)
-                        {
-                            pushingTouchCollider.transform.position = new Vector3(
-                                pushingVisual.transform.position.x,
-                                pushingVisual.transform.position.y,
-                                -0.3f);
-                        }
-
-                        if (withdrawProgress >= 1f)
-                        {
-                            FinalizeCapture();
-                        }
-                    }
+                    // Tongue retracts back into wall
+                    UpdatePushingWithdrawingPhase(deltaTime, phaseElapsed);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Emerging phase (pushing): Tongue extends horizontally toward heart.
+        /// Visitor stays locked in tight curl at the tip, moving with the extension.
+        /// Transitions to Uncurling when visitor is on valid walkable area.
+        /// </summary>
+        private void UpdatePushingEmergingPhase(float deltaTime)
+        {
+            if (pushingTongueInstance == null || currentVisitor == null) return;
+
+            // Extend tongue horizontally toward heart
+            pushingExtensionDistance += TONGUE_EMERGE_SPEED * deltaTime;
+
+            // Move tongue root toward heart (translate the whole tongue)
+            Vector3 extensionOffset = pushingDir * pushingExtensionDistance;
+            Vector3 newPos = pushingWallPos + extensionOffset;
+            newPos.z = TONGUE_LIP_Z;
+            pushingTongueInstance.transform.position = newPos;
+
+            // Apply bone state (tight curl locked, no uncurl)
+            ApplyPushingTongueBoneState(0f);
+
+            // Keep visitor at the curl center (moves with tongue extension)
+            UpdateVisitorPushPosition();
+
+            // Check if we've hit max distance
+            if (pushingExtensionDistance >= MAX_PUSH_DISTANCE)
+            {
+                pushingTargetPos = pushingTongueInstance.transform.position;
+                pushPhase = PushPhase.Uncurling;
+                pushPhaseStartTime = elapsedTime;
+                Debug.Log($"[HeartwardGrasp] Max push distance reached ({pushingExtensionDistance:F2}), transitioning to Uncurling");
+                return;
+            }
+
+            // Check if visitor is on valid walkable area (only after minimum distance)
+            if (pushingExtensionDistance >= MIN_PUSH_DISTANCE)
+            {
+                Vector3 visitorPos = currentVisitor.transform.position;
+                if (IsVisitorOnValidWalkableArea(visitorPos))
+                {
+                    pushingTargetPos = pushingTongueInstance.transform.position;
+                    pushPhase = PushPhase.Uncurling;
+                    pushPhaseStartTime = elapsedTime;
+                    Debug.Log($"[HeartwardGrasp] Visitor on walkable area at extension={pushingExtensionDistance:F2}, transitioning to Uncurling");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Uncurling phase (pushing): Tongue uncurls to release visitor.
+        /// This is the reverse of the grabbing curl.
+        /// </summary>
+        private void UpdatePushingUncurlingPhase(float deltaTime)
+        {
+            if (pushingTongueInstance == null || currentVisitor == null) return;
+
+            // Progress uncurling (reverse of curl progress)
+            pushingUncurlProgress = Mathf.Min(1f, pushingUncurlProgress + TONGUE_CURL_SPEED * deltaTime);
+
+            // Apply bone state with decreasing curl
+            ApplyPushingTongueBoneState(pushingUncurlProgress);
+
+            // Make visitor visible partway through uncurl
+            if (!visitorVisible && pushingUncurlProgress > 0.3f)
+            {
+                SetVisitorVisible(currentVisitor, true);
+                visitorVisible = true;
+
+                HeartPowerEvents.NotifyVisitorPushedByGrasp(currentVisitor.transform.position);
+            }
+
+            // Update visitor position as tongue uncurls
+            UpdateVisitorPushPosition();
+
+            // Transition to Withdrawing when fully uncurled
+            if (pushingUncurlProgress >= 1f)
+            {
+                // Apply daze to visitor
+                float dazeDuration = definition.param1 > 0 ? definition.param1 : 2f;
+                currentVisitor.OnWitnessMazeGrowth(dazeDuration);
+
+                pushPhase = PushPhase.Withdrawing;
+                pushPhaseStartTime = elapsedTime;
+                if (pushingParticles != null) pushingParticles.Emit(15);
+                Debug.Log($"[HeartwardGrasp] Uncurl complete, transitioning to Withdrawing");
+            }
+        }
+
+        /// <summary>
+        /// Withdrawing phase (pushing): Tongue retracts horizontally back to wall.
+        /// </summary>
+        private void UpdatePushingWithdrawingPhase(float deltaTime, float phaseElapsed)
+        {
+            if (pushingTongueInstance == null) return;
+
+            float withdrawProgress = Mathf.Clamp01(phaseElapsed / WITHDRAW_DURATION);
+
+            // Retract tongue back toward wall (extension decreases)
+            float startExtension = pushingExtensionDistance;
+            float currentExtension = Mathf.Lerp(startExtension, 0f, withdrawProgress);
+
+            // Move tongue back toward wall
+            Vector3 extensionOffset = pushingDir * currentExtension;
+            Vector3 newPos = pushingWallPos + extensionOffset;
+            newPos.z = TONGUE_LIP_Z;
+            pushingTongueInstance.transform.position = newPos;
+
+            // Apply bone state (fully uncurled, straight tongue)
+            ApplyPushingTongueBoneState(1f);
+
+            if (withdrawProgress >= 1f)
+            {
+                FinalizeCapture();
+            }
+        }
+
+        /// <summary>
+        /// Updates visitor position during pushing phase.
+        /// Positions visitor at the curl center (or release point during uncurl).
+        /// </summary>
+        private void UpdateVisitorPushPosition()
+        {
+            if (currentVisitor == null || pushingTongueBones == null || pushingTongueBones.Length == 0) return;
+
+            // During curl, visitor is at curl center
+            // During uncurl, visitor moves toward tip position
+            int tipIndex = pushingTongueBones.Length - 1;
+            int curlCenterIndex = Mathf.FloorToInt(tipIndex * 0.6f);  // ~60% from base
+
+            float t = pushingUncurlProgress;  // 0 = curled (at center), 1 = uncurled (at tip)
+            int targetIndex = Mathf.FloorToInt(Mathf.Lerp(curlCenterIndex, tipIndex, t));
+            targetIndex = Mathf.Clamp(targetIndex, 0, pushingTongueBones.Length - 1);
+
+            Transform targetBone = pushingTongueBones[targetIndex];
+            if (targetBone != null)
+            {
+                currentVisitor.transform.position = new Vector3(
+                    targetBone.position.x,
+                    targetBone.position.y,
+                    currentVisitor.transform.position.z);
+            }
+        }
+
+        /// <summary>
+        /// Applies bone rotations to the pushing tongue.
+        /// Tongue is fully horizontal with a 360° curl at the tip.
+        /// uncurlProgress: 0 = fully curled (start), 1 = straight (released)
+        /// </summary>
+        private void ApplyPushingTongueBoneState(float uncurlProgress)
+        {
+            if (pushingTongueBones == null || pushingTongueBones.Length == 0 || pushingTongueInstance == null) return;
+
+            int boneCount = pushingTongueBones.Length;
+
+            // Lip bone at 10% - bones before this are straight horizontal, after this they curl
+            int lipBoneIndex = pushingFrozenLipBoneIndex >= 0 ? pushingFrozenLipBoneIndex : Mathf.FloorToInt(boneCount * 0.1f);
+
+            // Direction toward heart (horizontal)
+            Vector3 targetDirWorld = new Vector3(
+                Mathf.Cos(pushingLockedAngle * Mathf.Deg2Rad),
+                Mathf.Sin(pushingLockedAngle * Mathf.Deg2Rad),
+                0f
+            );
+
+            // Curl amount (1 = fully curled, 0 = straight)
+            float curlAmount = 1f - uncurlProgress;
+
+            // Reset all bones to rest pose
+            for (int i = 0; i < boneCount; i++)
+            {
+                if (pushingTongueBones[i] == null) continue;
+                pushingTongueBones[i].localPosition = pushingBoneRestPositions[i];
+                pushingTongueBones[i].localRotation = pushingBoneRestRotations[i];
+            }
+
+            // Apply rotations to ALL bones (entire tongue is horizontal)
+            for (int i = 0; i < boneCount; i++)
+            {
+                if (pushingTongueBones[i] == null) continue;
+
+                Quaternion parentWorldRot = pushingTongueBones[i].parent != null ?
+                    pushingTongueBones[i].parent.rotation : Quaternion.identity;
+
+                Vector3 boneLocalDir = Vector3.up;
+                Vector3 boneWorldDir = parentWorldRot * pushingBoneRestRotations[i] * boneLocalDir;
+
+                Vector3 desiredDir;
+
+                if (i <= lipBoneIndex)
+                {
+                    // Straight section: all bones point toward heart (horizontal)
+                    desiredDir = targetDirWorld;
+                }
+                else
+                {
+                    // Curl zone: 360° curl in the XY plane
+                    int bonesInCurl = (boneCount - 1) - lipBoneIndex;
+                    float boneProgressAlongCurl = (float)(i - lipBoneIndex) / Mathf.Max(1, bonesInCurl);
+
+                    // Curl in opposite direction to grabbing (for pushing/release)
+                    float targetCumulativeAngle = boneProgressAlongCurl * 360f * -grabbingCurlDirection;
+                    float cumulativeAngle = targetCumulativeAngle * curlAmount;
+
+                    float rotatedAngle = pushingLockedAngle + cumulativeAngle;
+                    desiredDir = new Vector3(
+                        Mathf.Cos(rotatedAngle * Mathf.Deg2Rad),
+                        Mathf.Sin(rotatedAngle * Mathf.Deg2Rad),
+                        0f  // Stay in XY plane (horizontal curl)
+                    );
+                }
+
+                // Compute rotation to align bone toward desired direction
+                if (desiredDir.sqrMagnitude > 0.0001f && boneWorldDir.sqrMagnitude > 0.0001f)
+                {
+                    desiredDir = desiredDir.normalized;
+                    boneWorldDir = boneWorldDir.normalized;
+
+                    float dot = Vector3.Dot(boneWorldDir, desiredDir);
+                    Quaternion worldCorrection;
+
+                    if (dot > 0.9999f)
+                    {
+                        worldCorrection = Quaternion.identity;
+                    }
+                    else if (dot < -0.9999f)
+                    {
+                        Vector3 perpAxis = Vector3.Cross(boneWorldDir, Vector3.up);
+                        if (perpAxis.sqrMagnitude < 0.0001f)
+                            perpAxis = Vector3.Cross(boneWorldDir, Vector3.right);
+                        perpAxis.Normalize();
+                        worldCorrection = Quaternion.AngleAxis(180f, perpAxis);
+                    }
+                    else
+                    {
+                        worldCorrection = Quaternion.FromToRotation(boneWorldDir, desiredDir);
+                    }
+
+                    Quaternion newLocalRot = Quaternion.Inverse(parentWorldRot) * worldCorrection * parentWorldRot * pushingBoneRestRotations[i];
+
+                    if (!float.IsNaN(newLocalRot.x) && !float.IsNaN(newLocalRot.y) && !float.IsNaN(newLocalRot.z) && !float.IsNaN(newLocalRot.w))
+                    {
+                        pushingTongueBones[i].localRotation = newLocalRot;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Destroys the pushing tongue instance and cleans up.
+        /// </summary>
+        private void DestroyPushingTongue()
+        {
+            if (pushingBoneColliders != null)
+            {
+                foreach (var obj in pushingBoneColliders)
+                {
+                    if (obj != null) Object.Destroy(obj);
+                }
+                pushingBoneColliders = null;
+            }
+
+            if (pushingTongueInstance != null)
+            {
+                Object.Destroy(pushingTongueInstance);
+                pushingTongueInstance = null;
+            }
+
+            pushingTongueBones = null;
+            pushingBoneRestPositions = null;
+            pushingBoneRestRotations = null;
         }
 
         private void FinalizeCapture()
@@ -3065,45 +4112,20 @@ namespace FaeMaze.HeartPowers
             currentVisitor = null;
             pushPhase = PushPhase.Idle;
 
-            // Reset pushing visual to wall position and closed hand for next capture
-            if (pushingVisual != null)
-            {
-                pushingVisual.transform.position = pushingWallPos;
-            }
-            if (pushingTouchCollider != null)
-            {
-                pushingTouchCollider.transform.position = new Vector3(pushingWallPos.x, pushingWallPos.y, -0.3f);
-            }
-            SetAnimatorFrame(pushingAnimator, GRAB_ANIMATION_FRAMES);  // Reset to closed hand for next reverse play
-        }
+            // Destroy the pushing tongue
+            DestroyPushingTongue();
 
-        private void OrientHandTowardTarget(GameObject visual, Vector3 targetPos)
-        {
-            if (visual == null) return;
-
-            Vector3 direction = (targetPos - visual.transform.position).normalized;
-            if (direction.sqrMagnitude < 0.0001f) direction = Vector3.right;
-
-            // The prefab's default has fingers pointing +X, palm facing -Z.
-            // Just rotate around Z to point fingers toward target.
-            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-            visual.transform.rotation = Quaternion.Euler(0f, 0f, angle);
+            Debug.Log($"[HeartwardGrasp] Capture finalized, count: {capturedCount}/{requiredCaptures}");
         }
 
         /// <summary>
-        /// Updates touch collider and visitor positions during push phase.
+        /// Updates touch collider and visitor positions during push phase (LEGACY - not used with tongue).
+        /// Kept for potential future use or fallback.
         /// </summary>
         private void UpdatePushPositions(Vector3 handPos)
         {
-            if (pushingTouchCollider != null)
-            {
-                pushingTouchCollider.transform.position = new Vector3(handPos.x, handPos.y, -0.3f);
-            }
-
-            if (currentVisitor != null)
-            {
-                currentVisitor.transform.position = handPos + visitorPushOffset;
-            }
+            // LEGACY: This method was used with the hand-based push system
+            // Now the tongue-based system handles visitor positioning directly
         }
 
         /// <summary>
@@ -3152,11 +4174,6 @@ namespace FaeMaze.HeartPowers
             return onWalkableTile && !touchingWall;
         }
 
-        private void SetAnimatorFrame(Animator animator, int frame)
-        {
-            HeartPowerUtils.SetAnimatorFrame(animator, frame, GRAB_ANIMATION_FRAMES);
-        }
-
         private void SetVisitorVisible(VisitorControllerBase visitor, bool visible)
         {
             HeartPowerUtils.SetVisitorVisible(visitor, visible);
@@ -3182,6 +4199,9 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
+            // Clear tongue references and destroy tongue instances
+            DestroyGrabbingTongue();
+            DestroyPushingTongue();
 
             if (grabbingZoneObject != null)
             {
@@ -3221,6 +4241,7 @@ namespace FaeMaze.HeartPowers
             heartNodePosition += worldOffset;
             grabbingWallPos += worldOffset;
             pushingWallPos += worldOffset;
+            pushingHiddenPos += worldOffset;
 
             if (grabbingZoneObject != null)
                 grabbingZoneObject.transform.position += worldOffset;
@@ -3658,7 +4679,6 @@ namespace FaeMaze.HeartPowers
             Shader fogShader = Shader.Find("Custom/DevourDust");
             if (fogShader == null)
             {
-                Debug.LogWarning("[DevouringMaw] DevourDust shader not found, using fallback");
                 fogShader = Shader.Find("Universal Render Pipeline/Unlit");
                 if (fogShader == null) fogShader = Shader.Find("Unlit/Color");
             }
@@ -4020,7 +5040,6 @@ namespace FaeMaze.HeartPowers
 
             if (devourPrefab == null)
             {
-                Debug.LogWarning("[DevouringMaw] Devour prefab not assigned on HeartPowerManager");
                 return;
             }
 
@@ -4068,14 +5087,6 @@ namespace FaeMaze.HeartPowers
                     devourAnimator.Play(DEVOUR_ANIMATION_NAME, 0, startNormalized);
                     devourAnimator.Update(0f);
                 }
-                else
-                {
-                    Debug.LogWarning("[DevouringMaw] Animator has no RuntimeAnimatorController and could not load one");
-                }
-            }
-            else
-            {
-                Debug.LogWarning("[DevouringMaw] No Animator found on devour prefab");
             }
 
             // Fix MawThroat mesh rendering
@@ -4121,10 +5132,6 @@ namespace FaeMaze.HeartPowers
             if (manager.GameController != null)
             {
                 manager.GameController.AddEssence(essence, EssenceSource.VisitorConsumedByMaw, $"50% of {baseEssence}");
-            }
-            else
-            {
-                Debug.LogWarning("[DevouringMaw] GameController is null, cannot add essence");
             }
 
             // Track visitor fate with essence value
@@ -4265,7 +5272,6 @@ namespace FaeMaze.HeartPowers
             dynamicMazeGrowth = Object.FindFirstObjectByType<DynamicMazeGrowth>();
             if (dynamicMazeGrowth == null)
             {
-                Debug.LogWarning("[SculptingEffect] DynamicMazeGrowth not found!");
                 actionApplied = true;
                 return;
             }
@@ -4725,7 +5731,6 @@ namespace FaeMaze.HeartPowers
             var shader = Shader.Find("Custom/PowerFog");
             if (shader == null)
             {
-                Debug.LogWarning("PowerFog shader not found for sculpting smoke, using fallback");
                 shader = Shader.Find("Sprites/Default");
             }
 

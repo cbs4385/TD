@@ -85,10 +85,6 @@ namespace FaeMaze.Systems
         private float nodeRadius = 3.0f;
 
         [SerializeField]
-        [Tooltip("Node tile placement radius in world units (should match NODE_RADIUS=3.0 in generator)")]
-        private float nodeTileRadius = 3.0f;
-
-        [SerializeField]
         [Tooltip("Wall border depth in world units")]
         private float wallBorderDepth = 3.0f;
 
@@ -277,7 +273,6 @@ namespace FaeMaze.Systems
             var proceduralShader = Shader.Find("Custom/EarthenGround");
             if (proceduralShader == null)
             {
-                Debug.LogWarning("EarthenGround shader not found and could not extract heart material, falling back to default path material");
                 return;
             }
 
@@ -654,7 +649,6 @@ namespace FaeMaze.Systems
             List<Vector2> wallPositions, Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
-            float wallRadius = 0.65f;
 
             // Walk along each edge segment and check for gaps perpendicular to the path
             foreach (var seg in allEdgeSegments)
@@ -715,7 +709,6 @@ namespace FaeMaze.Systems
             List<Vector2> wallPositions, Transform mazeOrigin, float stepSize)
         {
             int tileCount = 0;
-            float wallRadius = 0.65f;
 
             // Fill gaps around new edges only
             if (newEdges != null)

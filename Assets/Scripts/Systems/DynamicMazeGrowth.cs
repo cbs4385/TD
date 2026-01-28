@@ -81,9 +81,6 @@ namespace FaeMaze.Systems
         [Tooltip("Pond prefab to place underneath each PukaHazard (not currently used)")]
         private GameObject pondPrefab;
 
-        [SerializeField]
-        [Tooltip("Z position for PukaHazards (default -0.5)")]
-        private float pukaZPosition = -0.5f;
 
         [SerializeField]
         [Tooltip("Z position for Ponds (default 0)")]
@@ -136,8 +133,11 @@ namespace FaeMaze.Systems
         // Unified tracking: maps node index to the type of prop spawned there
         private Dictionary<int, NodePropType> nodeProps = new Dictionary<int, NodePropType>();
 
-        // Cycling index for prop type selection during growth
-        private int nextPropTypeIndex = 0;
+        // Track node center colliders (block visitors from walking into node centers)
+        private Dictionary<int, GameObject> nodeCenterColliders = new Dictionary<int, GameObject>();
+        private Transform nodeCenterCollidersParent;
+        private const float NODE_CENTER_COLLIDER_RADIUS = 1.0f;  // Radius of collider blocking node center (matches tile walkability)
+
 
         // Track available spawn IDs
         private char[] availableSpawnIds = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' };
@@ -152,13 +152,6 @@ namespace FaeMaze.Systems
         /// Subscribe to this event to know when the maze is ready for gameplay.
         /// </summary>
         public event System.Action OnInitialGrowthComplete;
-
-        /// <summary>
-        /// Static event invoked when maze growth occurs at a specific position.
-        /// Visitors can subscribe to this to become dazed when they witness growth.
-        /// Parameter is the world position where growth occurred.
-        /// </summary>
-        public static event System.Action<Vector3> OnMazeGrowthOccurred;
 
         #endregion
 
@@ -250,6 +243,15 @@ namespace FaeMaze.Systems
                 pondsObj.transform.SetParent(transform);
                 pondsObj.transform.localPosition = Vector3.zero;
                 pondsParent = pondsObj.transform;
+            }
+
+            // Create node center colliders parent for organizing collision blockers
+            if (nodeCenterCollidersParent == null)
+            {
+                GameObject collidersObj = new GameObject("NodeCenterColliders");
+                collidersObj.transform.SetParent(transform);
+                collidersObj.transform.localPosition = Vector3.zero;
+                nodeCenterCollidersParent = collidersObj.transform;
             }
 
             // Run initial growth stages synchronously BEFORE the first frame renders
@@ -554,7 +556,9 @@ namespace FaeMaze.Systems
                 // This removes all walls around the node and re-renders them with proper edge angle clearance
                 foreach (var targetNode in crossConnectionTargetNodes)
                 {
+                    #pragma warning disable CS0618 // Type or member is obsolete
                     mazeRenderer.RegenerateNodeWalls(targetNode, forestMapState.Edges);
+                    #pragma warning restore CS0618
                 }
 
                 // Remove path tiles only around the NEW node center (to place cylinder)
@@ -999,6 +1003,10 @@ namespace FaeMaze.Systems
         /// </summary>
         private NodePropType GetRandomPropType()
         {
+            // DEBUG: Always return Pond for uninterrupted visitor pathing
+            return NodePropType.Pond;
+
+            /*
             // Check if any Puka exists in the maze
             bool hasPuka = nodePukas.Count > 0;
 
@@ -1036,6 +1044,7 @@ namespace FaeMaze.Systems
                 // No Puka exists, Puka gets 15% chance (10% + 5% from Wisp)
                 return NodePropType.Puka;
             }
+            */
         }
 
         /// <summary>
@@ -1190,6 +1199,9 @@ namespace FaeMaze.Systems
             // Track the pond
             nodePonds[nodeIndex] = pond;
 
+            // Add node center collider to block visitors from walking into the pond
+            CreateNodeCenterCollider(node, nodeIndex);
+
             // No Puka spawned - this is a standalone decorative pond
             return true;
         }
@@ -1326,6 +1338,10 @@ namespace FaeMaze.Systems
 
             // Track the fairy ring
             nodeFairyRings[nodeIndex] = ring;
+
+            // Add node center collider to block visitors from walking into the ring
+            CreateNodeCenterCollider(node, nodeIndex);
+
             return true;
         }
 
@@ -1378,6 +1394,10 @@ namespace FaeMaze.Systems
 
             // Track the lantern
             nodeLanterns[nodeIndex] = lantern;
+
+            // Add node center collider to block visitors from walking into the lantern
+            CreateNodeCenterCollider(node, nodeIndex);
+
             return true;
         }
 
@@ -1445,7 +1465,67 @@ namespace FaeMaze.Systems
 
             // Track the wisp
             nodeWisps[nodeIndex] = wisp;
+
+            // Add node center collider to block visitors from walking into the wisp
+            CreateNodeCenterCollider(node, nodeIndex);
+
             return true;
+        }
+
+        /// <summary>
+        /// Creates a solid collider at the node center to prevent visitors from walking into the middle.
+        /// Should be called for all nodes except heart (node 0) and Puka nodes.
+        /// </summary>
+        /// <param name="node">The node to add a collider to</param>
+        /// <param name="nodeIndex">The index of the node</param>
+        private void CreateNodeCenterCollider(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
+        {
+            // Skip if collider already exists
+            if (nodeCenterColliders.ContainsKey(nodeIndex))
+            {
+                return;
+            }
+
+            // Create collider game object
+            GameObject colliderObj = new GameObject($"NodeCenterCollider_{nodeIndex}");
+            colliderObj.transform.position = new Vector3(node.Position.x, node.Position.y, 0f);
+
+            if (nodeCenterCollidersParent != null)
+            {
+                colliderObj.transform.SetParent(nodeCenterCollidersParent, worldPositionStays: true);
+            }
+
+            // Add a CapsuleCollider oriented along Z axis (vertical in world-space)
+            // This creates a cylinder that blocks movement in the XY plane
+            // Note: This is a TRIGGER collider - it doesn't physically block movement.
+            // Movement blocking is handled by code in VisitorControllerBase.IsBlockedByNodeCenter().
+            // Using a trigger prevents visitors from getting permanently stuck if they somehow
+            // end up inside the blocked area (e.g., from spline interpolation cutting corners).
+            CapsuleCollider capsule = colliderObj.AddComponent<CapsuleCollider>();
+            capsule.radius = NODE_CENTER_COLLIDER_RADIUS;
+            capsule.height = 4f;  // Tall enough to block any Z position visitors might be at
+            capsule.direction = 2;  // Z-axis alignment
+            capsule.isTrigger = true;  // Trigger, not solid - code handles blocking
+
+            // Track the collider
+            nodeCenterColliders[nodeIndex] = colliderObj;
+        }
+
+        /// <summary>
+        /// Removes the node center collider for a specific node.
+        /// Called when removing props (e.g., via Sculpting power).
+        /// </summary>
+        /// <param name="nodeIndex">The index of the node</param>
+        private void RemoveNodeCenterCollider(int nodeIndex)
+        {
+            if (nodeCenterColliders.TryGetValue(nodeIndex, out GameObject colliderObj))
+            {
+                if (colliderObj != null)
+                {
+                    Destroy(colliderObj);
+                }
+                nodeCenterColliders.Remove(nodeIndex);
+            }
         }
 
         #region PukaHazard Spawning (Not Currently Used)
@@ -1670,6 +1750,9 @@ namespace FaeMaze.Systems
                 nodePukas.Remove(nodeIndex);
                 removed = true;
             }
+
+            // Remove node center collider
+            RemoveNodeCenterCollider(nodeIndex);
 
             return removed;
         }

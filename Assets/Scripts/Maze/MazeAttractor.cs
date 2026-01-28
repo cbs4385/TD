@@ -56,11 +56,6 @@ namespace FaeMaze.Maze
         [Tooltip("Enable fascination mechanic (visitors retarget to attractor then wander)")]
         private bool enableFascination = false;
 
-        [SerializeField]
-        [Tooltip("Chance (0-1) for a visitor to become fascinated when entering trigger")]
-        [Range(0f, 1f)]
-        private float fascinationChance = 0.8f;
-
         #endregion
 
         #region Private Fields

@@ -819,7 +819,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1408523521}
   - component: {fileID: 1408523522}
-  - component: {fileID: 1408523523}
   - component: {fileID: 1408523524}
   - component: {fileID: 1408523525}
   m_Layer: 0
@@ -862,22 +861,6 @@ MonoBehaviour:
   heart: {fileID: 0}
   uiController: {fileID: 2096385509}
   startingEssence: 200
---- !u!114 &1408523523
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1408523520}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3f8c2e9a7d1b5e4a6c8f2d9b5e7a3c6d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  visitorPrefab: {fileID: 5000000005, guid: 5e9a2c7f8d1b4e3a6c9f5d2b8e7a3c1f, type: 3}
-  entrance: {fileID: 0}
-  heart: {fileID: 0}
-  spawnOffset: {x: 0, y: 0, z: 0}
 --- !u!114 &1408523524
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -892,14 +875,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   basicVisitorPrefab: {fileID: 8000000003, guid: 86328c3da86d64c4eaf5c60e62be62a6, type: 3}
   mistakingVisitorPrefab: {fileID: 9000000003, guid: 38c7e2a69ba274a45a490b1cbd9b8916, type: 3}
-  lanternDrunkVisitorPrefab: {fileID: 7000000003, guid: ca0fe09d5bade5c4e9aee7f753fb9cb0, type: 3}
+  lanternDrunkVisitorPrefab: {fileID: 7849252713577324535, guid: e642516a3fb51c94a99c12ba11971ab8, type: 3}
   waryWayfarerVisitorPrefab: {fileID: 6000000003, guid: 2ad749bec494848408ae087122a2a286, type: 3}
   sleepwalkingVisitorPrefab: {fileID: 5000000003, guid: fcf1ccc101e3d2f4da955bc0eea16b81, type: 3}
   redCapPrefab: {fileID: 5000000003, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
-  visitorsPerWave: 10
-  spawnInterval: 3
+  baseSpawnInterval: 5
+  spawnIntervalIncreaseRate: 0.05
   enableRedCap: 1
-  redCapSpawnDelay: 60
   enableWaveSpawnerUI: 0
   uiCanvas: {fileID: 0}
   fontSize: 20
@@ -1043,7 +1025,6 @@ MonoBehaviour:
   useGameSettings: 1
   maximizeBlurIntensity: 1
   maximizeBlurSamples: 1
-  debugLog: 1
 --- !u!114 &1534669906
 MonoBehaviour:
   m_ObjectHideFlags: 0

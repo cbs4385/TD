@@ -85,12 +85,6 @@ namespace FaeMaze.Systems
                     _ => false
                 };
 
-                // Debug: log when mouse binding is checked and pressed
-                if (result)
-                {
-                    Debug.Log($"[InputBindingHelper] Mouse binding '{binding}' (index {mouseIndex}) was pressed this frame");
-                }
-
                 return result;
             }
 

@@ -259,7 +259,6 @@ namespace FaeMaze.HeartPowers
             string power1Binding = GameSettings.HeartPower1Binding;
             if (InputBindingHelper.WasBindingPressedThisFrame(power1Binding))
             {
-                Debug.Log($"[HeartPowerUI] Power 1 binding '{power1Binding}' pressed - activating MurmuringPaths");
                 ActivatePower(HeartPowerType.MurmuringPaths);
             }
             else if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.HeartPower2Binding))

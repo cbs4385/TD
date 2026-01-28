@@ -53,8 +53,8 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Sets up initial mesmerized state for Devotees.
-        /// Called at spawn to put them into trance toward the Heart.
-        /// Uses world-space navigation.
+        /// Called at spawn to put them into trance toward the Heart edge.
+        /// Uses world-space navigation. Visitors NEVER path to node centers.
         /// </summary>
         private void InitializeMesmerizedState()
         {
@@ -67,11 +67,11 @@ namespace FaeMaze.Visitors
                 currentStateTimer = currentStateDuration;
                 state = VisitorState.Fascinated;
 
-                // Ensure destination is the Heart using world-space position
+                // Ensure destination is the Heart edge (not center)
                 if (mazeGridBehaviour != null)
                 {
-                    Vector3 heartWorldPos = mazeGridBehaviour.HeartWorldPosition;
-                    SetWorldDestination(heartWorldPos);
+                    Vector3 heartApproachPos = GetHeartApproachPosition();
+                    SetWorldDestination(heartApproachPos);
                 }
             }
         }
@@ -136,20 +136,20 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Override destination logic - Devotees always head toward Heart when mesmerized.
-        /// Uses world-space navigation.
+        /// Override destination logic - Devotees always head toward Heart edge when mesmerized.
+        /// Uses world-space navigation. Visitors NEVER path to node centers.
         /// </summary>
         protected override Vector3 GetDestinationForCurrentState()
         {
             if (isFascinated && mazeGridBehaviour != null)
             {
-                return mazeGridBehaviour.HeartWorldPosition;
+                return GetHeartApproachPosition();
             }
 
-            // If frightened, still prefer Heart over exits (drawn to it)
+            // If frightened, still prefer Heart edge over exits (drawn to it)
             if (state == VisitorState.Frightened && mazeGridBehaviour != null)
             {
-                return mazeGridBehaviour.HeartWorldPosition;
+                return GetHeartApproachPosition();
             }
 
             return base.GetDestinationForCurrentState();

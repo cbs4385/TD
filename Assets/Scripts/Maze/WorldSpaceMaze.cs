@@ -669,12 +669,17 @@ namespace ForestMaze
                         float distance = offset.magnitude;
                         if (distance > NODE_RADIUS) continue;
 
+                        // DON'T CREATE tiles within 1.0 units of node center
+                        // This prevents A* from finding these tiles at all
+                        // Props and hazards occupy this central space
+                        // Visitors path to node edges and are detected by trigger colliders
+                        if (distance < 1.0f) continue;
+
                         // Use world-space proximity check - this ensures edge tiles near node boundary
                         // don't get replaced by node tiles (edge tiles have connectivity info)
                         if (HasTileNearPosition(data, position, minTileSpacing)) continue;
 
                         // Calculate orientation: radial from center (facing outward)
-                        // For tiles at center, default to 0
                         float orientation = 0f;
                         if (distance > 0.01f)
                         {
@@ -684,29 +689,6 @@ namespace ForestMaze
 
                         var tile = new WorldSpaceTile(position, orientation, WorldSpaceTile.TileCategory.Node, tileSize);
                         tile.NodeIndex = nodeIndex;
-
-                        // Mark special node tiles and handle center walkability
-                        // The central 1 unit radius of each node is unwalkable (for props/hazards)
-                        float distFromCenter = offset.magnitude;
-                        bool isInCentralCircle = distFromCenter < 1.0f;
-
-                        if (dx == 0 && dy == 0)
-                        {
-                            if (node.Kind == "root")
-                            {
-                                tile.Symbol = 'H'; // Heart
-                            }
-                            else
-                            {
-                                tile.Symbol = 'N'; // Node hazard
-                            }
-                        }
-
-                        // Mark tiles within 1 unit radius of node center as unwalkable (except root/heart)
-                        if (isInCentralCircle && node.Kind != "root")
-                        {
-                            tile.Walkable = false;
-                        }
 
                         data.AddTile(tile);
                         // Only add to walkable positions if the tile is walkable

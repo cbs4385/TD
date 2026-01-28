@@ -67,7 +67,6 @@ namespace FaeMaze.Systems
 
                 if (gameController == null)
                 {
-                    Debug.LogWarning("[EssenceBlurController] No GameController found - disabling");
                     enabled = false;
                     return;
                 }

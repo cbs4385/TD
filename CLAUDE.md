@@ -91,6 +91,158 @@ Resources.Load<Texture2D>("EarthenGroundTexture");
 
 ---
 
+# 🚨🚨🚨 CRITICAL: NODE CENTER IS UNWALKABLE 🚨🚨🚨
+
+## NODE CENTERS ARE NOT WALKABLE - VISITORS CANNOT PATH THROUGH THEM!
+
+**This is a fundamental architectural constraint that affects ALL pathfinding and navigation code.**
+
+### Node Geometry:
+```
+         NODE_RADIUS (3.0 units)
+         ←─────────────────────→
+
+              Walkable Ring
+           ╭───────────────────╮
+          ╱                     ╲
+         │    ╭─────────────╮    │
+         │   ╱  UNWALKABLE   ╲   │
+         │  │   (< 1.0 unit   │  │   ← Props/hazards go here
+         │   ╲   from center)╱   │
+         │    ╰─────────────╯    │
+          ╲                     ╱
+           ╰───────────────────╯
+
+         Inner radius: 1.0 unit (unwalkable)
+         Outer radius: 3.0 units (NODE_RADIUS)
+         Walkable area: ring from 1.0 to 3.0 units
+```
+
+### The Rules:
+| Distance from Node Center | Walkable? | Purpose |
+|---------------------------|-----------|---------|
+| 0.0 - 1.0 units | **NO** | Reserved for props (Pond, Lantern, FairyRing) |
+| 1.0 - 3.0 units | Yes | Visitor walking area |
+| > 3.0 units | Edge paths | Corridors between nodes |
+
+**Exception**: The root/heart node (Kind == "root") has walkable center tiles.
+
+### Implementation (WorldSpaceMaze.cs line ~705):
+```csharp
+// Mark tiles within 1 unit radius of node center as unwalkable (except root/heart)
+float distFromCenter = offset.magnitude;
+bool isInCentralCircle = distFromCenter < 1.0f;
+if (isInCentralCircle && node.Kind != "root")
+{
+    tile.Walkable = false;
+}
+```
+
+### VIOLATIONS - DO NOT DO THIS:
+```csharp
+// WRONG - Pathfinding through node centers
+waypoints.Add(nodeCenter); // NO! Node centers are unwalkable!
+
+// WRONG - Assuming visitors can reach node center
+Vector3 destination = node.Position; // NO! Use edge of walkable ring!
+
+// WRONG - Graph-based navigation using node positions directly
+path = FindPath(startNode.Position, endNode.Position); // NO! Positions are unwalkable!
+```
+
+### Correct Patterns for Navigation:
+
+**Finding a walkable position near a node:**
+```csharp
+// Get position on walkable ring (1.0 to 3.0 units from center)
+Vector2 directionFromCenter = (visitorPos - nodeCenter).normalized;
+Vector2 walkablePos = nodeCenter + directionFromCenter * 1.5f; // Middle of walkable ring
+```
+
+**Pathfinding must use TILES, not node centers:**
+- The A* algorithm uses `WorldSpaceTile` objects with `Walkable` property
+- Tiles within 1.0 unit of non-root node centers have `Walkable = false`
+- Pathfinding automatically avoids unwalkable tiles
+
+**Edge entry/exit points:**
+- Edges connect at NODE_RADIUS (3.0 units) from node center
+- Visitors enter/exit nodes at the edge of the walkable area
+- Movement through nodes follows the walkable ring, not straight lines through center
+
+### Why This Matters for Pathfinding:
+The current tile-based A* works correctly because it respects `Walkable` flags. Any "optimization" that tries to use node centers as waypoints will break navigation. Visitors would path into unwalkable areas and get stuck.
+
+**ALWAYS use tile-based pathfinding or ensure any graph-based approach respects the unwalkable center region!**
+
+---
+
+## Path Simplification (CRITICAL for Movement)
+
+**Paths MUST be simplified before use - without this, visitors trigger waypoint events too frequently.**
+
+### The Problem:
+Tiles are spaced ~0.5 units apart along edges. Without simplification, a path across one edge might have 10-20+ waypoints. This causes:
+- `HandleDetourAtWaypoint()` triggers at every tile boundary
+- Excessive waypoint processing overhead
+- Jittery direction updates
+
+### Movement System:
+**Spline smoothing is DISABLED** (`useSplineSmoothing = false` in VisitorControllerBase).
+Visitors now use direct tile-to-tile movement via `UpdateDirectWalking()`.
+Spline smoothing was disabled because it caused visitors to drift off walkable tiles and get stuck.
+
+### The Solution:
+`SimplifyTilePath()` removes intermediate collinear points, keeping only:
+1. Points where direction changes by >20 degrees (sharp turns)
+2. Points where cumulative small turns exceed 30 degrees (gradual curves)
+3. At least one point every 10 tiles (~5 world units) for waypoint spacing
+
+### Implementation (called in BuildWorldPath):
+```csharp
+// A* through walkable tiles
+var tilePath = FindTilePath(mazeData, startTile, endTile);
+
+// CRITICAL: Simplify path for smooth movement
+tilePath = SimplifyTilePath(tilePath);
+
+// Convert to world positions...
+```
+
+### VIOLATION - DO NOT DO THIS:
+```csharp
+// WRONG - Using raw tile path without simplification
+foreach (var tile in tilePath)  // NO! Simplify first!
+{
+    result.Add(new Vector3(tile.Position.x, tile.Position.y, start.z));
+}
+```
+
+### Shared Pathfinding Utility:
+All movement pathfinding should use `ForestMaze.MazePathfinding` (in `Assets/Scripts/Maze/MazePathfinding.cs`):
+
+```csharp
+// Standard usage - includes path simplification automatically
+var path = MazePathfinding.BuildWorldPath(
+    mazeData,
+    startPosition,
+    endPosition,
+    heartNodePenalty: 20f,      // Penalty for crossing heart node
+    penalizeHeartNode: true     // Set false if destination IS the heart
+);
+```
+
+### Files that build paths:
+| File | Method | Uses Shared Utility? | Notes |
+|------|--------|---------------------|-------|
+| `VisitorControllerBase.cs` | `BuildWorldPath()` | Yes | Primary visitor pathfinding |
+| `RedCapController.cs` | `BuildWorldPath()` | Yes | RedCap enemy pathfinding |
+| `HeartPowerEffects.cs` | `GeneratePathToHeart()` | No | Fog coverage (needs dense points) |
+
+**Any new pathfinding code for MOVEMENT must use `MazePathfinding.BuildWorldPath()` which handles simplification automatically!**
+(Visual effect paths may need dense points and should not use the shared utility.)
+
+---
+
 ## ⛔ LOCKED FILES - DO NOT MODIFY ⛔
 
 The following files have been stabilized after extensive debugging. **DO NOT MODIFY** without explicit user approval:
@@ -422,6 +574,141 @@ Resources.Load<RuntimeAnimatorController>("devour"); // NO! Use AssetDatabase pa
 
 ---
 
+## CRITICAL RULE 8: Physics Object Pooling (Prevents 15+ Second Freezes)
+
+**NEVER create/destroy GameObjects with colliders during gameplay - it causes 15+ second freezes!**
+
+### The Problem:
+When GameObjects containing colliders are created, destroyed, or activated/deactivated during gameplay:
+- Unity's physics engine rebuilds its broadphase data structure
+- With many visitors (each has a Rigidbody), this takes 15-20+ seconds
+- The freeze happens in FixedUpdate, blocking the entire game
+- Even `Physics.autoSyncTransforms = false` doesn't prevent the freeze
+
+### The Solution:
+**Pre-create all physics objects at startup and REUSE them.**
+
+1. **Create pooled colliders/objects in Start()** - before gameplay begins
+2. **Hide unused objects far underground** (Z = 1000) instead of destroying them
+3. **Reposition to actual locations when needed** instead of creating new ones
+4. **Never use SetActive() on objects with colliders** - reposition instead
+
+### Implementation Pattern:
+```csharp
+private const float COLLIDER_HIDDEN_Z = 1000f;
+
+// In Start() - create pool ONCE
+private void Start()
+{
+    CreateColliderPool();      // Pre-create all colliders at Z=1000
+    PreCreateTongueInstance(); // Pre-create tongue model at Z=1000
+}
+
+// To "spawn" - reposition from underground to play area
+colliderObject.transform.position = targetWorldPosition;
+
+// To "despawn" - reposition back underground (don't destroy!)
+colliderObject.transform.position = new Vector3(0, 0, COLLIDER_HIDDEN_Z);
+
+// NEVER do these during gameplay:
+Instantiate(prefabWithColliders);     // NO! Causes freeze!
+Destroy(objectWithColliders);          // NO! Causes freeze!
+colliderObject.SetActive(true/false);  // NO! Causes freeze!
+AddComponent<Collider>();              // NO! Causes freeze!
+AddComponent<Rigidbody>();             // NO! Causes freeze!
+```
+
+### Key Constants (HeartOfTheMaze.cs):
+| Constant | Value | Description |
+|----------|-------|-------------|
+| COLLIDER_HIDDEN_Z | 1000f | Z position to hide pooled objects |
+| COLLIDER_POOL_SIZE | 28 | Pre-calculated pool size for bone colliders |
+| EXPECTED_BONE_COUNT | 540 | Number of bones in tongue model |
+| TONGUE_BONE_BLOCKING_RADIUS | 0.25f | Script-based blocking radius per bone |
+
+### Pooled Objects in HeartOfTheMaze:
+| Object | Created In | Purpose |
+|--------|-----------|---------|
+| `pooledColliderObjects[]` | `CreateBoneColliderPool()` | 28 pooled bone colliders (TRIGGER ONLY, no solid colliders!) |
+| `heartTongueInstance` | `PreCreateTongueInstance()` | Single reusable tongue model |
+
+### Script-Based Blocking (No Solid Colliders):
+Solid colliders caused 14+ second freezes even with pooling, because Unity's physics engine
+does expensive collision calculations when many rigidbodies exist (visitors each have one).
+
+**Solution**: Use ONLY trigger colliders for detection, and script-based distance checks for blocking:
+- `HeartOfTheMaze.IsPositionBlockedByTongue(Vector2)` - Checks if position is near any bone
+- `HeartOfTheMaze.GetUnblockedPosition(Vector2 current, Vector2 target)` - Binary search for safe position
+- `VisitorControllerBase.IsBlockedByTongue()` - Uses the above instead of Physics.SphereCast
+
+### Files affected:
+- `HeartOfTheMaze.cs` - Tongue and bone colliders use pooling
+- Any future code adding physics objects dynamically must follow this pattern
+
+### VIOLATION - DO NOT DO THIS:
+```csharp
+// WRONG - creating colliders during gameplay
+private void SpawnTongue()
+{
+    heartTongueInstance = Instantiate(tonguePrefab);  // NO! Causes freeze!
+    for (int i = 0; i < bones.Length; i++)
+    {
+        GameObject obj = new GameObject();
+        obj.AddComponent<SphereCollider>();  // NO! Causes freeze!
+        obj.AddComponent<Rigidbody>();       // NO! Causes freeze!
+    }
+}
+
+// WRONG - destroying colliders during gameplay
+private void CleanupTongue()
+{
+    Destroy(heartTongueInstance);  // NO! Causes freeze!
+    foreach (var collider in boneColliders)
+        Destroy(collider);         // NO! Causes freeze!
+}
+```
+
+---
+
+## CRITICAL RULE 9: Collider World Position Detection
+
+**ALWAYS use `col.transform.position` for animated/scaled colliders, NEVER `col.bounds.center`!**
+
+### The Problem:
+When detecting collider positions for collision blocking, `Collider.bounds.center` can return incorrect world positions for colliders that are:
+1. **Parented to animated bones** (transforms change every frame)
+2. **Non-uniformly scaled** (scale affects bounds calculation incorrectly)
+
+### The Solution:
+Use `col.transform.position` which gives the actual world-space position of the collider's GameObject.
+
+### VIOLATION - DO NOT DO THIS:
+```csharp
+// WRONG - bounds.center is incorrect for animated/scaled colliders
+Vector3 colliderCenter = col.bounds.center;
+Vector2 collider2D = new Vector2(colliderCenter.x, colliderCenter.y);
+float dist2D = Vector2.Distance(visitor2D, collider2D);  // Distance will be WRONG!
+```
+
+### Correct Pattern:
+```csharp
+// CORRECT - transform.position gives actual world position
+Vector3 colliderWorldPos = col.transform.position;
+Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
+float dist2D = Vector2.Distance(visitor2D, collider2D);  // Distance is accurate
+```
+
+### When This Matters:
+- Tongue bone colliders (parented to animated skeleton)
+- Any collider with non-uniform scale
+- Colliders on procedurally animated objects
+- Colliders on objects with complex parent hierarchies
+
+### Reference:
+This bug caused visitors to walk through tongue colliders. The colliders were being found by `Physics.OverlapSphere`, but `bounds.center` reported positions 2+ units away from the actual visual position. Using `transform.position` fixed the issue completely.
+
+---
+
 ## CRITICAL RULE 7: Heart of the Maze Model Structure
 
 **The Heart of the Maze is a two-part model: a static base ring and an animated tongue.**
@@ -482,8 +769,32 @@ The `HeartOfTheMaze.cs` implements a three-state system:
 
 ### State transitions:
 1. **Idle → Reaching**: Visitor enters detection radius (default 2.5 units)
-2. **Reaching → Grabbing**: Grab collider touches visitor and curl progress >= 80%
+2. **Reaching → Grabbing**: Wrap complete (reverseCurlProgress >= 1.0)
 3. **Grabbing → Idle**: Tongue fully retracted below ground, visitor consumed
+
+### Tongue Phases (within Reaching state):
+The tongue progresses through multiple phases while in the Reaching state:
+```
+Emerging → Extending → Curving → Wrapping → Pulling → Sinking
+                          ↓ (miss)
+                      Retracting → Extending (retry)
+```
+
+| Phase | Description | Visitor State |
+|-------|-------------|---------------|
+| Emerging | Tongue translates up from z=9 until tip at lip | Walking (unchanged) |
+| Extending | Lip bone bends, horizontal section grows to node edge | Walking (unchanged) |
+| Curving | Horizontal portion curves toward visitor's predicted position | Walking (unchanged) |
+| Retracting | Miss timeout - straighten curve, retract to lip, then retry | Walking (unchanged) |
+| Wrapping | Bone collider contact - wrap around visitor from contact point | Grabbed |
+| Pulling | Wrap complete, horizontal retraction | Grabbed |
+| Sinking | Below lip - rotates down into heart | Grabbed |
+
+**Key behavioral changes:**
+- Visitor keeps moving until bone collider contact triggers Wrapping phase
+- Tongue aims ahead at visitor's predicted position (using `GetPredictedPosition()`)
+- Per-bone colliders (every 5th bone) detect contact anywhere along the tongue
+- Miss/retry: If curving for 3+ seconds without contact, retract and try again
 
 ### Key implementation details:
 ```csharp
@@ -543,146 +854,142 @@ The tongue has 540 bones (indices 0-539), named Bone_000 through Bone_539:
 
 ### Completed - Heart Tongue Visitor Consumption
 
-**Status**: Fully implemented and working. Full grab/consume sequence complete. Tongue emerges, reaches toward visitor, curls around them, pulls them back horizontally, then rotates the curl section 90° while sinking to consume the visitor.
+**Status**: Fully implemented and working. Tongue emerges, extends, curls around visitor, tightens, hinges 90°, and descends into heart.
 
 **Model details:**
 - 540 bones named Bone_000 through Bone_539
 - Base at origin, tip extends along +X
-- Bones use local +X as forward direction (boneLocalDir = Vector3.up after rest rotation)
-- All bones have localPosition (0,0,0)
-- Tongue length ~8.4 world units (scaled)
-- Colliders positioned using bone world positions directly
+- Bones use local +Y as forward direction after rest rotation
+- Prefab scale: (1, 0.3, 0.3), no runtime scaling applied
+- Tongue length ~8.1 world units
+- 27 bone colliders (every 20th bone) for contact detection and physics blocking
 
-**What works:**
-- Tongue spawns at z=9 (below ground) ✓
-- Tongue emerges straight during Emerging phase ✓
-- Bones stay at rest pose until Reaching phase begins ✓
-- When tip reaches TONGUE_LIP_Z (-0.25), transitions to Reaching phase ✓
-- During Reaching phase, bones above lipBoneIndex rotate toward visitor ✓
-- Tongue prefab's lights are removed at spawn ✓
-- Visitor dazed when tongue emerges ✓
-- **Initial curl works** - 180° horizontal curl in XY plane (parallel to ground) ✓
-- Curl direction determined by visitor angle (CCW if upper half, CW if lower) ✓
-- Collider positions update using bone.position (tracks deformed mesh) ✓
-- Grab hold timer delays pulling after grab contact ✓
-- **Pulling phase** - Horizontal retraction by reversing reaching motion ✓
-- **Sinking phase** - Pivot bone rotates, curl follows via locked local rotations ✓
-- **Visitor tracking** - Position at midpoint of grab/reach, rotation via delta ✓
-
-**Five-phase tongue sequence:**
+**Six-phase tongue sequence:**
 1. **Emerging**: Tongue translates up from z=9 until tip reaches lip (z=-0.25)
-2. **Reaching**: Bones above lip rotate toward visitor in XY plane
-3. **Touching**: Tip contacts visitor, curl progresses 180° around them
-4. **Pulling**: Tongue retracts horizontally (lip bone recalculated dynamically as tongue sinks)
-5. **Sinking**: When grab reaches lip, pivot bone rotates 90°, curl follows via locked rotations
+2. **Extending**: Lip bone bends 90°, horizontal section grows to detection radius
+3. **Curling**: 360° closed circle forms around visitor, physics colliders contain visitor
+4. **Pulling**: Tongue retracts to tighten curl, physics colliders push visitor inward
+5. **Hinging**: Tight curl rotates 90° from horizontal to vertical, visitor rotates with it
+6. **Descending**: Hinged curl pulls straight down into heart, visitor manually positioned
 
-**Pivot bone pattern (Sinking phase):**
-The curl section maintains its shape during the 90° rotation from horizontal to vertical:
-- **Pivot bone** (grabBoneIndex - 1): Rotates from horizontal to vertical via `desiredDir`
-- **Curl bones** (grabBoneIndex and beyond): Use locked local rotations, cascading from pivot
-- This causes the entire curl section (with visitor) to rotate as a unit
-
-**Visitor position and rotation tracking:**
-```csharp
-// Position: midpoint between grab and reach colliders
-Vector3 midpoint = (grabPos + reachPos) * 0.5f;
-targetVisitor.transform.position = midpoint;
-
-// Rotation: delta from grab bone applied incrementally
-Quaternion rotationDelta = currentGrabBoneRotation * Quaternion.Inverse(previousGrabBoneRotation);
-targetVisitor.transform.rotation = rotationDelta * targetVisitor.transform.rotation;
-```
+**Physics-based containment:**
+- During Curling: Solid colliders surround and trap the visitor
+- During Pulling: Tongue retracts (tongueZPosition increases), fewer horizontal bones = tighter curl
+- During Hinging: Colliders rotate and push visitor, manual rotation delta applied to visitor
+- During Descending: Manual positioning (physics won't work underground)
 
 **Key implementation details:**
 - File: `HeartOfTheMaze.cs`
 - State machine: `HeartState` (Idle, Reaching, Grabbing)
-- Tongue phase: `TonguePhase` (Emerging, Reaching, Touching, Pulling, Sinking)
-- Bones from SkinnedMeshRenderer: 540 bones
-- Bone direction: `Vector3.up` (local +Y points toward next bone after rest rotation)
-- Curl is HORIZONTAL (parallel to ground, in XY plane, rotates around Z axis)
+- Tongue phase: `TonguePhase` (Emerging, Extending, Curling, Pulling, Hinging, Descending)
+- Bone direction: `Vector3.up` (local +Y points toward next bone)
+- Curl is HORIZONTAL (parallel to ground, in XY plane)
+- Bone colliders: solid (blocking) on every 20th bone
 
 **Key constants:**
 | Constant | Value | Description |
 |----------|-------|-------------|
 | TONGUE_START_Z | 9.0 | Starting Z position (below ground) |
-| TONGUE_LIP_Z | -0.25 | Z where tip emerges (triggers Reaching phase) |
+| TONGUE_LIP_Z | -0.25 | Z where tip emerges above lip |
 | TONGUE_EMERGE_SPEED | 1.5 | Units per second for vertical movement |
-| TONGUE_CURL_SPEED | 2.0 | Rate of curl progress (0→1) |
-| GRAB_BONE_OFFSET | 50 | Bones from tip for grab collider (~9% from tip) |
-| CURL_DIAMETER | 0.5 | Target diameter of curl around visitor |
-| GRAB_HOLD_DURATION | 0.5 | Seconds to hold after grab before pulling |
-| detectionRadius | 2.5 | Visitor detection radius |
-
-**Curl state tracking:**
-```csharp
-private int curlDirection = 1;           // +1 = CCW (left), -1 = CW (right)
-private bool grabContactMade = false;     // True when grab collider touches visitor
-private float reverseCurlProgress = 0f;   // Progress of reverse curl (0-1)
-private float grabCurlProgress = 0f;      // Progress of initial curl (0-1)
-private Quaternion previousGrabBoneRotation;  // For rotation delta calculation
-private bool hasPreviousGrabBoneRotation = false;
-```
-
-**Locked curl rotations:**
-```csharp
-// LockCurlBoneRotations includes pivot bone (grabBoneIndex - 1) plus all curl bones
-int pivotBoneIndex = grabBoneIndex - 1;
-lockedCurlRotations = new Quaternion[boneCount - pivotBoneIndex];
-
-// During Sinking, pivot bone rotates via desiredDir, others use locked local rotations
-if (tonguePhase == TonguePhase.Sinking && i == pivotBoneIndex)
-{
-    float t = sinkingRotationProgress;
-    desiredDir = Vector3.Slerp(targetDirWorld, downDir, t);
-}
-else if (curlRotationsLocked && curlIndex >= 0)
-{
-    tongueBones[i].localRotation = lockedCurlRotations[curlIndex];
-    continue;
-}
-```
-
-**Collider positions:**
-- Reach collider: `tongueBones[boneCount - 1].position` (tip bone world pos)
-- Grab collider: `tongueBones[boneCount - 1 - GRAB_BONE_OFFSET].position`
+| TONGUE_CURL_SPEED | 2.0 | Rate of curl/hinge progress (0→1) |
+| PULLING_SPEED | 0.5 | Rate of curl tightening (0→1 per second) |
+| BONE_COLLIDER_SPACING | 20 | Add collider every 20th bone (27 colliders) |
+| BONE_COLLIDER_RADIUS | 0.0045 | World radius (localScale=0.03, radius=0.15) |
+| GRAB_BONE_OFFSET | 50 | Bones from tip for grab collider |
+| CURL_DIAMETER | 0.5 | Target tight curl diameter |
+| detectionRadius | 3.0 | Visitor detection radius |
 
 **Phase transitions:**
-1. **Emerging → Reaching**: Tip reaches TONGUE_LIP_Z
-2. **Reaching → Touching**: Reach collider touches visitor (via trigger callback)
-3. **Touching → Pulling**: Grab collider touches visitor, grab hold timer completes
-4. **Pulling → Sinking**: Grab bone reaches lip level (freeze lip bone index)
-5. **Sinking → Idle**: Tongue fully retracted (`tongueZPosition >= TONGUE_START_Z`), visitor consumed
+1. **Emerging → Extending**: Tip reaches TONGUE_LIP_Z
+2. **Extending → Curling**: Horizontal length >= detectionRadius
+3. **Curling → Pulling**: 360° curl complete AND visitor contact made
+4. **Pulling → Hinging**: pullingProgress >= 1.0 (curl fully tight)
+5. **Hinging → Descending**: sinkingRotationProgress >= 1.0 (90° rotation complete)
+6. **Descending → Idle**: tongueZPosition >= TONGUE_START_Z (visitor consumed)
 
 ---
 
 ### Completed - HeartwardGrasp (Heart Power 2)
 
-**Status**: Fully implemented and working. Core grab/transport/push sequence complete. Animation plays smoothly through all phases. Push phase dynamically extends until visitor is on valid walkable area.
+**Status**: Fully implemented with tongue-based grabbing. Uses the same tongue prefab and vertical emergence behavior as HeartOfTheMaze.
 
 **What works:**
-- Grab sequence: Idle → Reaching → Grabbing → Pulling → Transporting ✓
-- Push sequence: Pushing → Releasing → Withdrawing ✓
-- Animation plays smoothly (frames 0-24, reverse 24-0) ✓
-- Hand stays closed during pull phase (fixed normalizedTime clamping to 0.999) ✓
-- Push continues until visitor is on valid walkable area (no walls, on path/node tile) ✓
-- Visitor positioned in front of pushing hand along push axis ✓
+- Grabbing HGZ: Idle → Emerging → Extending → Curling → Pulling → Transporting ✓
+- Pushing HGZ: Emerging → Uncurling → Withdrawing ✓
+- Tongue emerges vertically from ground at wall tile position (like HeartOfTheMaze) ✓
+- Lip bone bends 90° to extend horizontally toward visitor ✓
+- 360° curl wraps around visitor ✓
+- Curl tightens while tongue sinks back into ground ✓
+- Reverse curl releases visitor near heart ✓
+- Push continues until visitor is on valid walkable area ✓
+
+**Grabbing HGZ State Machine (tongue-based, mirrors HeartOfTheMaze):**
+| Phase | Description |
+|-------|-------------|
+| Idle | Waiting for visitors to enter the zone |
+| Emerging | Tongue translates up from z=TONGUE_START_Z until tip at TONGUE_LIP_Z |
+| Extending | Lip bone bends 90°, horizontal section grows to GRASP_ZONE_RADIUS |
+| Curling | Tongue curls into 360° horizontal circle around visitor |
+| Pulling | Curl tightens, tongue sinks back into ground (+Z) |
+| Transporting | 1 second, visitor invisible, relocate to pushing zone |
+
+**Pushing HGZ State Machine (tongue-based, reverse of grab):**
+| Phase | Description |
+|-------|-------------|
+| Idle | Waiting for transported visitor |
+| Emerging | Tongue emerges from wall with visitor curled inside |
+| Uncurling | Tongue uncurls to release visitor (reverse of curl) |
+| Withdrawing | Tongue retracts back into wall |
 
 **Key implementation details:**
-- File: `HeartPowerEffects.cs` - `HeartwardGraspEffect` class (line ~1580)
-- Two state machines: `GrabPhase` and `PushPhase` enums
-- Animation controlled via `SetAnimatorFrame(animator, frameNumber)` using normalized time (clamped to 0.999 max)
-- Push phase uses continuous movement at `PUSH_SPEED` until `IsVisitorOnValidWalkableArea()` returns true
-- `IsVisitorOnValidWalkableArea()` checks for: on path/node tile AND not touching wall tiles
+- File: `HeartPowerEffects.cs` - `HeartwardGraspEffect` class (line ~1946)
+- Uses same tongue prefab as HeartOfTheMaze: `Assets/Prefabs/Tile/heart tongue.prefab`
+- Tongue spawned as child of grabbingZoneObject at wall tile position
+- Vertical Z-axis emergence: `grabbingTongueZPosition` controls root Z position
+- Lip bone index calculated dynamically based on `grabbingTongueZPosition`
+- Bone rotations controlled via `ApplyGrabbingTongueBoneState()` (mirrors HeartOfTheMaze)
+- Contact detection via `CheckTongueBoneContact()` - checks 2D distance from bones to visitor
+
+**Tongue bone structure (same as HeartOfTheMaze):**
+- 540 bones named Bone_000 through Bone_539
+- Bones use local +Y as forward direction after rest rotation
+- Bone colliders created on every 20th bone (27 colliders) for contact detection
 
 **Key constants:**
 | Constant | Value | Description |
 |----------|-------|-------------|
 | GRASP_ZONE_RADIUS | 2.5 | Trigger radius for visitor detection |
+| TONGUE_START_Z | 9.0 | Starting Z position (below ground) |
+| TONGUE_LIP_Z | -0.25 | Z where tip emerges above lip |
+| TONGUE_EMERGE_SPEED | 6.0 | Units per second for vertical movement |
+| TONGUE_EXTEND_SPEED | 4.0 | Rate of bone rotation for extending |
+| TONGUE_CURL_SPEED | 3.0 | Rate of curl for grabbing |
+| TONGUE_RETRACT_SPEED | 4.0 | Speed when retracting |
+| BEND_BONE_COUNT | 3 | Bones for the 90° bend at lip |
+| BONE_COLLIDER_RADIUS | 0.0045 | World radius (localScale=0.03, radius=0.15) |
 | MIN_PUSH_DISTANCE | 1.0 | Minimum push before checking for valid area |
 | MAX_PUSH_DISTANCE | 10.0 | Safety limit for push distance |
-| PUSH_SPEED | 2.0 | Units per second during push |
-| VISITOR_CHECK_RADIUS | 0.3 | Collision check radius for walkable area |
 | GRAB_ESSENCE_COST | 25 | Essence deducted from visitor when grabbed |
+
+**NOTE**: Prefab scale is (1, 0.3, 0.3), no runtime scaling applied.
+
+**Vertical emergence behavior (like HeartOfTheMaze):**
+The wall tile position acts as the "heart center" for the grabbing tongue:
+1. Tongue spawned as child of grabbingZoneObject at wall tile XY position
+2. Initial Z = TONGUE_START_Z (9.0, below ground)
+3. During Emerging: Z decreases until tip reaches TONGUE_LIP_Z (-0.25)
+4. During Extending: Z continues decreasing, lip bone bends 90° toward visitor
+5. During Pulling: Z increases (tongue sinks back into ground with visitor)
+
+**FindForestDirection algorithm (HGZ placement):**
+The HGZ is placed at a wall tile position, with the direction determined by finding the deepest forest:
+1. Collect all walkable tile positions within 5 units of HGZ position
+2. Test all 360° directions in 5° increments
+3. For each direction, place a candidate point at 3 units
+4. Skip if candidate point is walkable (we want forest positions only)
+5. Calculate minimum distance from candidate to ANY walkable tile
+6. Select direction with greatest minimum distance = deepest into forest
 
 ---
 
@@ -830,6 +1137,7 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 
 ### In Progress
 - [ ] Ensure other visitor types work as intended with heart powers
+- [x] ~~Test tongue collision fix~~ - **FIXED** - visitors now properly blocked by tongue colliders (see Session Notes item 12)
 
 ### Heart & Powers
 - [x] Fix heart prefab - separated into two parts (heartbase + heart tongue) with state machine
@@ -880,10 +1188,11 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 
 ### Files Modified This Session
 - `HeartPowerEffects.cs` - SculptingEffect class, smoke effect, menu sizing
-- `VisitorControllerBase.cs` - CurrentFaeLantern/CurrentFairyRing properties, EndLanternFascination/EndRingFascination methods, null lantern check in Update
+- `VisitorControllerBase.cs` - CurrentFaeLantern/CurrentFairyRing properties, EndLanternFascination/EndRingFascination methods, null lantern check in Update, GetCurrentPath() method, **IsBlockedByTongue() collision fix (bounds.center → transform.position)**
 - `FaeLantern.cs` - OnDisable with ReleaseAllFascinatedVisitors
 - `FairyRing.cs` - OnDisable with ReleaseAllFascinatedVisitors
 - `LanternGlow.cs` - Edit mode material leak fix
+- `HeartOfTheMaze.cs` - CalculatePathInterceptionPoint() rewritten, **IsTongueActiveWithColliders static flag added**
 
 6. **Focal Point Indicator Replacement** (FocalPointGlow.cs):
    - Replaced pink cylinder with a conic section surface following z = -1/(10*r^1.5)
@@ -897,6 +1206,110 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
    - Removed `AddDebugSphere()` method entirely
    - Removed cyan (reach) and magenta (grab) debug sphere meshes
    - Colliders remain functional (SphereCollider triggers still work for detection)
+
+8. **Heart Tongue Aiming Fix** (HeartOfTheMaze.cs):
+   - **Problem**: Tongue was aiming at visitor's current/predicted position instead of their EXIT point from the node
+   - **Solution**: Rewrote `CalculatePathInterceptionPoint()` to use visitor's actual worldPath
+   - Now iterates through visitor's path points to find the first point OUTSIDE the node boundary
+   - Uses ray-circle intersection (t2 = -b + sqrtDisc) to find exact exit point on the node edge
+   - Tongue extends to where visitor will EXIT, then curves back toward them
+
+   **Implementation:**
+   ```csharp
+   // Get the visitor's actual path
+   List<Vector3> visitorPath = visitor.GetCurrentPath(out currentPathIndex);
+
+   // Find first path point OUTSIDE node boundary
+   for (int i = currentPathIndex; i < visitorPath.Count; i++)
+   {
+       float distFromHeart = Vector2.Distance(pathPoint2D, heartPos);
+       if (distFromHeart > nodeRadius)
+       {
+           // Ray-circle intersection for exact exit point
+           float t2 = -b + sqrtDisc;  // Exit point (farther intersection)
+           return prevPoint2D + t2 * segmentDir;
+       }
+   }
+   ```
+
+9. **Visitor Path Exposure** (VisitorControllerBase.cs):
+   - Added `GetCurrentPath(out int currentIndex)` method to expose visitor's worldPath
+   - Required for tongue aiming to use actual path instead of guessing movement direction
+
+10. **Tongue Collision Z-Level Fix** (VisitorControllerBase.cs) - **TESTED AND WORKING**:
+    - **Problem**: Visitors were walking through the tongue
+    - **Root cause 1**: Tongue colliders are at varying Z levels, visitors at z=0
+    - **Root cause 2**: Using `col.bounds.center` returned incorrect positions for scaled colliders on animated bones
+    - **Solution**: Use `col.transform.position` for accurate world positions, search with large radius (10 units)
+
+    **Implementation:**
+    ```csharp
+    // Early exit if no tongue active - avoids expensive Physics.OverlapSphere
+    if (!Maze.HeartOfTheMaze.IsTongueActiveWithColliders) return false;
+
+    // Search from visitor position with large radius
+    Collider[] overlaps = Physics.OverlapSphere(currentPos, 10f, ~0, QueryTriggerInteraction.Ignore);
+    foreach (var col in overlaps)
+    {
+        if (!col.enabled || col.isTrigger) continue;
+        if (!col.gameObject.name.StartsWith("SolidCollider_")) continue;
+
+        // CRITICAL: Use transform.position, NOT bounds.center
+        Vector3 colliderWorldPos = col.transform.position;
+        Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
+        float dist2D = Vector2.Distance(current2D, collider2D);
+
+        if (dist2D < blockRadius) { /* blocked */ }
+    }
+    ```
+
+    **Key fix**: `col.bounds.center` returns incorrect positions for colliders that are scaled and parented to animated bones. Using `col.transform.position` gives the actual world-space position.
+
+    **Key values:**
+    - Search radius: 10.0 (catches colliders at any Z level)
+    - Visitor collision radius: 0.2f
+    - Average collider radius: 0.2f (ranges from 0.3 at base to 0.1 at tip)
+    - Block radius: 0.4f (visitor + collider)
+
+11. **FindForestDirection Rewrite** (HeartPowerEffects.cs) - PARTIALLY TESTED:
+    - **Problem**: Grabbing hand was emerging from wrong side of path (opposite side from forest interior)
+    - **Root cause**: Previous algorithm measured "forest depth" by probing outward, but both sides of a straight path have similar depth
+    - **Solution**: Rewrote to find direction with greatest minimum distance from ALL nearby walkable tiles
+    - **Status**: Passed initial tests, may need further validation on complex path geometries
+
+    **Algorithm:**
+    1. Collect all walkable tiles within 5 units (2× GRASP_ZONE_RADIUS)
+    2. For each direction (360° in 5° steps), place candidate point at 3 units
+    3. Skip if candidate is walkable (want forest only)
+    4. Calculate minimum distance from candidate to ANY walkable tile
+    5. Pick direction with greatest minimum distance = deepest into forest
+
+    **Key change**: Instead of measuring how far you can go before hitting walkable (forest depth), now measures how far candidate point is from ALL walkable tiles (isolation metric).
+
+12. **Tongue Collision Static Flag Optimization** (HeartOfTheMaze.cs) - **IMPLEMENTED**:
+    - **Problem**: Expensive `Physics.OverlapSphere` was being called every frame for every visitor, even when no tongue existed
+    - **Solution**: Added `public static bool IsTongueActiveWithColliders` property
+    - Set to `true` in `EnableBoneColliders()` when tongue colliders are active
+    - Set to `false` in `DisableBoneColliders()` when tongue colliders are disabled
+    - Visitors check this flag and skip the expensive search when no tongue is active
+
+    **Implementation:**
+    ```csharp
+    // In HeartOfTheMaze.cs
+    public static bool IsTongueActiveWithColliders { get; private set; } = false;
+
+    private void EnableBoneColliders()
+    {
+        // ... enable colliders ...
+        IsTongueActiveWithColliders = true;
+    }
+
+    private void DisableBoneColliders()
+    {
+        // ... disable colliders ...
+        IsTongueActiveWithColliders = false;
+    }
+    ```
 
 ### Key Constants (FocalPointGlow.cs)
 | Constant | Value | Description |
@@ -972,3 +1385,34 @@ float finalVolume = propVolume * masterSfxVolume * distanceVolume * (isActive ? 
 4. Verify scroll view no longer overlaps bottom buttons
 5. Test font consistency across all tabs
 6. Save scene and test in play mode
+
+---
+
+### FIXED - Heart Tongue Grab Behavior (Session Jan 27, 2026)
+
+**Status**: FIXED - Tongue now properly blocks visitors and completes the grab sequence.
+
+**Bug 1: Visitors walking through tongue colliders** - **FIXED**
+- **Root cause**: `col.bounds.center` returned incorrect world positions for scaled colliders parented to animated bones
+- **Solution**: Changed to use `col.transform.position` which gives actual world-space position
+- **File**: `VisitorControllerBase.cs` - `IsBlockedByTongue()` method
+
+**Bug 2: Performance - expensive search every frame** - **FIXED**
+- **Root cause**: `Physics.OverlapSphere` called every frame for every visitor even when no tongue existed
+- **Solution**: Added `HeartOfTheMaze.IsTongueActiveWithColliders` static flag
+- Visitors skip the expensive search when flag is false
+- **File**: `HeartOfTheMaze.cs` - `EnableBoneColliders()` and `DisableBoneColliders()`
+
+**Working tongue sequence:**
+1. Tongue emerges and extends toward visitor's exit point
+2. Tongue curls into 360° spiral around visitor
+3. Solid colliders block visitor from walking through tongue
+4. When tip touches shaft, visitor is grabbed
+5. Pulling phase retracts tongue with visitor
+6. Sinking phase pulls visitor into heart for consumption
+
+**Key implementation details:**
+- Use `col.transform.position` NOT `col.bounds.center` for collider positions
+- Search radius 10.0 (catches colliders at any Z level)
+- Block radius 0.4 (visitor radius 0.2 + collider radius 0.2)
+- Static flag avoids expensive physics queries when no tongue active
