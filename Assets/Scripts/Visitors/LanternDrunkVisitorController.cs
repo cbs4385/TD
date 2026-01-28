@@ -164,7 +164,7 @@ namespace FaeMaze.Visitors
             if (debugGizmos && isConfused && Application.isPlaying)
             {
                 Gizmos.color = new Color(1f, 0.8f, 0f, 0.3f); // Yellow-orange for confused lantern drunk
-                Gizmos.DrawWireSphere(transform.position, visitorSize * 0.02f);
+                Gizmos.DrawWireSphere(transform.position, 0.5f);
             }
         }
 

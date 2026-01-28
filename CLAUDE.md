@@ -622,28 +622,113 @@ AddComponent<Rigidbody>();             // NO! Causes freeze!
 | Constant | Value | Description |
 |----------|-------|-------------|
 | COLLIDER_HIDDEN_Z | 1000f | Z position to hide pooled objects |
-| COLLIDER_POOL_SIZE | 28 | Pre-calculated pool size for bone colliders |
 | EXPECTED_BONE_COUNT | 540 | Number of bones in tongue model |
-| TONGUE_BONE_BLOCKING_RADIUS | 0.25f | Script-based blocking radius per bone |
 
 ### Pooled Objects in HeartOfTheMaze:
 | Object | Created In | Purpose |
 |--------|-----------|---------|
-| `pooledColliderObjects[]` | `CreateBoneColliderPool()` | 28 pooled bone colliders (TRIGGER ONLY, no solid colliders!) |
-| `heartTongueInstance` | `PreCreateTongueInstance()` | Single reusable tongue model |
+| `heartTongueInstance` | `PreCreateTongueInstance()` | Single reusable tongue model with baked colliders |
 
-### Script-Based Blocking (No Solid Colliders):
-Solid colliders caused 14+ second freezes even with pooling, because Unity's physics engine
-does expensive collision calculations when many rigidbodies exist (visitors each have one).
+### Physics-Based Blocking (Colliders Baked in Prefab):
+Colliders are **baked into the tongue prefab** by the editor script `TonguePrefabColliderSetup.cs`.
+Since colliders are part of the prefab and never created/destroyed at runtime, they don't cause freezes.
 
-**Solution**: Use ONLY trigger colliders for detection, and script-based distance checks for blocking:
-- `HeartOfTheMaze.IsPositionBlockedByTongue(Vector2)` - Checks if position is near any bone
-- `HeartOfTheMaze.GetUnblockedPosition(Vector2 current, Vector2 target)` - Binary search for safe position
-- `VisitorControllerBase.IsBlockedByTongue()` - Uses the above instead of Physics.SphereCast
+**After running FaeMaze > Setup Tongue Prefab Colliders:**
+
+**The tongue prefab includes BOTH solid and trigger colliders per bone (every 10th bone = 54 pairs):**
+- `SolidCollider_N` objects - Solid sphere colliders for physics blocking
+- `BoneCollider_N` objects - Trigger sphere colliders for detection events
+- `TipTrigger` - Trigger on tip for exit detection
+
+**Why both collider types:**
+1. **SolidCollider_N (isTrigger = false)**: Unity physics naturally blocks visitors from walking through
+2. **BoneCollider_N (isTrigger = true)**: Allows OnTriggerEnter events for HeartOfTheMaze to detect contact
+
+**Solid collider setup (in prefab, created by editor script):**
+```csharp
+// SOLID - for physics blocking
+SphereCollider solidSphere = solidObj.AddComponent<SphereCollider>();
+solidSphere.radius = BONE_COLLIDER_RADIUS_LOCAL;
+solidSphere.isTrigger = false;  // SOLID for physics blocking
+
+Rigidbody solidRb = solidObj.AddComponent<Rigidbody>();
+solidRb.isKinematic = true;     // Moves with bones, doesn't respond to forces
+solidRb.useGravity = false;
+```
+
+**Trigger collider setup (same bone, created by editor script):**
+```csharp
+// TRIGGER - for detection events
+SphereCollider triggerSphere = triggerObj.AddComponent<SphereCollider>();
+triggerSphere.radius = BONE_COLLIDER_RADIUS_LOCAL;
+triggerSphere.isTrigger = true;  // TRIGGER for OnTriggerEnter events
+
+Rigidbody triggerRb = triggerObj.AddComponent<Rigidbody>();
+triggerRb.isKinematic = true;
+triggerRb.useGravity = false;
+```
+
+**Collider sizing (accounts for 100× Armature scale):**
+- Tapered from base to tip
+- World radius at base: ~0.3 units (scale 0.006)
+- World radius at tip: ~0.1 units (scale 0.002)
 
 ### Files affected:
-- `HeartOfTheMaze.cs` - Tongue and bone colliders use pooling
-- Any future code adding physics objects dynamically must follow this pattern
+- `TonguePrefabColliderSetup.cs` - Editor script that bakes colliders into prefab
+- `HeartOfTheMaze.cs` - Tongue instance uses pooling (prefab instantiated once at startup)
+- Any future code adding physics objects dynamically must follow the pooling pattern
+
+### Physics Layer Configuration:
+For tongue colliders to block visitors via Unity physics, the layer collision matrix must allow collisions:
+
+| Object | Layer | Layer Index | Collider Type | Rigidbody |
+|--------|-------|-------------|---------------|-----------|
+| Visitor "Detect" child | Visitor | 6 | CapsuleCollider (solid) | On root (NOT Detect) |
+| Tongue SolidCollider_N | Default | 0 | SphereCollider (solid) | Kinematic |
+| Tongue BoneCollider_N | Default | 0 | SphereCollider (trigger) | Kinematic |
+
+**Visitor Collider Architecture (IMPORTANT):**
+- Collider is on a child object named "Detect" baked into each visitor model prefab
+- NO runtime collider creation - colliders are pre-baked into prefabs
+- The "Detect" object is set to layer 6 (Visitor) at runtime by `SetupDetectCollider()`
+- **CRITICAL**: The Detect object must NOT have its own Rigidbody - it must be a compound collider using the root's Rigidbody
+
+**Compound Collider Requirement (CRITICAL for Physics):**
+Unity physics requires at least one non-kinematic Rigidbody for collision response.
+- Tongue bone colliders: kinematic Rigidbody (must be kinematic to move with bones)
+- Visitor Detect child: NO Rigidbody (compound collider uses parent's)
+- Visitor root: non-kinematic Rigidbody (receives physics responses)
+
+If the Detect child has its own kinematic Rigidbody, kinematic-to-kinematic collision won't work!
+`SetupDetectCollider()` destroys any Rigidbody on the Detect child to ensure proper physics.
+
+**Visitor "Detect" CapsuleCollider configuration (baked in prefab):**
+- Radius: 0.5
+- Height: 1.5
+- Direction: Y-axis
+- Center: (0, 0, 0)
+- NO Rigidbody on Detect object (runtime destroyed if present)
+
+**Key physics requirements for collision to work:**
+1. Both colliders must be solid (`isTrigger = false`)
+2. At least one must have a non-kinematic Rigidbody (visitor root has this)
+3. Detect child must NOT have its own Rigidbody (compound collider uses parent's)
+4. Layer collision matrix must allow Default ↔ Visitor collisions (check `DynamicsManager.asset`)
+5. Colliders must **actually overlap in 3D space** (check Z-level alignment!)
+
+**Hierarchy:**
+```
+Visitor (root) - Rigidbody (non-kinematic), layer 6
+  └─ ModelInstance (instantiated prefab)
+       └─ Armature
+       └─ Detect - CapsuleCollider (solid), NO Rigidbody, layer 6
+```
+
+**Debug: Check `DynamicsManager.asset` LayerCollisionMatrix:**
+The hex string encodes which layers can collide. To verify Visitor (6) and Default (0) can collide:
+- Look at the `m_LayerCollisionMatrix` in `ProjectSettings/DynamicsManager.asset`
+- Each layer's collision mask is 4 bytes (8 hex chars)
+- If the bit for layer 0 is set in layer 6's mask, they can collide
 
 ### VIOLATION - DO NOT DO THIS:
 ```csharp
@@ -670,7 +755,58 @@ private void CleanupTongue()
 
 ---
 
-## CRITICAL RULE 9: Collider World Position Detection
+## CRITICAL RULE 9: Velocity-Based Movement (NEVER MovePosition!)
+
+**NEVER use `MovePosition()` for visitor movement - it TELEPORTS and bypasses physics collisions!**
+
+### The Problem:
+`Rigidbody.MovePosition()` **teleports** the rigidbody to the desired position, completely ignoring solid colliders in the way. This means visitors walk right through tongue `SolidCollider_N` objects even though collision events fire.
+
+### The Solution:
+Use **velocity-based movement** in `FixedUpdate()`. Set a velocity toward the destination and let Unity physics handle collision naturally:
+
+```csharp
+// CRITICAL: Use VELOCITY-based movement, NOT MovePosition()!
+// MovePosition() teleports and bypasses solid colliders.
+Vector3 moveDir = desiredPosition - rb3D.position;
+float moveDist = moveDir.magnitude;
+
+if (moveDist > 0.001f)
+{
+    // Calculate velocity to reach desired position in one fixed timestep
+    // Physics will naturally stop us if we hit a solid collider
+    float speed = moveDist / Time.fixedDeltaTime;
+    rb3D.linearVelocity = moveDir.normalized * speed;
+}
+else
+{
+    rb3D.linearVelocity = Vector3.zero;
+}
+```
+
+### How It Works:
+1. Calculate direction and distance to desired position
+2. Set velocity to reach that position in one physics timestep
+3. Unity physics engine integrates velocity and checks for collisions
+4. If visitor hits a `SolidCollider_N`, physics naturally stops them
+5. `OnCollisionEnter`/`OnCollisionStay` set `isBlockedByTongue = true`
+6. When blocked, we skip setting new velocity - physics handles the rest
+
+### VIOLATION - DO NOT DO THIS:
+```csharp
+// WRONG - MovePosition TELEPORTS and bypasses solid colliders!
+rb3D.MovePosition(desiredPosition);  // NO! Visitor walks through tongue!
+
+// WRONG - Zeroing velocity when blocked prevents natural physics response
+if (isBlockedByTongue)
+{
+    rb3D.linearVelocity = Vector3.zero;  // NO! Let physics push naturally!
+}
+```
+
+---
+
+## CRITICAL RULE 10: Collider World Position Detection
 
 **ALWAYS use `col.transform.position` for animated/scaled colliders, NEVER `col.bounds.center`!**
 
@@ -709,105 +845,65 @@ This bug caused visitors to walk through tongue colliders. The colliders were be
 
 ---
 
-## CRITICAL RULE 7: Heart of the Maze Model Structure
+## CRITICAL RULE 7: Heart of the Maze - Frog Tongue Behavior
 
-**The Heart of the Maze is a two-part model: a static base ring and an animated tongue.**
+**The Heart of the Maze uses a two-part model: static base ring and frog-tongue that grabs visitors.**
 
 ### Two-part model architecture:
 1. **heartbase** - Static ring/base, no animations
-2. **heart tongue** - Procedurally animated tentacle/tongue with reach and grab colliders
+2. **heart tongue** - Procedurally animated tongue with "frog tongue" grab behavior
 
-### Tongue model orientation:
-**The tongue model has base at origin with bones extending along +X toward the tip.**
-- Bones extend in local +X direction in model space
-- At spawn, tongue instance is rotated -90° around Y: `Quaternion.Euler(0f, -90f, 0f)`
-- This transforms model +X to world -Z, so tongue points up when emerging
-- Colliders are positioned relative to bone local +X axis
+### Frog Tongue Behavior (simplified approach):
+The tongue uses a simple three-phase sequence:
+1. **EMERGING**: Tongue rises from underground (Z=28), tip emerges first
+2. **EXTENDING**: Tip bends 90° at ground level and extends horizontally toward visitor, tracking their position
+3. **RETRACTING**: When visitor touches any bone collider, tongue descends back underground, pulling visitor
 
 ### Key files and assets:
 | Asset | Path | Purpose |
 |-------|------|---------|
 | Base prefab | `Assets/Prefabs/Tile/heartbase.prefab` | Static ring model |
-| Tongue prefab | `Assets/Prefabs/Tile/heart tongue.prefab` | Tongue with colliders (no animation controller) |
-| Base GLB | `Assets/Animations/heart/heartbase.glb` | Source model for ring (GUID: aaa0818b631d950429276c037c33ddf4) |
-| Tongue FBX | `Assets/Animations/heart/heart tongue.glb` | Source model with armature (GUID: c7f35852d61045f4b82d89d34171c99e) |
-
-### Procedural animation (no animation controller):
-The tongue is controlled procedurally via direct bone manipulation in `HeartOfTheMaze.cs`.
-Bones are rotated to make the tongue emerge, bend toward visitor, curl around them, and retract.
-
-| Phase | Description |
-|-------|-------------|
-| Emerging | Tongue translates up from z=3 to lip level, bones at rest pose |
-| Reaching | Bones above lip rotate to point toward visitor |
-| Touching | Tip bones curl around visitor (180° half-circle) |
-| Pulling | Tongue retracts, curl rotations locked |
-| Sinking | Tongue sinks below ground, visitor consumed |
-
-### Prefab components:
-The `heart tongue.prefab` includes:
-- **reach** child object with SphereCollider (radius 0.5, trigger) - reparented to tip bone (Bone_539) at runtime
-- **grab** child object with SphereCollider (radius 0.5, trigger) - reparented to grab bone (~25% from tip, Bone_404) at runtime
-
-### Collider reparenting at runtime:
-```csharp
-// Reach collider -> tip bone (Bone_539), positioned at far end along +X
-reachColliderTransform.localPosition = new Vector3(1.0f, 0, 0);
-
-// Grab collider -> GRAB_BONE_OFFSET bones from tip (~25%, Bone_404), positioned at bone origin
-grabColliderTransform.localPosition = new Vector3(0, 0, 0);
-```
+| Tongue prefab | `Assets/Prefabs/Tile/heart tongue.prefab` | Tongue with baked SolidCollider_N objects |
+| Base GLB | `Assets/Animations/heart/heartbase.glb` | Source model for ring |
+| Tongue GLB | `Assets/Animations/heart/heart tongue.glb` | Source model with 540-bone armature |
 
 ### HeartOfTheMaze State Machine:
-The `HeartOfTheMaze.cs` implements a three-state system:
 
 | State | Description |
 |-------|-------------|
 | Idle | Only heartbase visible, monitoring for visitors in detection radius |
-| Reaching | Tongue spawned, procedural bone animation toward visitor |
-| Grabbing | Visitor locked to grab collider, tongue retracting |
+| Reaching | Tongue emerging and extending toward visitor |
+| Grabbing | Visitor grabbed, tongue retracting with visitor attached |
+
+### Tongue Phases (within Reaching state):
+
+| Phase | Description |
+|-------|-------------|
+| Emerging | Tongue rises from Z=28, tip not yet at ground level (Z=0) |
+| Extending | Tip above ground, bones bend 90° to point horizontally at visitor |
 
 ### State transitions:
 1. **Idle → Reaching**: Visitor enters detection radius (default 2.5 units)
-2. **Reaching → Grabbing**: Wrap complete (reverseCurlProgress >= 1.0)
-3. **Grabbing → Idle**: Tongue fully retracted below ground, visitor consumed
+2. **Reaching → Grabbing**: Visitor's OnCollisionEnter fires for `SolidCollider_N` and calls `NotifyVisitorTouchedTongue()`
+3. **Grabbing → Idle**: Tongue fully retracted to Z=28, visitor consumed
 
-### Tongue Phases (within Reaching state):
-The tongue progresses through multiple phases while in the Reaching state:
-```
-Emerging → Extending → Curving → Wrapping → Pulling → Sinking
-                          ↓ (miss)
-                      Retracting → Extending (retry)
-```
-
-| Phase | Description | Visitor State |
-|-------|-------------|---------------|
-| Emerging | Tongue translates up from z=9 until tip at lip | Walking (unchanged) |
-| Extending | Lip bone bends, horizontal section grows to node edge | Walking (unchanged) |
-| Curving | Horizontal portion curves toward visitor's predicted position | Walking (unchanged) |
-| Retracting | Miss timeout - straighten curve, retract to lip, then retry | Walking (unchanged) |
-| Wrapping | Bone collider contact - wrap around visitor from contact point | Grabbed |
-| Pulling | Wrap complete, horizontal retraction | Grabbed |
-| Sinking | Below lip - rotates down into heart | Grabbed |
-
-**Key behavioral changes:**
-- Visitor keeps moving until bone collider contact triggers Wrapping phase
-- Tongue aims ahead at visitor's predicted position (using `GetPredictedPosition()`)
-- Per-bone colliders (every 5th bone) detect contact anywhere along the tongue
-- Miss/retry: If curving for 3+ seconds without contact, retract and try again
-
-### Key implementation details:
+### Collision Detection:
+Visitor collision with tongue triggers the grab. The visitor's `OnCollisionEnter` calls `HeartOfTheMaze.NotifyVisitorTouchedTongue()`:
 ```csharp
-// Detection radius for visitor proximity
-private float detectionRadius = 2.5f;
+// In VisitorControllerBase.OnCollisionEnter
+if (collision.gameObject.name.StartsWith("SolidCollider_"))
+{
+    var heart = FindFirstObjectByType<HeartOfTheMaze>();
+    if (heart != null) heart.NotifyVisitorTouchedTongue(this);
+}
+```
 
-// Bone direction calculation (bones extend in local +X)
-Vector3 boneLocalDir = Vector3.right;  // local +X
-Vector3 boneWorldDir = parentWorldRot * boneRestRotations[i] * boneLocalDir;
-
-// Move visitor with grab collider (all axes for sinking)
-Vector3 grabPos = grabColliderTransform.position;
-targetVisitor.transform.position = grabPos;
+### Bone rotation logic:
+```csharp
+// Find which bone is at ground level (Z=0)
+// Bones BELOW ground: stay at rest pose (pointing up, -Z direction)
+// Bones AT bend zone: interpolate from vertical to horizontal over BEND_BONE_COUNT bones
+// Bones ABOVE bend zone: point horizontally toward visitor
 ```
 
 ### Asset loading pattern:
@@ -818,35 +914,28 @@ heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Asset
 #endif
 ```
 
-### VIOLATION - DO NOT DO THIS:
-```csharp
-// WRONG - Using Resources.Load
-Resources.Load<GameObject>("heart tongue"); // NO! Use AssetDatabase pattern
-
-// WRONG - Assuming bones extend in +Y (old model orientation)
-Vector3 boneLocalY = Vector3.up; // NO! Bones extend in +X
-
-// WRONG - Spawning tongue without detection
-// Tongue should ONLY spawn when visitor enters detection radius
-```
-
-### Key constants:
+### Key constants (HeartOfTheMaze.cs):
 | Constant | Value | Purpose |
 |----------|-------|---------|
 | detectionRadius | 2.5 | Radius to detect visitors and trigger reaching state |
-| TONGUE_START_Z | 6.0 | Starting Z position (below ground, increased for longer model) |
-| TONGUE_LIP_Z | -0.5 | Z where tip emerges above lip (triggers Reaching phase) |
-| GRAB_BONE_OFFSET | 135 | Grab bone is ~25% from tip (bone 404 out of 540) |
-| TONGUE_EMERGE_SPEED | 1.5 | Units per second for vertical movement |
-| TONGUE_CURL_SPEED | 2.0 | Rate of curl progress (0→1) |
+| TONGUE_HIDDEN_Z | 1000 | Z position when pooled (far underground) |
+| TONGUE_START_Z | 28.0 | Z position to start emerging (must be > tongue length ~27) |
+| TONGUE_GROUND_Z | 0.0 | Ground level where tip emerges |
+| TONGUE_EMERGE_SPEED | 9.0 | Units per second for vertical movement |
+| TONGUE_RETRACT_SPEED | 9.0 | Units per second when retracting with visitor |
+| BEND_BONE_COUNT | 5 | Number of bones for the 90° bend at ground level |
 
 ### Bone hierarchy:
 The tongue has 540 bones (indices 0-539), named Bone_000 through Bone_539:
 - Bone_000: Base of tongue (root)
-- Bone_001 through Bone_538: Segments along tongue
 - Bone_539: Tip of tongue
-- Grab bone: Index 404 (GRAB_BONE_OFFSET=135 from tip, ~25% back from end)
-- All bones have localPosition (0,0,0) - bone chain extends in local +X
+- Bones extend in local +Y direction (forward)
+- Prefab has baked `SolidCollider_N` objects for physics collision
+
+### Pooling:
+Tongue instance is pre-created at startup and repositioned rather than instantiated/destroyed:
+- **Idle**: Tongue at Z=1000 (hidden far underground)
+- **Active**: Tongue repositioned to Z=28, then rises by decreasing Z
 
 ---
 
@@ -1188,11 +1277,12 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 
 ### Files Modified This Session
 - `HeartPowerEffects.cs` - SculptingEffect class, smoke effect, menu sizing
-- `VisitorControllerBase.cs` - CurrentFaeLantern/CurrentFairyRing properties, EndLanternFascination/EndRingFascination methods, null lantern check in Update, GetCurrentPath() method, **IsBlockedByTongue() collision fix (bounds.center → transform.position)**
+- `VisitorControllerBase.cs` - CurrentFaeLantern/CurrentFairyRing properties, EndLanternFascination/EndRingFascination methods, null lantern check in Update, GetCurrentPath() method
 - `FaeLantern.cs` - OnDisable with ReleaseAllFascinatedVisitors
 - `FairyRing.cs` - OnDisable with ReleaseAllFascinatedVisitors
 - `LanternGlow.cs` - Edit mode material leak fix
-- `HeartOfTheMaze.cs` - CalculatePathInterceptionPoint() rewritten, **IsTongueActiveWithColliders static flag added**
+- `HeartOfTheMaze.cs` - CalculateVisitorExitPoint() for tongue aiming
+- `TonguePrefabColliderSetup.cs` - Bakes solid colliders into prefab for physics-based blocking
 
 6. **Focal Point Indicator Replacement** (FocalPointGlow.cs):
    - Replaced pink cylinder with a conic section surface following z = -1/(10*r^1.5)
@@ -1236,40 +1326,10 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
    - Added `GetCurrentPath(out int currentIndex)` method to expose visitor's worldPath
    - Required for tongue aiming to use actual path instead of guessing movement direction
 
-10. **Tongue Collision Z-Level Fix** (VisitorControllerBase.cs) - **TESTED AND WORKING**:
-    - **Problem**: Visitors were walking through the tongue
-    - **Root cause 1**: Tongue colliders are at varying Z levels, visitors at z=0
-    - **Root cause 2**: Using `col.bounds.center` returned incorrect positions for scaled colliders on animated bones
-    - **Solution**: Use `col.transform.position` for accurate world positions, search with large radius (10 units)
-
-    **Implementation:**
-    ```csharp
-    // Early exit if no tongue active - avoids expensive Physics.OverlapSphere
-    if (!Maze.HeartOfTheMaze.IsTongueActiveWithColliders) return false;
-
-    // Search from visitor position with large radius
-    Collider[] overlaps = Physics.OverlapSphere(currentPos, 10f, ~0, QueryTriggerInteraction.Ignore);
-    foreach (var col in overlaps)
-    {
-        if (!col.enabled || col.isTrigger) continue;
-        if (!col.gameObject.name.StartsWith("SolidCollider_")) continue;
-
-        // CRITICAL: Use transform.position, NOT bounds.center
-        Vector3 colliderWorldPos = col.transform.position;
-        Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
-        float dist2D = Vector2.Distance(current2D, collider2D);
-
-        if (dist2D < blockRadius) { /* blocked */ }
-    }
-    ```
-
-    **Key fix**: `col.bounds.center` returns incorrect positions for colliders that are scaled and parented to animated bones. Using `col.transform.position` gives the actual world-space position.
-
-    **Key values:**
-    - Search radius: 10.0 (catches colliders at any Z level)
-    - Visitor collision radius: 0.2f
-    - Average collider radius: 0.2f (ranges from 0.3 at base to 0.1 at tip)
-    - Block radius: 0.4f (visitor + collider)
+10. **Tongue Collision - Physics-Based** (TonguePrefabColliderSetup.cs):
+    - Solid colliders are **baked into the prefab** by editor script
+    - Unity physics handles collision automatically - no script-based blocking needed
+    - `BoneCollider_N` objects have `isTrigger = false` and kinematic Rigidbodies
 
 11. **FindForestDirection Rewrite** (HeartPowerEffects.cs) - PARTIALLY TESTED:
     - **Problem**: Grabbing hand was emerging from wrong side of path (opposite side from forest interior)
@@ -1285,31 +1345,6 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
     5. Pick direction with greatest minimum distance = deepest into forest
 
     **Key change**: Instead of measuring how far you can go before hitting walkable (forest depth), now measures how far candidate point is from ALL walkable tiles (isolation metric).
-
-12. **Tongue Collision Static Flag Optimization** (HeartOfTheMaze.cs) - **IMPLEMENTED**:
-    - **Problem**: Expensive `Physics.OverlapSphere` was being called every frame for every visitor, even when no tongue existed
-    - **Solution**: Added `public static bool IsTongueActiveWithColliders` property
-    - Set to `true` in `EnableBoneColliders()` when tongue colliders are active
-    - Set to `false` in `DisableBoneColliders()` when tongue colliders are disabled
-    - Visitors check this flag and skip the expensive search when no tongue is active
-
-    **Implementation:**
-    ```csharp
-    // In HeartOfTheMaze.cs
-    public static bool IsTongueActiveWithColliders { get; private set; } = false;
-
-    private void EnableBoneColliders()
-    {
-        // ... enable colliders ...
-        IsTongueActiveWithColliders = true;
-    }
-
-    private void DisableBoneColliders()
-    {
-        // ... disable colliders ...
-        IsTongueActiveWithColliders = false;
-    }
-    ```
 
 ### Key Constants (FocalPointGlow.cs)
 | Constant | Value | Description |
@@ -1388,31 +1423,24 @@ float finalVolume = propVolume * masterSfxVolume * distanceVolume * (isActive ? 
 
 ---
 
-### FIXED - Heart Tongue Grab Behavior (Session Jan 27, 2026)
+### FIXED - Heart Tongue Grab Behavior (Session Jan 27-28, 2026)
 
-**Status**: FIXED - Tongue now properly blocks visitors and completes the grab sequence.
+**Status**: FIXED - Tongue now properly blocks visitors via Unity physics.
 
-**Bug 1: Visitors walking through tongue colliders** - **FIXED**
-- **Root cause**: `col.bounds.center` returned incorrect world positions for scaled colliders parented to animated bones
-- **Solution**: Changed to use `col.transform.position` which gives actual world-space position
-- **File**: `VisitorControllerBase.cs` - `IsBlockedByTongue()` method
-
-**Bug 2: Performance - expensive search every frame** - **FIXED**
-- **Root cause**: `Physics.OverlapSphere` called every frame for every visitor even when no tongue existed
-- **Solution**: Added `HeartOfTheMaze.IsTongueActiveWithColliders` static flag
-- Visitors skip the expensive search when flag is false
-- **File**: `HeartOfTheMaze.cs` - `EnableBoneColliders()` and `DisableBoneColliders()`
+**Solution: Physics-Based Blocking with Baked Colliders**
+- Colliders are **baked into the tongue prefab** by `TonguePrefabColliderSetup.cs`
+- `BoneCollider_N` objects have solid SphereColliders with kinematic Rigidbodies
+- Unity's physics engine handles collision automatically - no script-based blocking needed
+- Since colliders are part of the prefab (never created/destroyed at runtime), no freezes occur
 
 **Working tongue sequence:**
-1. Tongue emerges and extends toward visitor's exit point
+1. Tongue emerges and extends toward visitor's exit point (calculated from visitor's path)
 2. Tongue curls into 360° spiral around visitor
-3. Solid colliders block visitor from walking through tongue
+3. Solid colliders block visitor from walking through tongue (Unity physics)
 4. When tip touches shaft, visitor is grabbed
 5. Pulling phase retracts tongue with visitor
 6. Sinking phase pulls visitor into heart for consumption
 
-**Key implementation details:**
-- Use `col.transform.position` NOT `col.bounds.center` for collider positions
-- Search radius 10.0 (catches colliders at any Z level)
-- Block radius 0.4 (visitor radius 0.2 + collider radius 0.2)
-- Static flag avoids expensive physics queries when no tongue active
+**Key fix - Exit point calculation:**
+The tongue must aim at where the visitor will EXIT the detection zone, not their current position.
+Fixed by using the visitor's actual path to find the exit point via ray-circle intersection.

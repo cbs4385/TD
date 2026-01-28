@@ -157,6 +157,11 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            // CRITICAL: Disable Visitor-to-Visitor collisions
+            // Layer 6 is the Visitor layer - visitors should not block each other
+            // They should only collide with tongue colliders (layer 0/Default)
+            Physics.IgnoreLayerCollision(6, 6, true);
+
             // Load starting essence from settings (overrides serialized default)
             startingEssence = GameSettings.StartingEssence;
 

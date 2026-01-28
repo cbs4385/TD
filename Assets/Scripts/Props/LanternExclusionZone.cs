@@ -32,7 +32,11 @@ namespace FaeMaze.Props
 
             if (visitor == null) return;
 
-            // Push visitor away from center
+            // Get visitor's rigidbody for physics-based push
+            Rigidbody visitorRb = visitor.GetComponent<Rigidbody>();
+            if (visitorRb == null) return;
+
+            // Push visitor away from center using forces (not position setting)
             Vector3 lanternPos = transform.position;
             Vector3 visitorPos = visitor.transform.position;
 
@@ -51,11 +55,18 @@ namespace FaeMaze.Props
             // Calculate distance from lantern
             float dist = Vector2.Distance(visitorXY, lanternXY);
 
-            // If inside exclusion radius, push to edge
+            // If inside exclusion radius, apply push force
             if (dist < exclusionRadius)
             {
-                Vector2 newPosXY = lanternXY + awayDir * exclusionRadius;
-                visitor.transform.position = new Vector3(newPosXY.x, newPosXY.y, visitorPos.z);
+                // Calculate how far inside the exclusion zone (0 = at edge, 1 = at center)
+                float penetration = 1f - (dist / exclusionRadius);
+
+                // Apply stronger force the deeper inside the zone
+                // Base force similar to tongue push (300), scaled by penetration
+                float pushForce = 300f * (0.5f + 0.5f * penetration);
+                Vector3 force = new Vector3(awayDir.x, awayDir.y, 0) * pushForce;
+
+                visitorRb.AddForce(force, ForceMode.Force);
             }
         }
     }

@@ -60,32 +60,8 @@ namespace FaeMaze.Visitors
 
         [Header("Visual Settings")]
         [SerializeField]
-        [Tooltip("Use 3D model instead of sprite-based rendering")]
-        protected bool use3DModel = true;
-
-        [SerializeField]
-        [Tooltip("3D model prefab to instantiate for this visitor")]
+        [Tooltip("3D model prefab to instantiate for this visitor (optional - visitor prefab may BE the model)")]
         protected GameObject modelPrefab;
-
-        [SerializeField]
-        [Tooltip("Color of the visitor sprite (2D mode only)")]
-        protected Color visitorColor = new Color(0.3f, 0.6f, 1f, 1f);
-
-        [SerializeField]
-        [Tooltip("Desired world-space diameter (in Unity units) for procedural visitors")]
-        protected float visitorSize = 30.0f;
-
-        [SerializeField]
-        [Tooltip("Pixels per unit for procedural visitor sprites (match imported visitor assets)")]
-        protected int proceduralPixelsPerUnit = 32;
-
-        [SerializeField]
-        [Tooltip("Sprite rendering layer order (2D mode only)")]
-        protected int sortingOrder = 15;
-
-        [SerializeField]
-        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations (2D mode only)")]
-        protected bool useProceduralSprite = false;
 
         [Header("State Duration Settings")]
         [SerializeField]
@@ -130,7 +106,6 @@ namespace FaeMaze.Visitors
         protected float speedMultiplier = 1f;
 
         // Rendering
-        protected SpriteRenderer spriteRenderer;
         protected GameObject modelInstance;
         protected Quaternion modelBaseRotation;
         protected bool modelBaseRotationCaptured;
@@ -138,8 +113,6 @@ namespace FaeMaze.Visitors
 
         // 3D physics
         protected Rigidbody rb3D;
-
-        protected Vector2 authoredSpriteWorldSize;
         protected Vector3 originalDestination;
         protected bool usesSpawnMarkerDestination;
 
@@ -211,6 +184,7 @@ namespace FaeMaze.Visitors
         protected bool isConfused;
         protected bool confusionEnabled = true;  // Can be disabled by derived classes
 
+
         // World-space navigation
         protected Vector3 worldDestination;
         protected Vector3 originalSpawnPosition; // Where the visitor spawned from (to avoid returning there)
@@ -232,6 +206,23 @@ namespace FaeMaze.Visitors
         protected const float STUCK_THRESHOLD = 0.1f; // Must move at least 0.1 units per check
         protected const float STUCK_LOG_THRESHOLD = 2.0f; // Log after 2 seconds of being stuck
 
+        // Navigation audit log - tracks events leading to current situation for debugging stuck visitors
+        protected struct NavigationEvent
+        {
+            public float timestamp;        // Time.time when event occurred
+            public string eventType;       // "Waypoint", "StateChange", "PathCalc", "Blocked", "MoveCause"
+            public string details;         // Event-specific details
+            public Vector3 position;       // Position when event occurred
+            public int pathIndex;          // worldPathIndex at time of event
+
+            public override string ToString()
+            {
+                return $"[{timestamp:F2}s] {eventType}: {details} @ ({position.x:F2}, {position.y:F2}) idx={pathIndex}";
+            }
+        }
+        protected List<NavigationEvent> navigationAuditLog = new List<NavigationEvent>();
+        protected const int MAX_AUDIT_LOG_ENTRIES = 50; // Keep last N entries to limit memory
+
         // Pathfinding cost penalties
         // Heart node penalty: visitors strongly prefer paths that don't cross through the heart center
         protected const float HEART_NODE_PATHFINDING_PENALTY = 20f;
@@ -250,6 +241,9 @@ namespace FaeMaze.Visitors
         // Physics-based movement: calculate in Update, apply in FixedUpdate
         protected Vector3 desiredPosition;
         protected bool hasDesiredPosition = false;
+
+        // Tongue collision tracking - stop applying force when colliding
+        protected int tongueCollisionCount = 0;  // Number of active tongue collider contacts
 
         // State aura visual feedback
         protected GameObject stateAuraObject;
@@ -321,34 +315,17 @@ namespace FaeMaze.Visitors
             // Look for Animator on this GameObject or children (for Blender imports)
             animator = GetComponentInChildren<Animator>();
 
-            // Look for SpriteRenderer
-            if (useProceduralSprite)
-            {
-                // Will be created by SetupSpriteRenderer
-                spriteRenderer = GetComponent<SpriteRenderer>();
-            }
-            else
-            {
-                // Use existing SpriteRenderer (may be on child object for Blender imports)
-                spriteRenderer = GetComponentInChildren<SpriteRenderer>();
-            }
-
-            // Setup visual representation based on mode
-            if (use3DModel)
-            {
-                Setup3DModel();
-            }
-            else
-            {
-                CacheAuthoredSpriteSize();
-                SetupSpriteRenderer();
-            }
+            // Setup 3D model (visitor prefab is the model or has a model prefab)
+            Setup3DModel();
 
             // Always setup state aura for visual feedback (regardless of model setup method)
             SetupStateAura();
 
             SetupPhysics();
 
+            // Setup the Detect collider - always try to find it
+            // The Detect child may be on the model instance OR directly on this visitor prefab
+            SetupDetectCollider();
 
             stalledDuration = 0f;
             hasLoggedCurrentStall = false;
@@ -462,22 +439,51 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Check if we're being blocked by tongue colliders and need to be pushed out
-            // This runs every frame to ensure visitors can't walk through the tongue
-            Vector3 tongueBlockedPos;
-            if (IsBlockedByTongue(transform.position, out tongueBlockedPos))
+            // NOTE: Tongue collision is handled by Unity physics via solid colliders on the tongue bones
+            // No manual blocking check needed - the visitor's Rigidbody collides with the tongue's kinematic colliders
+
+            // DEBUG: Manual overlap check to verify colliders are actually overlapping
+            if (FaeMaze.Maze.HeartOfTheMaze.IsTongueActiveWithColliders && Time.frameCount % 30 == 0)
             {
-                // Push visitor to the blocked position (outside the tongue)
-                if (rb3D != null)
+                Vector3 myPos = transform.position;
+                // Check for any overlapping colliders using a sphere at visitor position
+                Collider[] overlaps = Physics.OverlapSphere(myPos, 0.5f, ~0, QueryTriggerInteraction.Ignore);
+                foreach (var col in overlaps)
                 {
-                    rb3D.MovePosition(tongueBlockedPos);
-                    rb3D.linearVelocity = Vector3.zero;
+                    if (col.gameObject.name.StartsWith("BoneCollider_"))
+                    {
+                        Vector3 colPos = col.transform.position;
+                        Debug.Log($"[OverlapCheck] {name} at ({myPos.x:F2}, {myPos.y:F2}, {myPos.z:F2}) " +
+                            $"OVERLAPS {col.gameObject.name} at ({colPos.x:F2}, {colPos.y:F2}, {colPos.z:F2})");
+                    }
                 }
-                else
+
+                // Also check if there are ANY bone colliders nearby in XY even if not overlapping in 3D
+                Collider[] nearbyInXY = Physics.OverlapSphere(new Vector3(myPos.x, myPos.y, 0), 2f, ~0, QueryTriggerInteraction.Ignore);
+                int boneColliderCount = 0;
+                float closestDist = float.MaxValue;
+                string closestName = "";
+                Vector3 closestPos = Vector3.zero;
+                foreach (var col in nearbyInXY)
                 {
-                    transform.position = tongueBlockedPos;
+                    if (col.gameObject.name.StartsWith("BoneCollider_"))
+                    {
+                        boneColliderCount++;
+                        Vector3 colPos = col.transform.position;
+                        float dist3D = Vector3.Distance(myPos, colPos);
+                        if (dist3D < closestDist)
+                        {
+                            closestDist = dist3D;
+                            closestName = col.gameObject.name;
+                            closestPos = colPos;
+                        }
+                    }
                 }
-                RecordMoveCause("TonguePush");
+                if (boneColliderCount > 0)
+                {
+                    Debug.Log($"[NearbyCheck] {name} has {boneColliderCount} bone colliders within 2 XY units. " +
+                        $"Closest: {closestName} at ({closestPos.x:F2}, {closestPos.y:F2}, {closestPos.z:F2}), dist3D={closestDist:F3}");
+                }
             }
 
             // Handle FairyRing circling (takes priority over lantern fascination)
@@ -591,58 +597,47 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// FixedUpdate handles physics-based movement.
-        /// Movement is calculated in Update() and stored in desiredPosition,
-        /// then applied here using MovePosition() which works correctly with non-kinematic Rigidbodies.
+        /// FixedUpdate handles physics-based movement using forces.
+        /// NOTE: We do NOT try to block tongue colliders here - Unity physics cannot
+        /// handle fast-moving kinematic colliders. HeartOfTheMaze controls visitor
+        /// position directly once grabbed.
         /// </summary>
         protected virtual void FixedUpdate()
         {
-            if (rb3D != null)
+            if (rb3D == null) return;
+
+            // NOTE: We do NOT try to depenetrate from tongue colliders here.
+            // Unity physics cannot reliably handle fast-moving kinematic colliders.
+            // Instead, HeartOfTheMaze controls visitor position directly once grabbed.
+
+            bool canMove = state == VisitorState.Walking || state == VisitorState.Confused ||
+                           state == VisitorState.Frightened || state == VisitorState.Lured ||
+                           state == VisitorState.Fascinated;
+
+            // Don't apply movement force when grabbed - HeartOfTheMaze controls position
+            if (state == VisitorState.Grabbed || state == VisitorState.Consumed)
             {
-                // CRITICAL: Only apply desired position if we're in a movement-allowed state
-                // This prevents stale positions from being applied after state changes (e.g., becoming Dazed)
-                bool canMove = state == VisitorState.Walking || state == VisitorState.Confused ||
-                               state == VisitorState.Frightened || state == VisitorState.Lured ||
-                               state == VisitorState.Fascinated || state == VisitorState.Grabbed ||
-                               state == VisitorState.Consumed;
-
-                if (hasDesiredPosition && canMove)
-                {
-                    // Wake the Rigidbody in case it's sleeping (non-kinematic bodies can sleep)
-                    if (rb3D.IsSleeping())
-                    {
-                        rb3D.WakeUp();
-                    }
-
-                    // Use MovePosition only - do NOT override with transform.position
-                    // This allows the physics engine to handle collision resolution with tongue colliders
-                    rb3D.MovePosition(desiredPosition);
-                    hasDesiredPosition = false;
-                }
-                else if (hasDesiredPosition && !canMove)
-                {
-                    // Clear stale desired position for non-movement states
-                    hasDesiredPosition = false;
-                }
-
-                // CRITICAL: Zero velocity for ALL non-terminal states to prevent physics drift
-                // This includes Dazed, Idle, and walking states without a desired position
-                if (state != VisitorState.Grabbed && state != VisitorState.Consumed && state != VisitorState.Escaping)
-                {
-                    if (rb3D.linearVelocity.sqrMagnitude > 0.001f)
-                    {
-                        Debug.Log($"[PhysicsPush] {name} (state={state}) had velocity ({rb3D.linearVelocity.x:F2}, {rb3D.linearVelocity.y:F2}, {rb3D.linearVelocity.z:F2}) - zeroing");
-                        rb3D.linearVelocity = Vector3.zero;
-                        rb3D.angularVelocity = Vector3.zero;
-                    }
-                }
+                hasDesiredPosition = false;
+                return;
             }
 
-            // Check if we're on a walkable tile and log if not
-            CheckAndLogWalkability();
+            if (hasDesiredPosition && canMove)
+            {
+                Vector3 moveDir = desiredPosition - rb3D.position;
+                moveDir.z = 0;  // Only move in XY plane
+                float moveDist = moveDir.magnitude;
 
-            // Check if visitor is stuck (in Walking state but not moving)
-            CheckAndLogIfStuck();
+                if (moveDist > 0.01f)
+                {
+                    // Use AddForce to move toward destination
+                    // With mass=10 and damping=5: terminal velocity = force / (mass * damping)
+                    // For velocity=moveSpeed: force = moveSpeed * mass * damping = 3 * 10 * 5 = 150
+                    Vector3 force = moveDir.normalized * moveSpeed * 10f * 5f;
+                    rb3D.AddForce(force, ForceMode.Force);
+                }
+
+                hasDesiredPosition = false;
+            }
         }
 
         /// <summary>
@@ -732,6 +727,52 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Records an event to the navigation audit log for debugging stuck visitors.
+        /// </summary>
+        /// <param name="eventType">Type of event: "Waypoint", "StateChange", "PathCalc", "Blocked", "MoveCause"</param>
+        /// <param name="details">Event-specific details</param>
+        protected void RecordNavigationEvent(string eventType, string details)
+        {
+            var navEvent = new NavigationEvent
+            {
+                timestamp = Time.time,
+                eventType = eventType,
+                details = details,
+                position = transform.position,
+                pathIndex = worldPathIndex
+            };
+
+            navigationAuditLog.Add(navEvent);
+
+            // Trim old entries to keep memory bounded
+            while (navigationAuditLog.Count > MAX_AUDIT_LOG_ENTRIES)
+            {
+                navigationAuditLog.RemoveAt(0);
+            }
+        }
+
+        /// <summary>
+        /// Formats the navigation audit log for display in stuck diagnostics.
+        /// </summary>
+        /// <returns>Formatted string of recent navigation events</returns>
+        protected string FormatNavigationAuditLog()
+        {
+            if (navigationAuditLog.Count == 0)
+            {
+                return "  (no events recorded)";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            // Show last 15 entries for readability
+            int startIdx = Mathf.Max(0, navigationAuditLog.Count - 15);
+            for (int i = startIdx; i < navigationAuditLog.Count; i++)
+            {
+                sb.AppendLine($"  {navigationAuditLog[i]}");
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// Checks if the visitor is stuck (in Walking/Confused state but not moving).
         /// Logs diagnostic info after being stuck for STUCK_LOG_THRESHOLD seconds.
         /// </summary>
@@ -762,22 +803,55 @@ namespace FaeMaze.Visitors
 
                     if (stuckDuration >= STUCK_LOG_THRESHOLD)
                     {
-                        // Log stuck warning
-                        string pathInfo = worldPath != null
-                            ? $"PathLength={worldPath.Count}, PathIndex={worldPathIndex}"
-                            : "Path=null";
+                        // Build comprehensive stuck diagnostic
+                        StringBuilder diagSb = new StringBuilder();
+                        diagSb.AppendLine($"[VisitorDiag] {gameObject.name} STUCK for {stuckDuration:F1}s!");
+                        diagSb.AppendLine($"  Current: ({currentPos.x:F2}, {currentPos.y:F2}, {currentPos.z:F2})");
+                        diagSb.AppendLine($"  State: {state}");
+                        diagSb.AppendLine($"  LastMoveCause: {lastMoveCause}");
+                        diagSb.AppendLine($"  HasDesiredPosition: {hasDesiredPosition}");
+                        if (hasDesiredPosition)
+                        {
+                            diagSb.AppendLine($"  DesiredPosition: ({desiredPosition.x:F2}, {desiredPosition.y:F2}, {desiredPosition.z:F2})");
+                            diagSb.AppendLine($"  DistToDesired: {Vector3.Distance(currentPos, desiredPosition):F3}");
+                        }
 
-                        string nextWaypoint = worldPath != null && worldPathIndex < worldPath.Count
-                            ? $"({worldPath[worldPathIndex].x:F2}, {worldPath[worldPathIndex].y:F2})"
-                            : "none";
+                        // Path details
+                        if (worldPath != null)
+                        {
+                            diagSb.AppendLine($"  PathLength={worldPath.Count}, PathIndex={worldPathIndex}");
+                            if (worldPathIndex < worldPath.Count)
+                            {
+                                Vector3 nextWp = worldPath[worldPathIndex];
+                                float distToNext = Vector3.Distance(currentPos, nextWp);
+                                diagSb.AppendLine($"  NextWaypoint: ({nextWp.x:F2}, {nextWp.y:F2}) dist={distToNext:F3}");
+                            }
+                            // Show upcoming waypoints
+                            diagSb.AppendLine($"  Upcoming path waypoints:");
+                            for (int i = worldPathIndex; i < Mathf.Min(worldPathIndex + 5, worldPath.Count); i++)
+                            {
+                                Vector3 wp = worldPath[i];
+                                float dist = Vector3.Distance(currentPos, wp);
+                                diagSb.AppendLine($"    [{i}] ({wp.x:F2}, {wp.y:F2}) dist={dist:F2}");
+                            }
+                        }
+                        else
+                        {
+                            diagSb.AppendLine($"  Path=null");
+                        }
 
-                        Debug.LogWarning($"[VisitorDiag] {gameObject.name} STUCK for {stuckDuration:F1}s!\n" +
-                            $"  Current: ({currentPos.x:F2}, {currentPos.y:F2}, {currentPos.z:F2})\n" +
-                            $"  State: {state}\n" +
-                            $"  LastMoveCause: {lastMoveCause}\n" +
-                            $"  {pathInfo}\n" +
-                            $"  NextWaypoint: {nextWaypoint}\n" +
-                            $"  HasDesiredPosition: {hasDesiredPosition}");
+                        // Physics state
+                        if (rb3D != null)
+                        {
+                            diagSb.AppendLine($"  Rigidbody velocity: ({rb3D.linearVelocity.x:F3}, {rb3D.linearVelocity.y:F3}, {rb3D.linearVelocity.z:F3}) mag={rb3D.linearVelocity.magnitude:F3}");
+                            diagSb.AppendLine($"  Rigidbody isKinematic: {rb3D.isKinematic}, constraints: {rb3D.constraints}");
+                        }
+
+                        // Navigation audit trail
+                        diagSb.AppendLine($"  Navigation Audit Log (last 15 events):");
+                        diagSb.Append(FormatNavigationAuditLog());
+
+                        Debug.LogWarning(diagSb.ToString());
                         Debug.Break();  // Pause editor to allow inspection
 
                         // If stuck due to node center or no valid movement, try to recalculate path
@@ -1146,10 +1220,16 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            VisitorState previousState = state;
+
             // DEBUG: Skip all state logic and just walk (does NOT affect terminal states above)
             if (debugOnlyWalkingState)
             {
                 state = VisitorState.Walking;
+                if (state != previousState)
+                {
+                    RecordNavigationEvent("StateChange", $"{previousState} -> {state} (debug override)");
+                }
                 return;
             }
 
@@ -1179,6 +1259,12 @@ namespace FaeMaze.Visitors
             else
             {
                 state = VisitorState.Walking;
+            }
+
+            // Log state change if it occurred
+            if (state != previousState)
+            {
+                RecordNavigationEvent("StateChange", $"{previousState} -> {state}");
             }
         }
 
@@ -1328,10 +1414,18 @@ namespace FaeMaze.Visitors
             hasDumpedStallRouteLog = false;
             previousState = state;
 
+            // Clear navigation audit log for new destination
+            navigationAuditLog.Clear();
+
             // Build world-space path from current position to destination
             worldPath = BuildWorldPath(transform.position, destination);
             worldPathIndex = 0;
             ResetSplineState();
+
+            // Record initial path in audit log
+            int pathCount = worldPath?.Count ?? 0;
+            string firstWp = pathCount > 0 ? $"({worldPath[0].x:F2}, {worldPath[0].y:F2})" : "none";
+            RecordNavigationEvent("Init", $"SetDestination to ({destination.x:F2}, {destination.y:F2}), {pathCount} wps, first={firstWp}");
 
             if (worldPath != null && worldPath.Count > 0)
             {
@@ -1950,8 +2044,8 @@ namespace FaeMaze.Visitors
                 UpdateDirectWalking(effectiveSpeed);
             }
 
-            // Note: Position is applied via FixedUpdate using MovePosition()
-            // This works correctly with non-kinematic Rigidbody for physics collisions
+            // Note: Position is applied via FixedUpdate using velocity-based movement
+            // This allows Unity physics to naturally block movement at solid colliders
 
             // Check if fascinated visitor has reached close enough to lantern (0.5 units)
             if (isFascinated && !hasReachedLantern && currentFaeLantern != null)
@@ -2026,12 +2120,6 @@ namespace FaeMaze.Visitors
             {
                 // No tile found at all - this is bad, but we can't do much
                 // Stay in place and hope path recalculation fixes it
-                // CRITICAL: Zero velocity to prevent physics from continuing to push us
-                if (rb3D != null)
-                {
-                    rb3D.linearVelocity = Vector3.zero;
-                    rb3D.angularVelocity = Vector3.zero;
-                }
                 RecordMoveCause("SplineMovement_NoRecoveryTile");
                 return;
             }
@@ -2173,15 +2261,6 @@ namespace FaeMaze.Visitors
                 Debug.LogWarning($"[SplineDebug] {name} SPLINE SANITY CHECK FAILED! Calculated position {newPosition} is {distanceFromCurrent:F2} units from current {transform.position}. " +
                     $"Control points: P0={splineControlPoints[0]}, P1={splineControlPoints[1]}, P2={splineControlPoints[2]}, P3={splineControlPoints[3]}, progress={splineProgress:F3}");
 
-                // Zero velocity and stay in place - use immediate sync to prevent physics drift
-                if (rb3D != null)
-                {
-                    rb3D.linearVelocity = Vector3.zero;
-                    rb3D.angularVelocity = Vector3.zero;
-                    // Force the rigidbody to use our current position, preventing any physics integration
-                    rb3D.position = transform.position;
-                }
-
                 // Force path recalculation
                 RecordMoveCause("SplineMovement_InsanePosition");
                 splineInitialized = false;
@@ -2198,12 +2277,6 @@ namespace FaeMaze.Visitors
             if (IsBlockedByNodeCenter(newPosition, out blockedPos))
             {
                 // Blocked by node center - move to blocked position and DON'T advance spline
-                // Zero velocity to prevent physics from pushing us further
-                if (rb3D != null)
-                {
-                    rb3D.linearVelocity = Vector3.zero;
-                    rb3D.angularVelocity = Vector3.zero;
-                }
                 RecordMoveCause("SplineMovement_BlockedByNodeCenter");
                 desiredPosition = blockedPos;
                 hasDesiredPosition = true;
@@ -2213,21 +2286,7 @@ namespace FaeMaze.Visitors
                 // This prevents sanity check failures on next frame
                 UpdateSplineControlPoints();
             }
-            else if (IsBlockedByTongue(newPosition, out blockedPos))
-            {
-                // Blocked by tongue - stop movement
-                if (rb3D != null)
-                {
-                    rb3D.linearVelocity = Vector3.zero;
-                    rb3D.angularVelocity = Vector3.zero;
-                }
-                RecordMoveCause("SplineMovement_BlockedByTongue");
-                desiredPosition = blockedPos;
-                hasDesiredPosition = true;
-                wasBlocked = true;
-
-                UpdateSplineControlPoints();
-            }
+            // NOTE: Tongue collision handled by Unity physics - no manual check needed
             else
             {
                 // Check if the new position would take us off the walkable area
@@ -2260,27 +2319,13 @@ namespace FaeMaze.Visitors
                         }
                         else
                         {
-                            // Direct fallback also leads off-path - stay in place
-                            // Zero velocity to prevent physics from pushing us further
-                            if (rb3D != null)
-                            {
-                                rb3D.linearVelocity = Vector3.zero;
-                                rb3D.angularVelocity = Vector3.zero;
-                            }
                             newPosition = previousPosition;
                             RecordMoveCause("SplineMovement_StayInPlace");
-                            wasBlocked = true; // Don't advance spline
+                            wasBlocked = true;
                         }
                     }
                     else
                     {
-                        // No valid waypoint - stay in place
-                        // Zero velocity to prevent physics from pushing us further
-                        if (rb3D != null)
-                        {
-                            rb3D.linearVelocity = Vector3.zero;
-                            rb3D.angularVelocity = Vector3.zero;
-                        }
                         newPosition = previousPosition;
                         RecordMoveCause("SplineMovement_NoValidTarget");
                     }
@@ -2403,12 +2448,6 @@ namespace FaeMaze.Visitors
             else if (needsRecovery && recoveryTile == null)
             {
                 // No tile found at all - stay in place
-                // CRITICAL: Zero velocity to prevent physics from continuing to push us
-                if (rb3D != null)
-                {
-                    rb3D.linearVelocity = Vector3.zero;
-                    rb3D.angularVelocity = Vector3.zero;
-                }
                 RecordMoveCause("DirectWalking_NoRecoveryTile");
                 return;
             }
@@ -2428,18 +2467,21 @@ namespace FaeMaze.Visitors
                     Vector3 blockedPos;
                     if (IsBlockedByNodeCenter(targetWorldPos, out blockedPos))
                     {
+                        // If we're very close to the blocked waypoint (< 0.1 units), skip it to avoid getting stuck
+                        // This happens when a path waypoint is inside or very near a node center
+                        if (distanceToTarget < 0.1f && worldPathIndex + 1 < worldPath.Count)
+                        {
+                            RecordNavigationEvent("Skip", $"Skipping blocked wp[{worldPathIndex}] (dist={distanceToTarget:F3}), advancing to wp[{worldPathIndex + 1}]");
+                            worldPathIndex++;
+                            continue; // Try next waypoint
+                        }
                         // Blocked by node center - move to blocked position and stop
+                        RecordNavigationEvent("Blocked", $"NodeCenter blocked wp[{worldPathIndex}], pushed to ({blockedPos.x:F2}, {blockedPos.y:F2})");
                         finalPosition = blockedPos;
                         remainingDistance = 0f;
                         break;
                     }
-                    if (IsBlockedByTongue(targetWorldPos, out blockedPos))
-                    {
-                        // Blocked by tongue - move to blocked position and stop
-                        finalPosition = blockedPos;
-                        remainingDistance = 0f;
-                        break;
-                    }
+                    // NOTE: Tongue collision handled by Unity physics - no manual check needed
                     // We can reach (or pass) this waypoint - move to it and continue
                     remainingDistance -= distanceToTarget;
                     finalPosition = targetWorldPos;
@@ -2466,13 +2508,10 @@ namespace FaeMaze.Visitors
                     if (IsBlockedByNodeCenter(targetPos, out blockedPos))
                     {
                         // Blocked by node center - move to blocked position instead
+                        RecordNavigationEvent("Blocked", $"NodeCenter blocked partial move, pushed to ({blockedPos.x:F2}, {blockedPos.y:F2})");
                         finalPosition = blockedPos;
                     }
-                    else if (IsBlockedByTongue(targetPos, out blockedPos))
-                    {
-                        // Blocked by tongue - move to blocked position instead
-                        finalPosition = blockedPos;
-                    }
+                    // NOTE: Tongue collision handled by Unity physics - no manual check needed
                     else
                     {
                         // Validate that target position is near a walkable tile
@@ -2707,146 +2746,9 @@ namespace FaeMaze.Visitors
             return Vector2.Distance(point, projection);
         }
 
-        /// <summary>
-        /// Checks if movement to target position is blocked by heart tongue colliders.
-        /// Uses OverlapSphere to find SolidCollider_* objects from the tongue prefab.
-        /// </summary>
-        /// <param name="targetPosition">The position we want to move to</param>
-        /// <param name="blockedPosition">Output: adjusted position if blocked</param>
-        /// <returns>True if blocked by tongue, false otherwise</returns>
-        protected bool IsBlockedByTongue(Vector3 targetPosition, out Vector3 blockedPosition)
-        {
-            blockedPosition = targetPosition;
-
-            // Don't block if already grabbed
-            if (state == VisitorState.Grabbed) return false;
-
-            // Early exit if no tongue is active - avoids expensive Physics.OverlapSphere
-            if (!Maze.HeartOfTheMaze.IsTongueActiveWithColliders) return false;
-
-            Vector3 currentPos = transform.position;
-
-            // Search for tongue colliders near CURRENT position (to detect if we're already inside)
-            // and near TARGET position (to prevent moving into a collider)
-            //
-            // The tongue colliders are at varying Z levels depending on the tongue's animation state.
-            // Use a very large search radius (includes Z variance) to catch colliders wherever they are.
-            // The 2D distance check (XY plane) determines if we're actually blocked.
-            const float searchRadius = 10.0f;  // Very large to catch all nearby colliders at any Z
-            const float visitorRadius = 0.2f;   // Visitor collision radius
-            // Collider world radii range from 0.3 (base) to 0.1 (tip) - use average
-            const float avgColliderRadius = 0.2f;
-            const float blockRadius = avgColliderRadius + visitorRadius;  // Total blocking radius ~0.4
-
-            // Search from visitor position with large radius to catch colliders at any Z level
-            Vector3 searchPos = currentPos;
-            Collider[] overlaps = Physics.OverlapSphere(searchPos, searchRadius, ~0, QueryTriggerInteraction.Ignore);
-
-            Collider nearestBlockingCollider = null;
-            float nearestDist = float.MaxValue;
-            Vector2 nearestColliderPos = Vector2.zero;
-
-            foreach (var col in overlaps)
-            {
-                if (col == null) continue;
-                if (!col.enabled) continue;
-                if (col.isTrigger) continue;
-
-                // Check for solid tongue colliders
-                if (!col.gameObject.name.StartsWith("SolidCollider_")) continue;
-
-                // Get 2D distance from current position to collider's transform position
-                // NOTE: Use transform.position, NOT bounds.center - bounds can be incorrect for
-                // scaled colliders parented to animated bones
-                Vector3 colliderWorldPos = col.transform.position;
-                Vector2 current2D = new Vector2(currentPos.x, currentPos.y);
-                Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
-                float dist2D = Vector2.Distance(current2D, collider2D);
-
-                // Track nearest collider that we're inside or close to
-                if (dist2D < blockRadius && dist2D < nearestDist)
-                {
-                    nearestDist = dist2D;
-                    nearestBlockingCollider = col;
-                    nearestColliderPos = collider2D;
-                }
-            }
-
-            if (nearestBlockingCollider != null)
-            {
-                // We're inside or very close to a collider - push away
-                Vector2 current2D = new Vector2(currentPos.x, currentPos.y);
-                Vector2 target2D = new Vector2(targetPosition.x, targetPosition.y);
-
-                // Push direction: away from collider center
-                Vector2 pushDir = (current2D - nearestColliderPos);
-                if (pushDir.sqrMagnitude < 0.001f)
-                {
-                    // At center - push toward target if possible, else random
-                    pushDir = (target2D - nearestColliderPos);
-                    if (pushDir.sqrMagnitude < 0.001f)
-                    {
-                        float randomAngle = Random.value * Mathf.PI * 2f;
-                        pushDir = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
-                    }
-                }
-                pushDir.Normalize();
-
-                // Push to just outside the blocking radius
-                float pushDist = blockRadius - nearestDist + 0.1f;
-                blockedPosition = new Vector3(
-                    currentPos.x + pushDir.x * pushDist,
-                    currentPos.y + pushDir.y * pushDist,
-                    currentPos.z
-                );
-
-                return true;
-            }
-
-            // Also check if moving TO target would enter a collider
-            // Use target position directly - the large searchRadius will catch colliders at any Z
-            Vector3 targetSearchPos = targetPosition;
-            Collider[] targetOverlaps = Physics.OverlapSphere(targetSearchPos, searchRadius, ~0, QueryTriggerInteraction.Ignore);
-
-            foreach (var col in targetOverlaps)
-            {
-                if (col == null) continue;
-                if (!col.enabled) continue;
-                if (col.isTrigger) continue;  // Skip trigger colliders
-
-                if (!col.gameObject.name.StartsWith("SolidCollider_")) continue;
-
-                // Use transform.position, NOT bounds.center
-                Vector3 colliderWorldPos = col.transform.position;
-                Vector2 target2D = new Vector2(targetPosition.x, targetPosition.y);
-                Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
-                float dist2D = Vector2.Distance(target2D, collider2D);
-
-                if (dist2D < blockRadius)
-                {
-                    // Target is inside a collider - don't move there
-                    // Push away from collider
-                    Vector2 current2D = new Vector2(currentPos.x, currentPos.y);
-                    Vector2 pushDir = (target2D - collider2D);
-                    if (pushDir.sqrMagnitude < 0.001f)
-                    {
-                        pushDir = (current2D - collider2D);
-                    }
-                    pushDir.Normalize();
-
-                    float pushDist = blockRadius - dist2D + 0.1f;
-                    blockedPosition = new Vector3(
-                        targetPosition.x + pushDir.x * pushDist,
-                        targetPosition.y + pushDir.y * pushDist,
-                        targetPosition.z
-                    );
-
-                    return true;
-                }
-            }
-
-            return false;
-        }
+        // NOTE: IsBlockedByTongue removed - tongue collision is handled by Unity physics
+        // The tongue has solid (non-trigger) colliders with kinematic Rigidbodies that
+        // naturally block the visitor's Rigidbody through physics collision.
 
         /// <summary>
         /// Called when visitor reaches a waypoint. Override in derived classes
@@ -2858,10 +2760,15 @@ namespace FaeMaze.Visitors
             // Default: just advance to next waypoint
             if (worldPath != null && worldPathIndex < worldPath.Count)
             {
+                // Record waypoint reached before advancing
+                Vector3 reachedWp = worldPath[worldPathIndex];
+                RecordNavigationEvent("Waypoint", $"Reached wp[{worldPathIndex}] ({reachedWp.x:F2}, {reachedWp.y:F2})");
+
                 worldPathIndex++;
 
                 if (worldPathIndex >= worldPath.Count)
                 {
+                    RecordNavigationEvent("PathComplete", "Reached final waypoint");
                     OnPathCompleted();
                 }
             }
@@ -3642,6 +3549,11 @@ namespace FaeMaze.Visitors
             worldDestination = destination;
             ResetSplineState();
 
+            // Record path recalculation in audit log
+            int pathCount = worldPath?.Count ?? 0;
+            string firstWp = pathCount > 0 ? $"({worldPath[0].x:F2}, {worldPath[0].y:F2})" : "none";
+            RecordNavigationEvent("PathCalc", $"Recalc to ({destination.x:F2}, {destination.y:F2}), {pathCount} wps, first={firstWp}");
+
             if (debugSplineRotation && worldPath != null)
             {
                 Debug.Log($"[SplineDebug] {name} RecalculatePath COMPLETE - " +
@@ -3944,13 +3856,6 @@ namespace FaeMaze.Visitors
             frightRecoveryNodeCount = 0;
             hasReachedLantern = false;
             ClearLanternInteraction();
-
-            if (spriteRenderer != null)
-            {
-                Color escapingColor = visitorColor;
-                escapingColor.a = 0.3f;
-                spriteRenderer.color = escapingColor;
-            }
 
             Destroy(gameObject, 0.2f);
         }
@@ -4401,81 +4306,7 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Sprite Setup
-
-        protected virtual void SetupSpriteRenderer()
-        {
-            // Only create procedural sprite if enabled
-            if (useProceduralSprite)
-            {
-                spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
-                    gameObject,
-                    createProceduralSprite: true,
-                    useSoftEdges: false,
-                    resolution: 32,
-                    pixelsPerUnit: proceduralPixelsPerUnit
-                );
-            }
-            // Otherwise spriteRenderer should already be found via GetComponentInChildren in Awake
-
-            ApplySpriteSettings();
-        }
-
-        protected virtual void ApplySpriteSettings()
-        {
-            if (spriteRenderer == null)
-            {
-                return;
-            }
-
-            spriteRenderer.color = visitorColor;
-            spriteRenderer.sortingOrder = sortingOrder;
-
-            if (useProceduralSprite)
-            {
-                float baseSpriteSize = spriteRenderer.sprite != null
-                    ? Mathf.Max(spriteRenderer.sprite.bounds.size.x, spriteRenderer.sprite.bounds.size.y)
-                    : 1f;
-
-                if (baseSpriteSize <= 0f)
-                {
-                    baseSpriteSize = 1f;
-                }
-
-                float targetWorldSize = visitorSize > 0f
-                    ? visitorSize
-                    : Mathf.Max(authoredSpriteWorldSize.x, authoredSpriteWorldSize.y);
-
-                if (targetWorldSize > 0f)
-                {
-                    float scale = targetWorldSize / baseSpriteSize;
-                    transform.localScale = new Vector3(scale, scale, 1f);
-                }
-                else
-                {
-                    transform.localScale = initialScale;
-                }
-            }
-            else
-            {
-                transform.localScale = initialScale;
-            }
-        }
-
-        protected void CacheAuthoredSpriteSize()
-        {
-            if (spriteRenderer == null || spriteRenderer.sprite == null)
-            {
-                authoredSpriteWorldSize = Vector2.zero;
-                return;
-            }
-
-            Vector2 spriteSize = spriteRenderer.sprite.bounds.size;
-            authoredSpriteWorldSize = new Vector2(
-                spriteSize.x * transform.localScale.x,
-                spriteSize.y * transform.localScale.y
-            );
-        }
+        #region Physics Setup
 
         protected virtual void SetupPhysics()
         {
@@ -4492,49 +4323,315 @@ namespace FaeMaze.Visitors
             // Non-kinematic for physics collision response with solid colliders
             rb3D.isKinematic = false;
             rb3D.useGravity = false;
-            rb3D.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ;
-            // PERFORMANCE: Use Discrete instead of ContinuousDynamic - continuous is extremely expensive
-            // when many colliders are created at once (tongue bone colliders). Discrete is sufficient
-            // since visitors move slowly and we use MovePosition which handles collision correctly.
-            rb3D.collisionDetectionMode = CollisionDetectionMode.Discrete;
+            rb3D.mass = 10f;  // Higher mass = collision response has more effect
+            rb3D.constraints = RigidbodyConstraints.FreezeRotation;  // No position freeze - let physics work fully
+            rb3D.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;  // Best for dynamic vs kinematic
             rb3D.interpolation = RigidbodyInterpolation.Interpolate;
-            rb3D.sleepThreshold = 0f;  // Never sleep - we need MovePosition to always work
+            rb3D.linearDamping = 5f;  // Drag to slow down when not actively moving
+            rb3D.angularDamping = 0f;
 
-            // Use CapsuleCollider as a vertical column for the visitor's body
-            // NOTE: Visitor colliders should NOT be triggers - they need to be detected by
-            // trigger colliders on props (FairyRing, FaeLantern, Heart, etc.)
-            // CapsuleCollider aligned with Z-axis (direction=2) for vertical column in XY-plane game
+            // Remove any legacy colliders on the root GameObject - we use the "Detect" child collider now
+            // The "Detect" child is baked into the visitor model prefab with proper collider settings
             SphereCollider sphereCollider = GetComponent<SphereCollider>();
-            CapsuleCollider capsuleCollider = GetComponent<CapsuleCollider>();
+            CapsuleCollider rootCapsule = GetComponent<CapsuleCollider>();
 
-            // Remove any existing SphereCollider - we want CapsuleCollider for vertical column
             if (sphereCollider != null)
             {
                 Destroy(sphereCollider);
-                sphereCollider = null;
+            }
+            if (rootCapsule != null)
+            {
+                Destroy(rootCapsule);
             }
 
-            if (capsuleCollider != null)
+            // The actual collision collider is on the "Detect" child of the model instance
+            // It will be set up in SetupDetectCollider() after the model is instantiated
+        }
+
+        /// <summary>
+        /// Sets up the Detect collider from the model instance.
+        /// Called after Setup3DModel() instantiates the model prefab.
+        /// The Detect child has a CapsuleCollider baked into the prefab.
+        /// </summary>
+        protected virtual void SetupDetectCollider()
+        {
+            // The Detect collider can be either:
+            // 1. A child of modelInstance (if modelPrefab was used)
+            // 2. A direct child of this visitor (if the visitor prefab IS the model)
+            Transform searchRoot = modelInstance != null ? modelInstance.transform : transform;
+
+            Debug.Log($"[{name}] SetupDetectCollider: Searching for Detect in {searchRoot.name}, modelInstance={modelInstance?.name ?? "null"}");
+
+            // List all children for debug
+            System.Text.StringBuilder childList = new System.Text.StringBuilder();
+            childList.Append($"  Children of {searchRoot.name}: ");
+            foreach (Transform child in searchRoot)
             {
-                // Configure existing capsule as vertical column
-                // Visitor models extend from z=0 to z=-1, so center at z=-0.5 with height 1.0
-                capsuleCollider.isTrigger = false;
-                capsuleCollider.radius = 0.15f;
-                capsuleCollider.height = 1.0f;   // Covers z=0 to z=-1 when centered at z=-0.5
-                capsuleCollider.direction = 2;   // Z-axis (vertical in our coordinate system)
-                capsuleCollider.center = new Vector3(0f, 0f, -0.5f);  // Centered at z=-0.5
+                childList.Append($"{child.name}, ");
             }
-            else
+            Debug.Log(childList.ToString());
+
+            // Find the Detect child in the hierarchy
+            Transform detectTransform = searchRoot.Find("Detect");
+            if (detectTransform == null)
             {
-                // Add CapsuleCollider as vertical column for reliable collision detection
-                // Visitor models extend from z=0 to z=-1, so center at z=-0.5 with height 1.0
-                capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
-                capsuleCollider.radius = 0.15f;
-                capsuleCollider.height = 1.0f;   // Covers z=0 to z=-1 when centered at z=-0.5
-                capsuleCollider.direction = 2;   // Z-axis (vertical in our coordinate system)
-                capsuleCollider.center = new Vector3(0f, 0f, -0.5f);  // Centered at z=-0.5
-                capsuleCollider.isTrigger = false;
+                // Try searching recursively
+                detectTransform = FindChildRecursive(searchRoot, "Detect");
             }
+
+            if (detectTransform == null)
+            {
+                Debug.LogError($"[{name}] SetupDetectCollider: Could not find 'Detect' child in {searchRoot.name}. " +
+                    $"Visitor collision detection will not work!");
+                return;
+            }
+
+            // Set the Detect object to Visitor layer for collision matrix
+            detectTransform.gameObject.layer = 6;  // Visitor layer
+
+            // Get the CapsuleCollider on the Detect object
+            CapsuleCollider detectCollider = detectTransform.GetComponent<CapsuleCollider>();
+            if (detectCollider == null)
+            {
+                Debug.LogError($"[{name}] SetupDetectCollider: 'Detect' child has no CapsuleCollider!");
+                return;
+            }
+
+            // Ensure it's not a trigger - we need solid collision with tongue
+            detectCollider.isTrigger = false;
+            detectCollider.enabled = true;
+
+            // CRITICAL: Reconfigure capsule to extend along Z-axis (world vertical)
+            // The game uses XY as ground plane and -Z as up. Tongue colliders are at Z ≈ -0.5 to -0.6.
+            // The visitor is at Z=0. We need the capsule to extend into negative Z to collide with tongue.
+            // Direction 2 = Z-axis
+            detectCollider.direction = 2;  // Z-axis
+            detectCollider.center = new Vector3(0, 0, -0.5f);  // Centered at Z=-0.5 (halfway between ground and tongue)
+            detectCollider.height = 2.0f;  // Extends from Z=+0.5 to Z=-1.5, covering tongue at Z ≈ -0.6
+            detectCollider.radius = 0.5f;  // XY radius stays the same
+
+            // CRITICAL: Remove any Rigidbody on the Detect child object.
+            // When a collider doesn't have its own Rigidbody, Unity treats it as a "compound collider"
+            // that uses the parent's Rigidbody. This allows:
+            // - Visitor root Rigidbody (non-kinematic) to receive physics responses
+            // - Tongue bone colliders (kinematic) to push the visitor
+            // If Detect has its own kinematic Rigidbody, kinematic-kinematic collision doesn't work!
+            Rigidbody detectRb = detectTransform.GetComponent<Rigidbody>();
+            if (detectRb != null)
+            {
+                Debug.Log($"[{name}] SetupDetectCollider: Destroying Rigidbody on Detect child - compound collider will use parent's non-kinematic Rigidbody");
+                Destroy(detectRb);
+            }
+
+            Debug.Log($"[{name}] SetupDetectCollider: Found Detect collider - " +
+                $"radius={detectCollider.radius}, height={detectCollider.height}, " +
+                $"direction={detectCollider.direction}, center={detectCollider.center}, " +
+                $"worldPos={detectTransform.position}, layer={detectTransform.gameObject.layer}, " +
+                $"enabled={detectCollider.enabled}");
+        }
+
+        /// <summary>
+        /// Recursively searches for a child transform by name.
+        /// </summary>
+        private Transform FindChildRecursive(Transform parent, string childName)
+        {
+            foreach (Transform child in parent)
+            {
+                if (child.name == childName)
+                    return child;
+
+                Transform found = FindChildRecursive(child, childName);
+                if (found != null)
+                    return found;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Checks if this visitor is currently overlapping any tongue bone colliders.
+        /// Uses Physics.OverlapSphere to actively detect colliders rather than relying on collision events.
+        /// If overlapping, calculates a push direction away from the nearest collider.
+        /// </summary>
+        /// <param name="pushDirection">Output: normalized direction to push visitor away from tongue</param>
+        /// <param name="pushStrength">Output: strength of push based on overlap depth</param>
+        /// <returns>True if overlapping any tongue bone collider</returns>
+        protected bool IsOverlappingTongueBoneCollider(out Vector3 pushDirection, out float pushStrength)
+        {
+            pushDirection = Vector3.zero;
+            pushStrength = 0f;
+
+            // Check a small sphere around the visitor's position
+            // Use the visitor's actual collider bounds if available
+            Vector3 checkPos = transform.position;
+            float checkRadius = 0.5f;  // Approximate visitor radius
+
+            // Find the Detect collider for more accurate bounds
+            Transform detectTransform = transform.Find("Detect");
+            if (detectTransform == null)
+            {
+                // Try to find it in children (may be nested in model)
+                detectTransform = FindChildRecursive(transform, "Detect");
+            }
+
+            if (detectTransform != null)
+            {
+                CapsuleCollider capsule = detectTransform.GetComponent<CapsuleCollider>();
+                if (capsule != null)
+                {
+                    checkPos = detectTransform.position;
+                    checkRadius = capsule.radius * Mathf.Max(detectTransform.lossyScale.x, detectTransform.lossyScale.y);
+                }
+            }
+
+            // Check for overlapping colliders - use a larger radius to account for Z-level differences
+            // IMPORTANT: Use QueryTriggerInteraction.Collide because bone colliders are triggers!
+            // Bone colliders may be at different Z levels (e.g., Z=-0.71 while visitor is at Z=0)
+            // so we need a search radius that spans the Z gap plus the XY overlap distance
+            float searchRadius = checkRadius + 1.5f;  // Increased to account for Z-level differences
+            Collider[] overlaps = Physics.OverlapSphere(checkPos, searchRadius, ~0, QueryTriggerInteraction.Collide);
+
+            // Debug: Log search parameters occasionally
+            if (Time.frameCount % 30 == 0)
+            {
+                int boneColliderCount = 0;
+                foreach (Collider c in overlaps)
+                {
+                    if (c.gameObject.name.StartsWith("BoneCollider_")) boneColliderCount++;
+                }
+                if (boneColliderCount > 0)
+                {
+                    Debug.Log($"[TongueSearch] {name} at {checkPos:F2} found {boneColliderCount} bone colliders in radius {searchRadius:F2}");
+                }
+            }
+
+            // Find all tongue bone colliders and calculate combined push direction
+            Vector3 accumulatedPush = Vector3.zero;
+            int tongueColliderCount = 0;
+            float closestDist = float.MaxValue;
+
+            foreach (Collider col in overlaps)
+            {
+                // Check for both SolidCollider_N (new solid colliders) and BoneCollider_N (legacy/trigger)
+                // SolidCollider_N are the solid physics blocking colliders
+                // BoneCollider_N are now trigger colliders for detection
+                if (col.gameObject.name.StartsWith("SolidCollider_") || col.gameObject.name.StartsWith("BoneCollider_"))
+                {
+                    // Use transform.position for animated/scaled colliders (NOT bounds.center!)
+                    Vector3 colliderWorldPos = col.transform.position;
+
+                    // Calculate 2D distance (XY plane - our play surface)
+                    Vector2 visitor2D = new Vector2(checkPos.x, checkPos.y);
+                    Vector2 collider2D = new Vector2(colliderWorldPos.x, colliderWorldPos.y);
+                    float dist2D = Vector2.Distance(visitor2D, collider2D);
+
+                    // Get the collider's world radius
+                    // NOTE: Bone colliders have very small actual radius (0.0045 world units)
+                    // but they represent a continuous tongue surface, so we use a larger effective radius
+                    SphereCollider sphere = col as SphereCollider;
+                    float colliderWorldRadius = 0.15f; // Default
+                    if (sphere != null)
+                    {
+                        float actualRadius = sphere.radius * Mathf.Max(
+                            col.transform.lossyScale.x,
+                            col.transform.lossyScale.y,
+                            col.transform.lossyScale.z);
+                        // Use larger effective radius (0.3) to represent tongue surface between colliders
+                        // Colliders are spaced every 10 bones, so we need overlap between them
+                        colliderWorldRadius = Mathf.Max(actualRadius, 0.3f);
+                    }
+
+                    // Calculate how much we're overlapping (penetration depth)
+                    float combinedRadius = checkRadius + colliderWorldRadius;
+                    float penetration = combinedRadius - dist2D;
+
+                    // Debug: Log near-miss colliders
+                    if (Time.frameCount % 30 == 0 && dist2D < 2.0f)
+                    {
+                        Debug.Log($"[TongueColliderCheck] {name}: {col.gameObject.name} at {colliderWorldPos:F2}, " +
+                            $"visitor2D={visitor2D:F2}, collider2D={collider2D:F2}, dist2D={dist2D:F2}, " +
+                            $"checkRadius={checkRadius:F2}, colliderRadius={colliderWorldRadius:F4}, " +
+                            $"combinedRadius={combinedRadius:F2}, penetration={penetration:F2}");
+                    }
+
+                    if (penetration > 0)
+                    {
+                        // We ARE overlapping - calculate push away from this collider
+                        Vector2 pushDir2D = (visitor2D - collider2D);
+                        if (pushDir2D.sqrMagnitude > 0.0001f)
+                        {
+                            pushDir2D = pushDir2D.normalized;
+                        }
+                        else
+                        {
+                            // Visitor is exactly at collider center - push in any direction
+                            pushDir2D = Vector2.right;
+                        }
+
+                        // Weight by penetration depth - deeper overlap = stronger push
+                        accumulatedPush += new Vector3(pushDir2D.x, pushDir2D.y, 0) * penetration;
+                        tongueColliderCount++;
+
+                        if (dist2D < closestDist)
+                        {
+                            closestDist = dist2D;
+                        }
+                    }
+                }
+            }
+
+            if (tongueColliderCount > 0)
+            {
+                // Normalize the accumulated push direction
+                pushDirection = accumulatedPush.normalized;
+                // Push strength based on deepest penetration (clamped to reasonable range)
+                pushStrength = Mathf.Clamp(accumulatedPush.magnitude / tongueColliderCount, 0.1f, 2.0f);
+
+                // Debug log overlap detection
+                if (Time.frameCount % 10 == 0)
+                {
+                    Debug.Log($"[TongueOverlap] {name} OVERLAPS {tongueColliderCount} bone colliders, pushDir={pushDirection:F2}, pushStrength={pushStrength:F2}");
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Called by Unity physics when this visitor's collider starts touching another solid collider.
+        /// We track tongue collisions but don't rely on physics impulses - they're too unreliable.
+        /// Actual blocking is done via DepenetrateFromTongueColliders() in FixedUpdate.
+        /// </summary>
+        protected virtual void OnCollisionEnter(Collision collision)
+        {
+            if (collision.gameObject.name.StartsWith("SolidCollider_"))
+            {
+                tongueCollisionCount++;
+
+                // Notify HeartOfTheMaze that we touched the tongue
+                var heart = FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+                if (heart != null)
+                {
+                    heart.NotifyVisitorTouchedTongue(this);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Called by Unity physics when collision ends.
+        /// </summary>
+        protected virtual void OnCollisionExit(Collision collision)
+        {
+            if (collision.gameObject.name.StartsWith("SolidCollider_"))
+            {
+                tongueCollisionCount = Mathf.Max(0, tongueCollisionCount - 1);
+            }
+        }
+
+        protected virtual void OnCollisionStay(Collision collision)
+        {
+            // Tongue collision tracking - actual blocking handled by physics
         }
 
         protected virtual void Setup3DModel()

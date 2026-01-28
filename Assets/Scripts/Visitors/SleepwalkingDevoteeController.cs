@@ -239,7 +239,7 @@ namespace FaeMaze.Visitors
             if (showMesmerizedGlow && isFascinated && Application.isPlaying)
             {
                 Gizmos.color = new Color(0.5f, 0f, 1f, 0.3f); // Purple glow
-                Gizmos.DrawWireSphere(transform.position, visitorSize * 0.015f);
+                Gizmos.DrawWireSphere(transform.position, 0.4f);
             }
         }
 

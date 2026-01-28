@@ -5,6 +5,7 @@ using FaeMaze.Props;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
+using ForestMaze;
 
 namespace FaeMaze.HeartPowers
 {
@@ -1945,6 +1946,16 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public class HeartwardGraspEffect : ActivePowerEffect
     {
+        #region Static Properties
+
+        /// <summary>
+        /// Static flag indicating whether the HeartwardGrasp tongue has active solid colliders.
+        /// Visitors check this to avoid expensive Physics.OverlapSphere calls when no tongue exists.
+        /// </summary>
+        public static bool IsGraspTongueActiveWithColliders { get; private set; } = false;
+
+        #endregion
+
         // Grabbing HGZ states - Tongue-based grab using similar mechanics to HeartOfTheMaze
         private enum GrabPhase
         {
@@ -1970,16 +1981,17 @@ namespace FaeMaze.HeartPowers
         private const float GRASP_ZONE_RADIUS = 2.5f;
         private const int MIN_WALL_THICKNESS = 3;         // Minimum wall models required for valid wall intersection
         private const float TRANSPORT_DURATION = 1.0f;    // Duration of transport phase
-        private const float HGZ_WALL_OFFSET = 0.5f;       // How far to offset HGZ into the wall (away from path)
+        private const float HGZ_WALL_OFFSET = 1.6f;       // Offset to wall rank 2 (WALL_SPACING * 2 = 0.8 * 2)
         private const float MIN_EDGE_DISTANCE = 3.0f;     // Minimum distance from path/node edge (~4 wall tiles * 0.8 spacing)
 
         // Tongue movement constants (matching HeartOfTheMaze)
-        private const float TONGUE_EMERGE_SPEED = 6.0f;   // Units per second for vertical movement
+        private const float TONGUE_EMERGE_SPEED = 18.0f;  // Units per second for vertical movement (matches HeartOfTheMaze)
         private const float TONGUE_EXTEND_SPEED = 4.0f;   // Rate of bone rotation for extending
-        private const float TONGUE_CURL_SPEED = 3.0f;     // Rate of curl for grabbing
-        private const float TONGUE_RETRACT_SPEED = 4.0f;  // Speed when retracting
+        private const float TONGUE_CURL_SPEED = 2.0f;     // Rate of curl for grabbing (reduced by 33%)
+        private const float TONGUE_RETRACT_SPEED = 18.0f; // Speed when retracting (matches HeartOfTheMaze)
         // NOTE: No runtime scaling - prefab already has correct scale (1, 0.3, 0.3)
-        private const float TONGUE_START_Z = 9.0f;        // Starting Z position (below ground)
+        private const float TONGUE_START_Z = 28.0f;       // Starting Z position (tongue length ~27, so Z=28 keeps it underground)
+        private const float TONGUE_EMERGED_Z = 9.0f;      // Z after explosive emergence (tip at lip level)
         private const float TONGUE_LIP_Z = -0.25f;        // Z where tip emerges above lip
         private const float TONGUE_WALL_DEPTH = 3.0f;     // How far pushing tongue hides in wall (horizontal)
         private const int BEND_BONE_COUNT = 3;            // Bones for the 90° bend at lip
@@ -1998,10 +2010,13 @@ namespace FaeMaze.HeartPowers
         private float grabbingCurlProgress = 0f;              // How much the tongue has curled (0-1 = 0-360°)
         private int grabbingCurlDirection = 1;                // 1 = CCW (curl left), -1 = CW (curl right)
         private bool grabbingCurlDirectionLocked = false;     // True once curl direction determined
-        private bool grabbingContactMade = false;             // Has tongue touched visitor?
-        private int grabbingContactBoneIndex = -1;            // Which bone made first contact
         private float grabbingPullingProgress = 0f;           // Progress of curl tightening (0-1)
-        private GameObject[] grabbingBoneColliders;           // Collider objects attached to bones
+        private float grabbingPullingStartZ = 0f;            // Z position when pulling phase started
+        private GameObject[] grabbingBoneColliders;           // Trigger collider objects for contact detection
+        private GameObject[] grabbingSolidColliders;          // Solid collider objects for physics blocking
+
+        // Tip trigger - baked into prefab, detects when tip exits grabbing zone
+        private TipTriggerHandler grabbingTipTrigger;
 
         // Grabbing HGZ
         private GameObject grabbingZoneObject;
@@ -2011,7 +2026,6 @@ namespace FaeMaze.HeartPowers
         private Vector3 grabbingWallNormal;
         private float grabbingTongueZPosition = TONGUE_START_Z;  // Z position of tongue root (high = below ground, low = emerged)
         private float grabbingLockedAngle = 0f;            // Angle toward visitor (locked when reaching starts)
-        private int grabbingFrozenLipBoneIndex = -1;       // Frozen lip bone index during pulling/hinging
         private GrabPhase grabPhase = GrabPhase.Idle;
         private float grabPhaseStartTime = 0f;
 
@@ -2050,7 +2064,6 @@ namespace FaeMaze.HeartPowers
         private Vector3 visitorGrabOffset;  // Offset from grab collider when grabbed
         private Vector3 heartNodePosition;
         private bool visitorVisible = true;
-        private Vector3 visitorGrabbedPosition;  // World position where visitor was grabbed
 
         // Particle effects
         private ParticleSystem grabbingParticles;
@@ -2705,13 +2718,14 @@ namespace FaeMaze.HeartPowers
             // Find bone colliders that are baked into the prefab
             FindGrabbingBoneColliders();
 
+            // Set up tip trigger for physics-based detection zone exit
+            SetupGrabbingTipTrigger();
+
             // Reset state
             grabbingTongueExtension = 0f;
             grabbingCurlProgress = 0f;
-            grabbingContactMade = false;
-            grabbingContactBoneIndex = -1;
             grabbingPullingProgress = 0f;
-            grabbingFrozenLipBoneIndex = -1;
+            grabbingPullingStartZ = 0f;
 
             Debug.Log($"[HeartwardGrasp] Spawned grabbing tongue at wall tile {grabbingWallPos}, Z={grabbingTongueZPosition}, angle {grabbingLockedAngle:F1}°");
         }
@@ -2886,6 +2900,8 @@ namespace FaeMaze.HeartPowers
                 float avgBoneSpacing = grabbingTongueLength / (grabbingTongueBones.Length - 1);
                 grabbingTongueLength += avgBoneSpacing;
             }
+
+            Debug.Log($"[HeartwardGrasp] TongueLength calculated: {grabbingTongueLength:F2} (boneCount={grabbingTongueBones.Length}, firstBone={firstBoneWorld}, lastBone={lastBoneWorld})");
         }
 
         private void CalculatePushingTongueLength()
@@ -2905,27 +2921,106 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Creates colliders on every Nth bone for contact detection.
-        /// Uses fewer colliders to reduce physics overhead.
+        /// Finds colliders baked into the prefab for contact detection and physics blocking.
+        /// BoneCollider_N = triggers for contact detection
+        /// SolidCollider_N = solid colliders for physics blocking (same as HeartOfTheMaze)
         /// </summary>
         private void FindGrabbingBoneColliders()
         {
             // Colliders are now baked into the prefab - just find them
             if (grabbingTongueInstance == null) return;
 
-            var colliders = new List<GameObject>();
+            var triggerColliders = new List<GameObject>();
+            var solidColliders = new List<GameObject>();
             Transform[] allTransforms = grabbingTongueInstance.GetComponentsInChildren<Transform>(true);
 
             foreach (Transform t in allTransforms)
             {
                 if (t.name.StartsWith("BoneCollider_"))
                 {
-                    colliders.Add(t.gameObject);
+                    triggerColliders.Add(t.gameObject);
+                }
+                else if (t.name.StartsWith("SolidCollider_"))
+                {
+                    solidColliders.Add(t.gameObject);
                 }
             }
 
-            grabbingBoneColliders = colliders.ToArray();
-            Debug.Log($"[HeartwardGrasp] Found {grabbingBoneColliders.Length} bone colliders in prefab");
+            grabbingBoneColliders = triggerColliders.ToArray();
+            grabbingSolidColliders = solidColliders.ToArray();
+
+            // Disable solid colliders initially (enable during curling phase)
+            SetGrabbingSolidCollidersEnabled(false);
+
+            Debug.Log($"[HeartwardGrasp] Found {grabbingBoneColliders.Length} bone colliders + {grabbingSolidColliders.Length} solid colliders in prefab");
+        }
+
+        /// <summary>
+        /// Enables or disables solid colliders for physics-based visitor blocking.
+        /// Same pattern as HeartOfTheMaze.EnableBoneColliders/DisableBoneColliders.
+        /// Also sets the static flag so visitors know to check for tongue collision.
+        /// </summary>
+        private void SetGrabbingSolidCollidersEnabled(bool enabled)
+        {
+            if (grabbingSolidColliders == null) return;
+
+            foreach (var colliderObj in grabbingSolidColliders)
+            {
+                if (colliderObj != null)
+                {
+                    var collider = colliderObj.GetComponent<SphereCollider>();
+                    if (collider != null) collider.enabled = enabled;
+                }
+            }
+
+            // Set static flag so visitors know to check for tongue collision
+            IsGraspTongueActiveWithColliders = enabled;
+        }
+
+        /// <summary>
+        /// Sets up the tip trigger on the tip bone for physics-based detection of
+        /// when the tongue tip exits the grabbing zone.
+        /// </summary>
+        private void SetupGrabbingTipTrigger()
+        {
+            if (grabbingTongueInstance == null) return;
+
+            // Find the TipTrigger object baked into the prefab by TonguePrefabColliderSetup
+            foreach (Transform child in grabbingTongueInstance.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name == "TipTrigger")
+                {
+                    grabbingTipTrigger = child.GetComponent<TipTriggerHandler>();
+                    if (grabbingTipTrigger != null)
+                    {
+                        grabbingTipTrigger.TrackedCollider = grabbingCollider;
+                        grabbingTipTrigger.OnTipExitedTrigger += OnGrabbingTipExitedZone;
+                        Debug.Log($"[HeartwardGrasp] Found baked TipTrigger, tracking grabbing collider");
+                        return;
+                    }
+                }
+            }
+
+            Debug.LogWarning("[HeartwardGrasp] TipTrigger not found in prefab! Run FaeMaze > Setup Tongue Prefab Colliders");
+        }
+
+        /// <summary>
+        /// Called by TongueTipTrigger when the tip exits the grabbing zone.
+        /// </summary>
+        private void OnGrabbingTipExitedZone(Collider other)
+        {
+            // Only process if we're in Extending phase
+            if (grabPhase != GrabPhase.Extending) return;
+
+            Debug.Log($"[HeartwardGrasp] TIP EXITED GRABBING ZONE - transitioning to Curling");
+
+            // Transition to curling
+            grabPhase = GrabPhase.Curling;
+            grabPhaseStartTime = elapsedTime;
+            grabbingCurlProgress = 0f;
+
+            // Enable solid colliders for physics-based visitor blocking
+            SetGrabbingSolidCollidersEnabled(true);
         }
 
         /// <summary>
@@ -3088,7 +3183,12 @@ namespace FaeMaze.HeartPowers
             grabPhase = GrabPhase.Emerging;
             grabPhaseStartTime = elapsedTime;
 
-            Debug.Log($"[HeartwardGrasp] Starting grab - visitor at ({visitor.transform.position.x:F2}, {visitor.transform.position.y:F2}), angle={grabbingLockedAngle:F1}°");
+            Debug.Log($"[HeartwardGrasp] >>> STARTING GRAB");
+            Debug.Log($"[HeartwardGrasp]   Visitor: ({visitor.transform.position.x:F2}, {visitor.transform.position.y:F2})");
+            Debug.Log($"[HeartwardGrasp]   Wall pos: ({grabbingWallPos.x:F2}, {grabbingWallPos.y:F2}, {grabbingWallPos.z:F2})");
+            Debug.Log($"[HeartwardGrasp]   Tongue: Z={grabbingTongueZPosition:F2}, length={grabbingTongueLength:F2}, angle={grabbingLockedAngle:F1}°");
+            Debug.Log($"[HeartwardGrasp]   Lip Z: {TONGUE_LIP_Z} (tip emerges when tipZ <= lipZ)");
+            Debug.Log($"[HeartwardGrasp]   Initial tipZ: {grabbingTongueZPosition - grabbingTongueLength:F2}");
 
             if (grabbingParticles != null) grabbingParticles.Emit(25);
         }
@@ -3115,6 +3215,8 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void DestroyGrabbingTongue()
         {
+            // Note: Colliders are children of the tongue instance and will be destroyed with it,
+            // but we need to null out our references and ensure colliders are disabled first
             if (grabbingBoneColliders != null)
             {
                 foreach (var obj in grabbingBoneColliders)
@@ -3122,6 +3224,16 @@ namespace FaeMaze.HeartPowers
                     if (obj != null) Object.Destroy(obj);
                 }
                 grabbingBoneColliders = null;
+            }
+
+            // Solid colliders are also children of tongue - just null the reference
+            grabbingSolidColliders = null;
+
+            // Clean up tip trigger
+            if (grabbingTipTrigger != null)
+            {
+                grabbingTipTrigger.OnTipExitedTrigger -= OnGrabbingTipExitedZone;
+                grabbingTipTrigger = null;
             }
 
             if (grabbingTongueInstance != null)
@@ -3147,6 +3259,8 @@ namespace FaeMaze.HeartPowers
 
             if (currentVisitor == null)
             {
+                // Disable solid colliders before cleanup
+                SetGrabbingSolidCollidersEnabled(false);
                 DestroyGrabbingTongue();
                 grabPhase = GrabPhase.Idle;
                 return;
@@ -3204,24 +3318,51 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>
         /// Emerging phase: Tongue translates from wall toward path.
+        /// Two-step emergence matching HeartOfTheMaze:
+        /// 1. Explosive emergence from z=28 to z=9 (very fast)
+        /// 2. Normal emergence from z=9 until tip is above lip (z=-0.25)
         /// Transitions to Extending when emerged far enough.
         /// </summary>
         private void UpdateEmergingPhase(float deltaTime)
         {
             if (grabbingTongueInstance == null || currentVisitor == null) return;
 
-            // Move tongue up (-Z) until tip is above lip (like HeartOfTheMaze)
-            grabbingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            float zBefore = grabbingTongueZPosition;
+
+            // Two-step emergence (matching HeartOfTheMaze):
+            // 1. Explosive emergence from z=28 to z=9 (very fast) - 3x normal speed
+            // 2. Normal emergence from z=9 until tip is above lip
+            float emergenceSpeed;
+            if (grabbingTongueZPosition > TONGUE_EMERGED_Z)
+            {
+                // Phase 1: Explosive emergence (very fast) - 3x normal speed
+                emergenceSpeed = TONGUE_EMERGE_SPEED * 3.0f;
+            }
+            else
+            {
+                // Phase 2: Normal emergence
+                emergenceSpeed = TONGUE_EMERGE_SPEED;
+            }
+
+            // Move tongue up (-Z)
+            grabbingTongueZPosition -= emergenceSpeed * deltaTime;
             UpdateGrabbingTongueZPosition();
 
             // Apply bone state (keep tongue straight during emergence)
             ApplyGrabbingTongueBoneState();
 
-            // Calculate where tip would be
+            // Calculate where tip would be (tip = root position minus tongue length)
             float tipZ = grabbingTongueZPosition - grabbingTongueLength;
+
+            // DEBUG: Log every 30 frames
+            if (Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"[HeartwardGrasp] Emerging: Z {zBefore:F2} -> {grabbingTongueZPosition:F2}, tipZ={tipZ:F2}, lipZ={TONGUE_LIP_Z}, tongueLen={grabbingTongueLength:F2}, speed={emergenceSpeed:F1}");
+            }
+
             if (tipZ <= TONGUE_LIP_Z)
             {
-                Debug.Log($"[HeartwardGrasp] Emerged (tipZ={tipZ:F2}), transitioning to Extending");
+                Debug.Log($"[HeartwardGrasp] >>> EMERGED: tipZ={tipZ:F2} <= lipZ={TONGUE_LIP_Z}, transitioning to Extending");
                 grabPhase = GrabPhase.Extending;
                 grabPhaseStartTime = elapsedTime;
             }
@@ -3229,13 +3370,16 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>
         /// Extending phase: Tongue bones bend to extend horizontally toward visitor.
+        /// Like HeartOfTheMaze, tongue CONTINUES to rise (Z decreases) during this phase.
+        /// The lip bone bends 90° and the horizontal length grows as more tongue emerges.
         /// Transitions to Curling when extended to detection radius.
         /// </summary>
         private void UpdateExtendingPhase(float deltaTime)
         {
             if (grabbingTongueInstance == null || currentVisitor == null) return;
 
-            // Continue moving tongue up (-Z) to extend more past the lip
+            // IMPORTANT: Continue moving tongue up (-Z) during Extending phase (like HeartOfTheMaze line 540)
+            // This is what makes the horizontal length grow!
             grabbingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
             UpdateGrabbingTongueZPosition();
 
@@ -3279,13 +3423,26 @@ namespace FaeMaze.HeartPowers
                 Debug.Log($"[HeartwardGrasp] Curl direction determined: {(grabbingCurlDirection > 0 ? "CCW" : "CW")} (cross={cross:F2}), tongueDir=({tongueDir.x:F2}, {tongueDir.y:F2}), wallToVisitor=({wallToVisitor.x:F2}, {wallToVisitor.y:F2})");
             }
 
-            // Transition to Curling when extended to GRASP_ZONE_RADIUS (node edge equivalent)
-            if (horizontalLength >= GRASP_ZONE_RADIUS)
+            // TRANSITION: Handled by OnGrabbingTipExitedZone when physics detects tip leaving grabbing sphere
+
+            // DEBUG: Log extension progress every 30 frames
+            if (Time.frameCount % 30 == 0)
             {
-                Debug.Log($"[HeartwardGrasp] Extended (horizontal={horizontalLength:F2}), transitioning to Curling");
-                grabPhase = GrabPhase.Curling;
-                grabPhaseStartTime = elapsedTime;
-                grabbingCurlProgress = 0f;
+                // Measure actual distance for debug only
+                float actualHorizontalLength = 0f;
+                if (grabbingTongueBones != null && grabbingTongueBones.Length > 0)
+                {
+                    int tipIndex = grabbingTongueBones.Length - 1;
+                    if (grabbingTongueBones[tipIndex] != null)
+                    {
+                        Vector2 wallPos2D = new Vector2(grabbingWallPos.x, grabbingWallPos.y);
+                        Vector2 tipPos2D = new Vector2(grabbingTongueBones[tipIndex].position.x, grabbingTongueBones[tipIndex].position.y);
+                        actualHorizontalLength = Vector2.Distance(wallPos2D, tipPos2D);
+                    }
+                }
+
+                int lipBone = CalculateGrabbingLipBoneIndex();
+                Debug.Log($"[HeartwardGrasp] Extending: Z={grabbingTongueZPosition:F2}, formulaHoriz={horizontalLength:F2}, actualHoriz={actualHorizontalLength:F2}, lipBone={lipBone}, ext={grabbingTongueExtension:F2}");
             }
         }
 
@@ -3297,55 +3454,49 @@ namespace FaeMaze.HeartPowers
         {
             if (grabbingTongueBones == null || grabbingTongueBones.Length == 0) return 0f;
 
-            float lipWorldZ = grabbingZoneObject.transform.position.z + TONGUE_LIP_Z;
-            float boneSpacing = grabbingTongueLength / Mathf.Max(1, grabbingTongueBones.Length);
+            // Use the SAME formula as HeartOfTheMaze (line 533):
+            // Horizontal length = how much tongue length has passed the lip level
+            // = tongueLength - tongueZPosition + TONGUE_LIP_Z
+            //
+            // When tongueZPosition = TONGUE_LIP_Z + tongueLength, horizontal = 0 (tip just at lip)
+            // As tongueZPosition decreases (tongue rises, -Z is UP), horizontal increases
+            float horizontalLength = grabbingTongueLength - grabbingTongueZPosition + TONGUE_LIP_Z;
+            if (horizontalLength < 0) horizontalLength = 0;  // Tip hasn't reached lip yet
 
-            // Count bones that have emerged above the lip (lower Z = higher in world, toward -Z = up)
-            // A bone is "above lip" when its unrotatedBoneZ <= lipWorldZ
-            int bonesAboveLip = 0;
-            for (int i = grabbingTongueBones.Length - 1; i >= 0; i--)
+            // DEBUG: Log calculation details
+            if (Time.frameCount % 30 == 0)
             {
-                float unrotatedBoneZ = grabbingTongueZPosition - (i * boneSpacing);
-                if (unrotatedBoneZ <= lipWorldZ)
-                {
-                    bonesAboveLip++;
-                }
-                else
-                {
-                    // Once we hit a bone still below ground, stop counting
-                    break;
-                }
+                Debug.Log($"[HeartwardGrasp] HorizLength: {horizontalLength:F2} = tongueLen({grabbingTongueLength:F2}) - tongueZ({grabbingTongueZPosition:F2}) + lipZ({TONGUE_LIP_Z})");
             }
 
-            // Horizontal length = bones above lip × bone spacing
-            return bonesAboveLip * boneSpacing;
+            return horizontalLength;
         }
 
         /// <summary>
         /// Calculates the current lip bone index based on tongue Z position.
+        /// Uses the SAME formula as HeartOfTheMaze (line 1280):
+        /// lipBoneIndex = FloorToInt((tongueZPosition - TONGUE_LIP_Z) / boneSpacing)
         /// </summary>
         private int CalculateGrabbingLipBoneIndex()
         {
             if (grabbingTongueBones == null || grabbingTongueBones.Length == 0) return 0;
 
             int boneCount = grabbingTongueBones.Length;
-            float lipWorldZ = grabbingZoneObject.transform.position.z + TONGUE_LIP_Z;
             float boneSpacing = grabbingTongueLength / Mathf.Max(1, boneCount);
 
-            for (int i = boneCount - 1; i >= 0; i--)
+            // Use the SAME formula as HeartOfTheMaze:
+            // Lip bone is the bone at the "lip level" where the tongue bends 90° from vertical to horizontal
+            // As tongueZPosition decreases (tongue rises, -Z is UP), more bones emerge above the lip
+            int lipBoneIndex = Mathf.FloorToInt((grabbingTongueZPosition - TONGUE_LIP_Z) / boneSpacing);
+            lipBoneIndex = Mathf.Clamp(lipBoneIndex, 0, boneCount - BEND_BONE_COUNT - 1);
+
+            // DEBUG: Log calculation details
+            if (Time.frameCount % 30 == 0)
             {
-                float unrotatedBoneZ = grabbingTongueZPosition - (i * boneSpacing);
-                if (unrotatedBoneZ > lipWorldZ)
-                {
-                    // DEBUG: Log on first few bones checked
-                    if (i > boneCount - 5)
-                    {
-                        Debug.Log($"[HeartwardGrasp] LipBone calc: bone {i}, unrotZ={unrotatedBoneZ:F2}, lipZ={lipWorldZ:F2}, tongueZ={grabbingTongueZPosition:F2}");
-                    }
-                    return i;
-                }
+                Debug.Log($"[HeartwardGrasp] LipBone: {lipBoneIndex} = floor((tongueZ({grabbingTongueZPosition:F2}) - lipZ({TONGUE_LIP_Z})) / spacing({boneSpacing:F4}))");
             }
-            return 0;
+
+            return lipBoneIndex;
         }
 
         /// <summary>
@@ -3427,11 +3578,17 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>
         /// Curling phase: Tongue curls into a 360° circle around visitor.
+        /// Like HeartOfTheMaze Touching phase, continues extending while curling to make a bigger spiral.
         /// Transitions to Pulling when curl is complete.
         /// </summary>
         private void UpdateCurlingPhase(float deltaTime)
         {
             if (grabbingTongueInstance == null || currentVisitor == null) return;
+
+            // KEEP EXTENDING while curling to make a bigger spiral (like HeartOfTheMaze line 566-568)
+            // The tongue extends until the curl is complete
+            grabbingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            UpdateGrabbingTongueZPosition();
 
             // Progress curling
             grabbingCurlProgress = Mathf.Min(1f, grabbingCurlProgress + TONGUE_CURL_SPEED * deltaTime);
@@ -3439,61 +3596,35 @@ namespace FaeMaze.HeartPowers
             // Apply bone rotations for curl
             ApplyGrabbingTongueBoneState();
 
-            // Check for contact with visitor
-            if (!grabbingContactMade)
+            // DEBUG: Log curling progress every 30 frames
+            if (Time.frameCount % 30 == 0)
             {
-                int contactBone = CheckTongueBoneContact();
-                if (contactBone >= 0)
-                {
-                    grabbingContactMade = true;
-                    grabbingContactBoneIndex = contactBone;
-
-                    // Stop visitor movement
-                    currentVisitor.Stop();
-
-                    // Store the grab position
-                    visitorGrabbedPosition = currentVisitor.transform.position;
-
-                    // Deduct essence cost
-                    const float GRAB_ESSENCE_COST = 25f;
-                    currentVisitor.DeductEssence(GRAB_ESSENCE_COST);
-
-                    // Notify nearby visitors
-                    HeartPowerEvents.NotifyVisitorGrabbedByGrasp(currentVisitor.transform.position);
-
-                    Debug.Log($"[HeartwardGrasp] Contact made at bone {contactBone}!");
-                }
+                int lipBone = CalculateGrabbingLipBoneIndex();
+                int horzBones = (grabbingTongueBones.Length - 1) - (lipBone + BEND_BONE_COUNT);
+                Vector2 visitorPos = new Vector2(currentVisitor.transform.position.x, currentVisitor.transform.position.y);
+                Vector2 wallPos = new Vector2(grabbingWallPos.x, grabbingWallPos.y);
+                float distFromWall = Vector2.Distance(visitorPos, wallPos);
+                Debug.Log($"[HeartwardGrasp] Curling: progress={grabbingCurlProgress:F2}, lipBone={lipBone}, horzBones={horzBones}, visitorDistFromWall={distFromWall:F2}");
             }
 
-            // Keep visitor locked if contact was made
-            if (grabbingContactMade && grabbingContactBoneIndex >= 0 && grabbingContactBoneIndex < grabbingTongueBones.Length)
-            {
-                // Position visitor at the contact bone location
-                Transform contactBone = grabbingTongueBones[grabbingContactBoneIndex];
-                if (contactBone != null)
-                {
-                    currentVisitor.transform.position = new Vector3(
-                        contactBone.position.x,
-                        contactBone.position.y,
-                        currentVisitor.transform.position.z);
-                }
-            }
+            // Physics-based behavior: solid colliders push the visitor as tongue curls.
+            // No contact detection or forced positioning - same as HeartOfTheMaze devour.
 
-            // Transition to Pulling when curl is complete and contact was made
-            if (grabbingCurlProgress >= 1f && grabbingContactMade)
+            // Transition to Pulling when curl is complete
+            if (grabbingCurlProgress >= 1f)
             {
-                Debug.Log($"[HeartwardGrasp] Curl complete, transitioning to Pulling");
+                Debug.Log($"[HeartwardGrasp] >>> CURL COMPLETE: curlProgress={grabbingCurlProgress:F2}, transitioning to Pulling");
                 grabPhase = GrabPhase.Pulling;
                 grabPhaseStartTime = elapsedTime;
+
+                // Deduct essence cost now that visitor is captured
+                const float GRAB_ESSENCE_COST = 25f;
+                currentVisitor.DeductEssence(GRAB_ESSENCE_COST);
+
+                // Notify nearby visitors
+                HeartPowerEvents.NotifyVisitorGrabbedByGrasp(currentVisitor.transform.position);
+
                 if (grabbingParticles != null) grabbingParticles.Emit(20);
-            }
-            else if (grabbingCurlProgress >= 1f && !grabbingContactMade)
-            {
-                // Missed - curl completed without contact
-                Debug.Log($"[HeartwardGrasp] Curl complete but no contact - missed visitor");
-                DestroyGrabbingTongue();
-                grabPhase = GrabPhase.Idle;
-                currentVisitor = null;
             }
         }
 
@@ -3505,78 +3636,58 @@ namespace FaeMaze.HeartPowers
         {
             if (grabbingTongueInstance == null || currentVisitor == null) return;
 
-            // Freeze lip bone index when pulling starts
-            if (grabbingFrozenLipBoneIndex < 0)
+            // Minimum pulling duration to ensure visible animation
+            const float MIN_PULLING_DURATION = 2.0f;
+
+            // Record start Z when pulling starts (use 0 as "not initialized" flag)
+            if (grabbingPullingStartZ == 0f)
             {
-                grabbingFrozenLipBoneIndex = CalculateGrabbingLipBoneIndex();
+                grabbingPullingStartZ = grabbingTongueZPosition;
+                Debug.Log($"[HeartwardGrasp] Pulling started at Z={grabbingPullingStartZ:F2}, lipBone={CalculateGrabbingLipBoneIndex()}");
             }
 
-            // Progress pulling (curl tightening + retraction)
-            grabbingPullingProgress = Mathf.Min(1f, grabbingPullingProgress + TONGUE_RETRACT_SPEED * 0.5f * deltaTime);
-
             // Retract tongue by increasing Z position (tongue sinks back into ground)
-            // This mimics HeartOfTheMaze pulling behavior
-            float retractDistance = grabbingTongueLength * grabbingPullingProgress * 0.7f;
-            float startZ = grabbingTongueZPosition;  // Current position when pulling started
+            // This pulls bones through the lip, reducing horizontal bones and shrinking the circle
             grabbingTongueZPosition += TONGUE_RETRACT_SPEED * deltaTime;
             UpdateGrabbingTongueZPosition();
+
+            // Progress pulling based on time (ensures minimum duration for visual effect)
+            grabbingPullingProgress = Mathf.Clamp01(phaseElapsed / MIN_PULLING_DURATION);
 
             // Apply bone state (maintains curl while retracting)
             ApplyGrabbingTongueBoneState();
 
-            // Keep visitor with the tongue (at the grab bone position)
-            int grabBoneIndex = Mathf.Max(0, grabbingTongueBones.Length - 1 - GRAB_BONE_OFFSET);
-            if (grabBoneIndex >= 0 && grabBoneIndex < grabbingTongueBones.Length)
+            // Debug: Log pulling progress periodically
+            if (Time.frameCount % 30 == 0)
             {
-                Transform grabBone = grabbingTongueBones[grabBoneIndex];
-                if (grabBone != null)
-                {
-                    currentVisitor.transform.position = new Vector3(
-                        grabBone.position.x,
-                        grabBone.position.y,
-                        currentVisitor.transform.position.z);
-                }
+                int lipBone = CalculateGrabbingLipBoneIndex();
+                int horzBones = (grabbingTongueBones.Length - 1) - (lipBone + BEND_BONE_COUNT);
+                Debug.Log($"[HeartwardGrasp] Pulling: Z={grabbingTongueZPosition:F2}, lipBone={lipBone}, horizontalBones={horzBones}, time={phaseElapsed:F1}s");
             }
 
-            // Transition to Transporting when tongue is mostly retracted
-            if (grabbingTongueZPosition >= TONGUE_START_Z * 0.7f || grabbingPullingProgress >= 1f)
+            // NOTE: Visitor position is controlled by physics colliders pushing them as tongue retracts.
+            // The solid colliders will compress around the visitor and push them toward the wall.
+
+            // Transition to Transporting when BOTH:
+            // 1. Minimum pulling duration has elapsed (for visible animation)
+            // 2. Lip bone has moved far enough that circle is tight (few horizontal bones left)
+            // Calculate how many horizontal bones remain - transition when circle is small
+            int currentLipBone = CalculateGrabbingLipBoneIndex();
+            int horizontalBones = (grabbingTongueBones.Length - 1) - (currentLipBone + BEND_BONE_COUNT);
+            int minHorizontalBones = 50; // When only ~50 bones form the circle, it's tight enough
+
+            if (phaseElapsed >= MIN_PULLING_DURATION && horizontalBones <= minHorizontalBones)
             {
                 SetVisitorVisible(currentVisitor, false);
                 visitorVisible = false;
+
+                // Disable solid colliders since we're done with physics blocking
+                SetGrabbingSolidCollidersEnabled(false);
+
                 grabPhase = GrabPhase.Transporting;
                 grabPhaseStartTime = elapsedTime;
-                Debug.Log($"[HeartwardGrasp] Fully retracted (Z={grabbingTongueZPosition:F2}), transitioning to Transporting");
+                Debug.Log($"[HeartwardGrasp] Fully retracted (Z={grabbingTongueZPosition:F2}, time={phaseElapsed:F1}s), transitioning to Transporting");
             }
-        }
-
-        /// <summary>
-        /// Checks if any tongue bone collider is touching the visitor.
-        /// Returns the bone index that made contact, or -1 if no contact.
-        /// </summary>
-        private int CheckTongueBoneContact()
-        {
-            if (grabbingTongueBones == null || currentVisitor == null) return -1;
-
-            Vector3 visitorPos = currentVisitor.transform.position;
-            float contactRadius = 0.4f;  // Slightly larger than bone collider for detection
-
-            // Check bones from tip toward base (more likely to contact at tip)
-            for (int i = grabbingTongueBones.Length - 1; i >= 0; i--)
-            {
-                if (grabbingTongueBones[i] == null) continue;
-
-                Vector3 bonePos = grabbingTongueBones[i].position;
-                float dist = Vector2.Distance(
-                    new Vector2(bonePos.x, bonePos.y),
-                    new Vector2(visitorPos.x, visitorPos.y));
-
-                if (dist < contactRadius)
-                {
-                    return i;
-                }
-            }
-
-            return -1;
         }
 
         /// <summary>
@@ -3606,16 +3717,10 @@ namespace FaeMaze.HeartPowers
             }
 
             // Calculate lip bone index based on geometry (like HeartOfTheMaze)
+            // During Pulling, DON'T freeze the lip bone - let it recalculate as tongue retracts
+            // This causes fewer horizontal bones = smaller circle diameter
             float boneSpacing = grabbingTongueLength / Mathf.Max(1, boneCount);
-            int lipBoneIndex;
-            if (grabPhase == GrabPhase.Pulling && grabbingFrozenLipBoneIndex >= 0)
-            {
-                lipBoneIndex = grabbingFrozenLipBoneIndex;
-            }
-            else
-            {
-                lipBoneIndex = CalculateGrabbingLipBoneIndex();
-            }
+            int lipBoneIndex = CalculateGrabbingLipBoneIndex();
 
             int bendEndIndex = Mathf.Min(lipBoneIndex + BEND_BONE_COUNT, boneCount - 1);
 
@@ -3681,10 +3786,12 @@ namespace FaeMaze.HeartPowers
                 else if ((grabPhase == GrabPhase.Curling || grabPhase == GrabPhase.Pulling) && i > bendEndIndex)
                 {
                     // Curling/Pulling phase: bones curl into a 360° horizontal circle
+                    // During Pulling, the tongue retracts (Z increases), which moves the lip bone up.
+                    // Fewer horizontal bones = smaller circle diameter = tighter curl around visitor.
                     int bonesInHorizontal = (boneCount - 1) - bendEndIndex;
                     float boneProgressAlongHorizontal = (float)(i - bendEndIndex) / Mathf.Max(1, bonesInHorizontal);
 
-                    // Total curl is 360° × curlProgress × curlDirection
+                    // Total curl is always 360° - circle shrinks because fewer bones make the circle
                     float targetCumulativeAngle = boneProgressAlongHorizontal * 360f * grabbingCurlDirection;
                     float cumulativeAngle = targetCumulativeAngle * grabbingCurlProgress;
 
@@ -4980,13 +5087,17 @@ namespace FaeMaze.HeartPowers
                     SetDevourAnimatorFrame(DEVOUR_ANIMATION_FRAMES);
 
                     // Move visitors in +z direction in tandem with the devour model
+                    // Use Rigidbody.MovePosition for physics-compatible movement
                     foreach (var visitor in visitorsBeingDevoured)
                     {
                         if (visitor != null && visitorStartPositions.TryGetValue(visitor, out Vector3 startPos))
                         {
                             Vector3 visitorPos = startPos;
                             visitorPos.z = Mathf.Lerp(startPos.z, 1f, sinkT);
-                            visitor.transform.position = visitorPos;
+
+                            // Physics-based positioning - will throw NullReferenceException if Rigidbody missing
+                            Rigidbody visitorRb = visitor.GetComponent<Rigidbody>();
+                            visitorRb.MovePosition(visitorPos);
                         }
                     }
 
