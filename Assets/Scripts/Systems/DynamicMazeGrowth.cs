@@ -1003,10 +1003,6 @@ namespace FaeMaze.Systems
         /// </summary>
         private NodePropType GetRandomPropType()
         {
-            // DEBUG: Always return Pond for uninterrupted visitor pathing
-            return NodePropType.Pond;
-
-            /*
             // Check if any Puka exists in the maze
             bool hasPuka = nodePukas.Count > 0;
 
@@ -1044,7 +1040,6 @@ namespace FaeMaze.Systems
                 // No Puka exists, Puka gets 15% chance (10% + 5% from Wisp)
                 return NodePropType.Puka;
             }
-            */
         }
 
         /// <summary>
