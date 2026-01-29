@@ -41,10 +41,36 @@ namespace FaeMaze.Editor
 
         private const string PREFAB_PATH = "Assets/Prefabs/Tile/heart tongue.prefab";
 
+        private const string FBX_PATH = "Assets/Animations/heart/heart tongue.fbx";
+
         [MenuItem("FaeMaze/Setup Tongue Prefab Colliders")]
         public static void SetupColliders()
         {
-            // Load the prefab for editing
+            // First, check if we need to recreate the prefab from FBX
+            // The prefab might be missing the SkinnedMeshRenderer if created incorrectly
+            GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PREFAB_PATH);
+            bool needsRecreation = false;
+
+            if (existingPrefab != null)
+            {
+                SkinnedMeshRenderer existingSmr = existingPrefab.GetComponentInChildren<SkinnedMeshRenderer>();
+                if (existingSmr == null)
+                {
+                    Debug.LogWarning("[TonguePrefabColliderSetup] Prefab exists but has no SkinnedMeshRenderer - will recreate from FBX");
+                    needsRecreation = true;
+                }
+            }
+            else
+            {
+                needsRecreation = true;
+            }
+
+            if (needsRecreation)
+            {
+                RecreateFromFBX();
+            }
+
+            // Now load the prefab for editing
             GameObject prefabRoot = PrefabUtility.LoadPrefabContents(PREFAB_PATH);
 
             if (prefabRoot == null)
@@ -58,19 +84,82 @@ namespace FaeMaze.Editor
                 // Remove any existing collider objects
                 int removedCount = RemoveExistingColliders(prefabRoot);
 
-                // Find bones via SkinnedMeshRenderer
+                // Find bones - try SkinnedMeshRenderer first, then fall back to Armature hierarchy
+                Transform[] bones = null;
+
                 SkinnedMeshRenderer smr = prefabRoot.GetComponentInChildren<SkinnedMeshRenderer>();
-                if (smr == null || smr.bones == null || smr.bones.Length == 0)
+                if (smr != null && smr.bones != null && smr.bones.Length > 0)
                 {
-                    Debug.LogError("[TonguePrefabColliderSetup] No SkinnedMeshRenderer with bones found!");
+                    bones = smr.bones;
+                    Debug.Log($"[TonguePrefabColliderSetup] Found {bones.Length} bones via SkinnedMeshRenderer");
+                }
+                else
+                {
+                    // Fall back to finding bones in Armature hierarchy
+                    Debug.LogWarning("[TonguePrefabColliderSetup] SkinnedMeshRenderer has no bones, searching Armature hierarchy...");
+
+                    // Find Armature transform
+                    Transform armature = prefabRoot.transform.Find("Armature");
+                    if (armature == null)
+                    {
+                        // Try to find it recursively
+                        foreach (Transform child in prefabRoot.GetComponentsInChildren<Transform>(true))
+                        {
+                            if (child.name == "Armature")
+                            {
+                                armature = child;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (armature != null)
+                    {
+                        // Collect all bone transforms (Bone_XXX or Bone.XXX format)
+                        var boneList = new List<Transform>();
+                        foreach (Transform child in armature.GetComponentsInChildren<Transform>(true))
+                        {
+                            string name = child.name;
+                            // Match Bone_XXX, Bone.XXX, or BoneXXX patterns
+                            if (name.StartsWith("Bone"))
+                            {
+                                boneList.Add(child);
+                            }
+                        }
+
+                        if (boneList.Count > 0)
+                        {
+                            // Sort by bone number - extract digits from name
+                            boneList.Sort((a, b) => {
+                                int numA = ExtractBoneNumber(a.name);
+                                int numB = ExtractBoneNumber(b.name);
+                                return numA.CompareTo(numB);
+                            });
+                            bones = boneList.ToArray();
+                            Debug.Log($"[TonguePrefabColliderSetup] Found {bones.Length} bones via Armature hierarchy");
+                            Debug.Log($"  First bone: {bones[0].name}, Last bone: {bones[bones.Length - 1].name}");
+                        }
+                    }
+                }
+
+                if (bones == null || bones.Length == 0)
+                {
+                    Debug.LogError("[TonguePrefabColliderSetup] No bones found! Make sure the FBX is imported correctly.");
+
+                    // Debug: Log all transforms in hierarchy
+                    Debug.Log("Prefab hierarchy:");
+                    foreach (Transform t in prefabRoot.GetComponentsInChildren<Transform>(true))
+                    {
+                        Debug.Log($"  - {t.name}");
+                    }
                     return;
                 }
 
-                Transform[] bones = smr.bones;
-                Debug.Log($"[TonguePrefabColliderSetup] Found {bones.Length} bones");
-
                 // Create new colliders as children of bones
                 int colliderCount = CreateColliders(bones);
+
+                // Assign the tongue material if available
+                AssignTongueMaterial(smr);
 
                 // Save the prefab
                 PrefabUtility.SaveAsPrefabAsset(prefabRoot, PREFAB_PATH);
@@ -93,6 +182,103 @@ namespace FaeMaze.Editor
             }
 
             AssetDatabase.Refresh();
+        }
+
+        /// <summary>
+        /// Extracts the bone number from a bone name like "Bone_000", "Bone.001", "Bone123", etc.
+        /// </summary>
+        private static int ExtractBoneNumber(string boneName)
+        {
+            // Find digits in the name
+            string digits = "";
+            foreach (char c in boneName)
+            {
+                if (char.IsDigit(c))
+                {
+                    digits += c;
+                }
+            }
+
+            if (string.IsNullOrEmpty(digits))
+            {
+                return 0;
+            }
+
+            // Parse as integer (handles leading zeros)
+            if (int.TryParse(digits, out int result))
+            {
+                return result;
+            }
+
+            return 0;
+        }
+
+        /// <summary>
+        /// Recreates the prefab from the FBX source, ensuring the SkinnedMeshRenderer is included.
+        /// </summary>
+        private static void RecreateFromFBX()
+        {
+            // Load the FBX
+            GameObject fbxModel = AssetDatabase.LoadAssetAtPath<GameObject>(FBX_PATH);
+            if (fbxModel == null)
+            {
+                Debug.LogError($"[TonguePrefabColliderSetup] Could not load FBX at {FBX_PATH}");
+                return;
+            }
+
+            // Log all components in the FBX for debugging
+            Debug.Log($"[TonguePrefabColliderSetup] FBX root: {fbxModel.name}");
+            foreach (var comp in fbxModel.GetComponentsInChildren<Component>(true))
+            {
+                if (comp != null)
+                    Debug.Log($"  - {comp.GetType().Name} on {comp.gameObject.name}");
+            }
+
+            // Check FBX directly for SkinnedMeshRenderer
+            SkinnedMeshRenderer fbxSmr = fbxModel.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (fbxSmr != null)
+            {
+                Debug.Log($"[TonguePrefabColliderSetup] FBX has SkinnedMeshRenderer: mesh={fbxSmr.sharedMesh?.name ?? "null"}, bones={fbxSmr.bones?.Length ?? 0}");
+            }
+            else
+            {
+                Debug.LogWarning("[TonguePrefabColliderSetup] FBX has no SkinnedMeshRenderer - checking for MeshRenderer instead");
+                MeshRenderer mr = fbxModel.GetComponentInChildren<MeshRenderer>();
+                if (mr != null)
+                {
+                    Debug.Log($"[TonguePrefabColliderSetup] FBX has MeshRenderer on {mr.gameObject.name}");
+                }
+            }
+
+            // Instantiate the FBX model
+            GameObject instance = Object.Instantiate(fbxModel);
+            instance.name = "heart tongue";
+
+            // Verify it has a SkinnedMeshRenderer
+            SkinnedMeshRenderer smr = instance.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (smr == null)
+            {
+                Debug.LogError("[TonguePrefabColliderSetup] Instantiated FBX has no SkinnedMeshRenderer!");
+                Object.DestroyImmediate(instance);
+                return;
+            }
+
+            Debug.Log($"[TonguePrefabColliderSetup] Instance has SkinnedMeshRenderer with {smr.bones?.Length ?? 0} bones and mesh '{smr.sharedMesh?.name ?? "null"}'");
+
+            // Create/overwrite the prefab
+            // Ensure the directory exists
+            string directory = System.IO.Path.GetDirectoryName(PREFAB_PATH);
+            if (!System.IO.Directory.Exists(directory))
+            {
+                System.IO.Directory.CreateDirectory(directory);
+            }
+
+            // Save as new prefab (this will overwrite if exists)
+            PrefabUtility.SaveAsPrefabAsset(instance, PREFAB_PATH);
+            Debug.Log($"[TonguePrefabColliderSetup] Created prefab at {PREFAB_PATH}");
+
+            // Cleanup the temporary instance
+            Object.DestroyImmediate(instance);
         }
 
         private static int RemoveExistingColliders(GameObject root)
@@ -119,6 +305,97 @@ namespace FaeMaze.Editor
             }
 
             return toDestroy.Count;
+        }
+
+        /// <summary>
+        /// Assigns a dark reddish-brown material to the SkinnedMeshRenderer.
+        /// Creates or updates the TongueMat material using URP/Lit shader.
+        /// </summary>
+        private static void AssignTongueMaterial(SkinnedMeshRenderer smr)
+        {
+            if (smr == null)
+            {
+                Debug.LogWarning("[TonguePrefabColliderSetup] No SkinnedMeshRenderer provided for material assignment");
+                return;
+            }
+
+            const string MATERIAL_PATH = "Assets/Animations/Materials/TongueMat.mat";
+
+            // Try to load existing material first
+            Material tongueMat = AssetDatabase.LoadAssetAtPath<Material>(MATERIAL_PATH);
+
+            // Find the URP Lit shader
+            Shader urpLitShader = Shader.Find("Universal Render Pipeline/Lit");
+            if (urpLitShader == null)
+            {
+                Debug.LogError("[TonguePrefabColliderSetup] Could not find URP/Lit shader!");
+                return;
+            }
+
+            // Create new material if it doesn't exist
+            if (tongueMat == null)
+            {
+                tongueMat = new Material(urpLitShader);
+                tongueMat.name = "TongueMat";
+
+                // Ensure directory exists
+                string directory = System.IO.Path.GetDirectoryName(MATERIAL_PATH);
+                if (!System.IO.Directory.Exists(directory))
+                {
+                    System.IO.Directory.CreateDirectory(directory);
+                }
+
+                AssetDatabase.CreateAsset(tongueMat, MATERIAL_PATH);
+                Debug.Log($"[TonguePrefabColliderSetup] Created new material at {MATERIAL_PATH}");
+            }
+            else
+            {
+                // Update existing material's shader if needed
+                if (tongueMat.shader != urpLitShader)
+                {
+                    tongueMat.shader = urpLitShader;
+                    Debug.Log("[TonguePrefabColliderSetup] Updated material shader to URP/Lit");
+                }
+            }
+
+            // Set the dark reddish-brown color (flesh/tongue color)
+            Color tongueColor = new Color(0.4f, 0.15f, 0.2f, 1f);
+            tongueMat.SetColor("_BaseColor", tongueColor);
+            tongueMat.SetColor("_Color", tongueColor);  // Legacy property
+
+            // Set rendering properties
+            tongueMat.SetFloat("_Cull", 0f);           // Double-sided (render both faces)
+            tongueMat.SetFloat("_Smoothness", 0.3f);   // Slight glossiness for wet appearance
+            tongueMat.SetFloat("_Metallic", 0f);       // Not metallic
+            tongueMat.SetFloat("_Surface", 0f);        // Opaque
+            tongueMat.SetFloat("_Blend", 0f);          // Alpha blend mode
+            tongueMat.SetFloat("_AlphaClip", 0f);      // No alpha clipping
+            tongueMat.SetFloat("_ZWrite", 1f);         // Write to depth buffer
+            tongueMat.SetFloat("_SrcBlend", 1f);       // One
+            tongueMat.SetFloat("_DstBlend", 0f);       // Zero
+
+            // Enable double-sided global illumination
+            tongueMat.doubleSidedGI = true;
+
+            // Set render queue for opaque
+            tongueMat.renderQueue = -1;  // Use shader's default
+
+            // Mark as dirty so Unity saves changes
+            EditorUtility.SetDirty(tongueMat);
+            AssetDatabase.SaveAssets();
+
+            Debug.Log($"[TonguePrefabColliderSetup] Configured TongueMat with color RGB({tongueColor.r:F2}, {tongueColor.g:F2}, {tongueColor.b:F2})");
+
+            // Assign the material to all material slots
+            int slotCount = Mathf.Max(1, smr.sharedMaterials.Length);
+            Material[] materials = new Material[slotCount];
+            for (int i = 0; i < materials.Length; i++)
+            {
+                materials[i] = tongueMat;
+            }
+            smr.sharedMaterials = materials;
+
+            Debug.Log($"[TonguePrefabColliderSetup] Assigned TongueMat material to {materials.Length} material slot(s)");
         }
 
         private static int CreateColliders(Transform[] bones)

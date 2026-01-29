@@ -54,10 +54,6 @@ namespace FaeMaze.Visitors
         [Tooltip("Enable verbose logging for visitor pathfinding diagnostics")]
         protected bool logVisitorPathfinding = false;
 
-        [SerializeField]
-        [Tooltip("Enable debug logging for spline rotation issues")]
-        protected bool debugSplineRotation = false;
-
         [Header("Visual Settings")]
         [SerializeField]
         [Tooltip("3D model prefab to instantiate for this visitor (optional - visitor prefab may BE the model)")]
@@ -448,42 +444,6 @@ namespace FaeMaze.Visitors
                 Vector3 myPos = transform.position;
                 // Check for any overlapping colliders using a sphere at visitor position
                 Collider[] overlaps = Physics.OverlapSphere(myPos, 0.5f, ~0, QueryTriggerInteraction.Ignore);
-                foreach (var col in overlaps)
-                {
-                    if (col.gameObject.name.StartsWith("BoneCollider_"))
-                    {
-                        Vector3 colPos = col.transform.position;
-                        Debug.Log($"[OverlapCheck] {name} at ({myPos.x:F2}, {myPos.y:F2}, {myPos.z:F2}) " +
-                            $"OVERLAPS {col.gameObject.name} at ({colPos.x:F2}, {colPos.y:F2}, {colPos.z:F2})");
-                    }
-                }
-
-                // Also check if there are ANY bone colliders nearby in XY even if not overlapping in 3D
-                Collider[] nearbyInXY = Physics.OverlapSphere(new Vector3(myPos.x, myPos.y, 0), 2f, ~0, QueryTriggerInteraction.Ignore);
-                int boneColliderCount = 0;
-                float closestDist = float.MaxValue;
-                string closestName = "";
-                Vector3 closestPos = Vector3.zero;
-                foreach (var col in nearbyInXY)
-                {
-                    if (col.gameObject.name.StartsWith("BoneCollider_"))
-                    {
-                        boneColliderCount++;
-                        Vector3 colPos = col.transform.position;
-                        float dist3D = Vector3.Distance(myPos, colPos);
-                        if (dist3D < closestDist)
-                        {
-                            closestDist = dist3D;
-                            closestName = col.gameObject.name;
-                            closestPos = colPos;
-                        }
-                    }
-                }
-                if (boneColliderCount > 0)
-                {
-                    Debug.Log($"[NearbyCheck] {name} has {boneColliderCount} bone colliders within 2 XY units. " +
-                        $"Closest: {closestName} at ({closestPos.x:F2}, {closestPos.y:F2}, {closestPos.z:F2}), dist3D={closestDist:F3}");
-                }
             }
 
             // Handle FairyRing circling (takes priority over lantern fascination)
@@ -588,12 +548,6 @@ namespace FaeMaze.Visitors
             // Update animator speed based on state
             UpdateAnimatorSpeed();
 
-            // Performance logging
-            long totalMs = frameTimer.ElapsedMilliseconds;
-            if (totalMs > 100)
-            {
-                Debug.LogWarning($"[VisitorPerf] SLOW FRAME in {name}.Update: totalMs={totalMs}, pathRecalcMs={pathRecalcMs}");
-            }
         }
 
         /// <summary>
@@ -700,17 +654,6 @@ namespace FaeMaze.Visitors
                 {
                     offTileLogCooldown = OFF_TILE_LOG_INTERVAL;
 
-                    string tileInfo = nearestTile != null
-                        ? $"NearestTile: ({nearestTile.Position.x:F2}, {nearestTile.Position.y:F2}), Walkable={nearestTile.Walkable}, Dist={distanceToTile:F2}"
-                        : "NearestTile: null";
-
-                    Debug.LogWarning($"[VisitorDiag] {gameObject.name} OFF WALKABLE TILE!\n" +
-                        $"  Current: ({currentPos.x:F2}, {currentPos.y:F2}, {currentPos.z:F2})\n" +
-                        $"  LastValid: ({lastValidPosition.x:F2}, {lastValidPosition.y:F2}, {lastValidPosition.z:F2})\n" +
-                        $"  LastMoveCause: {lastMoveCause}\n" +
-                        $"  State: {state}\n" +
-                        $"  {tileInfo}\n" +
-                        $"  WasOnWalkable: {wasOnWalkableTile}");
                 }
 
                 wasOnWalkableTile = false;
@@ -803,83 +746,14 @@ namespace FaeMaze.Visitors
 
                     if (stuckDuration >= STUCK_LOG_THRESHOLD)
                     {
-                        // Build comprehensive stuck diagnostic
-                        StringBuilder diagSb = new StringBuilder();
-                        diagSb.AppendLine($"[VisitorDiag] {gameObject.name} STUCK for {stuckDuration:F1}s!");
-                        diagSb.AppendLine($"  Current: ({currentPos.x:F2}, {currentPos.y:F2}, {currentPos.z:F2})");
-                        diagSb.AppendLine($"  State: {state}");
-                        diagSb.AppendLine($"  LastMoveCause: {lastMoveCause}");
-                        diagSb.AppendLine($"  HasDesiredPosition: {hasDesiredPosition}");
-                        if (hasDesiredPosition)
-                        {
-                            diagSb.AppendLine($"  DesiredPosition: ({desiredPosition.x:F2}, {desiredPosition.y:F2}, {desiredPosition.z:F2})");
-                            diagSb.AppendLine($"  DistToDesired: {Vector3.Distance(currentPos, desiredPosition):F3}");
-                        }
-
-                        // Path details
-                        if (worldPath != null)
-                        {
-                            diagSb.AppendLine($"  PathLength={worldPath.Count}, PathIndex={worldPathIndex}");
-                            if (worldPathIndex < worldPath.Count)
-                            {
-                                Vector3 nextWp = worldPath[worldPathIndex];
-                                float distToNext = Vector3.Distance(currentPos, nextWp);
-                                diagSb.AppendLine($"  NextWaypoint: ({nextWp.x:F2}, {nextWp.y:F2}) dist={distToNext:F3}");
-                            }
-                            // Show upcoming waypoints
-                            diagSb.AppendLine($"  Upcoming path waypoints:");
-                            for (int i = worldPathIndex; i < Mathf.Min(worldPathIndex + 5, worldPath.Count); i++)
-                            {
-                                Vector3 wp = worldPath[i];
-                                float dist = Vector3.Distance(currentPos, wp);
-                                diagSb.AppendLine($"    [{i}] ({wp.x:F2}, {wp.y:F2}) dist={dist:F2}");
-                            }
-                        }
-                        else
-                        {
-                            diagSb.AppendLine($"  Path=null");
-                        }
-
-                        // Physics state
-                        if (rb3D != null)
-                        {
-                            diagSb.AppendLine($"  Rigidbody velocity: ({rb3D.linearVelocity.x:F3}, {rb3D.linearVelocity.y:F3}, {rb3D.linearVelocity.z:F3}) mag={rb3D.linearVelocity.magnitude:F3}");
-                            diagSb.AppendLine($"  Rigidbody isKinematic: {rb3D.isKinematic}, constraints: {rb3D.constraints}");
-                        }
-
-                        // Navigation audit trail
-                        diagSb.AppendLine($"  Navigation Audit Log (last 15 events):");
-                        diagSb.Append(FormatNavigationAuditLog());
-
-                        Debug.LogWarning(diagSb.ToString());
-                        Debug.Break();  // Pause editor to allow inspection
-
                         // If stuck due to node center or no valid movement, try to recalculate path
                         if (lastMoveCause != null &&
                             (lastMoveCause.Contains("BlockedByNodeCenter") ||
                              lastMoveCause.Contains("StayInPlace") ||
                              lastMoveCause.Contains("NoRecoveryTile")))
                         {
-                            Debug.Log($"[VisitorDiag] {gameObject.name} attempting path recalculation due to stuck state");
-
-                            // Log the old path details before recalculation
-                            int oldPathCount = worldPath?.Count ?? 0;
-                            Vector3 oldFirstWaypoint = worldPath != null && worldPath.Count > 0 ? worldPath[0] : Vector3.zero;
-
                             RecalculatePath();
                             splineInitialized = false; // Force spline reinitialization
-
-                            // Log the new path details after recalculation
-                            int newPathCount = worldPath?.Count ?? 0;
-                            Vector3 newFirstWaypoint = worldPath != null && worldPath.Count > 0 ? worldPath[0] : Vector3.zero;
-                            float distToFirstWaypoint = worldPath != null && worldPath.Count > 0
-                                ? Vector3.Distance(currentPos, worldPath[0])
-                                : float.MaxValue;
-
-                            Debug.Log($"[VisitorDiag] {gameObject.name} path recalculation complete:\n" +
-                                $"  OldPath: {oldPathCount} waypoints, first=({oldFirstWaypoint.x:F2}, {oldFirstWaypoint.y:F2})\n" +
-                                $"  NewPath: {newPathCount} waypoints, first=({newFirstWaypoint.x:F2}, {newFirstWaypoint.y:F2})\n" +
-                                $"  DistToFirstWaypoint: {distToFirstWaypoint:F2}");
                         }
 
                         // Reset to avoid spamming (will log again after another STUCK_LOG_THRESHOLD)
@@ -1140,7 +1014,6 @@ namespace FaeMaze.Visitors
                 {
                     pendingPathRecalculation = true;
                     stalledDuration = 0f;  // Reset to avoid repeated recalculations
-                    Debug.LogWarning($"{name} stalled for 2+ seconds, forcing path recalculation");
                 }
             }
             else
@@ -2158,10 +2031,6 @@ namespace FaeMaze.Visitors
                     // so we want t=0 (which evaluates to P1) to match where we actually are
                     if (p1Divergence > 0.5f)
                     {
-                        if (debugSplineRotation)
-                        {
-                            Debug.Log($"[SplineDebug] {name} DIVERGENCE DETECTED: P1={splineControlPoints[1]:F2}, current={currentPos:F2}, divergence={p1Divergence:F2}, resetting progress from {splineProgress:F3} to 0");
-                        }
                         UpdateSplineControlPoints();
                         splineProgress = 0f; // CRITICAL: Reset progress so spline starts from current position
                     }
@@ -2176,24 +2045,11 @@ namespace FaeMaze.Visitors
             float progressBefore = splineProgress;
             splineProgress += speedFactor * Time.deltaTime;
 
-            // DEBUG: Log if progress is abnormally slow
-            if (speedFactor < 0.1f && Time.frameCount % 60 == 0)
-            {
-                Debug.LogWarning($"[SplineDebug] {name} SLOW PROGRESS: speedFactor={speedFactor:F4} (speed={effectiveSpeed:F2}, segLen={splineSegmentLength:F2}), " +
-                    $"progress={progressBefore:F4}->{splineProgress:F4}, P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}");
-            }
-
             // Handle segment completion and advancement
             while (splineProgress >= 1f && splineStartIndex < worldPath.Count - 1)
             {
                 splineProgress -= 1f;
                 waypointsTraversedSinceSpawn++;
-
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} SEGMENT COMPLETE - splineStartIndex={splineStartIndex}, splineProgress wrapped to {splineProgress:F3}, " +
-                        $"currentPos={transform.position:F2}, currentRotZ={transform.eulerAngles.z:F1}");
-                }
 
                 // Allow derived classes to handle detour logic at waypoints
                 int previousIndex = splineStartIndex;
@@ -2202,11 +2058,6 @@ namespace FaeMaze.Visitors
                 // If path was changed by detour handling, reinitialize spline
                 if (worldPath == null || worldPathIndex != previousIndex + 1)
                 {
-                    if (debugSplineRotation)
-                    {
-                        Debug.Log($"[SplineDebug] {name} PATH CHANGED BY DETOUR - worldPath={worldPath != null}, worldPathIndex={worldPathIndex}, prevIndex+1={previousIndex + 1}, " +
-                            $"spline will reinitialize next frame");
-                    }
                     splineInitialized = false;
                     return;
                 }
@@ -2258,9 +2109,6 @@ namespace FaeMaze.Visitors
             float distanceFromCurrent = Vector3.Distance(newPosition, transform.position);
             if (distanceFromCurrent > 2.0f)
             {
-                Debug.LogWarning($"[SplineDebug] {name} SPLINE SANITY CHECK FAILED! Calculated position {newPosition} is {distanceFromCurrent:F2} units from current {transform.position}. " +
-                    $"Control points: P0={splineControlPoints[0]}, P1={splineControlPoints[1]}, P2={splineControlPoints[2]}, P3={splineControlPoints[3]}, progress={splineProgress:F3}");
-
                 // Force path recalculation
                 RecordMoveCause("SplineMovement_InsanePosition");
                 splineInitialized = false;
@@ -2386,36 +2234,10 @@ namespace FaeMaze.Visitors
             // Check magnitude BEFORE normalizing to avoid noise when movement is tiny
             Vector3 moveDirection = newPosition - previousPosition;
 
-            // Debug: Log every frame when enabled to track spinning
-            if (debugSplineRotation)
-            {
-                Debug.Log($"[SplineDebug] {name} FRAME - pos={transform.position:F3}, prev={previousPosition:F3}, " +
-                    $"moveDir=({moveDirection.x:F4}, {moveDirection.y:F4}), moveSqrMag={moveDirection.sqrMagnitude:F6}, " +
-                    $"splineProgress={splineProgress:F4}, rotZ={transform.eulerAngles.z:F1}°, " +
-                    $"P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}");
-            }
-
             if (moveDirection.sqrMagnitude > 0.0001f)  // Minimum movement threshold
             {
                 Vector2 facingDirection = new Vector2(moveDirection.x, moveDirection.y).normalized;
-                float newAngle = Mathf.Atan2(facingDirection.y, facingDirection.x) * Mathf.Rad2Deg;
-                float angleDelta = Mathf.DeltaAngle(transform.eulerAngles.z, newAngle);
-
-                // Log if angle change is significant (potential spin)
-                if (debugSplineRotation && Mathf.Abs(angleDelta) > 30f)
-                {
-                    Debug.LogWarning($"[SplineDebug] {name} LARGE ROTATION DELTA - angleDelta={angleDelta:F1}°, " +
-                        $"currentRotZ={transform.eulerAngles.z:F1}°, targetAngle={newAngle:F1}°, " +
-                        $"moveDir=({moveDirection.x:F3}, {moveDirection.y:F3}), moveMag={moveDirection.magnitude:F4}, " +
-                        $"prevPos={previousPosition:F2}, newPos={newPosition:F2}, " +
-                        $"splineProgress={splineProgress:F3}, splineStartIndex={splineStartIndex}");
-                }
-
                 UpdateAnimatorDirection(facingDirection);
-            }
-            else if (debugSplineRotation)
-            {
-                Debug.Log($"[SplineDebug] {name} SKIPPING ROTATION - moveSqrMag={moveDirection.sqrMagnitude:F8} below threshold 0.0001");
             }
 
             // Sync worldPathIndex with spline progress for compatibility
@@ -2544,8 +2366,6 @@ namespace FaeMaze.Visitors
                                 // Even waypoint is not near walkable - path seems invalid
                                 // But the A* algorithm built this path, so trust it
                                 // Just move directly toward the waypoint anyway
-                                Debug.LogWarning($"[PathDebug] {name} waypoint ({targetWorldPos.x:F2}, {targetWorldPos.y:F2}) not near walkable tile, but trusting A* path. Current: ({finalPosition.x:F2}, {finalPosition.y:F2})");
-                                Debug.Break(); // Pause editor to examine state
                                 Vector2 currentPos2D = new Vector2(finalPosition.x, finalPosition.y);
                                 Vector2 waypointPos2D = new Vector2(targetWorldPos.x, targetWorldPos.y);
                                 Vector2 moveDir = (waypointPos2D - currentPos2D).normalized;
@@ -2593,10 +2413,6 @@ namespace FaeMaze.Visitors
         /// <param name="targetPosition">The position we want to move to</param>
         /// <param name="blockedPosition">If blocked, a position that moves visitor around the obstacle</param>
         /// <returns>True if movement is blocked by node center collider, false otherwise</returns>
-        // Static counter for diagnostic logging - how often are visitors hitting node centers
-        private static int nodeBlockedThisFrame = 0;
-        private static int lastNodeBlockedLogFrame = -1;
-
         protected bool IsBlockedByNodeCenter(Vector3 targetPosition, out Vector3 blockedPosition)
         {
             blockedPosition = targetPosition;
@@ -2637,18 +2453,6 @@ namespace FaeMaze.Visitors
                         continue; // Not actually inside the blocked zone
                     }
 
-                    // Track how many times this happens
-                    if (Time.frameCount != lastNodeBlockedLogFrame)
-                    {
-                        if (nodeBlockedThisFrame > 0)
-                        {
-                            Debug.Log($"[NodeBlock] Previous frame had {nodeBlockedThisFrame} node center blocks");
-                        }
-                        nodeBlockedThisFrame = 0;
-                        lastNodeBlockedLogFrame = Time.frameCount;
-                    }
-                    nodeBlockedThisFrame++;
-
                     // We're inside a node center exclusion zone - push outward
                     Vector2 pushDir2D = offset2D;
 
@@ -2667,16 +2471,6 @@ namespace FaeMaze.Visitors
                         currentPos.y + pushDir2D.y * pushDist,
                         currentPos.z);
 
-                    // Log detailed info periodically
-                    if (nodeBlockedThisFrame == 1)
-                    {
-                        Debug.Log($"[NodeBlock] {name} INSIDE node center collider {col.gameObject.name}\n" +
-                            $"  VisitorPos: ({currentPos.x:F2}, {currentPos.y:F2})\n" +
-                            $"  ColliderCenter: ({colliderCenter.x:F2}, {colliderCenter.y:F2})\n" +
-                            $"  DistFromCenter: {distFromCenter:F2}\n" +
-                            $"  PushDir: ({pushDir2D.x:F2}, {pushDir2D.y:F2})\n" +
-                            $"  BlockedPos: ({blockedPosition.x:F2}, {blockedPosition.y:F2})");
-                    }
                     return true;
                 }
             }
@@ -2785,10 +2579,6 @@ namespace FaeMaze.Visitors
             if (worldPath == null || worldPath.Count < 2)
             {
                 splineInitialized = false;
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} InitializeSpline FAILED - worldPath null or too short (count={worldPath?.Count ?? 0})");
-                }
                 return;
             }
 
@@ -2797,16 +2587,8 @@ namespace FaeMaze.Visitors
             UpdateSplineControlPoints();
 
             // Skip initial segments that are too short to avoid rotation instability
-            int skippedCount = 0;
             while (splineSegmentLength < MIN_SPLINE_SEGMENT_LENGTH && splineStartIndex < worldPath.Count - 1)
             {
-                skippedCount++;
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} InitializeSpline SKIPPING SHORT SEGMENT - length={splineSegmentLength:F3} < {MIN_SPLINE_SEGMENT_LENGTH}, " +
-                        $"P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, advancing...");
-                }
-
                 // Snap position to P2 of the short segment before advancing
                 Vector3 snapPos = splineControlPoints[2];
                 snapPos.z = transform.position.z;
@@ -2821,10 +2603,6 @@ namespace FaeMaze.Visitors
                 {
                     splineInitialized = false;
                     worldPathIndex = worldPath.Count;
-                    if (debugSplineRotation)
-                    {
-                        Debug.Log($"[SplineDebug] {name} InitializeSpline - REACHED END after skipping {skippedCount} short segments");
-                    }
                     return;
                 }
 
@@ -2832,17 +2610,6 @@ namespace FaeMaze.Visitors
             }
 
             splineInitialized = true;
-
-            if (debugSplineRotation)
-            {
-                if (skippedCount > 0)
-                {
-                    Debug.Log($"[SplineDebug] {name} InitializeSpline - Skipped {skippedCount} short segment(s)");
-                }
-                Debug.Log($"[SplineDebug] {name} InitializeSpline SUCCESS - startIndex={splineStartIndex}, pathCount={worldPath.Count}, " +
-                    $"P0={splineControlPoints[0]:F2}, P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, P3={splineControlPoints[3]:F2}, " +
-                    $"segmentLength={splineSegmentLength:F3}, currentPos={transform.position:F2}, currentRotZ={transform.eulerAngles.z:F1}");
-            }
         }
 
         // Minimum segment length to avoid rotation instability from tiny movements
@@ -2883,13 +2650,6 @@ namespace FaeMaze.Visitors
             {
                 // Use visitor's actual position as P1
                 splineControlPoints[1] = new Vector3(currentPos.x, currentPos.y, pathP1.z);
-
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} UpdateSplineControlPoints - DIVERGENCE RECOVERY: " +
-                        $"visitor at ({currentPos.x:F2}, {currentPos.y:F2}) is {divergence:F2} units from path waypoint ({pathP1.x:F2}, {pathP1.y:F2}). " +
-                        $"Using current position as P1 for recovery spline.");
-                }
             }
             else
             {
@@ -2935,25 +2695,14 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void AdvanceSplineSegment()
         {
-            int prevIndex = splineStartIndex;
             splineStartIndex++;
             splineProgress = 0f;
-
-            if (debugSplineRotation)
-            {
-                Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - from index {prevIndex} to {splineStartIndex}, pathCount={worldPath?.Count ?? 0}, " +
-                    $"currentPos={transform.position:F2}, currentRotZ={transform.eulerAngles.z:F1}");
-            }
 
             // Check if we've reached the end of the path
             if (splineStartIndex >= worldPath.Count - 1)
             {
                 splineInitialized = false;
                 worldPathIndex = worldPath.Count;
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - REACHED END, spline invalidated");
-                }
                 return;
             }
 
@@ -2961,16 +2710,8 @@ namespace FaeMaze.Visitors
 
             // Skip segments that are too short - these cause rotation instability
             // Keep advancing until we find a segment of adequate length or reach the end
-            int skippedCount = 0;
             while (splineSegmentLength < MIN_SPLINE_SEGMENT_LENGTH && splineStartIndex < worldPath.Count - 1)
             {
-                skippedCount++;
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} SKIPPING SHORT SEGMENT - length={splineSegmentLength:F3} < {MIN_SPLINE_SEGMENT_LENGTH}, " +
-                        $"P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, advancing...");
-                }
-
                 // Snap position to P2 of the short segment before advancing
                 Vector3 snapPos = splineControlPoints[2];
                 snapPos.z = transform.position.z;
@@ -2985,24 +2726,10 @@ namespace FaeMaze.Visitors
                 {
                     splineInitialized = false;
                     worldPathIndex = worldPath.Count;
-                    if (debugSplineRotation)
-                    {
-                        Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - REACHED END after skipping {skippedCount} short segments");
-                    }
                     return;
                 }
 
                 UpdateSplineControlPoints();
-            }
-
-            if (debugSplineRotation)
-            {
-                if (skippedCount > 0)
-                {
-                    Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - Skipped {skippedCount} short segment(s), now at valid segment with length={splineSegmentLength:F3}");
-                }
-                Debug.Log($"[SplineDebug] {name} AdvanceSplineSegment - NEW CONTROL POINTS: " +
-                    $"P0={splineControlPoints[0]:F2}, P1={splineControlPoints[1]:F2}, P2={splineControlPoints[2]:F2}, P3={splineControlPoints[3]:F2}");
             }
         }
 
@@ -3052,10 +2779,6 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void ResetSplineState()
         {
-            if (debugSplineRotation && splineInitialized)
-            {
-                Debug.Log($"[SplineDebug] {name} ResetSplineState - was at splineStartIndex={splineStartIndex}, progress={splineProgress:F3}");
-            }
             splineInitialized = false;
             splineProgress = 0f;
             splineStartIndex = 0;
@@ -3255,6 +2978,33 @@ namespace FaeMaze.Visitors
 
             // Set grabbed state to stop all movement (lights stay on until consumed)
             state = VisitorState.Grabbed;
+        }
+
+        /// <summary>
+        /// Clears the Grabbed state so the visitor can be controlled by normal state logic again.
+        /// Called when releasing a visitor from HeartwardGrasp.
+        /// </summary>
+        public virtual void ClearGrabbedState()
+        {
+            if (state != VisitorState.Grabbed)
+            {
+                return;
+            }
+
+            // CRITICAL: Sync the Rigidbody position with the transform position.
+            // When grabbed, the visitor is moved via transform.position, but the Rigidbody's
+            // internal position tracking may not be updated (especially with interpolation).
+            // This prevents the visitor from teleporting back to their pre-grab physics position.
+            if (rb3D != null)
+            {
+                // Force the Rigidbody to match the current transform position
+                rb3D.position = transform.position;
+                rb3D.linearVelocity = Vector3.zero;
+                rb3D.angularVelocity = Vector3.zero;
+            }
+
+            // Reset to Idle - RefreshStateFromFlags will set appropriate state based on flags
+            state = VisitorState.Idle;
         }
 
         /// <summary>
@@ -3537,13 +3287,6 @@ namespace FaeMaze.Visitors
 
             Vector3 destination = GetDestinationForCurrentState();
 
-            if (debugSplineRotation)
-            {
-                Debug.Log($"[SplineDebug] {name} RecalculatePath CALLED - " +
-                    $"from pos={transform.position:F2} to dest={destination:F2}, " +
-                    $"currentRotZ={transform.eulerAngles.z:F1}°, state={state}");
-            }
-
             worldPath = BuildWorldPath(transform.position, destination);
             worldPathIndex = 0;
             worldDestination = destination;
@@ -3553,13 +3296,6 @@ namespace FaeMaze.Visitors
             int pathCount = worldPath?.Count ?? 0;
             string firstWp = pathCount > 0 ? $"({worldPath[0].x:F2}, {worldPath[0].y:F2})" : "none";
             RecordNavigationEvent("PathCalc", $"Recalc to ({destination.x:F2}, {destination.y:F2}), {pathCount} wps, first={firstWp}");
-
-            if (debugSplineRotation && worldPath != null)
-            {
-                Debug.Log($"[SplineDebug] {name} RecalculatePath COMPLETE - " +
-                    $"pathCount={worldPath.Count}, first waypoint={worldPath[0]:F2}, " +
-                    $"spline reset, will reinitialize on next frame");
-            }
 
             if (worldPath != null && worldPath.Count > 0)
             {
@@ -4330,18 +4066,19 @@ namespace FaeMaze.Visitors
             rb3D.linearDamping = 5f;  // Drag to slow down when not actively moving
             rb3D.angularDamping = 0f;
 
-            // Remove any legacy colliders on the root GameObject - we use the "Detect" child collider now
+            // Remove any legacy colliders on the root GameObject IMMEDIATELY - we use the "Detect" child collider now
             // The "Detect" child is baked into the visitor model prefab with proper collider settings
+            // Using DestroyImmediate ensures colliders are gone before any physics calculations
             SphereCollider sphereCollider = GetComponent<SphereCollider>();
             CapsuleCollider rootCapsule = GetComponent<CapsuleCollider>();
 
             if (sphereCollider != null)
             {
-                Destroy(sphereCollider);
+                DestroyImmediate(sphereCollider);
             }
             if (rootCapsule != null)
             {
-                Destroy(rootCapsule);
+                DestroyImmediate(rootCapsule);
             }
 
             // The actual collision collider is on the "Detect" child of the model instance
@@ -4360,17 +4097,6 @@ namespace FaeMaze.Visitors
             // 2. A direct child of this visitor (if the visitor prefab IS the model)
             Transform searchRoot = modelInstance != null ? modelInstance.transform : transform;
 
-            Debug.Log($"[{name}] SetupDetectCollider: Searching for Detect in {searchRoot.name}, modelInstance={modelInstance?.name ?? "null"}");
-
-            // List all children for debug
-            System.Text.StringBuilder childList = new System.Text.StringBuilder();
-            childList.Append($"  Children of {searchRoot.name}: ");
-            foreach (Transform child in searchRoot)
-            {
-                childList.Append($"{child.name}, ");
-            }
-            Debug.Log(childList.ToString());
-
             // Find the Detect child in the hierarchy
             Transform detectTransform = searchRoot.Find("Detect");
             if (detectTransform == null)
@@ -4381,13 +4107,20 @@ namespace FaeMaze.Visitors
 
             if (detectTransform == null)
             {
-                Debug.LogError($"[{name}] SetupDetectCollider: Could not find 'Detect' child in {searchRoot.name}. " +
-                    $"Visitor collision detection will not work!");
+                Debug.LogError($"[{name}] SetupDetectCollider: Could not find 'Detect' child. Visitor collision detection will not work!");
                 return;
             }
 
             // Set the Detect object to Visitor layer for collision matrix
             detectTransform.gameObject.layer = 6;  // Visitor layer
+
+            // CRITICAL: Reparent Detect directly under the visitor root and reset transform
+            // The Detect may be deep in a rotated hierarchy (e.g., under Armature with 90° rotation).
+            // By reparenting to root, we ensure the collider aligns with world axes.
+            detectTransform.SetParent(transform, false);  // false = don't preserve world position
+            detectTransform.localRotation = Quaternion.identity;
+            detectTransform.localPosition = Vector3.zero;
+            detectTransform.localScale = Vector3.one;
 
             // Get the CapsuleCollider on the Detect object
             CapsuleCollider detectCollider = detectTransform.GetComponent<CapsuleCollider>();
@@ -4402,32 +4135,29 @@ namespace FaeMaze.Visitors
             detectCollider.enabled = true;
 
             // CRITICAL: Reconfigure capsule to extend along Z-axis (world vertical)
-            // The game uses XY as ground plane and -Z as up. Tongue colliders are at Z ≈ -0.5 to -0.6.
-            // The visitor is at Z=0. We need the capsule to extend into negative Z to collide with tongue.
-            // Direction 2 = Z-axis
+            // The game uses XY as ground plane and -Z as up (toward camera).
+            // Ground is at Z=0, tongue extends horizontally at roughly Z=0.
+            // The visitor mesh is rendered above ground (negative Z).
+            // We want the capsule to cover from ground level up through the visitor's body.
+            //
+            // Direction 2 = Z-axis (now aligned with world Z since we reparented to root)
             detectCollider.direction = 2;  // Z-axis
-            detectCollider.center = new Vector3(0, 0, -0.5f);  // Centered at Z=-0.5 (halfway between ground and tongue)
-            detectCollider.height = 2.0f;  // Extends from Z=+0.5 to Z=-1.5, covering tongue at Z ≈ -0.6
-            detectCollider.radius = 0.5f;  // XY radius stays the same
+            detectCollider.center = new Vector3(0, 0, -0.5f);  // Centered at Z=-0.5 (above ground)
+            detectCollider.height = 1.5f;  // Extends from Z=+0.25 to Z=-1.25
+            detectCollider.radius = 0.4f;  // XY radius for body width
 
-            // CRITICAL: Remove any Rigidbody on the Detect child object.
+            // CRITICAL: Remove any Rigidbody on the Detect child object IMMEDIATELY.
             // When a collider doesn't have its own Rigidbody, Unity treats it as a "compound collider"
             // that uses the parent's Rigidbody. This allows:
             // - Visitor root Rigidbody (non-kinematic) to receive physics responses
             // - Tongue bone colliders (kinematic) to push the visitor
-            // If Detect has its own kinematic Rigidbody, kinematic-kinematic collision doesn't work!
+            // If Detect has its own Rigidbody, collision events go to Detect instead of the visitor root!
+            // We MUST use DestroyImmediate to ensure the Rigidbody is gone before any physics runs.
             Rigidbody detectRb = detectTransform.GetComponent<Rigidbody>();
             if (detectRb != null)
             {
-                Debug.Log($"[{name}] SetupDetectCollider: Destroying Rigidbody on Detect child - compound collider will use parent's non-kinematic Rigidbody");
-                Destroy(detectRb);
+                DestroyImmediate(detectRb);
             }
-
-            Debug.Log($"[{name}] SetupDetectCollider: Found Detect collider - " +
-                $"radius={detectCollider.radius}, height={detectCollider.height}, " +
-                $"direction={detectCollider.direction}, center={detectCollider.center}, " +
-                $"worldPos={detectTransform.position}, layer={detectTransform.gameObject.layer}, " +
-                $"enabled={detectCollider.enabled}");
         }
 
         /// <summary>
@@ -4490,20 +4220,6 @@ namespace FaeMaze.Visitors
             float searchRadius = checkRadius + 1.5f;  // Increased to account for Z-level differences
             Collider[] overlaps = Physics.OverlapSphere(checkPos, searchRadius, ~0, QueryTriggerInteraction.Collide);
 
-            // Debug: Log search parameters occasionally
-            if (Time.frameCount % 30 == 0)
-            {
-                int boneColliderCount = 0;
-                foreach (Collider c in overlaps)
-                {
-                    if (c.gameObject.name.StartsWith("BoneCollider_")) boneColliderCount++;
-                }
-                if (boneColliderCount > 0)
-                {
-                    Debug.Log($"[TongueSearch] {name} at {checkPos:F2} found {boneColliderCount} bone colliders in radius {searchRadius:F2}");
-                }
-            }
-
             // Find all tongue bone colliders and calculate combined push direction
             Vector3 accumulatedPush = Vector3.zero;
             int tongueColliderCount = 0;
@@ -4544,15 +4260,6 @@ namespace FaeMaze.Visitors
                     float combinedRadius = checkRadius + colliderWorldRadius;
                     float penetration = combinedRadius - dist2D;
 
-                    // Debug: Log near-miss colliders
-                    if (Time.frameCount % 30 == 0 && dist2D < 2.0f)
-                    {
-                        Debug.Log($"[TongueColliderCheck] {name}: {col.gameObject.name} at {colliderWorldPos:F2}, " +
-                            $"visitor2D={visitor2D:F2}, collider2D={collider2D:F2}, dist2D={dist2D:F2}, " +
-                            $"checkRadius={checkRadius:F2}, colliderRadius={colliderWorldRadius:F4}, " +
-                            $"combinedRadius={combinedRadius:F2}, penetration={penetration:F2}");
-                    }
-
                     if (penetration > 0)
                     {
                         // We ARE overlapping - calculate push away from this collider
@@ -4586,12 +4293,6 @@ namespace FaeMaze.Visitors
                 // Push strength based on deepest penetration (clamped to reasonable range)
                 pushStrength = Mathf.Clamp(accumulatedPush.magnitude / tongueColliderCount, 0.1f, 2.0f);
 
-                // Debug log overlap detection
-                if (Time.frameCount % 10 == 0)
-                {
-                    Debug.Log($"[TongueOverlap] {name} OVERLAPS {tongueColliderCount} bone colliders, pushDir={pushDirection:F2}, pushStrength={pushStrength:F2}");
-                }
-
                 return true;
             }
 
@@ -4615,6 +4316,13 @@ namespace FaeMaze.Visitors
                 {
                     heart.NotifyVisitorTouchedTongue(this);
                 }
+
+                // Also notify HeartwardGrasp if active
+                var graspEffect = HeartPowers.HeartwardGraspEffect.ActiveInstance;
+                if (graspEffect != null)
+                {
+                    graspEffect.NotifyVisitorTouchedGraspTongue(this);
+                }
             }
         }
 
@@ -4632,6 +4340,30 @@ namespace FaeMaze.Visitors
         protected virtual void OnCollisionStay(Collision collision)
         {
             // Tongue collision tracking - actual blocking handled by physics
+        }
+
+        /// <summary>
+        /// Called by Unity physics when this visitor's collider enters a trigger collider.
+        /// BoneCollider_N trigger colliders overlap with SolidCollider_N solid colliders.
+        /// </summary>
+        protected virtual void OnTriggerEnter(Collider other)
+        {
+            if (other.gameObject.name.StartsWith("BoneCollider_") || other.gameObject.name == "TipTrigger")
+            {
+                // Notify HeartOfTheMaze that we touched the tongue
+                var heart = FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+                if (heart != null)
+                {
+                    heart.NotifyVisitorTouchedTongue(this);
+                }
+
+                // Also notify HeartwardGrasp if active
+                var graspEffect = HeartPowers.HeartwardGraspEffect.ActiveInstance;
+                if (graspEffect != null)
+                {
+                    graspEffect.NotifyVisitorTouchedGraspTongue(this);
+                }
+            }
         }
 
         protected virtual void Setup3DModel()

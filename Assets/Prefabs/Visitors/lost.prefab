@@ -64,7 +64,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 4095991484230528848}
   m_Father: {fileID: 1787118507652433958}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!137 &5667878009766949033
@@ -433,12 +434,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2564873807443800749}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
+  m_LocalRotation: {x: 0.7071068, y: -3.5527137e-15, z: -3.5527137e-15, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1787118507652433958}
+  m_Father: {fileID: 2087870273701364883}
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!136 &8530742620224292114
 CapsuleCollider:
@@ -783,7 +784,6 @@ Transform:
   - {fileID: 2104672475396235572}
   - {fileID: 3794594873950182923}
   - {fileID: 6355446085709075550}
-  - {fileID: 4095991484230528848}
   m_Father: {fileID: 5514149373456373472}
   m_LocalEulerAnglesHint: {x: 180, y: 0, z: 180}
 --- !u!1 &5707203243313073426
@@ -1434,13 +1434,7 @@ MonoBehaviour:
   waypointReachedDistance: 0.05
   logVisitorPathfinding: 0
   debugSplineRotation: 0
-  use3DModel: 0
   modelPrefab: {fileID: 0}
-  visitorColor: {r: 0.3, g: 0.6, b: 1, a: 1}
-  visitorSize: 0.2
-  proceduralPixelsPerUnit: 32
-  sortingOrder: 15
-  useProceduralSprite: 0
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3

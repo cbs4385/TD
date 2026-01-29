@@ -64,7 +64,6 @@ Transform:
   - {fileID: 8360022898008157951}
   - {fileID: 2463577775554028486}
   - {fileID: 5500022726552235275}
-  - {fileID: 1204084945190263861}
   m_Father: {fileID: 2835506847928353453}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &747860976593915211
@@ -365,13 +364,7 @@ MonoBehaviour:
   waypointReachedDistance: 0.05
   logVisitorPathfinding: 0
   debugSplineRotation: 0
-  use3DModel: 0
   modelPrefab: {fileID: 0}
-  visitorColor: {r: 0.3, g: 0.6, b: 1, a: 1}
-  visitorSize: 0.2
-  proceduralPixelsPerUnit: 32
-  sortingOrder: 15
-  useProceduralSprite: 0
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3
@@ -695,12 +688,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6270945217689463615}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 77668618270485766}
+  m_Father: {fileID: 2835506847928353453}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!136 &5266067278020928437
 CapsuleCollider:
@@ -910,6 +903,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 77668618270485766}
+  - {fileID: 1204084945190263861}
   m_Father: {fileID: 1584962345084938755}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: -90}
 --- !u!137 &7905498990405699394

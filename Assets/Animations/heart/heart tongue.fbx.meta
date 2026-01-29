@@ -8,7 +8,7 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: MawThroat_EXPORT
-    second: {fileID: -8431271458077899309, guid: f899d52d5f44274438792fed97ae66a9, type: 3}
+    second: {fileID: 2100000, guid: f312ca1a4562a2a44823b86c1b8f27c7, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

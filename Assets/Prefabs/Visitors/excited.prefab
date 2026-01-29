@@ -123,11 +123,11 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8880215286817174251}
+  - {fileID: 2069202284292593411}
   - {fileID: 8438452937855542704}
   - {fileID: 5224333873767257689}
   - {fileID: 8883327124867136058}
   - {fileID: 1847851909753246756}
-  - {fileID: 2069202284292593411}
   m_Father: {fileID: 941752241327953562}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 180}
 --- !u!1 &1726124943748178147
@@ -583,13 +583,7 @@ MonoBehaviour:
   waypointReachedDistance: 0.05
   logVisitorPathfinding: 0
   debugSplineRotation: 0
-  use3DModel: 1
   modelPrefab: {fileID: 0}
-  visitorColor: {r: 0.3, g: 0.6, b: 1, a: 1}
-  visitorSize: 30
-  proceduralPixelsPerUnit: 32
-  sortingOrder: 15
-  useProceduralSprite: 0
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3

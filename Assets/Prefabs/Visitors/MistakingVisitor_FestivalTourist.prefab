@@ -53,13 +53,7 @@ MonoBehaviour:
   waypointReachedDistance: 0.05
   logVisitorPathfinding: 0
   debugSplineRotation: 0
-  use3DModel: 0
   modelPrefab: {fileID: 0}
-  visitorColor: {r: 0.3, g: 0.6, b: 1, a: 1}
-  visitorSize: 30
-  proceduralPixelsPerUnit: 32
-  sortingOrder: 15
-  useProceduralSprite: 0
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3
@@ -750,8 +744,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3241473555254189920}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.25, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.25000006, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

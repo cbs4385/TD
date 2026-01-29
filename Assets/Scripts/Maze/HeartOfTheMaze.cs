@@ -763,6 +763,7 @@ namespace FaeMaze.Maze
             }
             else
             {
+                // Fallback: find bones by name and SORT them by bone number
                 var boneList = new List<Transform>();
                 foreach (var t in heartTongueInstance.GetComponentsInChildren<Transform>())
                 {
@@ -772,6 +773,11 @@ namespace FaeMaze.Maze
                         boneList.Add(t);
                     }
                 }
+
+                // CRITICAL: Sort bones by their number (Bone_000, Bone_001, etc.)
+                // Without sorting, bones may be in arbitrary order which breaks the bending logic
+                boneList.Sort((a, b) => ExtractBoneNumber(a.name).CompareTo(ExtractBoneNumber(b.name)));
+
                 tongueBones = boneList.ToArray();
             }
 
@@ -790,6 +796,33 @@ namespace FaeMaze.Maze
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Extracts the bone number from a bone name like "Bone_000", "Bone.001", "Bone123", etc.
+        /// </summary>
+        private int ExtractBoneNumber(string boneName)
+        {
+            string digits = "";
+            foreach (char c in boneName)
+            {
+                if (char.IsDigit(c))
+                {
+                    digits += c;
+                }
+            }
+
+            if (string.IsNullOrEmpty(digits))
+            {
+                return 0;
+            }
+
+            if (int.TryParse(digits, out int result))
+            {
+                return result;
+            }
+
+            return 0;
         }
 
         private void CalculateTongueLength()

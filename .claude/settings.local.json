@@ -10,7 +10,11 @@
       "Bash(ls -la \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\Assets\\\\Scripts\\\\DebugTools\"\" 2>/dev/null || dir \"C:UserschrissourcereposTDAssetsScriptsDebugTools\"\")",
       "Bash(dotnet script:*)",
       "Bash(awk:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(wc -l \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\Assets\\\\Animations\"\"*.controller 2>/dev/null || dir /b \"C:UserschrissourcereposTDAssetsAnimations*.controller \")",
+      "Bash(dir \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\Assets\\\\Animations\\\\*.controller\")",
+      "Bash(ls:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

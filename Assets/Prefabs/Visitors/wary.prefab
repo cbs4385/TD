@@ -389,6 +389,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 5927097134038631296}
+  - {fileID: 855492980223779902}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!95 &7322412787757179340
@@ -429,14 +430,7 @@ MonoBehaviour:
   moveSpeed: 3
   waypointReachedDistance: 0.05
   logVisitorPathfinding: 0
-  debugSplineRotation: 0
-  use3DModel: 0
   modelPrefab: {fileID: 0}
-  visitorColor: {r: 0.3, g: 0.6, b: 1, a: 1}
-  visitorSize: 0.2
-  proceduralPixelsPerUnit: 32
-  sortingOrder: 15
-  useProceduralSprite: 0
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3
@@ -1630,7 +1624,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 327287939543503706}
-  - {fileID: 855492980223779902}
   m_Father: {fileID: 1314308844121220149}
   m_LocalEulerAnglesHint: {x: 90, y: -265, z: -90}
 --- !u!1 &9081236387323402850
@@ -1659,12 +1652,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9081236387323402850}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.5, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalRotation: {x: 0.030843562, y: -0.7064338, z: 0.7064338, w: 0.030843562}
+  m_LocalPosition: {x: -0.021788934, y: 0, z: -0.24904868}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5927097134038631296}
+  m_Father: {fileID: 1314308844121220149}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!136 &8670658197855595014
 CapsuleCollider:

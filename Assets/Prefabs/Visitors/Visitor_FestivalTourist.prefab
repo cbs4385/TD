@@ -52,14 +52,7 @@ MonoBehaviour:
   moveSpeed: 3
   waypointReachedDistance: 0.05
   logVisitorPathfinding: 0
-  debugSplineRotation: 0
-  use3DModel: 0
   modelPrefab: {fileID: 0}
-  visitorColor: {r: 0.3, g: 0.6, b: 1, a: 1}
-  visitorSize: 0.2
-  proceduralPixelsPerUnit: 32
-  sortingOrder: 15
-  useProceduralSprite: 0
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3

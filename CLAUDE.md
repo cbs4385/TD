@@ -636,13 +636,14 @@ Since colliders are part of the prefab and never created/destroyed at runtime, t
 **After running FaeMaze > Setup Tongue Prefab Colliders:**
 
 **The tongue prefab includes BOTH solid and trigger colliders per bone (every 10th bone = 54 pairs):**
-- `SolidCollider_N` objects - Solid sphere colliders for physics blocking
+- `SolidCollider_N` objects - Solid sphere colliders (not reliably detected by OnCollisionEnter)
 - `BoneCollider_N` objects - Trigger sphere colliders for detection events
 - `TipTrigger` - Trigger on tip for exit detection
 
-**Why both collider types:**
-1. **SolidCollider_N (isTrigger = false)**: Unity physics naturally blocks visitors from walking through
-2. **BoneCollider_N (isTrigger = true)**: Allows OnTriggerEnter events for HeartOfTheMaze to detect contact
+**CRITICAL: Use OnTriggerEnter with BoneCollider_N for detection!**
+- `OnCollisionEnter` with `SolidCollider_N` is **unreliable** - collision events often don't fire
+- `OnTriggerEnter` with `BoneCollider_N` **works reliably** for detecting tongue contact
+- Detection code should check for `BoneCollider_N` or `TipTrigger` names in OnTriggerEnter
 
 **Solid collider setup (in prefab, created by editor script):**
 ```csharp
@@ -845,6 +846,53 @@ This bug caused visitors to walk through tongue colliders. The colliders were be
 
 ---
 
+## CRITICAL RULE 11: Rigidbody Position Sync When Releasing Grabbed Objects
+
+**When releasing a visitor that was moved via `transform.position`, ALWAYS sync `rb3D.position` first!**
+
+### The Problem:
+When a visitor is grabbed, they are moved via `transform.position` (direct transform manipulation). However, the Rigidbody's internal position tracking may not be updated, especially with interpolation enabled. When the visitor is "released" and physics takes over again, the Rigidbody snaps back to where it thinks the object should be - often the original grab location.
+
+### The Solution:
+Before releasing control back to physics, sync the Rigidbody position:
+
+```csharp
+public virtual void ClearGrabbedState()
+{
+    if (state != VisitorState.Grabbed) return;
+
+    // CRITICAL: Sync the Rigidbody position with the transform position.
+    // When grabbed, the visitor is moved via transform.position, but the Rigidbody's
+    // internal position tracking may not be updated (especially with interpolation).
+    if (rb3D != null)
+    {
+        rb3D.position = transform.position;  // SYNC FIRST!
+        rb3D.linearVelocity = Vector3.zero;
+        rb3D.angularVelocity = Vector3.zero;
+    }
+
+    state = VisitorState.Idle;
+}
+```
+
+### VIOLATION - DO NOT DO THIS:
+```csharp
+// WRONG - Only clearing velocity, not syncing position
+if (rb3D != null)
+{
+    rb3D.linearVelocity = Vector3.zero;  // Position still desynced!
+    rb3D.angularVelocity = Vector3.zero;
+}
+// Visitor will teleport back to original grab location!
+```
+
+### When This Matters:
+- Releasing visitors from HeartwardGrasp tongue
+- Releasing visitors from HeartOfTheMaze tongue
+- Any system that moves objects via `transform.position` while they have a Rigidbody
+
+---
+
 ## CRITICAL RULE 7: Heart of the Maze - Frog Tongue Behavior
 
 **The Heart of the Maze uses a two-part model: static base ring and frog-tongue that grabs visitors.**
@@ -884,19 +932,21 @@ The tongue uses a simple three-phase sequence:
 
 ### State transitions:
 1. **Idle → Reaching**: Visitor enters detection radius (default 2.5 units)
-2. **Reaching → Grabbing**: Visitor's OnCollisionEnter fires for `SolidCollider_N` and calls `NotifyVisitorTouchedTongue()`
+2. **Reaching → Grabbing**: Visitor's OnTriggerEnter fires for `BoneCollider_N` and calls `NotifyVisitorTouchedTongue()`
 3. **Grabbing → Idle**: Tongue fully retracted to Z=28, visitor consumed
 
 ### Collision Detection:
-Visitor collision with tongue triggers the grab. The visitor's `OnCollisionEnter` calls `HeartOfTheMaze.NotifyVisitorTouchedTongue()`:
+Visitor trigger contact with tongue triggers the grab. The visitor's `OnTriggerEnter` calls `HeartOfTheMaze.NotifyVisitorTouchedTongue()`:
 ```csharp
-// In VisitorControllerBase.OnCollisionEnter
-if (collision.gameObject.name.StartsWith("SolidCollider_"))
+// In VisitorControllerBase.OnTriggerEnter
+if (other.gameObject.name.StartsWith("BoneCollider_") || other.gameObject.name == "TipTrigger")
 {
     var heart = FindFirstObjectByType<HeartOfTheMaze>();
     if (heart != null) heart.NotifyVisitorTouchedTongue(this);
 }
 ```
+
+**NOTE**: OnCollisionEnter with SolidCollider_N is unreliable. Always use OnTriggerEnter with BoneCollider_N for detection.
 
 ### Bone rotation logic:
 ```csharp
@@ -943,133 +993,106 @@ Tongue instance is pre-created at startup and repositioned rather than instantia
 
 ### Completed - Heart Tongue Visitor Consumption
 
-**Status**: Fully implemented and working. Tongue emerges, extends, curls around visitor, tightens, hinges 90°, and descends into heart.
+**Status**: Fully implemented and working with simplified "frog tongue" behavior.
 
 **Model details:**
 - 540 bones named Bone_000 through Bone_539
-- Base at origin, tip extends along +X
-- Bones use local +Y as forward direction after rest rotation
-- Prefab scale: (1, 0.3, 0.3), no runtime scaling applied
-- Tongue length ~8.1 world units
-- 27 bone colliders (every 20th bone) for contact detection and physics blocking
+- Base at origin, tip extends along local +Y
+- Tongue length ~27 world units
+- 54 SolidCollider_N + 54 BoneCollider_N objects baked into prefab
 
-**Six-phase tongue sequence:**
-1. **Emerging**: Tongue translates up from z=9 until tip reaches lip (z=-0.25)
-2. **Extending**: Lip bone bends 90°, horizontal section grows to detection radius
-3. **Curling**: 360° closed circle forms around visitor, physics colliders contain visitor
-4. **Pulling**: Tongue retracts to tighten curl, physics colliders push visitor inward
-5. **Hinging**: Tight curl rotates 90° from horizontal to vertical, visitor rotates with it
-6. **Descending**: Hinged curl pulls straight down into heart, visitor manually positioned
+**Three-phase frog tongue sequence:**
+1. **Emerging**: Tongue rises from Z=28 (underground), tip emerges at Z=0 (ground level)
+2. **Extending**: Bones above ground bend 90° and extend horizontally toward visitor, tracking their position
+3. **Retracting**: When visitor touches tongue, tongue descends back to Z=28, visitor follows tip
 
-**Physics-based containment:**
-- During Curling: Solid colliders surround and trap the visitor
-- During Pulling: Tongue retracts (tongueZPosition increases), fewer horizontal bones = tighter curl
-- During Hinging: Colliders rotate and push visitor, manual rotation delta applied to visitor
-- During Descending: Manual positioning (physics won't work underground)
+**Trigger-based grab (OnTriggerEnter with BoneCollider_N):**
+- Visitor's `OnTriggerEnter` detects contact with `BoneCollider_N` trigger colliders
+- Calls `HeartOfTheMaze.NotifyVisitorTouchedTongue()` to trigger grab
+- OnCollisionEnter with SolidCollider_N is unreliable - do NOT use for detection
 
 **Key implementation details:**
 - File: `HeartOfTheMaze.cs`
 - State machine: `HeartState` (Idle, Reaching, Grabbing)
-- Tongue phase: `TonguePhase` (Emerging, Extending, Curling, Pulling, Hinging, Descending)
+- Tongue phase: `TonguePhase` (Emerging, Extending, Retracting)
 - Bone direction: `Vector3.up` (local +Y points toward next bone)
-- Curl is HORIZONTAL (parallel to ground, in XY plane)
-- Bone colliders: solid (blocking) on every 20th bone
+- Tongue tracks visitor position continuously during Extending phase
 
 **Key constants:**
 | Constant | Value | Description |
 |----------|-------|-------------|
-| TONGUE_START_Z | 9.0 | Starting Z position (below ground) |
-| TONGUE_LIP_Z | -0.25 | Z where tip emerges above lip |
-| TONGUE_EMERGE_SPEED | 1.5 | Units per second for vertical movement |
-| TONGUE_CURL_SPEED | 2.0 | Rate of curl/hinge progress (0→1) |
-| PULLING_SPEED | 0.5 | Rate of curl tightening (0→1 per second) |
-| BONE_COLLIDER_SPACING | 20 | Add collider every 20th bone (27 colliders) |
-| BONE_COLLIDER_RADIUS | 0.0045 | World radius (localScale=0.03, radius=0.15) |
-| GRAB_BONE_OFFSET | 50 | Bones from tip for grab collider |
-| CURL_DIAMETER | 0.5 | Target tight curl diameter |
-| detectionRadius | 3.0 | Visitor detection radius |
+| TONGUE_HIDDEN_Z | 1000 | Z position when pooled |
+| TONGUE_START_Z | 28.0 | Starting Z position (underground) |
+| TONGUE_GROUND_Z | 0.0 | Ground level (tip emergence point) |
+| TONGUE_EMERGE_SPEED | 9.0 | Units per second for vertical movement |
+| TONGUE_RETRACT_SPEED | 9.0 | Units per second when retracting |
+| BEND_BONE_COUNT | 5 | Bones for the 90° bend at ground level |
+| detectionRadius | 2.5 | Visitor detection radius |
 
 **Phase transitions:**
-1. **Emerging → Extending**: Tip reaches TONGUE_LIP_Z
-2. **Extending → Curling**: Horizontal length >= detectionRadius
-3. **Curling → Pulling**: 360° curl complete AND visitor contact made
-4. **Pulling → Hinging**: pullingProgress >= 1.0 (curl fully tight)
-5. **Hinging → Descending**: sinkingRotationProgress >= 1.0 (90° rotation complete)
-6. **Descending → Idle**: tongueZPosition >= TONGUE_START_Z (visitor consumed)
+1. **Emerging → Extending**: Tip reaches ground level (Z=0)
+2. **Extending → Retracting**: Visitor collision detected via `NotifyVisitorTouchedTongue()`
+3. **Retracting → Idle**: Tongue fully retracted (Z >= 28), visitor consumed
 
 ---
 
 ### Completed - HeartwardGrasp (Heart Power 2)
 
-**Status**: Fully implemented with tongue-based grabbing. Uses the same tongue prefab and vertical emergence behavior as HeartOfTheMaze.
+**Status**: Fully implemented with tongue-based grabbing. Uses the same tongue prefab and frog-tongue behavior as HeartOfTheMaze.
 
 **What works:**
-- Grabbing HGZ: Idle → Emerging → Extending → Curling → Pulling → Transporting ✓
-- Pushing HGZ: Emerging → Uncurling → Withdrawing ✓
+- Grabbing HGZ: Idle → Emerging → Extending → Retracting → Transporting ✓
+- Pushing HGZ: Emerging → Extending → Releasing → Retracting ✓
 - Tongue emerges vertically from ground at wall tile position (like HeartOfTheMaze) ✓
-- Lip bone bends 90° to extend horizontally toward visitor ✓
-- 360° curl wraps around visitor ✓
-- Curl tightens while tongue sinks back into ground ✓
-- Reverse curl releases visitor near heart ✓
-- Push continues until visitor is on valid walkable area ✓
+- Bones above ground bend 90° to extend horizontally toward visitor ✓
+- Trigger-based grab: visitor OnTriggerEnter with BoneCollider_N triggers grab ✓
+- Tongue retracts with visitor attached ✓
+- Visitor released at ground level (Z=-0.01) over walkable area ✓
+- Visitor position synced with Rigidbody on release (prevents teleportation) ✓
 
-**Grabbing HGZ State Machine (tongue-based, mirrors HeartOfTheMaze):**
+**Grabbing HGZ State Machine (mirrors HeartOfTheMaze frog-tongue):**
 | Phase | Description |
 |-------|-------------|
-| Idle | Waiting for visitors to enter the zone |
-| Emerging | Tongue translates up from z=TONGUE_START_Z until tip at TONGUE_LIP_Z |
-| Extending | Lip bone bends 90°, horizontal section grows to GRASP_ZONE_RADIUS |
-| Curling | Tongue curls into 360° horizontal circle around visitor |
-| Pulling | Curl tightens, tongue sinks back into ground (+Z) |
-| Transporting | 1 second, visitor invisible, relocate to pushing zone |
+| Idle | Waiting for visitors to enter detection zone |
+| Emerging | Tongue rises from Z=TONGUE_START_Z until tip reaches ground (Z=0) |
+| Extending | Bones bend 90° at ground level, extend horizontally toward visitor |
+| Retracting | Visitor grabbed on collision, tongue descends with visitor attached |
 
-**Pushing HGZ State Machine (tongue-based, reverse of grab):**
+**Pushing HGZ State Machine (reverse of grab):**
 | Phase | Description |
 |-------|-------------|
 | Idle | Waiting for transported visitor |
-| Emerging | Tongue emerges from wall with visitor curled inside |
-| Uncurling | Tongue uncurls to release visitor (reverse of curl) |
-| Withdrawing | Tongue retracts back into wall |
+| Emerging | Tongue rises from underground with visitor at tip (hidden) |
+| Extending | Tongue extends horizontally, visitor becomes visible at ground level |
+| Releasing | Visitor released over walkable area, tongue pauses briefly |
+| Retracting | Tongue descends back underground |
 
 **Key implementation details:**
-- File: `HeartPowerEffects.cs` - `HeartwardGraspEffect` class (line ~1946)
+- File: `HeartPowerEffects.cs` - `HeartwardGraspEffect` class
 - Uses same tongue prefab as HeartOfTheMaze: `Assets/Prefabs/Tile/heart tongue.prefab`
-- Tongue spawned as child of grabbingZoneObject at wall tile position
-- Vertical Z-axis emergence: `grabbingTongueZPosition` controls root Z position
-- Lip bone index calculated dynamically based on `grabbingTongueZPosition`
-- Bone rotations controlled via `ApplyGrabbingTongueBoneState()` (mirrors HeartOfTheMaze)
-- Contact detection via `CheckTongueBoneContact()` - checks 2D distance from bones to visitor
-
-**Tongue bone structure (same as HeartOfTheMaze):**
-- 540 bones named Bone_000 through Bone_539
-- Bones use local +Y as forward direction after rest rotation
-- Bone colliders created on every 20th bone (27 colliders) for contact detection
+- SolidCollider_N objects baked into prefab for collision detection
+- Collision-based grab via `NotifyVisitorTouchedGraspTongue()` (like HeartOfTheMaze)
+- Visitor released at ground level Z=-0.01 with Rigidbody position synced
+- `ClearGrabbedState()` syncs `rb3D.position = transform.position` to prevent teleportation
 
 **Key constants:**
 | Constant | Value | Description |
 |----------|-------|-------------|
 | GRASP_ZONE_RADIUS | 2.5 | Trigger radius for visitor detection |
-| TONGUE_START_Z | 9.0 | Starting Z position (below ground) |
-| TONGUE_LIP_Z | -0.25 | Z where tip emerges above lip |
+| TONGUE_START_Z | 28.0 | Starting Z position (deep underground) |
+| TONGUE_GROUND_Z | 0.0 | Ground level where tip emerges |
 | TONGUE_EMERGE_SPEED | 6.0 | Units per second for vertical movement |
-| TONGUE_EXTEND_SPEED | 4.0 | Rate of bone rotation for extending |
-| TONGUE_CURL_SPEED | 3.0 | Rate of curl for grabbing |
 | TONGUE_RETRACT_SPEED | 4.0 | Speed when retracting |
-| BEND_BONE_COUNT | 3 | Bones for the 90° bend at lip |
-| BONE_COLLIDER_RADIUS | 0.0045 | World radius (localScale=0.03, radius=0.15) |
-| MIN_PUSH_DISTANCE | 1.0 | Minimum push before checking for valid area |
-| MAX_PUSH_DISTANCE | 10.0 | Safety limit for push distance |
+| BEND_BONE_COUNT | 5 | Bones for the 90° bend at ground level |
+| HGZ_WALL_OFFSET | 2.4 | Offset into forest (3 wall layers deep) |
 | GRAB_ESSENCE_COST | 25 | Essence deducted from visitor when grabbed |
 
-**NOTE**: Prefab scale is (1, 0.3, 0.3), no runtime scaling applied.
-
-**Vertical emergence behavior (like HeartOfTheMaze):**
-The wall tile position acts as the "heart center" for the grabbing tongue:
-1. Tongue spawned as child of grabbingZoneObject at wall tile XY position
-2. Initial Z = TONGUE_START_Z (9.0, below ground)
-3. During Emerging: Z decreases until tip reaches TONGUE_LIP_Z (-0.25)
-4. During Extending: Z continues decreasing, lip bone bends 90° toward visitor
-5. During Pulling: Z increases (tongue sinks back into ground with visitor)
+**Visitor release process:**
+1. Set visitor Z to ground level (Z=-0.01)
+2. Make visitor visible
+3. Call `ClearGrabbedState()` which syncs Rigidbody position and clears velocity
+4. Call `Resume()` and `RecalculatePath()`
+5. Apply daze effect via `OnWitnessMazeGrowth()`
 
 **FindForestDirection algorithm (HGZ placement):**
 The HGZ is placed at a wall tile position, with the direction determined by finding the deepest forest:
@@ -1226,7 +1249,6 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 
 ### In Progress
 - [ ] Ensure other visitor types work as intended with heart powers
-- [x] ~~Test tongue collision fix~~ - **FIXED** - visitors now properly blocked by tongue colliders (see Session Notes item 12)
 
 ### Heart & Powers
 - [x] Fix heart prefab - separated into two parts (heartbase + heart tongue) with state machine
@@ -1292,59 +1314,24 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
    - Points above fog cutoff collapse to previous valid point (bolt disappears into fog, no pooling)
    - Bolts and branches regenerate jitter every 0.08s for flickering effect
 
-7. **Heart Tongue Debug Visualization Removed** (HeartOfTheMaze.cs):
-   - Removed `AddDebugSphere()` method entirely
-   - Removed cyan (reach) and magenta (grab) debug sphere meshes
-   - Colliders remain functional (SphereCollider triggers still work for detection)
+7. **Heart Tongue Simplified to Frog Behavior** (HeartOfTheMaze.cs):
+   - Removed complex spiral/curl approach that relied on physics blocking
+   - Simplified to: emerge → extend toward visitor → grab on contact → retract
+   - Tongue tracks visitor position continuously during Extending phase
+   - Collision detection triggers grab (no physics blocking needed)
 
-8. **Heart Tongue Aiming Fix** (HeartOfTheMaze.cs):
-   - **Problem**: Tongue was aiming at visitor's current/predicted position instead of their EXIT point from the node
-   - **Solution**: Rewrote `CalculatePathInterceptionPoint()` to use visitor's actual worldPath
-   - Now iterates through visitor's path points to find the first point OUTSIDE the node boundary
-   - Uses ray-circle intersection (t2 = -b + sqrtDisc) to find exact exit point on the node edge
-   - Tongue extends to where visitor will EXIT, then curves back toward them
+8. **Tongue Collision Detection** (VisitorControllerBase.cs):
+   - `OnCollisionEnter` detects `SolidCollider_N` contact
+   - Calls `HeartOfTheMaze.NotifyVisitorTouchedTongue(this)` to trigger grab
+   - `tongueCollisionCount` tracks active collisions for reference
 
-   **Implementation:**
-   ```csharp
-   // Get the visitor's actual path
-   List<Vector3> visitorPath = visitor.GetCurrentPath(out currentPathIndex);
+9. **Tongue Colliders Baked in Prefab** (TonguePrefabColliderSetup.cs):
+   - `SolidCollider_N` objects baked into prefab by editor script
+   - No runtime collider creation/destruction (prevents physics freezes)
 
-   // Find first path point OUTSIDE node boundary
-   for (int i = currentPathIndex; i < visitorPath.Count; i++)
-   {
-       float distFromHeart = Vector2.Distance(pathPoint2D, heartPos);
-       if (distFromHeart > nodeRadius)
-       {
-           // Ray-circle intersection for exact exit point
-           float t2 = -b + sqrtDisc;  // Exit point (farther intersection)
-           return prevPoint2D + t2 * segmentDir;
-       }
-   }
-   ```
-
-9. **Visitor Path Exposure** (VisitorControllerBase.cs):
-   - Added `GetCurrentPath(out int currentIndex)` method to expose visitor's worldPath
-   - Required for tongue aiming to use actual path instead of guessing movement direction
-
-10. **Tongue Collision - Physics-Based** (TonguePrefabColliderSetup.cs):
-    - Solid colliders are **baked into the prefab** by editor script
-    - Unity physics handles collision automatically - no script-based blocking needed
-    - `BoneCollider_N` objects have `isTrigger = false` and kinematic Rigidbodies
-
-11. **FindForestDirection Rewrite** (HeartPowerEffects.cs) - PARTIALLY TESTED:
-    - **Problem**: Grabbing hand was emerging from wrong side of path (opposite side from forest interior)
-    - **Root cause**: Previous algorithm measured "forest depth" by probing outward, but both sides of a straight path have similar depth
-    - **Solution**: Rewrote to find direction with greatest minimum distance from ALL nearby walkable tiles
-    - **Status**: Passed initial tests, may need further validation on complex path geometries
-
-    **Algorithm:**
-    1. Collect all walkable tiles within 5 units (2× GRASP_ZONE_RADIUS)
-    2. For each direction (360° in 5° steps), place candidate point at 3 units
-    3. Skip if candidate is walkable (want forest only)
-    4. Calculate minimum distance from candidate to ANY walkable tile
-    5. Pick direction with greatest minimum distance = deepest into forest
-
-    **Key change**: Instead of measuring how far you can go before hitting walkable (forest depth), now measures how far candidate point is from ALL walkable tiles (isolation metric).
+10. **FindForestDirection Rewrite** (HeartPowerEffects.cs):
+    - Fixed HGZ placement to emerge from forest side, not path side
+    - Algorithm: find direction with greatest minimum distance from ALL nearby walkable tiles
 
 ### Key Constants (FocalPointGlow.cs)
 | Constant | Value | Description |
@@ -1423,24 +1410,26 @@ float finalVolume = propVolume * masterSfxVolume * distanceVolume * (isActive ? 
 
 ---
 
-### FIXED - Heart Tongue Grab Behavior (Session Jan 27-28, 2026)
+### Completed - Heart Tongue Frog Behavior (Session Jan 28, 2026)
 
-**Status**: FIXED - Tongue now properly blocks visitors via Unity physics.
+**Status**: Implemented and working with simplified "frog tongue" approach.
 
-**Solution: Physics-Based Blocking with Baked Colliders**
-- Colliders are **baked into the tongue prefab** by `TonguePrefabColliderSetup.cs`
-- `BoneCollider_N` objects have solid SphereColliders with kinematic Rigidbodies
-- Unity's physics engine handles collision automatically - no script-based blocking needed
-- Since colliders are part of the prefab (never created/destroyed at runtime), no freezes occur
+**Solution: Collision-Based Grab**
+- Abandoned complex spiral/curl approach that relied on physics blocking
+- New approach: tongue emerges, extends toward visitor, grabs on contact, retracts
+- Visitor's `OnCollisionEnter` detects contact with `SolidCollider_N` and notifies HeartOfTheMaze
+- Tongue tracks visitor position continuously during Extending phase
+- On contact, visitor becomes grabbed and follows tongue tip back underground
 
 **Working tongue sequence:**
-1. Tongue emerges and extends toward visitor's exit point (calculated from visitor's path)
-2. Tongue curls into 360° spiral around visitor
-3. Solid colliders block visitor from walking through tongue (Unity physics)
-4. When tip touches shaft, visitor is grabbed
-5. Pulling phase retracts tongue with visitor
-6. Sinking phase pulls visitor into heart for consumption
+1. Visitor enters detection radius → tongue starts emerging from Z=28
+2. Tip reaches ground level (Z=0) → transitions to Extending phase
+3. Bones above ground bend 90° and track visitor position
+4. Visitor collides with tongue → `NotifyVisitorTouchedTongue()` triggers Grabbing state
+5. Tongue retracts (Z increases), visitor follows tip
+6. Tongue reaches Z=28 → visitor consumed, tongue returns to pool
 
-**Key fix - Exit point calculation:**
-The tongue must aim at where the visitor will EXIT the detection zone, not their current position.
-Fixed by using the visitor's actual path to find the exit point via ray-circle intersection.
+**Key implementation:**
+- `HeartOfTheMaze.NotifyVisitorTouchedTongue(visitor)` - public method called by visitor collision
+- `VisitorControllerBase.OnCollisionEnter()` - detects `SolidCollider_N` and notifies heart
+- Tongue continuously updates target angle to track visitor during Extending

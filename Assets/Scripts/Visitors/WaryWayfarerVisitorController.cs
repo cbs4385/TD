@@ -79,10 +79,6 @@ namespace FaeMaze.Visitors
             // Check if state has changed since last waypoint
             if (state != previousState)
             {
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} HandleDetourAtWaypoint - STATE CHANGED from {previousState} to {state}, recalculating path");
-                }
                 previousState = state;
                 RecalculatePath();
                 return;
@@ -97,10 +93,6 @@ namespace FaeMaze.Visitors
 
                 if (shouldMisstep && worldPath != null && worldPathIndex < worldPath.Count)
                 {
-                    if (debugSplineRotation)
-                    {
-                        Debug.Log($"[SplineDebug] {name} HandleDetourAtWaypoint - MISSTEP triggered, recalculating path");
-                    }
                     // Mark current position as walked
                     walkedPositions.Add(transform.position);
                     isOnMisstepPath = true;
@@ -115,10 +107,6 @@ namespace FaeMaze.Visitors
             // If on misstep path and at a branch point, exit misstep
             if (isOnMisstepPath)
             {
-                if (debugSplineRotation)
-                {
-                    Debug.Log($"[SplineDebug] {name} HandleDetourAtWaypoint - EXIT MISSTEP, recalculating path");
-                }
                 isOnMisstepPath = false;
                 RecalculatePath();
                 return;
