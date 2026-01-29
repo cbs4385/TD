@@ -1,4 +1,5 @@
 using UnityEngine;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Visitors
 {
@@ -91,12 +92,12 @@ namespace FaeMaze.Visitors
                 isFascinated = false;
 
                 // 50% chance to become Confused, 50% to become Walking
-                if (Random.value < 0.5f)
+                if (RandomManager.Value < 0.5f)
                 {
                     // Become confused - wander aimlessly
                     float minDuration = config != null ? config.LostDetourMin : 5f;
                     float maxDuration = config != null ? config.LostDetourMax : 12f;
-                    float duration = Random.Range(minDuration, maxDuration);
+                    float duration = RandomManager.Range(minDuration, maxDuration);
                     SetLost(duration);
                 }
                 else
@@ -209,13 +210,13 @@ namespace FaeMaze.Visitors
             // Higher disturbance = more likely to break trance
             float breakChance = Mathf.Clamp01(disturbanceStrength);
 
-            if (Random.value < breakChance)
+            if (RandomManager.Value < breakChance)
             {
                 // Trance broken - become Lost
                 isFascinated = false;
                 float minDuration = config != null ? config.LostDetourMin : 5f;
                 float maxDuration = config != null ? config.LostDetourMax : 12f;
-                float lostDuration = Random.Range(minDuration, maxDuration);
+                float lostDuration = RandomManager.Range(minDuration, maxDuration);
                 SetLost(lostDuration);
             }
             else

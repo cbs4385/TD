@@ -69,35 +69,6 @@ namespace FaeMaze.Props
         [Tooltip("X rotation applied to visitor when knocked down (degrees) - tips forward")]
         private float knockdownXRotation = -90f;
 
-        [Header("Visual Settings")]
-        [SerializeField]
-        [Tooltip("Color of the Puka sprite (default green)")]
-        private Color pukaColor = new Color(0f, 1f, 0f, 1f);
-
-        [SerializeField]
-        [Tooltip("Size of the Puka sprite")]
-        private float pukaSize = 0.6f;
-
-        [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
-        private int sortingOrder = 14;
-
-        [SerializeField]
-        [Tooltip("Enable pulsing glow effect when idle")]
-        private bool enablePulse = true;
-
-        [SerializeField]
-        [Tooltip("Pulse speed")]
-        private float pulseSpeed = 2.5f;
-
-        [SerializeField]
-        [Tooltip("Pulse magnitude")]
-        private float pulseMagnitude = 0.12f;
-
-        [SerializeField]
-        [Tooltip("Generate a procedural sprite instead of using imported visuals")]
-        private bool useProceduralSprite = false;
-
         [Header("Debug")]
         [SerializeField]
         [Tooltip("Draw detection radius in Scene view")]
@@ -110,9 +81,6 @@ namespace FaeMaze.Props
         private MazeGridBehaviour mazeGridBehaviour;
         private HashSet<GameObject> processedVisitors;
         private float scanTimer;
-        private SpriteRenderer spriteRenderer;
-        private Vector3 baseScale;
-        private Vector3 initialScale;
         private PukaState currentState = PukaState.Idle;
         private Animator animator;
         private Animation legacyAnimation;
@@ -135,7 +103,6 @@ namespace FaeMaze.Props
 
         private void Awake()
         {
-            initialScale = transform.localScale;
             processedVisitors = new HashSet<GameObject>();
 
             // Try to find animator on this object or in children
@@ -150,11 +117,6 @@ namespace FaeMaze.Props
             if (legacyAnimation == null)
             {
                 legacyAnimation = GetComponentInChildren<Animation>();
-            }
-
-            if (useProceduralSprite)
-            {
-                SetupSpriteRenderer();
             }
         }
 
@@ -247,15 +209,9 @@ namespace FaeMaze.Props
 
         private void Update()
         {
-            // Only pulse when idle
+            // Only scan for visitors when idle
             if (currentState == PukaState.Idle)
             {
-                if (enablePulse && spriteRenderer != null)
-                {
-                    UpdatePulse();
-                }
-
-                // Only scan for visitors when idle
                 scanTimer += Time.deltaTime;
                 if (scanTimer >= scanInterval)
                 {
@@ -590,58 +546,6 @@ namespace FaeMaze.Props
             // Revert to idle state
             currentVictim = null;
             SetState(PukaState.Idle);
-        }
-
-        #endregion
-
-        #region Visual
-
-        private void SetupSpriteRenderer()
-        {
-            spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
-                gameObject,
-                createProceduralSprite: useProceduralSprite,
-                useSoftEdges: false,
-                resolution: 32,
-                pixelsPerUnit: 32
-            );
-
-            ApplySpriteSettings();
-        }
-
-        private void ApplySpriteSettings()
-        {
-            if (spriteRenderer == null)
-                return;
-
-            if (useProceduralSprite)
-            {
-                baseScale = new Vector3(pukaSize, pukaSize, 1f);
-                ProceduralSpriteFactory.ApplySpriteSettings(
-                    spriteRenderer,
-                    pukaColor,
-                    sortingOrder,
-                    pukaSize,
-                    applyScale: true
-                );
-            }
-            else
-            {
-                baseScale = initialScale;
-                ProceduralSpriteFactory.ApplySpriteSettings(
-                    spriteRenderer,
-                    pukaColor,
-                    sortingOrder,
-                    applyScale: false
-                );
-                transform.localScale = baseScale;
-            }
-        }
-
-        private void UpdatePulse()
-        {
-            float pulse = Mathf.Sin(Time.time * pulseSpeed) * pulseMagnitude;
-            transform.localScale = baseScale * (1f + pulse);
         }
 
         #endregion

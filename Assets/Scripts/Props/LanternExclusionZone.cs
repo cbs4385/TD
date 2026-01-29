@@ -1,5 +1,6 @@
 using UnityEngine;
 using FaeMaze.Visitors;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Props
 {
@@ -48,7 +49,7 @@ namespace FaeMaze.Props
             // If visitor is exactly at center, pick a random direction
             if (awayDir.sqrMagnitude < 0.01f)
             {
-                float randomAngle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                float randomAngle = RandomManager.Range(0f, 360f) * Mathf.Deg2Rad;
                 awayDir = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
             }
 

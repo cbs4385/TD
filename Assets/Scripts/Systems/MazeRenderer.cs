@@ -1485,8 +1485,8 @@ namespace FaeMaze.Systems
             // Add random jitter for walls
             if (symbol == '#')
             {
-                float jitterX = Random.Range(-0.02f, 0.02f);
-                float jitterY = Random.Range(-0.02f, 0.02f);
+                float jitterX = RandomManager.Range(-0.02f, 0.02f);
+                float jitterY = RandomManager.Range(-0.02f, 0.02f);
                 worldPos += new Vector3(jitterX, jitterY, 0f);
             }
 

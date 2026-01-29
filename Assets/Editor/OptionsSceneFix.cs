@@ -1456,6 +1456,14 @@ public class OptionsSceneFix : EditorWindow
 
             var startingEssenceSlider = CreateSliderRowWithRef(flowContent, "startingEssence", "Starting Essence", 0f, 1000f, 100f, false, 2);
             WireSliderToManager(managerSO, "startingEssenceSlider", "startingEssenceText", startingEssenceSlider);
+
+            // Random seed controls
+            var useFixedSeedToggle = CreateToggleRowWithRef(flowContent, "useFixedSeed", "Use Fixed Seed", false, 3);
+            WireToggleToManager(managerSO, "useFixedSeedToggle", useFixedSeedToggle);
+
+            var (seedInput, seedText) = CreateInputFieldRowWithRef(flowContent, "randomSeed", "Random Seed", "0", 4);
+            WireInputFieldToManager(managerSO, "randomSeedInput", seedInput);
+            WireTextToManager(managerSO, "currentSeedText", seedText);
         }
 
         if (managerSO != null)
@@ -1969,6 +1977,189 @@ public class OptionsSceneFix : EditorWindow
         {
             Debug.LogWarning($"[OptionsSceneFix] Could not find field: {toggleFieldName}");
         }
+    }
+
+    /// <summary>
+    /// Wire an input field to OptionsManager serialized field
+    /// </summary>
+    private void WireInputFieldToManager(SerializedObject managerSO, string inputFieldName, TMP_InputField inputField)
+    {
+        if (managerSO == null) return;
+
+        var inputProp = managerSO.FindProperty(inputFieldName);
+        if (inputProp != null)
+        {
+            inputProp.objectReferenceValue = inputField;
+            Debug.Log($"[OptionsSceneFix] Wired {inputFieldName}");
+        }
+        else
+        {
+            Debug.LogWarning($"[OptionsSceneFix] Could not find field: {inputFieldName}");
+        }
+    }
+
+    /// <summary>
+    /// Wire a text element to OptionsManager serialized field
+    /// </summary>
+    private void WireTextToManager(SerializedObject managerSO, string textFieldName, TextMeshProUGUI text)
+    {
+        if (managerSO == null) return;
+
+        var textProp = managerSO.FindProperty(textFieldName);
+        if (textProp != null)
+        {
+            textProp.objectReferenceValue = text;
+            Debug.Log($"[OptionsSceneFix] Wired {textFieldName}");
+        }
+        else
+        {
+            Debug.LogWarning($"[OptionsSceneFix] Could not find field: {textFieldName}");
+        }
+    }
+
+    /// <summary>
+    /// Create an input field row with a label and optional value display text
+    /// Returns the input field and the value text (which shows current seed info)
+    /// </summary>
+    private (TMP_InputField inputField, TextMeshProUGUI valueText) CreateInputFieldRowWithRef(Transform parent, string settingName, string labelText, string defaultValue, int siblingIndex)
+    {
+        TMP_FontAsset tmpFont = FindTMPFont(parent);
+
+        GameObject rowObj = new GameObject(settingName + "_Row");
+        Undo.RegisterCreatedObjectUndo(rowObj, "Create Input Field Row");
+        rowObj.transform.SetParent(parent, false);
+        rowObj.transform.SetSiblingIndex(siblingIndex);
+
+        var rowRect = rowObj.AddComponent<RectTransform>();
+        rowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        rowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        rowRect.pivot = new Vector2(0.5f, 0.5f);
+        rowRect.sizeDelta = new Vector2(0, 40);
+
+        // Match Video tab HorizontalLayoutGroup
+        var rowLayout = rowObj.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.childAlignment = TextAnchor.MiddleLeft;
+        rowLayout.childForceExpandWidth = false;
+        rowLayout.childForceExpandHeight = true;
+        rowLayout.childControlWidth = false;
+        rowLayout.childControlHeight = true;
+        rowLayout.spacing = 15;
+        rowLayout.padding = new RectOffset(15, 15, 0, 0);
+
+        var rowLayoutElement = rowObj.AddComponent<LayoutElement>();
+        rowLayoutElement.minHeight = 40;
+        rowLayoutElement.preferredHeight = 40;
+
+        // Label
+        GameObject labelObj = new GameObject("Label");
+        labelObj.transform.SetParent(rowObj.transform, false);
+        var labelRect = labelObj.AddComponent<RectTransform>();
+        labelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        labelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        labelRect.sizeDelta = new Vector2(300, 40);
+
+        var labelTMP = labelObj.AddComponent<TextMeshProUGUI>();
+        labelTMP.text = labelText;
+        labelTMP.fontSize = 20;
+        labelTMP.alignment = TextAlignmentOptions.MidlineLeft;
+        labelTMP.color = Color.white;
+        if (tmpFont != null) labelTMP.font = tmpFont;
+
+        var labelLayout = labelObj.AddComponent<LayoutElement>();
+        labelLayout.preferredWidth = 300;
+        labelLayout.flexibleWidth = -1;
+
+        // Input Field Container
+        GameObject inputContainerObj = new GameObject(settingName + "_Input");
+        inputContainerObj.transform.SetParent(rowObj.transform, false);
+
+        var inputContainerRect = inputContainerObj.AddComponent<RectTransform>();
+        inputContainerRect.anchorMin = new Vector2(0.5f, 0.5f);
+        inputContainerRect.anchorMax = new Vector2(0.5f, 0.5f);
+        inputContainerRect.sizeDelta = new Vector2(150, 30);
+
+        var inputContainerLayout = inputContainerObj.AddComponent<LayoutElement>();
+        inputContainerLayout.preferredWidth = 150;
+        inputContainerLayout.preferredHeight = 30;
+        inputContainerLayout.flexibleWidth = -1;
+
+        // Background image for input field
+        var bgImage = inputContainerObj.AddComponent<Image>();
+        bgImage.color = new Color(0.15f, 0.15f, 0.15f, 1f);
+
+        // Text Area (child of input container)
+        GameObject textAreaObj = new GameObject("Text Area");
+        textAreaObj.transform.SetParent(inputContainerObj.transform, false);
+        var textAreaRect = textAreaObj.AddComponent<RectTransform>();
+        textAreaRect.anchorMin = Vector2.zero;
+        textAreaRect.anchorMax = Vector2.one;
+        textAreaRect.offsetMin = new Vector2(5, 2);
+        textAreaRect.offsetMax = new Vector2(-5, -2);
+
+        // Input text
+        GameObject inputTextObj = new GameObject("Text");
+        inputTextObj.transform.SetParent(textAreaObj.transform, false);
+        var inputTextRect = inputTextObj.AddComponent<RectTransform>();
+        inputTextRect.anchorMin = Vector2.zero;
+        inputTextRect.anchorMax = Vector2.one;
+        inputTextRect.offsetMin = Vector2.zero;
+        inputTextRect.offsetMax = Vector2.zero;
+
+        var inputTextTMP = inputTextObj.AddComponent<TextMeshProUGUI>();
+        inputTextTMP.text = defaultValue;
+        inputTextTMP.fontSize = 18;
+        inputTextTMP.alignment = TextAlignmentOptions.MidlineLeft;
+        inputTextTMP.color = Color.white;
+        if (tmpFont != null) inputTextTMP.font = tmpFont;
+
+        // Placeholder text
+        GameObject placeholderObj = new GameObject("Placeholder");
+        placeholderObj.transform.SetParent(textAreaObj.transform, false);
+        var placeholderRect = placeholderObj.AddComponent<RectTransform>();
+        placeholderRect.anchorMin = Vector2.zero;
+        placeholderRect.anchorMax = Vector2.one;
+        placeholderRect.offsetMin = Vector2.zero;
+        placeholderRect.offsetMax = Vector2.zero;
+
+        var placeholderTMP = placeholderObj.AddComponent<TextMeshProUGUI>();
+        placeholderTMP.text = "Enter seed...";
+        placeholderTMP.fontSize = 18;
+        placeholderTMP.alignment = TextAlignmentOptions.MidlineLeft;
+        placeholderTMP.color = new Color(0.5f, 0.5f, 0.5f, 1f);
+        placeholderTMP.fontStyle = FontStyles.Italic;
+        if (tmpFont != null) placeholderTMP.font = tmpFont;
+
+        // Add TMP_InputField component
+        var inputField = inputContainerObj.AddComponent<TMP_InputField>();
+        inputField.textViewport = textAreaRect;
+        inputField.textComponent = inputTextTMP;
+        inputField.placeholder = placeholderTMP;
+        inputField.text = defaultValue;
+        inputField.contentType = TMP_InputField.ContentType.IntegerNumber;
+        inputField.characterLimit = 12;
+        inputField.targetGraphic = bgImage;
+
+        // Value text (shows current seed info)
+        GameObject valueObj = new GameObject("ValueText");
+        valueObj.transform.SetParent(rowObj.transform, false);
+        var valueRect = valueObj.AddComponent<RectTransform>();
+        valueRect.anchorMin = new Vector2(0.5f, 0.5f);
+        valueRect.anchorMax = new Vector2(0.5f, 0.5f);
+        valueRect.sizeDelta = new Vector2(200, 40);
+
+        var valueTMP = valueObj.AddComponent<TextMeshProUGUI>();
+        valueTMP.text = "(random on start)";
+        valueTMP.fontSize = 16;
+        valueTMP.alignment = TextAlignmentOptions.MidlineLeft;
+        valueTMP.color = new Color(0.7f, 0.7f, 0.7f, 1f);
+        if (tmpFont != null) valueTMP.font = tmpFont;
+
+        var valueLayout = valueObj.AddComponent<LayoutElement>();
+        valueLayout.preferredWidth = 200;
+        valueLayout.flexibleWidth = 1;
+
+        Debug.Log($"[OptionsSceneFix] Created input field row with ref: {settingName}");
+        return (inputField, valueTMP);
     }
 
     /// <summary>

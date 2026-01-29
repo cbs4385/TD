@@ -403,13 +403,6 @@ namespace ForestMaze
             {
                 SpatialIndex.RemoveGhost(position);
             }
-
-            // DEPRECATED - Legacy grid rasterization fields, kept for compatibility but unused
-            // In world-space mode, graph positions ARE world positions (no transform needed)
-            [System.Obsolete("No longer used - graph positions are world positions")]
-            public float Scale = 1.0f;
-            [System.Obsolete("No longer used - graph positions are world positions")]
-            public Vector2 Offset = Vector2.zero;
         }
 
         private class ValidationResult

@@ -79,6 +79,9 @@ namespace FaeMaze.UI
         [SerializeField] private TextMeshProUGUI autoStartDelayText;
         [SerializeField] private Slider startingEssenceSlider;
         [SerializeField] private TextMeshProUGUI startingEssenceText;
+        [SerializeField] private Toggle useFixedSeedToggle;
+        [SerializeField] private TMP_InputField randomSeedInput;
+        [SerializeField] private TextMeshProUGUI currentSeedText;
 
         [Header("Gameplay - Player Controls")]
         [SerializeField] private Slider focusSpeedSlider;
@@ -408,6 +411,10 @@ namespace FaeMaze.UI
                 autoStartDelaySlider.onValueChanged.AddListener(OnAutoStartDelayChanged);
             if (startingEssenceSlider != null)
                 startingEssenceSlider.onValueChanged.AddListener(OnStartingEssenceChanged);
+            if (useFixedSeedToggle != null)
+                useFixedSeedToggle.onValueChanged.AddListener(OnUseFixedSeedChanged);
+            if (randomSeedInput != null)
+                randomSeedInput.onEndEdit.AddListener(OnRandomSeedInputChanged);
 
             // Player Controls
             if (focusSpeedSlider != null)
@@ -488,6 +495,14 @@ namespace FaeMaze.UI
             UpdateValueText(autoStartDelayText, GameSettings.AutoStartDelay, "{0:F1}s");
             SetSliderValue(startingEssenceSlider, GameSettings.StartingEssence, 0f, 1000f);
             UpdateValueText(startingEssenceText, GameSettings.StartingEssence, "{0:F0}");
+            if (useFixedSeedToggle != null)
+                useFixedSeedToggle.isOn = GameSettings.UseFixedSeed;
+            if (randomSeedInput != null)
+            {
+                randomSeedInput.text = GameSettings.RandomSeed.ToString();
+                randomSeedInput.interactable = GameSettings.UseFixedSeed;
+            }
+            UpdateCurrentSeedDisplay();
 
             // Player Controls
             SetSliderValue(focusSpeedSlider, GameSettings.FocusSpeed, 5f, 15f);
@@ -646,6 +661,53 @@ namespace FaeMaze.UI
             UpdateValueText(startingEssenceText, value, "{0:F0}");
         }
 
+        private void OnUseFixedSeedChanged(bool value)
+        {
+            // Enable/disable seed input based on toggle
+            if (randomSeedInput != null)
+                randomSeedInput.interactable = value;
+            UpdateCurrentSeedDisplay();
+        }
+
+        private void OnRandomSeedInputChanged(string value)
+        {
+            // Validate input is a valid integer
+            if (!int.TryParse(value, out _) && randomSeedInput != null)
+            {
+                randomSeedInput.text = GameSettings.RandomSeed.ToString();
+            }
+            UpdateCurrentSeedDisplay();
+        }
+
+        private void UpdateCurrentSeedDisplay()
+        {
+            if (currentSeedText == null) return;
+
+            if (useFixedSeedToggle != null && useFixedSeedToggle.isOn)
+            {
+                if (randomSeedInput != null && int.TryParse(randomSeedInput.text, out int seed))
+                {
+                    currentSeedText.text = $"Fixed Seed: {seed}";
+                }
+                else
+                {
+                    currentSeedText.text = $"Fixed Seed: {GameSettings.RandomSeed}";
+                }
+            }
+            else
+            {
+                // Show the currently active seed from RandomManager
+                if (RandomManager.IsInitialized)
+                {
+                    currentSeedText.text = $"Current Seed: {RandomManager.CurrentSeed} (random)";
+                }
+                else
+                {
+                    currentSeedText.text = "Current Seed: (random on start)";
+                }
+            }
+        }
+
         // Player Controls callbacks
         private void OnFocusSpeedChanged(float value)
         {
@@ -753,6 +815,10 @@ namespace FaeMaze.UI
                 GameSettings.AutoStartDelay = autoStartDelaySlider.value;
             if (startingEssenceSlider != null)
                 GameSettings.StartingEssence = (int)startingEssenceSlider.value;
+            if (useFixedSeedToggle != null)
+                GameSettings.UseFixedSeed = useFixedSeedToggle.isOn;
+            if (randomSeedInput != null && int.TryParse(randomSeedInput.text, out int seedValue))
+                GameSettings.RandomSeed = seedValue;
 
             // Player Controls
             GameSettings.FocusSpeed = GetSliderValue(focusSpeedSlider);

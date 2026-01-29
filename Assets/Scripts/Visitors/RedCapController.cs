@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
-using FaeMaze.Systems;
 using FaeMaze.Maze;
+using FaeMaze.Systems;
 using ForestMaze;
 
 namespace FaeMaze.Visitors
@@ -73,23 +73,6 @@ namespace FaeMaze.Visitors
         [Tooltip("How often to check for visitors to frighten (in seconds)")]
         private float frightenCheckInterval = 0.25f;
 
-        [Header("Visual Settings")]
-        [SerializeField]
-        [Tooltip("Use procedural sprite if true, otherwise relies on child SpriteRenderer/Animator")]
-        private bool useProceduralSprite = false;
-
-        [SerializeField]
-        [Tooltip("Color of the Red Cap (used for procedural sprite)")]
-        private Color redCapColor = new Color(0.8f, 0.1f, 0.1f, 1f); // Dark red
-
-        [SerializeField]
-        [Tooltip("Size of the Red Cap sprite")]
-        private float redCapSize = 1.2f;
-
-        [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
-        private int sortingOrder = 15;
-
         [Header("Animation Settings")]
         [SerializeField]
         [Tooltip("Animator parameter name for direction")]
@@ -106,7 +89,6 @@ namespace FaeMaze.Visitors
         private int currentWaypointIndex;
         private VisitorControllerBase targetVisitor;
         private float targetUpdateTimer;
-        private SpriteRenderer spriteRenderer;
         private Animator animator;
         private float moveSpeed;
         private bool initialized;
@@ -235,17 +217,6 @@ namespace FaeMaze.Visitors
             if (gameController == null || mazeGridBehaviour == null)
             {
                 return;
-            }
-
-            // Create visual representation only if using procedural sprite
-            if (useProceduralSprite)
-            {
-                CreateProceduralVisual();
-            }
-            else
-            {
-                // Get existing SpriteRenderer if not using procedural
-                spriteRenderer = GetComponentInChildren<SpriteRenderer>();
             }
 
             // Initialize animator direction
@@ -573,7 +544,7 @@ namespace FaeMaze.Visitors
             }
 
             // Rotate the model to face the direction of motion
-            if (!useProceduralSprite && animator != null && baseRotationCaptured)
+            if (animator != null && baseRotationCaptured)
             {
                 // Determine which direction to use for rotation
                 int rotationDirection = direction;
@@ -822,70 +793,6 @@ namespace FaeMaze.Visitors
                     visitor.SetFrightened(transform.position);
                 }
             }
-        }
-
-        #endregion
-
-        #region Visual
-
-        /// <summary>
-        /// Creates the procedural visual representation of the Red Cap.
-        /// </summary>
-        private void CreateProceduralVisual()
-        {
-            // Add SpriteRenderer if not already present
-            spriteRenderer = GetComponent<SpriteRenderer>();
-            if (spriteRenderer == null)
-            {
-                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-            }
-
-            // Create a sprite (simple circle for now)
-            spriteRenderer.sprite = CreateCircleSprite(32);
-            spriteRenderer.color = redCapColor;
-            spriteRenderer.sortingOrder = sortingOrder;
-
-            // Set scale
-            transform.localScale = new Vector3(redCapSize, redCapSize, 1f);
-
-            SphereCollider collider = GetComponent<SphereCollider>();
-            if (collider == null)
-            {
-                collider = gameObject.AddComponent<SphereCollider>();
-                collider.radius = contactRadius;
-                collider.isTrigger = true;
-                collider.center = Vector3.zero; // XY-plane collision
-            }
-        }
-
-        private Sprite CreateCircleSprite(int resolution)
-        {
-            int size = resolution;
-            Texture2D texture = new Texture2D(size, size);
-            Color[] pixels = new Color[size * size];
-
-            Vector2 center = new Vector2(size / 2f, size / 2f);
-            float radius = size / 2f;
-
-            // Create a circle
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dist = Vector2.Distance(new Vector2(x, y), center);
-                    pixels[y * size + x] = dist <= radius ? Color.white : Color.clear;
-                }
-            }
-
-            texture.SetPixels(pixels);
-            texture.Apply();
-
-            return Sprite.Create(
-                texture,
-                new Rect(0, 0, size, size),
-                new Vector2(0.5f, 0.5f),
-                size
-            );
         }
 
         #endregion

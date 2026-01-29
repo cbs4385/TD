@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3856b15c4aaf442992d941adab3ae3, type: 3}
   m_Name: DevouringMaw_T1
   m_EditorClassIdentifier: 
-  powerType: 8
+  powerType: 2
   displayName: Devouring Maw
   description: 'Instantly consumes a visitor on the targeted tile, granting essence.
 

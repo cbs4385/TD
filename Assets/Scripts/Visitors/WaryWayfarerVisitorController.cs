@@ -89,7 +89,7 @@ namespace FaeMaze.Visitors
             if (misstepEnabled && !isOnMisstepPath)
             {
                 float misstepChance = GetConfusionChance();
-                bool shouldMisstep = Random.value <= misstepChance;
+                bool shouldMisstep = RandomManager.Value <= misstepChance;
 
                 if (shouldMisstep && worldPath != null && worldPathIndex < worldPath.Count)
                 {

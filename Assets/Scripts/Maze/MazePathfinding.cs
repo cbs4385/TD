@@ -74,10 +74,39 @@ namespace ForestMaze
                 result.Add(start);
             }
 
-            // Add all tile positions
+            // Add all tile positions, filtering out waypoints too close to the previous one
+            const float minWaypointDistance = 0.5f;
             foreach (var tile in tilePath)
             {
-                result.Add(new Vector3(tile.Position.x, tile.Position.y, start.z));
+                Vector3 waypoint = new Vector3(tile.Position.x, tile.Position.y, start.z);
+
+                // Skip waypoints within 0.5 units of the previous waypoint
+                if (result.Count > 0)
+                {
+                    float distToPrev = Vector3.Distance(waypoint, result[result.Count - 1]);
+                    if (distToPrev < minWaypointDistance)
+                    {
+                        continue;
+                    }
+                }
+
+                result.Add(waypoint);
+            }
+
+            // Ensure the final tile is always included (even if it's close to the previous)
+            // This prevents paths from ending short of their destination
+            if (tilePath.Count > 0)
+            {
+                var lastTile = tilePath[tilePath.Count - 1];
+                Vector3 finalWaypoint = new Vector3(lastTile.Position.x, lastTile.Position.y, start.z);
+                if (result.Count == 0 || result[result.Count - 1] != finalWaypoint)
+                {
+                    // Only add if it's not already the last point
+                    if (result.Count == 0 || Vector3.Distance(finalWaypoint, result[result.Count - 1]) > 0.01f)
+                    {
+                        result.Add(finalWaypoint);
+                    }
+                }
             }
 
             // Don't add the exact destination point - path should end at the last walkable tile

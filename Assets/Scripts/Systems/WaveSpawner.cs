@@ -316,7 +316,7 @@ namespace FaeMaze.Systems
                 // Get random spawn point from world-space data (positions queried in real-time from transforms)
                 var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
                 var keys = new List<char>(spawnPoints.Keys);
-                int randomIndex = Random.Range(0, keys.Count);
+                int randomIndex = RandomManager.Range(0, keys.Count);
                 spawnId = keys[randomIndex];
                 spawnWorldPos = spawnPoints[spawnId];
 
@@ -384,7 +384,7 @@ namespace FaeMaze.Systems
                 return null;
             }
 
-            int randomIndex = Random.Range(0, availableVisitorPrefabs.Count);
+            int randomIndex = RandomManager.Range(0, availableVisitorPrefabs.Count);
             VisitorControllerBase selectedPrefab = availableVisitorPrefabs[randomIndex];
 
             VisitorControllerBase spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.Euler(0, 0, 180));
@@ -425,7 +425,7 @@ namespace FaeMaze.Systems
             }
 
             // Select a random destination from valid spawn points
-            int randomIndex = Random.Range(0, validDestinations.Count);
+            int randomIndex = RandomManager.Range(0, validDestinations.Count);
             return validDestinations[randomIndex];
         }
 
@@ -443,7 +443,7 @@ namespace FaeMaze.Systems
             {
                 var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
                 var keys = new List<char>(spawnPoints.Keys);
-                int randomIndex = Random.Range(0, keys.Count);
+                int randomIndex = RandomManager.Range(0, keys.Count);
                 spawnWorldPos = spawnPoints[keys[randomIndex]];
             }
             else

@@ -151,6 +151,9 @@ namespace FaeMaze.Systems
                 return;
             }
 
+            // Initialize the random manager FIRST - all other systems depend on it
+            RandomManager.Initialize();
+
             // NOTE: Visitor-to-Visitor collision is disabled in Project Settings > Physics > Layer Collision Matrix
             // Do NOT call Physics.IgnoreLayerCollision at runtime - it causes Unity assertion errors
 

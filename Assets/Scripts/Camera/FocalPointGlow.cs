@@ -278,8 +278,8 @@ namespace FaeMaze.Cameras
 
                 // Initialize bolt state
                 boltAngle.Add((float)i / numBolts * Mathf.PI * 2f);
-                boltProgress.Add(Random.value);
-                boltDirection.Add(Random.value > 0.5f ? 1f : -1f);
+                boltProgress.Add(RandomManager.Value);
+                boltDirection.Add(RandomManager.Value > 0.5f ? 1f : -1f);
 
                 // Initialize jitter offsets for jagged lightning
                 float[] jitters = new float[MAIN_BOLT_POINTS * 2]; // x and y jitter per point
@@ -294,7 +294,7 @@ namespace FaeMaze.Cameras
             for (int j = 0; j < jitters.Length; j++)
             {
                 // Sharp random offsets for jagged lightning appearance
-                jitters[j] = Random.Range(-0.25f, 0.25f);
+                jitters[j] = RandomManager.Range(-0.25f, 0.25f);
             }
         }
 
@@ -338,12 +338,12 @@ namespace FaeMaze.Cameras
                 if (boltProgress[i] > 1f)
                 {
                     boltProgress[i] = 0f;
-                    boltAngle[i] += Random.Range(-0.3f, 0.3f);
+                    boltAngle[i] += RandomManager.Range(-0.3f, 0.3f);
                 }
                 else if (boltProgress[i] < 0f)
                 {
                     boltProgress[i] = 1f;
-                    boltAngle[i] += Random.Range(-0.3f, 0.3f);
+                    boltAngle[i] += RandomManager.Range(-0.3f, 0.3f);
                 }
 
                 // Regenerate jitter periodically for flickering jagged effect
@@ -351,7 +351,7 @@ namespace FaeMaze.Cameras
                 if (boltRegenerateTime[i] <= 0f)
                 {
                     RegenerateBoltJitter(boltJitterOffsets[i]);
-                    boltRegenerateTime[i] = BOLT_REGENERATE_INTERVAL + Random.Range(0f, 0.04f);
+                    boltRegenerateTime[i] = BOLT_REGENERATE_INTERVAL + RandomManager.Range(0f, 0.04f);
                 }
 
                 // Spiral parameters
@@ -409,7 +409,7 @@ namespace FaeMaze.Cameras
                 }
 
                 // Intense flickering color - alternating between dark red and purple
-                float flicker = Random.Range(0.5f, 1.0f);
+                float flicker = RandomManager.Range(0.5f, 1.0f);
                 // Alternate colors based on bolt index
                 Color boltColor = (i % 2 == 0) ? darkRed : deepPurple;
                 Color startColor = boltColor * flicker;
@@ -441,7 +441,7 @@ namespace FaeMaze.Cameras
                 Vector3 forkPos = mainPositions[forkPoint];
 
                 // Random direction for branch
-                float branchDir = boltAngle[boltIndex] + b * 1.57f + Random.Range(-0.3f, 0.3f);
+                float branchDir = boltAngle[boltIndex] + b * 1.57f + RandomManager.Range(-0.3f, 0.3f);
 
                 // Branches extend from fork point - cut off at fog level when over fog
                 float branchTopZ = isOverWalkableArea ? GROUND_Z_LEVEL : FOG_Z_LEVEL;
@@ -469,8 +469,8 @@ namespace FaeMaze.Cameras
                     float baseY = forkPos.y + Mathf.Sin(branchDir) * t * branchLen;
 
                     // Sharp random jitter per segment
-                    float jx = Random.Range(-jitterMag, jitterMag) * (1f - t * 0.5f);
-                    float jy = Random.Range(-jitterMag, jitterMag) * (1f - t * 0.5f);
+                    float jx = RandomManager.Range(-jitterMag, jitterMag) * (1f - t * 0.5f);
+                    float jy = RandomManager.Range(-jitterMag, jitterMag) * (1f - t * 0.5f);
 
                     // Branch stays at roughly same z as fork point (slightly toward surface)
                     float branchZ = forkPos.z + t * 0.1f;
@@ -480,7 +480,7 @@ namespace FaeMaze.Cameras
                 }
 
                 // Heavy flicker on branches - match parent bolt color
-                float flicker = Random.Range(0.3f, 1.0f);
+                float flicker = RandomManager.Range(0.3f, 1.0f);
                 // Branches use same color scheme as parent bolt (alternating dark red/purple)
                 Color boltColor = (boltIndex % 2 == 0) ? darkRed : deepPurple;
                 Color branchStart = boltColor * flicker;

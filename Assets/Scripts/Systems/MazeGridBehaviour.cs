@@ -119,6 +119,15 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform;
             }
 
+            // Initialize RandomManager if not already done (we're early in execution order)
+            if (!RandomManager.IsInitialized)
+            {
+                RandomManager.Initialize();
+            }
+
+            // Get initial seed from RandomManager for consistency
+            planarGeneratorConfig.randomSeed = RandomManager.NextSeed();
+
             InitializeFromGraph();
         }
 
@@ -373,8 +382,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public void RegenerateMaze()
         {
-            // Use current time as random seed for variety
-            planarGeneratorConfig.randomSeed = System.DateTime.Now.Millisecond + (System.DateTime.Now.Second * 1000);
+            // Get seed from RandomManager for consistency
+            planarGeneratorConfig.randomSeed = RandomManager.NextSeed();
 
             // Regenerate maze
             InitializeFromGraph();

@@ -267,9 +267,6 @@ namespace FaeMaze.UI
 
                     successCount++;
                 }
-                else
-                {
-                }
             }
 
 
@@ -285,21 +282,6 @@ namespace FaeMaze.UI
                 heartPowersPanel.SetActive(true);
             }
 
-            // Debug: Check game state and essence connection
-            if (heartPowerManager != null)
-            {
-                if (GameController.Instance != null)
-                {
-                }
-                else
-                {
-                }
-
-                for (int i = 0; i < powerTypes.Length; i++)
-                {
-                    bool canActivate = heartPowerManager.CanActivatePower(powerTypes[i], out string reason);
-                }
-            }
         }
 
         #endregion
@@ -747,16 +729,8 @@ namespace FaeMaze.UI
 
             HeartPowerType powerType = powerTypes[index];
 
-            if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
-            {
-            }
-
             // Get the focal point position from the camera controller
             Vector3 targetPosition = GetFocalPointPosition();
-
-            if (powerType == HeartPowerType.HeartwardGrasp || powerType == HeartPowerType.DevouringMaw)
-            {
-            }
 
             // All powers now activate at the focal point
             heartPowerManager.TryActivatePower(powerType, targetPosition);

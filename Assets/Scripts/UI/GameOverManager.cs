@@ -35,11 +35,6 @@ namespace FaeMaze.UI
         [Tooltip("Text displaying escaped count")]
         private TextMeshProUGUI escapedText;
 
-        [Header("Buttons")]
-        [SerializeField]
-        [Tooltip("Button to return to main menu")]
-        private Button mainMenuButton;
-
         [Header("Colors")]
         [SerializeField]
         private Color heartColor = new Color(0.8f, 0.2f, 0.2f);
@@ -54,7 +49,7 @@ namespace FaeMaze.UI
         [SerializeField]
         private Color redCapColor = new Color(0.4f, 0.2f, 0.2f);
         [SerializeField]
-        private Color escapedColor = new Color(0.5f, 0.5f, 0.5f);
+        private Color escapedColor = new Color(0.6f, 0.6f, 0.6f);
 
         // Archetype colors for procedural icons
         private readonly Color lanternDrunkColor = new Color(1f, 0.6f, 0.2f);    // Orange
@@ -63,6 +58,7 @@ namespace FaeMaze.UI
 
         private SceneLoader sceneLoader;
         private Canvas canvas;
+        private Button createdMainMenuButton;
 
         private void Awake()
         {
@@ -72,8 +68,8 @@ namespace FaeMaze.UI
         private void Start()
         {
             SetupCanvas();
-            SetupButtons();
-            CreateUI();
+            HideOldElements();
+            CreateFullScreenUI();
             DisplayStatistics();
         }
 
@@ -95,53 +91,10 @@ namespace FaeMaze.UI
                 GameObject canvasObj = new GameObject("GameOverCanvas");
                 canvas = canvasObj.AddComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                canvasObj.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                var scaler = canvasObj.AddComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1920, 1080);
                 canvasObj.AddComponent<GraphicRaycaster>();
-            }
-        }
-
-        private void SetupButtons()
-        {
-            if (mainMenuButton != null)
-            {
-                mainMenuButton.onClick.AddListener(ReturnToMainMenu);
-            }
-        }
-
-        /// <summary>
-        /// Creates UI elements if they don't exist (for runtime creation)
-        /// </summary>
-        private void CreateUI()
-        {
-            // Hide old StatsContainer and StatRow elements if they exist
-            HideOldElements();
-
-            // Create header texts if they don't exist
-            // Position below the "GAME OVER" title which is around y=0.88
-            if (runLengthText == null)
-            {
-                runLengthText = CreateHeaderText("RunLengthText", new Vector2(0.5f, 0.72f), "Run Length: 00:00", 24);
-            }
-
-            if (peakEssenceText == null)
-            {
-                peakEssenceText = CreateHeaderText("PeakEssenceText", new Vector2(0.5f, 0.67f), "Peak Essence: 0", 20);
-            }
-
-            // If containers don't exist, create them
-            if (essenceLedgerContainer == null)
-            {
-                essenceLedgerContainer = CreateContainer("EssenceLedger", new Vector2(0.5f, 0.52f), new Vector2(500, 140));
-            }
-
-            if (hazardHistogramContainer == null)
-            {
-                hazardHistogramContainer = CreateContainer("HazardHistogram", new Vector2(0.5f, 0.28f), new Vector2(500, 180));
-            }
-
-            if (escapedText == null)
-            {
-                escapedText = CreateHeaderText("EscapedText", new Vector2(0.5f, 0.15f), "Escaped: 0", 18);
             }
         }
 
@@ -150,22 +103,77 @@ namespace FaeMaze.UI
         /// </summary>
         private void HideOldElements()
         {
-            // Find and hide the old StatsContainer
-            Transform statsContainer = canvas.transform.Find("MainPanel/StatsContainer");
-            if (statsContainer != null)
+            // Find and hide the old MainPanel (with its grey background and all children)
+            Transform mainPanel = canvas.transform.Find("MainPanel");
+            if (mainPanel != null)
             {
-                statsContainer.gameObject.SetActive(false);
-            }
-
-            // Also try direct child
-            Transform directStats = canvas.transform.Find("StatsContainer");
-            if (directStats != null)
-            {
-                directStats.gameObject.SetActive(false);
+                // Destroy the entire MainPanel to prevent any interference
+                Destroy(mainPanel.gameObject);
             }
         }
 
-        private TextMeshProUGUI CreateHeaderText(string name, Vector2 anchorPos, string defaultText, float fontSize)
+        /// <summary>
+        /// Creates a full-screen UI layout without the grey background panel
+        /// </summary>
+        private void CreateFullScreenUI()
+        {
+            // Title at top (anchor 0.5, 0.93)
+            CreateHeaderText("TitleText", new Vector2(0.5f, 0.93f), "GAME OVER", 72, new Color(1f, 0.3f, 0.3f));
+
+            // Run length below title
+            runLengthText = CreateHeaderText("RunLengthText", new Vector2(0.5f, 0.84f), "Run Length: 00:00", 28);
+
+            // Peak essence
+            peakEssenceText = CreateHeaderText("PeakEssenceText", new Vector2(0.5f, 0.78f), "Peak Essence: 0", 22);
+
+            // Essence Ledger container
+            essenceLedgerContainer = CreateContainer("EssenceLedger", new Vector2(0.5f, 0.62f), new Vector2(600, 160));
+
+            // Hazard Histogram container (positioned to leave room for button at bottom)
+            hazardHistogramContainer = CreateContainer("HazardHistogram", new Vector2(0.5f, 0.32f), new Vector2(700, 280));
+
+            // Main Menu button at very bottom
+            CreateMainMenuButton();
+        }
+
+        private void CreateMainMenuButton()
+        {
+            GameObject buttonObj = new GameObject("MainMenuButton_New");
+            buttonObj.transform.SetParent(canvas.transform, false);
+
+            RectTransform rect = buttonObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0.03f);
+            rect.anchorMax = new Vector2(0.5f, 0.03f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(350, 60);
+
+            Image bgImage = buttonObj.AddComponent<Image>();
+            bgImage.color = new Color(0.3f, 0.5f, 0.8f, 1f);
+
+            createdMainMenuButton = buttonObj.AddComponent<Button>();
+            createdMainMenuButton.targetGraphic = bgImage;
+            createdMainMenuButton.onClick.AddListener(ReturnToMainMenu);
+
+            // Button text
+            GameObject textObj = new GameObject("Text");
+            textObj.transform.SetParent(buttonObj.transform, false);
+
+            RectTransform textRect = textObj.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+
+            TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
+            tmp.text = "Return to Main Menu";
+            tmp.fontSize = 28;
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.color = Color.white;
+        }
+
+        private TextMeshProUGUI CreateHeaderText(string name, Vector2 anchorPos, string defaultText, float fontSize, Color? color = null)
         {
             GameObject textObj = new GameObject(name);
             textObj.transform.SetParent(canvas.transform, false);
@@ -175,14 +183,14 @@ namespace FaeMaze.UI
             rect.anchorMax = anchorPos;
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(600, 40);
+            rect.sizeDelta = new Vector2(800, 60);
 
             TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
             tmp.text = defaultText;
             tmp.fontSize = fontSize;
             tmp.fontStyle = FontStyles.Bold;
             tmp.alignment = TextAlignmentOptions.Center;
-            tmp.color = Color.white;
+            tmp.color = color ?? Color.white;
 
             return tmp;
         }
@@ -227,15 +235,8 @@ namespace FaeMaze.UI
             // Build essence ledger
             BuildEssenceLedger(stats);
 
-            // Build hazard histogram
+            // Build hazard histogram (now includes Escaped)
             BuildHazardHistogram(stats);
-
-            // Escaped count (separate from kills)
-            int escapedCount = stats.GetTotalByFate(VisitorFate.Escaped);
-            if (escapedText != null)
-            {
-                escapedText.text = $"Escaped: {escapedCount}";
-            }
         }
 
         /// <summary>
@@ -254,12 +255,12 @@ namespace FaeMaze.UI
             var essenceTotals = stats.GetEssenceTotalsBySource();
 
             // Create header
-            CreateLedgerText("ESSENCE LEDGER", 20, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, 55));
+            CreateLedgerText("ESSENCE LEDGER", 22, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, 70));
 
             // Gains column (left)
-            float leftX = -120f;
-            float startY = 30f;
-            float lineHeight = 22f;
+            float leftX = -140f;
+            float startY = 40f;
+            float lineHeight = 24f;
 
             CreateLedgerText("GAINS", 18, FontStyles.Bold, essenceLedgerContainer, new Vector2(leftX, startY), new Color(0.5f, 0.9f, 0.5f));
 
@@ -296,7 +297,7 @@ namespace FaeMaze.UI
             }
 
             // Costs column (right)
-            float rightX = 120f;
+            float rightX = 140f;
             yIndex = 0;
             int totalCosts = 0;
 
@@ -324,7 +325,7 @@ namespace FaeMaze.UI
             int netEssence = totalGains + totalCosts;
             string netStr = netEssence >= 0 ? $"+{netEssence}" : netEssence.ToString();
             Color netColor = netEssence >= 0 ? new Color(0.5f, 0.9f, 0.5f) : new Color(0.9f, 0.5f, 0.5f);
-            CreateLedgerText($"Net: {netStr}", 18, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, -55), netColor);
+            CreateLedgerText($"Net: {netStr}", 20, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, -70), netColor);
         }
 
         private TextMeshProUGUI CreateLedgerText(string text, float fontSize, FontStyles style, Transform parent, Vector2 position, Color? color = null)
@@ -337,7 +338,7 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = position;
-            rect.sizeDelta = new Vector2(250, 30);
+            rect.sizeDelta = new Vector2(280, 30);
 
             TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
             tmp.text = text;
@@ -350,7 +351,8 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Builds the hazard effectiveness histogram ordered by kills
+        /// Builds the hazard effectiveness histogram ordered by kills.
+        /// Now includes Escaped at the end.
         /// </summary>
         private void BuildHazardHistogram(GameStatsTracker stats)
         {
@@ -362,7 +364,7 @@ namespace FaeMaze.UI
                 Destroy(child.gameObject);
             }
 
-            // Collect hazard data (excluding Escaped)
+            // Collect hazard data (including Escaped at the end)
             var hazardData = new List<(string name, int count, Color color, VisitorFate fate)>
             {
                 ("Heart Tongue", stats.GetTotalByFate(VisitorFate.Consumed), heartColor, VisitorFate.Consumed),
@@ -373,32 +375,39 @@ namespace FaeMaze.UI
                 ("Fairy Ring", stats.GetTotalByFate(VisitorFate.FairyRing), fairyRingColor, VisitorFate.FairyRing)
             };
 
-            // Sort by count descending
+            // Sort hazards by count descending
             hazardData = hazardData.OrderByDescending(h => h.count).ToList();
 
-            // Find max for bar scaling
+            // Add Escaped at the end (not sorted with hazards)
+            int escapedCount = stats.GetTotalByFate(VisitorFate.Escaped);
+            hazardData.Add(("Escaped", escapedCount, escapedColor, VisitorFate.Escaped));
+
+            // Find max for bar scaling (include escaped in max calculation)
             int maxCount = hazardData.Max(h => h.count);
             if (maxCount == 0) maxCount = 1; // Avoid division by zero
 
-            // Create header (shorter text to fit on one line)
-            CreateLedgerText("HAZARDS", 20, FontStyles.Bold, hazardHistogramContainer, new Vector2(0, 75));
+            // Create header
+            CreateLedgerText("VISITOR FATES", 22, FontStyles.Bold, hazardHistogramContainer, new Vector2(0, 130));
 
             // Create histogram bars
-            float startY = 50f;
-            float barHeight = 20f;
-            float barMaxWidth = 200f;
-            float labelWidth = 120f;
-            float countWidth = 40f;
+            float startY = 100f;
+            float barHeight = 22f;
+            float barSpacing = 4f;
+            float barMaxWidth = 280f;
+            float labelWidth = 130f;
+            float countWidth = 50f;
 
+            int displayedCount = 0;
             for (int i = 0; i < hazardData.Count; i++)
             {
                 var (name, count, color, fate) = hazardData[i];
-                float yPos = startY - (i * (barHeight + 3));
 
-                // Only show hazards with kills
-                if (count > 0)
+                // Show all items (even with 0 count for Escaped to always show it)
+                if (count > 0 || fate == VisitorFate.Escaped)
                 {
+                    float yPos = startY - (displayedCount * (barHeight + barSpacing));
                     CreateHistogramRow(name, count, maxCount, color, yPos, barMaxWidth, labelWidth, countWidth, stats, fate);
+                    displayedCount++;
                 }
             }
         }
@@ -406,7 +415,7 @@ namespace FaeMaze.UI
         private void CreateHistogramRow(string label, int count, int maxCount, Color color, float yPos,
             float barMaxWidth, float labelWidth, float countWidth, GameStatsTracker stats, VisitorFate fate)
         {
-            float totalWidth = labelWidth + barMaxWidth + countWidth + 20;
+            float totalWidth = labelWidth + barMaxWidth + countWidth + 30;
             float startX = -totalWidth / 2;
 
             // Label
@@ -418,11 +427,11 @@ namespace FaeMaze.UI
             labelRect.anchorMax = new Vector2(0.5f, 0.5f);
             labelRect.pivot = new Vector2(0f, 0.5f);
             labelRect.anchoredPosition = new Vector2(startX, yPos);
-            labelRect.sizeDelta = new Vector2(labelWidth, 22);
+            labelRect.sizeDelta = new Vector2(labelWidth, 24);
 
             TextMeshProUGUI labelTmp = labelObj.AddComponent<TextMeshProUGUI>();
             labelTmp.text = label;
-            labelTmp.fontSize = 14;
+            labelTmp.fontSize = 16;
             labelTmp.alignment = TextAlignmentOptions.MidlineRight;
             labelTmp.color = color;
 
@@ -435,7 +444,7 @@ namespace FaeMaze.UI
             barBgRect.anchorMax = new Vector2(0.5f, 0.5f);
             barBgRect.pivot = new Vector2(0f, 0.5f);
             barBgRect.anchoredPosition = new Vector2(startX + labelWidth + 10, yPos);
-            barBgRect.sizeDelta = new Vector2(barMaxWidth, 18);
+            barBgRect.sizeDelta = new Vector2(barMaxWidth, 20);
 
             Image barBgImage = barBgObj.AddComponent<Image>();
             barBgImage.color = new Color(0.15f, 0.15f, 0.15f, 1f);
@@ -452,7 +461,7 @@ namespace FaeMaze.UI
                 barFillRect.anchorMax = new Vector2(0.5f, 0.5f);
                 barFillRect.pivot = new Vector2(0f, 0.5f);
                 barFillRect.anchoredPosition = new Vector2(startX + labelWidth + 10, yPos);
-                barFillRect.sizeDelta = new Vector2(fillWidth, 18);
+                barFillRect.sizeDelta = new Vector2(fillWidth, 20);
 
                 Image barFillImage = barFillObj.AddComponent<Image>();
                 barFillImage.color = color;
@@ -467,17 +476,20 @@ namespace FaeMaze.UI
             countRect.anchorMax = new Vector2(0.5f, 0.5f);
             countRect.pivot = new Vector2(0f, 0.5f);
             countRect.anchoredPosition = new Vector2(startX + labelWidth + barMaxWidth + 15, yPos);
-            countRect.sizeDelta = new Vector2(countWidth, 22);
+            countRect.sizeDelta = new Vector2(countWidth, 24);
 
             TextMeshProUGUI countTmp = countObj.AddComponent<TextMeshProUGUI>();
             countTmp.text = count.ToString();
-            countTmp.fontSize = 14;
+            countTmp.fontSize = 16;
             countTmp.fontStyle = FontStyles.Bold;
             countTmp.alignment = TextAlignmentOptions.MidlineLeft;
             countTmp.color = Color.white;
 
-            // Add archetype breakdown icons after count
-            AddArchetypeBreakdown(fate, stats, startX + labelWidth + barMaxWidth + countWidth + 25, yPos);
+            // Add archetype breakdown icons after count (skip for Escaped since it's not tracked by archetype the same way)
+            if (fate != VisitorFate.Escaped)
+            {
+                AddArchetypeBreakdown(fate, stats, startX + labelWidth + barMaxWidth + countWidth + 25, yPos);
+            }
         }
 
         /// <summary>
@@ -485,8 +497,8 @@ namespace FaeMaze.UI
         /// </summary>
         private void AddArchetypeBreakdown(VisitorFate fate, GameStatsTracker stats, float xPos, float yPos)
         {
-            float iconSize = 16f;
-            float iconSpacing = 3f;
+            float iconSize = 14f;
+            float iconSpacing = 2f;
             int iconIndex = 0;
 
             foreach (var kvp in stats.ArchetypeStats)
@@ -499,14 +511,14 @@ namespace FaeMaze.UI
                     // Create colored square for each archetype with kills by this hazard
                     Color archetypeColor = GetArchetypeColor(archetype);
 
-                    for (int i = 0; i < Mathf.Min(count, 5); i++) // Max 5 icons per archetype
+                    for (int i = 0; i < Mathf.Min(count, 4); i++) // Max 4 icons per archetype
                     {
                         CreateArchetypeIcon(archetypeColor, xPos + (iconIndex * (iconSize + iconSpacing)), yPos, iconSize);
                         iconIndex++;
                     }
 
-                    // If more than 5, show "+N" text
-                    if (count > 5)
+                    // If more than 4, show "+N" text
+                    if (count > 4)
                     {
                         GameObject plusObj = new GameObject("PlusCount");
                         plusObj.transform.SetParent(hazardHistogramContainer, false);
@@ -519,7 +531,7 @@ namespace FaeMaze.UI
                         plusRect.sizeDelta = new Vector2(30, 16);
 
                         TextMeshProUGUI plusTmp = plusObj.AddComponent<TextMeshProUGUI>();
-                        plusTmp.text = $"+{count - 5}";
+                        plusTmp.text = $"+{count - 4}";
                         plusTmp.fontSize = 10;
                         plusTmp.alignment = TextAlignmentOptions.MidlineLeft;
                         plusTmp.color = archetypeColor;
@@ -563,9 +575,6 @@ namespace FaeMaze.UI
 
             if (peakEssenceText != null)
                 peakEssenceText.text = "Peak Essence: 0";
-
-            if (escapedText != null)
-                escapedText.text = "Escaped: 0";
         }
 
         private void ReturnToMainMenu()

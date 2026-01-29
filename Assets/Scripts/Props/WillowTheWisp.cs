@@ -49,35 +49,6 @@ namespace FaeMaze.Props
         [Tooltip("How often to scan for visitors (seconds)")]
         private float visitorScanInterval = 0.25f;
 
-        [Header("Visual Settings")]
-        [SerializeField]
-        [Tooltip("Color of the wisp sprite")]
-        private Color wispColor = new Color(0.9f, 1f, 0.4f, 1f);
-
-        [SerializeField]
-        [Tooltip("Size of the wisp sprite")]
-        private float wispSize = 0.5f;
-
-        [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
-        private int sortingOrder = 16;
-
-        [SerializeField]
-        [Tooltip("Enable pulsing glow effect")]
-        private bool enablePulse = true;
-
-        [SerializeField]
-        [Tooltip("Pulse speed")]
-        private float pulseSpeed = 3f;
-
-        [SerializeField]
-        [Tooltip("Pulse magnitude")]
-        private float pulseMagnitude = 0.15f;
-
-        [SerializeField]
-        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
-        private bool useProceduralSprite = false;
-
         [Header("Model Settings")]
         [SerializeField]
         [Tooltip("Model prefab to spawn for the Willow-the-Wisp visuals")]
@@ -119,11 +90,8 @@ namespace FaeMaze.Props
         private WispState state;
         private MazeGridBehaviour mazeGridBehaviour;
         private GameController gameController;
-        private SpriteRenderer spriteRenderer;
         private Rigidbody rb;
         private Animator animator;
-        private Vector3 baseScale;
-        private Vector3 initialScale;
 
         // Node navigation - 4-node Catmull-Rom spline system: P0 -> P1 -> P2 -> P3
         // Wisp travels smoothly from P1 to P2, with P0 and P3 influencing the curve shape
@@ -190,9 +158,7 @@ namespace FaeMaze.Props
         private void Awake()
         {
             state = WispState.Idle;
-            initialScale = transform.localScale;
             SetupModel();
-            SetupSpriteRenderer();
             SetupColliders();
             SetupGlowLight();
             animator = GetComponentInChildren<Animator>(true);
@@ -223,11 +189,6 @@ namespace FaeMaze.Props
             if (!AcquireDependencies())
             {
                 return;
-            }
-
-            if (enablePulse && spriteRenderer != null)
-            {
-                UpdatePulse();
             }
 
             if (enableGlow && glowLight != null)
@@ -381,7 +342,7 @@ namespace FaeMaze.Props
             }
 
             // Pick P2 (next target) randomly from P1's neighbors
-            int p2 = p1Neighbors[Random.Range(0, p1Neighbors.Count)];
+            int p2 = p1Neighbors[RandomManager.Range(0, p1Neighbors.Count)];
 
             // Pick P0 (previous node for tangent) - any neighbor of P1 that isn't P2
             // If only one neighbor, use P1's position mirrored across itself
@@ -453,10 +414,10 @@ namespace FaeMaze.Props
             // If all neighbors are the avoid node, allow backtracking
             if (validNeighbors.Count == 0)
             {
-                return neighbors[Random.Range(0, neighbors.Count)];
+                return neighbors[RandomManager.Range(0, neighbors.Count)];
             }
 
-            return validNeighbors[Random.Range(0, validNeighbors.Count)];
+            return validNeighbors[RandomManager.Range(0, validNeighbors.Count)];
         }
 
         /// <summary>
@@ -1249,49 +1210,6 @@ namespace FaeMaze.Props
 
         #region Visual Setup
 
-        private void SetupSpriteRenderer()
-        {
-            if (wispModelPrefab != null || modelInstance != null)
-            {
-                baseScale = new Vector3(wispSize, wispSize, 1f);
-                transform.localScale = baseScale;
-                spriteRenderer = null;
-                return;
-            }
-
-            spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
-                gameObject,
-                createProceduralSprite: useProceduralSprite,
-                useSoftEdges: true,
-                resolution: 32,
-                pixelsPerUnit: 32
-            );
-
-            ApplySpriteSettings();
-        }
-
-        private void ApplySpriteSettings()
-        {
-            if (spriteRenderer == null)
-            {
-                baseScale = initialScale;
-                transform.localScale = baseScale;
-                return;
-            }
-
-            baseScale = useProceduralSprite
-                ? new Vector3(wispSize, wispSize, 1f)
-                : initialScale;
-
-            ProceduralSpriteFactory.ApplySpriteSettings(
-                spriteRenderer,
-                wispColor,
-                sortingOrder,
-                applyScale: false
-            );
-            transform.localScale = baseScale;
-        }
-
         private void SetupColliders()
         {
             rb = GetComponent<Rigidbody>();
@@ -1310,12 +1228,6 @@ namespace FaeMaze.Props
             collider.radius = 0.4f;
             collider.isTrigger = true;
             collider.center = Vector3.zero; // XY-plane collision
-        }
-
-        private void UpdatePulse()
-        {
-            float pulse = Mathf.Sin(Time.time * pulseSpeed) * pulseMagnitude;
-            transform.localScale = baseScale * (1f + pulse);
         }
 
         private void SetupGlowLight()
@@ -1354,8 +1266,6 @@ namespace FaeMaze.Props
                 return;
             }
 
-            SpriteRenderer sprite = GetComponent<SpriteRenderer>();
-
             if (transform.childCount > 0)
             {
                 var childAnimator = GetComponentInChildren<Animator>(true);
@@ -1368,11 +1278,6 @@ namespace FaeMaze.Props
                     // The model is imported facing backwards, so rotate 180° around Z axis
                     // Preserve the X=-90 rotation that converts Y-up model to -Z-up game coords
                     modelInstance.transform.localRotation = Quaternion.Euler(-90f, 0f, 180f);
-
-                    if (sprite != null)
-                    {
-                        sprite.enabled = false;
-                    }
                     return;
                 }
             }
@@ -1399,11 +1304,6 @@ namespace FaeMaze.Props
             if (modelAnimator != null)
             {
                 animator = modelAnimator;
-            }
-
-            if (sprite != null)
-            {
-                sprite.enabled = false;
             }
         }
 

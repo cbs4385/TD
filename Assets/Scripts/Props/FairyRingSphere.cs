@@ -1,4 +1,5 @@
 using UnityEngine;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Props
 {
@@ -76,14 +77,14 @@ namespace FaeMaze.Props
         private void OnEnable()
         {
             // Randomize cycle duration
-            cycleDuration = Random.Range(minCycleDuration, maxCycleDuration);
+            cycleDuration = RandomManager.Range(minCycleDuration, maxCycleDuration);
 
             // Calculate time offset so each sphere starts at its assigned color
             float colorHoldDuration = cycleDuration / RainbowHues.Length;
             colorTimeOffset = startingColorIndex * colorHoldDuration;
 
             // Random movement offset for variation
-            movementTimeOffset = Random.value * 1000f;
+            movementTimeOffset = RandomManager.Value * 1000f;
 
             // Ensure we have a proper 3D sphere mesh (not a flat disk)
             EnsureSphereMesh();
@@ -471,7 +472,7 @@ namespace FaeMaze.Props
             if (Time.time >= nextDirectionChangeTime)
             {
                 targetVelocity = GetRandomVelocity();
-                nextDirectionChangeTime = Time.time + directionChangeInterval + Random.Range(-0.2f, 0.2f);
+                nextDirectionChangeTime = Time.time + directionChangeInterval + RandomManager.Range(-0.2f, 0.2f);
             }
 
             // Smoothly interpolate velocity
@@ -490,9 +491,9 @@ namespace FaeMaze.Props
         {
             // Random direction in 3D space
             Vector3 randomDir = new Vector3(
-                Random.Range(-1f, 1f),
-                Random.Range(-1f, 1f),
-                Random.Range(-1f, 1f)
+                RandomManager.Range(-1f, 1f),
+                RandomManager.Range(-1f, 1f),
+                RandomManager.Range(-1f, 1f)
             ).normalized;
 
             return randomDir * movementSpeed;

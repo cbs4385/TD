@@ -21,7 +21,8 @@
       "Bash(powershell -Command:*)",
       "Bash(git log:*)",
       "Bash(for script in \"Billboard\" \"WorldSpaceCanvasHelper\" \"KeyBindingCapture\")",
-      "Bash(do echo \"=== $script ===\")"
+      "Bash(do echo \"=== $script ===\")",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []

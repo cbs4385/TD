@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Visitors
 {
@@ -111,7 +112,7 @@ namespace FaeMaze.Visitors
                 {
                     // Use archetype-specific confusion chance (HIGH for LanternDrunks)
                     float confusionChance = GetConfusionChance();
-                    if (Random.value <= confusionChance)
+                    if (RandomManager.Value <= confusionChance)
                     {
                         // Confused at intersection! Build a detour path through at least 2 random nodes
                         if (BuildConfusionDetourPath(2))

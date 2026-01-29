@@ -36,6 +36,8 @@ namespace FaeMaze.Systems
             }
         }
 
+        private bool _isValid = false;
+
         private void Awake()
         {
             if (_instance != null && _instance != this)
@@ -48,6 +50,7 @@ namespace FaeMaze.Systems
 
             _frameStopwatch = new Stopwatch();
             _lastUpdateTime = Time.realtimeSinceStartup;
+            _isValid = true;
         }
 
         private void Start()
@@ -78,6 +81,8 @@ namespace FaeMaze.Systems
 
         private void FixedUpdate()
         {
+            if (!_isValid) return;
+
             float currentTime = Time.realtimeSinceStartup;
             _lastFixedUpdateTime = currentTime;
             _fixedUpdateCount++;
@@ -86,6 +91,8 @@ namespace FaeMaze.Systems
 
         private void Update()
         {
+            if (!_isValid) return;
+
             float currentTime = Time.realtimeSinceStartup;
             _lastUpdateTime = currentTime;
             _frameStopwatch.Restart();
@@ -96,6 +103,8 @@ namespace FaeMaze.Systems
 
         private void LateUpdate()
         {
+            if (!_isValid) return;
+
             _frameStopwatch.Stop();
             _lastCheckpoint = "FrameProfiler.LateUpdate";
         }

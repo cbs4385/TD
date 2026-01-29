@@ -25,23 +25,6 @@ namespace FaeMaze.Maze
         [Tooltip("Draw attraction radius in Scene view")]
         private bool showDebugRadius = true;
 
-        [Header("Visual Settings")]
-        [SerializeField]
-        [Tooltip("Color of the attractor sprite")]
-        private Color spriteColor = new Color(1f, 0.8f, 0.2f, 1f); // Golden yellow
-
-        [SerializeField]
-        [Tooltip("Size of the attractor sprite")]
-        private float spriteSize = 0.7f;
-
-        [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
-        private int sortingOrder = 12;
-
-        [SerializeField]
-        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
-        private bool useProceduralSprite = false;
-
         [Header("Visitor Interaction")]
         [SerializeField]
         [Tooltip("Slow factor applied to visitors within radius (0.5 = half speed)")]
@@ -61,9 +44,7 @@ namespace FaeMaze.Maze
         #region Private Fields
 
         private MazeGridBehaviour gridBehaviour;
-        private SpriteRenderer spriteRenderer;
         private SphereCollider triggerCollider;
-        private Vector3 initialScale;
 
         #endregion
 
@@ -86,10 +67,6 @@ namespace FaeMaze.Maze
         {
             // Find the MazeGridBehaviour in the scene
             gridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-
-            initialScale = transform.localScale;
-
-            SetupSpriteRenderer();
         }
 
         private void Start()
@@ -123,80 +100,6 @@ namespace FaeMaze.Maze
             triggerCollider.isTrigger = true;
             triggerCollider.radius = radius;
             triggerCollider.center = Vector3.zero; // XY-plane collision
-        }
-
-        private void CreateVisualSprite()
-        {
-            // Create a simple circle sprite for the attractor
-            spriteRenderer.sprite = CreateAttractorSprite(32);
-        }
-
-        private void SetupSpriteRenderer()
-        {
-            // Add SpriteRenderer if not already present
-            spriteRenderer = GetComponent<SpriteRenderer>();
-            if (spriteRenderer == null)
-            {
-                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-            }
-
-            if (useProceduralSprite)
-            {
-                CreateVisualSprite();
-            }
-
-            ApplySpriteSettings();
-        }
-
-        private void ApplySpriteSettings()
-        {
-            if (spriteRenderer == null)
-            {
-                return;
-            }
-
-            spriteRenderer.color = spriteColor;
-            spriteRenderer.sortingOrder = sortingOrder;
-
-            // Only override scale when generating a procedural sprite
-            if (useProceduralSprite)
-            {
-                transform.localScale = new Vector3(spriteSize, spriteSize, 1f);
-            }
-            else
-            {
-                transform.localScale = initialScale;
-            }
-        }
-
-        private Sprite CreateAttractorSprite(int resolution)
-        {
-            int size = resolution;
-            Texture2D texture = new Texture2D(size, size);
-            Color[] pixels = new Color[size * size];
-
-            Vector2 center = new Vector2(size / 2f, size / 2f);
-            float spriteRadius = size / 2f;
-
-            // Create a circle (simplified attractor shape)
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dist = Vector2.Distance(new Vector2(x, y), center);
-                    pixels[y * size + x] = dist <= spriteRadius ? Color.white : Color.clear;
-                }
-            }
-
-            texture.SetPixels(pixels);
-            texture.Apply();
-
-            return Sprite.Create(
-                texture,
-                new Rect(0, 0, size, size),
-                new Vector2(0.5f, 0.5f),
-                size
-            );
         }
 
         private void OnTriggerEnter(Collider other)

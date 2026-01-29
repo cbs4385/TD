@@ -104,7 +104,7 @@ namespace FaeMaze.Visitors
 
                 // Use archetype-specific misstep chance (or default 0.25)
                 float misstepChance = GetConfusionChance();
-                float roll = Random.value;
+                float roll = RandomManager.Value;
 
                 if (roll <= misstepChance)
                 {

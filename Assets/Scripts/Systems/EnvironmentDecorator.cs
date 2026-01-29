@@ -178,8 +178,8 @@ namespace FaeMaze.Systems
                         Vector3 worldPos = new Vector3(x, y, zPosition);
 
                         // Add random jitter
-                        worldPos.x += Random.Range(-0.02f, 0.02f);
-                        worldPos.y += Random.Range(-0.02f, 0.02f);
+                        worldPos.x += RandomManager.Range(-0.02f, 0.02f);
+                        worldPos.y += RandomManager.Range(-0.02f, 0.02f);
 
                         Quaternion rotation = Quaternion.Euler(-90f, 0f, 0f);
 

@@ -141,6 +141,25 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetInt("EnableRedCap", value ? 1 : 0);
         }
 
+        // Random Seed Settings
+        /// <summary>
+        /// Random seed for deterministic gameplay. Set to 0 for time-based random seed.
+        /// </summary>
+        public static int RandomSeed
+        {
+            get => PlayerPrefs.GetInt("RandomSeed", 0);
+            set => PlayerPrefs.SetInt("RandomSeed", value);
+        }
+
+        /// <summary>
+        /// If true, use the specified RandomSeed. If false, generate a new random seed each game.
+        /// </summary>
+        public static bool UseFixedSeed
+        {
+            get => PlayerPrefs.GetInt("UseFixedSeed", 0) == 1;
+            set => PlayerPrefs.SetInt("UseFixedSeed", value ? 1 : 0);
+        }
+
         // Game Flow Settings
         public static bool AutoStartNextWave
         {

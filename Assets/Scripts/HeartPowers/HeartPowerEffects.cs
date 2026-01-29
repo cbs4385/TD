@@ -139,8 +139,8 @@ namespace FaeMaze.HeartPowers
 
                 if (originalPositions.TryGetValue(obj, out Vector3 originalPos))
                 {
-                    float offsetX = (Random.value - 0.5f) * 2f * intensity;
-                    float offsetY = (Random.value - 0.5f) * 2f * intensity;
+                    float offsetX = (RandomManager.Value - 0.5f) * 2f * intensity;
+                    float offsetY = (RandomManager.Value - 0.5f) * 2f * intensity;
                     obj.transform.position = originalPos + new Vector3(offsetX, offsetY, 0f);
                 }
             }
@@ -482,7 +482,7 @@ namespace FaeMaze.HeartPowers
                 Vector3 visitorPos = visitor.transform.position;
                 bool nearInfluence = IsNearLanternInfluence(visitorPos, tierRadius * 0.2f);
 
-                if (nearInfluence && Random.value < 0.3f)
+                if (nearInfluence && RandomManager.Value < 0.3f)
                 {
                     // Apply fascination if the visitor has a public method for it
                 }
@@ -1804,7 +1804,7 @@ namespace FaeMaze.HeartPowers
 
         public Vector3? GetPreferredTeleportTarget()
         {
-            if (definition.tier >= 3 && !undertowUsed && Random.value < 0.2f)
+            if (definition.tier >= 3 && !undertowUsed && RandomManager.Value < 0.2f)
             {
                 undertowUsed = true;
                 return manager.MazeGrid.HeartWorldPosition;
@@ -1812,7 +1812,7 @@ namespace FaeMaze.HeartPowers
 
             if (pactPoolPositions.Count > 0)
             {
-                int randomIndex = Random.Range(0, pactPoolPositions.Count);
+                int randomIndex = RandomManager.Range(0, pactPoolPositions.Count);
                 return pactPoolPositions.ElementAt(randomIndex);
             }
 
@@ -1983,7 +1983,7 @@ namespace FaeMaze.HeartPowers
         // Constants
         private const float GRASP_ZONE_RADIUS = 2.5f;
         private const int MIN_WALL_THICKNESS = 3;         // Minimum wall models required for valid wall intersection
-        private const float HGZ_WALL_OFFSET = 2.4f;       // Offset to wall rank 3 (WALL_SPACING * 3 = 0.8 * 3) - ensures at least 1 wall between HGZ and graph
+        private const float HGZ_WALL_OFFSET = 1.5f;       // Distance from closest graph border
         private const float MIN_EDGE_DISTANCE = 3.0f;     // Minimum distance from path/node edge (~4 wall tiles * 0.8 spacing)
 
         // Tongue movement constants (matching HeartOfTheMaze)
@@ -3951,6 +3951,11 @@ namespace FaeMaze.HeartPowers
         private float cycleStartTime;
         private float lastCycleEndTime;
 
+        // Consumption-based expiration (like MurmuringPaths)
+        private int requiredConsumptions = 1;
+        private int consumedCount = 0;
+        private bool hasExpired = false;
+
         // Animation constants
         private const string DEVOUR_ANIMATION_NAME = "FaceRigAction";
         private const int DEVOUR_ANIMATION_FRAMES = 62;  // Total frames in animation (1-62 at 60fps)
@@ -3979,10 +3984,50 @@ namespace FaeMaze.HeartPowers
         public DevouringMawEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
 
+        /// <summary>
+        /// DevouringMaw uses consumption-based expiration, not duration.
+        /// Return a high value so the duration check doesn't prematurely expire the effect.
+        /// </summary>
+        public override float Duration => float.MaxValue;
+
+        /// <summary>
+        /// Override IsExpired to use consumption-based expiration instead of duration.
+        /// Power expires when consumed visitor count reaches the power tier.
+        /// Also extends while a devour cycle is still in progress.
+        /// </summary>
+        public override bool IsExpired
+        {
+            get
+            {
+                // Extend if a cycle is still in progress
+                if (cycleInProgress)
+                {
+                    return false;
+                }
+                return hasExpired;
+            }
+        }
+
+        /// <summary>
+        /// Gets the current consumption progress (for UI display).
+        /// </summary>
+        public int GetConsumedCount() => consumedCount;
+
+        /// <summary>
+        /// Gets the required consumption count to expire (power tier).
+        /// </summary>
+        public int GetRequiredConsumptions() => requiredConsumptions;
+
         public override void OnStart()
         {
             targetWorldPos = targetPosition;
-            // Duration equals cooldown for this power
+
+            // Set required consumptions to the power tier (like MurmuringPaths)
+            requiredConsumptions = manager.GetPowerTier(HeartPowerType.DevouringMaw);
+            consumedCount = 0;
+            hasExpired = false;
+
+            // Duration for tile visualizer display (not used for expiration)
             powerDuration = definition.cooldown > 0 ? definition.cooldown : 10f;
             cycleInProgress = false;
             lastCycleEndTime = 0f;
@@ -4043,20 +4088,6 @@ namespace FaeMaze.HeartPowers
             {
                 // Update current devour cycle
                 UpdateDevourCycle();
-            }
-        }
-
-        public override bool IsExpired
-        {
-            get
-            {
-                // Extend duration if a cycle is still in progress
-                if (cycleInProgress)
-                {
-                    return false;
-                }
-
-                return elapsedTime >= powerDuration;
             }
         }
 
@@ -4179,8 +4210,8 @@ namespace FaeMaze.HeartPowers
                 // Sample 3 different random circular regions for color variation
                 for (int colorIndex = 0; colorIndex < 3; colorIndex++)
                 {
-                    int centerX = UnityEngine.Random.Range(sampleRadius, earthenTexture.width - sampleRadius);
-                    int centerY = UnityEngine.Random.Range(sampleRadius, earthenTexture.height - sampleRadius);
+                    int centerX = RandomManager.Range(sampleRadius, earthenTexture.width - sampleRadius);
+                    int centerY = RandomManager.Range(sampleRadius, earthenTexture.height - sampleRadius);
 
                     Color avgColor = Color.black;
                     int sampleCount = 0;
@@ -4231,8 +4262,8 @@ namespace FaeMaze.HeartPowers
 
                             for (int colorIndex = 0; colorIndex < 3; colorIndex++)
                             {
-                                int centerX = UnityEngine.Random.Range(sampleRadius, tex.width - sampleRadius);
-                                int centerY = UnityEngine.Random.Range(sampleRadius, tex.height - sampleRadius);
+                                int centerX = RandomManager.Range(sampleRadius, tex.width - sampleRadius);
+                                int centerY = RandomManager.Range(sampleRadius, tex.height - sampleRadius);
 
                                 Color avgColor = Color.black;
                                 int sampleCount = 0;
@@ -4810,6 +4841,13 @@ namespace FaeMaze.HeartPowers
             HeartPowerEvents.NotifyVisitorConsumedByMaw(consumptionPosition);
 
             Object.Destroy(visitor.gameObject);
+
+            // Increment consumption count and check for expiration (like MurmuringPaths)
+            consumedCount++;
+            if (consumedCount >= requiredConsumptions)
+            {
+                hasExpired = true;
+            }
         }
 
         private void ApplyEchoingTerror(Vector3 centerWorldPos)

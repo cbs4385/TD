@@ -128,7 +128,7 @@ namespace FaeMaze.Visitors
         protected float fairyRingFascinationTimer;
         protected bool fairyRingApproaching; // True while moving toward ring, false once circling
         protected FaeMaze.Props.FairyRing immuneToFairyRing; // Ring visitor is immune to (after fascination ends)
-        protected const float FairyRingCircleRadius = 1.0f; // Distance from ring center to circle at (matches node center exclusion)
+        protected const float FairyRingCircleRadius = 1.5f; // Distance from ring center to circle at (must be > 1.0 to be in walkable ring area)
         protected const float FairyRingCircleSpeed = 1.5f; // Radians per second
 
         // Visitor essence tracking (drained by props, visitor escapes when depleted)
@@ -457,6 +457,11 @@ namespace FaeMaze.Visitors
             // Handle FairyRing circling (takes priority over lantern fascination)
             if (currentFairyRing != null)
             {
+                // Log once when starting to circle (first frame)
+                if (Time.frameCount % 300 == 0)
+                {
+                    Debug.Log($"[FairyRing] Update: {gameObject.name} has currentFairyRing set, calling UpdateFairyRingCircling");
+                }
                 UpdateFairyRingCircling();
                 return; // Don't process other movement while circling
             }
@@ -2837,7 +2842,7 @@ namespace FaeMaze.Visitors
                     if (pushDir2D.sqrMagnitude < 0.001f)
                     {
                         // At center - push in random direction
-                        float randomAngle = Random.value * Mathf.PI * 2f;
+                        float randomAngle = RandomManager.Value * Mathf.PI * 2f;
                         pushDir2D = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
                     }
                     pushDir2D.Normalize();
@@ -3485,7 +3490,7 @@ namespace FaeMaze.Visitors
 
             // Use archetype-specific fascination chance
             float fascinationChance = GetFascinationChance();
-            float roll = Random.value;
+            float roll = RandomManager.Value;
             if (roll > fascinationChance)
             {
                 // Set cooldown even on failed proc to prevent spam checks
@@ -3515,7 +3520,7 @@ namespace FaeMaze.Visitors
             if (dirToVisitor.sqrMagnitude < 0.01f)
             {
                 // Visitor is at lantern center, pick a random direction
-                float randomAngle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                float randomAngle = RandomManager.Range(0f, 360f) * Mathf.Deg2Rad;
                 dirToVisitor = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
             }
             dirToVisitor.Normalize();
@@ -3785,8 +3790,9 @@ namespace FaeMaze.Visitors
         /// <param name="duration">Duration is ignored - frightened state ends via node recovery or portal escape</param>
         public virtual void SetFrightened(Vector3 sourcePosition, float duration = 0f)
         {
-            // Already frightened or in terminal state - ignore
-            if (isFrightened || state == VisitorState.Consumed || state == VisitorState.Escaping)
+            // Already frightened, lured by Murmuring Paths, or in terminal state - ignore
+            // Lured visitors are immune to fear - they are entranced by the Heart's call
+            if (isFrightened || isLured || state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
                 return;
             }
@@ -3816,6 +3822,13 @@ namespace FaeMaze.Visitors
             if (isLured != value)
             {
                 isLured = value;
+
+                // Lured overrides frightened - the Heart's call is stronger than fear
+                if (value && isFrightened)
+                {
+                    isFrightened = false;
+                    frightRecoveryNodeCount = 0;
+                }
 
                 // Lured overrides fascination - clear fascination state when becoming lured
                 if (value && isFascinated)
@@ -3942,7 +3955,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void CheckForNearbyRedCaps()
         {
-            if (isFrightened || state == VisitorState.Consumed || state == VisitorState.Escaping)
+            // Skip if already frightened, lured (immune to fear), or in terminal state
+            if (isFrightened || isLured || state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
                 return;
             }
@@ -4220,7 +4234,7 @@ namespace FaeMaze.Visitors
             if (nodeTiles.Count > 0)
             {
                 // Pick a random node
-                int randomIndex = Random.Range(0, nodeTiles.Count);
+                int randomIndex = RandomManager.Range(0, nodeTiles.Count);
                 Vector2 nodePos = nodeTiles[randomIndex].Position;
                 return new Vector3(nodePos.x, nodePos.y, transform.position.z);
             }
@@ -4238,8 +4252,11 @@ namespace FaeMaze.Visitors
         /// <param name="slowFactor">Speed multiplier while fascinated (0.5 = 50% speed)</param>
         public virtual void BecomeFascinatedByRing(FaeMaze.Props.FairyRing ring, float duration, float slowFactor)
         {
+            Debug.Log($"[FairyRing] BecomeFascinatedByRing called for {gameObject.name}: state={state}, ring={ring.gameObject.name}");
+
             if (!IsMovementState(state) && state != VisitorState.Idle)
             {
+                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - state {state} is not a movement state and not Idle");
                 return;
             }
 
@@ -4247,24 +4264,30 @@ namespace FaeMaze.Visitors
             var followWisp = GetComponent<FaeMaze.Visitors.FollowWispBehavior>();
             if (followWisp != null && followWisp.IsFollowing)
             {
+                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - currently following a wisp");
                 return;
             }
 
             // Already fascinated by this ring
             if (currentFairyRing == ring)
             {
+                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - already fascinated by this ring");
                 return;
             }
 
             // Immune to this ring (just finished fascination, haven't left trigger yet)
             if (immuneToFairyRing == ring)
             {
+                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - immune to this ring (recently finished fascination)");
                 return;
             }
+
+            Debug.Log($"[FairyRing] ACCEPTED: {gameObject.name} will become fascinated by ring");
 
             // Clear any existing lantern fascination
             if (currentFaeLantern != null)
             {
+                Debug.Log($"[FairyRing] Clearing existing lantern fascination for {gameObject.name}");
                 ClearLanternInteraction();
             }
 
@@ -4283,12 +4306,15 @@ namespace FaeMaze.Visitors
             float distanceToRing = toVisitor.magnitude;
             fairyRingApproaching = distanceToRing > FairyRingCircleRadius;
 
+            Debug.Log($"[FairyRing] {gameObject.name} fascination setup: distanceToRing={distanceToRing:F2}, circleRadius={FairyRingCircleRadius}, approaching={fairyRingApproaching}, startAngle={fairyRingCircleAngle * Mathf.Rad2Deg:F1}°");
+
             // Clear current path - we're now circling
             worldPath = null;
             worldPathIndex = 0;
             ResetSplineState();
 
             RefreshStateFromFlags();
+            Debug.Log($"[FairyRing] {gameObject.name} final state after RefreshStateFromFlags: state={state}, isFascinated={isFascinated}, currentFairyRing={(currentFairyRing != null ? "set" : "null")}");
         }
 
         /// <summary>
@@ -4296,8 +4322,15 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void UpdateFairyRingCircling()
         {
+            // Log every 60 frames (roughly once per second at 60fps)
+            if (Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"[FairyRing] UpdateFairyRingCircling for {gameObject.name}: timer={fairyRingFascinationTimer:F1}s, approaching={fairyRingApproaching}, pos={transform.position}");
+            }
+
             if (currentFairyRing == null)
             {
+                Debug.Log($"[FairyRing] {gameObject.name}: currentFairyRing is null, ending fascination");
                 EndFairyRingFascination();
                 return;
             }
@@ -4306,6 +4339,7 @@ namespace FaeMaze.Visitors
             fairyRingFascinationTimer -= Time.deltaTime;
             if (fairyRingFascinationTimer <= 0f)
             {
+                Debug.Log($"[FairyRing] {gameObject.name}: timer expired, ending fascination");
                 EndFairyRingFascination();
                 return;
             }
@@ -4825,13 +4859,6 @@ namespace FaeMaze.Visitors
             {
                 animator = modelInstance.GetComponentInChildren<Animator>();
             }
-
-            // Disable any sprite renderers if present
-            SpriteRenderer[] sprites = GetComponentsInChildren<SpriteRenderer>();
-            foreach (var sprite in sprites)
-            {
-                sprite.enabled = false;
-            }
         }
 
         #endregion
@@ -4994,7 +5021,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected void DecideRecoveryFromConfusion()
         {
-            float roll = Random.value;
+            float roll = RandomManager.Value;
             bool recover = roll <= 0.5f;
             isConfused = !recover;
         }
@@ -5039,7 +5066,7 @@ namespace FaeMaze.Visitors
             visitedNodeIds.Add(currentNodeId);
 
             // Walk randomly through the graph for at least minDetourNodes steps
-            for (int i = 0; i < minDetourNodes + Random.Range(0, 2); i++)
+            for (int i = 0; i < minDetourNodes + RandomManager.Range(0, 2); i++)
             {
                 var currentNode = graphState.Nodes[currentNodeId];
 
@@ -5089,7 +5116,7 @@ namespace FaeMaze.Visitors
                     break;
 
                 // Pick a random connected node
-                int randomIndex = Random.Range(0, connectedNodeIds.Count);
+                int randomIndex = RandomManager.Range(0, connectedNodeIds.Count);
                 int nextNodeId = connectedNodeIds[randomIndex];
 
                 detourNodeIds.Add(nextNodeId);
@@ -5254,7 +5281,7 @@ namespace FaeMaze.Visitors
             }
 
             // Pick randomly from remaining candidates
-            int randomIndex = Random.Range(0, candidates.Count);
+            int randomIndex = RandomManager.Range(0, candidates.Count);
             return candidates[randomIndex].nodeId;
         }
 
@@ -5277,7 +5304,7 @@ namespace FaeMaze.Visitors
             // Accumulating recovery chance: 25% per node visited
             // At node 1: 25%, node 2: 50%, node 3: 75%, node 4: 100%
             float recoveryChance = frightRecoveryNodeCount * FRIGHTENED_RECOVERY_CHANCE_PER_NODE;
-            if (Random.value <= recoveryChance)
+            if (RandomManager.Value <= recoveryChance)
             {
                 // Recovered from fright
                 isFrightened = false;

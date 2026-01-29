@@ -173,55 +173,40 @@ namespace FaeMaze.HeartPowers
 
         private void LoadPowerDefinitionsFromResources()
         {
-            // Load all HeartPowerDefinition assets from Resources
-            HeartPowerDefinition[] loadedDefinitions = Resources.LoadAll<HeartPowerDefinition>("ScriptableObjects/HeartPowers");
-
-            if (loadedDefinitions == null || loadedDefinitions.Length == 0)
+            // If definitions are already assigned via inspector, use those
+            if (powerDefinitions != null && powerDefinitions.Length > 0)
             {
-                // Try alternative path without ScriptableObjects folder
-                loadedDefinitions = Resources.LoadAll<HeartPowerDefinition>("HeartPowers");
+                return;
             }
 
-            if (loadedDefinitions != null && loadedDefinitions.Length > 0)
+#if UNITY_EDITOR
+            // Load all HeartPowerDefinition assets from ScriptableObjects folder using AssetDatabase
+            string[] guids = UnityEditor.AssetDatabase.FindAssets("t:HeartPowerDefinition", new[] { "Assets/ScriptableObjects/HeartPowers" });
+            var loadedDefinitions = new List<HeartPowerDefinition>();
+
+            foreach (string guid in guids)
             {
-                // Merge with existing definitions
-                if (powerDefinitions == null || powerDefinitions.Length == 0)
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                var def = UnityEditor.AssetDatabase.LoadAssetAtPath<HeartPowerDefinition>(path);
+                if (def != null)
                 {
-                    powerDefinitions = loadedDefinitions;
-                }
-                else
-                {
-                    // Combine existing and loaded definitions
-                    var combinedList = new List<HeartPowerDefinition>(powerDefinitions);
-
-                    foreach (var loaded in loadedDefinitions)
-                    {
-                        // Check if this definition already exists
-                        bool exists = false;
-                        foreach (var existing in powerDefinitions)
-                        {
-                            if (existing != null && loaded != null &&
-                                existing.powerType == loaded.powerType &&
-                                existing.tier == loaded.tier)
-                            {
-                                exists = true;
-                                break;
-                            }
-                        }
-
-                        if (!exists)
-                        {
-                            combinedList.Add(loaded);
-                        }
-                    }
-
-                    powerDefinitions = combinedList.ToArray();
+                    loadedDefinitions.Add(def);
                 }
             }
+
+            if (loadedDefinitions.Count > 0)
+            {
+                powerDefinitions = loadedDefinitions.ToArray();
+            }
+#endif
         }
 
         private void Start()
         {
+            // Powers should be available as soon as the game scene loads
+            // OnWaveFail() will set this to false when the game is over
+            isGameActive = true;
+
             // Find GameController - do this in Start() to ensure it's initialized
             if (gameController == null)
             {
@@ -318,6 +303,17 @@ namespace FaeMaze.HeartPowers
 
             foreach (var powerType in _powersToRemove)
             {
+                // For toggle powers WITH cooldown (like DevouringMaw), start cooldown when the effect expires
+                // Other toggle powers (MurmuringPaths, HeartwardGrasp, Sculpting) can be reused immediately
+                if (IsTogglePowerWithCooldown(powerType))
+                {
+                    var definition = GetPowerDefinition(powerType);
+                    if (definition != null && definition.cooldown > 0)
+                    {
+                        cooldownTimers[powerType] = definition.cooldown;
+                    }
+                }
+
                 activePowers.Remove(powerType);
                 OnPowerDeactivated?.Invoke(powerType);
             }
@@ -462,8 +458,9 @@ namespace FaeMaze.HeartPowers
                 return false;
             }
 
-            // Non-toggle powers use cooldowns
-            if (!IsTogglePower(powerType) && cooldownTimers.GetValueOrDefault(powerType, 0) > 0)
+            // Check cooldowns for non-toggle powers OR toggle powers with cooldown (like DevouringMaw)
+            bool hasCooldown = !IsTogglePower(powerType) || IsTogglePowerWithCooldown(powerType);
+            if (hasCooldown && cooldownTimers.GetValueOrDefault(powerType, 0) > 0)
             {
                 reason = $"On cooldown ({cooldownTimers[powerType]:F1}s remaining)";
                 return false;
@@ -480,7 +477,17 @@ namespace FaeMaze.HeartPowers
         {
             return powerType == HeartPowerType.MurmuringPaths ||
                    powerType == HeartPowerType.HeartwardGrasp ||
+                   powerType == HeartPowerType.DevouringMaw ||
                    powerType == HeartPowerType.Sculpting;
+        }
+
+        /// <summary>
+        /// Checks if a toggle power has a cooldown after expiration.
+        /// Most toggle powers can be reused immediately; DevouringMaw has a cooldown.
+        /// </summary>
+        public bool IsTogglePowerWithCooldown(HeartPowerType powerType)
+        {
+            return powerType == HeartPowerType.DevouringMaw;
         }
 
         /// <summary>
@@ -551,7 +558,7 @@ namespace FaeMaze.HeartPowers
 
             foreach (var def in powerDefinitions)
             {
-                if (def.powerType == powerType && def.tier == currentTier)
+                if (def != null && def.powerType == powerType && def.tier == currentTier)
                 {
                     return def;
                 }
@@ -811,7 +818,7 @@ namespace FaeMaze.HeartPowers
         protected Vector3 targetPosition;
         protected float elapsedTime;
 
-        public float Duration => definition.duration;
+        public virtual float Duration => definition.duration;
         public virtual bool IsExpired => elapsedTime >= Duration && Duration > 0;
 
         protected ActivePowerEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)

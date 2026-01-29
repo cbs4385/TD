@@ -30,7 +30,7 @@ Shader "Custom/PowerFog"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-50" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-150" }
         LOD 100
 
         Pass

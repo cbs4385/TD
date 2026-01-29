@@ -46,31 +46,12 @@ namespace FaeMaze.Props
         [Tooltip("Draw the influence area in Scene view")]
         private bool debugDrawInfluence = true;
 
-        [Header("Visual Settings")]
-        [SerializeField]
-        [Tooltip("Color of the lantern sprite")]
-        private Color lanternColor = new Color(1f, 0.9f, 0.3f, 1f); // Golden yellow
-
-        [SerializeField]
-        [Tooltip("Size of the lantern sprite")]
-        private float lanternSize = 0.8f;
-
-        [SerializeField]
-        [Tooltip("Sprite rendering layer order")]
-        private int sortingOrder = 12;
-
-        [SerializeField]
-        [Tooltip("Generate a procedural sprite instead of using imported visuals/animations")]
-        private bool useProceduralSprite = false;
-
         #endregion
 
         #region Private Fields
 
         private MazeGridBehaviour _gridBehaviour;
-        private SpriteRenderer _spriteRenderer;
         private Animator _animator;
-        private Vector3 _initialScale;
         private PropAudioSource _propAudio;
 
         private const string DirectionParameter = "Direction";
@@ -100,8 +81,6 @@ namespace FaeMaze.Props
 
         private void Awake()
         {
-            _initialScale = transform.localScale;
-
             _animator = GetComponent<Animator>();
 
             // Find the MazeGridBehaviour in the scene
@@ -110,13 +89,6 @@ namespace FaeMaze.Props
             if (_gridBehaviour == null)
             {
                 return;
-            }
-
-            // Only setup sprite renderer if this is NOT a 3D model (no MeshRenderer)
-            // 3D models use LanternGlow for visuals instead
-            if (GetComponentInChildren<MeshRenderer>() == null)
-            {
-                SetupSpriteRenderer();
             }
 
             SetIdleDirection();
@@ -319,53 +291,6 @@ namespace FaeMaze.Props
             }
 
             _animator.SetInteger(DirectionParameter, 0);
-        }
-
-        #endregion
-
-        #region Visual
-
-        private void SetupSpriteRenderer()
-        {
-            _spriteRenderer = ProceduralSpriteFactory.SetupSpriteRenderer(
-                gameObject,
-                createProceduralSprite: useProceduralSprite,
-                useSoftEdges: false,
-                resolution: 32,
-                pixelsPerUnit: 32
-            );
-
-            ApplySpriteSettings();
-        }
-
-        private void ApplySpriteSettings()
-        {
-            if (_spriteRenderer == null)
-            {
-                return;
-            }
-
-            // Only override scale when generating a procedural sprite
-            if (useProceduralSprite)
-            {
-                ProceduralSpriteFactory.ApplySpriteSettings(
-                    _spriteRenderer,
-                    lanternColor,
-                    sortingOrder,
-                    lanternSize,
-                    applyScale: true
-                );
-            }
-            else
-            {
-                ProceduralSpriteFactory.ApplySpriteSettings(
-                    _spriteRenderer,
-                    lanternColor,
-                    sortingOrder,
-                    applyScale: false
-                );
-                transform.localScale = _initialScale;
-            }
         }
 
         #endregion

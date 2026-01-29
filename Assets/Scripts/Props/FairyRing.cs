@@ -72,14 +72,42 @@ namespace FaeMaze.Props
             {
                 rb.isKinematic = true;
                 rb.useGravity = false;
+                Debug.Log($"[FairyRing] {gameObject.name} Start: Rigidbody found and configured (isKinematic={rb.isKinematic})");
+            }
+            else
+            {
+                Debug.LogWarning($"[FairyRing] {gameObject.name} Start: NO RIGIDBODY FOUND - trigger events may not fire!");
             }
 
             // Ensure collider is a trigger
             var collider = GetComponent<Collider>();
-            if (collider != null && !collider.isTrigger)
+            if (collider != null)
             {
-                collider.isTrigger = true;
+                if (!collider.isTrigger)
+                {
+                    collider.isTrigger = true;
+                }
+                Debug.Log($"[FairyRing] {gameObject.name} Start: Collider found - type={collider.GetType().Name}, isTrigger={collider.isTrigger}, center={GetColliderCenter(collider)}, size={GetColliderSize(collider)}");
             }
+            else
+            {
+                Debug.LogError($"[FairyRing] {gameObject.name} Start: NO COLLIDER FOUND - trigger events will NOT fire!");
+            }
+
+            // List all colliders on this object and children for debugging
+            var allColliders = GetComponentsInChildren<Collider>();
+            Debug.Log($"[FairyRing] {gameObject.name} has {allColliders.Length} total colliders (including children)");
+            foreach (var col in allColliders)
+            {
+                Debug.Log($"[FairyRing]   - {col.gameObject.name}: {col.GetType().Name}, isTrigger={col.isTrigger}");
+            }
+
+            // Check layer collision matrix
+            int defaultLayer = 0;
+            int visitorLayer = 6;
+            bool canCollide = !Physics.GetIgnoreLayerCollision(defaultLayer, visitorLayer);
+            Debug.Log($"[FairyRing] Layer collision check: Default(0) vs Visitor(6) = {(canCollide ? "CAN COLLIDE" : "IGNORED")}");
+            Debug.Log($"[FairyRing] {gameObject.name} is on layer {LayerMask.LayerToName(gameObject.layer)} ({gameObject.layer})");
 
             if (autoSetupSpheres)
             {
@@ -88,6 +116,22 @@ namespace FaeMaze.Props
 
             // Setup audio
             SetupAudio();
+        }
+
+        private Vector3 GetColliderCenter(Collider col)
+        {
+            if (col is SphereCollider sphere) return sphere.center;
+            if (col is BoxCollider box) return box.center;
+            if (col is CapsuleCollider capsule) return capsule.center;
+            return Vector3.zero;
+        }
+
+        private float GetColliderSize(Collider col)
+        {
+            if (col is SphereCollider sphere) return sphere.radius;
+            if (col is BoxCollider box) return Mathf.Max(box.size.x, box.size.y, box.size.z);
+            if (col is CapsuleCollider capsule) return capsule.radius;
+            return 0f;
         }
 
         private void SetupAudio()
@@ -130,15 +174,31 @@ namespace FaeMaze.Props
 
         private void OnTriggerEnter(Collider other)
         {
+            Debug.Log($"[FairyRing] OnTriggerEnter: {other.gameObject.name} (tag={other.tag}, layer={LayerMask.LayerToName(other.gameObject.layer)})");
+
             // The visitor's collider is on the "Detect" child, but VisitorControllerBase is on the root
             var visitor = other.GetComponent<VisitorControllerBase>();
             if (visitor == null)
             {
                 visitor = other.GetComponentInParent<VisitorControllerBase>();
+                if (visitor != null)
+                {
+                    Debug.Log($"[FairyRing] Found visitor on parent: {visitor.gameObject.name}");
+                }
             }
+            else
+            {
+                Debug.Log($"[FairyRing] Found visitor directly: {visitor.gameObject.name}");
+            }
+
             if (visitor != null)
             {
+                Debug.Log($"[FairyRing] Calling OnVisitorEnter for {visitor.gameObject.name}");
                 OnVisitorEnter(visitor);
+            }
+            else
+            {
+                Debug.Log($"[FairyRing] No VisitorControllerBase found on {other.gameObject.name} or its parents");
             }
         }
 
@@ -190,8 +250,10 @@ namespace FaeMaze.Props
         /// <param name="visitor">The visitor entering the ring</param>
         private void OnVisitorEnter(VisitorControllerBase visitor)
         {
+            Debug.Log($"[FairyRing] OnVisitorEnter: {visitor.gameObject.name}, state={visitor.State}, duration={fascinationDuration}, slowFactor={slowFactor}");
             // Make visitor fascinated by this ring - they will circle it
             visitor.BecomeFascinatedByRing(this, fascinationDuration, slowFactor);
+            Debug.Log($"[FairyRing] After BecomeFascinatedByRing: visitor.IsFascinatedByRing={visitor.IsFascinatedByRing}, currentFairyRing={(visitor.CurrentFairyRing == this ? "this" : (visitor.CurrentFairyRing == null ? "null" : "other"))}");
         }
 
         /// <summary>

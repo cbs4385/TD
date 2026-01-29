@@ -497,7 +497,7 @@ namespace ForestMaze
                 // Always use polyline-based generation since PolylinePoints contains
                 // the actual S-curved path shape. The edge.Curve is a simplified Bezier
                 // that doesn't match the actual visual path.
-                GenerateTilesFromPolyline(edge, edgeIndex, data, walkablePositions, tileSize);
+                GenerateTilesFromPolyline(edge, edgeIndex, state, data, walkablePositions, tileSize);
             }
         }
 
@@ -507,6 +507,7 @@ namespace ForestMaze
         private static void GenerateTilesFromCurve(
             PlanarForestMazeGenerator.Edge edge,
             int edgeIndex,
+            PlanarForestMazeGenerator.ForestMapState state,
             WorldSpaceMazeData data,
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
@@ -517,6 +518,9 @@ namespace ForestMaze
             // Minimum distance for world-space deduplication (half tile size for dense coverage)
             float minTileSpacing = tileSize * 0.3f;
 
+            // Node center exclusion radius - tiles within this distance from a non-root node center are not walkable
+            const float nodeCenterExclusionRadius = 1.0f;
+
             for (int i = 0; i < samples.Count; i++)
             {
                 Vector2 position = samples[i].Position;
@@ -524,6 +528,21 @@ namespace ForestMaze
 
                 // Calculate orientation from tangent
                 float orientation = Mathf.Atan2(tangent.y, tangent.x);
+
+                // Skip tiles that are within the exclusion zone of any non-root node center
+                // This prevents A* from pathing through unwalkable node center areas
+                bool inNodeExclusionZone = false;
+                foreach (var node in state.Nodes)
+                {
+                    if (node.Kind == "root") continue; // Root/heart node center is walkable
+                    float distToNodeCenter = Vector2.Distance(position, node.Position);
+                    if (distToNodeCenter < nodeCenterExclusionRadius)
+                    {
+                        inNodeExclusionZone = true;
+                        break;
+                    }
+                }
+                if (inNodeExclusionZone) continue;
 
                 // Use world-space proximity check instead of grid snapping
                 // This ensures tiles along the actual path are kept even if they'd snap to the same grid cell
@@ -550,6 +569,7 @@ namespace ForestMaze
         private static void GenerateTilesFromPolyline(
             PlanarForestMazeGenerator.Edge edge,
             int edgeIndex,
+            PlanarForestMazeGenerator.ForestMapState state,
             WorldSpaceMazeData data,
             HashSet<Vector2Int> walkablePositions,
             float tileSize)
@@ -559,6 +579,9 @@ namespace ForestMaze
 
             // Minimum distance for world-space deduplication
             float minTileSpacing = tileSize * 0.3f;
+
+            // Node center exclusion radius - tiles within this distance from a non-root node center are not walkable
+            const float nodeCenterExclusionRadius = 1.0f;
 
             for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
             {
@@ -576,6 +599,21 @@ namespace ForestMaze
                 {
                     float t = numSteps > 0 ? (float)j / numSteps : 0;
                     Vector2 position = Vector2.Lerp(start, end, t);
+
+                    // Skip tiles that are within the exclusion zone of any non-root node center
+                    // This prevents A* from pathing through unwalkable node center areas
+                    bool inNodeExclusionZone = false;
+                    foreach (var node in state.Nodes)
+                    {
+                        if (node.Kind == "root") continue; // Root/heart node center is walkable
+                        float distToNodeCenter = Vector2.Distance(position, node.Position);
+                        if (distToNodeCenter < nodeCenterExclusionRadius)
+                        {
+                            inNodeExclusionZone = true;
+                            break;
+                        }
+                    }
+                    if (inNodeExclusionZone) continue;
 
                     // Use world-space proximity check instead of grid snapping
                     if (HasTileNearPosition(data, position, minTileSpacing)) continue;
@@ -614,6 +652,9 @@ namespace ForestMaze
             float stepSize = tileSize * 0.5f;
             float minTileSpacing = tileSize * 0.3f;
 
+            // Node center exclusion radius - tiles within this distance from a non-root node center are not walkable
+            const float nodeCenterExclusionRadius = 1.0f;
+
             foreach (var (start, end) in state.AdjustmentFills)
             {
                 Vector2 direction = (end - start).normalized;
@@ -628,6 +669,20 @@ namespace ForestMaze
                 {
                     float t = numSteps > 0 ? (float)j / numSteps : 0;
                     Vector2 position = Vector2.Lerp(start, end, t);
+
+                    // Skip tiles that are within the exclusion zone of any non-root node center
+                    bool inNodeExclusionZone = false;
+                    foreach (var node in state.Nodes)
+                    {
+                        if (node.Kind == "root") continue;
+                        float distToNodeCenter = Vector2.Distance(position, node.Position);
+                        if (distToNodeCenter < nodeCenterExclusionRadius)
+                        {
+                            inNodeExclusionZone = true;
+                            break;
+                        }
+                    }
+                    if (inNodeExclusionZone) continue;
 
                     // Use world-space proximity check instead of grid snapping
                     if (HasTileNearPosition(data, position, minTileSpacing)) continue;

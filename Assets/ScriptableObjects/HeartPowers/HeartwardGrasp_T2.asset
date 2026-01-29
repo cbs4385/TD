@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3856b15c4aaf442992d941adab3ae3, type: 3}
   m_Name: HeartwardGrasp_T2
   m_EditorClassIdentifier:
-  powerType: 7
+  powerType: 1
   displayName: Heartward Grasp
   description: 'Pulls a visitor through a wall toward the Heart.
 

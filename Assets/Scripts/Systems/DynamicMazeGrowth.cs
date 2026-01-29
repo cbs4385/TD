@@ -1006,7 +1006,7 @@ namespace FaeMaze.Systems
             // Check if any Puka exists in the maze
             bool hasPuka = nodePukas.Count > 0;
 
-            float roll = Random.value * 100f;
+            float roll = RandomManager.Value * 100f;
 
             // Cumulative thresholds based on whether Puka exists
             // Base: Pond 50%, Lantern 20%, Ring 15%, Puka 10%, Wisp 5%
@@ -1283,18 +1283,9 @@ namespace FaeMaze.Systems
             if (fairyRingPrefab == null)
             {
 #if UNITY_EDITOR
-                // Try ring.prefab first (the new 3D ring with spheres)
                 fairyRingPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/ring.prefab");
-                if (fairyRingPrefab == null)
-                {
-                    fairyRingPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/FairyRing.prefab");
-                }
 #else
                 fairyRingPrefab = Resources.Load<GameObject>("Prefabs/Props/ring");
-                if (fairyRingPrefab == null)
-                {
-                    fairyRingPrefab = Resources.Load<GameObject>("Prefabs/Props/FairyRing");
-                }
 #endif
             }
 
@@ -1316,35 +1307,52 @@ namespace FaeMaze.Systems
                 ring.transform.SetParent(fairyRingsParent, worldPositionStays: true);
             }
 
+            // ALWAYS ensure the ring has the proper trigger collider and Rigidbody,
+            // even if the prefab already has a FairyRing component.
+            // GetComponent<Collider>() would find child colliders (like the animated spheres)
+            // which are too small and not at the right position for detection.
+
+            // Check if a SphereCollider already exists on the ROOT (not children)
+            var existingRootSphere = ring.GetComponent<SphereCollider>();
+            if (existingRootSphere == null)
+            {
+                // Add a new SphereCollider to the root specifically for the FairyRing trigger
+                var triggerCollider = ring.AddComponent<SphereCollider>();
+                triggerCollider.isTrigger = true;
+                // Radius 2.5 reaches visitors in the walkable ring (1.0 to 3.0 from node center)
+                triggerCollider.radius = 2.5f;
+                triggerCollider.center = Vector3.zero;
+                Debug.Log($"[FairyRing] Added SphereCollider to {ring.name}: radius=2.5, isTrigger=true");
+            }
+            else
+            {
+                // Ensure existing sphere is properly configured
+                existingRootSphere.isTrigger = true;
+                if (existingRootSphere.radius < 2.0f)
+                {
+                    Debug.LogWarning($"[FairyRing] {ring.name} has small SphereCollider radius={existingRootSphere.radius}, setting to 2.5");
+                    existingRootSphere.radius = 2.5f;
+                }
+                Debug.Log($"[FairyRing] {ring.name} already has SphereCollider: radius={existingRootSphere.radius}, isTrigger={existingRootSphere.isTrigger}");
+            }
+
+            // Ensure the ring has a kinematic Rigidbody for trigger events to work
+            // Unity requires at least one colliding object to have a Rigidbody for OnTriggerEnter
+            var rb = ring.GetComponent<Rigidbody>();
+            if (rb == null)
+            {
+                rb = ring.AddComponent<Rigidbody>();
+                rb.isKinematic = true;
+                rb.useGravity = false;
+                Debug.Log($"[FairyRing] Added Rigidbody to {ring.name}");
+            }
+
             // Add FairyRing component if not present (for entrancement behavior)
             var fairyRing = ring.GetComponent<FaeMaze.Props.FairyRing>();
             if (fairyRing == null)
             {
-                // Ensure the ring has a trigger collider for OnTriggerEnter
-                var collider = ring.GetComponent<Collider>();
-                if (collider == null)
-                {
-                    var sphereCollider = ring.AddComponent<SphereCollider>();
-                    sphereCollider.isTrigger = true;
-                    sphereCollider.radius = 3f;
-                    sphereCollider.center = Vector3.zero; // XY-plane collision
-                }
-                else if (!collider.isTrigger)
-                {
-                    collider.isTrigger = true;
-                }
-
-                // Ensure the ring has a kinematic Rigidbody for trigger events to work
-                // Unity requires at least one colliding object to have a Rigidbody for OnTriggerEnter
-                var rb = ring.GetComponent<Rigidbody>();
-                if (rb == null)
-                {
-                    rb = ring.AddComponent<Rigidbody>();
-                    rb.isKinematic = true;
-                    rb.useGravity = false;
-                }
-
                 fairyRing = ring.AddComponent<FaeMaze.Props.FairyRing>();
+                Debug.Log($"[FairyRing] Added FairyRing component to {ring.name}");
             }
 
             // Track the fairy ring

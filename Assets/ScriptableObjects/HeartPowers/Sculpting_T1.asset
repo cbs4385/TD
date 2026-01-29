@@ -10,17 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2b3856b15c4aaf442992d941adab3ae3, type: 3}
-  m_Name: HeartbeatOfLongingDefinition
-  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.HeartPowers.HeartPowerDefinition
-  powerType: 0
-  displayName: Heartbeat of Longing
-  description: Amplifies all FaeLanterns, granting temporary power boost to nearby
-    towers.
+  m_Name: Sculpting_T1
+  m_EditorClassIdentifier:
+  powerType: 3
+  displayName: Sculpting
+  description: 'Change the prop type on a node.
+
+    Tier I - Basic Sculpting: Choose from Pond, Lantern, Fairy Ring, or remove existing prop.'
   tier: 1
-  chargeCost: 1
-  cooldown: 15
-  duration: 10
-  radius: 5
+  essenceCost: 0
+  cooldown: 0
+  duration: 0
+  radius: 0
   param1: 0
   param2: 0
   param3: 0

@@ -1,5 +1,6 @@
 using UnityEngine;
 using FaeMaze.Visitors;
+using FaeMaze.Systems;
 
 /// <summary>
 /// Adds a cycling pastel rainbow glow effect to the lantern via a point light.
@@ -449,7 +450,7 @@ public class LanternGlow : MonoBehaviour
     {
         // Use the visitor's fascination chance from their archetype
         float fascinationChance = visitor.GetFascinationChance();
-        float roll = Random.value;
+        float roll = RandomManager.Value;
 
         if (roll <= fascinationChance)
         {

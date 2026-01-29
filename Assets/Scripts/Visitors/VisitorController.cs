@@ -115,7 +115,7 @@ namespace FaeMaze.Visitors
                 if (pastMinWaypoints && hasPathRemaining && atNode)
                 {
                     float confusionChance = GetConfusionChance();
-                    float roll = Random.value;
+                    float roll = RandomManager.Value;
                     bool triggered = roll <= confusionChance;
 
                     if (triggered)
