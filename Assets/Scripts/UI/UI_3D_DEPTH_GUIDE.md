@@ -12,9 +12,9 @@ The UI system uses screen-space overlays - HUD elements that stay fixed on scree
 
 The main HUD elements use screen-space overlays, which is the correct approach for 3D games:
 
-- **UIController.cs** - Main game UI with essence display and wave controls
-- **PlayerResourcesUIController.cs** - Resource panel showing essence count
-- **HeartPowerPanelController.cs** - Heart power activation buttons
+- **UIController.cs** - Canvas settings configuration
+- **EssenceBarController.cs** - Essence bar at top of screen
+- **HeartPowerPanelController.cs** - Heart power activation buttons and run timer
 
 All these use `RenderMode.ScreenSpaceOverlay`, which ensures they:
 - Always render on top of the 3D scene

@@ -53,7 +53,9 @@ namespace FaeMaze.UI
         private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[4];
 
         // Right panel UI elements
-        private TextMeshProUGUI waveText;
+        private TextMeshProUGUI runTimerText;
+        private float runStartTime;
+        private bool runTimerActive;
 
         private readonly string[] powerNames = new string[]
         {
@@ -183,8 +185,8 @@ namespace FaeMaze.UI
             // Handle targeting mode for targeted powers
             HandleTargetingMode();
 
-            // Update wave and essence displays
-            UpdateWaveAndEssenceDisplays();
+            // Update run timer display
+            UpdateRunTimerDisplay();
         }
 
         private void OnEnable()
@@ -391,13 +393,11 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Automatically creates the Heart Powers UI.
-        /// Places round power buttons in a row at the bottom-left of the screen (no panel background).
-        /// Wave display is positioned to the right.
+        /// Creates the Heart Powers UI under the existing Canvas.
         /// </summary>
         private void CreateHeartPowersPanelUI()
         {
-            // Find or create canvas
+            // Find existing canvas (should be GameRoot > Canvas)
             Canvas canvas = FindFirstObjectByType<Canvas>();
             if (canvas == null)
             {
@@ -414,7 +414,42 @@ namespace FaeMaze.UI
                 }
             }
 
-            // Create a container for the buttons (no visible panel, just for organization)
+            // Check if HeartPowersPanel already exists (avoid duplicates on scene reload)
+            Transform existingPanel = canvas.transform.Find("HeartPowersPanel");
+            if (existingPanel != null)
+            {
+                heartPowersPanel = existingPanel.gameObject;
+                FindExistingButtons(canvas.transform);
+                return;
+            }
+
+            // Create UI at runtime
+            CreateHeartPowersPanelRuntime(canvas);
+        }
+
+        /// <summary>
+        /// Finds existing buttons in the canvas hierarchy.
+        /// </summary>
+        private void FindExistingButtons(Transform canvasTransform)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                Transform btn = canvasTransform.Find($"PowerButton_{i}");
+                if (btn != null)
+                {
+                    powerButtons[i] = btn.GetComponent<Button>();
+                    buttonImages[i] = btn.GetComponent<Image>();
+                    cooldownTexts[i] = btn.GetComponentInChildren<TextMeshProUGUI>();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Creates the Heart Powers UI at runtime (fallback when prefabs not available).
+        /// </summary>
+        private void CreateHeartPowersPanelRuntime(Canvas canvas)
+        {
+            // Create the panel container
             heartPowersPanel = new GameObject("HeartPowersPanel");
             heartPowersPanel.transform.SetParent(canvas.transform, false);
 
@@ -423,12 +458,12 @@ namespace FaeMaze.UI
             panelRect.anchorMax = new Vector2(1f, 0f); // Bottom right
             panelRect.pivot = new Vector2(0.5f, 0f);
             panelRect.anchoredPosition = Vector2.zero;
-            panelRect.sizeDelta = new Vector2(0f, 200f); // Height for buttons
+            panelRect.sizeDelta = new Vector2(0f, 250f); // Height for buttons (raised to y=140 center)
 
             // Button settings - 3x scale (50 base * 3 = 150)
             float buttonSize = 150f;
-            float buttonSpacing = 40f; // Increased spacing between buttons
-            float bottomPadding = 40f; // Move buttons up from bottom
+            float buttonSpacing = 40f;
+            float bottomPadding = 65f; // Button center at y=140 (65 + 150/2 = 140)
             float leftPadding = 30f;
 
             // Create 4 power buttons in a horizontal row at bottom-left
@@ -444,7 +479,7 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Creates a Canvas for the UI.
+        /// Creates a Canvas for the UI (fallback if none exists).
         /// </summary>
         private Canvas CreateCanvas()
         {
@@ -467,27 +502,43 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Creates the wave display at bottom-right and essence bar controller.
+        /// Creates or finds the run timer display at bottom-right and essence bar controller.
+        /// If a RunTimer GameObject already exists in the canvas hierarchy, it will be used.
         /// </summary>
         private void CreateRightPanelUI(Transform parent, float buttonSize)
         {
-            // Create Wave display at bottom-right
-            GameObject waveObj = new GameObject("WaveDisplay");
-            waveObj.transform.SetParent(parent, false);
+            // Try to find existing RunTimer first (supports editor-created static UI)
+            GameObject timerObj = null;
+            Transform existingTimer = parent.Find("RunTimer");
+            if (existingTimer != null)
+            {
+                timerObj = existingTimer.gameObject;
+                runTimerText = timerObj.GetComponent<TextMeshProUGUI>();
+            }
+            else
+            {
+                // Create run timer display at bottom-right
+                timerObj = new GameObject("RunTimer");
+                timerObj.transform.SetParent(parent, false);
 
-            RectTransform waveRect = waveObj.AddComponent<RectTransform>();
-            waveRect.anchorMin = new Vector2(1f, 0f); // Bottom right
-            waveRect.anchorMax = new Vector2(1f, 0f);
-            waveRect.pivot = new Vector2(1f, 0f);
-            waveRect.anchoredPosition = new Vector2(-30f, 20f); // 30px from right, 20px from bottom
-            waveRect.sizeDelta = new Vector2(200f, 50f);
+                RectTransform timerRect = timerObj.AddComponent<RectTransform>();
+                timerRect.anchorMin = new Vector2(1f, 0f); // Bottom right
+                timerRect.anchorMax = new Vector2(1f, 0f);
+                timerRect.pivot = new Vector2(1f, 0f);
+                timerRect.anchoredPosition = new Vector2(-30f, 20f); // 30px from right, 20px from bottom
+                timerRect.sizeDelta = new Vector2(200f, 50f);
 
-            waveText = waveObj.AddComponent<TextMeshProUGUI>();
-            waveText.text = "Wave 0";
-            waveText.fontSize = 24;
-            waveText.fontStyle = FontStyles.Bold;
-            waveText.alignment = TextAlignmentOptions.MidlineRight;
-            waveText.color = new Color(1f, 0.85f, 0.3f, 1f); // Gold
+                runTimerText = timerObj.AddComponent<TextMeshProUGUI>();
+                runTimerText.text = "00:00.00";
+                runTimerText.fontSize = 24;
+                runTimerText.fontStyle = FontStyles.Bold;
+                runTimerText.alignment = TextAlignmentOptions.MidlineRight;
+                runTimerText.color = new Color(1f, 0.85f, 0.3f, 1f); // Gold
+            }
+
+            // Initialize timer (starts when first wave begins)
+            runStartTime = Time.time;
+            runTimerActive = false;
 
             // Create EssenceBarController for the top-of-screen essence bar
             CreateEssenceBarController();
@@ -814,23 +865,26 @@ namespace FaeMaze.UI
         #region Display Updates
 
         /// <summary>
-        /// Updates wave display in the right panel.
+        /// Updates run timer display in the right panel.
         /// Essence bar is now handled by EssenceBarController at the top of the screen.
         /// </summary>
-        private void UpdateWaveAndEssenceDisplays()
+        private void UpdateRunTimerDisplay()
         {
-            // Update wave display
-            if (waveText != null && waveSpawner != null)
+            // Start timer when first wave becomes active
+            if (!runTimerActive && waveSpawner != null && waveSpawner.IsWaveActive)
             {
-                int currentWave = waveSpawner.CurrentWaveNumber;
-                if (waveSpawner.IsWaveActive)
-                {
-                    waveText.text = $"Wave {currentWave}";
-                }
-                else
-                {
-                    waveText.text = currentWave > 0 ? $"Wave {currentWave} Complete" : "No Active Wave";
-                }
+                runStartTime = Time.time;
+                runTimerActive = true;
+            }
+
+            // Update run timer display
+            if (runTimerText != null)
+            {
+                float elapsedTime = runTimerActive ? Time.time - runStartTime : 0f;
+                int minutes = Mathf.FloorToInt(elapsedTime / 60f);
+                int seconds = Mathf.FloorToInt(elapsedTime % 60f);
+                int centiseconds = Mathf.FloorToInt((elapsedTime % 1f) * 100f);
+                runTimerText.text = $"{minutes:D2}:{seconds:D2}.{centiseconds:D2}";
             }
         }
 
@@ -839,7 +893,7 @@ namespace FaeMaze.UI
         /// </summary>
         private void UpdateResourceDisplays()
         {
-            UpdateWaveAndEssenceDisplays();
+            UpdateRunTimerDisplay();
         }
 
         /// <summary>

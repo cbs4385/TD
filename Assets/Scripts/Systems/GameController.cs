@@ -1,6 +1,5 @@
 using UnityEngine;
 using FaeMaze.Maze;
-using FaeMaze.UI;
 using FaeMaze.Visitors;
 using System.Collections.Generic;
 
@@ -75,11 +74,6 @@ namespace FaeMaze.Systems
         [SerializeField]
         [Tooltip("Reference to the Heart of the Maze")]
         private HeartOfTheMaze heart;
-
-        [Header("System References")]
-        [SerializeField]
-        [Tooltip("Reference to the UI controller")]
-        private UIController uiController;
 
         [Header("Essence Settings")]
         [SerializeField]
@@ -175,6 +169,9 @@ namespace FaeMaze.Systems
                 persistentEssence = currentEssence;
                 // Log starting essence
                 LogEssenceTransaction(EssenceSource.StartingEssence, currentEssence, "Game start");
+
+                // Initialize max essence tracking with starting value
+                GameStatsTracker.Instance?.UpdateMaxEssence(currentEssence);
             }
         }
 
@@ -199,14 +196,6 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets the UI controller reference.
-        /// </summary>
-        public UIController GetUIController()
-        {
-            return uiController;
-        }
-
-        /// <summary>
         /// Adds essence to the current total.
         /// </summary>
         public void AddEssence(int amount)
@@ -223,6 +212,9 @@ namespace FaeMaze.Systems
             persistentEssence = currentEssence;
             LogEssenceTransaction(source, amount, details);
             OnEssenceChanged?.Invoke(currentEssence);
+
+            // Track maximum essence achieved
+            GameStatsTracker.Instance?.UpdateMaxEssence(currentEssence);
         }
 
         /// <summary>

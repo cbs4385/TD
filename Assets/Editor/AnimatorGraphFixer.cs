@@ -71,14 +71,8 @@ public static class AnimatorGraphFixer
         if (lastFix != today)
         {
             // Silently reimport animators to prevent the error
-            string[] guids = AssetDatabase.FindAssets("t:AnimatorController", new[] { "Assets" });
-            foreach (string guid in guids)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                // Use ForceSynchronousImport to ensure it completes before anything uses the animator
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-            }
-
+            // Skip this automatic reimport - it causes filename mismatch warnings
+            // Users can manually run FaeMaze > Fix Animator Graph Errors if needed
             EditorPrefs.SetString(prefKey, today);
         }
     }

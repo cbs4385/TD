@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.IO;
 using FaeMaze.HeartPowers;
+using FaeMaze.Visitors;
 
 namespace FaeMaze.Systems
 {
@@ -355,12 +356,14 @@ namespace FaeMaze.Systems
         /// </summary>
         private void LoadGameOverScene()
         {
-
             // Record final wave reached
             if (GameStatsTracker.Instance != null && waveSpawner != null)
             {
                 GameStatsTracker.Instance.RecordWaveReached(waveSpawner.CurrentWaveNumber);
             }
+
+            // Count all remaining visitors on the graph as escaped
+            RecordRemainingVisitorsAsEscaped();
 
             // Load the GameOver scene
             try
@@ -370,6 +373,26 @@ namespace FaeMaze.Systems
             catch (System.Exception e)
             {
                 _ = e;
+            }
+        }
+
+        /// <summary>
+        /// Records all remaining visitors on the graph as escaped when game ends.
+        /// </summary>
+        private void RecordRemainingVisitorsAsEscaped()
+        {
+            if (GameStatsTracker.Instance == null) return;
+
+            // Find all active visitors in the scene
+            VisitorControllerBase[] allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+
+            foreach (var visitor in allVisitors)
+            {
+                if (visitor != null && visitor.gameObject.activeInHierarchy)
+                {
+                    // Record as escaped with 0 essence (they didn't actually exit through portal)
+                    GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Escaped, 0);
+                }
             }
         }
 

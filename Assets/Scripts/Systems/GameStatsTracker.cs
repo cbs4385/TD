@@ -73,6 +73,7 @@ namespace FaeMaze.Systems
         private int maxWaveReached = 0;
         private float totalTimePlayed = 0f;
         private float sessionStartTime;
+        private int maxEssenceAchieved = 0;
 
         // Visitor fate tracking by archetype
         private Dictionary<VisitorArchetype, ArchetypeStats> archetypeStats = new Dictionary<VisitorArchetype, ArchetypeStats>();
@@ -89,6 +90,9 @@ namespace FaeMaze.Systems
 
         /// <summary>Gets the total time played in this session (seconds)</summary>
         public float TotalTimePlayed => totalTimePlayed;
+
+        /// <summary>Gets the maximum essence achieved during this session</summary>
+        public int MaxEssenceAchieved => maxEssenceAchieved;
 
         /// <summary>Gets the archetype statistics dictionary</summary>
         public Dictionary<VisitorArchetype, ArchetypeStats> ArchetypeStats => archetypeStats;
@@ -140,6 +144,17 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Updates the maximum essence achieved if current essence exceeds it
+        /// </summary>
+        public void UpdateMaxEssence(int currentEssence)
+        {
+            if (currentEssence > maxEssenceAchieved)
+            {
+                maxEssenceAchieved = currentEssence;
+            }
+        }
+
+        /// <summary>
         /// Records a visitor's fate with their archetype and essence value
         /// </summary>
         public void RecordVisitorFate(VisitorArchetype archetype, VisitorFate fate, int essenceValue)
@@ -160,6 +175,7 @@ namespace FaeMaze.Systems
         {
             maxWaveReached = 0;
             totalTimePlayed = 0f;
+            maxEssenceAchieved = 0;
             archetypeStats.Clear();
             essenceBySource.Clear();
             sessionStartTime = Time.time;

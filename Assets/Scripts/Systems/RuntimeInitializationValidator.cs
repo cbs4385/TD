@@ -179,14 +179,14 @@ namespace FaeMaze.Systems
                 validationReport.AppendLine("⚠ WARNING: UIController not found");
             }
 
-            var resourcesUI = FindFirstObjectByType<PlayerResourcesUIController>();
-            if (resourcesUI != null)
+            var essenceBar = FindFirstObjectByType<EssenceBarController>();
+            if (essenceBar != null)
             {
-                validationReport.AppendLine("✓ PlayerResourcesUIController exists");
+                validationReport.AppendLine("✓ EssenceBarController exists");
             }
             else
             {
-                validationReport.AppendLine("⚠ WARNING: PlayerResourcesUIController not found");
+                validationReport.AppendLine("⚠ WARNING: EssenceBarController not found");
             }
 
             validationReport.AppendLine();

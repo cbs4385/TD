@@ -528,10 +528,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dde760252925734409d7a7183402e316, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.UI.GameOverManager
-  maxWaveText: {fileID: 2083466775}
-  visitorsConsumedText: {fileID: 830932719}
-  totalTimeText: {fileID: 1107801855}
-  propsPlacedText: {fileID: 116620516}
+  runLengthText: {fileID: 0}
+  peakEssenceText: {fileID: 0}
+  essenceLedgerContainer: {fileID: 0}
+  hazardHistogramContainer: {fileID: 0}
+  escapedText: {fileID: 0}
   mainMenuButton: {fileID: 58311572}
 --- !u!4 &200217501
 Transform:

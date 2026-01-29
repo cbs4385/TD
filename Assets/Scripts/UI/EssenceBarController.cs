@@ -85,16 +85,31 @@ namespace FaeMaze.UI
         #region UI Creation
 
         /// <summary>
-        /// Creates the essence bar UI at the top of the screen.
-        /// Classic candy-colored health bar style with gradient and border.
+        /// Creates or finds the essence bar UI at the top of the screen.
+        /// Uses the existing Canvas (GameRoot > Canvas) for proper hierarchy.
         /// </summary>
         private void CreateEssenceBarUI()
         {
-            // Find or create canvas
+            // Find existing canvas (should be GameRoot > Canvas)
             Canvas canvas = FindFirstObjectByType<Canvas>();
             if (canvas == null)
             {
                 canvas = CreateCanvas();
+            }
+
+            // Check if EssenceBarPanel already exists (avoid duplicates)
+            Transform existingPanel = canvas.transform.Find("EssenceBarPanel");
+            if (existingPanel != null)
+            {
+                essenceBarPanel = existingPanel.gameObject;
+                // Find existing components
+                essenceSlider = existingPanel.GetComponentInChildren<Slider>();
+                essenceText = existingPanel.GetComponentInChildren<TextMeshProUGUI>();
+                if (essenceSlider != null)
+                {
+                    fillImage = essenceSlider.fillRect?.GetComponent<Image>();
+                }
+                return;
             }
 
             // Create the panel at top center, half screen width

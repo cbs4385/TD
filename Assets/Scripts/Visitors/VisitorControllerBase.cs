@@ -128,7 +128,7 @@ namespace FaeMaze.Visitors
         protected float fairyRingFascinationTimer;
         protected bool fairyRingApproaching; // True while moving toward ring, false once circling
         protected FaeMaze.Props.FairyRing immuneToFairyRing; // Ring visitor is immune to (after fascination ends)
-        protected const float FairyRingCircleRadius = 1.5f; // Distance from ring center to circle at
+        protected const float FairyRingCircleRadius = 1.0f; // Distance from ring center to circle at (matches node center exclusion)
         protected const float FairyRingCircleSpeed = 1.5f; // Radians per second
 
         // Visitor essence tracking (drained by props, visitor escapes when depleted)
@@ -1201,7 +1201,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual int GetEssenceReward()
         {
-            return config != null ? config.EssenceReward : 100;
+            return config != null ? config.EssenceReward : 50;
         }
 
         /// <summary>

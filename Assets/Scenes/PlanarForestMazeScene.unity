@@ -405,8 +405,6 @@ MonoBehaviour:
   useFocalPointMode: 1
   focalMoveSpeed: 1
   focalTurnSpeed: 90
-  focalFollowDistance: 3
-  focalHeightOffset: 2
   focalViewAngle: 45
   angleChangeSpeed: 5
   maxFocalZoomDistance: 2
@@ -757,10 +755,10 @@ MonoBehaviour:
   waterColor: {r: 1, g: 0, b: 1, a: 1}
   heartColor: {r: 0.9, g: 0.35, b: 0.35, a: 1}
   nodeRadius: 3
-  nodeTileRadius: 2.5
   wallBorderDepth: 3
   tilesParent: {fileID: 0}
-  batchChunkSize: 1
+  enableStaticBatching: 1
+  alwaysUseLOD2Walls: 1
 --- !u!114 &963194231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -806,7 +804,6 @@ MonoBehaviour:
   kelpieModelPrefab: {fileID: 0}
   kelpieAnimatorController: {fileID: 0}
   pondPrefab: {fileID: 0}
-  pukaZPosition: -0.5
   pondZPosition: 0
   portalsParent: {fileID: 0}
 --- !u!1 &1408523520
@@ -841,6 +838,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1800000001}
+  - {fileID: 4000000001}
   m_Father: {fileID: 1534669903}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1408523522
@@ -858,7 +856,6 @@ MonoBehaviour:
   mazeOrigin: {fileID: 330585546}
   entrance: {fileID: 0}
   heart: {fileID: 0}
-  uiController: {fileID: 2096385509}
   startingEssence: 200
 --- !u!114 &1408523524
 MonoBehaviour:
@@ -920,7 +917,6 @@ Transform:
   m_Children:
   - {fileID: 396929189}
   - {fileID: 1408523521}
-  - {fileID: 2096385508}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1534669904
@@ -948,6 +944,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 903e134c3576fa74c87c73f381e568db, type: 2}
   autoCreateUI: 1
   graspPrefab: {fileID: 6225537257164506695, guid: 2e176672e0acf0c488f8bb40daebb76d, type: 3}
+  tonguePrefab: {fileID: 0}
   devourPrefab: {fileID: 3946631708089124196, guid: 9bb3c1d4dbc68b74792dc8064cee3574, type: 3}
 --- !u!114 &1534669905
 MonoBehaviour:
@@ -991,7 +988,6 @@ MonoBehaviour:
   lod2Distance: 1
   focalPoint: {fileID: 0}
   zPosition: 0
-  zRotationVariance: 5
   backgroundPadding: 20
   decorationParent: {fileID: 0}
   createBlackBackdrop: 1
@@ -1314,55 +1310,6 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
---- !u!1 &2096385507
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2096385508}
-  - component: {fileID: 2096385509}
-  m_Layer: 0
-  m_Name: UIRoot
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &2096385508
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2096385507}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1534669903}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2096385509
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2096385507}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  essenceText: {fileID: 0}
-  startWaveButton: {fileID: 0}
-  placementInstructionsText: {fileID: 0}
-  waveSpawner: {fileID: 1408523524}
-  referencePixelsPerUnit: 32
 --- !u!1 &4000000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -1394,7 +1341,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 1408523521}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4000000002
 MonoBehaviour:
@@ -1448,7 +1395,6 @@ SceneRoots:
   m_Roots:
   - {fileID: 534669905}
   - {fileID: 1534669903}
-  - {fileID: 4000000001}
   - {fileID: 879032714}
   - {fileID: 820251996}
   - {fileID: 1644971210}
