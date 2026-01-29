@@ -14,7 +14,14 @@
       "Bash(wc -l \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\Assets\\\\Animations\"\"*.controller 2>/dev/null || dir /b \"C:UserschrissourcereposTDAssetsAnimations*.controller \")",
       "Bash(dir \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\Assets\\\\Animations\\\\*.controller\")",
       "Bash(ls:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(dir:*)",
+      "Bash(git grep:*)",
+      "Bash(python3:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(git log:*)",
+      "Bash(for script in \"Billboard\" \"WorldSpaceCanvasHelper\" \"KeyBindingCapture\")",
+      "Bash(do echo \"=== $script ===\")"
     ],
     "deny": [],
     "ask": []

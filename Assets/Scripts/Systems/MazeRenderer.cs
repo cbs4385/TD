@@ -94,12 +94,13 @@ namespace FaeMaze.Systems
         private Transform tilesParent;
 
         [Header("Optimization Settings")]
-        [Tooltip("Mesh batching disabled - individual tiles needed for pathfinding reference")]
-        private bool enableMeshBatching = false; // Removed [SerializeField] so scene value can't override
+        [SerializeField]
+        [Tooltip("Use StaticBatchingUtility to combine wall meshes at runtime (significantly reduces draw calls).")]
+        private bool enableStaticBatching = true;
 
         [SerializeField]
-        [Tooltip("Maximum tiles per batch (to avoid meshes that are too large)")]
-        private int batchChunkSize = 100;
+        [Tooltip("Always use LOD2 (low-poly) wall prefab for ALL walls, not just interior layers. Dramatically reduces vertex count.")]
+        private bool alwaysUseLOD2Walls = true;
 
         #endregion
 
@@ -108,11 +109,6 @@ namespace FaeMaze.Systems
         private MazeGridBehaviour mazeGridBehaviour;
         private GameObject tilesContainer;
 
-        // Batching collections
-        private List<GameObject> wallTiles;
-        private List<GameObject> undergrowthTiles;
-        private List<GameObject> waterTiles;
-        private List<GameObject> pathTiles;
 
         // World-space rendering state
         private float tileSize;
@@ -337,14 +333,6 @@ namespace FaeMaze.Systems
 
             // Background plane removed - camera background color (#0a0a0a) handles this
 
-            if (enableMeshBatching)
-            {
-                wallTiles = new List<GameObject>();
-                undergrowthTiles = new List<GameObject>();
-                waterTiles = new List<GameObject>();
-                pathTiles = new List<GameObject>();
-            }
-
             // Track all occupied positions using world-space coordinates with distance-based overlap detection
             occupiedPositions = new List<Vector2>();
             occupiedWallPositions = new List<Vector2>();
@@ -365,9 +353,10 @@ namespace FaeMaze.Systems
             // Step 4: Render wall border
             RenderWallBorder(forestState, mazeOrigin);
 
-            if (enableMeshBatching)
+            // Step 5: Apply static batching to reduce draw calls
+            if (enableStaticBatching && tilesParent != null)
             {
-                PerformMeshBatching();
+                StaticBatchingUtility.Combine(tilesParent.gameObject);
             }
         }
 
@@ -1508,15 +1497,21 @@ namespace FaeMaze.Systems
 
             if (symbol == '#' && wallPrefab != null)
             {
-                // Use LOD2 prefab for interior walls (layer > 0), full detail for front rank (layer 0)
-                GameObject prefabToUse = (wallLayer > 0 && wallPrefabLOD2 != null) ? wallPrefabLOD2 : wallPrefab;
+                // Use LOD2 prefab for all walls if alwaysUseLOD2Walls is enabled, otherwise only for interior layers
+                bool useLOD2 = alwaysUseLOD2Walls || (wallLayer > 0);
+                GameObject prefabToUse = (useLOD2 && wallPrefabLOD2 != null) ? wallPrefabLOD2 : wallPrefab;
                 tileObj = Instantiate(prefabToUse, tileParent);
                 tileObj.transform.position = worldPos;
                 // Apply Z-axis rotation only so model's X axis aligns radially (toward node center for node walls)
                 // Using tileRotation (Z-only) instead of flatPrefabRotation (which tilts on X-axis)
                 tileObj.transform.rotation = tileRotation;
                 // Wall models use prefab default scale (no additional scaling)
-                wallTiles?.Add(tileObj);
+
+                // Mark wall as static for runtime static batching
+                if (enableStaticBatching)
+                {
+                    tileObj.isStatic = true;
+                }
 
                 // Ensure wall has a collider for physics-based wall re-checking
                 // (needed so WallCollisionChecker.RecheckWallsInArea can find it via OverlapSphere)
@@ -1543,7 +1538,6 @@ namespace FaeMaze.Systems
                 // Path base (flat on XY plane)
                 var pathBase = CreateProceduralFlatTile(worldPos, tileRotation, '.', pathColor);
                 pathBase.transform.SetParent(tilesParent);
-                pathTiles?.Add(pathBase);
 
                 // Node hazard on top (uses flat prefab rotation)
                 tileObj = Instantiate(nodeHazardPrefab, tilesParent);
@@ -1559,7 +1553,6 @@ namespace FaeMaze.Systems
 
                 if (symbol == '#')
                 {
-                    wallTiles?.Add(tileObj);
                     // Make collider a trigger so it doesn't block movement
                     Collider wallCol = tileObj.GetComponent<Collider>();
                     if (wallCol != null)
@@ -1568,9 +1561,13 @@ namespace FaeMaze.Systems
                     }
                     // ARCHITECTURE: Add WallCollisionChecker for physics-based collision removal
                     tileObj.AddComponent<WallCollisionChecker>();
+
+                    // Mark wall as static for Unity's built-in static batching
+                    if (enableStaticBatching)
+                    {
+                        tileObj.isStatic = true;
+                    }
                 }
-                else
-                    pathTiles?.Add(tileObj);
             }
 
             if (tileObj != null)
@@ -1638,31 +1635,6 @@ namespace FaeMaze.Systems
                 tilesContainer.transform.localScale = Vector3.one;
                 tilesParent = tilesContainer.transform;
             }
-        }
-
-        private void AddTileToBatchList(char symbol, GameObject tileObj)
-        {
-            switch (symbol)
-            {
-                case '#': wallTiles?.Add(tileObj); break;
-                case ';': undergrowthTiles?.Add(tileObj); break;
-                case '~': waterTiles?.Add(tileObj); break;
-                case '.': pathTiles?.Add(tileObj); break;
-            }
-        }
-
-        private void PerformMeshBatching()
-        {
-            int totalBatches = 0;
-
-            if (wallTiles?.Count > 0)
-                totalBatches += MeshBatcher.BatchInChunks(wallTiles, tilesParent, batchChunkSize, true).Count;
-            if (undergrowthTiles?.Count > 0)
-                totalBatches += MeshBatcher.BatchInChunks(undergrowthTiles, tilesParent, batchChunkSize, true).Count;
-            if (waterTiles?.Count > 0)
-                totalBatches += MeshBatcher.BatchInChunks(waterTiles, tilesParent, batchChunkSize, true).Count;
-            if (pathTiles?.Count > 0)
-                totalBatches += MeshBatcher.BatchInChunks(pathTiles, tilesParent, batchChunkSize, true).Count;
         }
 
         private Material CreatePBRMaterialForSymbol(char symbol, Color color)
@@ -2258,14 +2230,6 @@ namespace FaeMaze.Systems
             spawnSymbolCounter = 0;
             tileSize = mazeGridBehaviour.WorldSpaceTileSize;
 
-            if (enableMeshBatching)
-            {
-                wallTiles = new List<GameObject>();
-                undergrowthTiles = new List<GameObject>();
-                waterTiles = new List<GameObject>();
-                pathTiles = new List<GameObject>();
-            }
-
             occupiedPositions = new List<Vector2>();
             occupiedWallPositions = new List<Vector2>();
             allEdgeSegments = new List<EdgeSegmentData>();
@@ -2432,10 +2396,10 @@ namespace FaeMaze.Systems
 
             yield return null;
 
-            // Step 5: Perform mesh batching
-            if (enableMeshBatching)
+            // Step 5: Apply static batching to reduce draw calls
+            if (enableStaticBatching)
             {
-                PerformMeshBatching();
+                StaticBatchingUtility.Combine(newContainer);
             }
             yield return null;
 

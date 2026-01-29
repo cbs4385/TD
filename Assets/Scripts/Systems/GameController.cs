@@ -159,7 +159,6 @@ namespace FaeMaze.Systems
 
             // NOTE: Visitor-to-Visitor collision is disabled in Project Settings > Physics > Layer Collision Matrix
             // Do NOT call Physics.IgnoreLayerCollision at runtime - it causes Unity assertion errors
-            // when the layer collision matrix has inconsistent state.
 
             // Load starting essence from settings (overrides serialized default)
             startingEssence = GameSettings.StartingEssence;

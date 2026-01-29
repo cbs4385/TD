@@ -191,19 +191,6 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Update PropPlacementController reference
-            var propController = Object.FindFirstObjectByType<FaeMaze.Props.PropPlacementController>();
-            if (propController != null)
-            {
-                var pcType = typeof(FaeMaze.Props.PropPlacementController);
-                var mazeGridField = pcType.GetField("mazeGridBehaviour",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (mazeGridField != null)
-                {
-                    mazeGridField.SetValue(propController, newMaze);
-                }
-            }
-
             // Update HeartPowerManager reference
             var heartPowerManager = Object.FindFirstObjectByType<FaeMaze.HeartPowers.HeartPowerManager>();
             if (heartPowerManager != null)

@@ -187,6 +187,14 @@ namespace FaeMaze.Visitors
         protected List<Vector3> worldPath;
         protected int worldPathIndex;
 
+        // Graph-based navigation (uses actual maze geometry instead of tiles)
+        protected bool useGraphNavigation = false;  // Disabled: graph navigation can drift off walkable areas. Using tile-based instead.
+        protected ForestMaze.GraphPath graphPath;
+        protected int graphSegmentIndex;           // Current segment in graphPath
+        protected float graphSegmentProgress;      // 0-1 progress within current segment
+        protected List<Vector2> currentNodeArc;    // Waypoints for current node traversal
+        protected int nodeArcIndex;                // Index within currentNodeArc
+
         // Movement diagnostic tracking - logs when visitor ends up off walkable tiles
         protected Vector3 lastValidPosition;
         protected string lastMoveCause = "Initial";
@@ -1343,6 +1351,44 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Builds a graph-based path using actual maze geometry (polyline paths and circular nodes).
+        /// This produces smoother, more natural paths than tile-based pathfinding.
+        /// </summary>
+        /// <param name="start">Starting world position</param>
+        /// <param name="end">Destination world position</param>
+        /// <returns>A GraphPath with segments, or null if pathfinding fails</returns>
+        protected virtual ForestMaze.GraphPath BuildGraphPath(Vector3 start, Vector3 end)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
+            {
+                return null;
+            }
+
+            Vector2 start2D = new Vector2(start.x, start.y);
+            Vector2 end2D = new Vector2(end.x, end.y);
+
+            var path = ForestMaze.GraphNavigation.FindPath(mazeGridBehaviour.ForestMapState, start2D, end2D);
+
+            if (path == null || !path.IsValid)
+            {
+                return null;
+            }
+
+            return path;
+        }
+
+        /// <summary>
+        /// Resets the graph navigation state for a new path.
+        /// </summary>
+        protected virtual void ResetGraphNavigationState()
+        {
+            graphSegmentIndex = 0;
+            graphSegmentProgress = 0f;
+            currentNodeArc = null;
+            nodeArcIndex = 0;
+        }
+
+        /// <summary>
         /// Finds the nearest walkable tile to a position.
         /// Wrapper around MazePathfinding.FindNearestWalkableTile for internal use.
         /// </summary>
@@ -1879,20 +1925,17 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Handles movement in world-space navigation mode.
         /// Walks along the world path toward the destination.
-        /// Uses Catmull-Rom spline smoothing for natural curved movement.
+        /// Uses graph-based navigation (polylines) or tile-based fallback.
         /// </summary>
         protected virtual void UpdateWorldSpaceWalking()
         {
-            if (worldPath == null || worldPath.Count == 0)
+            // Check for valid path (graph or tile-based)
+            bool hasGraphPath = graphPath != null && graphPath.IsValid && graphSegmentIndex < graphPath.Segments.Count;
+            bool hasTilePath = worldPath != null && worldPath.Count > 0 && worldPathIndex < worldPath.Count;
+
+            if (!hasGraphPath && !hasTilePath)
             {
                 state = VisitorState.Idle;
-                return;
-            }
-
-            if (worldPathIndex >= worldPath.Count)
-            {
-                // Path complete - arrived at destination
-                OnWorldSpacePathComplete();
                 return;
             }
 
@@ -1907,12 +1950,16 @@ namespace FaeMaze.Visitors
                 effectiveSpeed *= FRIGHTENED_SPEED_MULTIPLIER;
             }
 
-            // Use spline smoothing if enabled and path has enough waypoints
-            if (useSplineSmoothing && worldPath.Count >= 2)
+            // Use graph navigation if enabled and path is valid
+            if (useGraphNavigation && hasGraphPath)
+            {
+                UpdateGraphNavigation(effectiveSpeed);
+            }
+            else if (useSplineSmoothing && hasTilePath && worldPath.Count >= 2)
             {
                 UpdateSplineWalking(effectiveSpeed);
             }
-            else
+            else if (hasTilePath)
             {
                 UpdateDirectWalking(effectiveSpeed);
             }
@@ -2403,6 +2450,337 @@ namespace FaeMaze.Visitors
                     UpdateAnimatorDirection(facingDirection);
                 }
             }
+        }
+
+        /// <summary>
+        /// Updates movement using graph-based navigation with actual maze geometry.
+        /// Uses polylines for edges and arc traversal for nodes.
+        /// </summary>
+        protected virtual void UpdateGraphNavigation(float effectiveSpeed)
+        {
+            if (graphPath == null || !graphPath.IsValid || graphSegmentIndex >= graphPath.Segments.Count)
+            {
+                // No valid graph path - fall back to tile-based
+                UpdateDirectWalking(effectiveSpeed);
+                return;
+            }
+
+            var segment = graphPath.Segments[graphSegmentIndex];
+            Vector3 currentPos = transform.position;
+            Vector2 currentPos2D = new Vector2(currentPos.x, currentPos.y);
+
+            if (segment.Type == ForestMaze.SegmentType.Edge)
+            {
+                UpdateGraphEdgeMovement(segment, effectiveSpeed, currentPos2D);
+            }
+            else // Node
+            {
+                UpdateGraphNodeMovement(segment, effectiveSpeed, currentPos2D);
+            }
+        }
+
+        /// <summary>
+        /// Updates movement along an edge segment using the polyline path.
+        /// NOTE: We use PolylinePoints exclusively because edge.Curve is a simplified
+        /// straight-line Bezier that doesn't match the actual S-curved path where walls are placed.
+        /// </summary>
+        protected virtual void UpdateGraphEdgeMovement(ForestMaze.GraphPathSegment segment, float effectiveSpeed, Vector2 currentPos2D)
+        {
+            var mapState = mazeGridBehaviour.ForestMapState;
+            if (mapState == null || segment.Index >= mapState.Edges.Count)
+            {
+                AdvanceGraphSegment();
+                return;
+            }
+
+            var edge = mapState.Edges[segment.Index];
+            if (edge.PolylinePoints == null || edge.PolylinePoints.Count < 2)
+            {
+                // No valid polyline - skip to next segment
+                AdvanceGraphSegment();
+                return;
+            }
+
+            // Calculate exit progress (where we're trying to reach on this segment)
+            float exitProgress = CalculateEdgeProgressAtPoint(segment, segment.ExitPoint);
+
+            // Calculate progress increment based on speed and segment length (not full edge length)
+            // Use the segment's actual length which accounts for partial traversal
+            float segmentLength = segment.Length > 0 ? segment.Length : CalculatePolylineLength(edge.PolylinePoints);
+            float progressDelta = (effectiveSpeed * Time.deltaTime) / Mathf.Max(segmentLength, 0.1f);
+
+            // Determine direction based on whether exit progress is greater or less than current
+            bool movingForward = exitProgress > graphSegmentProgress;
+            if (movingForward)
+                graphSegmentProgress += progressDelta;
+            else
+                graphSegmentProgress -= progressDelta;
+
+            // Check segment completion: have we reached or passed the exit point?
+            bool completed = movingForward
+                ? (graphSegmentProgress >= exitProgress)
+                : (graphSegmentProgress <= exitProgress);
+
+            if (completed)
+            {
+                // Snap to exit point and advance to next segment
+                graphSegmentProgress = exitProgress;
+                AdvanceGraphSegment();
+                return;
+            }
+
+            // Calculate target position on polyline
+            Vector2 targetPos2D = ForestMaze.EdgeFollower.GetPosition(edge, graphSegmentProgress);
+
+            // Apply aggressive centerline correction to keep visitors on path
+            float lateralOffset = ForestMaze.EdgeFollower.GetLateralOffset(edge, graphSegmentProgress, currentPos2D);
+            Vector2 normal = ForestMaze.EdgeFollower.GetNormal(edge, graphSegmentProgress);
+
+            // Correction strength increases with distance from centerline:
+            // - Within 0.3 units: 30% correction (gentle)
+            // - 0.3-0.6 units: 60% correction (moderate)
+            // - Beyond 0.6 units: 100% correction (snap back to path)
+            float absOffset = Mathf.Abs(lateralOffset);
+            float correctionStrength;
+            if (absOffset < 0.3f)
+                correctionStrength = 0.3f;
+            else if (absOffset < 0.6f)
+                correctionStrength = 0.6f;
+            else
+                correctionStrength = 1.0f;
+
+            targetPos2D -= normal * lateralOffset * correctionStrength;
+
+            // Get facing direction (reversed if moving backward along polyline)
+            Vector2 facingDir = ForestMaze.EdgeFollower.GetDirection(edge, graphSegmentProgress, !movingForward);
+            UpdateAnimatorDirection(facingDir);
+
+            // Set desired position for physics
+            desiredPosition = new Vector3(targetPos2D.x, targetPos2D.y, transform.position.z);
+            hasDesiredPosition = true;
+            RecordMoveCause("GraphEdge");
+        }
+
+        /// <summary>
+        /// Updates movement through a node using arc waypoints along the walkable ring.
+        /// </summary>
+        protected virtual void UpdateGraphNodeMovement(ForestMaze.GraphPathSegment segment, float effectiveSpeed, Vector2 currentPos2D)
+        {
+            var mapState = mazeGridBehaviour.ForestMapState;
+            if (mapState == null || segment.Index >= mapState.Nodes.Count)
+            {
+                AdvanceGraphSegment();
+                return;
+            }
+
+            var node = mapState.Nodes[segment.Index];
+
+            // Initialize node arc waypoints if not done yet
+            if (currentNodeArc == null || currentNodeArc.Count == 0)
+            {
+                currentNodeArc = ForestMaze.NodeTraverser.GetNodeArc(node, segment.EntryPoint, segment.ExitPoint, 4);
+                nodeArcIndex = 0;
+
+                if (currentNodeArc.Count == 0)
+                {
+                    AdvanceGraphSegment();
+                    return;
+                }
+            }
+
+            // Move through arc waypoints
+            if (nodeArcIndex >= currentNodeArc.Count)
+            {
+                // Arc complete - advance to next segment
+                AdvanceGraphSegment();
+                return;
+            }
+
+            Vector2 targetWaypoint = currentNodeArc[nodeArcIndex];
+            float distToWaypoint = Vector2.Distance(currentPos2D, targetWaypoint);
+            float moveDistance = effectiveSpeed * Time.deltaTime;
+
+            if (distToWaypoint <= moveDistance)
+            {
+                // Reached waypoint - move to it and advance
+                Vector2 newPos = targetWaypoint;
+                nodeArcIndex++;
+
+                // If there are more waypoints, consume remaining distance
+                while (nodeArcIndex < currentNodeArc.Count)
+                {
+                    float remainingDist = moveDistance - distToWaypoint;
+                    Vector2 nextWaypoint = currentNodeArc[nodeArcIndex];
+                    float nextDist = Vector2.Distance(newPos, nextWaypoint);
+
+                    if (nextDist <= remainingDist)
+                    {
+                        newPos = nextWaypoint;
+                        distToWaypoint = nextDist;
+                        nodeArcIndex++;
+                    }
+                    else
+                    {
+                        // Move partial distance toward next waypoint
+                        Vector2 dir = (nextWaypoint - newPos).normalized;
+                        newPos = newPos + dir * remainingDist;
+                        break;
+                    }
+                }
+
+                // Check for node center blocking before setting desired position
+                Vector3 targetPos3D = new Vector3(newPos.x, newPos.y, transform.position.z);
+                if (IsBlockedByNodeCenter(targetPos3D, out Vector3 blockedPos))
+                {
+                    desiredPosition = blockedPos;
+                }
+                else
+                {
+                    desiredPosition = targetPos3D;
+                }
+                hasDesiredPosition = true;
+
+                // Check if arc complete after consuming distance
+                if (nodeArcIndex >= currentNodeArc.Count)
+                {
+                    AdvanceGraphSegment();
+                    return; // Exit early - arc is done
+                }
+            }
+            else
+            {
+                // Move toward waypoint
+                Vector2 dir = (targetWaypoint - currentPos2D).normalized;
+                Vector2 newPos = currentPos2D + dir * moveDistance;
+
+                // Check for node center blocking before setting desired position
+                Vector3 targetPos3D = new Vector3(newPos.x, newPos.y, transform.position.z);
+                if (IsBlockedByNodeCenter(targetPos3D, out Vector3 blockedPos))
+                {
+                    desiredPosition = blockedPos;
+                }
+                else
+                {
+                    desiredPosition = targetPos3D;
+                }
+                hasDesiredPosition = true;
+            }
+
+            // Update facing direction (guard against null after AdvanceGraphSegment)
+            if (currentNodeArc != null && nodeArcIndex < currentNodeArc.Count)
+            {
+                Vector2 facingDir = (currentNodeArc[nodeArcIndex] - currentPos2D).normalized;
+                if (facingDir.sqrMagnitude > 0.0001f)
+                {
+                    UpdateAnimatorDirection(facingDir);
+                }
+            }
+
+            RecordMoveCause("GraphNode");
+        }
+
+        /// <summary>
+        /// Advances to the next segment in the graph path.
+        /// </summary>
+        protected virtual void AdvanceGraphSegment()
+        {
+            graphSegmentIndex++;
+            currentNodeArc = null;
+            nodeArcIndex = 0;
+
+            if (graphSegmentIndex < graphPath.Segments.Count)
+            {
+                var nextSegment = graphPath.Segments[graphSegmentIndex];
+
+                // Initialize progress for next segment
+                if (nextSegment.Type == ForestMaze.SegmentType.Edge)
+                {
+                    // Calculate actual progress at entry point (not just 0 or 1)
+                    graphSegmentProgress = CalculateEdgeProgressAtPoint(nextSegment, nextSegment.EntryPoint);
+                }
+                else
+                {
+                    graphSegmentProgress = 0f;
+                }
+
+                // Fire segment enter event
+                OnGraphSegmentEnter(nextSegment);
+            }
+            else
+            {
+                // Path complete
+                OnGraphPathComplete();
+            }
+        }
+
+        /// <summary>
+        /// Called when entering a new graph segment. Override for segment-based behaviors.
+        /// </summary>
+        protected virtual void OnGraphSegmentEnter(ForestMaze.GraphPathSegment segment)
+        {
+            RecordNavigationEvent("SegmentEnter", $"{segment.Type}[{segment.Index}] {(segment.Reversed ? "R" : "")}");
+
+            // For node segments, this is a good place to check for detours/confusion
+            if (segment.Type == ForestMaze.SegmentType.Node)
+            {
+                // Simplified detour handling at node entry
+                HandleDetourAtNode(segment.Index);
+            }
+        }
+
+        /// <summary>
+        /// Called when graph path is complete.
+        /// </summary>
+        protected virtual void OnGraphPathComplete()
+        {
+            RecordNavigationEvent("PathComplete", "Graph path complete");
+            OnWorldSpacePathComplete();
+        }
+
+        /// <summary>
+        /// Handles detour logic when entering a node during graph navigation.
+        /// Simplified version of HandleDetourAtWaypoint for graph-based movement.
+        /// </summary>
+        protected virtual void HandleDetourAtNode(int nodeIndex)
+        {
+            // Base implementation does nothing - derived classes can override for confusion/misstep behavior
+            // This replaces the per-tile HandleDetourAtWaypoint with per-node events (much less frequent)
+        }
+
+        /// <summary>
+        /// Calculates the total length of a polyline.
+        /// </summary>
+        private float CalculatePolylineLength(List<Vector2> points)
+        {
+            if (points == null || points.Count < 2)
+                return 0f;
+
+            float length = 0f;
+            for (int i = 1; i < points.Count; i++)
+            {
+                length += Vector2.Distance(points[i - 1], points[i]);
+            }
+            return length;
+        }
+
+        /// <summary>
+        /// Calculates the curve parameter (0-1) for a point on an edge segment.
+        /// This is used to properly initialize progress when entering an edge, especially
+        /// for partial edges where the entry point is not at t=0 or t=1.
+        /// </summary>
+        private float CalculateEdgeProgressAtPoint(ForestMaze.GraphPathSegment segment, Vector2 point)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.ForestMapState == null)
+                return segment.Reversed ? 1f : 0f;
+
+            var mapState = mazeGridBehaviour.ForestMapState;
+            if (segment.Index >= mapState.Edges.Count)
+                return segment.Reversed ? 1f : 0f;
+
+            var edge = mapState.Edges[segment.Index];
+
+            // Use EdgeFollower to find the actual curve parameter
+            return ForestMaze.EdgeFollower.GetProgress(edge, point);
         }
 
         /// <summary>
@@ -3287,17 +3665,64 @@ namespace FaeMaze.Visitors
 
             Vector3 destination = GetDestinationForCurrentState();
 
+            // Build graph-based path if enabled
+            if (useGraphNavigation)
+            {
+                graphPath = BuildGraphPath(transform.position, destination);
+                ResetGraphNavigationState();
+
+                // If graph path valid, initialize first segment
+                if (graphPath != null && graphPath.IsValid && graphPath.Segments.Count > 0)
+                {
+                    var firstSegment = graphPath.Segments[0];
+                    if (firstSegment.Type == ForestMaze.SegmentType.Edge)
+                    {
+                        // Calculate actual progress at entry point (not just 0 or 1)
+                        graphSegmentProgress = CalculateEdgeProgressAtPoint(firstSegment, firstSegment.EntryPoint);
+                    }
+                    OnGraphSegmentEnter(firstSegment);
+
+                    // Debug: Log successful graph path creation (only when verbose logging enabled)
+                    #if UNITY_EDITOR
+                    if (logVisitorPathfinding)
+                    {
+                        Debug.Log($"[GraphNav] {name}: Created graph path with {graphPath.Segments.Count} segments, " +
+                            $"first segment: {firstSegment.Type}[{firstSegment.Index}]");
+                    }
+                    #endif
+                }
+                else
+                {
+                    // Debug: Log graph path failure (only when verbose logging enabled)
+                    #if UNITY_EDITOR
+                    if (logVisitorPathfinding)
+                    {
+                        Debug.LogWarning($"[GraphNav] {name}: Graph path failed! graphPath={graphPath != null}, " +
+                            $"IsValid={graphPath?.IsValid}, Segments={graphPath?.Segments?.Count ?? 0}. " +
+                            $"From ({transform.position.x:F1},{transform.position.y:F1}) to ({destination.x:F1},{destination.y:F1})");
+                    }
+                    #endif
+                }
+            }
+
+            // Also build tile-based path as fallback
             worldPath = BuildWorldPath(transform.position, destination);
             worldPathIndex = 0;
             worldDestination = destination;
             ResetSplineState();
 
             // Record path recalculation in audit log
-            int pathCount = worldPath?.Count ?? 0;
-            string firstWp = pathCount > 0 ? $"({worldPath[0].x:F2}, {worldPath[0].y:F2})" : "none";
-            RecordNavigationEvent("PathCalc", $"Recalc to ({destination.x:F2}, {destination.y:F2}), {pathCount} wps, first={firstWp}");
+            int graphSegments = graphPath?.Segments?.Count ?? 0;
+            int tileWaypoints = worldPath?.Count ?? 0;
+            string pathInfo = useGraphNavigation
+                ? $"Graph:{graphSegments} segs, Tile:{tileWaypoints} wps"
+                : $"Tile:{tileWaypoints} wps";
+            RecordNavigationEvent("PathCalc", $"Recalc to ({destination.x:F2}, {destination.y:F2}), {pathInfo}");
 
-            if (worldPath != null && worldPath.Count > 0)
+            bool hasValidPath = (useGraphNavigation && graphPath != null && graphPath.IsValid) ||
+                               (worldPath != null && worldPath.Count > 0);
+
+            if (hasValidPath)
             {
                 RefreshStateFromFlags();
             }
@@ -4048,7 +4473,7 @@ namespace FaeMaze.Visitors
         {
             // Set layer to "Visitor" (layer 6) so visitors don't collide with each other
             // The physics collision matrix has Visitor-Visitor collisions disabled
-            gameObject.layer = 6;  // Visitor layer
+            SetLayerRecursively(gameObject, 6);  // Set ALL objects to Visitor layer
 
             rb3D = GetComponent<Rigidbody>();
             if (rb3D == null)
@@ -4175,6 +4600,19 @@ namespace FaeMaze.Visitors
                     return found;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Sets the layer of a GameObject and all its children recursively.
+        /// Used to ensure all visitor colliders are on the Visitor layer (6).
+        /// </summary>
+        private void SetLayerRecursively(GameObject obj, int layer)
+        {
+            obj.layer = layer;
+            foreach (Transform child in obj.transform)
+            {
+                SetLayerRecursively(child.gameObject, layer);
+            }
         }
 
         /// <summary>
@@ -4864,8 +5302,18 @@ namespace FaeMaze.Visitors
 
         protected virtual void OnDrawGizmos()
         {
-            // Draw world-space path with waypoint spheres
-            if (worldPath != null && worldPath.Count > 0)
+            // Draw graph path with smooth curves (if using graph navigation)
+            if (useGraphNavigation && graphPath != null && graphPath.IsValid && mazeGridBehaviour != null)
+            {
+                var mapState = mazeGridBehaviour.ForestMapState;
+                if (mapState != null)
+                {
+                    DrawGraphPathGizmos(mapState);
+                }
+            }
+
+            // Draw world-space (tile) path only if NOT using graph navigation or as fallback
+            if (!useGraphNavigation && worldPath != null && worldPath.Count > 0)
             {
                 // Draw path lines in cyan
                 Gizmos.color = Color.cyan;
@@ -4920,6 +5368,98 @@ namespace FaeMaze.Visitors
             // Draw visitor position and direction
             Gizmos.color = Color.white;
             Gizmos.DrawWireSphere(transform.position, 0.25f);
+        }
+
+        /// <summary>
+        /// Draws the graph path with polylines for edges and arcs for nodes.
+        /// </summary>
+        private void DrawGraphPathGizmos(ForestMaze.PlanarForestMazeGenerator.ForestMapState mapState)
+        {
+            for (int segIdx = 0; segIdx < graphPath.Segments.Count; segIdx++)
+            {
+                var segment = graphPath.Segments[segIdx];
+                bool isCurrentSegment = segIdx == graphSegmentIndex;
+                bool isPastSegment = segIdx < graphSegmentIndex;
+
+                // Color: Green for current, Gray for past, Cyan for future
+                if (isPastSegment)
+                    Gizmos.color = Color.gray;
+                else if (isCurrentSegment)
+                    Gizmos.color = Color.green;
+                else
+                    Gizmos.color = Color.cyan;
+
+                if (segment.Type == ForestMaze.SegmentType.Edge)
+                {
+                    // Draw edge using polyline (the actual path where walls are placed)
+                    if (segment.Index < mapState.Edges.Count)
+                    {
+                        var edge = mapState.Edges[segment.Index];
+                        // ALWAYS use polyline - it matches the actual path visitors follow
+                        if (edge.PolylinePoints != null && edge.PolylinePoints.Count >= 2)
+                        {
+                            for (int i = 0; i < edge.PolylinePoints.Count - 1; i++)
+                            {
+                                Vector3 p1 = new Vector3(edge.PolylinePoints[i].x, edge.PolylinePoints[i].y, 0f);
+                                Vector3 p2 = new Vector3(edge.PolylinePoints[i + 1].x, edge.PolylinePoints[i + 1].y, 0f);
+                                Gizmos.DrawLine(p1, p2);
+                            }
+                        }
+                    }
+
+                    // Draw entry/exit points
+                    Gizmos.color = isCurrentSegment ? Color.yellow : Color.white;
+                    Gizmos.DrawWireSphere(new Vector3(segment.EntryPoint.x, segment.EntryPoint.y, 0f), 0.2f);
+                    Gizmos.DrawWireSphere(new Vector3(segment.ExitPoint.x, segment.ExitPoint.y, 0f), 0.2f);
+                }
+                else // Node segment
+                {
+                    // Draw node arc
+                    if (segment.Index < mapState.Nodes.Count)
+                    {
+                        var node = mapState.Nodes[segment.Index];
+
+                        // Draw arc through walkable ring
+                        var arcPoints = ForestMaze.NodeTraverser.GetNodeArc(node, segment.EntryPoint, segment.ExitPoint, 8);
+                        for (int i = 0; i < arcPoints.Count - 1; i++)
+                        {
+                            Vector3 p1 = new Vector3(arcPoints[i].x, arcPoints[i].y, 0f);
+                            Vector3 p2 = new Vector3(arcPoints[i + 1].x, arcPoints[i + 1].y, 0f);
+                            Gizmos.DrawLine(p1, p2);
+                        }
+
+                        // Draw node center reference
+                        Gizmos.color = new Color(1f, 0.5f, 0f, 0.3f); // Orange
+                        Gizmos.DrawWireSphere(new Vector3(node.Position.x, node.Position.y, 0f), 1.0f);
+                    }
+                }
+
+                // Label segment
+                #if UNITY_EDITOR
+                Vector3 labelPos = new Vector3(segment.EntryPoint.x, segment.EntryPoint.y, 0f) + Vector3.up * 0.8f;
+                string label = $"{segIdx}: {segment.Type}[{segment.Index}]";
+                if (isCurrentSegment) label += " (CURRENT)";
+                UnityEditor.Handles.Label(labelPos, label);
+                #endif
+            }
+
+            // Draw current position on graph if in edge movement
+            if (graphSegmentIndex < graphPath.Segments.Count)
+            {
+                var currentSeg = graphPath.Segments[graphSegmentIndex];
+                if (currentSeg.Type == ForestMaze.SegmentType.Edge && currentSeg.Index < mapState.Edges.Count)
+                {
+                    var edge = mapState.Edges[currentSeg.Index];
+                    Vector2 currentGraphPos = ForestMaze.EdgeFollower.GetPosition(edge, graphSegmentProgress);
+                    Gizmos.color = Color.red;
+                    Gizmos.DrawSphere(new Vector3(currentGraphPos.x, currentGraphPos.y, 0f), 0.3f);
+
+                    #if UNITY_EDITOR
+                    UnityEditor.Handles.Label(new Vector3(currentGraphPos.x, currentGraphPos.y + 0.5f, 0f),
+                        $"Progress: {graphSegmentProgress:F2}");
+                    #endif
+                }
+            }
         }
 
         #endregion

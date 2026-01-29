@@ -123,24 +123,8 @@ namespace FaeMaze.Cameras
 
             Vector2 focalPos2D = new Vector2(focalPointTransform.position.x, focalPointTransform.position.y);
 
-            // Check if focal point is over a walkable tile
-            isOverWalkableArea = false;
-            var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
-
-            foreach (var tile in mazeData.Tiles)
-            {
-                if (!tile.Walkable) continue;
-
-                float halfSize = tile.Size * 0.5f;
-                float distSq = (tile.Position - focalPos2D).sqrMagnitude;
-
-                // Check if focal point is within tile bounds (using half-size as radius)
-                if (distSq <= halfSize * halfSize)
-                {
-                    isOverWalkableArea = true;
-                    break;
-                }
-            }
+            // Use existing IsWalkable() which uses spatial grid - O(1) instead of O(n) tile iteration
+            isOverWalkableArea = mazeGridBehaviour.WorldSpaceMazeData.IsWalkable(focalPos2D);
         }
 
         private void OnDestroy()

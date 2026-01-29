@@ -1320,6 +1320,7 @@ namespace FaeMaze.Systems
             var fairyRing = ring.GetComponent<FaeMaze.Props.FairyRing>();
             if (fairyRing == null)
             {
+                // Ensure the ring has a trigger collider for OnTriggerEnter
                 var collider = ring.GetComponent<Collider>();
                 if (collider == null)
                 {
@@ -1328,6 +1329,21 @@ namespace FaeMaze.Systems
                     sphereCollider.radius = 3f;
                     sphereCollider.center = Vector3.zero; // XY-plane collision
                 }
+                else if (!collider.isTrigger)
+                {
+                    collider.isTrigger = true;
+                }
+
+                // Ensure the ring has a kinematic Rigidbody for trigger events to work
+                // Unity requires at least one colliding object to have a Rigidbody for OnTriggerEnter
+                var rb = ring.GetComponent<Rigidbody>();
+                if (rb == null)
+                {
+                    rb = ring.AddComponent<Rigidbody>();
+                    rb.isKinematic = true;
+                    rb.useGravity = false;
+                }
+
                 fairyRing = ring.AddComponent<FaeMaze.Props.FairyRing>();
             }
 

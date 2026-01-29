@@ -130,7 +130,12 @@ namespace FaeMaze.Props
 
         private void OnTriggerEnter(Collider other)
         {
+            // The visitor's collider is on the "Detect" child, but VisitorControllerBase is on the root
             var visitor = other.GetComponent<VisitorControllerBase>();
+            if (visitor == null)
+            {
+                visitor = other.GetComponentInParent<VisitorControllerBase>();
+            }
             if (visitor != null)
             {
                 OnVisitorEnter(visitor);
@@ -139,7 +144,12 @@ namespace FaeMaze.Props
 
         private void OnTriggerExit(Collider other)
         {
+            // The visitor's collider is on the "Detect" child, but VisitorControllerBase is on the root
             var visitor = other.GetComponent<VisitorControllerBase>();
+            if (visitor == null)
+            {
+                visitor = other.GetComponentInParent<VisitorControllerBase>();
+            }
             if (visitor != null)
             {
                 OnVisitorExit(visitor);
