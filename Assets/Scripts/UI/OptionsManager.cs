@@ -30,55 +30,80 @@ namespace FaeMaze.UI
         [SerializeField] private TMP_Dropdown resolutionDropdown;
         [SerializeField] private Slider fieldOfViewSlider;
         [SerializeField] private TextMeshProUGUI fieldOfViewText;
+        [SerializeField] private TMP_InputField fieldOfViewInput;
         [SerializeField] private Slider cameraPanSpeedSlider;
         [SerializeField] private TextMeshProUGUI cameraPanSpeedText;
+        [SerializeField] private TMP_InputField cameraPanSpeedInput;
         [SerializeField] private Slider cameraZoomSpeedSlider;
         [SerializeField] private TextMeshProUGUI cameraZoomSpeedText;
+        [SerializeField] private TMP_InputField cameraZoomSpeedInput;
         [SerializeField] private Slider cameraMinZoomSlider;
         [SerializeField] private TextMeshProUGUI cameraMinZoomText;
+        [SerializeField] private TMP_InputField cameraMinZoomInput;
         [SerializeField] private Slider cameraMaxZoomSlider;
         [SerializeField] private TextMeshProUGUI cameraMaxZoomText;
+        [SerializeField] private TMP_InputField cameraMaxZoomInput;
         [SerializeField] private Slider cameraMovementSpeedSlider;
         [SerializeField] private TextMeshProUGUI cameraMovementSpeedText;
+        [SerializeField] private TMP_InputField cameraMovementSpeedInput;
+        [SerializeField] private Slider lightLevelSlider;
+        [SerializeField] private TextMeshProUGUI lightLevelText;
+        [SerializeField] private TMP_InputField lightLevelInput;
 
         [Header("Audio Settings")]
         [SerializeField] private Slider sfxVolumeSlider;
         [SerializeField] private TextMeshProUGUI sfxVolumeText;
+        [SerializeField] private TMP_InputField sfxVolumeInput;
         [SerializeField] private Slider musicVolumeSlider;
         [SerializeField] private TextMeshProUGUI musicVolumeText;
+        [SerializeField] private TMP_InputField musicVolumeInput;
 
         [Header("Audio - Individual Sound Volumes")]
         [SerializeField] private Slider lanternVolumeSlider;
         [SerializeField] private TextMeshProUGUI lanternVolumeText;
+        [SerializeField] private TMP_InputField lanternVolumeInput;
         [SerializeField] private Slider fairyRingVolumeSlider;
         [SerializeField] private TextMeshProUGUI fairyRingVolumeText;
+        [SerializeField] private TMP_InputField fairyRingVolumeInput;
         [SerializeField] private Slider pondVolumeSlider;
         [SerializeField] private TextMeshProUGUI pondVolumeText;
+        [SerializeField] private TMP_InputField pondVolumeInput;
         [SerializeField] private Slider sculptVolumeSlider;
         [SerializeField] private TextMeshProUGUI sculptVolumeText;
+        [SerializeField] private TMP_InputField sculptVolumeInput;
 
         [Header("Gameplay - Visitor Settings")]
         [SerializeField] private Slider visitorSpeedSlider;
         [SerializeField] private TextMeshProUGUI visitorSpeedText;
+        [SerializeField] private TMP_InputField visitorSpeedInput;
         [SerializeField] private Toggle confusionEnabledToggle;
         [SerializeField] private Slider confusionChanceSlider;
         [SerializeField] private TextMeshProUGUI confusionChanceText;
+        [SerializeField] private TMP_InputField confusionChanceInput;
         [SerializeField] private Slider confusionDistanceMinSlider;
         [SerializeField] private TextMeshProUGUI confusionDistanceMinText;
+        [SerializeField] private TMP_InputField confusionDistanceMinInput;
         [SerializeField] private Slider confusionDistanceMaxSlider;
         [SerializeField] private TextMeshProUGUI confusionDistanceMaxText;
+        [SerializeField] private TMP_InputField confusionDistanceMaxInput;
 
         [Header("Gameplay - Spawning Settings")]
-        [SerializeField] private Slider spawnIntervalSlider;
-        [SerializeField] private TextMeshProUGUI spawnIntervalText;
+        [SerializeField] private Slider spawnIntervalSlider;  // Now used as difficulty selector (0=Easy, 1=Normal, 2=Hard)
+        [SerializeField] private TextMeshProUGUI spawnIntervalText;  // Shows "EASY", "NORMAL", or "HARD"
+        [SerializeField] private TMP_InputField spawnIntervalInput;  // Hidden for difficulty mode
         [SerializeField] private Toggle enableRedCapToggle;
 
+        // Difficulty settings mapping (slider value -> spawn interval in seconds)
+        private static readonly string[] difficultyLabels = { "EASY", "NORMAL", "HARD" };
+        private static readonly float[] difficultySpawnIntervals = { 2f, 5f, 8f };  // Easy=2s, Normal=5s, Hard=8s
+
         [Header("Gameplay - Game Flow Settings")]
-        [SerializeField] private Toggle autoStartNextWaveToggle;
         [SerializeField] private Slider autoStartDelaySlider;
         [SerializeField] private TextMeshProUGUI autoStartDelayText;
+        [SerializeField] private TMP_InputField autoStartDelayInput;
         [SerializeField] private Slider startingEssenceSlider;
         [SerializeField] private TextMeshProUGUI startingEssenceText;
+        [SerializeField] private TMP_InputField startingEssenceInput;
         [SerializeField] private Toggle useFixedSeedToggle;
         [SerializeField] private TMP_InputField randomSeedInput;
         [SerializeField] private TextMeshProUGUI currentSeedText;
@@ -86,6 +111,7 @@ namespace FaeMaze.UI
         [Header("Gameplay - Player Controls")]
         [SerializeField] private Slider focusSpeedSlider;
         [SerializeField] private TextMeshProUGUI focusSpeedText;
+        [SerializeField] private TMP_InputField focusSpeedInput;
         [SerializeField] private TMP_Dropdown heartPower1KeyDropdown;
         [SerializeField] private TMP_Dropdown heartPower2KeyDropdown;
         [SerializeField] private TMP_Dropdown heartPower3KeyDropdown;
@@ -124,6 +150,7 @@ namespace FaeMaze.UI
         private string bindingCameraFocusHeart;
         private string bindingCameraFocusEntrance;
         private string bindingCameraFocusVisitor;
+        private string bindingCameraForward;
         private string bindingCameraOrbit;
         private string bindingCameraPan;
         private string bindingScreenshot;
@@ -369,12 +396,27 @@ namespace FaeMaze.UI
                 cameraMaxZoomSlider.onValueChanged.AddListener(OnCameraMaxZoomChanged);
             if (cameraMovementSpeedSlider != null)
                 cameraMovementSpeedSlider.onValueChanged.AddListener(OnCameraMovementSpeedChanged);
+            if (lightLevelSlider != null)
+                lightLevelSlider.onValueChanged.AddListener(OnLightLevelChanged);
+
+            // Video input field syncs
+            SetupSliderInputSync(fieldOfViewSlider, fieldOfViewInput, "{0:F0}");
+            SetupSliderInputSync(cameraPanSpeedSlider, cameraPanSpeedInput, "{0:F1}");
+            SetupSliderInputSync(cameraZoomSpeedSlider, cameraZoomSpeedInput, "{0:F1}");
+            SetupSliderInputSync(cameraMinZoomSlider, cameraMinZoomInput, "{0:F1}");
+            SetupSliderInputSync(cameraMaxZoomSlider, cameraMaxZoomInput, "{0:F1}");
+            SetupSliderInputSync(cameraMovementSpeedSlider, cameraMovementSpeedInput, "{0:F1}");
+            SetupSliderInputSync(lightLevelSlider, lightLevelInput, "{0:F1}");
 
             // Audio settings
             if (sfxVolumeSlider != null)
                 sfxVolumeSlider.onValueChanged.AddListener(OnSfxVolumeChanged);
             if (musicVolumeSlider != null)
                 musicVolumeSlider.onValueChanged.AddListener(OnMusicVolumeChanged);
+
+            // Audio input field syncs (percentages)
+            SetupSliderInputSync(sfxVolumeSlider, sfxVolumeInput, "{0:F0}", isPercentage: true);
+            SetupSliderInputSync(musicVolumeSlider, musicVolumeInput, "{0:F0}", isPercentage: true);
 
             // Individual sound volumes
             if (lanternVolumeSlider != null)
@@ -385,6 +427,12 @@ namespace FaeMaze.UI
                 pondVolumeSlider.onValueChanged.AddListener(OnPondVolumeChanged);
             if (sculptVolumeSlider != null)
                 sculptVolumeSlider.onValueChanged.AddListener(OnSculptVolumeChanged);
+
+            // Individual sound volume input field syncs (percentages)
+            SetupSliderInputSync(lanternVolumeSlider, lanternVolumeInput, "{0:F0}", isPercentage: true);
+            SetupSliderInputSync(fairyRingVolumeSlider, fairyRingVolumeInput, "{0:F0}", isPercentage: true);
+            SetupSliderInputSync(pondVolumeSlider, pondVolumeInput, "{0:F0}", isPercentage: true);
+            SetupSliderInputSync(sculptVolumeSlider, sculptVolumeInput, "{0:F0}", isPercentage: true);
 
             // Visitor Gameplay
             if (visitorSpeedSlider != null)
@@ -398,15 +446,28 @@ namespace FaeMaze.UI
             if (confusionDistanceMaxSlider != null)
                 confusionDistanceMaxSlider.onValueChanged.AddListener(OnConfusionDistanceMaxChanged);
 
-            // Spawning Settings
+            // Visitor Gameplay input field syncs
+            SetupSliderInputSync(visitorSpeedSlider, visitorSpeedInput, "{0:F1}");
+            SetupSliderInputSync(confusionChanceSlider, confusionChanceInput, "{0:F0}", isPercentage: true);
+            SetupSliderInputSync(confusionDistanceMinSlider, confusionDistanceMinInput, "{0:F0}");
+            SetupSliderInputSync(confusionDistanceMaxSlider, confusionDistanceMaxInput, "{0:F0}");
+
+            // Spawning Settings - Difficulty selector (3 stops: Easy, Normal, Hard)
             if (spawnIntervalSlider != null)
-                spawnIntervalSlider.onValueChanged.AddListener(OnSpawnIntervalChanged);
+            {
+                spawnIntervalSlider.wholeNumbers = true;
+                spawnIntervalSlider.minValue = 0;
+                spawnIntervalSlider.maxValue = 2;
+                spawnIntervalSlider.onValueChanged.AddListener(OnDifficultyChanged);
+            }
             if (enableRedCapToggle != null)
                 enableRedCapToggle.onValueChanged.AddListener(OnEnableRedCapChanged);
 
+            // Hide the input field for difficulty mode (we show labels instead)
+            if (spawnIntervalInput != null)
+                spawnIntervalInput.gameObject.SetActive(false);
+
             // Game Flow
-            if (autoStartNextWaveToggle != null)
-                autoStartNextWaveToggle.onValueChanged.AddListener(OnAutoStartNextWaveChanged);
             if (autoStartDelaySlider != null)
                 autoStartDelaySlider.onValueChanged.AddListener(OnAutoStartDelayChanged);
             if (startingEssenceSlider != null)
@@ -416,9 +477,16 @@ namespace FaeMaze.UI
             if (randomSeedInput != null)
                 randomSeedInput.onEndEdit.AddListener(OnRandomSeedInputChanged);
 
+            // Game Flow input field syncs
+            SetupSliderInputSync(autoStartDelaySlider, autoStartDelayInput, "{0:F1}");
+            SetupSliderInputSync(startingEssenceSlider, startingEssenceInput, "{0:F0}");
+
             // Player Controls
             if (focusSpeedSlider != null)
                 focusSpeedSlider.onValueChanged.AddListener(OnFocusSpeedChanged);
+
+            // Player Controls input field sync
+            SetupSliderInputSync(focusSpeedSlider, focusSpeedInput, "{0:F1}");
 
             // Screenshot Settings
             if (browseScreenshotPathButton != null)
@@ -443,58 +511,84 @@ namespace FaeMaze.UI
             // Camera settings (in Video tab)
             SetSliderValue(fieldOfViewSlider, GameSettings.CameraFieldOfView, 30f, 120f);
             UpdateValueText(fieldOfViewText, GameSettings.CameraFieldOfView, "{0:F0}°");
+            UpdateInputFromSlider(fieldOfViewInput, GameSettings.CameraFieldOfView, "{0:F0}");
             SetSliderValue(cameraPanSpeedSlider, GameSettings.CameraPanSpeed, 1f, 30f);
             UpdateValueText(cameraPanSpeedText, GameSettings.CameraPanSpeed, "{0:F1}");
+            UpdateInputFromSlider(cameraPanSpeedInput, GameSettings.CameraPanSpeed, "{0:F1}");
             SetSliderValue(cameraZoomSpeedSlider, GameSettings.CameraZoomSpeed, 1f, 20f);
             UpdateValueText(cameraZoomSpeedText, GameSettings.CameraZoomSpeed, "{0:F1}");
+            UpdateInputFromSlider(cameraZoomSpeedInput, GameSettings.CameraZoomSpeed, "{0:F1}");
             SetSliderValue(cameraMinZoomSlider, GameSettings.CameraMinZoom, 1f, 10f);
             UpdateValueText(cameraMinZoomText, GameSettings.CameraMinZoom, "{0:F1}");
+            UpdateInputFromSlider(cameraMinZoomInput, GameSettings.CameraMinZoom, "{0:F1}");
             SetSliderValue(cameraMaxZoomSlider, GameSettings.CameraMaxZoom, 10f, 50f);
             UpdateValueText(cameraMaxZoomText, GameSettings.CameraMaxZoom, "{0:F1}");
+            UpdateInputFromSlider(cameraMaxZoomInput, GameSettings.CameraMaxZoom, "{0:F1}");
             SetSliderValue(cameraMovementSpeedSlider, GameSettings.CameraMovementSpeed, 0.1f, 10f);
             UpdateValueText(cameraMovementSpeedText, GameSettings.CameraMovementSpeed, "{0:F1}");
+            UpdateInputFromSlider(cameraMovementSpeedInput, GameSettings.CameraMovementSpeed, "{0:F1}");
+            SetSliderValue(lightLevelSlider, GameSettings.LightLevel, 0f, 2f);
+            UpdateValueText(lightLevelText, GameSettings.LightLevel, "{0:F1}");
+            UpdateInputFromSlider(lightLevelInput, GameSettings.LightLevel, "{0:F1}");
 
             // Audio settings
             SetSliderValue(sfxVolumeSlider, GameSettings.SfxVolume, 0f, 1f);
             UpdateValueText(sfxVolumeText, GameSettings.SfxVolume, "{0:P0}");
+            UpdateInputFromSlider(sfxVolumeInput, GameSettings.SfxVolume, "{0:F0}", isPercentage: true);
             SetSliderValue(musicVolumeSlider, GameSettings.MusicVolume, 0f, 1f);
             UpdateValueText(musicVolumeText, GameSettings.MusicVolume, "{0:P0}");
+            UpdateInputFromSlider(musicVolumeInput, GameSettings.MusicVolume, "{0:F0}", isPercentage: true);
 
             // Individual sound volumes
             SetSliderValue(lanternVolumeSlider, GameSettings.LanternVolume, 0f, 1f);
             UpdateValueText(lanternVolumeText, GameSettings.LanternVolume, "{0:P0}");
+            UpdateInputFromSlider(lanternVolumeInput, GameSettings.LanternVolume, "{0:F0}", isPercentage: true);
             SetSliderValue(fairyRingVolumeSlider, GameSettings.FairyRingVolume, 0f, 1f);
             UpdateValueText(fairyRingVolumeText, GameSettings.FairyRingVolume, "{0:P0}");
+            UpdateInputFromSlider(fairyRingVolumeInput, GameSettings.FairyRingVolume, "{0:F0}", isPercentage: true);
             SetSliderValue(pondVolumeSlider, GameSettings.PondVolume, 0f, 1f);
             UpdateValueText(pondVolumeText, GameSettings.PondVolume, "{0:P0}");
+            UpdateInputFromSlider(pondVolumeInput, GameSettings.PondVolume, "{0:F0}", isPercentage: true);
             SetSliderValue(sculptVolumeSlider, GameSettings.SculptVolume, 0f, 1f);
             UpdateValueText(sculptVolumeText, GameSettings.SculptVolume, "{0:P0}");
+            UpdateInputFromSlider(sculptVolumeInput, GameSettings.SculptVolume, "{0:F0}", isPercentage: true);
 
             // Visitor Gameplay
             SetSliderValue(visitorSpeedSlider, GameSettings.VisitorSpeed, 0.5f, 10f);
             UpdateValueText(visitorSpeedText, GameSettings.VisitorSpeed, "{0:F1}");
+            UpdateInputFromSlider(visitorSpeedInput, GameSettings.VisitorSpeed, "{0:F1}");
             if (confusionEnabledToggle != null)
                 confusionEnabledToggle.isOn = GameSettings.ConfusionEnabled;
             SetSliderValue(confusionChanceSlider, GameSettings.ConfusionChance, 0f, 1f);
             UpdateValueText(confusionChanceText, GameSettings.ConfusionChance, "{0:P0}");
+            UpdateInputFromSlider(confusionChanceInput, GameSettings.ConfusionChance, "{0:F0}", isPercentage: true);
             SetSliderValue(confusionDistanceMinSlider, GameSettings.ConfusionDistanceMin, 1f, 50f);
             UpdateValueText(confusionDistanceMinText, GameSettings.ConfusionDistanceMin, "{0:F0}");
+            UpdateInputFromSlider(confusionDistanceMinInput, GameSettings.ConfusionDistanceMin, "{0:F0}");
             SetSliderValue(confusionDistanceMaxSlider, GameSettings.ConfusionDistanceMax, 1f, 50f);
             UpdateValueText(confusionDistanceMaxText, GameSettings.ConfusionDistanceMax, "{0:F0}");
+            UpdateInputFromSlider(confusionDistanceMaxInput, GameSettings.ConfusionDistanceMax, "{0:F0}");
 
-            // Spawning Settings
-            SetSliderValue(spawnIntervalSlider, GameSettings.SpawnInterval, 0.1f, 5f);
-            UpdateValueText(spawnIntervalText, GameSettings.SpawnInterval, "{0:F1}s");
+            // Spawning Settings - Load difficulty based on saved spawn interval
+            int difficultyIndex = SpawnIntervalToDifficultyIndex(GameSettings.SpawnInterval);
+            if (spawnIntervalSlider != null)
+            {
+                spawnIntervalSlider.wholeNumbers = true;
+                spawnIntervalSlider.minValue = 0;
+                spawnIntervalSlider.maxValue = 2;
+                spawnIntervalSlider.value = difficultyIndex;
+            }
+            UpdateDifficultyText(difficultyIndex);
             if (enableRedCapToggle != null)
                 enableRedCapToggle.isOn = GameSettings.EnableRedCap;
 
             // Game Flow
-            if (autoStartNextWaveToggle != null)
-                autoStartNextWaveToggle.isOn = GameSettings.AutoStartNextWave;
             SetSliderValue(autoStartDelaySlider, GameSettings.AutoStartDelay, 0f, 10f);
             UpdateValueText(autoStartDelayText, GameSettings.AutoStartDelay, "{0:F1}s");
+            UpdateInputFromSlider(autoStartDelayInput, GameSettings.AutoStartDelay, "{0:F1}");
             SetSliderValue(startingEssenceSlider, GameSettings.StartingEssence, 0f, 1000f);
             UpdateValueText(startingEssenceText, GameSettings.StartingEssence, "{0:F0}");
+            UpdateInputFromSlider(startingEssenceInput, GameSettings.StartingEssence, "{0:F0}");
             if (useFixedSeedToggle != null)
                 useFixedSeedToggle.isOn = GameSettings.UseFixedSeed;
             if (randomSeedInput != null)
@@ -507,6 +601,7 @@ namespace FaeMaze.UI
             // Player Controls
             SetSliderValue(focusSpeedSlider, GameSettings.FocusSpeed, 5f, 15f);
             UpdateValueText(focusSpeedText, GameSettings.FocusSpeed, "{0:F1}");
+            UpdateInputFromSlider(focusSpeedInput, GameSettings.FocusSpeed, "{0:F1}");
             SetDropdownValue(heartPower1KeyDropdown, KeyCodeToDropdownIndex(GameSettings.HeartPower1Key));
             SetDropdownValue(heartPower2KeyDropdown, KeyCodeToDropdownIndex(GameSettings.HeartPower2Key));
             SetDropdownValue(heartPower3KeyDropdown, KeyCodeToDropdownIndex(GameSettings.HeartPower3Key));
@@ -549,69 +644,114 @@ namespace FaeMaze.UI
         private void OnFieldOfViewChanged(float value)
         {
             UpdateValueText(fieldOfViewText, value, "{0:F0}°");
+            UpdateInputFromSlider(fieldOfViewInput, value, "{0:F0}");
         }
 
         private void OnCameraPanSpeedChanged(float value)
         {
             UpdateValueText(cameraPanSpeedText, value, "{0:F1}");
+            UpdateInputFromSlider(cameraPanSpeedInput, value, "{0:F1}");
         }
 
         private void OnCameraZoomSpeedChanged(float value)
         {
             UpdateValueText(cameraZoomSpeedText, value, "{0:F1}");
+            UpdateInputFromSlider(cameraZoomSpeedInput, value, "{0:F1}");
         }
 
         private void OnCameraMinZoomChanged(float value)
         {
             UpdateValueText(cameraMinZoomText, value, "{0:F1}");
+            UpdateInputFromSlider(cameraMinZoomInput, value, "{0:F1}");
         }
 
         private void OnCameraMaxZoomChanged(float value)
         {
             UpdateValueText(cameraMaxZoomText, value, "{0:F1}");
+            UpdateInputFromSlider(cameraMaxZoomInput, value, "{0:F1}");
         }
 
         private void OnCameraMovementSpeedChanged(float value)
         {
             UpdateValueText(cameraMovementSpeedText, value, "{0:F1}");
+            UpdateInputFromSlider(cameraMovementSpeedInput, value, "{0:F1}");
+        }
+
+        private void OnLightLevelChanged(float value)
+        {
+            UpdateValueText(lightLevelText, value, "{0:F1}");
+            UpdateInputFromSlider(lightLevelInput, value, "{0:F1}");
+            // Apply light level immediately to the directional light if it exists
+            ApplyLightLevel(value);
+        }
+
+        private void ApplyLightLevel(float intensity)
+        {
+            // Find and update the directional light in the scene
+            var directionalLight = FindDirectionalLight();
+            if (directionalLight != null)
+            {
+                directionalLight.intensity = intensity;
+            }
+        }
+
+        private Light FindDirectionalLight()
+        {
+            // Look for a light named "Directional Light" or the first directional light
+            var lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+            foreach (var light in lights)
+            {
+                if (light.type == LightType.Directional)
+                {
+                    return light;
+                }
+            }
+            return null;
         }
 
         // Audio callbacks
         private void OnSfxVolumeChanged(float value)
         {
             UpdateValueText(sfxVolumeText, value, "{0:P0}");
+            UpdateInputFromSlider(sfxVolumeInput, value, "{0:F0}", isPercentage: true);
         }
 
         private void OnMusicVolumeChanged(float value)
         {
             UpdateValueText(musicVolumeText, value, "{0:P0}");
+            UpdateInputFromSlider(musicVolumeInput, value, "{0:F0}", isPercentage: true);
         }
 
         // Individual sound volume callbacks
         private void OnLanternVolumeChanged(float value)
         {
             UpdateValueText(lanternVolumeText, value, "{0:P0}");
+            UpdateInputFromSlider(lanternVolumeInput, value, "{0:F0}", isPercentage: true);
         }
 
         private void OnFairyRingVolumeChanged(float value)
         {
             UpdateValueText(fairyRingVolumeText, value, "{0:P0}");
+            UpdateInputFromSlider(fairyRingVolumeInput, value, "{0:F0}", isPercentage: true);
         }
 
         private void OnPondVolumeChanged(float value)
         {
             UpdateValueText(pondVolumeText, value, "{0:P0}");
+            UpdateInputFromSlider(pondVolumeInput, value, "{0:F0}", isPercentage: true);
         }
 
         private void OnSculptVolumeChanged(float value)
         {
             UpdateValueText(sculptVolumeText, value, "{0:P0}");
+            UpdateInputFromSlider(sculptVolumeInput, value, "{0:F0}", isPercentage: true);
         }
 
         // Visitor callbacks
         private void OnVisitorSpeedChanged(float value)
         {
             UpdateValueText(visitorSpeedText, value, "{0:F1}");
+            UpdateInputFromSlider(visitorSpeedInput, value, "{0:F1}");
         }
 
         private void OnConfusionEnabledChanged(bool value)
@@ -622,22 +762,68 @@ namespace FaeMaze.UI
         private void OnConfusionChanceChanged(float value)
         {
             UpdateValueText(confusionChanceText, value, "{0:P0}");
+            UpdateInputFromSlider(confusionChanceInput, value, "{0:F0}", isPercentage: true);
         }
 
         private void OnConfusionDistanceMinChanged(float value)
         {
             UpdateValueText(confusionDistanceMinText, value, "{0:F0}");
+            UpdateInputFromSlider(confusionDistanceMinInput, value, "{0:F0}");
         }
 
         private void OnConfusionDistanceMaxChanged(float value)
         {
             UpdateValueText(confusionDistanceMaxText, value, "{0:F0}");
+            UpdateInputFromSlider(confusionDistanceMaxInput, value, "{0:F0}");
         }
 
-        // Spawning callbacks
-        private void OnSpawnIntervalChanged(float value)
+        // Spawning callbacks - Difficulty selector
+        private void OnDifficultyChanged(float value)
         {
-            UpdateValueText(spawnIntervalText, value, "{0:F1}s");
+            int index = Mathf.RoundToInt(value);
+            UpdateDifficultyText(index);
+        }
+
+        private void UpdateDifficultyText(int difficultyIndex)
+        {
+            if (spawnIntervalText != null && difficultyIndex >= 0 && difficultyIndex < difficultyLabels.Length)
+            {
+                spawnIntervalText.text = difficultyLabels[difficultyIndex];
+            }
+        }
+
+        /// <summary>
+        /// Converts a spawn interval value to the nearest difficulty index.
+        /// </summary>
+        private int SpawnIntervalToDifficultyIndex(float spawnInterval)
+        {
+            // Find the closest matching difficulty
+            float minDiff = float.MaxValue;
+            int bestIndex = 1; // Default to Normal
+
+            for (int i = 0; i < difficultySpawnIntervals.Length; i++)
+            {
+                float diff = Mathf.Abs(spawnInterval - difficultySpawnIntervals[i]);
+                if (diff < minDiff)
+                {
+                    minDiff = diff;
+                    bestIndex = i;
+                }
+            }
+
+            return bestIndex;
+        }
+
+        /// <summary>
+        /// Converts a difficulty index to the corresponding spawn interval.
+        /// </summary>
+        private float DifficultyIndexToSpawnInterval(int index)
+        {
+            if (index >= 0 && index < difficultySpawnIntervals.Length)
+            {
+                return difficultySpawnIntervals[index];
+            }
+            return 5f; // Default to Normal (5 seconds)
         }
 
         private void OnEnableRedCapChanged(bool value)
@@ -646,19 +832,16 @@ namespace FaeMaze.UI
         }
 
         // Game Flow callbacks
-        private void OnAutoStartNextWaveChanged(bool value)
-        {
-            // Toggle is handled directly
-        }
-
         private void OnAutoStartDelayChanged(float value)
         {
             UpdateValueText(autoStartDelayText, value, "{0:F1}s");
+            UpdateInputFromSlider(autoStartDelayInput, value, "{0:F1}");
         }
 
         private void OnStartingEssenceChanged(float value)
         {
             UpdateValueText(startingEssenceText, value, "{0:F0}");
+            UpdateInputFromSlider(startingEssenceInput, value, "{0:F0}");
         }
 
         private void OnUseFixedSeedChanged(bool value)
@@ -712,6 +895,7 @@ namespace FaeMaze.UI
         private void OnFocusSpeedChanged(float value)
         {
             UpdateValueText(focusSpeedText, value, "{0:F1}");
+            UpdateInputFromSlider(focusSpeedInput, value, "{0:F1}");
         }
 
         // Screenshot callbacks
@@ -783,6 +967,7 @@ namespace FaeMaze.UI
             GameSettings.CameraMinZoom = GetSliderValue(cameraMinZoomSlider);
             GameSettings.CameraMaxZoom = GetSliderValue(cameraMaxZoomSlider);
             GameSettings.CameraMovementSpeed = GetSliderValue(cameraMovementSpeedSlider);
+            GameSettings.LightLevel = GetSliderValue(lightLevelSlider);
 
             // Audio settings
             GameSettings.SfxVolume = GetSliderValue(sfxVolumeSlider);
@@ -802,15 +987,16 @@ namespace FaeMaze.UI
             GameSettings.ConfusionDistanceMin = (int)GetSliderValue(confusionDistanceMinSlider);
             GameSettings.ConfusionDistanceMax = (int)GetSliderValue(confusionDistanceMaxSlider);
 
-            // Spawning Settings
+            // Spawning Settings - Convert difficulty index to spawn interval
             if (spawnIntervalSlider != null)
-                GameSettings.SpawnInterval = spawnIntervalSlider.value;
+            {
+                int difficultyIndex = Mathf.RoundToInt(spawnIntervalSlider.value);
+                GameSettings.SpawnInterval = DifficultyIndexToSpawnInterval(difficultyIndex);
+            }
             if (enableRedCapToggle != null)
                 GameSettings.EnableRedCap = enableRedCapToggle.isOn;
 
             // Game Flow
-            if (autoStartNextWaveToggle != null)
-                GameSettings.AutoStartNextWave = autoStartNextWaveToggle.isOn;
             if (autoStartDelaySlider != null)
                 GameSettings.AutoStartDelay = autoStartDelaySlider.value;
             if (startingEssenceSlider != null)
@@ -860,6 +1046,8 @@ namespace FaeMaze.UI
                 GameSettings.CameraFocusEntranceBinding = bindingCameraFocusEntrance;
             if (!string.IsNullOrEmpty(bindingCameraFocusVisitor))
                 GameSettings.CameraFocusVisitorBinding = bindingCameraFocusVisitor;
+            if (!string.IsNullOrEmpty(bindingCameraForward))
+                GameSettings.CameraForwardBinding = bindingCameraForward;
             if (!string.IsNullOrEmpty(bindingCameraOrbit))
                 GameSettings.CameraOrbitBinding = bindingCameraOrbit;
             if (!string.IsNullOrEmpty(bindingCameraPan))
@@ -892,6 +1080,74 @@ namespace FaeMaze.UI
             {
                 text.text = string.Format(format, value);
             }
+        }
+
+        /// <summary>
+        /// Updates the input field to match the slider value.
+        /// </summary>
+        private void UpdateInputFromSlider(TMP_InputField input, float value, string format, bool isPercentage = false)
+        {
+            if (input == null) return;
+
+            if (isPercentage)
+            {
+                input.text = string.Format(format, value * 100f);
+            }
+            else
+            {
+                input.text = string.Format(format, value);
+            }
+        }
+
+        /// <summary>
+        /// Sets up bidirectional sync between a slider and input field.
+        /// </summary>
+        private void SetupSliderInputSync(Slider slider, TMP_InputField input, string format, bool isPercentage = false, string suffix = "")
+        {
+            if (slider == null || input == null) return;
+
+            // Configure input field
+            input.contentType = TMP_InputField.ContentType.DecimalNumber;
+
+            // Initialize input with slider value
+            UpdateInputFromSlider(input, slider.value, format, isPercentage);
+
+            // Input -> Slider sync
+            input.onEndEdit.AddListener((text) =>
+            {
+                // Clean the text (remove suffix and percentage sign)
+                string cleanText = text.Replace("%", "");
+                if (!string.IsNullOrEmpty(suffix))
+                {
+                    cleanText = cleanText.Replace(suffix, "");
+                }
+                cleanText = cleanText.Trim();
+
+                if (float.TryParse(cleanText, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float value))
+                {
+                    // Convert from percentage display to decimal if needed
+                    if (isPercentage)
+                    {
+                        value /= 100f;
+                    }
+
+                    // Clamp to slider range
+                    value = Mathf.Clamp(value, slider.minValue, slider.maxValue);
+                    slider.value = value;
+
+                    // Update input to show clamped value
+                    UpdateInputFromSlider(input, value, format, isPercentage);
+                }
+                else
+                {
+                    // Invalid input, revert to slider value
+                    UpdateInputFromSlider(input, slider.value, format, isPercentage);
+                }
+            });
+
+            // Slider -> Input sync (via existing onValueChanged callback)
+            // We'll update the input field in the slider callback methods
         }
 
         #region Key Binding Capture Handling
@@ -941,6 +1197,7 @@ namespace FaeMaze.UI
             bindingCameraFocusHeart = GameSettings.CameraFocusHeartBinding;
             bindingCameraFocusEntrance = GameSettings.CameraFocusEntranceBinding;
             bindingCameraFocusVisitor = GameSettings.CameraFocusVisitorBinding;
+            bindingCameraForward = GameSettings.CameraForwardBinding;
             bindingCameraOrbit = GameSettings.CameraOrbitBinding;
             bindingCameraPan = GameSettings.CameraPanBinding;
             bindingScreenshot = GameSettings.ScreenshotBinding;
@@ -1062,6 +1319,12 @@ namespace FaeMaze.UI
                     capture.OnBindingCaptured -= OnCameraFocusVisitorBindingChanged;
                     capture.OnBindingCaptured += OnCameraFocusVisitorBindingChanged;
                 }
+                else if (objName.Contains("forward") && objName.Contains("mouse"))
+                {
+                    capture.SetBinding(bindingCameraForward);
+                    capture.OnBindingCaptured -= OnCameraForwardBindingChanged;
+                    capture.OnBindingCaptured += OnCameraForwardBindingChanged;
+                }
                 else if (objName.Contains("orbit"))
                 {
                     capture.SetBinding(bindingCameraOrbit);
@@ -1099,9 +1362,43 @@ namespace FaeMaze.UI
         private void OnCameraFocusHeartBindingChanged(string binding) => bindingCameraFocusHeart = binding;
         private void OnCameraFocusEntranceBindingChanged(string binding) => bindingCameraFocusEntrance = binding;
         private void OnCameraFocusVisitorBindingChanged(string binding) => bindingCameraFocusVisitor = binding;
+        private void OnCameraForwardBindingChanged(string binding) => bindingCameraForward = binding;
         private void OnCameraOrbitBindingChanged(string binding) => bindingCameraOrbit = binding;
         private void OnCameraPanBindingChanged(string binding) => bindingCameraPan = binding;
-        private void OnScreenshotBindingChanged(string binding) => bindingScreenshot = binding;
+
+        private void OnScreenshotBindingChanged(string binding)
+        {
+            bindingScreenshot = binding;
+            // Sync all screenshot captures across panels (VIDEO and CONTROLS may both have one)
+            SyncScreenshotBindings(binding);
+        }
+
+        /// <summary>
+        /// Synchronizes the screenshot binding across all KeyBindingCapture components that handle it.
+        /// This ensures VIDEO tab and CONTROLS tab show the same value.
+        /// </summary>
+        private void SyncScreenshotBindings(string binding)
+        {
+            // Find all screenshot captures and update them
+            var allCaptures = new List<KeyBindingCapture>();
+            if (controlsPanel != null)
+                allCaptures.AddRange(controlsPanel.GetComponentsInChildren<KeyBindingCapture>(true));
+            if (videoPanel != null)
+                allCaptures.AddRange(videoPanel.GetComponentsInChildren<KeyBindingCapture>(true));
+
+            foreach (var capture in allCaptures)
+            {
+                string objName = capture.gameObject.name.ToLower();
+                if (objName.Contains("screenshot"))
+                {
+                    // Update the display without triggering the callback again
+                    if (capture.GetBinding() != binding)
+                    {
+                        capture.SetBinding(binding);
+                    }
+                }
+            }
+        }
 
         #endregion
     }

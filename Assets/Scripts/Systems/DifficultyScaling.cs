@@ -20,48 +20,83 @@ namespace FaeMaze.Systems
     /// - Tier 5: 4.0x starting essence
     /// - Tier 6: 6.0x starting essence
     /// - Tier 7: 8.0x starting essence (max)
+    ///
+    /// All scaling parameters are loaded from GameSettings for configurability.
     /// </summary>
     public static class DifficultyScaling
     {
-        #region Spawn Interval Constants
+        #region Cached Settings
 
-        /// <summary>Maximum spawn interval in seconds (asymptotic ceiling).</summary>
-        private const float MAX_SPAWN_INTERVAL = 15f;
+        // Cached settings loaded from GameSettings on first access
+        private static bool settingsLoaded = false;
 
-        /// <summary>Rate at which spawn interval approaches maximum.</summary>
-        private const float SPAWN_INTERVAL_GROWTH_RATE = 0.02f;
+        // Spawn interval settings
+        private static float maxSpawnInterval;
+        private static float spawnIntervalGrowthRate;
 
-        #endregion
+        // Visitor speed scaling
+        private static float visitorSpeedMaxMultiplier;
+        private static float visitorSpeedGrowthRate;
 
-        #region Tier Scaling Constants
+        // RedCap speed scaling
+        private static float redCapSpeedMaxMultiplier;
+        private static float redCapSpeedGrowthRate;
 
-        // Tier scaling uses 7 tiers (1-7), with steeper curves than wave-based scaling
-        // since there are fewer tiers than there were waves
+        // RedCap penalty scaling
+        private static float redCapPenaltyMaxMultiplier;
+        private static float redCapPenaltyGrowthRate;
 
-        // Visitor speed increases
-        // Tier 1: 1.0x, Tier 4: 1.25x, Tier 7: 1.5x
-        private const float VISITOR_SPEED_MAX_MULTIPLIER = 1.5f;
-        private const float VISITOR_SPEED_GROWTH_RATE = 0.25f;  // Steeper for fewer tiers
+        // Confusion chance scaling
+        private static float confusionMaxMultiplier;
+        private static float confusionGrowthRate;
 
-        // RedCap speed increases
-        // Tier 1: 1.0x, Tier 4: 1.3x, Tier 7: 1.6x
-        private const float REDCAP_SPEED_MAX_MULTIPLIER = 1.6f;
-        private const float REDCAP_SPEED_GROWTH_RATE = 0.3f;
+        // Essence reward scaling
+        private static float essenceRewardMaxMultiplier;
+        private static float essenceRewardGrowthRate;
 
-        // RedCap essence penalty increases
-        // Tier 1: 1.0x, Tier 4: 1.75x, Tier 7: 2.5x
-        private const float REDCAP_PENALTY_MAX_MULTIPLIER = 2.5f;
-        private const float REDCAP_PENALTY_GROWTH_RATE = 0.35f;
+        /// <summary>
+        /// Ensures settings are loaded from GameSettings.
+        /// Called automatically on first access to any scaling method.
+        /// </summary>
+        private static void EnsureSettingsLoaded()
+        {
+            if (settingsLoaded) return;
 
-        // Confusion chance increases (visitors get lost more)
-        // Tier 1: 1.0x, Tier 4: 1.3x, Tier 7: 1.75x
-        private const float CONFUSION_CHANCE_MAX_MULTIPLIER = 1.75f;
-        private const float CONFUSION_CHANCE_GROWTH_RATE = 0.25f;
+            // Spawn interval
+            maxSpawnInterval = GameSettings.MaxSpawnInterval;
+            spawnIntervalGrowthRate = GameSettings.SpawnIntervalGrowthRate;
 
-        // Visitor essence value increases (reward for catching harder visitors)
-        // Tier 1: 1.0x, Tier 4: 1.25x, Tier 7: 1.5x
-        private const float ESSENCE_REWARD_MAX_MULTIPLIER = 1.5f;
-        private const float ESSENCE_REWARD_GROWTH_RATE = 0.2f;
+            // Visitor speed
+            visitorSpeedMaxMultiplier = GameSettings.VisitorSpeedMaxMultiplier;
+            visitorSpeedGrowthRate = GameSettings.VisitorSpeedGrowthRate;
+
+            // RedCap speed
+            redCapSpeedMaxMultiplier = GameSettings.RedCapSpeedMaxMultiplier;
+            redCapSpeedGrowthRate = GameSettings.RedCapSpeedGrowthRate;
+
+            // RedCap penalty
+            redCapPenaltyMaxMultiplier = GameSettings.RedCapPenaltyMaxMultiplier;
+            redCapPenaltyGrowthRate = GameSettings.RedCapPenaltyGrowthRate;
+
+            // Confusion
+            confusionMaxMultiplier = GameSettings.ConfusionMaxMultiplier;
+            confusionGrowthRate = GameSettings.ConfusionGrowthRate;
+
+            // Essence reward
+            essenceRewardMaxMultiplier = GameSettings.EssenceRewardMaxMultiplier;
+            essenceRewardGrowthRate = GameSettings.EssenceRewardGrowthRate;
+
+            settingsLoaded = true;
+        }
+
+        /// <summary>
+        /// Reloads settings from GameSettings. Call this if settings may have changed.
+        /// </summary>
+        public static void ReloadSettings()
+        {
+            settingsLoaded = false;
+            EnsureSettingsLoaded();
+        }
 
         #endregion
 
@@ -76,22 +111,24 @@ namespace FaeMaze.Systems
         /// <returns>Current spawn interval in seconds.</returns>
         public static float GetAsymptoticSpawnInterval(int spawnCount, float baseInterval)
         {
+            EnsureSettingsLoaded();
             if (spawnCount <= 0) return baseInterval;
 
-            float range = MAX_SPAWN_INTERVAL - baseInterval;
-            float progress = 1f - Mathf.Exp(-SPAWN_INTERVAL_GROWTH_RATE * spawnCount);
+            float range = maxSpawnInterval - baseInterval;
+            float progress = 1f - Mathf.Exp(-spawnIntervalGrowthRate * spawnCount);
             return baseInterval + (range * progress);
         }
 
         /// <summary>
         /// Calculates spawn interval with custom maximum.
         /// </summary>
-        public static float GetAsymptoticSpawnInterval(int spawnCount, float baseInterval, float maxInterval)
+        public static float GetAsymptoticSpawnInterval(int spawnCount, float baseInterval, float customMaxInterval)
         {
+            EnsureSettingsLoaded();
             if (spawnCount <= 0) return baseInterval;
 
-            float range = maxInterval - baseInterval;
-            float progress = 1f - Mathf.Exp(-SPAWN_INTERVAL_GROWTH_RATE * spawnCount);
+            float range = customMaxInterval - baseInterval;
+            float progress = 1f - Mathf.Exp(-spawnIntervalGrowthRate * spawnCount);
             return baseInterval + (range * progress);
         }
 
@@ -126,7 +163,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public static float GetVisitorSpeedMultiplier(int tier)
         {
-            return CalculateGrowthMultiplier(tier, VISITOR_SPEED_MAX_MULTIPLIER, VISITOR_SPEED_GROWTH_RATE);
+            EnsureSettingsLoaded();
+            return CalculateGrowthMultiplier(tier, visitorSpeedMaxMultiplier, visitorSpeedGrowthRate);
         }
 
         /// <summary>
@@ -135,7 +173,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public static float GetRedCapSpeedMultiplier(int tier)
         {
-            return CalculateGrowthMultiplier(tier, REDCAP_SPEED_MAX_MULTIPLIER, REDCAP_SPEED_GROWTH_RATE);
+            EnsureSettingsLoaded();
+            return CalculateGrowthMultiplier(tier, redCapSpeedMaxMultiplier, redCapSpeedGrowthRate);
         }
 
         /// <summary>
@@ -144,7 +183,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public static float GetRedCapPenaltyMultiplier(int tier)
         {
-            return CalculateGrowthMultiplier(tier, REDCAP_PENALTY_MAX_MULTIPLIER, REDCAP_PENALTY_GROWTH_RATE);
+            EnsureSettingsLoaded();
+            return CalculateGrowthMultiplier(tier, redCapPenaltyMaxMultiplier, redCapPenaltyGrowthRate);
         }
 
         /// <summary>
@@ -153,7 +193,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public static float GetConfusionChanceMultiplier(int tier)
         {
-            return CalculateGrowthMultiplier(tier, CONFUSION_CHANCE_MAX_MULTIPLIER, CONFUSION_CHANCE_GROWTH_RATE);
+            EnsureSettingsLoaded();
+            return CalculateGrowthMultiplier(tier, confusionMaxMultiplier, confusionGrowthRate);
         }
 
         /// <summary>
@@ -163,7 +204,8 @@ namespace FaeMaze.Systems
         /// </summary>
         public static float GetEssenceRewardMultiplier(int tier)
         {
-            return CalculateGrowthMultiplier(tier, ESSENCE_REWARD_MAX_MULTIPLIER, ESSENCE_REWARD_GROWTH_RATE);
+            EnsureSettingsLoaded();
+            return CalculateGrowthMultiplier(tier, essenceRewardMaxMultiplier, essenceRewardGrowthRate);
         }
 
         /// <summary>

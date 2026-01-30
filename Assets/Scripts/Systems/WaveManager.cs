@@ -127,7 +127,8 @@ namespace FaeMaze.Systems
         /// </summary>
         private void LoadSettings()
         {
-            autoStartNextWave = GameSettings.AutoStartNextWave;
+            // autoStartNextWave is always false - wave system is deprecated, game uses continuous spawning
+            autoStartNextWave = false;
             autoStartDelay = GameSettings.AutoStartDelay;
         }
 

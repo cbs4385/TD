@@ -128,6 +128,7 @@ namespace FaeMaze.Cameras
         private bool isOrbiting;
         private bool isPanning;
         private Vector3 lastMouseWorldPosition;
+        private Vector2 lastMouseScreenPosition; // For focal point mode panning (screen-space tracking)
 
         // Focus state
         private bool isFocusing;
@@ -406,6 +407,9 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            // Handle mouse controls for focal point mode
+            HandleFocalPointMouseControls();
+
             // Use configurable bindings + arrow key fallback
             Keyboard keyboard = Keyboard.current;
             float moveInput = 0f;
@@ -459,6 +463,102 @@ namespace FaeMaze.Cameras
 
                 focalPointTransform.Rotate(up, yawDelta, Space.World);
 
+            }
+        }
+
+        /// <summary>
+        /// Handles mouse orbit and pan controls in focal point mode.
+        /// Right-click drag: rotate focal point (orbit camera around focal point)
+        /// Middle-click drag: pan focal point position
+        /// </summary>
+        private void HandleFocalPointMouseControls()
+        {
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+            {
+                return;
+            }
+
+            // Orbit control (configurable, default: right mouse button)
+            // In focal point mode, this rotates the focal point direction
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraOrbitBinding))
+            {
+                isOrbiting = true;
+            }
+            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraOrbitBinding))
+            {
+                isOrbiting = false;
+            }
+
+            // Pan control (configurable, default: middle mouse button)
+            // In focal point mode, this moves the focal point position
+            // We use SCREEN-SPACE tracking to avoid feedback loops (camera moves when focal point moves)
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraPanBinding))
+            {
+                isPanning = true;
+                lastMouseScreenPosition = mouse.position.ReadValue();
+            }
+            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraPanBinding))
+            {
+                isPanning = false;
+            }
+
+            // Handle orbit drag - rotate focal point direction
+            if (isOrbiting && InputBindingHelper.IsBindingPressed(GameSettings.CameraOrbitBinding))
+            {
+                Vector2 mouseDelta = mouse.delta.ReadValue();
+                if (Mathf.Abs(mouseDelta.x) > 0.001f)
+                {
+                    Vector3 up = GetMazeUpDirection();
+                    // Negative because dragging right should rotate the view left (focal point rotates right)
+                    float yawDelta = -mouseDelta.x * orbitSpeed * Time.deltaTime;
+                    focalPointTransform.Rotate(up, yawDelta, Space.World);
+                }
+            }
+
+            // Handle pan drag - move focal point position using SCREEN-SPACE delta
+            // This avoids the feedback loop where moving the focal point moves the camera,
+            // which changes what GetMouseWorldPosition() returns, causing oscillation.
+            if (isPanning && InputBindingHelper.IsBindingPressed(GameSettings.CameraPanBinding))
+            {
+                Vector2 currentMouseScreen = mouse.position.ReadValue();
+                Vector2 screenDelta = currentMouseScreen - lastMouseScreenPosition;
+
+                if (screenDelta.sqrMagnitude > 0.001f)
+                {
+                    // Convert screen delta to world delta using camera's orientation
+                    // Get camera's right and up vectors projected onto the XY plane
+                    Vector3 camRight = transform.right;
+                    Vector3 camUp = transform.up;
+
+                    // Project onto XY plane (Z=0)
+                    camRight.z = 0f;
+                    camUp.z = 0f;
+                    camRight.Normalize();
+                    camUp.Normalize();
+
+                    // Scale factor: how many world units per screen pixel
+                    // This depends on camera distance and FOV
+                    float distanceToFocal = Vector3.Distance(transform.position, focalPointTransform.position);
+                    float worldUnitsPerPixel = distanceToFocal * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * 2f / Screen.height;
+
+                    // Calculate world delta (negative because dragging moves view, not focal point)
+                    Vector3 worldDelta = (-camRight * screenDelta.x - camUp * screenDelta.y) * worldUnitsPerPixel;
+
+                    // Apply movement
+                    focalPointTransform.position += worldDelta;
+
+                    // Keep focal point on the XY plane
+                    Vector3 planarPosition = focalPointTransform.position;
+                    planarPosition.z = 0f;
+                    focalPointTransform.position = planarPosition;
+
+                    // Constrain to maze bounds
+                    ConstrainFocalPointToMazeBounds();
+                }
+
+                // Update last screen position for next frame
+                lastMouseScreenPosition = currentMouseScreen;
             }
         }
 

@@ -140,9 +140,9 @@ namespace FaeMaze.Maze
         // The tongue rises by DECREASING Z, retracts by INCREASING Z
         private float tongueZPosition = TONGUE_START_Z;
 
-        // Tongue movement speeds
-        private const float TONGUE_EMERGE_SPEED = 9.0f;   // Units per second for vertical movement
-        private const float TONGUE_RETRACT_SPEED = 9.0f;  // Speed when retracting with visitor
+        // Tongue movement speeds - loaded from GameSettings
+        private float tongueEmergeSpeed;
+        private float tongueRetractSpeed;
 
         // Tongue geometry constants
         private const float TONGUE_HIDDEN_Z = 1000f;      // Z position when pooled (far underground)
@@ -230,8 +230,26 @@ namespace FaeMaze.Maze
 
         private void Awake()
         {
+            LoadSettingsFromGameSettings();
             SetupDetectionCollider();
             SetupRigidbody();
+        }
+
+        /// <summary>
+        /// Loads configurable gameplay settings from GameSettings.
+        /// Allows SerializeField values to override if set in Inspector.
+        /// </summary>
+        private void LoadSettingsFromGameSettings()
+        {
+            // Load tongue speeds from GameSettings
+            tongueEmergeSpeed = GameSettings.TongueEmergeSpeed;
+            tongueRetractSpeed = GameSettings.TongueRetractSpeed;
+
+            // Detection radius: use GameSettings if SerializeField is at default (2.5f)
+            if (Mathf.Approximately(detectionRadius, 2.5f))
+            {
+                detectionRadius = GameSettings.HeartDetectionRadius;
+            }
         }
 
         private void Start()
@@ -325,7 +343,7 @@ namespace FaeMaze.Maze
             }
 
             // Retract tongue (increase Z)
-            tongueZPosition += TONGUE_RETRACT_SPEED * Time.deltaTime;
+            tongueZPosition += tongueRetractSpeed * Time.deltaTime;
 
             // Apply bone rotations (same as extending, but tongue is descending)
             ApplyTongueBoneRotations();
@@ -350,7 +368,7 @@ namespace FaeMaze.Maze
             float dt = Time.deltaTime;
 
             // Tongue rises by decreasing Z
-            tongueZPosition -= TONGUE_EMERGE_SPEED * dt;
+            tongueZPosition -= tongueEmergeSpeed * dt;
 
             // Calculate how much of the tongue is above ground
             // tongueZPosition is the Z of the tongue BASE

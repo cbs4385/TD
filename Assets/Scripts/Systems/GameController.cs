@@ -182,6 +182,9 @@ namespace FaeMaze.Systems
         {
             ValidateReferences();
 
+            // Apply saved settings (light level, video settings, etc.)
+            GameSettings.ApplySettings();
+
             // Invoke event for initial essence value
             OnEssenceChanged?.Invoke(currentEssence);
         }

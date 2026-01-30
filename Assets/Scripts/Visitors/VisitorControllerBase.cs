@@ -121,7 +121,7 @@ namespace FaeMaze.Visitors
         protected bool hasReachedLantern;
         protected float fascinationTimer;
         protected FaeMaze.Props.FaeLantern currentFaeLantern;
-        protected const float FascinationSpeedMultiplier = 0.5f; // 50% speed when approaching lantern
+        protected float fascinationSpeedMultiplier; // Loaded from GameSettings
 
         // FairyRing fascination state (circling behavior)
         protected FaeMaze.Props.FairyRing currentFairyRing;
@@ -135,9 +135,9 @@ namespace FaeMaze.Visitors
         // Visitor essence tracking (drained by props, visitor escapes when depleted)
         protected float currentEssence;  // Current essence remaining (starts at GetEssenceReward())
         protected float lanternEssenceAwardAccumulator;  // Accumulates fractional essence to award whole amounts
-        protected const float RING_ESSENCE_DRAIN_PER_SECOND = 5f;  // Essence lost per second while at fairy ring
-        protected const float LANTERN_ESSENCE_DRAIN_PER_SECOND = 5f;  // Essence lost per second while at lantern
-        protected const float LANTERN_ESSENCE_AWARD_PER_SECOND = 2f;  // Essence awarded to player per second while at lantern
+        protected float ringEssenceDrainPerSecond;    // Loaded from GameSettings
+        protected float lanternEssenceDrainPerSecond; // Loaded from GameSettings
+        protected float lanternEssenceAwardPerSecond; // Loaded from GameSettings
 
         // Cooldown tracking per lantern (prevents immediate re-triggering)
         protected Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
@@ -171,8 +171,8 @@ namespace FaeMaze.Visitors
         // Frightened state tracking
         protected Vector3 frightSourcePosition;  // Position of what frightened the visitor (to flee away from)
         protected int frightRecoveryNodeCount;   // Number of nodes visited while frightened (for accumulating recovery chance)
-        protected const float FRIGHTENED_SPEED_MULTIPLIER = 2.0f;  // Double speed when frightened
-        protected const float FRIGHTENED_RECOVERY_CHANCE_PER_NODE = 0.25f;  // 25% cumulative chance to recover at each node
+        protected float frightenedSpeedMultiplier;       // Loaded from GameSettings
+        protected float frightenedRecoveryChancePerNode; // Loaded from GameSettings
 
         // Red Cap detection tracking
         protected float redCapDetectionTimer;
@@ -313,6 +313,9 @@ namespace FaeMaze.Visitors
 
         protected virtual void Awake()
         {
+            // Load settings from GameSettings (must be first, before any settings are used)
+            LoadSettingsFromGameSettings();
+
             state = VisitorState.Idle;
             lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
             initialScale = transform.localScale;
@@ -353,6 +356,23 @@ namespace FaeMaze.Visitors
 
             // Initialize visitor's essence pool (drained by props)
             currentEssence = GetEssenceReward();
+        }
+
+        /// <summary>
+        /// Loads configurable gameplay settings from GameSettings.
+        /// Called once at Awake to cache values for performance.
+        /// </summary>
+        protected virtual void LoadSettingsFromGameSettings()
+        {
+            // Props - Essence Mechanics
+            ringEssenceDrainPerSecond = GameSettings.RingEssenceDrainPerSecond;
+            lanternEssenceDrainPerSecond = GameSettings.LanternEssenceDrainPerSecond;
+            lanternEssenceAwardPerSecond = GameSettings.LanternEssenceAwardPerSecond;
+            fascinationSpeedMultiplier = GameSettings.FascinationSpeedMultiplier;
+
+            // Visitor Behavior - Frightened State
+            frightenedSpeedMultiplier = GameSettings.FrightenedSpeedMultiplier;
+            frightenedRecoveryChancePerNode = GameSettings.FrightenedRecoveryChance;
         }
 
         protected virtual void OnEnable()
@@ -494,13 +514,13 @@ namespace FaeMaze.Visitors
                     fascinationTimer -= Time.deltaTime;
 
                     // Drain visitor essence while at the lantern
-                    currentEssence -= LANTERN_ESSENCE_DRAIN_PER_SECOND * Time.deltaTime;
+                    currentEssence -= lanternEssenceDrainPerSecond * Time.deltaTime;
 
                     // Award essence to the player while visitor is at the lantern
                     if (GameController.Instance != null)
                     {
                         // Accumulate fractional essence and award whole amounts
-                        lanternEssenceAwardAccumulator += LANTERN_ESSENCE_AWARD_PER_SECOND * Time.deltaTime;
+                        lanternEssenceAwardAccumulator += lanternEssenceAwardPerSecond * Time.deltaTime;
                         if (lanternEssenceAwardAccumulator >= 1f)
                         {
                             int wholeEssence = Mathf.FloorToInt(lanternEssenceAwardAccumulator);
@@ -1243,11 +1263,11 @@ namespace FaeMaze.Visitors
             float effectiveSpeed = moveSpeed * speedMultiplier;
             if (isFascinated && !hasReachedLantern)
             {
-                effectiveSpeed *= FascinationSpeedMultiplier;
+                effectiveSpeed *= fascinationSpeedMultiplier;
             }
             else if (isFrightened)
             {
-                effectiveSpeed *= FRIGHTENED_SPEED_MULTIPLIER;
+                effectiveSpeed *= frightenedSpeedMultiplier;
             }
 
             // Predict position
@@ -1978,11 +1998,11 @@ namespace FaeMaze.Visitors
             float effectiveSpeed = moveSpeed * speedMultiplier;
             if (isFascinated && !hasReachedLantern)
             {
-                effectiveSpeed *= FascinationSpeedMultiplier;
+                effectiveSpeed *= fascinationSpeedMultiplier;
             }
             else if (isFrightened)
             {
-                effectiveSpeed *= FRIGHTENED_SPEED_MULTIPLIER;
+                effectiveSpeed *= frightenedSpeedMultiplier;
             }
 
             // Use graph navigation if enabled and path is valid
@@ -4375,7 +4395,7 @@ namespace FaeMaze.Visitors
             }
 
             // Drain visitor essence while circling the ring
-            currentEssence -= RING_ESSENCE_DRAIN_PER_SECOND * Time.deltaTime;
+            currentEssence -= ringEssenceDrainPerSecond * Time.deltaTime;
             if (currentEssence <= 0f)
             {
                 // Visitor's essence is depleted - they escape
@@ -5333,7 +5353,7 @@ namespace FaeMaze.Visitors
 
             // Accumulating recovery chance: 25% per node visited
             // At node 1: 25%, node 2: 50%, node 3: 75%, node 4: 100%
-            float recoveryChance = frightRecoveryNodeCount * FRIGHTENED_RECOVERY_CHANCE_PER_NODE;
+            float recoveryChance = frightRecoveryNodeCount * frightenedRecoveryChancePerNode;
             if (RandomManager.Value <= recoveryChance)
             {
                 // Recovered from fright

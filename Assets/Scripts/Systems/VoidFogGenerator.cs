@@ -81,8 +81,8 @@ namespace FaeMaze.Systems
 
         [Header("Positioning")]
         [SerializeField]
-        [Tooltip("Z position of fog (at top of wall models, around -1)")]
-        private float zPosition = -1f;
+        [Tooltip("Z position of fog (at top of wall models, around -1.2)")]
+        private float zPosition = -1.2f;
 
         private GameObject fogQuad;
         private Material fogMaterial;

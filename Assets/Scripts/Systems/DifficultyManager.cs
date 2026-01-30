@@ -16,16 +16,57 @@ namespace FaeMaze.Systems
 
         #endregion
 
-        #region Constants
+        #region Tier Multipliers
 
         /// <summary>
         /// Tier thresholds as multipliers of starting essence.
+        /// Loaded from GameSettings.TierMultipliers (comma-separated string).
         /// Tier 1 = start, Tier 2 = 1.5x, Tier 3 = 2x (RedCap), etc.
         /// </summary>
-        private static readonly float[] TIER_MULTIPLIERS = { 0f, 1.5f, 2f, 3f, 4f, 6f, 8f };
+        private float[] tierMultipliers;
 
-        /// <summary>Maximum tier (index into TIER_MULTIPLIERS + 1)</summary>
-        public const int MAX_TIER = 7;
+        /// <summary>Maximum tier (determined by tierMultipliers array length)</summary>
+        public int MaxTier => tierMultipliers?.Length ?? 7;
+
+        /// <summary>
+        /// Default tier multipliers used if parsing fails.
+        /// </summary>
+        private static readonly float[] DEFAULT_tierMultipliers = { 0f, 1.5f, 2f, 3f, 4f, 6f, 8f };
+
+        /// <summary>
+        /// Parses tier multipliers from GameSettings string.
+        /// Expected format: "0,1.5,2,3,4,6,8"
+        /// </summary>
+        private void LoadTierMultipliers()
+        {
+            string multiplierString = GameSettings.TierMultipliers;
+            if (string.IsNullOrEmpty(multiplierString))
+            {
+                tierMultipliers = DEFAULT_tierMultipliers;
+                return;
+            }
+
+            try
+            {
+                string[] parts = multiplierString.Split(',');
+                tierMultipliers = new float[parts.Length];
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    if (!float.TryParse(parts[i].Trim(), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out tierMultipliers[i]))
+                    {
+                        Debug.LogWarning($"DifficultyManager: Failed to parse tier multiplier '{parts[i]}', using default");
+                        tierMultipliers = DEFAULT_tierMultipliers;
+                        return;
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"DifficultyManager: Error parsing tier multipliers: {e.Message}, using default");
+                tierMultipliers = DEFAULT_tierMultipliers;
+            }
+        }
 
         #endregion
 
@@ -101,6 +142,9 @@ namespace FaeMaze.Systems
         private void Initialize()
         {
             if (initialized) return;
+
+            // Load tier multipliers from GameSettings
+            LoadTierMultipliers();
 
             startingEssence = GameSettings.StartingEssence;
             currentTier = 1;
@@ -183,12 +227,12 @@ namespace FaeMaze.Systems
             float essenceRatio = (float)essence / startingEssence;
 
             // Find highest tier whose threshold we've passed
-            for (int tier = TIER_MULTIPLIERS.Length; tier >= 1; tier--)
+            for (int tier = tierMultipliers.Length; tier >= 1; tier--)
             {
-                float threshold = TIER_MULTIPLIERS[tier - 1];
+                float threshold = tierMultipliers[tier - 1];
                 if (essenceRatio >= threshold)
                 {
-                    return Mathf.Min(tier, MAX_TIER);
+                    return Mathf.Min(tier, MaxTier);
                 }
             }
 
@@ -200,12 +244,12 @@ namespace FaeMaze.Systems
         /// </summary>
         public int GetThresholdForTier(int tier)
         {
-            if (tier < 1 || tier > TIER_MULTIPLIERS.Length)
+            if (tier < 1 || tier > tierMultipliers.Length)
             {
                 return 0;
             }
 
-            return Mathf.RoundToInt(startingEssence * TIER_MULTIPLIERS[tier - 1]);
+            return Mathf.RoundToInt(startingEssence * tierMultipliers[tier - 1]);
         }
 
         /// <summary>
@@ -214,7 +258,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public int GetEssenceToNextTier()
         {
-            if (currentTier >= MAX_TIER) return -1;
+            if (currentTier >= MaxTier) return -1;
 
             int nextThreshold = GetThresholdForTier(currentTier + 1);
             int currentEssence = GameController.Instance?.CurrentEssence ?? 0;

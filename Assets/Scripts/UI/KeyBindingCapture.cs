@@ -9,15 +9,21 @@ namespace FaeMaze.UI
 {
     /// <summary>
     /// Component that handles "press any key" input capture for key binding UI.
-    /// Attach to a button - when clicked, it enters capture mode and waits for user input.
+    /// Uses a separate checkbox (Toggle) to activate capture mode, avoiding conflicts with left-click binding.
+    /// The checkbox activates capture mode, then the next input is captured and bound.
     /// </summary>
     public class KeyBindingCapture : MonoBehaviour
     {
-        [Header("Display")]
+        [Header("UI References")]
         [SerializeField]
         [Tooltip("Text element to show current binding")]
         private TextMeshProUGUI bindingText;
 
+        [SerializeField]
+        [Tooltip("Toggle/checkbox to activate capture mode")]
+        private Toggle captureToggle;
+
+        [Header("Display")]
         [SerializeField]
         [Tooltip("Text to display while waiting for input")]
         private string capturePrompt = "Press any key...";
@@ -29,7 +35,6 @@ namespace FaeMaze.UI
         [SerializeField]
         private Color captureTextColor = new Color(1f, 0.8f, 0.3f, 1f); // Yellow-orange for capture mode
 
-        private Button button;
         private string currentBinding;
         private bool isCapturing = false;
 
@@ -41,18 +46,24 @@ namespace FaeMaze.UI
 
         private void Awake()
         {
-            button = GetComponent<Button>();
-            if (button != null)
+            // Find toggle if not assigned - look for Toggle component on this object or children
+            if (captureToggle == null)
             {
-                button.onClick.AddListener(StartCapture);
+                captureToggle = GetComponentInChildren<Toggle>(true);
+            }
+
+            if (captureToggle != null)
+            {
+                captureToggle.onValueChanged.AddListener(OnToggleChanged);
+                captureToggle.isOn = false;
             }
         }
 
         private void OnDestroy()
         {
-            if (button != null)
+            if (captureToggle != null)
             {
-                button.onClick.RemoveListener(StartCapture);
+                captureToggle.onValueChanged.RemoveListener(OnToggleChanged);
             }
         }
 
@@ -77,6 +88,22 @@ namespace FaeMaze.UI
         /// Check if currently in capture mode.
         /// </summary>
         public bool IsCapturing => isCapturing;
+
+        private void OnToggleChanged(bool isOn)
+        {
+            if (isOn)
+            {
+                StartCapture();
+            }
+            else
+            {
+                // If toggle is turned off manually, cancel capture
+                if (isCapturing)
+                {
+                    CancelCapture();
+                }
+            }
+        }
 
         private void StartCapture()
         {
@@ -104,6 +131,13 @@ namespace FaeMaze.UI
                 return;
 
             isCapturing = false;
+
+            // Turn off the toggle without triggering another callback
+            if (captureToggle != null && captureToggle.isOn)
+            {
+                captureToggle.SetIsOnWithoutNotify(false);
+            }
+
             UpdateDisplayText();
         }
 
@@ -124,6 +158,7 @@ namespace FaeMaze.UI
             Mouse mouse = Mouse.current;
             if (mouse != null)
             {
+                // Left click - now works cleanly since checkbox activation is separate
                 if (mouse.leftButton.wasPressedThisFrame)
                 {
                     CompleteCapture("Mouse0");
@@ -170,6 +205,13 @@ namespace FaeMaze.UI
         {
             isCapturing = false;
             currentBinding = newBinding;
+
+            // Turn off the toggle without triggering another callback
+            if (captureToggle != null && captureToggle.isOn)
+            {
+                captureToggle.SetIsOnWithoutNotify(false);
+            }
+
             UpdateDisplayText();
             OnBindingCaptured?.Invoke(newBinding);
 

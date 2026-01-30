@@ -22,6 +22,15 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetInt("ResolutionIndex", value);
         }
 
+        /// <summary>
+        /// Light level intensity for the directional light (0.0 to 2.0, default 0.9)
+        /// </summary>
+        public static float LightLevel
+        {
+            get => PlayerPrefs.GetFloat("LightLevel", 0.9f);
+            set => PlayerPrefs.SetFloat("LightLevel", Mathf.Clamp(value, 0f, 2f));
+        }
+
         // Audio Settings
         public static float SfxVolume
         {
@@ -161,12 +170,6 @@ namespace FaeMaze.Systems
         }
 
         // Game Flow Settings
-        public static bool AutoStartNextWave
-        {
-            get => PlayerPrefs.GetInt("AutoStartNextWave", 0) == 1;
-            set => PlayerPrefs.SetInt("AutoStartNextWave", value ? 1 : 0);
-        }
-
         public static float AutoStartDelay
         {
             get => PlayerPrefs.GetFloat("AutoStartDelay", 2f);
@@ -262,27 +265,28 @@ namespace FaeMaze.Systems
         }
 
         // Sculpt Menu Keybindings (when sculpt radial menu is open)
+        // Using Z, X, C, V to avoid conflicts with camera WASD
         public static string SculptPondBinding
         {
-            get => PlayerPrefs.GetString("SculptPondBinding", "Q");
+            get => PlayerPrefs.GetString("SculptPondBinding", "Z");
             set => PlayerPrefs.SetString("SculptPondBinding", value);
         }
 
         public static string SculptLanternBinding
         {
-            get => PlayerPrefs.GetString("SculptLanternBinding", "S");
+            get => PlayerPrefs.GetString("SculptLanternBinding", "X");
             set => PlayerPrefs.SetString("SculptLanternBinding", value);
         }
 
         public static string SculptRingBinding
         {
-            get => PlayerPrefs.GetString("SculptRingBinding", "E");
+            get => PlayerPrefs.GetString("SculptRingBinding", "C");
             set => PlayerPrefs.SetString("SculptRingBinding", value);
         }
 
         public static string SculptRemoveBinding
         {
-            get => PlayerPrefs.GetString("SculptRemoveBinding", "W");
+            get => PlayerPrefs.GetString("SculptRemoveBinding", "V");
             set => PlayerPrefs.SetString("SculptRemoveBinding", value);
         }
 
@@ -312,25 +316,32 @@ namespace FaeMaze.Systems
         }
 
         // Camera Focus Shortcuts
+        // Using F5/F6/F7 to avoid conflicts with HeartPower 1/2/3/4
         public static string CameraFocusHeartBinding
         {
-            get => PlayerPrefs.GetString("CameraFocusHeartBinding", "Digit1");
+            get => PlayerPrefs.GetString("CameraFocusHeartBinding", "F5");
             set => PlayerPrefs.SetString("CameraFocusHeartBinding", value);
         }
 
         public static string CameraFocusEntranceBinding
         {
-            get => PlayerPrefs.GetString("CameraFocusEntranceBinding", "Digit2");
+            get => PlayerPrefs.GetString("CameraFocusEntranceBinding", "F6");
             set => PlayerPrefs.SetString("CameraFocusEntranceBinding", value);
         }
 
         public static string CameraFocusVisitorBinding
         {
-            get => PlayerPrefs.GetString("CameraFocusVisitorBinding", "Digit3");
+            get => PlayerPrefs.GetString("CameraFocusVisitorBinding", "F7");
             set => PlayerPrefs.SetString("CameraFocusVisitorBinding", value);
         }
 
         // Camera Mouse Bindings
+        public static string CameraForwardBinding
+        {
+            get => PlayerPrefs.GetString("CameraForwardBinding", "Mouse0");
+            set => PlayerPrefs.SetString("CameraForwardBinding", value);
+        }
+
         public static string CameraOrbitBinding
         {
             get => PlayerPrefs.GetString("CameraOrbitBinding", "Mouse1");
@@ -356,6 +367,201 @@ namespace FaeMaze.Systems
             get => InputBindingHelper.ParseKeyCode(ScreenshotBinding);
             set => ScreenshotBinding = InputBindingHelper.KeyCodeToBindingString(value);
         }
+
+        #region Props - Essence Mechanics
+
+        /// <summary>Essence drained from visitor per second while at fairy ring</summary>
+        public static float RingEssenceDrainPerSecond
+        {
+            get => PlayerPrefs.GetFloat("RingEssenceDrainPerSecond", 5f);
+            set => PlayerPrefs.SetFloat("RingEssenceDrainPerSecond", Mathf.Max(0f, value));
+        }
+
+        /// <summary>Essence drained from visitor per second while at lantern</summary>
+        public static float LanternEssenceDrainPerSecond
+        {
+            get => PlayerPrefs.GetFloat("LanternEssenceDrainPerSecond", 5f);
+            set => PlayerPrefs.SetFloat("LanternEssenceDrainPerSecond", Mathf.Max(0f, value));
+        }
+
+        /// <summary>Essence awarded to player per second while visitor is at lantern</summary>
+        public static float LanternEssenceAwardPerSecond
+        {
+            get => PlayerPrefs.GetFloat("LanternEssenceAwardPerSecond", 2f);
+            set => PlayerPrefs.SetFloat("LanternEssenceAwardPerSecond", Mathf.Max(0f, value));
+        }
+
+        /// <summary>Speed multiplier when visitor is fascinated (approaching prop)</summary>
+        public static float FascinationSpeedMultiplier
+        {
+            get => PlayerPrefs.GetFloat("FascinationSpeedMultiplier", 0.5f);
+            set => PlayerPrefs.SetFloat("FascinationSpeedMultiplier", Mathf.Clamp(value, 0.1f, 2f));
+        }
+
+        #endregion
+
+        #region Heart Powers
+
+        /// <summary>Essence cost deducted from visitor when grabbed by HeartwardGrasp</summary>
+        public static float HeartwardGraspEssenceCost
+        {
+            get => PlayerPrefs.GetFloat("HeartwardGraspEssenceCost", 25f);
+            set => PlayerPrefs.SetFloat("HeartwardGraspEssenceCost", Mathf.Max(0f, value));
+        }
+
+        /// <summary>Detection radius for Heart of the Maze tongue</summary>
+        public static float HeartDetectionRadius
+        {
+            get => PlayerPrefs.GetFloat("HeartDetectionRadius", 2.5f);
+            set => PlayerPrefs.SetFloat("HeartDetectionRadius", Mathf.Max(0.5f, value));
+        }
+
+        /// <summary>Detection radius for HeartwardGrasp zones</summary>
+        public static float HeartwardGraspRadius
+        {
+            get => PlayerPrefs.GetFloat("HeartwardGraspRadius", 2.5f);
+            set => PlayerPrefs.SetFloat("HeartwardGraspRadius", Mathf.Max(0.5f, value));
+        }
+
+        /// <summary>Trigger radius for DevouringMaw</summary>
+        public static float DevouringMawRadius
+        {
+            get => PlayerPrefs.GetFloat("DevouringMawRadius", 2.5f);
+            set => PlayerPrefs.SetFloat("DevouringMawRadius", Mathf.Max(0.5f, value));
+        }
+
+        /// <summary>Speed at which tongue emerges from ground (units per second)</summary>
+        public static float TongueEmergeSpeed
+        {
+            get => PlayerPrefs.GetFloat("TongueEmergeSpeed", 9f);
+            set => PlayerPrefs.SetFloat("TongueEmergeSpeed", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Speed at which tongue retracts with visitor (units per second)</summary>
+        public static float TongueRetractSpeed
+        {
+            get => PlayerPrefs.GetFloat("TongueRetractSpeed", 9f);
+            set => PlayerPrefs.SetFloat("TongueRetractSpeed", Mathf.Max(1f, value));
+        }
+
+        #endregion
+
+        #region Visitor Behavior
+
+        /// <summary>Speed multiplier when visitor is frightened (fleeing from RedCap)</summary>
+        public static float FrightenedSpeedMultiplier
+        {
+            get => PlayerPrefs.GetFloat("FrightenedSpeedMultiplier", 2f);
+            set => PlayerPrefs.SetFloat("FrightenedSpeedMultiplier", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Chance per node for frightened visitor to recover (0-1)</summary>
+        public static float FrightenedRecoveryChance
+        {
+            get => PlayerPrefs.GetFloat("FrightenedRecoveryChance", 0.25f);
+            set => PlayerPrefs.SetFloat("FrightenedRecoveryChance", Mathf.Clamp01(value));
+        }
+
+        #endregion
+
+        #region Difficulty Scaling
+
+        /// <summary>Maximum spawn interval in seconds (asymptotic ceiling)</summary>
+        public static float MaxSpawnInterval
+        {
+            get => PlayerPrefs.GetFloat("MaxSpawnInterval", 15f);
+            set => PlayerPrefs.SetFloat("MaxSpawnInterval", Mathf.Max(5f, value));
+        }
+
+        /// <summary>Rate at which spawn interval approaches maximum (higher = faster approach)</summary>
+        public static float SpawnIntervalGrowthRate
+        {
+            get => PlayerPrefs.GetFloat("SpawnIntervalGrowthRate", 0.02f);
+            set => PlayerPrefs.SetFloat("SpawnIntervalGrowthRate", Mathf.Clamp(value, 0.001f, 0.1f));
+        }
+
+        /// <summary>
+        /// Tier threshold multipliers as comma-separated values.
+        /// Each value is a multiplier of StartingEssence for that tier.
+        /// Tier 1 = 0 (start), Tier 2 = 1.5x, etc.
+        /// </summary>
+        public static string TierMultipliers
+        {
+            get => PlayerPrefs.GetString("TierMultipliers", "0,1.5,2,3,4,6,8");
+            set => PlayerPrefs.SetString("TierMultipliers", value ?? "0,1.5,2,3,4,6,8");
+        }
+
+        /// <summary>Maximum visitor speed multiplier at highest tier</summary>
+        public static float VisitorSpeedMaxMultiplier
+        {
+            get => PlayerPrefs.GetFloat("VisitorSpeedMaxMultiplier", 1.5f);
+            set => PlayerPrefs.SetFloat("VisitorSpeedMaxMultiplier", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Growth rate for visitor speed scaling (higher = faster approach to max)</summary>
+        public static float VisitorSpeedGrowthRate
+        {
+            get => PlayerPrefs.GetFloat("VisitorSpeedGrowthRate", 0.25f);
+            set => PlayerPrefs.SetFloat("VisitorSpeedGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
+        }
+
+        /// <summary>Maximum RedCap speed multiplier at highest tier</summary>
+        public static float RedCapSpeedMaxMultiplier
+        {
+            get => PlayerPrefs.GetFloat("RedCapSpeedMaxMultiplier", 1.6f);
+            set => PlayerPrefs.SetFloat("RedCapSpeedMaxMultiplier", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Growth rate for RedCap speed scaling</summary>
+        public static float RedCapSpeedGrowthRate
+        {
+            get => PlayerPrefs.GetFloat("RedCapSpeedGrowthRate", 0.3f);
+            set => PlayerPrefs.SetFloat("RedCapSpeedGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
+        }
+
+        /// <summary>Maximum RedCap essence penalty multiplier at highest tier</summary>
+        public static float RedCapPenaltyMaxMultiplier
+        {
+            get => PlayerPrefs.GetFloat("RedCapPenaltyMaxMultiplier", 2.5f);
+            set => PlayerPrefs.SetFloat("RedCapPenaltyMaxMultiplier", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Growth rate for RedCap penalty scaling</summary>
+        public static float RedCapPenaltyGrowthRate
+        {
+            get => PlayerPrefs.GetFloat("RedCapPenaltyGrowthRate", 0.35f);
+            set => PlayerPrefs.SetFloat("RedCapPenaltyGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
+        }
+
+        /// <summary>Maximum confusion chance multiplier at highest tier</summary>
+        public static float ConfusionMaxMultiplier
+        {
+            get => PlayerPrefs.GetFloat("ConfusionMaxMultiplier", 1.75f);
+            set => PlayerPrefs.SetFloat("ConfusionMaxMultiplier", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Growth rate for confusion chance scaling</summary>
+        public static float ConfusionGrowthRate
+        {
+            get => PlayerPrefs.GetFloat("ConfusionGrowthRate", 0.25f);
+            set => PlayerPrefs.SetFloat("ConfusionGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
+        }
+
+        /// <summary>Maximum essence reward multiplier at highest tier</summary>
+        public static float EssenceRewardMaxMultiplier
+        {
+            get => PlayerPrefs.GetFloat("EssenceRewardMaxMultiplier", 1.5f);
+            set => PlayerPrefs.SetFloat("EssenceRewardMaxMultiplier", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Growth rate for essence reward scaling</summary>
+        public static float EssenceRewardGrowthRate
+        {
+            get => PlayerPrefs.GetFloat("EssenceRewardGrowthRate", 0.2f);
+            set => PlayerPrefs.SetFloat("EssenceRewardGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
+        }
+
+        #endregion
 
         /// <summary>
         /// Reset all settings to default values
@@ -401,7 +607,7 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Apply video settings (fullscreen and resolution)
+        /// Apply video settings (fullscreen, resolution, and light level)
         /// </summary>
         public static void ApplyVideoSettings()
         {
@@ -414,6 +620,25 @@ namespace FaeMaze.Systems
                 {
                     Resolution res = resolutions[ResolutionIndex];
                     Screen.SetResolution(res.width, res.height, Fullscreen);
+                }
+            }
+
+            // Apply light level to directional light
+            ApplyLightLevel();
+        }
+
+        /// <summary>
+        /// Apply light level setting to the directional light in the scene
+        /// </summary>
+        public static void ApplyLightLevel()
+        {
+            var lights = Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
+            foreach (var light in lights)
+            {
+                if (light.type == LightType.Directional)
+                {
+                    light.intensity = LightLevel;
+                    break;
                 }
             }
         }

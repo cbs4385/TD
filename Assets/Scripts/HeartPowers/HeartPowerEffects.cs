@@ -1980,15 +1980,16 @@ namespace FaeMaze.HeartPowers
             Retracting      // Tongue retracts underground (visitor already released)
         }
 
-        // Constants
-        private const float GRASP_ZONE_RADIUS = 2.5f;
+        // Constants - Architectural (not configurable)
         private const int MIN_WALL_THICKNESS = 3;         // Minimum wall models required for valid wall intersection
         private const float HGZ_WALL_OFFSET = 1.5f;       // Distance from closest graph border
         private const float MIN_EDGE_DISTANCE = 3.0f;     // Minimum distance from path/node edge (~4 wall tiles * 0.8 spacing)
 
-        // Tongue movement constants (matching HeartOfTheMaze)
-        private const float TONGUE_EMERGE_SPEED = 9.0f;   // Units per second for vertical movement (matches HeartOfTheMaze)
-        private const float TONGUE_RETRACT_SPEED = 9.0f;  // Speed when retracting (matches HeartOfTheMaze)
+        // Settings - Loaded from GameSettings
+        private readonly float graspZoneRadius;           // Detection radius for HeartwardGrasp zones
+        private readonly float tongueEmergeSpeed;         // Units per second for vertical movement
+        private readonly float tongueRetractSpeed;        // Speed when retracting
+        private readonly float grabEssenceCost;           // Essence deducted from visitor when grabbed
         private const float TONGUE_START_Z = 28.0f;       // Starting Z position (tongue length ~27, so Z=28 keeps it underground)
         private const float TONGUE_GROUND_Z = 0.0f;       // Ground level where tip emerges
         private const int BEND_BONE_COUNT = 5;            // Bones for the 90° bend at ground level (matches HeartOfTheMaze)
@@ -2051,7 +2052,14 @@ namespace FaeMaze.HeartPowers
         private static readonly Color BarkBrown = new Color(0.6f, 0.4f, 0.15f, 1f);
 
         public HeartwardGraspEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
-            : base(manager, definition, targetPosition) { }
+            : base(manager, definition, targetPosition)
+        {
+            // Load settings from GameSettings
+            graspZoneRadius = GameSettings.HeartwardGraspRadius;
+            tongueEmergeSpeed = GameSettings.TongueEmergeSpeed;
+            tongueRetractSpeed = GameSettings.TongueRetractSpeed;
+            grabEssenceCost = GameSettings.HeartwardGraspEssenceCost;
+        }
 
         public override bool IsExpired => hasExpired;
 
@@ -2396,7 +2404,7 @@ namespace FaeMaze.HeartPowers
         private Vector2 FindForestDirection(Vector2 hgzPosition, Vector2 rayDir, Vector2 heartPos)
         {
             const float ANGLE_STEP = 5f;           // Degrees between test directions
-            const float SEARCH_RADIUS = 5f;        // 2x GRASP_ZONE_RADIUS (2.5)
+            const float SEARCH_RADIUS = 5f;        // 2x graspZoneRadius (2.5)
             const float CANDIDATE_DISTANCE = 3f;   // Distance to place candidate points
             const float TILE_SCAN_STEP = 0.5f;     // Step for finding walkable tiles
 
@@ -2539,7 +2547,7 @@ namespace FaeMaze.HeartPowers
 
         private void FindAffectedGrabbingWalls()
         {
-            HeartPowerUtils.FindWallTilesInRadius(grabbingWallPos, GRASP_ZONE_RADIUS, affectedGrabbingWalls, originalWallPositions);
+            HeartPowerUtils.FindWallTilesInRadius(grabbingWallPos, graspZoneRadius, affectedGrabbingWalls, originalWallPositions);
         }
 
         private void UpdateWallShakeEffect()
@@ -2575,7 +2583,7 @@ namespace FaeMaze.HeartPowers
 
             // Add trigger collider for visitor detection
             grabbingCollider = grabbingZoneObject.AddComponent<SphereCollider>();
-            grabbingCollider.radius = GRASP_ZONE_RADIUS;
+            grabbingCollider.radius = graspZoneRadius;
             grabbingCollider.isTrigger = true;
 
             // Add rigidbody for trigger detection
@@ -2597,7 +2605,7 @@ namespace FaeMaze.HeartPowers
 
             // Add trigger collider
             pushingCollider = pushingZoneObject.AddComponent<SphereCollider>();
-            pushingCollider.radius = GRASP_ZONE_RADIUS;
+            pushingCollider.radius = graspZoneRadius;
             pushingCollider.isTrigger = true;
 
             // Add rigidbody for trigger detection
@@ -2968,7 +2976,7 @@ namespace FaeMaze.HeartPowers
             var shape = particles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = GRASP_ZONE_RADIUS * 0.5f;
+            shape.radius = graspZoneRadius * 0.5f;
 
             var sizeOverLifetime = particles.sizeOverLifetime;
             sizeOverLifetime.enabled = true;
@@ -3032,7 +3040,7 @@ namespace FaeMaze.HeartPowers
                     continue;
 
                 float distance = Vector3.Distance(visitor.transform.position, grabbingWallPos);
-                if (distance <= GRASP_ZONE_RADIUS)
+                if (distance <= graspZoneRadius)
                 {
                     pendingVisitors.Enqueue(visitor);
                 }
@@ -3139,7 +3147,7 @@ namespace FaeMaze.HeartPowers
             if (grabbingTongueInstance == null || currentVisitor == null) return;
 
             // Move tongue up (-Z is up in this coordinate system)
-            grabbingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            grabbingTongueZPosition -= tongueEmergeSpeed * deltaTime;
             UpdateGrabbingTongueZPosition();
 
             // Keep tongue straight (bones at rest pose)
@@ -3170,7 +3178,7 @@ namespace FaeMaze.HeartPowers
             if (grabbingTongueInstance == null || currentVisitor == null) return;
 
             // Continue rising (this increases horizontal extension)
-            grabbingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            grabbingTongueZPosition -= tongueEmergeSpeed * deltaTime;
             UpdateGrabbingTongueZPosition();
 
             // Update target angle to track visitor (like HeartOfTheMaze)
@@ -3191,7 +3199,7 @@ namespace FaeMaze.HeartPowers
             if (grabbingTongueInstance == null || currentVisitor == null) return;
 
             // Retract tongue (increase Z)
-            grabbingTongueZPosition += TONGUE_RETRACT_SPEED * deltaTime;
+            grabbingTongueZPosition += tongueRetractSpeed * deltaTime;
             UpdateGrabbingTongueZPosition();
 
             // Apply bone rotations
@@ -3220,8 +3228,7 @@ namespace FaeMaze.HeartPowers
             currentVisitor.SetGrabbedByHeart();
 
             // Deduct essence cost
-            const float GRAB_ESSENCE_COST = 25f;
-            currentVisitor.DeductEssence(GRAB_ESSENCE_COST);
+            currentVisitor.DeductEssence(grabEssenceCost);
 
             // Notify nearby visitors
             HeartPowerEvents.NotifyVisitorGrabbedByGrasp(currentVisitor.transform.position);
@@ -3510,7 +3517,7 @@ namespace FaeMaze.HeartPowers
             if (pushingTongueInstance == null || currentVisitor == null) return;
 
             // Move tongue up (-Z is up)
-            pushingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            pushingTongueZPosition -= tongueEmergeSpeed * deltaTime;
             UpdatePushingTongueZPosition();
 
             // Keep tongue straight during emergence
@@ -3543,7 +3550,7 @@ namespace FaeMaze.HeartPowers
             if (pushingTongueInstance == null || currentVisitor == null) return;
 
             // Continue rising (increases horizontal extension)
-            pushingTongueZPosition -= TONGUE_EMERGE_SPEED * deltaTime;
+            pushingTongueZPosition -= tongueEmergeSpeed * deltaTime;
             UpdatePushingTongueZPosition();
 
             // Apply bone rotations (bend at ground level, extend toward heart)
@@ -3628,7 +3635,7 @@ namespace FaeMaze.HeartPowers
             if (pushingTongueInstance == null) return;
 
             // Retract tongue (increase Z)
-            pushingTongueZPosition += TONGUE_RETRACT_SPEED * deltaTime;
+            pushingTongueZPosition += tongueRetractSpeed * deltaTime;
             UpdatePushingTongueZPosition();
 
             // Apply bone rotations
@@ -3924,8 +3931,10 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public class DevouringMawEffect : ActivePowerEffect
     {
-        // Constants
-        private const float TRIGGER_RADIUS = 2.5f;
+        // Settings - Loaded from GameSettings
+        private readonly float triggerRadius;
+
+        // Constants - Architectural (not configurable)
         private const float DEVOUR_CYCLE_DELAY = 0.25f;
         private const float EMERGE_DURATION = 1.04f; // 25 frames at 24fps = ~1.04 seconds for full bite animation
         private const float PAUSE_DURATION = 1.0f; // Full second pause for visibility
@@ -3982,7 +3991,11 @@ namespace FaeMaze.HeartPowers
         private Material fogMaterial;
 
         public DevouringMawEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
-            : base(manager, definition, targetPosition) { }
+            : base(manager, definition, targetPosition)
+        {
+            // Load settings from GameSettings
+            triggerRadius = GameSettings.DevouringMawRadius;
+        }
 
         /// <summary>
         /// DevouringMaw uses consumption-based expiration, not duration.
@@ -4244,7 +4257,7 @@ namespace FaeMaze.HeartPowers
             }
 
             // Fallback: try to get texture from NodeColumn material
-            Collider[] colliders = Physics.OverlapSphere(targetWorldPos, TRIGGER_RADIUS * 2f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+            Collider[] colliders = Physics.OverlapSphere(targetWorldPos, triggerRadius * 2f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
 
             foreach (var collider in colliders)
             {
@@ -4310,7 +4323,7 @@ namespace FaeMaze.HeartPowers
 
         private void FindAffectedPathTiles()
         {
-            HeartPowerUtils.FindPathTilesInRadius(targetWorldPos, TRIGGER_RADIUS, affectedPathTiles, originalTilePositions);
+            HeartPowerUtils.FindPathTilesInRadius(targetWorldPos, triggerRadius, affectedPathTiles, originalTilePositions);
         }
 
         private void CreateFogEffect()
@@ -4349,8 +4362,8 @@ namespace FaeMaze.HeartPowers
             for (int i = 0; i < segments; i++)
             {
                 float angle = (float)i / segments * Mathf.PI * 2f;
-                float x = Mathf.Cos(angle) * TRIGGER_RADIUS;
-                float y = Mathf.Sin(angle) * TRIGGER_RADIUS;
+                float x = Mathf.Cos(angle) * triggerRadius;
+                float y = Mathf.Sin(angle) * triggerRadius;
 
                 vertices[i + 1] = new Vector3(x, y, 0f);
                 uvs[i + 1] = new Vector2(0.5f + Mathf.Cos(angle) * 0.5f, 0.5f + Mathf.Sin(angle) * 0.5f);
@@ -4446,7 +4459,7 @@ namespace FaeMaze.HeartPowers
             var shape = dustParticles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = TRIGGER_RADIUS;
+            shape.radius = triggerRadius;
             shape.radiusThickness = 1f;
             shape.position = new Vector3(0f, 0f, -0.25f);
 
@@ -4516,7 +4529,7 @@ namespace FaeMaze.HeartPowers
             var shape = areaParticles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = TRIGGER_RADIUS;
+            shape.radius = triggerRadius;
             shape.radiusThickness = 1f; // Emit from entire circle area, not just edge
             // Position in the z range between -0.5 and 0
             shape.position = new Vector3(0f, 0f, (PARTICLE_Z_MIN + PARTICLE_Z_MAX) / 2f);
@@ -4562,7 +4575,7 @@ namespace FaeMaze.HeartPowers
 
         private VisitorControllerBase FindVisitorInTriggerZone()
         {
-            return HeartPowerUtils.FindVisitorInRadius(targetWorldPos, TRIGGER_RADIUS, visitorsBeingDevoured);
+            return HeartPowerUtils.FindVisitorInRadius(targetWorldPos, triggerRadius, visitorsBeingDevoured);
         }
 
         private void StartDevourCycle(VisitorControllerBase triggeringVisitor)
