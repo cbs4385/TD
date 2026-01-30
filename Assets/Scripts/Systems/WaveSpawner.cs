@@ -49,10 +49,6 @@ namespace FaeMaze.Systems
         [SerializeField]
         private float baseSpawnInterval = 5.0f;
 
-        [SerializeField]
-        [Tooltip("Each spawn increases interval by this percentage (0.05 = 5%)")]
-        private float spawnIntervalIncreaseRate = 0.05f;
-
         [Header("Red Cap Settings")]
         [SerializeField]
         private bool enableRedCap = true;
@@ -268,7 +264,7 @@ namespace FaeMaze.Systems
         {
             isSpawning = true;
 
-            // Reset spawn interval at start of wave
+            // Initialize spawn interval at base value
             currentSpawnInterval = baseSpawnInterval;
 
             // Spawn visitors continuously while game is active (essence > 0)
@@ -283,12 +279,13 @@ namespace FaeMaze.Systems
                 SpawnVisitor();
                 visitorsSpawnedThisWave++;
 
+                // Calculate spawn interval using asymptotic growth (approaches max, never exceeds)
+                currentSpawnInterval = DifficultyScaling.GetAsymptoticSpawnInterval(
+                    totalVisitorsSpawned, baseSpawnInterval);
+
                 // Wait for current interval (minimum 0.1 seconds for safety)
                 float waitTime = Mathf.Max(0.1f, currentSpawnInterval);
                 yield return new WaitForSeconds(waitTime);
-
-                // Increase spawn interval by configured percentage after each spawn
-                currentSpawnInterval *= (1f + spawnIntervalIncreaseRate);
             }
 
             isSpawning = false;
@@ -343,6 +340,10 @@ namespace FaeMaze.Systems
             // Initialize visitor with GameController reference
             spawnedVisitor.Initialize(GameController.Instance);
 
+            // Apply difficulty tier scaling (essence-threshold based)
+            int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
+            spawnedVisitor.SetDifficultyTier(tier);
+
             // Track where visitor spawned from (to prevent retargeting back to origin)
             spawnedVisitor.SetOriginalSpawnPosition(spawnWorldPos);
 
@@ -355,7 +356,7 @@ namespace FaeMaze.Systems
             }
 
             string visitorType = spawnedVisitor.GetType().Name.Replace("Controller", "");
-            visitorObject.name = $"{visitorType}_W{currentWaveNumber}_{visitorsSpawnedThisWave}_{spawnId}";
+            visitorObject.name = $"{visitorType}_T{tier}_{totalVisitorsSpawned}_{spawnId}";
 
             SoundManager.Instance?.PlayVisitorSpawn();
 
@@ -452,7 +453,9 @@ namespace FaeMaze.Systems
             }
 
             currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
-            currentRedCap.name = $"RedCap_Wave{currentWaveNumber}";
+            int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
+            currentRedCap.SetDifficultyTier(tier);
+            currentRedCap.name = $"RedCap_T{tier}";
         }
 
         private void HandleGameOver()

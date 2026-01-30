@@ -1247,6 +1247,75 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 
 ---
 
+### Completed - Difficulty Progression System
+
+**Status**: Fully implemented with essence-threshold tiers and asymptotic spawn intervals.
+
+**Core Architecture**:
+- `DifficultyManager.cs` - Monitors essence, calculates tier, fires `OnTierChanged` events
+- `DifficultyScaling.cs` - Static class providing asymptotic scaling curves
+
+**Game Flow** (IMPORTANT - No Waves):
+- Game is ONE CONTINUOUS spawn session until essence depletes
+- NO discrete waves with completion events
+- Spawn interval grows asymptotically (approaches max of 15s, never exceeds)
+- Difficulty tier increases at essence milestones
+
+**Essence-Threshold Tiers** (relative to starting essence, default 100):
+
+| Tier | Threshold | With 100 Start | Notes |
+|------|-----------|----------------|-------|
+| 1 | Start | 0+ | Baseline |
+| 2 | 1.5x | 150 | First milestone |
+| 3 | 2.0x | 200 | RedCap spawns |
+| 4 | 3.0x | 300 | |
+| 5 | 4.0x | 400 | |
+| 6 | 6.0x | 600 | |
+| 7 | 8.0x | 800 | Maximum |
+
+**Hysteresis**: Tier increases immediately when threshold crossed, but only decreases if essence drops below PREVIOUS tier threshold (prevents oscillation).
+
+**Scaled Parameters Per Tier**:
+
+| Parameter | Tier 1 | Tier 4 | Tier 7 (Max) |
+|-----------|--------|--------|--------------|
+| Visitor Speed | 1.0x | 1.25x | 1.5x |
+| RedCap Speed | 1.0x | 1.3x | 1.6x |
+| RedCap Penalty | 1.0x | 1.75x | 2.5x |
+| Confusion Chance | 1.0x | 1.3x | 1.75x |
+| Essence Rewards | 1.0x | 1.25x | 1.5x |
+
+**Asymptotic Spawn Interval**:
+- Base: 5.0s (starting rate)
+- Max: 15.0s (never exceeds)
+- Formula: `base + (max - base) * (1 - e^(-0.02 * spawnCount))`
+- Progression: 5.0s → 6.3s (10 spawns) → 9.8s (50 spawns) → 14.1s (200 spawns)
+
+**Implementation Points**:
+- `DifficultyManager.OnEssenceChanged()` - recalculates tier with hysteresis
+- `WaveSpawner.SpawnWaveCoroutine()` - uses asymptotic spawn interval
+- `WaveSpawner.SpawnVisitor()` - calls `SetDifficultyTier()` on spawned visitors
+- `VisitorControllerBase.SetDifficultyTier()` - applies speed scaling
+- `VisitorControllerBase.GetConfusionChance()` - applies confusion scaling
+- `VisitorControllerBase.GetEssenceReward()` - applies reward scaling
+- `RedCapController.SetDifficultyTier()` - applies speed scaling
+- `RedCapController.GetScaledEssencePenalty()` - applies penalty scaling
+
+**Key Files**:
+| File | Purpose |
+|------|---------|
+| `DifficultyManager.cs` | Tier management, essence monitoring, hysteresis |
+| `DifficultyScaling.cs` | Asymptotic spawn interval, tier-based multipliers |
+| `WaveSpawner.cs` | Applies spawn interval, gets tier from manager |
+| `VisitorControllerBase.cs` | Visitor speed/confusion/reward scaling |
+| `RedCapController.cs` | RedCap speed/penalty scaling |
+
+**Scaling Formula**:
+- Growth: `1 + (maxBonus) * (1 - e^(-rate * (tier-1)))`
+- Spawn interval: `base + (max - base) * (1 - e^(-rate * spawnCount))`
+
+---
+
 ### In Progress
 - [ ] Ensure other visitor types work as intended with heart powers
 
@@ -1265,8 +1334,8 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 - [x] Replace the focus point indicator - now uses conic section with spiraling energy bolts
 
 ### Game State
-- [ ] Enable game over state
-- [ ] Implement difficulty progression
+- [x] Enable game over state - fully implemented (see Game Over Statistics section)
+- [x] Implement difficulty progression - wave-based scaling system (see Difficulty Progression section)
 
 ### Visitors
 - [x] Enable all visitor types - removed individual enable/disable toggles from options

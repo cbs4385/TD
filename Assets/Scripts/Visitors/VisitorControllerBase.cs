@@ -100,6 +100,7 @@ namespace FaeMaze.Visitors
         protected GameController gameController;
         protected MazeGridBehaviour mazeGridBehaviour;
         protected float speedMultiplier = 1f;
+        protected int difficultyTier = 1;  // Difficulty tier when spawned (essence-threshold based)
 
         // Rendering
         protected GameObject modelInstance;
@@ -1179,10 +1180,12 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Gets the confusion/misstep chance at intersections for this visitor.
+        /// Scaled by wave-based difficulty.
         /// </summary>
         public virtual float GetConfusionChance()
         {
-            return config != null ? config.ConfusionIntersectionChance : 0.25f;
+            float baseChance = config != null ? config.ConfusionIntersectionChance : 0.25f;
+            return DifficultyScaling.GetScaledConfusionChance(difficultyTier, baseChance);
         }
 
         /// <summary>
@@ -1203,10 +1206,12 @@ namespace FaeMaze.Visitors
 
         /// <summary>
         /// Gets the essence reward for consuming this visitor.
+        /// Scaled by tier-based difficulty (higher tiers = more essence from harder visitors).
         /// </summary>
         public virtual int GetEssenceReward()
         {
-            return config != null ? config.EssenceReward : 50;
+            int baseReward = config != null ? config.EssenceReward : 50;
+            return DifficultyScaling.GetScaledEssenceReward(difficultyTier, baseReward);
         }
 
         /// <summary>
@@ -1274,6 +1279,31 @@ namespace FaeMaze.Visitors
         {
             Initialize(GameController.Instance);
         }
+
+        /// <summary>
+        /// Sets the difficulty tier for this visitor and applies scaling.
+        /// Call after Initialize() and before the visitor starts moving.
+        /// </summary>
+        public virtual void SetDifficultyTier(int tier)
+        {
+            difficultyTier = Mathf.Max(1, tier);
+            ApplyDifficultyScaling();
+        }
+
+        /// <summary>
+        /// Applies tier-based difficulty scaling to visitor parameters.
+        /// </summary>
+        protected virtual void ApplyDifficultyScaling()
+        {
+            // Apply speed scaling (visitors get faster at higher tiers)
+            float tierSpeedMultiplier = DifficultyScaling.GetVisitorSpeedMultiplier(difficultyTier);
+            moveSpeed *= tierSpeedMultiplier;
+        }
+
+        /// <summary>
+        /// Gets the difficulty tier this visitor was spawned at.
+        /// </summary>
+        public int DifficultyTier => difficultyTier;
 
         #endregion
 

@@ -100,4 +100,56 @@ Shader "Hidden/PostProcess/RadialBlur"
             ENDHLSL
         }
     }
+
+    // Fallback for older/integrated GPUs - simpler blur
+    SubShader
+    {
+        Tags { "RenderType"="Opaque" "RenderPipeline"="UniversalPipeline" }
+        LOD 50
+        ZTest Always ZWrite Off Cull Off
+
+        Pass
+        {
+            Name "RadialBlurFallback"
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 2.0
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+
+            TEXTURE2D_X(_MainTex);
+            SAMPLER(sampler_MainTex);
+
+            float _VignetteCoverage;
+            float _VignetteIntensity;
+
+            float4 Frag(Varyings input) : SV_Target
+            {
+                float2 uv = input.texcoord;
+                float4 color = SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
+
+                // Simple vignette only (no blur)
+                float2 center = float2(0.5, 0.5);
+                float distanceFromCenter = length(uv - center);
+                float normalizedDist = distanceFromCenter / 0.707;
+
+                float vignetteStart = 1.0 - (_VignetteCoverage / 100.0);
+                float vignetteFactor = 0.0;
+                if (normalizedDist > vignetteStart)
+                {
+                    vignetteFactor = (normalizedDist - vignetteStart) / max(1.0 - vignetteStart, 0.001);
+                    vignetteFactor = saturate(vignetteFactor) * _VignetteIntensity;
+                }
+
+                color.rgb *= (1.0 - vignetteFactor);
+                return color;
+            }
+            ENDHLSL
+        }
+    }
+
+    FallBack Off
 }

@@ -125,6 +125,9 @@ namespace FaeMaze.Visitors
         // Pathfinding cost penalties (same as visitors)
         private const float HEART_NODE_PATHFINDING_PENALTY = 20f;
 
+        // Difficulty tier for scaling (essence-threshold based)
+        private int difficultyTier = 1;
+
         #endregion
 
         #region Properties
@@ -144,8 +147,37 @@ namespace FaeMaze.Visitors
 
         private void Awake()
         {
-            // Calculate actual move speed
+            // Calculate actual move speed (will be scaled by tier when set)
             moveSpeed = baseMoveSpeed * speedMultiplier;
+        }
+
+        /// <summary>
+        /// Sets the difficulty tier for this RedCap and applies scaling.
+        /// Call after instantiation.
+        /// </summary>
+        public void SetDifficultyTier(int tier)
+        {
+            difficultyTier = Mathf.Max(1, tier);
+            ApplyDifficultyScaling();
+        }
+
+        /// <summary>
+        /// Applies tier-based difficulty scaling to RedCap parameters.
+        /// </summary>
+        private void ApplyDifficultyScaling()
+        {
+            // Apply speed scaling (RedCap gets faster at higher tiers)
+            float tierSpeedMultiplier = DifficultyScaling.GetRedCapSpeedMultiplier(difficultyTier);
+            moveSpeed = baseMoveSpeed * speedMultiplier * tierSpeedMultiplier;
+        }
+
+        /// <summary>
+        /// Gets the essence penalty for catching a visitor, scaled by difficulty tier.
+        /// </summary>
+        public int GetScaledEssencePenalty()
+        {
+            int basePenalty = Mathf.RoundToInt(baseEssencePerVisitor * essencePenaltyMultiplier);
+            return DifficultyScaling.GetScaledEssencePenalty(difficultyTier, basePenalty);
         }
 
         private void OnEnable()
@@ -645,13 +677,13 @@ namespace FaeMaze.Visitors
         {
             if (killingTarget != null)
             {
-                // Calculate essence penalty
-                int essencePenalty = Mathf.RoundToInt(baseEssencePerVisitor * essencePenaltyMultiplier);
+                // Calculate essence penalty (scaled by difficulty tier)
+                int essencePenalty = GetScaledEssencePenalty();
 
                 // Deduct essence from player
                 if (gameController != null)
                 {
-                    gameController.AddEssence(-essencePenalty, EssenceSource.RedCapPenalty, $"Visitor killed");
+                    gameController.AddEssence(-essencePenalty, EssenceSource.RedCapPenalty, $"Visitor killed (tier {difficultyTier})");
                 }
 
                 // Track visitor fate - negative essence since it's a penalty

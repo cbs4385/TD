@@ -704,7 +704,7 @@ namespace FaeMaze.Maze
             glowLight.color = glowColor;
             glowLight.range = glowRange;
             glowLight.intensity = glowMaxIntensity;
-            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
+            glowLight.renderMode = LightRenderMode.ForcePixel;
             glowLight.shadows = LightShadows.None;
         }
 

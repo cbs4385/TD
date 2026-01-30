@@ -66,4 +66,6 @@ Shader "Custom/VertexColor"
             ENDCG
         }
     }
+
+    FallBack "Diffuse"
 }

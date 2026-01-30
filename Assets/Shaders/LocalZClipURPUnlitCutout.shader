@@ -84,4 +84,73 @@ Shader "Custom/LocalZClipURPUnlitCutout"
             ENDHLSL
         }
     }
+
+    // Fallback for older/integrated GPUs
+    SubShader
+    {
+        Tags
+        {
+            "RenderPipeline"="UniversalPipeline"
+            "Queue"="AlphaTest"
+            "RenderType"="TransparentCutout"
+        }
+        LOD 50
+
+        Pass
+        {
+            Name "ForwardFallback"
+            Tags { "LightMode"="UniversalForward" }
+
+            Cull Off
+            ZWrite On
+
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma target 2.0
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float2 uv         : TEXCOORD0;
+            };
+
+            struct Varyings
+            {
+                float4 positionHCS : SV_POSITION;
+                float2 uv          : TEXCOORD0;
+                float  zOS         : TEXCOORD1;
+            };
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseColor;
+                float4 _BaseMap_ST;
+                float  _ClipZ;
+            CBUFFER_END
+
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+
+            Varyings vert(Attributes IN)
+            {
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
+                OUT.zOS = IN.positionOS.z;
+                return OUT;
+            }
+
+            half4 frag(Varyings IN) : SV_Target
+            {
+                if (IN.zOS < _ClipZ) discard;
+                half4 col = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv) * _BaseColor;
+                return col;
+            }
+            ENDHLSL
+        }
+    }
+
+    FallBack "Universal Render Pipeline/Unlit"
 }

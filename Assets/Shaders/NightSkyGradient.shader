@@ -62,4 +62,6 @@ Shader "Custom/NightSkyGradient"
             ENDCG
         }
     }
+
+    FallBack "Unlit/Color"
 }

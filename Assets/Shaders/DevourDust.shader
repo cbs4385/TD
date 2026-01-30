@@ -177,4 +177,65 @@ Shader "Custom/DevourDust"
             ENDCG
         }
     }
+
+    // Fallback for older/integrated GPUs
+    SubShader
+    {
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-50" }
+        LOD 50
+
+        Pass
+        {
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
+            Cull Off
+
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma target 2.0
+            #include "UnityCG.cginc"
+
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f
+            {
+                float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            sampler2D _MainTex;
+            float _Alpha;
+            float _EdgeFade;
+
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.vertex = UnityObjectToClipPos(v.vertex);
+                o.uv = v.uv;
+                return o;
+            }
+
+            fixed4 frag (v2f i) : SV_Target
+            {
+                float2 centerOffset = i.uv - float2(0.5, 0.5);
+                float distFromCenter = length(centerOffset) * 2.0;
+                float circleMask = 1.0 - saturate((distFromCenter - (1.0 - _EdgeFade)) / _EdgeFade);
+                circleMask = circleMask * circleMask;
+
+                if (circleMask < 0.01)
+                    return fixed4(0, 0, 0, 0);
+
+                fixed4 texColor = tex2D(_MainTex, i.uv);
+                return fixed4(texColor.rgb, circleMask * _Alpha);
+            }
+            ENDCG
+        }
+    }
+
+    FallBack "Transparent/Diffuse"
 }
