@@ -451,6 +451,7 @@ namespace FaeMaze.Visitors
             {
                 redCapDetectionTimer = redCapDetectionInterval;
                 CheckForNearbyRedCaps();
+                CheckForFrighteningEvents();
             }
 
             FrameProfiler.Checkpoint($"Visitor.AfterRedCapCheck({name})");
@@ -4027,6 +4028,26 @@ namespace FaeMaze.Visitors
                     SetFrightened(redCap.transform.position);
                     return;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Checks for nearby frightening events (Puka drowning, heart tongue, powers, wisps luring).
+        /// Uses the FrighteningEventManager to detect events and trigger fear response.
+        /// </summary>
+        protected virtual void CheckForFrighteningEvents()
+        {
+            // Skip if already frightened, lured (immune to fear), or in terminal state
+            if (isFrightened || isLured || state == VisitorState.Consumed || state == VisitorState.Escaping ||
+                state == VisitorState.Drowning || state == VisitorState.Grabbed)
+            {
+                return;
+            }
+
+            // Use the FrighteningEventManager to check for nearby events
+            if (FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.CheckAndFrightenVisitor(this);
             }
         }
 

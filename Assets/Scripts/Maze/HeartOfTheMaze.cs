@@ -4,6 +4,7 @@ using FaeMaze.Audio;
 using FaeMaze.Visitors;
 using System;
 using System.Collections.Generic;
+using static FaeMaze.Systems.FrighteningEventManager;
 
 namespace FaeMaze.Maze
 {
@@ -165,6 +166,9 @@ namespace FaeMaze.Maze
 
         // Bone colliders (baked into prefab, used for collision detection)
         private GameObject[] boneColliderObjects = null;
+
+        // Frightening event (registered when tongue is active)
+        private FrighteningEvent currentFrighteningEvent;
 
         #endregion
 
@@ -401,6 +405,13 @@ namespace FaeMaze.Maze
             tongueZPosition = TONGUE_START_Z;
             currentTargetAngle = 0f;
 
+            // Unregister frightening event
+            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
+                currentFrighteningEvent = null;
+            }
+
             if (heartTongueInstance != null)
             {
                 heartTongueInstance.name = "HeartTongue_Pooled";
@@ -423,6 +434,16 @@ namespace FaeMaze.Maze
             tongueZPosition = TONGUE_START_Z;
 
             UpdateTargetAngle();
+
+            // Register frightening event - nearby visitors will flee from the heart
+            if (FrighteningEventManager.Instance != null)
+            {
+                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
+                    EventType.HeartTongue,
+                    transform.position,
+                    this
+                );
+            }
 
             // Activate tongue from pool
             if (heartTongueInstance != null)

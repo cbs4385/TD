@@ -2047,6 +2047,9 @@ namespace FaeMaze.HeartPowers
         private int requiredCaptures = 1;
         private bool hasExpired = false;
 
+        // Frightening event (registered when tongue is active)
+        private FrighteningEventManager.FrighteningEvent currentFrighteningEvent;
+
         // Particle colors
         private static readonly Color LeafGreen = new Color(0.3f, 0.7f, 0.2f, 1f);
         private static readonly Color BarkBrown = new Color(0.6f, 0.4f, 0.15f, 1f);
@@ -3062,6 +3065,16 @@ namespace FaeMaze.HeartPowers
             // Spawn the tongue
             SpawnGrabbingTongue(visitor.transform.position);
 
+            // Register frightening event - nearby visitors will flee
+            if (FrighteningEventManager.Instance != null)
+            {
+                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
+                    FrighteningEventManager.EventType.HeartwardGrasp,
+                    grabbingWallPos,
+                    this
+                );
+            }
+
             // Start emerging phase - tongue rises from underground (like HeartOfTheMaze)
             grabPhase = GrabPhase.Emerging;
 
@@ -3090,6 +3103,13 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void DestroyGrabbingTongue()
         {
+            // Unregister frightening event
+            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
+                currentFrighteningEvent = null;
+            }
+
             // Disable colliders and clear static flag
             SetGrabbingSolidCollidersEnabled(false);
             grabbingSolidColliders = null;
@@ -4004,6 +4024,9 @@ namespace FaeMaze.HeartPowers
         private GameObject fogQuad;
         private Material fogMaterial;
 
+        // Frightening event (registered when devour cycle is active)
+        private FrighteningEventManager.FrighteningEvent currentFrighteningEvent;
+
         public DevouringMawEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition)
         {
@@ -4120,6 +4143,13 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
+            // Unregister frightening event
+            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
+                currentFrighteningEvent = null;
+            }
+
             // Clean up any in-progress devour
             if (devourVisual != null)
             {
@@ -4612,6 +4642,16 @@ namespace FaeMaze.HeartPowers
             Vector3 devourLocation = triggeringVisitor.transform.position;
             devourLocation.z = 0f;
 
+            // Register frightening event - nearby visitors will flee from the devour
+            if (FrighteningEventManager.Instance != null)
+            {
+                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
+                    FrighteningEventManager.EventType.DevouringMaw,
+                    devourLocation,
+                    this
+                );
+            }
+
             // Find all visitors near the triggering visitor's location
             var visitors = VisitorRegistry.All;
             foreach (var visitor in visitors)
@@ -4741,6 +4781,13 @@ namespace FaeMaze.HeartPowers
                     break;
 
                 case DevourPhase.Complete:
+                    // Unregister frightening event
+                    if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
+                    {
+                        FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
+                        currentFrighteningEvent = null;
+                    }
+
                     // Clean up and reset for next cycle
                     if (devourVisual != null)
                     {

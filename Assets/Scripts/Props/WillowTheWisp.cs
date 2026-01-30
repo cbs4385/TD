@@ -3,6 +3,7 @@ using UnityEngine;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
 using ForestMaze;
+using static FaeMaze.Systems.FrighteningEventManager;
 
 namespace FaeMaze.Props
 {
@@ -134,6 +135,9 @@ namespace FaeMaze.Props
         private const string DirectionParameter = "Direction";
         private GameObject modelInstance;
         private Light glowLight;
+
+        // Frightening event (registered when actively luring a visitor)
+        private FrighteningEvent currentFrighteningEvent;
 
         #endregion
 
@@ -755,6 +759,16 @@ namespace FaeMaze.Props
 
             state = WispState.Reacting;
 
+            // Register frightening event - other visitors will flee from seeing the lure
+            if (FrighteningEventManager.Instance != null)
+            {
+                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
+                    EventType.WispLure,
+                    transform.position,
+                    this
+                );
+            }
+
             // NOW notify the visitor to follow this wisp (we're near them on a walkable tile)
             var followWisp = targetVisitor.gameObject.GetComponent<FollowWispBehavior>();
             if (followWisp == null)
@@ -900,6 +914,12 @@ namespace FaeMaze.Props
             {
                 ReturnToIdle();
                 return;
+            }
+
+            // Update frightening event position as we move
+            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UpdateEventPosition(currentFrighteningEvent, transform.position);
             }
 
             // Check if visitor is no longer in a lurable state (consumed, etc.)
@@ -1053,6 +1073,13 @@ namespace FaeMaze.Props
 
         private void ReturnToIdle()
         {
+            // Unregister frightening event
+            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
+                currentFrighteningEvent = null;
+            }
+
             state = WispState.Idle;
             targetVisitor = null;
             targetPuka = null;
