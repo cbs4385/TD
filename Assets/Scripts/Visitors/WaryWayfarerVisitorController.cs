@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using FaeMaze.Systems;
+using FaeMaze.Props;
+using FaeMaze.Maze;
+using FaeMaze.HeartPowers;
 using UnityEngine;
 
 namespace FaeMaze.Visitors
@@ -30,6 +33,22 @@ namespace FaeMaze.Visitors
 
         #endregion
 
+        #region Hazard Awareness Fields
+
+        [Header("Hazard Awareness")]
+        [SerializeField]
+        [Tooltip("Chance to detect and avoid hazards (0-1)")]
+        private float hazardDetectionChance = 0.25f;
+
+        [SerializeField]
+        [Tooltip("Cost penalty applied to tiles near detected hazards")]
+        private float hazardAvoidancePenalty = 20f;
+
+        // Cached hazard zones for current path calculation
+        private List<(Vector2 position, float radius)> detectedHazardZones;
+
+        #endregion
+
         #region Properties
 
         public override VisitorState State => state;
@@ -51,6 +70,7 @@ namespace FaeMaze.Visitors
             walkedPositions = new HashSet<Vector3>();
             isOnMisstepPath = false;
             misstepSegmentStartIndex = -1;
+            detectedHazardZones = new List<(Vector2, float)>();
         }
 
         #endregion
@@ -182,6 +202,134 @@ namespace FaeMaze.Visitors
             }
 
             return nearestExit;
+        }
+
+        #endregion
+
+        #region Hazard Avoidance
+
+        /// <summary>
+        /// Override BuildWorldPath to apply hazard avoidance costs when hazards are detected.
+        /// Rolls a 25% chance per path calculation to detect hazards.
+        /// </summary>
+        public override List<Vector3> BuildWorldPath(Vector3 start, Vector3 end)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+                return new List<Vector3>();
+
+            // Roll 25% chance to detect hazards for this path calculation
+            System.Func<Vector2, float> hazardCost = null;
+            if (TryDetectHazards())
+            {
+                hazardCost = GetHazardCostForPosition;
+            }
+
+            return ForestMaze.MazePathfinding.BuildWorldPath(
+                mazeGridBehaviour.WorldSpaceMazeData,
+                start, end,
+                heartNodePenalty: 0f,
+                penalizeHeartNode: false,
+                hazardCostFunction: hazardCost
+            );
+        }
+
+        /// <summary>
+        /// Rolls 25% chance to detect hazards and collects their positions.
+        /// Called each time a path is calculated.
+        /// </summary>
+        private bool TryDetectHazards()
+        {
+            // 25% chance to detect hazards this path calculation
+            if (RandomManager.Value > hazardDetectionChance)
+            {
+                return false;
+            }
+
+            detectedHazardZones.Clear();
+
+            // PukaHazard (drowning pools) - static registry
+            foreach (var puka in PukaHazard.All)
+            {
+                Vector2 pos = new Vector2(puka.transform.position.x, puka.transform.position.y);
+                detectedHazardZones.Add((pos, 1.5f)); // detectionRadius default
+            }
+
+            // FaeLantern (fascination zones) - static registry
+            foreach (var lantern in FaeLantern.All)
+            {
+                Vector2 pos = new Vector2(lantern.transform.position.x, lantern.transform.position.y);
+                detectedHazardZones.Add((pos, lantern.InfluenceRadius));
+            }
+
+            // FairyRing (circling zones) - no static registry, use FindObjectsByType
+            var fairyRings = FindObjectsByType<FairyRing>(FindObjectsSortMode.None);
+            foreach (var ring in fairyRings)
+            {
+                Vector2 pos = new Vector2(ring.transform.position.x, ring.transform.position.y);
+                // Get radius from collider (SphereCollider typical)
+                float radius = 3.0f; // default
+                var sphereCol = ring.GetComponent<SphereCollider>();
+                if (sphereCol != null)
+                {
+                    radius = sphereCol.radius * ring.transform.localScale.x;
+                }
+                detectedHazardZones.Add((pos, radius));
+            }
+
+            // HeartOfTheMaze - find single instance
+            var heart = FindFirstObjectByType<HeartOfTheMaze>();
+            if (heart != null)
+            {
+                Vector2 pos = new Vector2(heart.transform.position.x, heart.transform.position.y);
+                detectedHazardZones.Add((pos, GameSettings.HeartDetectionRadius));
+            }
+
+            // Active HeartwardGrasp zones - query HeartPowerManager
+            var hpm = HeartPowerManager.Instance;
+            if (hpm != null)
+            {
+                var graspPositions = hpm.GetActiveHeartwardGraspPositions();
+                foreach (var graspPos in graspPositions)
+                {
+                    Vector2 pos = new Vector2(graspPos.x, graspPos.y);
+                    detectedHazardZones.Add((pos, GameSettings.HeartwardGraspRadius));
+                }
+
+                // Active DevouringMaw zones
+                var mawPositions = hpm.GetActiveDevouringMawPositions();
+                foreach (var mawPos in mawPositions)
+                {
+                    Vector2 pos = new Vector2(mawPos.x, mawPos.y);
+                    detectedHazardZones.Add((pos, GameSettings.DevouringMawRadius));
+                }
+            }
+
+            return detectedHazardZones.Count > 0;
+        }
+
+        /// <summary>
+        /// Calculates additional pathfinding cost for a tile based on proximity to detected hazards.
+        /// Uses quadratic falloff - higher cost closer to hazard center.
+        /// </summary>
+        private float GetHazardCostForPosition(Vector2 tilePos)
+        {
+            float totalCost = 0f;
+
+            foreach (var (hazardPos, radius) in detectedHazardZones)
+            {
+                float dist = Vector2.Distance(tilePos, hazardPos);
+
+                // Apply cost if within hazard zone
+                if (dist < radius)
+                {
+                    // Higher cost closer to center (quadratic falloff)
+                    float normalizedDist = dist / radius;
+                    float costMultiplier = (1f - normalizedDist) * (1f - normalizedDist);
+                    totalCost += hazardAvoidancePenalty * costMultiplier;
+                }
+            }
+
+            return totalCost;
         }
 
         #endregion

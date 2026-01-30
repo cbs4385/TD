@@ -3918,6 +3918,20 @@ namespace FaeMaze.HeartPowers
 
         public int GetCapturedCount() => capturedCount;
         public int GetRequiredCaptures() => requiredCaptures;
+
+        /// <summary>
+        /// Returns the world positions of both grabbing and pushing zones.
+        /// Used by WaryWayfarer for hazard avoidance pathfinding.
+        /// </summary>
+        public List<Vector3> GetZonePositions()
+        {
+            var positions = new List<Vector3>();
+            if (grabbingZoneObject != null)
+                positions.Add(grabbingZoneObject.transform.position);
+            if (pushingZoneObject != null)
+                positions.Add(pushingZoneObject.transform.position);
+            return positions;
+        }
     }
 
     #endregion
@@ -4199,6 +4213,12 @@ namespace FaeMaze.HeartPowers
             }
             visitorStartPositions = updatedVisitorPositions;
         }
+
+        /// <summary>
+        /// Returns the target world position of the DevouringMaw zone.
+        /// Used by WaryWayfarer for hazard avoidance pathfinding.
+        /// </summary>
+        public Vector3 GetTargetPosition() => targetWorldPos;
 
         private Texture2D LoadEarthenGroundTexture()
         {

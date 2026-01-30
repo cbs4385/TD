@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Systems;
@@ -149,6 +150,11 @@ namespace FaeMaze.Cameras
         private const float RollLogInterval = 0.5f;
         private bool loggedMazeUpFlip;
 
+        // Focus cycling state
+        private int currentPortalIndex = -1;
+        private int currentVisitorIndex = -1;
+        private DynamicMazeGrowth dynamicMazeGrowth;
+
         #endregion
 
         #region Public Properties
@@ -297,6 +303,9 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            // Handle focus shortcuts regardless of camera mode
+            HandleFocusShortcuts();
+
             if (useFocalPointMode)
             {
                 if (!focalPointInitialized)
@@ -311,8 +320,6 @@ namespace FaeMaze.Cameras
                 UpdateFocalPointCameraPosition();
                 return;
             }
-
-            HandleFocusShortcuts();
             HandleKeyboardInput();
             HandleMouseControls();
             HandleScrollZoom();
@@ -571,17 +578,12 @@ namespace FaeMaze.Cameras
 
             if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusEntranceBinding))
             {
-                FocusOnEntrance(true);
+                CycleToNextPortal();
             }
 
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusVisitorBinding) &&
-                GameController.Instance != null)
+            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusVisitorBinding))
             {
-                VisitorController lastVisitor = GameController.Instance.LastSpawnedVisitor;
-                if (lastVisitor != null)
-                {
-                    FocusOnVisitor(lastVisitor, false);
-                }
+                CycleToNextVisitor();
             }
         }
 
@@ -1080,12 +1082,22 @@ namespace FaeMaze.Cameras
         /// <summary>
         /// Focuses the camera on the given world position.
         /// Preserves yaw/pitch and recomputes radius from current camera position for stability.
+        /// In focal point mode, moves the focal point transform to the target position.
         /// </summary>
         public void FocusOnPosition(Vector3 worldPos, bool instant = false, float lerpSpeed = 10f)
         {
             focusVisitor = null;
             Vector3 targetPosition = new Vector3(worldPos.x, worldPos.y, 0f);
             focusTargetPosition = targetPosition;
+
+            // In focal point mode, move the focal point transform
+            if (useFocalPointMode && focalPointTransform != null)
+            {
+                focalPointTransform.position = targetPosition;
+                _focusPoint = targetPosition;
+                isFocusing = false;
+                return;
+            }
 
             if (instant)
             {
@@ -1154,6 +1166,71 @@ namespace FaeMaze.Cameras
             isFocusing = true;
             trackingLogTimer = 0f;
             trackingVisitorLostLogged = false;
+        }
+
+        /// <summary>
+        /// Cycles to the next portal and focuses on it.
+        /// If no portals exist, falls back to the original entrance.
+        /// </summary>
+        public void CycleToNextPortal()
+        {
+            // Lazy-init DynamicMazeGrowth reference
+            if (dynamicMazeGrowth == null && mazeGridBehaviour != null)
+            {
+                dynamicMazeGrowth = mazeGridBehaviour.GetComponent<DynamicMazeGrowth>();
+            }
+
+            // Get current portal positions
+            List<Vector3> portalPositions = null;
+            if (dynamicMazeGrowth != null)
+            {
+                portalPositions = dynamicMazeGrowth.GetPortalPositions();
+            }
+
+            // If no portals, fall back to original entrance
+            if (portalPositions == null || portalPositions.Count == 0)
+            {
+                FocusOnEntrance(true);
+                currentPortalIndex = -1;
+                return;
+            }
+
+            // Cycle to next portal
+            currentPortalIndex = (currentPortalIndex + 1) % portalPositions.Count;
+            Vector3 portalPos = portalPositions[currentPortalIndex];
+            FocusOnPosition(portalPos, true);
+
+            // Clear visitor tracking since we're focusing on a portal
+            focusVisitor = null;
+        }
+
+        /// <summary>
+        /// Cycles to the next visitor and focuses on them.
+        /// If no visitors exist, does nothing.
+        /// </summary>
+        public void CycleToNextVisitor()
+        {
+            var allVisitors = VisitorRegistry.All;
+            if (allVisitors == null || allVisitors.Count == 0)
+            {
+                currentVisitorIndex = -1;
+                return;
+            }
+
+            // Cycle to next visitor
+            currentVisitorIndex = (currentVisitorIndex + 1) % allVisitors.Count;
+
+            // Get the visitor at the current index
+            var visitor = allVisitors[currentVisitorIndex];
+            if (visitor != null)
+            {
+                FocusOnPosition(visitor.transform.position, false);
+                focusVisitor = visitor as VisitorController;
+                focusLerpSpeed = 10f;
+                isFocusing = true;
+                trackingLogTimer = 0f;
+                trackingVisitorLostLogged = false;
+            }
         }
 
         #endregion

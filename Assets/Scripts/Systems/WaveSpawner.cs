@@ -174,6 +174,8 @@ namespace FaeMaze.Systems
             currentSpawnInterval = baseSpawnInterval;
             enableRedCap = GameSettings.EnableRedCap;
             startingEssence = GameSettings.StartingEssence;
+
+            Debug.Log($"[WaveSpawner] LoadSettings: enableRedCap={enableRedCap}, startingEssence={startingEssence}, redCapPrefab={(redCapPrefab != null ? redCapPrefab.name : "NULL")}");
         }
 
         private void Update()
@@ -196,8 +198,14 @@ namespace FaeMaze.Systems
 
                 if (currentEssence >= spawnThreshold)
                 {
+                    Debug.Log($"[WaveSpawner] RedCap spawn triggered: currentEssence={currentEssence} >= threshold={spawnThreshold}");
                     SpawnRedCap();
                 }
+            }
+            else if (!enableRedCap)
+            {
+                // Log once when RedCap is disabled (use a static flag to avoid spam)
+                LogRedCapDisabledOnce();
             }
 
             activeVisitors.RemoveAll(v => v == null);
@@ -432,8 +440,17 @@ namespace FaeMaze.Systems
 
         private void SpawnRedCap()
         {
-            if (redCapPrefab == null || mazeGridBehaviour == null)
+            Debug.Log($"[WaveSpawner] SpawnRedCap called: redCapPrefab={(redCapPrefab != null ? redCapPrefab.name : "NULL")}, mazeGridBehaviour={(mazeGridBehaviour != null ? "OK" : "NULL")}");
+
+            if (redCapPrefab == null)
             {
+                Debug.LogError("[WaveSpawner] SpawnRedCap FAILED: redCapPrefab is NULL!");
+                return;
+            }
+
+            if (mazeGridBehaviour == null)
+            {
+                Debug.LogError("[WaveSpawner] SpawnRedCap FAILED: mazeGridBehaviour is NULL!");
                 return;
             }
 
@@ -446,16 +463,48 @@ namespace FaeMaze.Systems
                 var keys = new List<char>(spawnPoints.Keys);
                 int randomIndex = RandomManager.Range(0, keys.Count);
                 spawnWorldPos = spawnPoints[keys[randomIndex]];
+                Debug.Log($"[WaveSpawner] RedCap spawn position from spawn point: {spawnWorldPos}");
             }
             else
             {
                 spawnWorldPos = mazeGridBehaviour.HeartWorldPosition;
+                Debug.Log($"[WaveSpawner] RedCap spawn position from heart: {spawnWorldPos}");
             }
 
             currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
+
+            if (currentRedCap == null)
+            {
+                Debug.LogError("[WaveSpawner] SpawnRedCap FAILED: Instantiate returned NULL!");
+                return;
+            }
+
+            // Check if RedCapController component exists
+            var controller = currentRedCap.GetComponent<RedCapController>();
+            if (controller == null)
+            {
+                Debug.LogError("[WaveSpawner] SpawnRedCap WARNING: Instantiated object has no RedCapController component! Check prefab setup.");
+            }
+            else
+            {
+                Debug.Log($"[WaveSpawner] RedCapController component found on instantiated object");
+            }
+
             int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
             currentRedCap.SetDifficultyTier(tier);
             currentRedCap.name = $"RedCap_T{tier}";
+
+            Debug.Log($"[WaveSpawner] RedCap spawned successfully: name={currentRedCap.name}, position={spawnWorldPos}, tier={tier}");
+        }
+
+        private static bool _redCapDisabledLogged = false;
+        private void LogRedCapDisabledOnce()
+        {
+            if (!_redCapDisabledLogged)
+            {
+                Debug.Log("[WaveSpawner] RedCap spawning is DISABLED (enableRedCap=false)");
+                _redCapDisabledLogged = true;
+            }
         }
 
         private void HandleGameOver()

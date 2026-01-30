@@ -1502,3 +1502,115 @@ float finalVolume = propVolume * masterSfxVolume * distanceVolume * (isActive ? 
 - `HeartOfTheMaze.NotifyVisitorTouchedTongue(visitor)` - public method called by visitor collision
 - `VisitorControllerBase.OnCollisionEnter()` - detects `SolidCollider_N` and notifies heart
 - Tongue continuously updates target angle to track visitor during Extending
+
+---
+
+### Completed - Key Binding Capture System Redesign (Session Jan 30, 2026)
+
+**Status**: Fully implemented. Key binding capture now uses Toggle-based activation to avoid left-click conflicts.
+
+**Problem**: The original system used a Button click to activate capture mode. This created an inherent conflict when trying to bind left-click - clicking the button to start capture would also register as the binding input.
+
+**Solution**: Separated "select this binding" from "capture input" by using a Toggle (checkbox):
+1. User checks the toggle → enters capture mode ("Press any key...")
+2. User presses any input (including left-click) → binding captured
+3. Toggle automatically unchecks
+
+**Key files modified:**
+| File | Changes |
+|------|---------|
+| `KeyBindingCapture.cs` | Redesigned to use Toggle instead of Button for capture activation |
+| `OptionsManager.cs` | Added `SyncScreenshotBindings()` to keep VIDEO and CONTROLS tab bindings in sync |
+| `OptionsBindingToggleSetup.cs` | Editor script to add Toggles to all KeyBindingCapture components |
+| `OptionsScreenshotSetup.cs` | Editor script to set up screenshot capture controls |
+
+**KeyBindingCapture component structure:**
+```
+KeyBindingCapture (GameObject)
+├── CaptureToggle (Toggle) - activates capture mode
+│   └── Checkmark (Image) - yellow-orange when checked
+└── BindingText (TextMeshProUGUI) - displays current binding or "Press any key..."
+```
+
+**Editor scripts to run (in order):**
+1. `FaeMaze > Add KeyBindingCapture to Screenshot Button` - if screenshot button lacks component
+2. `FaeMaze > Setup Binding Capture Toggles` - adds toggles to all KeyBindingCapture components
+3. Save the Options scene
+
+**Sync behavior:**
+- Screenshot binding appears on both VIDEO tab (in SCREENSHOT section) and CONTROLS tab (in UTILITY section)
+- When either is changed, `SyncScreenshotBindings()` updates all screenshot KeyBindingCapture components
+- Both tabs always show the same value
+
+---
+
+### Completed - Light Level Setting Application (Session Jan 30, 2026)
+
+**Status**: Fixed. Light Level setting now applies when game scene loads.
+
+**Problem**: The Light Level slider in Options worked (value was saved), but the Directional Light intensity wasn't updated when starting a new game. The setting was only applied in the Options scene preview.
+
+**Solution**: Added `GameSettings.ApplySettings()` call to `GameController.Start()`:
+```csharp
+private void Start()
+{
+    ValidateReferences();
+
+    // Apply saved settings (light level, video settings, etc.)
+    GameSettings.ApplySettings();
+
+    // Invoke event for initial essence value
+    OnEssenceChanged?.Invoke(currentEssence);
+}
+```
+
+**Call chain:**
+1. `GameController.Start()` calls `GameSettings.ApplySettings()`
+2. `ApplySettings()` calls `ApplyVideoSettings()`
+3. `ApplyVideoSettings()` calls `ApplyLightLevel()`
+4. `ApplyLightLevel()` finds the Directional Light and sets `light.intensity = LightLevel`
+
+**Default value**: `GameSettings.LightLevel` defaults to 0.9f (stored in PlayerPrefs)
+
+---
+
+### Completed - Void Fog Z Position Fix (Session Jan 30, 2026)
+
+**Status**: Fixed. Void fog now renders at Z=-1.2 instead of Z=-1.0.
+
+**File**: `VoidFogGenerator.cs`
+
+**Change**:
+```csharp
+// Before
+private float zPosition = -1f;
+
+// After
+private float zPosition = -1.2f;
+```
+
+**Reason**: The fog needs to render slightly above the wall tops to properly occlude the forest without clipping through path geometry.
+
+---
+
+### Key Binding Default Values
+
+**Current default bindings (from GameSettings.cs):**
+
+| Control | Default | Category |
+|---------|---------|----------|
+| Heart Power 1 (Murmuring) | 1 | Heart Powers |
+| Heart Power 2 (Grasp) | 2 | Heart Powers |
+| Heart Power 3 (Devour) | 3 | Heart Powers |
+| Heart Power 4 (Sculpt) | 4 | Heart Powers |
+| Sculpt Pond | Z | Sculpt Menu |
+| Sculpt Lantern | X | Sculpt Menu |
+| Sculpt Ring | C | Sculpt Menu |
+| Sculpt Remove | V | Sculpt Menu |
+| Camera Forward (Mouse) | Mouse0 (Left Click) | Camera Mouse |
+| Camera Orbit | Mouse1 (Right Click) | Camera Mouse |
+| Camera Pan | Mouse2 (Middle Click) | Camera Mouse |
+| Camera Focus Heart | F5 | Camera Focus |
+| Camera Focus Entrance | F6 | Camera Focus |
+| Camera Focus Visitor | F7 | Camera Focus |
+| Screenshot | F12 | Utility |

@@ -19,13 +19,15 @@ namespace ForestMaze
         /// <param name="end">End position in world space</param>
         /// <param name="heartNodePenalty">Additional cost for traversing heart node tiles (0 to disable)</param>
         /// <param name="penalizeHeartNode">Whether to apply heart node penalty (false if destination is heart)</param>
+        /// <param name="hazardCostFunction">Optional function that returns additional cost for a tile position (for hazard avoidance)</param>
         /// <returns>List of waypoints from start to end, or empty list if no path found</returns>
         public static List<Vector3> BuildWorldPath(
             WorldSpaceMazeData mazeData,
             Vector3 start,
             Vector3 end,
             float heartNodePenalty = 0f,
-            bool penalizeHeartNode = true)
+            bool penalizeHeartNode = true,
+            System.Func<UnityEngine.Vector2, float> hazardCostFunction = null)
         {
             if (mazeData == null)
             {
@@ -52,7 +54,7 @@ namespace ForestMaze
             }
 
             // A* through walkable tiles
-            var tilePath = FindTilePath(mazeData, startTile, endTile, heartNodePenalty, penalizeHeartNode);
+            var tilePath = FindTilePath(mazeData, startTile, endTile, heartNodePenalty, penalizeHeartNode, hazardCostFunction);
 
             if (tilePath == null || tilePath.Count == 0)
             {
@@ -156,7 +158,8 @@ namespace ForestMaze
             WorldSpaceTile startTile,
             WorldSpaceTile endTile,
             float heartNodePenalty,
-            bool penalizeHeartNode)
+            bool penalizeHeartNode,
+            System.Func<UnityEngine.Vector2, float> hazardCostFunction = null)
         {
             if (startTile == endTile)
             {
@@ -242,6 +245,12 @@ namespace ForestMaze
                     if (penalizeHeartNode && neighbor.NodeIndex == 0 && heartNodePenalty > 0f)
                     {
                         stepCost += heartNodePenalty;
+                    }
+
+                    // Apply hazard cost function if provided (for WaryWayfarer hazard avoidance)
+                    if (hazardCostFunction != null)
+                    {
+                        stepCost += hazardCostFunction(neighbor.Position);
                     }
 
                     float tentativeG = currentG + stepCost;

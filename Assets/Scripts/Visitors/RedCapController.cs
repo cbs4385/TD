@@ -192,8 +192,12 @@ namespace FaeMaze.Visitors
 
         private void Start()
         {
+            Debug.Log($"[RedCapController] Start() called on {gameObject.name} at position {transform.position}");
             TryInitialize();
         }
+
+        private float _debugLogTimer = 0f;
+        private const float DEBUG_LOG_INTERVAL = 2f;
 
         private void Update()
         {
@@ -203,6 +207,14 @@ namespace FaeMaze.Visitors
             }
 
             TryInitialize();
+
+            // Periodic debug logging
+            _debugLogTimer += Time.deltaTime;
+            if (_debugLogTimer >= DEBUG_LOG_INTERVAL)
+            {
+                _debugLogTimer = 0f;
+                Debug.Log($"[RedCapController] Update: state={state}, initialized={initialized}, position={transform.position}, targetVisitor={(targetVisitor != null ? targetVisitor.name : "NULL")}, pathCount={worldPath.Count}");
+            }
 
             // Check essence threshold - flee if below starting essence
             if (state != RedCapState.Fleeing && state != RedCapState.Killing)
@@ -241,13 +253,18 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            Debug.Log($"[RedCapController] TryInitialize called on {gameObject.name}");
+
             // Find required components
             AcquireDependencies();
             // Look for Animator on this GameObject or children (for Blender imports)
             animator = GetComponentInChildren<Animator>();
 
+            Debug.Log($"[RedCapController] Dependencies: gameController={(gameController != null ? "OK" : "NULL")}, mazeGridBehaviour={(mazeGridBehaviour != null ? "OK" : "NULL")}, animator={(animator != null ? "OK" : "NULL")}");
+
             if (gameController == null || mazeGridBehaviour == null)
             {
+                Debug.LogWarning($"[RedCapController] TryInitialize deferred - waiting for dependencies");
                 return;
             }
 
@@ -273,6 +290,8 @@ namespace FaeMaze.Visitors
             // Start hunting
             state = RedCapState.Hunting;
             initialized = true;
+
+            Debug.Log($"[RedCapController] Initialized successfully! State={state}, startingEssence={startingEssence}, moveSpeed={moveSpeed}");
         }
 
         /// <summary>

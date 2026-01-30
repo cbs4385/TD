@@ -1226,7 +1226,7 @@ MonoBehaviour:
   lanternDrunkVisitorPrefab: {fileID: 7849252713577324535, guid: e642516a3fb51c94a99c12ba11971ab8, type: 3}
   waryWayfarerVisitorPrefab: {fileID: 6000000003, guid: 2ad749bec494848408ae087122a2a286, type: 3}
   sleepwalkingVisitorPrefab: {fileID: 5000000003, guid: fcf1ccc101e3d2f4da955bc0eea16b81, type: 3}
-  redCapPrefab: {fileID: 5000000003, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
+  redCapPrefab: {fileID: 7652839950100921278, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
   baseSpawnInterval: 5
   enableRedCap: 1
   enableWaveSpawnerUI: 0

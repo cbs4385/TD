@@ -1889,6 +1889,29 @@ namespace FaeMaze.Systems
             return new Vector3(node.Position.x, node.Position.y, 0);
         }
 
+        /// <summary>
+        /// Gets the world positions of all active portals (spawn points).
+        /// Used by camera focus cycling.
+        /// </summary>
+        /// <returns>List of portal world positions</returns>
+        public List<Vector3> GetPortalPositions()
+        {
+            var positions = new List<Vector3>();
+            foreach (var kvp in spawnPointPortals)
+            {
+                if (kvp.Value != null)
+                {
+                    positions.Add(kvp.Value.transform.position);
+                }
+            }
+            return positions;
+        }
+
+        /// <summary>
+        /// Gets the number of active portals.
+        /// </summary>
+        public int PortalCount => spawnPointPortals.Count;
+
         #endregion
     }
 }

@@ -776,6 +776,43 @@ namespace FaeMaze.HeartPowers
 
         #endregion
 
+        #region Active Effect Position Queries
+
+        /// <summary>
+        /// Returns world positions of all active HeartwardGrasp zones (both grabbing and pushing).
+        /// Used by WaryWayfarer for hazard avoidance pathfinding.
+        /// </summary>
+        public List<Vector3> GetActiveHeartwardGraspPositions()
+        {
+            var positions = new List<Vector3>();
+
+            if (activePowers.TryGetValue(HeartPowerType.HeartwardGrasp, out var effect) && effect is HeartwardGraspEffect graspEffect)
+            {
+                var zonePositions = graspEffect.GetZonePositions();
+                positions.AddRange(zonePositions);
+            }
+
+            return positions;
+        }
+
+        /// <summary>
+        /// Returns world positions of all active DevouringMaw zones.
+        /// Used by WaryWayfarer for hazard avoidance pathfinding.
+        /// </summary>
+        public List<Vector3> GetActiveDevouringMawPositions()
+        {
+            var positions = new List<Vector3>();
+
+            if (activePowers.TryGetValue(HeartPowerType.DevouringMaw, out var effect) && effect is DevouringMawEffect mawEffect)
+            {
+                positions.Add(mawEffect.GetTargetPosition());
+            }
+
+            return positions;
+        }
+
+        #endregion
+
         #region Gizmos
 
         private void OnDrawGizmos()
