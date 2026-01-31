@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using FaeMaze.Systems;
+using FaeMaze.Tutorial;
 
 namespace FaeMaze.UI
 {
@@ -14,6 +15,9 @@ namespace FaeMaze.UI
         [SerializeField] private TMP_InputField seedInputField;
         [SerializeField] private Toggle useFixedSeedToggle;
         [SerializeField] private Button randomizeSeedButton;
+
+        [Header("Tutorial")]
+        [SerializeField] private Button tutorialButton;
 
         [Header("References")]
         [SerializeField] private SceneLoader sceneLoader;
@@ -124,6 +128,34 @@ namespace FaeMaze.UI
             }
 
             // Load the game scene
+            LoadGameScene();
+        }
+
+        /// <summary>
+        /// Called by Tutorial button to start the game with tutorial enabled.
+        /// </summary>
+        public void StartTutorial()
+        {
+            // Reset tutorial completion so it will play
+            TutorialManager.ResetTutorial();
+
+            // Save seed settings
+            if (seedInputField != null && int.TryParse(seedInputField.text, out int seed))
+            {
+                GameSettings.RandomSeed = seed;
+            }
+
+            if (useFixedSeedToggle != null)
+            {
+                GameSettings.UseFixedSeed = useFixedSeedToggle.isOn;
+            }
+
+            // Load the game scene (tutorial will auto-start)
+            LoadGameScene();
+        }
+
+        private void LoadGameScene()
+        {
             if (sceneLoader != null)
             {
                 sceneLoader.LoadGameScene();

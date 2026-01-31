@@ -439,7 +439,7 @@ namespace FaeMaze.Maze
             if (FrighteningEventManager.Instance != null)
             {
                 currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    EventType.HeartTongue,
+                    FrighteningEventManager.EventType.HeartTongue,
                     transform.position,
                     this
                 );

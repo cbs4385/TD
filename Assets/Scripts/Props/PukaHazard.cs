@@ -397,7 +397,7 @@ namespace FaeMaze.Props
             if (FrighteningEventManager.Instance != null)
             {
                 currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    EventType.PukaDrowning,
+                    FrighteningEventManager.EventType.PukaDrowning,
                     transform.position,
                     this
                 );

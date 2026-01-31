@@ -187,6 +187,33 @@ namespace FaeMaze.Systems
 
             // Invoke event for initial essence value
             OnEssenceChanged?.Invoke(currentEssence);
+
+            // Check if tutorial should auto-start
+            CheckTutorialAutoStart();
+        }
+
+        /// <summary>
+        /// Checks if tutorial should auto-start on first run.
+        /// </summary>
+        private void CheckTutorialAutoStart()
+        {
+            // Only auto-start if it's the first run and tutorial is enabled
+            if (!GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun)
+            {
+                var tutorialManager = FindFirstObjectByType<Tutorial.TutorialManager>();
+                if (tutorialManager != null)
+                {
+                    tutorialManager.CheckAutoStartTutorial();
+                }
+                else
+                {
+                    // Create tutorial manager if it doesn't exist
+                    var tutorialGO = new GameObject("TutorialManager");
+                    var manager = tutorialGO.AddComponent<Tutorial.TutorialManager>();
+                    tutorialGO.AddComponent<Tutorial.TutorialEventTriggers>();
+                    manager.CheckAutoStartTutorial();
+                }
+            }
         }
 
         #endregion

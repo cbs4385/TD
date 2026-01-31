@@ -763,7 +763,7 @@ namespace FaeMaze.Props
             if (FrighteningEventManager.Instance != null)
             {
                 currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    EventType.WispLure,
+                    FrighteningEventManager.EventType.WispLure,
                     transform.position,
                     this
                 );

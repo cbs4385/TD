@@ -563,6 +563,29 @@ namespace FaeMaze.Systems
 
         #endregion
 
+        #region Tutorial Settings
+
+        /// <summary>
+        /// Whether the tutorial has been completed at least once.
+        /// </summary>
+        public static bool TutorialCompleted
+        {
+            get => PlayerPrefs.GetInt("TutorialCompleted", 0) == 1;
+            set => PlayerPrefs.SetInt("TutorialCompleted", value ? 1 : 0);
+        }
+
+        /// <summary>
+        /// Whether to show the tutorial prompt on first run.
+        /// If true and TutorialCompleted is false, tutorial will auto-start.
+        /// </summary>
+        public static bool ShowTutorialOnFirstRun
+        {
+            get => PlayerPrefs.GetInt("ShowTutorialOnFirstRun", 1) == 1;
+            set => PlayerPrefs.SetInt("ShowTutorialOnFirstRun", value ? 1 : 0);
+        }
+
+        #endregion
+
         /// <summary>
         /// Reset all settings to default values
         /// </summary>

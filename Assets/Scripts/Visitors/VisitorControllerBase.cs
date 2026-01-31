@@ -4038,8 +4038,9 @@ namespace FaeMaze.Visitors
         protected virtual void CheckForFrighteningEvents()
         {
             // Skip if already frightened, lured (immune to fear), or in terminal state
+            // Note: Drowning state was consolidated into Escaping state
             if (isFrightened || isLured || state == VisitorState.Consumed || state == VisitorState.Escaping ||
-                state == VisitorState.Drowning || state == VisitorState.Grabbed)
+                state == VisitorState.Grabbed)
             {
                 return;
             }

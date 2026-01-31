@@ -214,7 +214,7 @@ namespace FaeMaze.Systems
             foreach (var evt in activeEvents)
             {
                 // Don't frighten the visitor being affected by the event
-                if (excludeIfSource != null && evt.Source == excludeIfSource)
+                if (excludeIfSource != null && ReferenceEquals(evt.Source, excludeIfSource))
                     continue;
 
                 // Check distance in XY plane (game uses -Z as up)
@@ -245,9 +245,9 @@ namespace FaeMaze.Systems
                 return;
 
             // Don't frighten visitors that are already in certain states
+            // Note: Drowning state was consolidated into Escaping state
             if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
                 visitor.State == VisitorControllerBase.VisitorState.Escaping ||
-                visitor.State == VisitorControllerBase.VisitorState.Drowning ||
                 visitor.State == VisitorControllerBase.VisitorState.Grabbed ||
                 visitor.State == VisitorControllerBase.VisitorState.Frightened)
             {

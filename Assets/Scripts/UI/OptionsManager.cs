@@ -107,6 +107,7 @@ namespace FaeMaze.UI
         [SerializeField] private Toggle useFixedSeedToggle;
         [SerializeField] private TMP_InputField randomSeedInput;
         [SerializeField] private TextMeshProUGUI currentSeedText;
+        [SerializeField] private Toggle showTutorialToggle;
 
         [Header("Gameplay - Player Controls")]
         [SerializeField] private Slider focusSpeedSlider;
@@ -598,6 +599,10 @@ namespace FaeMaze.UI
             }
             UpdateCurrentSeedDisplay();
 
+            // Tutorial
+            if (showTutorialToggle != null)
+                showTutorialToggle.isOn = GameSettings.ShowTutorialOnFirstRun;
+
             // Player Controls
             SetSliderValue(focusSpeedSlider, GameSettings.FocusSpeed, 5f, 15f);
             UpdateValueText(focusSpeedText, GameSettings.FocusSpeed, "{0:F1}");
@@ -1005,6 +1010,10 @@ namespace FaeMaze.UI
                 GameSettings.UseFixedSeed = useFixedSeedToggle.isOn;
             if (randomSeedInput != null && int.TryParse(randomSeedInput.text, out int seedValue))
                 GameSettings.RandomSeed = seedValue;
+
+            // Tutorial
+            if (showTutorialToggle != null)
+                GameSettings.ShowTutorialOnFirstRun = showTutorialToggle.isOn;
 
             // Player Controls
             GameSettings.FocusSpeed = GetSliderValue(focusSpeedSlider);
