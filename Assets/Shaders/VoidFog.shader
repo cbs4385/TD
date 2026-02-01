@@ -159,5 +159,5 @@ Shader "Custom/VoidFog"
         }
     }
 
-    FallBack "Transparent/Diffuse"
+    FallBack "Universal Render Pipeline/Unlit"
 }

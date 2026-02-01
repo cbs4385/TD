@@ -107,5 +107,5 @@ Shader "Custom/FocalPointBolt"
         }
     }
 
-    FallBack "Particles/Additive"
+    FallBack "Universal Render Pipeline/Unlit"
 }

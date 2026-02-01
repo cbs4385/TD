@@ -63,5 +63,5 @@ Shader "Custom/NightSkyGradient"
         }
     }
 
-    FallBack "Unlit/Color"
+    FallBack "Universal Render Pipeline/Unlit"
 }

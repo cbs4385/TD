@@ -237,5 +237,5 @@ Shader "Custom/DevourDust"
         }
     }
 
-    FallBack "Transparent/Diffuse"
+    FallBack "Universal Render Pipeline/Unlit"
 }

@@ -277,5 +277,5 @@ Shader "Custom/PowerFog"
         }
     }
 
-    FallBack "Transparent/Diffuse"
+    FallBack "Universal Render Pipeline/Unlit"
 }

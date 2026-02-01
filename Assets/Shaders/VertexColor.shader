@@ -67,5 +67,5 @@ Shader "Custom/VertexColor"
         }
     }
 
-    FallBack "Diffuse"
+    FallBack "Universal Render Pipeline/Lit"
 }

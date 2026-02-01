@@ -342,7 +342,7 @@ namespace FaeMaze.Editor
             labelTMP.fontSize = 20;
             labelTMP.alignment = TextAlignmentOptions.MidlineLeft;
             labelTMP.color = Color.white;
-            labelTMP.enableWordWrapping = false;
+            labelTMP.textWrappingMode = TextWrappingModes.NoWrap;
         }
 
         private static void CreateBindingCapture(Transform parent, string bindingName, float width)

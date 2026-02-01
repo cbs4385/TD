@@ -282,5 +282,5 @@ Shader "Custom/EarthenGround"
         }
     }
 
-    FallBack "Diffuse"
+    FallBack "Universal Render Pipeline/Lit"
 }

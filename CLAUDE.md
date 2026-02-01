@@ -1316,6 +1316,61 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 
 ---
 
+## Building the Game
+
+### Multi-Platform Build System
+
+The project includes a build script for creating Windows and macOS builds.
+
+**Build from Unity Editor menu:**
+| Menu Item | Description |
+|-----------|-------------|
+| `FaeMaze > Build > Windows (64-bit)` | Build Windows executable |
+| `FaeMaze > Build > macOS` | Build macOS application bundle |
+| `FaeMaze > Build > Both Platforms` | Build both platforms sequentially |
+| `FaeMaze > Build > Open Build Folder` | Open the Builds directory in file explorer |
+
+**Build output locations:**
+| Platform | Output Path |
+|----------|-------------|
+| Windows | `Builds/Windows/HungryForest.exe` |
+| macOS | `Builds/macOS/HungryForest.app` |
+
+**Command-line builds (for CI/CD):**
+```bash
+# Windows build
+Unity -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit
+
+# macOS build
+Unity -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildMacOSCommandLine -quit
+
+# Both platforms
+Unity -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildAllCommandLine -quit
+```
+
+**Build scenes (from EditorBuildSettings):**
+1. MainMenu
+2. PlanarForestMazeScene (main game)
+3. Options
+4. GameOver
+
+**Platform requirements:**
+| Platform | Minimum OS | Architecture |
+|----------|------------|--------------|
+| Windows | Windows 10 | 64-bit |
+| macOS | macOS 11.0 (Big Sur) | Universal |
+
+**Key files:**
+| File | Purpose |
+|------|---------|
+| `Assets/Editor/BuildScript.cs` | Build automation script |
+| `ProjectSettings/ProjectSettings.asset` | Platform settings, bundle identifiers |
+| `ProjectSettings/EditorBuildSettings.asset` | Scene list for builds |
+
+**Bundle identifier:** `com.gamestrubios.hungryforest`
+
+---
+
 ### In Progress
 - [ ] Ensure other visitor types work as intended with heart powers
 
