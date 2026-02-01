@@ -1425,6 +1425,35 @@ To build for macOS from Windows, install the Mac Build Support module via Unity 
 
 ---
 
+## Session Notes (February 2026)
+
+### Multi-Platform Build System (Session Feb 1, 2026)
+
+**Status**: Fully implemented and working for Windows and macOS.
+
+**What was done:**
+1. Created `Assets/Editor/BuildScript.cs` - automated build system with menu integration
+2. Created `Assets/Editor/FixGraphicsAPIs.cs` - graphics API configuration utility
+3. Fixed shader fallbacks to use URP-compatible shaders (legacy fallbacks caused crashes)
+4. Configured graphics APIs: D3D11+D3D12+Vulkan for Windows, Metal for macOS
+5. Fixed corrupted .meta files that were blocking builds
+
+**Shader fallback fixes applied:**
+- `FocalPointBolt.shader`: `Particles/Additive` → `Universal Render Pipeline/Unlit`
+- `DevourDust.shader`: `Transparent/Diffuse` → `Universal Render Pipeline/Unlit`
+- `VoidFogMasked.shader`: `Transparent/Diffuse` → `Universal Render Pipeline/Unlit`
+- `PowerFog.shader`: `Transparent/Diffuse` → `Universal Render Pipeline/Unlit`
+- `VoidFog.shader`: `Transparent/Diffuse` → `Universal Render Pipeline/Unlit`
+- `EarthenGround.shader`: `Diffuse` → `Universal Render Pipeline/Lit`
+- `VertexColor.shader`: `Diffuse` → `Universal Render Pipeline/Lit`
+- `NightSkyGradient.shader`: `Unlit/Color` → `Universal Render Pipeline/Unlit`
+
+**Files created:**
+- `Assets/Editor/BuildScript.cs` - Build automation
+- `Assets/Editor/FixGraphicsAPIs.cs` - Graphics API utility
+
+---
+
 ## Session Notes (January 2026)
 
 ### Recent Changes This Session
