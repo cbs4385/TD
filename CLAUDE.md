@@ -1329,6 +1329,8 @@ The project includes a build script for creating Windows and macOS builds.
 | `FaeMaze > Build > macOS` | Build macOS application bundle |
 | `FaeMaze > Build > Both Platforms` | Build both platforms sequentially |
 | `FaeMaze > Build > Open Build Folder` | Open the Builds directory in file explorer |
+| `FaeMaze > Fix Graphics APIs` | Configure graphics APIs for both platforms |
+| `FaeMaze > Show Current Graphics APIs` | Display current graphics API configuration |
 
 **Build output locations:**
 | Platform | Output Path |
@@ -1358,14 +1360,39 @@ Unity -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildA
 | Platform | Minimum OS | Architecture |
 |----------|------------|--------------|
 | Windows | Windows 10 | 64-bit |
-| macOS | macOS 11.0 (Big Sur) | Universal |
+| macOS | macOS 12.0 (Monterey) | Universal (Intel + Apple Silicon) |
+
+**Graphics API Configuration:**
+
+The build system requires specific graphics APIs to be configured for each platform. If builds fail with graphics-related errors, run `FaeMaze > Fix Graphics APIs` to configure them correctly.
+
+| Platform | Graphics APIs | Notes |
+|----------|---------------|-------|
+| Windows | Direct3D 11, Direct3D 12, Vulkan | D3D11 primary for compatibility |
+| macOS | Metal | Required for Apple Silicon support |
+
+**macOS Build Module:**
+To build for macOS from Windows, install the Mac Build Support module via Unity Hub:
+1. Open Unity Hub → Installs
+2. Click gear icon on your Unity version → Add modules
+3. Select "Mac Build Support (Mono)"
+4. Install and restart Unity
 
 **Key files:**
 | File | Purpose |
 |------|---------|
 | `Assets/Editor/BuildScript.cs` | Build automation script |
+| `Assets/Editor/FixGraphicsAPIs.cs` | Graphics API configuration utility |
 | `ProjectSettings/ProjectSettings.asset` | Platform settings, bundle identifiers |
 | `ProjectSettings/EditorBuildSettings.asset` | Scene list for builds |
+
+**Troubleshooting builds:**
+| Error | Solution |
+|-------|----------|
+| "Build target was unsupported" | Install the platform's build module via Unity Hub |
+| "Apple silicon support requires Metal" | Run `FaeMaze > Fix Graphics APIs` |
+| "Graphics APIs do not include Direct3D 11 or 12" | Run `FaeMaze > Fix Graphics APIs` |
+| Shader compilation crash | Ensure all shader fallbacks use URP-compatible shaders (not legacy) |
 
 **Bundle identifier:** `com.gamestrubios.hungryforest`
 
