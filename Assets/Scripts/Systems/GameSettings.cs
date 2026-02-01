@@ -448,11 +448,19 @@ namespace FaeMaze.Systems
 
         #region Visitor Behavior
 
+        private const float DEFAULT_FRIGHTENED_SPEED_MULTIPLIER = 1.3f;
+
         /// <summary>Speed multiplier when visitor is frightened (fleeing from RedCap)</summary>
         public static float FrightenedSpeedMultiplier
         {
-            get => PlayerPrefs.GetFloat("FrightenedSpeedMultiplier", 2f);
+            get => PlayerPrefs.GetFloat("FrightenedSpeedMultiplier", DEFAULT_FRIGHTENED_SPEED_MULTIPLIER);
             set => PlayerPrefs.SetFloat("FrightenedSpeedMultiplier", Mathf.Max(1f, value));
+        }
+
+        /// <summary>Resets frightened speed multiplier to default value</summary>
+        public static void ResetFrightenedSpeedMultiplier()
+        {
+            PlayerPrefs.SetFloat("FrightenedSpeedMultiplier", DEFAULT_FRIGHTENED_SPEED_MULTIPLIER);
         }
 
         /// <summary>Chance per node for frightened visitor to recover (0-1)</summary>

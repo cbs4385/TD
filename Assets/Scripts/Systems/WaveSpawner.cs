@@ -7,6 +7,7 @@ using FaeMaze.Maze;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
 using FaeMaze.HeartPowers;
+using FaeMaze.Tutorial;
 using FontStyles = TMPro.FontStyles;
 
 namespace FaeMaze.Systems
@@ -164,7 +165,21 @@ namespace FaeMaze.Systems
 
             if (autoStartFirstWave)
             {
-                StartWave();
+                // Don't auto-start if tutorial hasn't been completed yet - tutorial controls spawning
+                // Check both TutorialCompleted (persistent) AND IsActive (runtime) because:
+                // - TutorialCompleted is false until tutorial finishes for the first time
+                // - IsActive might not be true yet if tutorial is starting with a delay
+                bool tutorialWillRun = !GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun;
+                bool tutorialIsActive = TutorialManager.Instance != null && TutorialManager.Instance.IsActive;
+
+                if (tutorialWillRun || tutorialIsActive)
+                {
+                    Debug.Log($"[WaveSpawner] Tutorial controls spawning, skipping auto-start (willRun={tutorialWillRun}, isActive={tutorialIsActive})");
+                }
+                else
+                {
+                    StartWave();
+                }
             }
         }
 

@@ -499,6 +499,14 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
+        /// Checks if any power is currently active.
+        /// </summary>
+        public bool IsAnyPowerActive()
+        {
+            return activePowers.Count > 0;
+        }
+
+        /// <summary>
         /// Gets the remaining cooldown time for a power.
         /// </summary>
         public float GetCooldownRemaining(HeartPowerType powerType)

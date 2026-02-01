@@ -595,6 +595,7 @@ namespace FaeMaze.UI
             if (randomSeedInput != null)
             {
                 randomSeedInput.text = GameSettings.RandomSeed.ToString();
+                randomSeedInput.characterLimit = 10; // Limit to 10 digits
                 randomSeedInput.interactable = GameSettings.UseFixedSeed;
             }
             UpdateCurrentSeedDisplay();

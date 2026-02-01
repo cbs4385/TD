@@ -100,6 +100,9 @@ namespace FaeMaze.UI
         private float glowPulseSpeed = 3.0f;
         private float flashDecaySpeed = 5.0f;
 
+        // Tutorial highlight lock - when set, that button is frozen at peak brightness
+        private int lockedAtPeakButtonIndex = -1;
+
         private Camera mainCamera;
 
         // Power button sprites (loaded at runtime)
@@ -980,12 +983,21 @@ namespace FaeMaze.UI
                     flashIntensity[i] = Mathf.Max(0, flashIntensity[i] - Time.deltaTime * flashDecaySpeed);
                 }
 
+                // Check if this button is locked at peak brightness (for tutorial)
+                bool isLockedAtPeak = (i == lockedAtPeakButtonIndex);
+
                 // Check if power is unavailable (low glow intensity means not ready)
                 bool isUnavailable = glowIntensity[i] < 0.5f;
 
                 Color finalColor;
 
-                if (isUnavailable && flashIntensity[i] <= 0)
+                if (isLockedAtPeak)
+                {
+                    // Button is locked at peak brightness for tutorial highlighting
+                    // Use full ROYGBIV color at maximum brightness
+                    finalColor = roygbivColors[i];
+                }
+                else if (isUnavailable && flashIntensity[i] <= 0)
                 {
                     // Power is unavailable - use flat grey (no pulsing)
                     finalColor = unavailableGrey;
@@ -999,8 +1011,9 @@ namespace FaeMaze.UI
                 {
                     // Update glow phase with staggered timing for visual variety
                     // Each button starts at a different phase for a cascading effect
+                    // Use unscaledTime so animation continues during pause (e.g., tutorial)
                     float phaseOffset = i * 0.5f; // Stagger by 0.5 seconds
-                    glowPhase[i] = Time.time * glowPulseSpeed + phaseOffset;
+                    glowPhase[i] = Time.unscaledTime * glowPulseSpeed + phaseOffset;
 
                     // Calculate pulse using sine wave (0 to 1)
                     float pulse = (Mathf.Sin(glowPhase[i]) + 1f) * 0.5f;
@@ -1070,6 +1083,99 @@ namespace FaeMaze.UI
             mouseWorldPos.z = 0; // Assuming 2D game on Z=0 plane
 
             return mouseWorldPos;
+        }
+
+        /// <summary>
+        /// Gets the current pulse brightness (0 to 1) for a specific power button.
+        /// Used by tutorial system to sync pause with maximum brightness.
+        /// </summary>
+        /// <param name="buttonIndex">Power button index (0-3)</param>
+        /// <returns>Current pulse value from 0 (dimmest) to 1 (brightest)</returns>
+        public float GetButtonPulseBrightness(int buttonIndex)
+        {
+            if (buttonIndex < 0 || buttonIndex >= 4) return 0f;
+
+            // Calculate the same way as UpdateGlowEffects()
+            // Uses unscaledTime to match the glow animation (works during pause)
+            float phaseOffset = buttonIndex * 0.5f;
+            float phase = Time.unscaledTime * glowPulseSpeed + phaseOffset;
+            float pulse = (Mathf.Sin(phase) + 1f) * 0.5f;
+            // Apply same smoothing
+            pulse = Mathf.Pow(pulse, 0.7f);
+            return pulse;
+        }
+
+        /// <summary>
+        /// Calculates the time (in seconds) until a specific power button reaches peak brightness.
+        /// Used by tutorial system to wait for optimal visual moment before pausing.
+        /// </summary>
+        /// <param name="buttonIndex">Power button index (0-3)</param>
+        /// <returns>Time in seconds until next peak brightness (0 to period/2)</returns>
+        public float GetTimeUntilPeakBrightness(int buttonIndex)
+        {
+            if (buttonIndex < 0 || buttonIndex >= 4) return 0f;
+
+            // Calculate current phase (uses unscaledTime to match glow animation)
+            float phaseOffset = buttonIndex * 0.5f;
+            float currentPhase = Time.unscaledTime * glowPulseSpeed + phaseOffset;
+
+            // Sine peaks at π/2, 5π/2, 9π/2, etc. (π/2 + n*2π)
+            // Normalize current phase to 0 to 2π range
+            float normalizedPhase = currentPhase % (2f * Mathf.PI);
+            if (normalizedPhase < 0) normalizedPhase += 2f * Mathf.PI;
+
+            // Find distance to next peak (π/2)
+            float targetPhase = Mathf.PI / 2f;
+            float phaseToGo;
+
+            if (normalizedPhase <= targetPhase)
+            {
+                // Peak is ahead in this cycle
+                phaseToGo = targetPhase - normalizedPhase;
+            }
+            else
+            {
+                // Peak is in the next cycle
+                phaseToGo = (2f * Mathf.PI - normalizedPhase) + targetPhase;
+            }
+
+            // Convert phase to time
+            return phaseToGo / glowPulseSpeed;
+        }
+
+        /// <summary>
+        /// Gets whether a power button is currently at or near peak brightness.
+        /// </summary>
+        /// <param name="buttonIndex">Power button index (0-3)</param>
+        /// <param name="threshold">Brightness threshold (0.9 = 90% of max)</param>
+        /// <returns>True if button is at or above threshold brightness</returns>
+        public bool IsButtonAtPeakBrightness(int buttonIndex, float threshold = 0.9f)
+        {
+            return GetButtonPulseBrightness(buttonIndex) >= threshold;
+        }
+
+        /// <summary>
+        /// Locks a specific power button at peak brightness for tutorial highlighting.
+        /// While locked, the button will always render at maximum glow regardless of the animation cycle.
+        /// </summary>
+        /// <param name="buttonIndex">Power button index (0-3) to lock, or -1 to unlock all</param>
+        public void LockButtonAtPeakBrightness(int buttonIndex)
+        {
+            lockedAtPeakButtonIndex = buttonIndex;
+            Debug.Log($"[HeartPowerPanelController] Button {buttonIndex} locked at peak brightness");
+        }
+
+        /// <summary>
+        /// Unlocks any button that was locked at peak brightness.
+        /// The button will resume normal glow animation.
+        /// </summary>
+        public void UnlockButtonBrightness()
+        {
+            if (lockedAtPeakButtonIndex >= 0)
+            {
+                Debug.Log($"[HeartPowerPanelController] Button {lockedAtPeakButtonIndex} unlocked from peak brightness");
+            }
+            lockedAtPeakButtonIndex = -1;
         }
 
         #endregion

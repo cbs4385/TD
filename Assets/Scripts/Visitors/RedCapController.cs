@@ -102,6 +102,7 @@ namespace FaeMaze.Visitors
         private const int IdleDirection = 0;
         private int lastDirection = IdleDirection;
         private int currentAnimatorDirection = IdleDirection;
+        private bool hasDirectionParameter = false; // Whether animator has Direction parameter
 
         // Base rotation from prefab (captured at initialization)
         private Quaternion baseRotation;
@@ -278,7 +279,21 @@ namespace FaeMaze.Visitors
                     baseRotationCaptured = true;
                 }
 
-                SetAnimatorDirection(IdleDirection);
+                // Check if the animator has a Direction parameter
+                hasDirectionParameter = false;
+                foreach (var param in animator.parameters)
+                {
+                    if (param.name == directionParameterName && param.type == AnimatorControllerParameterType.Int)
+                    {
+                        hasDirectionParameter = true;
+                        break;
+                    }
+                }
+
+                if (hasDirectionParameter)
+                {
+                    SetAnimatorDirection(IdleDirection);
+                }
             }
 
             // Capture starting essence for flee threshold
@@ -587,8 +602,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         private void SetAnimatorDirection(int direction)
         {
-            // Guard against redundant animator parameter writes
-            if (animator != null && currentAnimatorDirection != direction)
+            // Guard against redundant animator parameter writes and missing parameters
+            if (animator != null && hasDirectionParameter && currentAnimatorDirection != direction)
             {
                 animator.SetInteger(directionParameterName, direction);
                 currentAnimatorDirection = direction;

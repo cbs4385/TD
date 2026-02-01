@@ -30,8 +30,10 @@ namespace FaeMaze.Tutorial
     {
         /// <summary>No highlight</summary>
         None,
-        /// <summary>Highlight a UI element by name</summary>
+        /// <summary>Highlight a UI element by name (rectangular)</summary>
         UIElement,
+        /// <summary>Highlight a circular UI element by name (like power buttons)</summary>
+        UIElementCircular,
         /// <summary>Highlight a world-space position with arrow</summary>
         WorldPosition,
         /// <summary>Highlight the focal point indicator</summary>
@@ -86,6 +88,9 @@ namespace FaeMaze.Tutorial
         [Tooltip("Spawn a tutorial visitor at this step")]
         public bool spawnVisitor = false;
 
+        [Tooltip("Position dialog on right side of screen (default is left)")]
+        public bool dialogOnRight = false;
+
         /// <summary>
         /// Creates a tutorial step with the given parameters.
         /// </summary>
@@ -99,7 +104,8 @@ namespace FaeMaze.Tutorial
             string highlightTarget = null,
             bool pause = true,
             bool canSkip = true,
-            bool spawn = false)
+            bool spawn = false,
+            bool rightSideDialog = false)
         {
             this.stepId = id;
             this.title = title;
@@ -111,6 +117,7 @@ namespace FaeMaze.Tutorial
             this.pauseGame = pause;
             this.allowSkip = canSkip;
             this.spawnVisitor = spawn;
+            this.dialogOnRight = rightSideDialog;
         }
 
         /// <summary>

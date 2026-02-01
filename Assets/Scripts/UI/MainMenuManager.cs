@@ -39,6 +39,7 @@ namespace FaeMaze.UI
             if (seedInputField != null)
             {
                 seedInputField.text = GameSettings.RandomSeed.ToString();
+                seedInputField.characterLimit = 10; // Limit to 10 digits
                 // Enable/disable based on toggle state
                 seedInputField.interactable = GameSettings.UseFixedSeed;
             }

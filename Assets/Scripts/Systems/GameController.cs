@@ -308,6 +308,17 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Sets essence to a specific value (used by tutorial).
+        /// </summary>
+        public void SetEssence(int amount, string details = "Set essence")
+        {
+            currentEssence = Mathf.Max(0, amount);
+            persistentEssence = currentEssence;
+            LogEssenceTransaction(EssenceSource.StartingEssence, currentEssence, details);
+            OnEssenceChanged?.Invoke(currentEssence);
+        }
+
+        /// <summary>
         /// Resets all persistent game state (static fields).
         /// </summary>
         public static void ResetPersistentGameState()

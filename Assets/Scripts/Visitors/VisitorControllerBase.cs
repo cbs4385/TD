@@ -1214,7 +1214,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual float GetFrightenedSpeedMultiplier()
         {
-            return config != null ? config.FrightenedSpeedMultiplier : 1.2f;
+            return config != null ? config.FrightenedSpeedMultiplier : 1.3f;
         }
 
         /// <summary>

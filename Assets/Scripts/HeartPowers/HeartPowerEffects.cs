@@ -1982,7 +1982,7 @@ namespace FaeMaze.HeartPowers
 
         // Constants - Architectural (not configurable)
         private const int MIN_WALL_THICKNESS = 3;         // Minimum wall models required for valid wall intersection
-        private const float HGZ_WALL_OFFSET = 1.5f;       // Distance from closest graph border
+        private const float HGZ_WALL_OFFSET = 1.6f;       // Offset into forest (2 wall layers deep, second rank)
         private const float MIN_EDGE_DISTANCE = 3.0f;     // Minimum distance from path/node edge (~4 wall tiles * 0.8 spacing)
 
         // Settings - Loaded from GameSettings
@@ -2066,6 +2066,16 @@ namespace FaeMaze.HeartPowers
 
         public override bool IsExpired => hasExpired;
 
+        /// <summary>
+        /// Gets the position of the grabbing HGZ zone (for tutorial camera tracking).
+        /// </summary>
+        public Vector3 GrabbingZonePosition => grabbingWallPos;
+
+        /// <summary>
+        /// Gets the position of the pushing HGZ zone (for tutorial camera tracking).
+        /// </summary>
+        public Vector3 PushingZonePosition => pushingWallPos;
+
         public override void OnStart()
         {
             requiredCaptures = manager.GetPowerTier(HeartPowerType.HeartwardGrasp);
@@ -2098,157 +2108,200 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>
         /// Finds wall positions for both grabbing (near focal point) and pushing (near heart) HGZs.
-        /// Uses Physics.RaycastAll to find wall colliders along the heart-to-focal ray.
-        /// First hit = pushing HGZ, last hit before focal = grabbing HGZ.
+        ///
+        /// GRABBING HGZ: Ray from FOCAL toward HEART
+        ///   - First wall hit = grabbing placement point
+        ///   - If no hits, find wall closest to the focal-to-heart ray
+        ///
+        /// PUSHING HGZ: Ray from HEART toward FOCAL
+        ///   - First wall hit = pushing placement point
+        ///   - If no hits, find wall closest to the heart-to-focal ray
+        ///
+        /// Both placement points are then offset into the forest.
         /// </summary>
         private void FindWallPositions(Vector3 focalPos)
         {
-            Vector3 rayOrigin = new Vector3(heartNodePosition.x, heartNodePosition.y, 0f);
+            Vector3 heartPos3D = new Vector3(heartNodePosition.x, heartNodePosition.y, 0f);
             Vector3 focalPos3D = new Vector3(focalPos.x, focalPos.y, 0f);
-            Vector3 rayDirection = (focalPos3D - rayOrigin).normalized;
-            float distToFocal = Vector3.Distance(rayOrigin, focalPos3D);
-
-            // Raycast only to the focal point - no walls past focal should be hit
-            // Use QueryTriggerInteraction.Collide to hit trigger colliders
-            RaycastHit[] allHits = Physics.RaycastAll(rayOrigin, rayDirection, distToFocal, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
-
-            // Filter to only include wall tiles (name starts with "WorldTile_#")
-            var wallHitsList = new System.Collections.Generic.List<RaycastHit>();
-            foreach (var hit in allHits)
-            {
-                if (hit.collider != null && hit.collider.gameObject.name.StartsWith("WorldTile_#"))
-                {
-                    wallHitsList.Add(hit);
-                }
-            }
-            RaycastHit[] hits = wallHitsList.ToArray();
-
-            // Sort hits by distance from ray origin (heart)
-            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-            // HGZ is placed directly at the wall center (no offset)
-            const float MAX_PUSHING_DISTANCE_FROM_HEART = 3.5f;
-            const float MAX_GRABBING_DISTANCE_FROM_FOCAL = 3.5f;
+            float totalDist = Vector3.Distance(heartPos3D, focalPos3D);
 
             Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
             Vector2 focalPos2D = new Vector2(focalPos.x, focalPos.y);
 
-            if (hits.Length >= 1)
+            // Direction vectors
+            Vector3 focalToHeartDir = (heartPos3D - focalPos3D).normalized;
+            Vector3 heartToFocalDir = -focalToHeartDir;
+            Vector2 focalToHeartDir2D = new Vector2(focalToHeartDir.x, focalToHeartDir.y);
+            Vector2 heartToFocalDir2D = new Vector2(heartToFocalDir.x, heartToFocalDir.y);
+
+            Debug.Log($"[HeartwardGrasp] ===== FindWallPositions START =====" +
+                $"\n  Heart: {heartPos3D}" +
+                $"\n  Focal: {focalPos3D}" +
+                $"\n  Total distance: {totalDist:F2}" +
+                $"\n  Focal->Heart dir: {focalToHeartDir}" +
+                $"\n  Heart->Focal dir: {heartToFocalDir}");
+
+            // ===== GRABBING HGZ: Ray from FOCAL toward HEART =====
+            // First wall hit along this ray is the grabbing placement point
+            RaycastHit[] grabbingHits = Physics.RaycastAll(focalPos3D, focalToHeartDir, totalDist, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            // Filter to only wall tiles and sort by distance from focal
+            var grabbingWallHits = new System.Collections.Generic.List<RaycastHit>();
+            foreach (var hit in grabbingHits)
             {
-                // Get first and last wall model transforms
-                var firstHit = hits[0];
-                var lastHit = hits[hits.Length - 1];
-
-                // Get wall model centers
-                Transform firstWallTransform = firstHit.collider.transform;
-                Transform lastWallTransform = lastHit.collider.transform;
-
-                Vector3 firstWallCenter = firstWallTransform.position;
-                Vector3 lastWallCenter = lastWallTransform.position;
-
-                // For pushing: place at wall center
-                Vector2 pushingPos = new Vector2(firstWallCenter.x, firstWallCenter.y);
-
-                // Check if pushing position is too far from heart (ray missed node border wall)
-                float distFromHeart = Vector2.Distance(pushingPos, heartPos2D);
-
-                if (distFromHeart > MAX_PUSHING_DISTANCE_FROM_HEART)
+                if (hit.collider != null && hit.collider.gameObject.name.StartsWith("WorldTile_#"))
                 {
-                    // Find closest wall on heart node border to the ray
-                    Transform closestNodeWall = FindClosestNodeBorderWallToRay(heartPos2D, rayDirection);
-                    if (closestNodeWall != null)
-                    {
-                        firstWallCenter = closestNodeWall.position;
-                        pushingPos = new Vector2(firstWallCenter.x, firstWallCenter.y);
-                    }
+                    grabbingWallHits.Add(hit);
                 }
+            }
+            grabbingWallHits.Sort((a, b) => a.distance.CompareTo(b.distance));
 
-                // For grabbing: place at wall center
-                Vector2 grabbingPos = new Vector2(lastWallCenter.x, lastWallCenter.y);
+            Debug.Log($"[HeartwardGrasp] GRABBING ray (focal->heart): {grabbingHits.Length} total hits, {grabbingWallHits.Count} wall hits");
 
-                // Check if grabbing position is too far from focal point (ray missed edge border wall)
-                float distFromFocal = Vector2.Distance(grabbingPos, focalPos2D);
-
-                if (distFromFocal > MAX_GRABBING_DISTANCE_FROM_FOCAL)
-                {
-                    // Find closest wall to the focal point
-                    Transform closestEdgeWall = FindClosestWallToPoint(focalPos2D, rayDirection);
-                    if (closestEdgeWall != null)
-                    {
-                        lastWallCenter = closestEdgeWall.position;
-                        grabbingPos = new Vector2(lastWallCenter.x, lastWallCenter.y);
-                    }
-                }
-
-                // Test hemisphere of points to find the one furthest from graph elements
-                // One side of the path is walkable, the other is forest. Find forest side.
-                Vector2 rayDir2D = new Vector2(rayDirection.x, rayDirection.y).normalized;
-
-                // Find best grabbing position using hemisphere search
-                Vector2 grabbingBestDir = FindForestDirection(grabbingPos, rayDir2D, heartPos2D);
-                Vector2 grabbingOffset = grabbingBestDir * HGZ_WALL_OFFSET;
-                grabbingWallPos = new Vector3(grabbingPos.x + grabbingOffset.x, grabbingPos.y + grabbingOffset.y, -0.4f);
-                grabbingWallNormal = new Vector3(grabbingBestDir.x, grabbingBestDir.y, 0f);
-
-                // Find best pushing position using hemisphere search
-                Vector2 pushingBestDir = FindForestDirection(pushingPos, rayDir2D, heartPos2D);
-                Vector2 pushingOffset = pushingBestDir * HGZ_WALL_OFFSET;
-                pushingWallPos = new Vector3(pushingPos.x + pushingOffset.x, pushingPos.y + pushingOffset.y, -0.4f);
-                pushingWallNormal = new Vector3(pushingBestDir.x, pushingBestDir.y, 0f);
+            Vector2 grabbingPlacementPos;
+            if (grabbingWallHits.Count > 0)
+            {
+                // First wall hit = grabbing placement point
+                var firstGrabbingWall = grabbingWallHits[0];
+                grabbingPlacementPos = new Vector2(firstGrabbingWall.collider.transform.position.x, firstGrabbingWall.collider.transform.position.y);
+                Debug.Log($"[HeartwardGrasp] GRABBING: First wall hit = {firstGrabbingWall.collider.gameObject.name} at {grabbingPlacementPos}");
             }
             else
             {
-                // No walls hit along ray - find closest walls to heart and focal point
-                Vector2 rayDir2D = new Vector2(rayDirection.x, rayDirection.y).normalized;
-
-                // Find closest wall to heart node border
-                Transform closestNodeWall = FindClosestNodeBorderWallToRay(heartPos2D, rayDirection);
-                if (closestNodeWall != null)
+                // No wall hits - find wall closest to the focal-to-heart ray
+                Debug.Log($"[HeartwardGrasp] GRABBING: No wall hits along ray, searching for closest wall to ray");
+                Transform closestWall = FindClosestWallToRay(focalPos2D, focalToHeartDir2D, totalDist);
+                if (closestWall != null)
                 {
-                    Vector2 pushingPos = new Vector2(closestNodeWall.position.x, closestNodeWall.position.y);
-                    // Use sampling with hint = radially outward from heart
-                    Vector2 pushingHint = (pushingPos - heartPos2D).normalized;
-                    Vector2 pushingIntoForest = GetIntoForestDirectionForEdge(pushingPos, pushingHint);
-                    Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
-
-                    pushingWallPos = new Vector3(
-                        closestNodeWall.position.x + pushingOffset.x,
-                        closestNodeWall.position.y + pushingOffset.y,
-                        -0.4f);
-                    pushingWallNormal = new Vector3(pushingIntoForest.x, pushingIntoForest.y, 0f);
+                    grabbingPlacementPos = new Vector2(closestWall.position.x, closestWall.position.y);
+                    Debug.Log($"[HeartwardGrasp] GRABBING: Closest wall to ray = {closestWall.name} at {grabbingPlacementPos}");
                 }
                 else
                 {
-                    // Default fallback - just use ray direction (radially outward from heart)
-                    Vector2 pushingIntoForest = rayDir2D;  // Ray goes from heart to focal, so same direction
-                    Vector2 pushingOffset = pushingIntoForest * HGZ_WALL_OFFSET;
-                    pushingWallPos = new Vector3(rayOrigin.x + rayDirection.x * 3.5f + pushingOffset.x, rayOrigin.y + rayDirection.y * 3.5f + pushingOffset.y, -0.4f);
-                    pushingWallNormal = rayDirection;
-                }
-
-                // Find closest wall to focal point
-                Transform closestFocalWall = FindClosestWallToPoint(focalPos2D, rayDirection);
-                if (closestFocalWall != null)
-                {
-                    Vector2 grabbingPos = new Vector2(closestFocalWall.position.x, closestFocalWall.position.y);
-                    // Use sampling with hint = ray direction (from heart toward focal)
-                    Vector2 grabbingIntoForest = GetIntoForestDirectionForEdge(grabbingPos, rayDir2D);
-                    Vector2 grabbingOffset = grabbingIntoForest * HGZ_WALL_OFFSET;
-
-                    grabbingWallPos = new Vector3(
-                        closestFocalWall.position.x + grabbingOffset.x,
-                        closestFocalWall.position.y + grabbingOffset.y,
-                        -0.4f);
-                    grabbingWallNormal = new Vector3(grabbingIntoForest.x, grabbingIntoForest.y, 0f);
-                }
-                else
-                {
-                    // Default fallback - just use ray direction
-                    Vector2 grabbingOffset = rayDir2D * HGZ_WALL_OFFSET;
-                    grabbingWallPos = new Vector3(focalPos3D.x + grabbingOffset.x, focalPos3D.y + grabbingOffset.y, -0.4f);
-                    grabbingWallNormal = -rayDirection;
+                    // Ultimate fallback - use a point along the ray at NODE_RADIUS from focal
+                    const float NODE_RADIUS = 3.0f;
+                    grabbingPlacementPos = focalPos2D + focalToHeartDir2D * NODE_RADIUS;
+                    Debug.Log($"[HeartwardGrasp] GRABBING: No walls found, using fallback point at {grabbingPlacementPos}");
                 }
             }
+
+            // Offset grabbing placement into forest
+            Vector2 grabbingForestDir = FindForestDirection(grabbingPlacementPos, heartToFocalDir2D, heartPos2D);
+            Vector2 grabbingOffset = grabbingForestDir * HGZ_WALL_OFFSET;
+            grabbingWallPos = new Vector3(grabbingPlacementPos.x + grabbingOffset.x, grabbingPlacementPos.y + grabbingOffset.y, -0.4f);
+            grabbingWallNormal = new Vector3(grabbingForestDir.x, grabbingForestDir.y, 0f);
+
+            Debug.Log($"[HeartwardGrasp] GRABBING HGZ FINAL:" +
+                $"\n  Placement point: {grabbingPlacementPos}" +
+                $"\n  Forest direction: {grabbingForestDir} (angle: {Mathf.Atan2(grabbingForestDir.y, grabbingForestDir.x) * Mathf.Rad2Deg:F1}°)" +
+                $"\n  Offset: {grabbingOffset} (magnitude {HGZ_WALL_OFFSET})" +
+                $"\n  FINAL position: {grabbingWallPos}");
+
+            // ===== PUSHING HGZ: Ray from HEART toward FOCAL =====
+            // First wall hit along this ray is the pushing placement point
+            RaycastHit[] pushingHits = Physics.RaycastAll(heartPos3D, heartToFocalDir, totalDist, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            // Filter to only wall tiles and sort by distance from heart
+            var pushingWallHits = new System.Collections.Generic.List<RaycastHit>();
+            foreach (var hit in pushingHits)
+            {
+                if (hit.collider != null && hit.collider.gameObject.name.StartsWith("WorldTile_#"))
+                {
+                    pushingWallHits.Add(hit);
+                }
+            }
+            pushingWallHits.Sort((a, b) => a.distance.CompareTo(b.distance));
+
+            Debug.Log($"[HeartwardGrasp] PUSHING ray (heart->focal): {pushingHits.Length} total hits, {pushingWallHits.Count} wall hits");
+
+            Vector2 pushingPlacementPos;
+            if (pushingWallHits.Count > 0)
+            {
+                // First wall hit = pushing placement point
+                var firstPushingWall = pushingWallHits[0];
+                pushingPlacementPos = new Vector2(firstPushingWall.collider.transform.position.x, firstPushingWall.collider.transform.position.y);
+                Debug.Log($"[HeartwardGrasp] PUSHING: First wall hit = {firstPushingWall.collider.gameObject.name} at {pushingPlacementPos}");
+            }
+            else
+            {
+                // No wall hits - find wall closest to the heart-to-focal ray
+                Debug.Log($"[HeartwardGrasp] PUSHING: No wall hits along ray, searching for closest wall to ray");
+                Transform closestWall = FindClosestWallToRay(heartPos2D, heartToFocalDir2D, totalDist);
+                if (closestWall != null)
+                {
+                    pushingPlacementPos = new Vector2(closestWall.position.x, closestWall.position.y);
+                    Debug.Log($"[HeartwardGrasp] PUSHING: Closest wall to ray = {closestWall.name} at {pushingPlacementPos}");
+                }
+                else
+                {
+                    // Ultimate fallback - use a point along the ray at NODE_RADIUS from heart
+                    const float NODE_RADIUS = 3.0f;
+                    pushingPlacementPos = heartPos2D + heartToFocalDir2D * NODE_RADIUS;
+                    Debug.Log($"[HeartwardGrasp] PUSHING: No walls found, using fallback point at {pushingPlacementPos}");
+                }
+            }
+
+            // Offset pushing placement into forest
+            Vector2 pushingForestDir = FindForestDirection(pushingPlacementPos, heartToFocalDir2D, heartPos2D);
+            Vector2 pushingOffset = pushingForestDir * HGZ_WALL_OFFSET;
+            pushingWallPos = new Vector3(pushingPlacementPos.x + pushingOffset.x, pushingPlacementPos.y + pushingOffset.y, -0.4f);
+            pushingWallNormal = new Vector3(pushingForestDir.x, pushingForestDir.y, 0f);
+
+            Debug.Log($"[HeartwardGrasp] PUSHING HGZ FINAL:" +
+                $"\n  Placement point: {pushingPlacementPos}" +
+                $"\n  Forest direction: {pushingForestDir} (angle: {Mathf.Atan2(pushingForestDir.y, pushingForestDir.x) * Mathf.Rad2Deg:F1}°)" +
+                $"\n  Offset: {pushingOffset} (magnitude {HGZ_WALL_OFFSET})" +
+                $"\n  FINAL position: {pushingWallPos}");
+        }
+
+        /// <summary>
+        /// Finds the wall tile closest to a ray (line from origin in direction).
+        /// Used when no walls are directly hit by the ray.
+        /// </summary>
+        private Transform FindClosestWallToRay(Vector2 rayOrigin, Vector2 rayDir, float maxDist)
+        {
+            // Search for walls in a wide area around the ray
+            const float SEARCH_WIDTH = 10f;
+            Vector2 rayEnd = rayOrigin + rayDir * maxDist;
+            Vector2 rayCenter = (rayOrigin + rayEnd) / 2f;
+            float searchRadius = maxDist / 2f + SEARCH_WIDTH;
+
+            Collider[] colliders = Physics.OverlapSphere(
+                new Vector3(rayCenter.x, rayCenter.y, 0f),
+                searchRadius,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Collide
+            );
+
+            Transform closestWall = null;
+            float closestDistToRay = float.MaxValue;
+
+            foreach (var collider in colliders)
+            {
+                // Only consider wall tiles
+                if (!collider.gameObject.name.StartsWith("WorldTile_#")) continue;
+
+                Vector2 wallPos = new Vector2(collider.transform.position.x, collider.transform.position.y);
+
+                // Calculate perpendicular distance from wall to ray
+                Vector2 originToWall = wallPos - rayOrigin;
+                float projectionLength = Vector2.Dot(originToWall, rayDir);
+
+                // Only consider walls that are along the ray (positive projection, within max distance)
+                if (projectionLength < 0 || projectionLength > maxDist) continue;
+
+                Vector2 closestPointOnRay = rayOrigin + rayDir * projectionLength;
+                float distToRay = Vector2.Distance(wallPos, closestPointOnRay);
+
+                if (distToRay < closestDistToRay)
+                {
+                    closestDistToRay = distToRay;
+                    closestWall = collider.transform;
+                }
+            }
+
+            Debug.Log($"[HeartwardGrasp] FindClosestWallToRay: origin={rayOrigin}, dir={rayDir}, found={closestWall?.name ?? "null"}, distToRay={closestDistToRay:F2}");
+            return closestWall;
         }
 
         private Transform FindClosestNodeBorderWallToRay(Vector2 heartPos, Vector3 rayDir)
@@ -2302,7 +2355,8 @@ namespace FaeMaze.HeartPowers
         private Transform FindClosestWallToPoint(Vector2 targetPoint, Vector3 rayDir)
         {
             // Search for walls near the target point using physics
-            const float SEARCH_RADIUS = 5f;
+            // Increased radius to find walls even when focal point is on a node
+            const float SEARCH_RADIUS = 8f;
             Collider[] colliders = Physics.OverlapSphere(
                 new Vector3(targetPoint.x, targetPoint.y, 0f),
                 SEARCH_RADIUS,
@@ -2310,16 +2364,20 @@ namespace FaeMaze.HeartPowers
                 QueryTriggerInteraction.Collide
             );
 
+            Debug.Log($"[HeartwardGrasp] FindClosestWallToPoint: target={targetPoint}, searchRadius={SEARCH_RADIUS}, found {colliders.Length} colliders");
+
             Transform closestWall = null;
             float closestDist = float.MaxValue;
 
             Vector2 rayDir2D = new Vector2(rayDir.x, rayDir.y).normalized;
+            int wallsFound = 0;
 
             foreach (var collider in colliders)
             {
                 // Only consider wall tiles
                 if (!collider.gameObject.name.StartsWith("WorldTile_#")) continue;
 
+                wallsFound++;
                 Vector2 wallPos = new Vector2(collider.transform.position.x, collider.transform.position.y);
                 float dist = Vector2.Distance(wallPos, targetPoint);
 
@@ -2330,6 +2388,7 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
+            Debug.Log($"[HeartwardGrasp] FindClosestWallToPoint: found {wallsFound} walls, closest={closestWall?.name} at dist={closestDist:F2}");
             return closestWall;
         }
 
@@ -2399,7 +2458,8 @@ namespace FaeMaze.HeartPowers
         /// <summary>
         /// Finds the direction from an HGZ position into the forest (non-walkable area).
         /// The "inside" of the forest is the direction where a point at fixed distance
-        /// has the greatest minimum distance from all nearby walkable path tiles.
+        /// has the greatest minimum distance from all nearby graph elements (walkable tiles AND node centers).
+        /// Node centers are unwalkable but are NOT forest - they are open areas we must avoid.
         /// </summary>
         /// <param name="hgzPosition">The HGZ position on the path</param>
         /// <param name="rayDir">Direction of the focal ray (heart to focal point)</param>
@@ -2407,9 +2467,10 @@ namespace FaeMaze.HeartPowers
         private Vector2 FindForestDirection(Vector2 hgzPosition, Vector2 rayDir, Vector2 heartPos)
         {
             const float ANGLE_STEP = 5f;           // Degrees between test directions
-            const float SEARCH_RADIUS = 5f;        // 2x graspZoneRadius (2.5)
+            const float SEARCH_RADIUS = 8f;        // Increased to catch nearby nodes
             const float CANDIDATE_DISTANCE = 3f;   // Distance to place candidate points
             const float TILE_SCAN_STEP = 0.5f;     // Step for finding walkable tiles
+            const float NODE_RADIUS = 3.0f;        // Node clearing radius
 
             // Get the maze data for walkability checks
             var mazeData = manager.MazeGrid?.WorldSpaceMazeData;
@@ -2422,8 +2483,11 @@ namespace FaeMaze.HeartPowers
                 return perpCCW;
             }
 
-            // First, collect all walkable tile positions within search radius
-            List<Vector2> walkableTiles = new List<Vector2>();
+            // Collect all "graph element" positions - both walkable tiles AND node centers
+            // We want to find the direction AWAY from all graph elements, not just walkable tiles
+            List<Vector2> graphElements = new List<Vector2>();
+
+            // Add walkable tiles
             for (float dx = -SEARCH_RADIUS; dx <= SEARCH_RADIUS; dx += TILE_SCAN_STEP)
             {
                 for (float dy = -SEARCH_RADIUS; dy <= SEARCH_RADIUS; dy += TILE_SCAN_STEP)
@@ -2431,23 +2495,60 @@ namespace FaeMaze.HeartPowers
                     Vector2 testPoint = hgzPosition + new Vector2(dx, dy);
                     if (Vector2.Distance(testPoint, hgzPosition) <= SEARCH_RADIUS && mazeData.IsWalkable(testPoint))
                     {
-                        walkableTiles.Add(testPoint);
+                        graphElements.Add(testPoint);
                     }
                 }
             }
 
-            // If no walkable tiles found, use fallback
-            if (walkableTiles.Count == 0)
+            // Add node centers as graph elements (even though they're unwalkable, they're not forest!)
+            var graphState = mazeData.GraphState;
+            int nodesAdded = 0;
+            if (graphState != null && graphState.Nodes != null)
             {
+                foreach (var node in graphState.Nodes)
+                {
+                    Vector2 nodeCenter = node.Position;
+                    float distToNode = Vector2.Distance(hgzPosition, nodeCenter);
+                    if (distToNode <= SEARCH_RADIUS + NODE_RADIUS)
+                    {
+                        // Add the node center itself
+                        graphElements.Add(nodeCenter);
+                        nodesAdded++;
+                        // Also add points around the node center to represent the full node area
+                        for (float angle = 0; angle < 360; angle += 45)
+                        {
+                            float rad = angle * Mathf.Deg2Rad;
+                            Vector2 nodeEdgePoint = nodeCenter + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * (NODE_RADIUS * 0.5f);
+                            graphElements.Add(nodeEdgePoint);
+                        }
+                    }
+                }
+            }
+
+            Debug.Log($"[HeartwardGrasp] FindForestDirection collected:" +
+                $"\n  Walkable tiles: {graphElements.Count - nodesAdded * 9}" +
+                $"\n  Nodes added: {nodesAdded} (each adds 9 points)" +
+                $"\n  Total graph elements: {graphElements.Count}");
+
+            // If no graph elements found, use fallback
+            if (graphElements.Count == 0)
+            {
+                Debug.Log($"[HeartwardGrasp] FindForestDirection: No graph elements found, using fallback perpCCW={perpCCW}");
                 return perpCCW;
             }
 
             // Test all directions around the HGZ position
             // For each direction, place a candidate point at CANDIDATE_DISTANCE
-            // Calculate the minimum distance from that point to any walkable tile
+            // Calculate the minimum distance from that point to any graph element
             // The direction with the greatest minimum distance is the "inside" of the forest
             Vector2 bestDir = perpCCW;
             float bestMinDist = -1f;
+            int skippedWalkable = 0;
+            int skippedInsideNode = 0;
+            int validCandidates = 0;
+
+            // Track top 3 candidates for debugging
+            var topCandidates = new System.Collections.Generic.List<(float angle, Vector2 dir, float minDist)>();
 
             for (float angle = 0f; angle < 360f; angle += ANGLE_STEP)
             {
@@ -2458,27 +2559,72 @@ namespace FaeMaze.HeartPowers
                 // Skip if the candidate point itself is walkable (we want forest)
                 if (mazeData.IsWalkable(candidatePoint))
                 {
+                    skippedWalkable++;
                     continue;
                 }
 
-                // Find minimum distance from candidate point to any walkable tile
-                float minDistToWalkable = float.MaxValue;
-                foreach (var tile in walkableTiles)
+                // Skip if candidate point is inside any node's area (node centers are not forest!)
+                bool insideNode = false;
+                if (graphState != null && graphState.Nodes != null)
                 {
-                    float dist = Vector2.Distance(candidatePoint, tile);
-                    if (dist < minDistToWalkable)
+                    foreach (var node in graphState.Nodes)
                     {
-                        minDistToWalkable = dist;
+                        if (Vector2.Distance(candidatePoint, node.Position) < NODE_RADIUS)
+                        {
+                            insideNode = true;
+                            break;
+                        }
+                    }
+                }
+                if (insideNode)
+                {
+                    skippedInsideNode++;
+                    continue;
+                }
+
+                validCandidates++;
+
+                // Find minimum distance from candidate point to any graph element
+                float minDistToGraph = float.MaxValue;
+                foreach (var element in graphElements)
+                {
+                    float dist = Vector2.Distance(candidatePoint, element);
+                    if (dist < minDistToGraph)
+                    {
+                        minDistToGraph = dist;
                     }
                 }
 
-                // Track the direction with the greatest minimum distance to walkable area
-                if (minDistToWalkable > bestMinDist)
+                // Track top candidates for debugging
+                topCandidates.Add((angle, testDir, minDistToGraph));
+
+                // Track the direction with the greatest minimum distance to graph elements
+                if (minDistToGraph > bestMinDist)
                 {
-                    bestMinDist = minDistToWalkable;
+                    bestMinDist = minDistToGraph;
                     bestDir = testDir;
                 }
             }
+
+            // Sort and get top 5 candidates
+            topCandidates.Sort((a, b) => b.minDist.CompareTo(a.minDist));
+            string topCandidatesStr = "";
+            for (int i = 0; i < Mathf.Min(5, topCandidates.Count); i++)
+            {
+                var c = topCandidates[i];
+                topCandidatesStr += $"\n    #{i + 1}: angle={c.angle:F0}° dir={c.dir} minDist={c.minDist:F2}";
+            }
+
+            // Log detailed results
+            Debug.Log($"[HeartwardGrasp] FindForestDirection RESULT:" +
+                $"\n  hgzPosition: {hgzPosition}" +
+                $"\n  Candidates: {validCandidates} valid, {skippedWalkable} skipped (walkable), {skippedInsideNode} skipped (inside node)" +
+                $"\n  graphElements found: {graphElements.Count}" +
+                $"\n  bestDir: {bestDir} (angle: {Mathf.Atan2(bestDir.y, bestDir.x) * Mathf.Rad2Deg:F1}°)" +
+                $"\n  bestMinDist to graph: {bestMinDist:F2}" +
+                $"\n  rayDir for reference: {rayDir} (angle: {Mathf.Atan2(rayDir.y, rayDir.x) * Mathf.Rad2Deg:F1}°)" +
+                $"\n  perpCCW fallback: {perpCCW} (angle: {Mathf.Atan2(perpCCW.y, perpCCW.x) * Mathf.Rad2Deg:F1}°)" +
+                $"\n  Top candidates:{topCandidatesStr}");
 
             return bestDir.normalized;
         }
@@ -4068,6 +4214,40 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public int GetRequiredConsumptions() => requiredConsumptions;
 
+        /// <summary>
+        /// Called by DevourTriggerHandler when a visitor enters the maw's trigger zone.
+        /// Captures visitors during Emerging, Paused, or early Sinking phases.
+        /// Sets the visitor to Grabbed state to prevent movement.
+        /// </summary>
+        public void NotifyVisitorEnteredMaw(VisitorControllerBase visitor)
+        {
+            // Capture during active phases (not Idle or Complete)
+            if (currentPhase == DevourPhase.Idle || currentPhase == DevourPhase.Complete)
+            {
+                return;
+            }
+
+            // Don't capture already-captured visitors
+            if (visitorsBeingDevoured.Contains(visitor))
+            {
+                return;
+            }
+
+            // Don't capture visitors in invalid states
+            if (!HeartPowerUtils.IsVisitorTargetable(visitor))
+            {
+                return;
+            }
+
+            // Capture the visitor - set to Grabbed state to completely stop movement
+            visitor.Stop();
+            visitor.SetGrabbedByHeart();
+            visitorsBeingDevoured.Add(visitor);
+            visitorStartPositions[visitor] = visitor.transform.position;
+
+            Debug.Log($"[DevouringMaw] Captured visitor via trigger: {visitor.name}, phase={currentPhase}");
+        }
+
         public override void OnStart()
         {
             targetWorldPos = targetPosition;
@@ -4669,7 +4849,9 @@ namespace FaeMaze.HeartPowers
 
                 if (Vector2.Distance(visitorPos2D, devourPos2D) <= 1.0f)
                 {
+                    // Stop visitor and set Grabbed state to prevent any movement
                     visitor.Stop();
+                    visitor.SetGrabbedByHeart();
                     visitorsBeingDevoured.Add(visitor);
                     visitorStartPositions[visitor] = visitor.transform.position;
                 }
@@ -4866,6 +5048,13 @@ namespace FaeMaze.HeartPowers
 
             // Fix MawThroat mesh rendering
             SetDoubleSidedRendering(devourVisual);
+
+            // Connect the trigger handler so it can notify us when visitors enter the maw
+            var handler = devourVisual.GetComponentInChildren<DevourTriggerHandler>();
+            if (handler != null)
+            {
+                handler.SetOwner(this);
+            }
         }
 
         private void SetDoubleSidedRendering(GameObject obj)
@@ -5007,8 +5196,16 @@ namespace FaeMaze.HeartPowers
     /// </summary>
     public class SculptingEffect : ActivePowerEffect
     {
+        // Static instance for tutorial access
+        public static SculptingEffect ActiveInstance { get; private set; }
+
         // Menu state
         private bool menuActive = false;
+
+        /// <summary>
+        /// Returns true if the sculpt menu is currently open.
+        /// </summary>
+        public bool IsMenuActive => menuActive;
         private int targetNodeIndex = -1;
         private Vector3 menuPosition;
 
@@ -5040,6 +5237,9 @@ namespace FaeMaze.HeartPowers
         // Track if we've applied an action
         private bool actionApplied = false;
 
+        // Tutorial mode - only allow lantern selection
+        private bool tutorialLanternOnlyMode = false;
+
         public SculptingEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
             : base(manager, definition, targetPosition) { }
 
@@ -5048,8 +5248,85 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public override bool IsExpired => actionApplied;
 
+        /// <summary>
+        /// Highlights only the lantern button and disables all other buttons.
+        /// Used by the tutorial to guide the player to select the lantern.
+        /// Also disables keyboard shortcuts for non-lantern options.
+        /// </summary>
+        public void HighlightLanternButtonOnly()
+        {
+            if (!menuActive) return;
+
+            // Enable tutorial mode - blocks non-lantern keyboard shortcuts
+            tutorialLanternOnlyMode = true;
+
+            // Visually dim and disable all buttons except lantern (bottomButton)
+            DimAndDisableButton(centerButton);
+            DimAndDisableButton(topButton);
+            DimAndDisableButton(leftButton);
+            DimAndDisableButton(rightButton);
+
+            // Keep lantern button enabled and add a pulsing highlight effect
+            if (bottomButton != null)
+            {
+                bottomButton.interactable = true;
+
+                // Add a pulsing glow effect to the lantern button
+                var buttonImage = bottomButton.GetComponent<UnityEngine.UI.Image>();
+                if (buttonImage != null)
+                {
+                    // Create a coroutine host for the pulse effect
+                    var pulseHost = bottomButton.gameObject.AddComponent<ButtonPulseEffect>();
+                    pulseHost.StartPulse(buttonImage, LanternColor);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Dims a button visually and disables interaction.
+        /// </summary>
+        private void DimAndDisableButton(UnityEngine.UI.Button button)
+        {
+            if (button == null) return;
+
+            button.interactable = false;
+
+            // Visually dim the button by reducing alpha/brightness
+            var bgImage = button.GetComponent<UnityEngine.UI.Image>();
+            if (bgImage != null)
+            {
+                Color dimColor = bgImage.color;
+                dimColor.a = 0.3f; // Reduce opacity significantly
+                dimColor.r *= 0.5f;
+                dimColor.g *= 0.5f;
+                dimColor.b *= 0.5f;
+                bgImage.color = dimColor;
+            }
+
+            // Also dim the border (parent object)
+            var borderImage = button.transform.parent?.GetComponent<UnityEngine.UI.Image>();
+            if (borderImage != null)
+            {
+                Color dimBorderColor = borderImage.color;
+                dimBorderColor.a = 0.3f;
+                borderImage.color = dimBorderColor;
+            }
+
+            // Dim content image if present
+            var contentImage = button.transform.Find("Content")?.GetComponent<UnityEngine.UI.Image>();
+            if (contentImage != null)
+            {
+                Color dimContentColor = contentImage.color;
+                dimContentColor.a = 0.3f;
+                contentImage.color = dimContentColor;
+            }
+        }
+
         public override void OnStart()
         {
+            // Set static instance for tutorial access
+            ActiveInstance = this;
+
             // Find DynamicMazeGrowth
             dynamicMazeGrowth = Object.FindFirstObjectByType<DynamicMazeGrowth>();
             if (dynamicMazeGrowth == null)
@@ -5086,6 +5363,12 @@ namespace FaeMaze.HeartPowers
         {
             DestroyMenu();
             menuActive = false;
+
+            // Clear static instance
+            if (ActiveInstance == this)
+            {
+                ActiveInstance = null;
+            }
         }
 
         public override void Update(float deltaTime)
@@ -5097,15 +5380,16 @@ namespace FaeMaze.HeartPowers
 
             var keyboard = UnityEngine.InputSystem.Keyboard.current;
 
-            // Check for escape key to cancel
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            // Check for escape key to cancel (disabled in tutorial mode)
+            if (!tutorialLanternOnlyMode && keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             {
                 CancelMenu();
                 return;
             }
 
             // Keyboard shortcuts for sculpt menu options
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptPondBinding))
+            // In tutorial mode, only lantern shortcut is allowed
+            if (!tutorialLanternOnlyMode && InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptPondBinding))
             {
                 OnPondClicked();
                 return;
@@ -5115,12 +5399,12 @@ namespace FaeMaze.HeartPowers
                 OnLanternClicked();
                 return;
             }
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRingBinding))
+            if (!tutorialLanternOnlyMode && InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRingBinding))
             {
                 OnRingClicked();
                 return;
             }
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRemoveBinding))
+            if (!tutorialLanternOnlyMode && InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRemoveBinding))
             {
                 OnRemoveClicked();
                 return;
@@ -5163,10 +5447,6 @@ namespace FaeMaze.HeartPowers
             // Get the canvas RectTransform
             RectTransform canvasRect = menuCanvas.GetComponent<RectTransform>();
 
-            // Convert world position to screen position for menu center
-            Camera mainCamera = Camera.main;
-            Vector3 screenPos = mainCamera.WorldToScreenPoint(menuPosition);
-
             // Calculate sizes based on reference resolution height (50% of screen height for entire menu)
             // Use reference height (1080) since CanvasScaler is set to ScaleWithScreenSize
             float referenceHeight = 1080f;
@@ -5175,7 +5455,46 @@ namespace FaeMaze.HeartPowers
             float buttonSize = menuSize * BUTTON_SIZE_FRACTION;
             float centerButtonSize = menuSize * CENTER_BUTTON_FRACTION;
 
-            // Create a panel at the screen position
+            // Find PowerButton_3 (Sculpting button) to center the menu directly above it
+            // Default to screen center (will be converted to canvas coordinates below)
+            Vector2 screenPos = new Vector2(Screen.width / 2f, Screen.height / 2f);
+            GameObject powerButton = GameObject.Find("PowerButton_3");
+
+            if (powerButton != null)
+            {
+                RectTransform powerButtonRect = powerButton.GetComponent<RectTransform>();
+                if (powerButtonRect != null)
+                {
+                    // Get the screen position of the power button (world corners = screen coords for overlay canvas)
+                    Vector3[] corners = new Vector3[4];
+                    powerButtonRect.GetWorldCorners(corners);
+                    // corners: 0=bottom-left, 1=top-left, 2=top-right, 3=bottom-right
+
+                    Vector2 buttonCenter = new Vector2((corners[0].x + corners[2].x) / 2f, (corners[0].y + corners[2].y) / 2f);
+                    float powerButtonTop = corners[1].y;
+
+                    // Position menu so the bottom sculpt button sits just above the power button
+                    // Need to calculate in screen pixels first, then convert to canvas coordinates
+                    float gap = 15f; // Gap in screen pixels
+                    // In screen space: menu center Y = powerButtonTop + gap + (distance from menu center to bottom of bottom button)
+                    // The bottom button center is at menuRadius below menu center, and button extends buttonSize/2 below that
+                    // So menu center Y = powerButtonTop + gap + menuRadius + buttonSize/2
+                    // But menuRadius and buttonSize are in reference resolution (1080p), need to scale
+                    float scaleFactor = Screen.height / 1080f;
+                    float scaledMenuRadius = menuRadius * scaleFactor;
+                    float scaledButtonSize = buttonSize * scaleFactor;
+                    float menuCenterY = powerButtonTop + gap + scaledMenuRadius + scaledButtonSize * 0.5f;
+                    screenPos = new Vector2(buttonCenter.x, menuCenterY);
+                }
+            }
+
+            // Convert screen position to canvas local position
+            // The canvas uses CanvasScaler with reference 1920x1080, so we need to scale
+            float canvasScaleX = 1920f / Screen.width;
+            float canvasScaleY = 1080f / Screen.height;
+            Vector2 canvasPos = new Vector2(screenPos.x * canvasScaleX, screenPos.y * canvasScaleY);
+
+            // Create a panel at the calculated position
             GameObject panelObj = new GameObject("MenuPanel");
             panelObj.transform.SetParent(canvasRect, false);
 
@@ -5183,7 +5502,7 @@ namespace FaeMaze.HeartPowers
             panelRect.anchorMin = Vector2.zero;
             panelRect.anchorMax = Vector2.zero;
             panelRect.pivot = new Vector2(0.5f, 0.5f);
-            panelRect.anchoredPosition = new Vector2(screenPos.x, screenPos.y);
+            panelRect.anchoredPosition = canvasPos;
             panelRect.sizeDelta = new Vector2(menuSize, menuSize);
 
             // Create circular buttons around center (no labels, with preview images)
@@ -5760,6 +6079,42 @@ namespace FaeMaze.HeartPowers
             mesh.RecalculateBounds();
 
             return mesh;
+        }
+    }
+
+    /// <summary>
+    /// Simple MonoBehaviour component to pulse a button's color for highlighting.
+    /// </summary>
+    public class ButtonPulseEffect : MonoBehaviour
+    {
+        private UnityEngine.UI.Image targetImage;
+        private Color baseColor;
+        private float pulseSpeed = 2f;
+        private float pulseIntensity = 0.3f;
+
+        public void StartPulse(UnityEngine.UI.Image image, Color baseCol)
+        {
+            targetImage = image;
+            baseColor = baseCol;
+        }
+
+        private void Update()
+        {
+            if (targetImage == null) return;
+
+            // Pulse brightness using sine wave
+            float pulse = (Mathf.Sin(Time.unscaledTime * pulseSpeed * Mathf.PI) + 1f) * 0.5f;
+            float brightness = 1f + pulse * pulseIntensity;
+
+            // Apply brighter color
+            Color pulsedColor = new Color(
+                Mathf.Min(baseColor.r * brightness, 1f),
+                Mathf.Min(baseColor.g * brightness, 1f),
+                Mathf.Min(baseColor.b * brightness, 1f),
+                baseColor.a
+            );
+
+            targetImage.color = pulsedColor;
         }
     }
 

@@ -51,7 +51,7 @@ namespace FaeMaze.Visitors
         private float frightenedDuration = 3f;
 
         [SerializeField] [Tooltip("Speed multiplier when frightened")]
-        private float frightenedSpeedMultiplier = 1.2f;
+        private float frightenedSpeedMultiplier = 1.3f;
 
         [SerializeField] [Tooltip("If true, frightened visitors repath toward nearest exit")]
         private bool frightenedPrefersExit = false;

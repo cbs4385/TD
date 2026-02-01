@@ -135,7 +135,7 @@ namespace FaeMaze.Cameras
         private bool isFocusing;
         private Vector3 focusTargetPosition;
         private float focusLerpSpeed = 10f;
-        private VisitorController focusVisitor;
+        private VisitorControllerBase focusVisitor;
         private float trackingLogInterval = 0.5f;
         private float trackingLogTimer;
         private bool trackingVisitorLostLogged;
@@ -144,6 +144,11 @@ namespace FaeMaze.Cameras
         private bool focalPointInitialized;
         private bool focalCameraPoseInitialized;
         private float focalZoomOffset = 0f; // Current zoom offset along focal axis (0 = minimum/start, positive = further away)
+
+        // Focal point smooth movement state (for tutorial transitions)
+        private bool isFocalPointMoving;
+        private Vector3 focalPointMoveTarget;
+        private float focalPointMoveSpeed = 5f;
 
         // Debugging
         private float rollLogTimer;
@@ -182,6 +187,11 @@ namespace FaeMaze.Cameras
         /// Gets the focal point position in world space.
         /// </summary>
         public Vector3 FocalPointPosition => focalPointTransform != null ? focalPointTransform.position : _focusPoint;
+
+        /// <summary>
+        /// Gets whether the focal point is currently moving to a target position.
+        /// </summary>
+        public bool IsFocalPointMoving => isFocalPointMoving;
 
         /// <summary>
         /// Applies a world-space offset to the camera and its focus targets.
@@ -314,6 +324,9 @@ namespace FaeMaze.Cameras
                 }
 
                 TryConfigureInitialFocalCameraPose();
+
+                // Handle smooth focal point movement (e.g., from tutorial transitions)
+                UpdateFocalPointSmoothMovement();
 
                 HandleFocalPointInput();
                 HandleScrollZoom();
@@ -779,6 +792,33 @@ namespace FaeMaze.Cameras
 
         #region Focal Point Mode
 
+        /// <summary>
+        /// Updates smooth movement of the focal point toward a target position.
+        /// Uses unscaled delta time so it works during pause (Time.timeScale = 0).
+        /// </summary>
+        private void UpdateFocalPointSmoothMovement()
+        {
+            if (!isFocalPointMoving || focalPointTransform == null) return;
+
+            Vector3 currentPos = focalPointTransform.position;
+            Vector3 targetPos = focalPointMoveTarget;
+
+            // Use MoveTowards for consistent speed
+            // IMPORTANT: Use unscaledDeltaTime so movement works during pause
+            Vector3 newPos = Vector3.MoveTowards(currentPos, targetPos, focalPointMoveSpeed * Time.unscaledDeltaTime);
+            focalPointTransform.position = newPos;
+            _focusPoint = newPos;
+
+            // Check if we've arrived
+            float distSq = Vector3.SqrMagnitude(newPos - targetPos);
+            if (distSq < 0.01f)
+            {
+                focalPointTransform.position = targetPos;
+                _focusPoint = targetPos;
+                isFocalPointMoving = false;
+            }
+        }
+
         private void InitializeFocalPoint()
         {
             if (focalPointInitialized)
@@ -1093,8 +1133,19 @@ namespace FaeMaze.Cameras
             // In focal point mode, move the focal point transform
             if (useFocalPointMode && focalPointTransform != null)
             {
-                focalPointTransform.position = targetPosition;
-                _focusPoint = targetPosition;
+                if (instant)
+                {
+                    focalPointTransform.position = targetPosition;
+                    _focusPoint = targetPosition;
+                    isFocalPointMoving = false;
+                }
+                else
+                {
+                    // Start smooth movement to target
+                    focalPointMoveTarget = targetPosition;
+                    focalPointMoveSpeed = Mathf.Max(lerpSpeed, 1f);
+                    isFocalPointMoving = true;
+                }
                 isFocusing = false;
                 return;
             }
@@ -1122,6 +1173,20 @@ namespace FaeMaze.Cameras
                 focusLerpSpeed = Mathf.Max(lerpSpeed, 0f);
                 isFocusing = true;
             }
+        }
+
+        /// <summary>
+        /// Sets the focal point rotation to look along a specific direction (in XY plane).
+        /// In focal point mode, this rotates the focal point transform around the Z axis.
+        /// </summary>
+        /// <param name="direction">The direction to look along (in XY plane)</param>
+        public void SetFocalPointDirection(Vector2 direction)
+        {
+            if (!useFocalPointMode || focalPointTransform == null) return;
+            if (direction.sqrMagnitude < 0.001f) return;
+
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            focalPointTransform.rotation = Quaternion.Euler(0f, 0f, angle);
         }
 
         /// <summary>
@@ -1153,7 +1218,7 @@ namespace FaeMaze.Cameras
         /// <summary>
         /// Focuses on the given visitor.
         /// </summary>
-        public void FocusOnVisitor(VisitorController visitor, bool instant = false)
+        public void FocusOnVisitor(VisitorControllerBase visitor, bool instant = false)
         {
             if (visitor == null)
             {
@@ -1225,7 +1290,7 @@ namespace FaeMaze.Cameras
             if (visitor != null)
             {
                 FocusOnPosition(visitor.transform.position, false);
-                focusVisitor = visitor as VisitorController;
+                focusVisitor = visitor as VisitorControllerBase;
                 focusLerpSpeed = 10f;
                 isFocusing = true;
                 trackingLogTimer = 0f;
