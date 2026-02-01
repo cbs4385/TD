@@ -148,6 +148,10 @@ namespace FaeMaze.UI
         private string bindingCameraMoveBackward;
         private string bindingCameraTurnLeft;
         private string bindingCameraTurnRight;
+        private string bindingCameraMoveForwardAlt;
+        private string bindingCameraMoveBackwardAlt;
+        private string bindingCameraTurnLeftAlt;
+        private string bindingCameraTurnRightAlt;
         private string bindingCameraFocusHeart;
         private string bindingCameraFocusEntrance;
         private string bindingCameraFocusVisitor;
@@ -1050,6 +1054,14 @@ namespace FaeMaze.UI
                 GameSettings.CameraTurnLeftBinding = bindingCameraTurnLeft;
             if (!string.IsNullOrEmpty(bindingCameraTurnRight))
                 GameSettings.CameraTurnRightBinding = bindingCameraTurnRight;
+            if (!string.IsNullOrEmpty(bindingCameraMoveForwardAlt))
+                GameSettings.CameraMoveForwardAltBinding = bindingCameraMoveForwardAlt;
+            if (!string.IsNullOrEmpty(bindingCameraMoveBackwardAlt))
+                GameSettings.CameraMoveBackwardAltBinding = bindingCameraMoveBackwardAlt;
+            if (!string.IsNullOrEmpty(bindingCameraTurnLeftAlt))
+                GameSettings.CameraTurnLeftAltBinding = bindingCameraTurnLeftAlt;
+            if (!string.IsNullOrEmpty(bindingCameraTurnRightAlt))
+                GameSettings.CameraTurnRightAltBinding = bindingCameraTurnRightAlt;
             if (!string.IsNullOrEmpty(bindingCameraFocusHeart))
                 GameSettings.CameraFocusHeartBinding = bindingCameraFocusHeart;
             if (!string.IsNullOrEmpty(bindingCameraFocusEntrance))
@@ -1204,6 +1216,10 @@ namespace FaeMaze.UI
             bindingCameraMoveBackward = GameSettings.CameraMoveBackwardBinding;
             bindingCameraTurnLeft = GameSettings.CameraTurnLeftBinding;
             bindingCameraTurnRight = GameSettings.CameraTurnRightBinding;
+            bindingCameraMoveForwardAlt = GameSettings.CameraMoveForwardAltBinding;
+            bindingCameraMoveBackwardAlt = GameSettings.CameraMoveBackwardAltBinding;
+            bindingCameraTurnLeftAlt = GameSettings.CameraTurnLeftAltBinding;
+            bindingCameraTurnRightAlt = GameSettings.CameraTurnRightAltBinding;
             bindingCameraFocusHeart = GameSettings.CameraFocusHeartBinding;
             bindingCameraFocusEntrance = GameSettings.CameraFocusEntranceBinding;
             bindingCameraFocusVisitor = GameSettings.CameraFocusVisitorBinding;
@@ -1237,6 +1253,44 @@ namespace FaeMaze.UI
             foreach (var capture in captures)
             {
                 string objName = capture.gameObject.name.ToLower();
+
+                // IMPORTANT: Check "tertiary" and "alt" suffixes FIRST before checking base names
+                // Otherwise "heartpower1" matches "heartpower1alt_button" and "heartpower1tertiary_button"
+
+                // Skip tertiary bindings - they have no stored values and should remain empty
+                // Users can assign them through the UI if desired
+                if (objName.Contains("tertiary"))
+                {
+                    // Leave tertiary bindings unset (empty) - no callback needed for now
+                    capture.SetBinding("");
+                    continue;
+                }
+
+                // Handle Alt bindings for controls that don't have stored Alt values
+                // These should be empty unless explicitly set by the user
+                if (objName.Contains("heartpower") && objName.Contains("alt"))
+                {
+                    // Heart power Alt bindings - not stored, leave empty
+                    capture.SetBinding("");
+                    continue;
+                }
+                if ((objName.Contains("sculptpond") || objName.Contains("sculptlantern") ||
+                     objName.Contains("sculptring") || objName.Contains("sculptremove") ||
+                     objName.Contains("placepond") || objName.Contains("placelantern") ||
+                     objName.Contains("placering") || objName.Contains("removeprop")) && objName.Contains("alt"))
+                {
+                    // Sculpt menu Alt bindings - not stored, leave empty
+                    capture.SetBinding("");
+                    continue;
+                }
+                if ((objName.Contains("focusheart") || objName.Contains("focusentrance") ||
+                     objName.Contains("focusvisitor") || objName.Contains("orbit") ||
+                     objName.Contains("pan") || objName.Contains("screenshot")) && objName.Contains("alt"))
+                {
+                    // Other Alt bindings - not stored, leave empty
+                    capture.SetBinding("");
+                    continue;
+                }
 
                 // Match by object name to determine which binding to use
                 if (objName.Contains("heartpower1") || objName.Contains("murmuring"))
@@ -1287,6 +1341,33 @@ namespace FaeMaze.UI
                     capture.OnBindingCaptured -= OnSculptRemoveBindingChanged;
                     capture.OnBindingCaptured += OnSculptRemoveBindingChanged;
                 }
+                // Alt/Secondary bindings for camera movement (arrow keys by default)
+                // IMPORTANT: Check Alt versions FIRST since "moveforward" would match both "moveforward" and "moveforwardalt"
+                else if (objName.Contains("moveforwardalt") || objName.Contains("cameramoveforwardalt"))
+                {
+                    capture.SetBinding(bindingCameraMoveForwardAlt);
+                    capture.OnBindingCaptured -= OnCameraMoveForwardAltBindingChanged;
+                    capture.OnBindingCaptured += OnCameraMoveForwardAltBindingChanged;
+                }
+                else if (objName.Contains("movebackwardalt") || objName.Contains("cameramovebackwardalt"))
+                {
+                    capture.SetBinding(bindingCameraMoveBackwardAlt);
+                    capture.OnBindingCaptured -= OnCameraMoveBackwardAltBindingChanged;
+                    capture.OnBindingCaptured += OnCameraMoveBackwardAltBindingChanged;
+                }
+                else if (objName.Contains("turnleftalt") || objName.Contains("cameraturnleftalt"))
+                {
+                    capture.SetBinding(bindingCameraTurnLeftAlt);
+                    capture.OnBindingCaptured -= OnCameraTurnLeftAltBindingChanged;
+                    capture.OnBindingCaptured += OnCameraTurnLeftAltBindingChanged;
+                }
+                else if (objName.Contains("turnrightalt") || objName.Contains("cameraturnrightalt"))
+                {
+                    capture.SetBinding(bindingCameraTurnRightAlt);
+                    capture.OnBindingCaptured -= OnCameraTurnRightAltBindingChanged;
+                    capture.OnBindingCaptured += OnCameraTurnRightAltBindingChanged;
+                }
+                // Primary bindings for camera movement (WASD by default)
                 else if (objName.Contains("moveforward") || objName.Contains("cameraforward"))
                 {
                     capture.SetBinding(bindingCameraMoveForward);
@@ -1369,6 +1450,10 @@ namespace FaeMaze.UI
         private void OnCameraMoveBackwardBindingChanged(string binding) => bindingCameraMoveBackward = binding;
         private void OnCameraTurnLeftBindingChanged(string binding) => bindingCameraTurnLeft = binding;
         private void OnCameraTurnRightBindingChanged(string binding) => bindingCameraTurnRight = binding;
+        private void OnCameraMoveForwardAltBindingChanged(string binding) => bindingCameraMoveForwardAlt = binding;
+        private void OnCameraMoveBackwardAltBindingChanged(string binding) => bindingCameraMoveBackwardAlt = binding;
+        private void OnCameraTurnLeftAltBindingChanged(string binding) => bindingCameraTurnLeftAlt = binding;
+        private void OnCameraTurnRightAltBindingChanged(string binding) => bindingCameraTurnRightAlt = binding;
         private void OnCameraFocusHeartBindingChanged(string binding) => bindingCameraFocusHeart = binding;
         private void OnCameraFocusEntranceBindingChanged(string binding) => bindingCameraFocusEntrance = binding;
         private void OnCameraFocusVisitorBindingChanged(string binding) => bindingCameraFocusVisitor = binding;
@@ -1384,12 +1469,13 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Synchronizes the screenshot binding across all KeyBindingCapture components that handle it.
-        /// This ensures VIDEO tab and CONTROLS tab show the same value.
+        /// Synchronizes the PRIMARY screenshot binding across VIDEO and CONTROLS tabs.
+        /// Only syncs the primary binding - Alt and Tertiary are independent.
+        /// This ensures VIDEO tab mirrors the CONTROLS tab primary screenshot binding.
         /// </summary>
         private void SyncScreenshotBindings(string binding)
         {
-            // Find all screenshot captures and update them
+            // Find all screenshot captures and update only PRIMARY ones (not Alt/Tertiary)
             var allCaptures = new List<KeyBindingCapture>();
             if (controlsPanel != null)
                 allCaptures.AddRange(controlsPanel.GetComponentsInChildren<KeyBindingCapture>(true));
@@ -1399,7 +1485,8 @@ namespace FaeMaze.UI
             foreach (var capture in allCaptures)
             {
                 string objName = capture.gameObject.name.ToLower();
-                if (objName.Contains("screenshot"))
+                // Only sync PRIMARY screenshot bindings (not "alt" or "tertiary")
+                if (objName.Contains("screenshot") && !objName.Contains("alt") && !objName.Contains("tertiary"))
                 {
                     // Update the display without triggering the callback again
                     if (capture.GetBinding() != binding)

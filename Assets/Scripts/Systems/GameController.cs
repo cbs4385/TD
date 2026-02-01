@@ -152,7 +152,15 @@ namespace FaeMaze.Systems
             }
 
             // Initialize the random manager FIRST - all other systems depend on it
-            RandomManager.Initialize();
+            // If tutorial will run, use the fixed tutorial seed for consistent maze layout
+            if (!GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun)
+            {
+                RandomManager.Initialize(Tutorial.TutorialManager.TUTORIAL_SEED);
+            }
+            else
+            {
+                RandomManager.Initialize();
+            }
 
             // NOTE: Visitor-to-Visitor collision is disabled in Project Settings > Physics > Layer Collision Matrix
             // Do NOT call Physics.IgnoreLayerCollision at runtime - it causes Unity assertion errors

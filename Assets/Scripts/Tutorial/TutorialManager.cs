@@ -42,6 +42,9 @@ namespace FaeMaze.Tutorial
         /// <summary>Starting essence for tutorial runs (higher to allow practicing all powers)</summary>
         public const int TUTORIAL_STARTING_ESSENCE = 200;
 
+        /// <summary>Fixed seed for tutorial runs to ensure consistent maze layout</summary>
+        public const int TUTORIAL_SEED = 3141592;
+
         #endregion
 
         #region Serialized Fields
@@ -1364,10 +1367,15 @@ namespace FaeMaze.Tutorial
 
         /// <summary>
         /// Skips the tutorial entirely.
+        /// Also disables tutorial auto-start for future runs.
         /// </summary>
         public void SkipTutorial()
         {
             if (!isActive) return;
+
+            // Disable tutorial auto-start for future runs
+            // Player explicitly chose to skip, so don't show it again automatically
+            GameSettings.ShowTutorialOnFirstRun = false;
 
             CompleteTutorial();
         }

@@ -315,6 +315,31 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetString("CameraTurnRightBinding", value);
         }
 
+        // Camera Movement Alt Keybindings (default to arrow keys)
+        public static string CameraMoveForwardAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraMoveForwardAltBinding", "UpArrow");
+            set => PlayerPrefs.SetString("CameraMoveForwardAltBinding", value);
+        }
+
+        public static string CameraMoveBackwardAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraMoveBackwardAltBinding", "DownArrow");
+            set => PlayerPrefs.SetString("CameraMoveBackwardAltBinding", value);
+        }
+
+        public static string CameraTurnLeftAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraTurnLeftAltBinding", "LeftArrow");
+            set => PlayerPrefs.SetString("CameraTurnLeftAltBinding", value);
+        }
+
+        public static string CameraTurnRightAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraTurnRightAltBinding", "RightArrow");
+            set => PlayerPrefs.SetString("CameraTurnRightAltBinding", value);
+        }
+
         // Camera Focus Shortcuts
         // Using F5/F6/F7 to avoid conflicts with HeartPower 1/2/3/4
         public static string CameraFocusHeartBinding

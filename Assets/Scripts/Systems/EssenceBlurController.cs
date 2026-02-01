@@ -49,6 +49,7 @@ namespace FaeMaze.Systems
 
         private RadialBlur radialBlur;
         private float essenceDecayTimer;
+        private bool hasInitializedBlur;
 
         #endregion
 
@@ -72,10 +73,54 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Try to find and initialize RadialBlur immediately
+            // If not found now (likely because PostProcessVolumeRuntimeSetup hasn't run yet),
+            // TryInitializeBlur() will retry in Update()
+            TryInitializeBlur();
+        }
+
+        private void Update()
+        {
+            if (gameController == null)
+            {
+                return;
+            }
+
+            // Decay essence over time (use GameSettings if enabled)
+            bool decayEnabled = useGameSettings ? GameSettings.EssenceDecayEnabled : enableEssenceDecay;
+            if (decayEnabled)
+            {
+                DecayEssence();
+            }
+
+            // Try to find and initialize RadialBlur if not yet done
+            // This handles the case where PostProcessVolumeRuntimeSetup adds RadialBlur after Start()
+            if (!hasInitializedBlur)
+            {
+                TryInitializeBlur();
+            }
+
+            // Update blur parameters based on current essence (only if blur is available)
+            if (radialBlur != null)
+            {
+                UpdateBlurFromEssence();
+            }
+        }
+
+        #endregion
+
+        #region Blur Initialization
+
+        /// <summary>
+        /// Attempts to find and initialize the RadialBlur component.
+        /// Called from Update() to handle the case where PostProcessVolumeRuntimeSetup
+        /// adds RadialBlur after this component's Start() runs.
+        /// </summary>
+        private void TryInitializeBlur()
+        {
             // Find global volume if not assigned - search for one with RadialBlur
             if (globalVolume == null)
             {
-                // Find all volumes and pick the one with RadialBlur
                 var volumes = FindObjectsByType<Volume>(FindObjectsSortMode.None);
                 foreach (var vol in volumes)
                 {
@@ -87,13 +132,13 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Try to get RadialBlur component from volume (optional - decay still works without it)
+            // Try to get RadialBlur component from volume
             if (globalVolume != null && globalVolume.profile != null)
             {
                 globalVolume.profile.TryGet(out radialBlur);
             }
 
-            // Setup blur effects if available
+            // Setup blur effects if found
             if (radialBlur != null)
             {
                 if (maximizeBlurIntensity)
@@ -118,27 +163,10 @@ namespace FaeMaze.Systems
 
                 // Initial update
                 UpdateBlurFromEssence();
-            }
-        }
 
-        private void Update()
-        {
-            if (gameController == null)
-            {
-                return;
-            }
-
-            // Decay essence over time (use GameSettings if enabled)
-            bool decayEnabled = useGameSettings ? GameSettings.EssenceDecayEnabled : enableEssenceDecay;
-            if (decayEnabled)
-            {
-                DecayEssence();
-            }
-
-            // Update blur parameters based on current essence (only if blur is available)
-            if (radialBlur != null)
-            {
-                UpdateBlurFromEssence();
+                // Mark as initialized so we don't keep searching
+                hasInitializedBlur = true;
+                Debug.Log("[EssenceBlurController] RadialBlur initialized successfully");
             }
         }
 

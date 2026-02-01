@@ -352,31 +352,31 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            Keyboard keyboard = Keyboard.current;
-
             // Cancel focus when user manually controls camera
             bool anyMovementPressed =
                 InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
                 InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
                 InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
                 InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
-                (keyboard != null && (keyboard.upArrowKey.isPressed || keyboard.downArrowKey.isPressed ||
-                                      keyboard.leftArrowKey.isPressed || keyboard.rightArrowKey.isPressed));
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardAltBinding) ||
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardAltBinding) ||
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding) ||
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding);
 
             if (isFocusing && anyMovementPressed)
             {
                 isFocusing = false;
             }
 
-            // W/S (or configured binding): Move focus point forward/backward
+            // W/S or ↑/↓ (or configured bindings): Move focus point forward/backward
             float forwardInput = 0f;
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
-                (keyboard != null && keyboard.upArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardAltBinding))
             {
                 forwardInput += 1f;
             }
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
-                (keyboard != null && keyboard.downArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardAltBinding))
             {
                 forwardInput -= 1f;
             }
@@ -392,15 +392,15 @@ namespace FaeMaze.Cameras
                 _focusPoint += movement;
             }
 
-            // A/D or ←/→ (or configured binding): Orbit yaw (keyboard orbit)
+            // A/D or ←/→ (or configured bindings): Orbit yaw (keyboard orbit)
             float yawInput = 0f;
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
-                (keyboard != null && keyboard.rightArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding))
             {
                 yawInput += 1f;
             }
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
-                (keyboard != null && keyboard.leftArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding))
             {
                 yawInput -= 1f;
             }
@@ -430,30 +430,29 @@ namespace FaeMaze.Cameras
             // Handle mouse controls for focal point mode
             HandleFocalPointMouseControls();
 
-            // Use configurable bindings + arrow key fallback
-            Keyboard keyboard = Keyboard.current;
+            // Use configurable bindings (primary and alt)
             float moveInput = 0f;
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
-                (keyboard != null && keyboard.upArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardAltBinding))
             {
                 moveInput += 1f;
             }
 
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
-                (keyboard != null && keyboard.downArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardAltBinding))
             {
                 moveInput -= 1f;
             }
 
             float turnInput = 0f;
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
-                (keyboard != null && keyboard.leftArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding))
             {
                 turnInput -= 1f;
             }
 
             if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
-                (keyboard != null && keyboard.rightArrowKey.isPressed))
+                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding))
             {
                 turnInput += 1f;
             }

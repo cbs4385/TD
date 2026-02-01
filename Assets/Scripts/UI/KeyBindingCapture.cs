@@ -11,6 +11,11 @@ namespace FaeMaze.UI
     /// Component that handles "press any key" input capture for key binding UI.
     /// Uses a separate checkbox (Toggle) to activate capture mode, avoiding conflicts with left-click binding.
     /// The checkbox activates capture mode, then the next input is captured and bound.
+    ///
+    /// Features:
+    /// - Left toggle checkbox: click to enter capture mode, then press any key to bind
+    /// - Clear button (X): appears on the RIGHT side when a binding is set, click to clear
+    /// - Text display: shows current binding or "Press any key..." during capture
     /// </summary>
     public class KeyBindingCapture : MonoBehaviour
     {
@@ -23,10 +28,18 @@ namespace FaeMaze.UI
         [Tooltip("Toggle/checkbox to activate capture mode")]
         private Toggle captureToggle;
 
+        [SerializeField]
+        [Tooltip("Button to clear the current binding (optional, created at runtime if not assigned)")]
+        private Button clearButton;
+
         [Header("Display")]
         [SerializeField]
         [Tooltip("Text to display while waiting for input")]
         private string capturePrompt = "Press any key...";
+
+        [SerializeField]
+        [Tooltip("Text to display when no binding is set")]
+        private string unsetText = "-";
 
         [Header("Styling")]
         [SerializeField]
@@ -35,12 +48,20 @@ namespace FaeMaze.UI
         [SerializeField]
         private Color captureTextColor = new Color(1f, 0.8f, 0.3f, 1f); // Yellow-orange for capture mode
 
+        [SerializeField]
+        private Color unsetTextColor = new Color(0.5f, 0.5f, 0.5f, 1f); // Gray for unset
+
+        [SerializeField]
+        private Color clearButtonColor = new Color(0.6f, 0.2f, 0.2f, 1f); // Dark red for clear button
+
         private string currentBinding;
         private bool isCapturing = false;
+        private GameObject clearButtonObj; // Runtime-created clear button
 
         /// <summary>
         /// Event fired when a new binding is captured.
         /// Parameter is the binding string (e.g., "W", "Mouse1", "F12").
+        /// Empty string means binding was cleared.
         /// </summary>
         public event Action<string> OnBindingCaptured;
 
@@ -57,6 +78,34 @@ namespace FaeMaze.UI
                 captureToggle.onValueChanged.AddListener(OnToggleChanged);
                 captureToggle.isOn = false;
             }
+
+            // Find clear button if not assigned
+            if (clearButton == null)
+            {
+                // Look for a button named "ClearButton" in children
+                foreach (Transform child in transform)
+                {
+                    if (child.name == "ClearButton")
+                    {
+                        clearButton = child.GetComponent<Button>();
+                        break;
+                    }
+                }
+            }
+
+            // Create clear button at runtime if not found
+            if (clearButton == null)
+            {
+                CreateClearButton();
+            }
+
+            if (clearButton != null)
+            {
+                clearButton.onClick.AddListener(OnClearClicked);
+            }
+
+            // Initial visibility update
+            UpdateClearButtonVisibility();
         }
 
         private void OnDestroy()
@@ -65,14 +114,116 @@ namespace FaeMaze.UI
             {
                 captureToggle.onValueChanged.RemoveListener(OnToggleChanged);
             }
+
+            if (clearButton != null)
+            {
+                clearButton.onClick.RemoveListener(OnClearClicked);
+            }
+        }
+
+        /// <summary>
+        /// Creates a clear button (X) on the right side of the binding display.
+        /// </summary>
+        private void CreateClearButton()
+        {
+            // Find the background/container for the binding text
+            Transform bgTransform = null;
+            foreach (Transform child in transform)
+            {
+                if (child.name == "Background" || child.GetComponent<Image>() != null)
+                {
+                    // Skip the toggle
+                    if (child.GetComponent<Toggle>() != null || child.name == "CaptureToggle")
+                        continue;
+                    bgTransform = child;
+                    break;
+                }
+            }
+
+            if (bgTransform == null)
+            {
+                // Fall back to this transform if no background found
+                bgTransform = transform;
+            }
+
+            clearButtonObj = new GameObject("ClearButton");
+            clearButtonObj.transform.SetParent(bgTransform, false);
+
+            RectTransform clearRect = clearButtonObj.AddComponent<RectTransform>();
+            clearRect.anchorMin = new Vector2(1, 0.5f);
+            clearRect.anchorMax = new Vector2(1, 0.5f);
+            clearRect.pivot = new Vector2(1, 0.5f);
+            clearRect.anchoredPosition = new Vector2(-4, 0);
+            clearRect.sizeDelta = new Vector2(20, 20);
+
+            Image clearBg = clearButtonObj.AddComponent<Image>();
+            clearBg.color = clearButtonColor;
+
+            clearButton = clearButtonObj.AddComponent<Button>();
+            clearButton.targetGraphic = clearBg;
+
+            // Add X text
+            GameObject xTextObj = new GameObject("XText");
+            xTextObj.transform.SetParent(clearButtonObj.transform, false);
+
+            RectTransform xRect = xTextObj.AddComponent<RectTransform>();
+            xRect.anchorMin = Vector2.zero;
+            xRect.anchorMax = Vector2.one;
+            xRect.offsetMin = Vector2.zero;
+            xRect.offsetMax = Vector2.zero;
+
+            TextMeshProUGUI xText = xTextObj.AddComponent<TextMeshProUGUI>();
+            xText.text = "X";
+            xText.fontSize = 14;
+            xText.fontStyle = FontStyles.Bold;
+            xText.alignment = TextAlignmentOptions.Center;
+            xText.color = Color.white;
+        }
+
+        /// <summary>
+        /// Updates the visibility of the clear button based on whether a binding is set.
+        /// </summary>
+        private void UpdateClearButtonVisibility()
+        {
+            bool hasBinding = !string.IsNullOrEmpty(currentBinding);
+            bool showClearButton = hasBinding && !isCapturing;
+
+            if (clearButton != null)
+            {
+                clearButton.gameObject.SetActive(showClearButton);
+            }
+            else if (clearButtonObj != null)
+            {
+                clearButtonObj.SetActive(showClearButton);
+            }
+        }
+
+        /// <summary>
+        /// Called when the clear button is clicked.
+        /// </summary>
+        private void OnClearClicked()
+        {
+            ClearBinding();
+        }
+
+        /// <summary>
+        /// Clears the current binding.
+        /// </summary>
+        public void ClearBinding()
+        {
+            currentBinding = "";
+            UpdateDisplayText();
+            UpdateClearButtonVisibility();
+            OnBindingCaptured?.Invoke("");
         }
 
         /// <summary>
         /// Initialize the control with a binding value.
+        /// Pass null or empty string to show unset state.
         /// </summary>
         public void SetBinding(string binding)
         {
-            currentBinding = binding;
+            currentBinding = binding ?? "";
             UpdateDisplayText();
         }
 
@@ -233,11 +384,18 @@ namespace FaeMaze.UI
                 bindingText.text = capturePrompt;
                 bindingText.color = captureTextColor;
             }
+            else if (string.IsNullOrEmpty(currentBinding))
+            {
+                bindingText.text = unsetText;
+                bindingText.color = unsetTextColor;
+            }
             else
             {
                 bindingText.text = FaeMaze.Systems.InputBindingHelper.GetDisplayName(currentBinding);
                 bindingText.color = normalTextColor;
             }
+
+            UpdateClearButtonVisibility();
         }
     }
 }
