@@ -168,6 +168,7 @@ namespace FaeMaze.Visitors
         protected bool isFrightened;
         protected bool isLured;
         protected bool isDazed;
+        protected bool isTutorialVisitor;  // Tutorial visitors are immune to frightening
 
         // Frightened state tracking
         protected Vector3 frightSourcePosition;  // Position of what frightened the visitor (to flee away from)
@@ -487,7 +488,8 @@ namespace FaeMaze.Visitors
             FrameProfiler.Checkpoint($"Visitor.AfterRingCheck({name})");
 
             // Check for FaeLantern influence (world-space detection)
-            if (IsMovementState(state))
+            // Also check when Idle - visitors standing near a lantern should become fascinated
+            if (IsMovementState(state) || state == VisitorState.Idle)
             {
                 bool pausedAtLantern = isFascinated && hasReachedLantern && fascinationTimer > 0;
                 if (!pausedAtLantern)
@@ -900,6 +902,15 @@ namespace FaeMaze.Visitors
         public void SetOriginalSpawnPosition(Vector3 position)
         {
             originalSpawnPosition = position;
+        }
+
+        /// <summary>
+        /// Marks this visitor as a tutorial visitor.
+        /// Tutorial visitors are immune to being frightened, ensuring they walk into power zones.
+        /// </summary>
+        public void SetTutorialVisitor(bool isTutorial)
+        {
+            isTutorialVisitor = isTutorial;
         }
 
         /// <summary>
@@ -1991,6 +2002,10 @@ namespace FaeMaze.Visitors
 
             if (!hasGraphPath && !hasTilePath)
             {
+                Debug.LogWarning($"[Visitor] {name} UpdateWorldSpaceWalking: No valid path! " +
+                    $"graphPath={(graphPath != null ? "valid" : "null")}, " +
+                    $"worldPath={(worldPath != null ? worldPath.Count.ToString() : "null")}, " +
+                    $"worldPathIndex={worldPathIndex}, pos={transform.position}, dest={worldDestination}");
                 state = VisitorState.Idle;
                 return;
             }
@@ -3502,6 +3517,16 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void CheckFaeLanternInfluence()
         {
+            // Debug: Log lantern count if this is a tutorial visitor (helps diagnose registration issues)
+            if (isTutorialVisitor && FaeMaze.Props.FaeLantern.All.Count == 0)
+            {
+                // Only log once per second to avoid spam
+                if (Time.frameCount % 60 == 0)
+                {
+                    Debug.LogWarning($"[{name}] CheckFaeLanternInfluence: FaeLantern.All is EMPTY - lantern not registered!");
+                }
+            }
+
             // Check all active FaeLanterns using world-space distance
             foreach (var lantern in FaeMaze.Props.FaeLantern.All)
             {
@@ -3510,6 +3535,13 @@ namespace FaeMaze.Visitors
 
                 // Check if visitor is within lantern's influence radius (world-space)
                 float distanceToLantern = Vector3.Distance(transform.position, lantern.transform.position);
+
+                // Debug: Log distance for tutorial visitors
+                if (isTutorialVisitor && Time.frameCount % 60 == 0)
+                {
+                    Debug.Log($"[{name}] Distance to lantern {lantern.name}: {distanceToLantern:F2} (influence radius: {lantern.InfluenceRadius})");
+                }
+
                 if (distanceToLantern <= lantern.InfluenceRadius)
                 {
                     EnterFaeInfluence(lantern);
@@ -3841,9 +3873,10 @@ namespace FaeMaze.Visitors
         /// <param name="duration">Duration is ignored - frightened state ends via node recovery or portal escape</param>
         public virtual void SetFrightened(Vector3 sourcePosition, float duration = 0f)
         {
-            // Already frightened, lured by Murmuring Paths, or in terminal state - ignore
+            // Already frightened, lured by Murmuring Paths, tutorial visitor, or in terminal state - ignore
             // Lured visitors are immune to fear - they are entranced by the Heart's call
-            if (isFrightened || isLured || state == VisitorState.Consumed || state == VisitorState.Escaping)
+            // Tutorial visitors are immune so they walk into power demonstration zones
+            if (isFrightened || isLured || isTutorialVisitor || state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
                 return;
             }
@@ -4067,6 +4100,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void OnStateExpired(VisitorState expiredState)
         {
+            Debug.Log($"[Visitor] OnStateExpired: {name} expiring state {expiredState}, pos={transform.position}, dest={worldDestination}");
+
             switch (expiredState)
             {
                 case VisitorState.Fascinated:
@@ -4089,6 +4124,8 @@ namespace FaeMaze.Visitors
             currentStateTimer = 0f;
 
             RefreshStateFromFlags();
+
+            Debug.Log($"[Visitor] OnStateExpired: {name} new state after refresh: {state}, worldPath={(worldPath != null ? worldPath.Count.ToString() : "null")}");
         }
 
         /// <summary>
@@ -4113,7 +4150,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual void BecomeFascinated(Vector3 lanternWorldPosition)
         {
-            if (!IsMovementState(state))
+            // Allow fascination from movement states OR Idle (visitors standing near a lantern)
+            if (!IsMovementState(state) && state != VisitorState.Idle)
             {
                 return;
             }

@@ -8,6 +8,8 @@ using FaeMaze.Cameras;
 using FaeMaze.UI;
 using FaeMaze.Visitors;
 using FaeMaze.Props;
+using FaeMaze.Maze;
+using ForestMaze;
 
 namespace FaeMaze.Tutorial
 {
@@ -211,7 +213,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_murmuring",
                     title: "Power 1: Spooky Fog",
-                    description: "First, move the camera to follow an edge away from the Heart to another node. This positions your focal point along a path.\n\nThen press [1] to activate Spooky Fog.\n\nThis creates a fog along the path from your focal point back to the Heart. Visitors caught in the fog become confused and walk toward the Heart instead of the exit.\n\nCost: 100 Threads (50% of starting)",
+                    description: "Press [1] to activate Spooky Fog.\n\nThis creates a fog along the path from your focal point back to the Heart. Visitors caught in the fog become confused and walk toward the Heart instead of the exit.\n\nThe fog persists until a visitor is consumed or grabbed by the Heart.\n\nCost: 100 Threads (50% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "0", // MurmuringPaths index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -223,7 +225,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_murmuring_effect",
                     title: "Spooky Fog Active",
-                    description: "Watch the fog spread along the path from your focal point to the Heart.\n\nVisitors who walk through the fog become confused and start moving toward the Heart instead of the exit.\n\nThe fog fades after a short time.",
+                    description: "Watch the fog spread along the path from your focal point to the Heart.\n\nVisitors who walk through the fog become confused and start moving toward the Heart instead of the exit.\n\nThe fog persists until a visitor is consumed or grabbed by the Heart.",
                     trigger: TutorialTriggerType.ButtonClick,
                     pause: false,
                     spawn: false // Visitor spawned by HandlePowerMurmuringEffectStep coroutine
@@ -244,7 +246,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_grasp_effect",
                     title: "Yoink! Active",
-                    description: "Watch the tongue emerge from the forest wall!\n\nIt will grab any visitor that comes too close and pull them deeper into the maze. This costs a small amount of threads from the grabbed visitor.\n\nThe tongue retracts after catching a visitor or after a short time.",
+                    description: "Watch the tongue emerge from the forest wall!\n\nIt will grab any visitor that comes too close and pull them deeper into the maze. This costs a small amount of threads from the grabbed visitor.\n\nThe tongue retracts after catching a visitor.",
                     trigger: TutorialTriggerType.ButtonClick,
                     pause: false, // Let action play - camera will track visitor being grabbed
                     spawn: false // Visitor spawned by HandlePowerGraspEffectStep coroutine
@@ -265,7 +267,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_maw_effect",
                     title: "Nom Nom Active",
-                    description: "A monstrous maw has emerged from the ground!\n\nAny visitor who walks into the maw is consumed instantly, granting you half their thread value.\n\nWatch the visitor get devoured...",
+                    description: "A monstrous maw has emerged from the ground!\n\nAny visitor who walks into the maw is consumed instantly, granting you half their thread value.\n\nThe maw stays active until it consumes a visitor.",
                     trigger: TutorialTriggerType.Timer, // No Continue button - auto-advances when visitor is consumed
                     pause: false,
                     spawn: false // Visitor spawned by HandlePowerMawEffectStep coroutine
@@ -456,6 +458,18 @@ namespace FaeMaze.Tutorial
 
             Debug.Log($"[TutorialManager] Now at step: id={step.stepId}, title={step.title}, trigger={step.triggerType}, highlight={step.highlightType}");
 
+            // For all power activation steps, always do cinematic camera move to ensure focal point is in correct position
+            bool isPowerActivationStep = step.stepId == "power_murmuring" ||
+                                         step.stepId == "power_grasp" ||
+                                         step.stepId == "power_maw" ||
+                                         step.stepId == "power_sculpt";
+            if (isPowerActivationStep)
+            {
+                Debug.Log($"[TutorialManager] {step.stepId} step - performing cinematic camera move");
+                StartCoroutine(CinematicCameraTransitionThenShowStep(step));
+                return;
+            }
+
             // Special handling for power effect steps - spawn visitor and track with focal point
             if (step.stepId == "power_murmuring_effect")
             {
@@ -585,6 +599,8 @@ namespace FaeMaze.Tutorial
         {
             // Check if power is already active for PowerActivated trigger steps
             // This prevents tutorial lock if player activated power before being prompted
+            // NOTE: We ALWAYS check this, even after cinematic transitions - if the player
+            // activated the power during the transition, we should still advance
             if (step.triggerType == TutorialTriggerType.PowerActivated && IsPowerAlreadyActiveForCurrentStep())
             {
                 Debug.Log($"[TutorialManager] Power already active for step {step.stepId}, auto-advancing");
@@ -630,11 +646,12 @@ namespace FaeMaze.Tutorial
         }
 
         /// <summary>
-        /// Performs a cinematic camera transition: dims scene, pauses, moves camera smoothly, then advances.
+        /// Performs a cinematic camera transition: dims scene, pauses, moves camera smoothly.
         /// </summary>
-        private IEnumerator CinematicCameraTransition()
+        /// <param name="advanceAfter">If true, advances to next step after transition. If false, just does the camera move.</param>
+        private IEnumerator CinematicCameraTransition(bool advanceAfter = true)
         {
-            Debug.Log("[TutorialManager] CinematicCameraTransition started");
+            Debug.Log($"[TutorialManager] CinematicCameraTransition started (advanceAfter={advanceAfter})");
             isTransitioning = true;
 
             // Step 1: Dim the scene and pause (this will be done via uiController notifying of a special state)
@@ -685,14 +702,17 @@ namespace FaeMaze.Tutorial
             yield return new WaitForSecondsRealtime(0.2f);
             Debug.Log("[TutorialManager] After settle delay");
 
-            // Step 4: Complete transition and advance to next step
+            // Step 4: Complete transition
             isTransitioning = false;
             Debug.Log("[TutorialManager] Hiding transition overlay");
             uiController?.ShowTransitionOverlay(false);
 
-            // Now advance to the next step
-            Debug.Log("[TutorialManager] Calling AdvanceStepInternal from transition");
-            AdvanceStepInternal();
+            // Optionally advance to the next step
+            if (advanceAfter)
+            {
+                Debug.Log("[TutorialManager] Calling AdvanceStepInternal from transition");
+                AdvanceStepInternal();
+            }
             Debug.Log("[TutorialManager] CinematicCameraTransition complete");
         }
 
@@ -705,18 +725,38 @@ namespace FaeMaze.Tutorial
         {
             Debug.Log("[TutorialManager] HandlePowerGraspEffectStep started");
 
+            // CRITICAL: Always unpause first if needed - the game must be running
+            // This step has pause: false, so ensure the game is unpaused
+            bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
+            Debug.Log($"[TutorialManager] HandlePowerGraspEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
+            if (!shouldPause && isPaused)
+            {
+                Debug.Log("[TutorialManager] Unpausing game for power_grasp_effect step");
+                PauseGame(false);
+            }
+
+            // Check if the power is still active - if not, skip this step
+            var heartPowerManager = HeartPowerManager.Instance;
+            if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.HeartwardGrasp))
+            {
+                Debug.Log("[TutorialManager] HeartwardGrasp power not active, skipping effect step");
+                AdvanceStep();
+                yield break;
+            }
+
             // Get the active HeartwardGraspEffect
             var graspEffect = HeartwardGraspEffect.ActiveInstance;
             if (graspEffect == null)
             {
-                Debug.LogWarning("[TutorialManager] No active HeartwardGraspEffect for power_grasp_effect step, falling back to normal display");
-                ShowStepImmediate(step);
+                Debug.LogWarning("[TutorialManager] No active HeartwardGraspEffect for power_grasp_effect step, skipping");
+                AdvanceStep();
                 yield break;
             }
 
-            // Get the grabbing zone position
-            Vector3 hgzPos = graspEffect.GrabbingZonePosition;
-            Debug.Log($"[TutorialManager] HGZ position: {hgzPos}");
+            // Get the path-side grabbing position (where visitor should walk near)
+            // This is the point on the walkable path, not the forest wall position
+            Vector3 hgzPos = graspEffect.GrabbingPathPosition;
+            Debug.Log($"[TutorialManager] HGZ path position: {hgzPos}");
 
             // Get heart position for calculating spawn direction
             var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
@@ -786,16 +826,7 @@ namespace FaeMaze.Tutorial
             // Show the step UI (game not paused - action continues)
             Debug.Log("[TutorialManager] Showing power_grasp_effect step UI");
 
-            // Handle pause state based on step settings
-            bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
-            if (shouldPause && !isPaused)
-            {
-                PauseGame(true);
-            }
-            else if (!shouldPause && isPaused)
-            {
-                PauseGame(false);
-            }
+            // Pause state already handled at start of method - no need to check again
 
             // Update tracking for triggers
             if (GameController.Instance != null)
@@ -813,6 +844,10 @@ namespace FaeMaze.Tutorial
             OnStepChanged?.Invoke(currentStepIndex);
 
             // Track visitor by directly updating focal point position until grabbed
+            // Timeout prevents tutorial from freezing if visitor doesn't get grabbed/consumed
+            float trackingTimeout = 20f; // Max seconds to wait
+            float trackingStartTime = Time.realtimeSinceStartup;
+
             if (targetVisitor != null && cameraController != null)
             {
                 Debug.Log($"[TutorialManager] Starting direct focal point tracking of visitor {targetVisitor.name}");
@@ -820,6 +855,11 @@ namespace FaeMaze.Tutorial
                 // Phase 1: Track until visitor is grabbed
                 while (targetVisitor != null && targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
                 {
+                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
+                    {
+                        Debug.Log("[TutorialManager] HGZ tracking timeout (phase 1) - visitor did not get grabbed in time");
+                        break;
+                    }
                     Vector3 visitorPos = targetVisitor.transform.position;
                     visitorPos.z = 0f;
                     cameraController.FocusOnPosition(visitorPos, instant: true);
@@ -829,7 +869,7 @@ namespace FaeMaze.Tutorial
                 Debug.Log("[TutorialManager] Visitor grabbed, transitioning camera to pushing HGZ");
 
                 // Phase 2: Move camera to pushing HGZ and rotate to look along heart->pushing axis
-                if (targetVisitor != null && graspEffect != null)
+                if (targetVisitor != null && graspEffect != null && targetVisitor.State == VisitorControllerBase.VisitorState.Grabbed)
                 {
                     Vector3 pushingPos = graspEffect.PushingZonePosition;
                     pushingPos.z = 0f;
@@ -851,18 +891,29 @@ namespace FaeMaze.Tutorial
 
                     Debug.Log("[TutorialManager] Camera at pushing HGZ, waiting for visitor to emerge");
 
-                    // Phase 3: Wait for visitor to become visible (back on ground)
-                    // The visitor is hidden underground during transport, then becomes visible when tongue emerges
+                    // Phase 3: Wait for visitor to become visible (back on ground) with timeout
+                    float phase3StartTime = Time.realtimeSinceStartup;
                     while (targetVisitor != null && !IsVisitorVisible(targetVisitor))
                     {
+                        if (Time.realtimeSinceStartup - phase3StartTime > 10f)
+                        {
+                            Debug.Log("[TutorialManager] HGZ tracking timeout (phase 3) - visitor did not become visible");
+                            break;
+                        }
                         yield return null;
                     }
 
                     Debug.Log("[TutorialManager] Visitor visible, resuming tracking until consumed");
 
-                    // Phase 4: Track visitor until consumed
+                    // Phase 4: Track visitor until consumed with timeout
+                    float phase4StartTime = Time.realtimeSinceStartup;
                     while (targetVisitor != null && targetVisitor.State != VisitorControllerBase.VisitorState.Consumed)
                     {
+                        if (Time.realtimeSinceStartup - phase4StartTime > 15f)
+                        {
+                            Debug.Log("[TutorialManager] HGZ tracking timeout (phase 4) - visitor did not get consumed");
+                            break;
+                        }
                         Vector3 visitorPos = targetVisitor.transform.position;
                         visitorPos.z = 0f;
                         cameraController.FocusOnPosition(visitorPos, instant: true);
@@ -878,6 +929,7 @@ namespace FaeMaze.Tutorial
             }
 
             Debug.Log("[TutorialManager] HandlePowerGraspEffectStep complete");
+            AdvanceStep();
         }
 
         /// <summary>
@@ -904,12 +956,31 @@ namespace FaeMaze.Tutorial
         {
             Debug.Log("[TutorialManager] HandlePowerMurmuringEffectStep started");
 
+            // CRITICAL: Always unpause first if needed - the game must be running
+            // This step has pause: false, so ensure the game is unpaused
+            bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
+            Debug.Log($"[TutorialManager] HandlePowerMurmuringEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
+            if (!shouldPause && isPaused)
+            {
+                Debug.Log("[TutorialManager] Unpausing game for power_murmuring_effect step");
+                PauseGame(false);
+            }
+
+            // Check if the power is still active - if not, skip this step
+            var heartPowerManager = HeartPowerManager.Instance;
+            if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.MurmuringPaths))
+            {
+                Debug.Log("[TutorialManager] MurmuringPaths power not active, skipping effect step");
+                AdvanceStep();
+                yield break;
+            }
+
             var cameraController = FindFirstObjectByType<CameraController3D>();
 
-            // Spawn visitor using normal tutorial spawner
+            // Spawn visitor that paths toward heart (for Murmuring Paths demonstration)
             if (visitorSpawner != null)
             {
-                visitorSpawner.SpawnTutorialVisitor();
+                visitorSpawner.SpawnTutorialVisitorTowardHeart();
             }
 
             // Wait for spawn to complete
@@ -939,6 +1010,11 @@ namespace FaeMaze.Tutorial
 
             // Track visitor until they are consumed or grabbed (terminal states)
             // We want to watch them walk through the fog and toward the heart
+            // Timeout prevents tutorial from freezing if visitor doesn't get consumed
+            float trackingTimeout = 30f; // Max seconds to wait (increased for longer paths)
+            float trackingStartTime = Time.realtimeSinceStartup;
+            bool visitorWasConsumed = false;
+
             if (targetVisitor != null && cameraController != null)
             {
                 Debug.Log($"[TutorialManager] Starting focal point tracking of visitor {targetVisitor.name} for Murmuring Paths, state={targetVisitor.State}");
@@ -947,20 +1023,44 @@ namespace FaeMaze.Tutorial
                        targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
                 {
+                    // Check for timeout
+                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
+                    {
+                        Debug.Log("[TutorialManager] Murmuring Paths tracking timeout - visitor did not get consumed in time");
+                        break;
+                    }
+
                     Vector3 visitorPos = targetVisitor.transform.position;
                     visitorPos.z = 0f;
                     cameraController.FocusOnPosition(visitorPos, instant: true);
                     yield return null;
                 }
 
-                Debug.Log("[TutorialManager] Visitor tracking ended for Murmuring Paths");
+                // Check if visitor was actually consumed
+                visitorWasConsumed = targetVisitor == null ||
+                                     targetVisitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                                     targetVisitor.State == VisitorControllerBase.VisitorState.Grabbed;
+
+                Debug.Log($"[TutorialManager] Visitor tracking ended for Murmuring Paths, consumed={visitorWasConsumed}");
+
+                // If visitor wasn't consumed (timeout), destroy them to prevent issues with subsequent powers
+                if (!visitorWasConsumed && targetVisitor != null)
+                {
+                    Debug.Log("[TutorialManager] Destroying unconsumed visitor to prevent subsequent power issues");
+                    UnityEngine.Object.Destroy(targetVisitor.gameObject);
+                    yield return new WaitForSecondsRealtime(0.5f);
+                }
             }
             else
             {
                 Debug.LogWarning("[TutorialManager] Could not find spawned visitor to track for Murmuring Paths");
             }
 
+            // Wait for heart consumption animation to complete
+            yield return new WaitForSecondsRealtime(1.5f);
+
             Debug.Log("[TutorialManager] HandlePowerMurmuringEffectStep complete");
+            AdvanceStep();
         }
 
         /// <summary>
@@ -971,12 +1071,31 @@ namespace FaeMaze.Tutorial
         {
             Debug.Log("[TutorialManager] HandlePowerMawEffectStep started");
 
+            // CRITICAL: Always unpause first if needed - the game must be running
+            // This step has pause: false, so ensure the game is unpaused
+            bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
+            Debug.Log($"[TutorialManager] HandlePowerMawEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
+            if (!shouldPause && isPaused)
+            {
+                Debug.Log("[TutorialManager] Unpausing game for power_maw_effect step");
+                PauseGame(false);
+            }
+
+            // Check if the power is still active - if not, skip this step
+            var heartPowerManager = HeartPowerManager.Instance;
+            if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.DevouringMaw))
+            {
+                Debug.Log("[TutorialManager] DevouringMaw power not active, skipping effect step");
+                AdvanceStep();
+                yield break;
+            }
+
             var cameraController = FindFirstObjectByType<CameraController3D>();
 
-            // Spawn visitor using normal tutorial spawner
+            // Spawn visitor that walks THROUGH the active Devouring Maw
             if (visitorSpawner != null)
             {
-                visitorSpawner.SpawnTutorialVisitor();
+                visitorSpawner.SpawnVisitorThroughMaw();
             }
 
             // Wait for spawn to complete
@@ -1004,7 +1123,11 @@ namespace FaeMaze.Tutorial
             // Show the step UI
             ShowStepImmediate(step);
 
-            // Track visitor until they are Consumed by the maw or destroyed
+            // Track visitor until they are Consumed by the maw, destroyed, or timeout
+            // Timeout prevents tutorial from freezing if visitor doesn't reach the maw
+            float trackingTimeout = 15f; // Max seconds to wait for consumption
+            float trackingStartTime = Time.realtimeSinceStartup;
+
             if (targetVisitor != null && cameraController != null)
             {
                 Debug.Log($"[TutorialManager] Starting focal point tracking of visitor {targetVisitor.name} for Devouring Maw, state={targetVisitor.State}");
@@ -1013,6 +1136,13 @@ namespace FaeMaze.Tutorial
                        targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
                 {
+                    // Check for timeout
+                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
+                    {
+                        Debug.Log("[TutorialManager] Maw tracking timeout - visitor did not reach maw in time");
+                        break;
+                    }
+
                     Vector3 visitorPos = targetVisitor.transform.position;
                     visitorPos.z = 0f;
                     cameraController.FocusOnPosition(visitorPos, instant: true);
@@ -1111,6 +1241,25 @@ namespace FaeMaze.Tutorial
         {
             Debug.Log("[TutorialManager] HandlePowerSculptEffectStep started");
 
+            // CRITICAL: Always unpause first if needed - the game must be running
+            // This step has pause: false, so ensure the game is unpaused
+            bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
+            Debug.Log($"[TutorialManager] HandlePowerSculptEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
+            if (!shouldPause && isPaused)
+            {
+                Debug.Log("[TutorialManager] Unpausing game for power_sculpt_effect step");
+                PauseGame(false);
+            }
+
+            // Check if the sculpt power is still active - if not, skip this step
+            var heartPowerManager = HeartPowerManager.Instance;
+            if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.Sculpting))
+            {
+                Debug.Log("[TutorialManager] Sculpting power not active, skipping effect step");
+                AdvanceStep();
+                yield break;
+            }
+
             // Show the step UI immediately
             ShowStepImmediate(step);
 
@@ -1170,14 +1319,35 @@ namespace FaeMaze.Tutorial
         {
             Debug.Log("[TutorialManager] HandleLanternDemoStep started");
 
+            // CRITICAL: Always unpause first if needed - the game must be running
+            // This step has pause: false, so ensure the game is unpaused
+            bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
+            Debug.Log($"[TutorialManager] HandleLanternDemoStep: shouldPause={shouldPause}, isPaused={isPaused}");
+            if (!shouldPause && isPaused)
+            {
+                Debug.Log("[TutorialManager] Unpausing game for lantern_demo step");
+                PauseGame(false);
+            }
+
             // Find the lantern we just placed
             var lanterns = FindObjectsByType<FaeLantern>(FindObjectsSortMode.None);
+            Debug.Log($"[TutorialManager] Found {lanterns.Length} FaeLantern components");
+
+            // Also check for LanternGlow components (debug)
+            var lanternGlows = FindObjectsByType<LanternGlow>(FindObjectsSortMode.None);
+            Debug.Log($"[TutorialManager] Found {lanternGlows.Length} LanternGlow components for comparison");
+
             FaeLantern targetLantern = null;
 
             if (lanterns.Length > 0)
             {
                 targetLantern = lanterns[0]; // Use the first lantern found
                 Debug.Log($"[TutorialManager] Found lantern at {targetLantern.transform.position}");
+            }
+            else
+            {
+                Debug.LogWarning("[TutorialManager] No FaeLantern components found! Checking static registry...");
+                Debug.Log($"[TutorialManager] FaeLantern.All contains {FaeLantern.All.Count} lanterns");
             }
 
             // Show the step UI
@@ -1195,18 +1365,88 @@ namespace FaeMaze.Tutorial
             // Spawn visitor near the lantern (on the same node)
             if (visitorSpawner != null && targetLantern != null)
             {
-                // Calculate spawn position: on the edge of the node, pointing toward lantern
+                // Calculate spawn position: on the edge of the node, opposite side from heart
+                // Visitor will walk THROUGH the lantern toward the heart, getting fascinated along the way
                 Vector3 lanternPos = targetLantern.transform.position;
-                Vector3 spawnOffset = new Vector3(3f, 0f, 0f); // NODE_RADIUS away
-                Vector3 spawnPos = lanternPos + spawnOffset;
-                spawnPos.z = 0f;
+                var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
 
-                // Destination is the lantern position (visitor will be drawn to it)
-                Vector3 destPos = lanternPos;
+                // Get heart position with multiple fallbacks
+                Vector3 heartPos = Vector3.zero;
+
+                // First try: GameController.Instance.Heart (most reliable)
+                if (GameController.Instance != null && GameController.Instance.Heart != null)
+                {
+                    heartPos = GameController.Instance.Heart.transform.position;
+                    heartPos.z = 0f;
+                    Debug.Log($"[TutorialManager] Got heart position from GameController.Heart: {heartPos}");
+                }
+                // Second try: MazeGridBehaviour.HeartWorldPosition
+                else if (mazeGrid != null && mazeGrid.HeartWorldPosition.sqrMagnitude > 0.01f)
+                {
+                    heartPos = mazeGrid.HeartWorldPosition;
+                    Debug.Log($"[TutorialManager] Got heart position from MazeGridBehaviour: {heartPos}");
+                }
+                // Third try: ForestMapState node 0
+                else if (mazeGrid != null && mazeGrid.ForestMapState != null && mazeGrid.ForestMapState.Nodes.Count > 0)
+                {
+                    var seedNode = mazeGrid.ForestMapState.Nodes[0];
+                    heartPos = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
+                    Debug.Log($"[TutorialManager] Got heart position from ForestMapState: {heartPos}");
+                }
+                else
+                {
+                    Debug.LogWarning("[TutorialManager] Could not get heart position! Visitor may not path correctly.");
+                }
+
+                // Direction from lantern to heart
+                Vector3 dirToHeart = (heartPos - lanternPos).normalized;
+                if (dirToHeart.sqrMagnitude < 0.01f)
+                {
+                    dirToHeart = new Vector3(1f, 0f, 0f); // Fallback direction
+                    Debug.LogWarning("[TutorialManager] Using fallback direction for visitor spawn");
+                }
+
+                // Calculate ideal spawn position: opposite side of lantern from heart
+                Vector3 idealSpawnPos = lanternPos - dirToHeart * 5f;
+                idealSpawnPos.z = 0f;
+
+                // CRITICAL: Find the nearest walkable tile to the ideal spawn position
+                // The calculated position might be off the path (in the forest)
+                var mazeData = mazeGrid?.WorldSpaceMazeData;
+                Vector3 spawnPos;
+                if (mazeData != null)
+                {
+                    var nearestWalkableTile = MazePathfinding.FindNearestWalkableTile(
+                        mazeData, new Vector2(idealSpawnPos.x, idealSpawnPos.y));
+
+                    if (nearestWalkableTile != null)
+                    {
+                        spawnPos = new Vector3(nearestWalkableTile.Position.x, nearestWalkableTile.Position.y, 0f);
+                        Debug.Log($"[TutorialManager] Found walkable tile at {spawnPos} (ideal was {idealSpawnPos})");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[TutorialManager] No walkable tile found near ideal spawn, using lantern position");
+                        spawnPos = lanternPos - dirToHeart * 2f;
+                        spawnPos.z = 0f;
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("[TutorialManager] No maze data available, using ideal spawn position");
+                    spawnPos = idealSpawnPos;
+                }
+
+                // Destination is the heart (visitor walks toward heart, through lantern area)
+                Vector3 destPos = heartPos;
                 destPos.z = 0f;
 
-                Debug.Log($"[TutorialManager] Spawning visitor at {spawnPos} to walk toward lantern");
-                visitorSpawner.SpawnVisitorForHGZ(spawnPos, destPos); // Reuse HGZ spawner method
+                Debug.Log($"[TutorialManager] Spawning visitor at {spawnPos} to walk through lantern at {lanternPos} toward {destPos}");
+                visitorSpawner.SpawnVisitorForHGZ(spawnPos, destPos);
+            }
+            else
+            {
+                Debug.LogWarning($"[TutorialManager] Cannot spawn lantern demo visitor: visitorSpawner={visitorSpawner != null}, targetLantern={targetLantern != null}");
             }
 
             // Wait for spawn to complete
@@ -1234,10 +1474,34 @@ namespace FaeMaze.Tutorial
             if (targetVisitor != null && cameraController != null)
             {
                 Debug.Log($"[TutorialManager] Tracking visitor {targetVisitor.name} until fascinated");
+                Debug.Log($"[TutorialManager] FaeLantern.All count: {FaeMaze.Props.FaeLantern.All.Count}");
+                foreach (var l in FaeMaze.Props.FaeLantern.All)
+                {
+                    Debug.Log($"[TutorialManager] FaeLantern in registry: {l.name} at {l.transform.position}, influence radius: {l.InfluenceRadius}");
+                }
 
-                // Track visitor position with camera
+                // Track visitor position with camera (with timeout to prevent infinite loop)
+                float trackingTimeout = 20f; // 20 second timeout
+                float trackingStartTime = Time.realtimeSinceStartup;
+                float lastDebugTime = 0f;
+
                 while (targetVisitor != null)
                 {
+                    // Check timeout
+                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
+                    {
+                        Debug.LogWarning("[TutorialManager] Lantern fascination tracking timed out after 20s");
+                        break;
+                    }
+
+                    // Periodic debug logging (every 2 seconds)
+                    if (Time.realtimeSinceStartup - lastDebugTime > 2f)
+                    {
+                        lastDebugTime = Time.realtimeSinceStartup;
+                        float distToLantern = targetLantern != null ? Vector3.Distance(targetVisitor.transform.position, targetLantern.transform.position) : -1f;
+                        Debug.Log($"[TutorialManager] Visitor at {targetVisitor.transform.position}, state={targetVisitor.State}, dist to lantern={distToLantern:F2}, fascinated={targetVisitor.CurrentFaeLantern != null}");
+                    }
+
                     // Check if visitor is fascinated by a lantern
                     if (targetVisitor.CurrentFaeLantern != null)
                     {
@@ -1368,6 +1632,28 @@ namespace FaeMaze.Tutorial
         }
 
         /// <summary>
+        /// Performs cinematic camera transition then shows the step.
+        /// Used to ensure camera is in correct position before showing power steps.
+        /// </summary>
+        private IEnumerator CinematicCameraTransitionThenShowStep(TutorialStep step)
+        {
+            // Perform the cinematic camera transition WITHOUT auto-advancing
+            yield return CinematicCameraTransition(advanceAfter: false);
+
+            // Now show the step normally (will go through power button brightness sync)
+            int powerButtonIndex = GetPowerButtonIndex(step);
+            if (powerButtonIndex >= 0)
+            {
+                Debug.Log($"[TutorialManager] After camera transition, showing step with PowerButton_{powerButtonIndex} highlight");
+                StartCoroutine(WaitForPeakBrightnessThenShowStep(step, powerButtonIndex));
+            }
+            else
+            {
+                ShowStepImmediate(step);
+            }
+        }
+
+        /// <summary>
         /// Skips the tutorial entirely.
         /// Also disables tutorial auto-start for future runs.
         /// </summary>
@@ -1403,11 +1689,84 @@ namespace FaeMaze.Tutorial
                 PauseGame(false);
             }
 
+            // Assign valid exit destinations to any remaining visitors
+            AssignExitDestinationsToRemainingVisitors();
+
             // Mark as completed
             GameSettings.TutorialCompleted = true;
             GameSettings.Save();
 
             OnTutorialCompleted?.Invoke();
+        }
+
+        /// <summary>
+        /// Assigns valid exit portal destinations to all remaining visitors and recalculates their paths.
+        /// Called at the end of the tutorial to ensure visitors have proper navigation targets.
+        /// </summary>
+        private void AssignExitDestinationsToRemainingVisitors()
+        {
+            var dynamicMaze = FindFirstObjectByType<DynamicMazeGrowth>();
+            if (dynamicMaze == null)
+            {
+                Debug.LogWarning("[TutorialManager] Cannot assign exit destinations - DynamicMazeGrowth not found");
+                return;
+            }
+
+            var portalPositions = dynamicMaze.GetPortalPositions();
+            if (portalPositions == null || portalPositions.Count == 0)
+            {
+                Debug.LogWarning("[TutorialManager] Cannot assign exit destinations - no portal positions found");
+                return;
+            }
+
+            var visitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            int assignedCount = 0;
+
+            foreach (var visitor in visitors)
+            {
+                if (visitor == null) continue;
+
+                // Skip visitors in terminal states
+                var state = visitor.State;
+                if (state == VisitorControllerBase.VisitorState.Consumed ||
+                    state == VisitorControllerBase.VisitorState.Grabbed ||
+                    state == VisitorControllerBase.VisitorState.Escaping)
+                {
+                    continue;
+                }
+
+                // Find the closest exit portal to this visitor
+                Vector3 visitorPos = visitor.transform.position;
+                Vector3 bestExit = portalPositions[0];
+                float bestDist = float.MaxValue;
+
+                foreach (var portal in portalPositions)
+                {
+                    float dist = Vector3.Distance(visitorPos, portal);
+                    if (dist < bestDist)
+                    {
+                        bestDist = dist;
+                        bestExit = portal;
+                    }
+                }
+
+                // End any fascination state first (lantern or ring)
+                if (state == VisitorControllerBase.VisitorState.Fascinated)
+                {
+                    visitor.EndLanternFascination();
+                    visitor.EndRingFascination();
+                }
+
+                // Set the exit as the visitor's destination and recalculate path
+                visitor.SetWorldDestination(bestExit);
+                visitor.Resume(); // Ensure visitor is not stuck in Idle state
+                visitor.RecalculatePath();
+                assignedCount++;
+
+                Debug.Log($"[TutorialManager] Assigned exit destination to {visitor.name} at ({bestExit.x:F1}, {bestExit.y:F1})");
+            }
+
+            Debug.Log($"[TutorialManager] Assigned exit destinations to {assignedCount} remaining visitors");
         }
 
         /// <summary>

@@ -5,13 +5,16 @@ using FaeMaze.Systems;
 using FaeMaze.Visitors;
 using FaeMaze.Maze;
 using FaeMaze.Cameras;
+using FaeMaze.HeartPowers;
+using ForestMaze;
 
 namespace FaeMaze.Tutorial
 {
     /// <summary>
     /// Handles controlled visitor spawning during the tutorial.
     /// Spawns visitors at specific tutorial steps for guaranteed player interaction.
-    /// Visitors spawn at the edge of the focused node and path to a random exit.
+    /// Visitors spawn at the edge of the focused node and path toward the heart or a random exit.
+    /// All random choices use RandomManager for deterministic behavior.
     /// </summary>
     public class TutorialVisitorSpawner : MonoBehaviour
     {
@@ -98,20 +101,114 @@ namespace FaeMaze.Tutorial
         #region Public Methods
 
         /// <summary>
-        /// Spawns a tutorial visitor at the maze entrance.
+        /// Spawns a tutorial visitor at the maze entrance, pathing toward a random exit.
         /// </summary>
         public void SpawnTutorialVisitor()
         {
-            StartCoroutine(SpawnVisitorCoroutine());
+            StartCoroutine(SpawnVisitorCoroutine(pathTowardHeart: false));
+        }
+
+        /// <summary>
+        /// Spawns a tutorial visitor that paths toward the heart/seed node.
+        /// Use this for power demonstrations where the visitor needs to reach the heart.
+        /// </summary>
+        public void SpawnTutorialVisitorTowardHeart()
+        {
+            StartCoroutine(SpawnVisitorCoroutine(pathTowardHeart: true));
+        }
+
+        /// <summary>
+        /// Spawns a tutorial visitor that will walk through the active Devouring Maw.
+        /// Visitor spawns 5 units from the Maw (away from heart) and paths 5 units past it (toward heart).
+        /// </summary>
+        public void SpawnVisitorThroughMaw()
+        {
+            StartCoroutine(SpawnVisitorThroughMawCoroutine());
+        }
+
+        private IEnumerator SpawnVisitorThroughMawCoroutine()
+        {
+            Debug.Log("[TutorialVisitorSpawner] SpawnVisitorThroughMawCoroutine started");
+
+            // Get the active Maw position
+            var heartPowerManager = HeartPowerManager.Instance;
+            if (heartPowerManager == null)
+            {
+                Debug.LogError("[TutorialVisitorSpawner] HeartPowerManager not found!");
+                yield break;
+            }
+
+            var mawPositions = heartPowerManager.GetActiveDevouringMawPositions();
+            if (mawPositions == null || mawPositions.Count == 0)
+            {
+                Debug.LogError("[TutorialVisitorSpawner] No active Devouring Maw found!");
+                // Fallback to normal spawn toward heart
+                SpawnTutorialVisitorTowardHeart();
+                yield break;
+            }
+
+            Vector3 mawPos = mawPositions[0];
+            mawPos.z = 0f;
+            Debug.Log($"[TutorialVisitorSpawner] Maw position: {mawPos}");
+
+            // Get heart position to determine direction
+            Vector3 heartPos = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
+            Vector3 dirToHeart = (heartPos - mawPos).normalized;
+
+            // If direction is zero (Maw is at heart), use a default direction
+            if (dirToHeart.sqrMagnitude < 0.01f)
+            {
+                dirToHeart = Vector3.down; // Default direction in XY plane
+            }
+
+            // Calculate ideal spawn position: 5 units from Maw (away from heart)
+            Vector3 idealSpawnPos = mawPos - dirToHeart * 5f;
+            idealSpawnPos.z = 0f;
+
+            // CRITICAL: Find the nearest walkable tile to the ideal spawn position
+            // The calculated position might be off the path (in the forest)
+            var mazeData = mazeGrid?.WorldSpaceMazeData;
+            if (mazeData == null)
+            {
+                Debug.LogError("[TutorialVisitorSpawner] No maze data available!");
+                yield break;
+            }
+
+            var nearestWalkableTile = MazePathfinding.FindNearestWalkableTile(
+                mazeData, new Vector2(idealSpawnPos.x, idealSpawnPos.y));
+
+            Vector3 spawnPos;
+            if (nearestWalkableTile != null)
+            {
+                spawnPos = new Vector3(nearestWalkableTile.Position.x, nearestWalkableTile.Position.y, 0f);
+                Debug.Log($"[TutorialVisitorSpawner] Found walkable tile at {spawnPos} (ideal was {idealSpawnPos})");
+            }
+            else
+            {
+                Debug.LogWarning("[TutorialVisitorSpawner] No walkable tile found near ideal spawn, using Maw position");
+                // Fallback: use a position closer to the Maw which should be on a path
+                spawnPos = mawPos - dirToHeart * 2f;
+                spawnPos.z = 0f;
+            }
+
+            // Destination is the heart (visitor walks through Maw toward heart)
+            // Using heart as destination ensures the visitor has a valid path through the Maw
+            Vector3 destPos = heartPos;
+            destPos.z = 0f;
+
+            Debug.Log($"[TutorialVisitorSpawner] Maw spawn: {spawnPos} -> {destPos} (through maw at {mawPos})");
+
+            // Use existing spawn method
+            SpawnVisitorForHGZ(spawnPos, destPos);
         }
 
         #endregion
 
         #region Visitor Spawning
 
-        private IEnumerator SpawnVisitorCoroutine()
+        private IEnumerator SpawnVisitorCoroutine(bool pathTowardHeart = false)
         {
-            Debug.Log("[TutorialVisitorSpawner] SpawnVisitorCoroutine started");
+            Debug.Log($"[TutorialVisitorSpawner] SpawnVisitorCoroutine started, pathTowardHeart={pathTowardHeart}");
 
             // Small delay for visual effect
             yield return new WaitForSecondsRealtime(0.5f);
@@ -120,9 +217,20 @@ namespace FaeMaze.Tutorial
             Vector3 spawnPosition = GetSpawnPositionAtFocusedNode();
             Debug.Log($"[TutorialVisitorSpawner] Spawn position determined: {spawnPosition}");
 
-            // Get a random exit as destination
-            Vector3 destinationPosition = GetRandomExitPosition(spawnPosition);
-            Debug.Log($"[TutorialVisitorSpawner] Destination (random exit): {destinationPosition}");
+            // Get destination - heart position or random exit based on parameter
+            Vector3 destinationPosition;
+            if (pathTowardHeart)
+            {
+                // Path toward heart/seed node for power demonstrations
+                destinationPosition = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
+                Debug.Log($"[TutorialVisitorSpawner] Destination (heart): {destinationPosition}");
+            }
+            else
+            {
+                // Get a random exit as destination
+                destinationPosition = GetRandomExitPosition(spawnPosition);
+                Debug.Log($"[TutorialVisitorSpawner] Destination (random exit): {destinationPosition}");
+            }
 
             // Get visitor prefab from wave spawner or load it
             GameObject visitorPrefab = GetVisitorPrefab();
@@ -145,6 +253,9 @@ namespace FaeMaze.Tutorial
                 Debug.Log($"[TutorialVisitorSpawner] Initializing visitor controller: {controller.GetType().Name}");
                 // Initialize with GameController (visitor will find maze data internally)
                 controller.Initialize();
+
+                // Mark as tutorial visitor - immune to being frightened
+                controller.SetTutorialVisitor(true);
 
                 // Set original spawn position to prevent retargeting back to where they spawned
                 controller.SetOriginalSpawnPosition(spawnPosition);
@@ -228,8 +339,8 @@ namespace FaeMaze.Tutorial
             Vector2 dirToExit = (exitPos2D - closestNodeCenter).normalized;
             if (dirToExit == Vector2.zero)
             {
-                // Fallback: random direction
-                float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                // Fallback: deterministic random direction using seeded RandomManager
+                float angle = RandomManager.Range(0f, 360f) * Mathf.Deg2Rad;
                 dirToExit = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             }
 
@@ -272,14 +383,14 @@ namespace FaeMaze.Tutorial
 
                     if (validPortals.Count > 0)
                     {
-                        // Pick a random valid portal
-                        int randomIndex = Random.Range(0, validPortals.Count);
+                        // Pick a deterministic random valid portal using seeded RandomManager
+                        int randomIndex = RandomManager.Range(0, validPortals.Count);
                         return validPortals[randomIndex];
                     }
                     else if (portalPositions.Count > 0)
                     {
-                        // All portals were too close, just pick any
-                        int randomIndex = Random.Range(0, portalPositions.Count);
+                        // All portals were too close, just pick any (deterministic)
+                        int randomIndex = RandomManager.Range(0, portalPositions.Count);
                         return portalPositions[randomIndex];
                     }
                 }
@@ -320,6 +431,10 @@ namespace FaeMaze.Tutorial
             if (controller != null)
             {
                 controller.Initialize();
+
+                // Mark as tutorial visitor - immune to being frightened
+                controller.SetTutorialVisitor(true);
+
                 controller.SetOriginalSpawnPosition(spawnPosition);
                 controller.SetWorldDestination(destinationPosition);
                 Debug.Log($"[TutorialVisitorSpawner] HGZ visitor initialized. State={controller.State}, Destination={destinationPosition}");
