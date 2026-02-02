@@ -1478,14 +1478,28 @@ To build for macOS from Windows, install the Mac Build Support module via Unity 
 
 2. **Visitors stuck after tutorial completion**: Tutorial demo visitors had no valid exit destinations after the tutorial ended, leaving them wandering aimlessly.
 
+3. **Power activation timing issues**: If player activated a power button before the tutorial modal appeared, the game would get stuck paused.
+
+4. **Lantern demo visitor pathing**: Visitors spawned for lantern demo were walking away from the lantern instead of through it.
+
+5. **Maw demo visitor spawning**: Visitors needed to spawn on walkable tiles and path through the Devouring Maw.
+
 **Changes Made:**
 
 | File | Change |
 |------|--------|
 | `VisitorControllerBase.cs` | `CheckFaeLanternInfluence()` now runs for `Idle` state (line ~491) |
 | `VisitorControllerBase.cs` | `BecomeFascinated()` now accepts `Idle` visitors (line ~4153) |
+| `VisitorControllerBase.cs` | Added `isTutorialVisitor` flag and `SetTutorialVisitor()` method |
+| `VisitorControllerBase.cs` | `SetFrightened()` ignores tutorial visitors |
 | `TutorialManager.cs` | Added `AssignExitDestinationsToRemainingVisitors()` method |
 | `TutorialManager.cs` | Called in `CompleteTutorial()` before marking tutorial complete |
+| `TutorialManager.cs` | Added `CinematicCameraTransitionThenShowStep()` for power activation steps |
+| `TutorialManager.cs` | All power effect handlers now check `IsPowerActive()` and skip if power expired |
+| `TutorialManager.cs` | `HandleLanternDemoStep()` spawns visitor opposite heart, walking through lantern |
+| `TutorialVisitorSpawner.cs` | Added `SpawnTutorialVisitorTowardHeart()` for power demos |
+| `TutorialVisitorSpawner.cs` | Added `SpawnVisitorThroughMaw()` with walkable tile detection |
+| `TutorialVisitorSpawner.cs` | Uses `MazePathfinding.FindNearestWalkableTile()` for spawn positions |
 
 **AssignExitDestinationsToRemainingVisitors() behavior:**
 - Gets portal positions from `DynamicMazeGrowth.GetPortalPositions()`
@@ -1498,6 +1512,16 @@ To build for macOS from Windows, install the Mac Build Support module via Unity 
 - Tutorial visitors have `isTutorialVisitor = true` flag
 - Immune to `SetFrightened()` so they walk into power demonstration zones
 - Added debug logging for lantern distance checks on tutorial visitors
+
+**Power activation step fixes:**
+- All power activation steps (`power_murmuring`, `power_grasp`, `power_maw`, `power_sculpt`) now do cinematic camera transition first
+- Power effect handlers (`HandlePowerMurmuringEffectStep`, `HandlePowerMawEffectStep`, `HandlePowerGraspEffectStep`, `HandlePowerSculptEffectStep`) check `IsPowerActive()` at start
+- If power is no longer active (expired), handler skips immediately via `AdvanceStep()`
+- Handlers always unpause first if needed before checking power state
+
+**Tutorial step text updates:**
+- Removed mention of camera movement before power activation (camera moves automatically)
+- Updated power duration descriptions (fog persists until visitor consumed, maw until consumed, etc.)
 
 ---
 
