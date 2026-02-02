@@ -1468,6 +1468,39 @@ To build for macOS from Windows, install the Mac Build Support module via Unity 
 
 ## Session Notes (February 2026)
 
+### Tutorial Fixes - Lantern Fascination and Exit Destinations (Session Feb 2, 2026)
+
+**Status**: Fully implemented and working.
+
+**Issues Fixed:**
+
+1. **Idle visitors not becoming fascinated by lanterns**: Visitors who reached their destination and became `Idle` near a lantern would not trigger fascination because `CheckFaeLanternInfluence()` only ran for "movement states".
+
+2. **Visitors stuck after tutorial completion**: Tutorial demo visitors had no valid exit destinations after the tutorial ended, leaving them wandering aimlessly.
+
+**Changes Made:**
+
+| File | Change |
+|------|--------|
+| `VisitorControllerBase.cs` | `CheckFaeLanternInfluence()` now runs for `Idle` state (line ~491) |
+| `VisitorControllerBase.cs` | `BecomeFascinated()` now accepts `Idle` visitors (line ~4153) |
+| `TutorialManager.cs` | Added `AssignExitDestinationsToRemainingVisitors()` method |
+| `TutorialManager.cs` | Called in `CompleteTutorial()` before marking tutorial complete |
+
+**AssignExitDestinationsToRemainingVisitors() behavior:**
+- Gets portal positions from `DynamicMazeGrowth.GetPortalPositions()`
+- Skips visitors in terminal states (`Consumed`, `Grabbed`, `Escaping`)
+- Ends any fascination state (`EndLanternFascination()`, `EndRingFascination()`)
+- Assigns closest exit portal as destination
+- Calls `Resume()` and `RecalculatePath()` to start walking
+
+**Tutorial visitor immunity:**
+- Tutorial visitors have `isTutorialVisitor = true` flag
+- Immune to `SetFrightened()` so they walk into power demonstration zones
+- Added debug logging for lantern distance checks on tutorial visitors
+
+---
+
 ### Main Menu Tutorial Toggle (Session Feb 2, 2026)
 
 **Status**: Fully implemented and working.
