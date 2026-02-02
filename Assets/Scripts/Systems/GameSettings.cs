@@ -461,10 +461,10 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetFloat("HeartwardGraspRadius", Mathf.Max(0.5f, value));
         }
 
-        /// <summary>Trigger radius for DevouringMaw</summary>
+        /// <summary>Trigger radius for DevouringMaw (detection zone for visitors, visual cue is 0.5 larger)</summary>
         public static float DevouringMawRadius
         {
-            get => PlayerPrefs.GetFloat("DevouringMawRadius", 2.5f);
+            get => PlayerPrefs.GetFloat("DevouringMawRadius", 2.0f);
             set => PlayerPrefs.SetFloat("DevouringMawRadius", Mathf.Max(0.5f, value));
         }
 

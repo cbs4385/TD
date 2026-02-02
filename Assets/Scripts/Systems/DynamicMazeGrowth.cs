@@ -1365,9 +1365,12 @@ namespace FaeMaze.Systems
         /// <returns>True if spawn was successful</returns>
         private bool SpawnLanternAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
+            Debug.Log($"[DynamicMazeGrowth] SpawnLanternAtNode called for node {nodeIndex}");
+
             // Skip if lantern already exists at this node
             if (nodeLanterns.ContainsKey(nodeIndex))
             {
+                Debug.Log($"[DynamicMazeGrowth] Lantern already exists at node {nodeIndex}, skipping");
                 return false;
             }
 
@@ -1376,6 +1379,7 @@ namespace FaeMaze.Systems
             {
 #if UNITY_EDITOR
                 lanternPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/lantern2.prefab");
+                Debug.Log($"[DynamicMazeGrowth] Loaded lanternPrefab via AssetDatabase: {(lanternPrefab != null ? lanternPrefab.name : "NULL")}");
 #else
                 lanternPrefab = Resources.Load<GameObject>("Prefabs/Props/lantern2");
 #endif
@@ -1383,6 +1387,7 @@ namespace FaeMaze.Systems
 
             if (lanternPrefab == null)
             {
+                Debug.LogError("[DynamicMazeGrowth] lanternPrefab is NULL, cannot spawn lantern!");
                 return false;
             }
 
@@ -1394,6 +1399,10 @@ namespace FaeMaze.Systems
             lantern.name = $"Lantern_Node{nodeIndex}";
             lantern.transform.position = lanternPos;
 
+            // Lantern rotation is now baked into the prefab (90° around X)
+            // to make the model's +Y (up) point toward world -Z (up)
+            // No additional rotation needed here.
+
             if (lanternsParent != null)
             {
                 lantern.transform.SetParent(lanternsParent, worldPositionStays: true);
@@ -1404,7 +1413,22 @@ namespace FaeMaze.Systems
             if (lanternComponent == null)
             {
                 lanternComponent = lantern.AddComponent<FaeMaze.Props.FaeLantern>();
+                Debug.Log($"[DynamicMazeGrowth] Added FaeLantern component to {lantern.name}");
             }
+            else
+            {
+                Debug.Log($"[DynamicMazeGrowth] FaeLantern component already exists on {lantern.name}");
+            }
+
+            // Ensure the component is enabled (registers in FaeLantern.All via OnEnable)
+            if (!lanternComponent.enabled)
+            {
+                lanternComponent.enabled = true;
+                Debug.Log($"[DynamicMazeGrowth] Enabled FaeLantern component on {lantern.name}");
+            }
+
+            // Verify registration in the static collection
+            Debug.Log($"[DynamicMazeGrowth] FaeLantern.All count after spawn: {FaeMaze.Props.FaeLantern.All.Count}");
 
             // Track the lantern
             nodeLanterns[nodeIndex] = lantern;
@@ -1799,6 +1823,7 @@ namespace FaeMaze.Systems
             var node = forestMapState.Nodes[nodeIndex];
 
             // Spawn the new prop
+            Debug.Log($"[DynamicMazeGrowth] SetNodeProp spawning {propType.Value} at node {nodeIndex}");
             bool success = false;
             switch (propType.Value)
             {
@@ -1823,6 +1848,11 @@ namespace FaeMaze.Systems
             if (success)
             {
                 nodeProps[nodeIndex] = propType.Value;
+                Debug.Log($"[DynamicMazeGrowth] Successfully spawned {propType.Value} at node {nodeIndex}");
+            }
+            else
+            {
+                Debug.LogWarning($"[DynamicMazeGrowth] Failed to spawn {propType.Value} at node {nodeIndex}");
             }
 
             return success;

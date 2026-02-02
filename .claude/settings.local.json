@@ -33,7 +33,10 @@
       "Bash(findstr:*)",
       "WebFetch(domain:docs.unity3d.com)",
       "WebFetch(domain:github.com)",
-      "Bash(\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\" -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit -logFile build_log.txt)"
+      "Bash(\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\" -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit -logFile build_log.txt)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix tutorial lantern fascination and assign exit destinations on completion\n\n- Fix idle visitors not becoming fascinated by lanterns:\n  - CheckFaeLanternInfluence\\(\\) now runs for Idle state \\(not just movement states\\)\n  - BecomeFascinated\\(\\) now accepts visitors in Idle state\n  \n- Add AssignExitDestinationsToRemainingVisitors\\(\\) at tutorial end:\n  - Finds closest exit portal for each remaining visitor\n  - Ends any fascination state before reassigning destination\n  - Calls Resume\\(\\) and RecalculatePath\\(\\) to ensure visitors start walking\n\n- Tutorial visitors are now immune to frightening \\(isTutorialVisitor flag\\)\n- Added debug logging for lantern distance checks on tutorial visitors\n- Cinematic camera transitions for all power activation steps\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

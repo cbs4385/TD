@@ -41,14 +41,14 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8857678336291207924}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 12
   m_Type: 2
-  m_Color: {r: 0.77036357, g: 0.5, b: 1, a: 1}
+  m_Color: {r: 0.98657036, g: 0.5, b: 1, a: 1}
   m_Intensity: 0.8
   m_Range: 5
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
-  m_CookieSize: 10
+  m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
     m_Type: 0
     m_Resolution: -1
@@ -137,8 +137,8 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -568242685400575856, guid: 0969b6631018f204b8f30a7a15dbc4fa, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
-      value:
-      objectReference: {fileID: 2100000, guid: e747fa3e8c804fa4b8ffc469f1c542cc, type: 2}
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 1070805889805311912, guid: 0969b6631018f204b8f30a7a15dbc4fa, type: 3}
       propertyPath: m_LocalScale.x
       value: 0.25

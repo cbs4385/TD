@@ -2008,6 +2008,7 @@ namespace FaeMaze.HeartPowers
         private SphereCollider grabbingCollider;
         private GameObject grabbingTongueInstance;         // Instantiated tongue prefab
         private Vector3 grabbingWallPos;                   // Wall tile position (spawn point, acts like heart center)
+        private Vector3 grabbingPlacementPos;              // Path-edge position (where visitor should walk near)
         private Vector3 grabbingWallNormal;
         private float grabbingTongueZPosition = TONGUE_START_Z;  // Z position of tongue root (high = below ground, low = emerged)
         private float grabbingTargetAngle = 0f;            // Angle toward visitor (updated during Extending)
@@ -2069,8 +2070,16 @@ namespace FaeMaze.HeartPowers
 
         /// <summary>
         /// Gets the position of the grabbing HGZ zone (for tutorial camera tracking).
+        /// This is the wall position (in the forest).
         /// </summary>
         public Vector3 GrabbingZonePosition => grabbingWallPos;
+
+        /// <summary>
+        /// Gets the path-side placement position of the grabbing HGZ.
+        /// This is the point on the walkable path edge where visitors should walk near to be grabbed.
+        /// Use this for spawning visitors that need to walk through the grab zone.
+        /// </summary>
+        public Vector3 GrabbingPathPosition => grabbingPlacementPos;
 
         /// <summary>
         /// Gets the position of the pushing HGZ zone (for tutorial camera tracking).
@@ -2105,6 +2114,16 @@ namespace FaeMaze.HeartPowers
 
             // Find and affect wall tiles in grabbing zone
             FindAffectedGrabbingWalls();
+
+            // Register frightening event so visitors flee when they see the active HGZ
+            if (FrighteningEventManager.Instance != null)
+            {
+                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
+                    FrighteningEventManager.EventType.HeartwardGrasp,
+                    grabbingWallPos,
+                    this
+                );
+            }
         }
 
         /// <summary>
@@ -2159,13 +2178,13 @@ namespace FaeMaze.HeartPowers
 
             Debug.Log($"[HeartwardGrasp] GRABBING ray (focal->heart): {grabbingHits.Length} total hits, {grabbingWallHits.Count} wall hits");
 
-            Vector2 grabbingPlacementPos;
+            Vector2 localGrabbingPlacementPos;
             if (grabbingWallHits.Count > 0)
             {
                 // First wall hit = grabbing placement point
                 var firstGrabbingWall = grabbingWallHits[0];
-                grabbingPlacementPos = new Vector2(firstGrabbingWall.collider.transform.position.x, firstGrabbingWall.collider.transform.position.y);
-                Debug.Log($"[HeartwardGrasp] GRABBING: First wall hit = {firstGrabbingWall.collider.gameObject.name} at {grabbingPlacementPos}");
+                localGrabbingPlacementPos = new Vector2(firstGrabbingWall.collider.transform.position.x, firstGrabbingWall.collider.transform.position.y);
+                Debug.Log($"[HeartwardGrasp] GRABBING: First wall hit = {firstGrabbingWall.collider.gameObject.name} at {localGrabbingPlacementPos}");
             }
             else
             {
@@ -2174,26 +2193,29 @@ namespace FaeMaze.HeartPowers
                 Transform closestWall = FindClosestWallToRay(focalPos2D, focalToHeartDir2D, totalDist);
                 if (closestWall != null)
                 {
-                    grabbingPlacementPos = new Vector2(closestWall.position.x, closestWall.position.y);
-                    Debug.Log($"[HeartwardGrasp] GRABBING: Closest wall to ray = {closestWall.name} at {grabbingPlacementPos}");
+                    localGrabbingPlacementPos = new Vector2(closestWall.position.x, closestWall.position.y);
+                    Debug.Log($"[HeartwardGrasp] GRABBING: Closest wall to ray = {closestWall.name} at {localGrabbingPlacementPos}");
                 }
                 else
                 {
                     // Ultimate fallback - use a point along the ray at NODE_RADIUS from focal
                     const float NODE_RADIUS = 3.0f;
-                    grabbingPlacementPos = focalPos2D + focalToHeartDir2D * NODE_RADIUS;
-                    Debug.Log($"[HeartwardGrasp] GRABBING: No walls found, using fallback point at {grabbingPlacementPos}");
+                    localGrabbingPlacementPos = focalPos2D + focalToHeartDir2D * NODE_RADIUS;
+                    Debug.Log($"[HeartwardGrasp] GRABBING: No walls found, using fallback point at {localGrabbingPlacementPos}");
                 }
             }
 
             // Offset grabbing placement into forest
-            Vector2 grabbingForestDir = FindForestDirection(grabbingPlacementPos, heartToFocalDir2D, heartPos2D);
+            Vector2 grabbingForestDir = FindForestDirection(localGrabbingPlacementPos, heartToFocalDir2D, heartPos2D);
             Vector2 grabbingOffset = grabbingForestDir * HGZ_WALL_OFFSET;
-            grabbingWallPos = new Vector3(grabbingPlacementPos.x + grabbingOffset.x, grabbingPlacementPos.y + grabbingOffset.y, -0.4f);
+            grabbingWallPos = new Vector3(localGrabbingPlacementPos.x + grabbingOffset.x, localGrabbingPlacementPos.y + grabbingOffset.y, -0.4f);
             grabbingWallNormal = new Vector3(grabbingForestDir.x, grabbingForestDir.y, 0f);
 
+            // Store the placement position (path-side point) for tutorial spawning
+            this.grabbingPlacementPos = new Vector3(localGrabbingPlacementPos.x, localGrabbingPlacementPos.y, 0f);
+
             Debug.Log($"[HeartwardGrasp] GRABBING HGZ FINAL:" +
-                $"\n  Placement point: {grabbingPlacementPos}" +
+                $"\n  Placement point: {localGrabbingPlacementPos}" +
                 $"\n  Forest direction: {grabbingForestDir} (angle: {Mathf.Atan2(grabbingForestDir.y, grabbingForestDir.x) * Mathf.Rad2Deg:F1}°)" +
                 $"\n  Offset: {grabbingOffset} (magnitude {HGZ_WALL_OFFSET})" +
                 $"\n  FINAL position: {grabbingWallPos}");
@@ -3212,16 +3234,6 @@ namespace FaeMaze.HeartPowers
             // Spawn the tongue
             SpawnGrabbingTongue(visitor.transform.position);
 
-            // Register frightening event - nearby visitors will flee
-            if (FrighteningEventManager.Instance != null)
-            {
-                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    FrighteningEventManager.EventType.HeartwardGrasp,
-                    grabbingWallPos,
-                    this
-                );
-            }
-
             // Start emerging phase - tongue rises from underground (like HeartOfTheMaze)
             grabPhase = GrabPhase.Emerging;
 
@@ -3250,13 +3262,6 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void DestroyGrabbingTongue()
         {
-            // Unregister frightening event
-            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-            {
-                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
-                currentFrighteningEvent = null;
-            }
-
             // Disable colliders and clear static flag
             SetGrabbingSolidCollidersEnabled(false);
             grabbingSolidColliders = null;
@@ -3375,7 +3380,34 @@ namespace FaeMaze.HeartPowers
             // Move visitor with tongue tip
             MoveGrabbedVisitorToTip();
 
-            // Check if fully retracted
+            // Check if visitor has reached the bend point (ground level where tongue enters ground)
+            // Transport when visitor Z position drops below ground level (entering the ground)
+            // This is when the tongue tip crosses below Z=0
+            if (currentVisitor != null)
+            {
+                float visitorZ = currentVisitor.transform.position.z;
+                // Transport when visitor goes below ground (Z > 0 in this coordinate system where +Z is down)
+                // Actually, the tip bone world position determines this - when tip is below ground
+                if (grabbingTongueBones != null && grabbingTongueBones.Length > 0)
+                {
+                    int tipIndex = grabbingTongueBones.Length - 1;
+                    Transform tipBone = grabbingTongueBones[tipIndex];
+                    if (tipBone != null)
+                    {
+                        // In this coordinate system, -Z is up, +Z is down
+                        // Ground level is Z=0, below ground is Z>0
+                        // Transport when tongue tip goes below ground (tip Z > 0.5 to give some margin)
+                        float tipWorldZ = tipBone.position.z;
+                        if (tipWorldZ > 0.5f)
+                        {
+                            TransportVisitorToPushingZone();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Fallback: transport if fully retracted (safety check)
             if (grabbingTongueZPosition >= TONGUE_START_Z)
             {
                 TransportVisitorToPushingZone();
@@ -3753,6 +3785,9 @@ namespace FaeMaze.HeartPowers
                     GROUND_Z
                 );
 
+                Debug.Log($"[HeartwardGrasp] TransitionToReleasing: Visitor {currentVisitor.name} released at {currentVisitor.transform.position}");
+                Debug.Log($"[HeartwardGrasp] Visitor destination before update: {currentVisitor.GetCurrentDestination()}");
+
                 // Ensure visitor is visible when released
                 SetVisitorVisible(currentVisitor, true);
 
@@ -3760,12 +3795,39 @@ namespace FaeMaze.HeartPowers
                 // RefreshStateFromFlags() returns early for Grabbed state, so we must clear it first
                 currentVisitor.ClearGrabbedState();
 
+                Debug.Log($"[HeartwardGrasp] Visitor state after ClearGrabbedState: {currentVisitor.State}");
+
+                // IMPORTANT: Update destination to the heart position
+                // The visitor was transported closer to the heart by the pushing HGZ.
+                // Their original destination may now be behind them (especially if it was
+                // a short-distance destination like "3 units past grabbing HGZ").
+                // Setting destination to heart ensures they continue inward after being pushed.
+                currentVisitor.SetWorldDestination(heartNodePosition);
+                Debug.Log($"[HeartwardGrasp] Visitor destination updated to heart: {heartNodePosition}");
+
+                // Check if path was built successfully
+                int pathIndex;
+                var path = currentVisitor.GetCurrentPath(out pathIndex);
+                Debug.Log($"[HeartwardGrasp] Path info after SetWorldDestination: count={(path != null ? path.Count.ToString() : "null")}, index={pathIndex}");
+
+                // If path to heart failed, try recalculating - visitor might be at an edge position
+                if (path == null || path.Count == 0)
+                {
+                    Debug.LogWarning($"[HeartwardGrasp] Path to heart failed, trying RecalculatePath");
+                    currentVisitor.RecalculatePath();
+                    path = currentVisitor.GetCurrentPath(out pathIndex);
+                    Debug.Log($"[HeartwardGrasp] Path after recalc: count={(path != null ? path.Count.ToString() : "null")}");
+                }
+
                 currentVisitor.Resume();
-                currentVisitor.RecalculatePath();
+                Debug.Log($"[HeartwardGrasp] Visitor state after Resume: {currentVisitor.State}");
 
                 // Apply daze effect
                 float dazeDuration = definition.param1 > 0 ? definition.param1 : 2f;
                 currentVisitor.OnWitnessMazeGrowth(dazeDuration);
+
+                Debug.Log($"[HeartwardGrasp] Visitor state after OnWitnessMazeGrowth({dazeDuration}s): {currentVisitor.State}");
+                Debug.Log($"[HeartwardGrasp] Visitor destination after release: {currentVisitor.GetCurrentDestination()}");
 
                 // Notify of push
                 HeartPowerEvents.NotifyVisitorPushedByGrasp(currentVisitor.transform.position);
@@ -4028,6 +4090,13 @@ namespace FaeMaze.HeartPowers
 
         public override void OnEnd()
         {
+            // Unregister frightening event
+            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
+                currentFrighteningEvent = null;
+            }
+
             // Clear static instance reference
             if (ActiveInstance == this)
             {
@@ -4114,6 +4183,10 @@ namespace FaeMaze.HeartPowers
     {
         // Settings - Loaded from GameSettings
         private readonly float triggerRadius;
+
+        // Visual cue radius is larger than detection radius so the prefab fits inside
+        private const float VISUAL_RADIUS_OFFSET = 0.5f;
+        private float visualRadius => triggerRadius + VISUAL_RADIUS_OFFSET;
 
         // Base durations (before blessing multipliers)
         private const float BASE_DEVOUR_CYCLE_DELAY = 0.25f;
@@ -4298,6 +4371,16 @@ namespace FaeMaze.HeartPowers
             if (manager.TileVisualizer != null)
             {
                 manager.TileVisualizer.AddTileEffectAtWorldPos(targetWorldPos, HeartPowerType.DevouringMaw, 1.0f, powerDuration);
+            }
+
+            // Register frightening event so visitors flee when they see the active maw zone
+            if (FrighteningEventManager.Instance != null)
+            {
+                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
+                    FrighteningEventManager.EventType.DevouringMaw,
+                    targetWorldPos,
+                    this
+                );
             }
 
             // Tier I: Apply fear to nearby visitors
@@ -4608,8 +4691,9 @@ namespace FaeMaze.HeartPowers
             for (int i = 0; i < segments; i++)
             {
                 float angle = (float)i / segments * Mathf.PI * 2f;
-                float x = Mathf.Cos(angle) * triggerRadius;
-                float y = Mathf.Sin(angle) * triggerRadius;
+                // Use visualRadius for the fog circle (larger than detection triggerRadius)
+                float x = Mathf.Cos(angle) * visualRadius;
+                float y = Mathf.Sin(angle) * visualRadius;
 
                 vertices[i + 1] = new Vector3(x, y, 0f);
                 uvs[i + 1] = new Vector2(0.5f + Mathf.Cos(angle) * 0.5f, 0.5f + Mathf.Sin(angle) * 0.5f);
@@ -4701,11 +4785,11 @@ namespace FaeMaze.HeartPowers
             var emission = dustParticles.emission;
             emission.rateOverTime = 60f;
 
-            // Circular emission shape
+            // Circular emission shape - use visualRadius to match fog circle
             var shape = dustParticles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = triggerRadius;
+            shape.radius = visualRadius;
             shape.radiusThickness = 1f;
             shape.position = new Vector3(0f, 0f, -0.25f);
 
@@ -4771,11 +4855,11 @@ namespace FaeMaze.HeartPowers
             var emission = areaParticles.emission;
             emission.rateOverTime = 20f;
 
-            // Use circle shape for circular emission area
+            // Use circle shape for circular emission area - use visualRadius to match fog circle
             var shape = areaParticles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = triggerRadius;
+            shape.radius = visualRadius;
             shape.radiusThickness = 1f; // Emit from entire circle area, not just edge
             // Position in the z range between -0.5 and 0
             shape.position = new Vector3(0f, 0f, (PARTICLE_Z_MIN + PARTICLE_Z_MAX) / 2f);
@@ -4835,42 +4919,21 @@ namespace FaeMaze.HeartPowers
             visitorsBeingDevoured.Clear();
             visitorStartPositions.Clear();
 
+            // Get devour location from triggering visitor
             Vector3 devourLocation = triggeringVisitor.transform.position;
             devourLocation.z = 0f;
 
-            // Register frightening event - nearby visitors will flee from the devour
-            if (FrighteningEventManager.Instance != null)
+            // Capture the triggering visitor immediately
+            // Additional visitors will be captured by the DevourTriggerHandler when they
+            // collide with the maw model's collider during the emerging/paused phases
+            if (triggeringVisitor != null &&
+                triggeringVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
+                triggeringVisitor.State != VisitorControllerBase.VisitorState.Escaping)
             {
-                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    FrighteningEventManager.EventType.DevouringMaw,
-                    devourLocation,
-                    this
-                );
-            }
-
-            // Find all visitors near the triggering visitor's location
-            var visitors = VisitorRegistry.All;
-            foreach (var visitor in visitors)
-            {
-                if (visitor == null) continue;
-
-                if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
-                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
-                {
-                    continue;
-                }
-
-                Vector2 visitorPos2D = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
-                Vector2 devourPos2D = new Vector2(devourLocation.x, devourLocation.y);
-
-                if (Vector2.Distance(visitorPos2D, devourPos2D) <= 1.0f)
-                {
-                    // Stop visitor and set Grabbed state to prevent any movement
-                    visitor.Stop();
-                    visitor.SetGrabbedByHeart();
-                    visitorsBeingDevoured.Add(visitor);
-                    visitorStartPositions[visitor] = visitor.transform.position;
-                }
+                triggeringVisitor.Stop();
+                triggeringVisitor.SetGrabbedByHeart();
+                visitorsBeingDevoured.Add(triggeringVisitor);
+                visitorStartPositions[triggeringVisitor] = triggeringVisitor.transform.position;
             }
 
             // Spawn devour prefab at z=0 (first frame of animation)

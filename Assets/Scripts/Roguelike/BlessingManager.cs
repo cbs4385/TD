@@ -265,8 +265,8 @@ namespace FaeMaze.Roguelike
             if (unlocked.Count <= count)
                 return unlocked;
 
-            // Shuffle and take first N
-            var shuffled = unlocked.OrderBy(_ => UnityEngine.Random.value).ToList();
+            // Shuffle and take first N (use seeded RandomManager for deterministic selection)
+            var shuffled = unlocked.OrderBy(_ => FaeMaze.Systems.RandomManager.Value).ToList();
             return shuffled.Take(count).ToList();
         }
 

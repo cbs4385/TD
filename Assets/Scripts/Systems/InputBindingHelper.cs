@@ -14,7 +14,7 @@ namespace FaeMaze.Systems
         private const float STICK_THRESHOLD = 0.5f;
 
         // Debug logging toggle - set to true to diagnose input issues
-        private static bool debugLogging = false;
+        private static bool debugLogging = true;
         private static float lastLogTime = 0f;
         private const float LOG_INTERVAL = 1f; // Only log once per second to avoid spam
 
@@ -474,7 +474,14 @@ namespace FaeMaze.Systems
         {
             Gamepad gamepad = Gamepad.current;
             if (gamepad == null)
+            {
+                if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
+                {
+                    Debug.LogWarning($"[InputBindingHelper] Gamepad.current is null! Cannot check gamepad binding '{binding}'");
+                    lastLogTime = Time.time;
+                }
                 return false;
+            }
 
             return binding switch
             {
@@ -521,7 +528,14 @@ namespace FaeMaze.Systems
         {
             Gamepad gamepad = Gamepad.current;
             if (gamepad == null)
+            {
+                if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
+                {
+                    Debug.LogWarning($"[InputBindingHelper] Gamepad.current is null! Cannot check gamepad binding '{binding}' for press this frame");
+                    lastLogTime = Time.time;
+                }
                 return false;
+            }
 
             return binding switch
             {

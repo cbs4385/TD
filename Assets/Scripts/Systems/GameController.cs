@@ -241,10 +241,10 @@ namespace FaeMaze.Systems
                 }
             }
 
-            // Shuffle and place lanterns
+            // Shuffle and place lanterns (use seeded RandomManager for deterministic placement)
             for (int i = availableNodes.Count - 1; i > 0; i--)
             {
-                int j = UnityEngine.Random.Range(0, i + 1);
+                int j = RandomManager.Range(0, i + 1);
                 (availableNodes[i], availableNodes[j]) = (availableNodes[j], availableNodes[i]);
             }
 
