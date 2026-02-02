@@ -293,13 +293,23 @@ namespace FaeMaze.UI
 
         /// <summary>
         /// Loads sprites for power buttons from the Assets/Textures/PowerModels folder.
-        /// Uses AssetDatabase in editor, falls back to Resources in builds.
+        /// Uses AssetDatabase in editor, Resources.Load in builds.
         /// Also creates a procedural circle sprite for round button backgrounds.
         /// </summary>
         private void LoadPowerButtonSprites()
         {
+            // Resource names (without extension, relative to Resources folder)
+            string[] resourceNames = new string[]
+            {
+                "PowerModels/path",
+                "PowerModels/grasp",
+                "PowerModels/devour",
+                "PowerModels/sculpt"
+            };
+
 #if UNITY_EDITOR
-            string[] paths = new string[]
+            // In editor, use AssetDatabase for faster iteration
+            string[] editorPaths = new string[]
             {
                 "Assets/Textures/PowerModels/path.png",
                 "Assets/Textures/PowerModels/grasp.png",
@@ -310,12 +320,12 @@ namespace FaeMaze.UI
             for (int i = 0; i < 4; i++)
             {
                 // First try loading as Sprite (if texture type is set correctly and Sprite Mode is Single)
-                powerButtonSprites[i] = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(paths[i]);
+                powerButtonSprites[i] = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(editorPaths[i]);
 
                 // If that fails, try loading all sprites at that path (handles Multiple sprite mode)
                 if (powerButtonSprites[i] == null)
                 {
-                    Object[] allSprites = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(paths[i]);
+                    Object[] allSprites = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(editorPaths[i]);
                     foreach (Object obj in allSprites)
                     {
                         if (obj is Sprite sprite)
@@ -329,7 +339,7 @@ namespace FaeMaze.UI
                 // If still null, load as Texture2D and create sprite manually
                 if (powerButtonSprites[i] == null)
                 {
-                    Texture2D tex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(paths[i]);
+                    Texture2D tex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(editorPaths[i]);
                     if (tex != null)
                     {
                         powerButtonSprites[i] = Sprite.Create(
@@ -338,6 +348,32 @@ namespace FaeMaze.UI
                             new Vector2(0.5f, 0.5f),
                             100f
                         );
+                    }
+                }
+            }
+#else
+            // In builds, use Resources.Load
+            for (int i = 0; i < 4; i++)
+            {
+                // Try loading as Sprite first
+                powerButtonSprites[i] = Resources.Load<Sprite>(resourceNames[i]);
+
+                // If that fails, try loading as Texture2D and create sprite manually
+                if (powerButtonSprites[i] == null)
+                {
+                    Texture2D tex = Resources.Load<Texture2D>(resourceNames[i]);
+                    if (tex != null)
+                    {
+                        powerButtonSprites[i] = Sprite.Create(
+                            tex,
+                            new Rect(0, 0, tex.width, tex.height),
+                            new Vector2(0.5f, 0.5f),
+                            100f
+                        );
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Failed to load power button sprite: {resourceNames[i]}");
                     }
                 }
             }

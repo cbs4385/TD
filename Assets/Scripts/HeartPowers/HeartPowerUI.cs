@@ -246,7 +246,7 @@ namespace FaeMaze.HeartPowers
         {
             if (essenceText != null)
             {
-                essenceText.text = $"Essence: {essence}";
+                essenceText.text = $"Threads: {essence}";
             }
         }
 

@@ -21,46 +21,52 @@ Shader "Custom/DevourDust"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-50" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-50" "RenderPipeline"="UniversalPipeline" }
         LOD 100
 
         Pass
         {
+            Name "ForwardLit"
+            Tags { "LightMode"="UniversalForward" }
+
             ZWrite Off
             Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
 
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
 
-            struct appdata
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 vertex : SV_POSITION;
+                float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 float3 worldPos : TEXCOORD1;
             };
 
-            sampler2D _MainTex;
-            float4 _MainTex_ST;
-            float _Alpha;
+            TEXTURE2D(_MainTex);
+            SAMPLER(sampler_MainTex);
 
-            float _CloudScale;
-            float _CloudDetail;
-            float _CloudDensity;
-            float _CloudSharpness;
-
-            float _WindSpeed;
-            float _TurbulenceSpeed;
-            float _TextureScrollSpeed;
-            float _EdgeFade;
+            CBUFFER_START(UnityPerMaterial)
+                float4 _MainTex_ST;
+                float _Alpha;
+                float _CloudScale;
+                float _CloudDetail;
+                float _CloudDensity;
+                float _CloudSharpness;
+                float _WindSpeed;
+                float _TurbulenceSpeed;
+                float _TextureScrollSpeed;
+                float _EdgeFade;
+            CBUFFER_END
 
             // Hash function for noise
             float hash(float2 p)
@@ -95,7 +101,7 @@ Shader "Custom/DevourDust"
                 float frequency = 1.0;
                 float maxValue = 0.0;
 
-                for (int i = 0; i < octaves; i++)
+                for (int idx = 0; idx < octaves; idx++)
                 {
                     value += amplitude * valueNoise(p * frequency);
                     maxValue += amplitude;
@@ -129,19 +135,19 @@ Shader "Custom/DevourDust"
                 return cloud;
             }
 
-            v2f vert (appdata v)
+            Varyings vert (Attributes IN)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                return o;
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.uv = IN.uv;
+                OUT.worldPos = TransformObjectToWorld(IN.positionOS.xyz);
+                return OUT;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            half4 frag (Varyings IN) : SV_Target
             {
                 // Calculate distance from center (UV 0.5, 0.5 is center)
-                float2 centerOffset = i.uv - float2(0.5, 0.5);
+                float2 centerOffset = IN.uv - float2(0.5, 0.5);
                 float distFromCenter = length(centerOffset) * 2.0; // 0 at center, 1 at edge
 
                 // Circular mask with soft edge fade
@@ -150,21 +156,21 @@ Shader "Custom/DevourDust"
 
                 // Early out if outside circle
                 if (circleMask < 0.01)
-                    return fixed4(0, 0, 0, 0);
+                    return half4(0, 0, 0, 0);
 
                 // Generate animated dust pattern for alpha modulation
-                float dustValue = dustNoise(i.worldPos.xy * 0.15, _Time.y);
+                float dustValue = dustNoise(IN.worldPos.xy * 0.15, _Time.y);
 
                 // Animated texture UVs - scroll and distort with noise
                 float2 texScrollOffset = float2(_Time.y * _TextureScrollSpeed, _Time.y * _TextureScrollSpeed * 0.7);
                 float2 noiseOffset = float2(
-                    dustNoise(i.worldPos.xy * 0.1, _Time.y * 0.5) - 0.5,
-                    dustNoise(i.worldPos.xy * 0.1 + 100, _Time.y * 0.5) - 0.5
+                    dustNoise(IN.worldPos.xy * 0.1, _Time.y * 0.5) - 0.5,
+                    dustNoise(IN.worldPos.xy * 0.1 + 100, _Time.y * 0.5) - 0.5
                 ) * 0.3;
 
                 // Sample texture with animated UVs (tile it across the area)
-                float2 texUV = i.worldPos.xy * 0.3 + texScrollOffset + noiseOffset;
-                fixed4 texColor = tex2D(_MainTex, texUV);
+                float2 texUV = IN.worldPos.xy * 0.3 + texScrollOffset + noiseOffset;
+                half4 texColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, texUV);
 
                 // Final alpha combines circle mask, dust pattern, and overall alpha
                 float alpha = circleMask * dustValue * _Alpha;
@@ -172,9 +178,9 @@ Shader "Custom/DevourDust"
                 // Boost visibility
                 alpha = saturate(alpha * 1.8);
 
-                return fixed4(texColor.rgb, alpha);
+                return half4(texColor.rgb, alpha);
             }
-            ENDCG
+            ENDHLSL
         }
     }
 

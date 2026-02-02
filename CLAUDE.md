@@ -1316,6 +1316,47 @@ GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consu
 
 ---
 
+## Roguelike Meta-Progression System
+
+**Status**: Phase 1 Complete (February 2026)
+
+**Full Documentation**: See `Assets/Scripts/Roguelike/README_ROGUELIKE.md` for complete implementation details.
+
+### Overview
+
+The game implements Hades-style roguelike meta-progression:
+- **Fae Dust**: Persistent currency earned from run performance
+- **Unlocks**: Power tiers, blessings, heart forms, mutations purchased with Fae Dust
+- **Run Progression**: Powers start at Tier I, can be upgraded mid-run at essence thresholds
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `Assets/Scripts/Roguelike/MetaProgressionManager.cs` | Fae Dust, lifetime stats, persistence |
+| `Assets/Scripts/Roguelike/UnlockManager.cs` | Unlock definitions and purchase system |
+| `Assets/Scripts/Roguelike/PowerProgressionManager.cs` | Run-based tier tracking |
+| `Assets/Scripts/Roguelike/RoguelikeBootstrap.cs` | Manager auto-instantiation |
+| `Assets/Scripts/UI/TierUpgradeUI.cs` | Tier upgrade modal UI |
+
+### Integration Points
+
+- `GameController.Start()` calls `OnRunStart()` and `ResetRunTiers()`
+- `GameStatsTracker.FinalizeRunStats()` triggers Fae Dust reward calculation
+- `DifficultyManager` records tier changes to MetaProgressionManager
+- `HeartPowerManager.GetPowerDefinition()` uses PowerProgressionManager for tier lookup
+
+### Tier Upgrade Thresholds
+
+| Target Tier | Essence Thresholds (relative to start) |
+|-------------|---------------------------------------|
+| Tier II | 1.5x, 3.0x starting essence |
+| Tier III | 5.0x, 8.0x starting essence |
+
+When a threshold is crossed, TierUpgradeUI appears allowing player to choose which power to upgrade (only showing powers with that tier permanently unlocked).
+
+---
+
 ## Building the Game
 
 ### Multi-Platform Build System

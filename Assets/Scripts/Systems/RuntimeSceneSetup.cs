@@ -19,6 +19,13 @@ namespace FaeMaze.Systems
         {
             string sceneName = scene.name;
 
+            // Reset RandomManager when loading game scenes to ensure clean state
+            // This prevents static state from persisting incorrectly between editor play sessions
+            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "PlanarForestMazeScene")
+            {
+                RandomManager.Reset();
+            }
+
             if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "PlanarForestMazeScene" || sceneName == "Options")
             {
                 GameObject escapeHandlerObj = GameObject.Find("EscapeHandler");
@@ -69,6 +76,9 @@ namespace FaeMaze.Systems
 #if UNITY_EDITOR
                 heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heartbase.prefab");
                 heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
+#else
+                heartBasePrefab = Resources.Load<GameObject>("Prefabs/Tile/heartbase");
+                heartTonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
 #endif
 
                 FaeMaze.Maze.HeartOfTheMaze heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();

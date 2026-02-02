@@ -119,9 +119,12 @@ namespace FaeMaze.Systems
                 mazeOrigin = transform;
             }
 
-            // Initialize RandomManager if not already done (we're early in execution order)
+            // RandomManager MUST be initialized by GameController (execution order -200) BEFORE this runs (execution order -100)
+            // This ensures consistent seed-based maze generation between editor and build
             if (!RandomManager.IsInitialized)
             {
+                Debug.LogError("[MazeGridBehaviour] RandomManager not initialized! GameController must run first. Check execution order.");
+                // Fallback to prevent crash, but maze may not match expected seed
                 RandomManager.Initialize();
             }
 

@@ -479,11 +479,6 @@ namespace FaeMaze.Visitors
             // Handle FairyRing circling (takes priority over lantern fascination)
             if (currentFairyRing != null)
             {
-                // Log once when starting to circle (first frame)
-                if (Time.frameCount % 300 == 0)
-                {
-                    Debug.Log($"[FairyRing] Update: {gameObject.name} has currentFairyRing set, calling UpdateFairyRingCircling");
-                }
                 UpdateFairyRingCircling();
                 return; // Don't process other movement while circling
             }
@@ -4324,11 +4319,8 @@ namespace FaeMaze.Visitors
         /// <param name="slowFactor">Speed multiplier while fascinated (0.5 = 50% speed)</param>
         public virtual void BecomeFascinatedByRing(FaeMaze.Props.FairyRing ring, float duration, float slowFactor)
         {
-            Debug.Log($"[FairyRing] BecomeFascinatedByRing called for {gameObject.name}: state={state}, ring={ring.gameObject.name}");
-
             if (!IsMovementState(state) && state != VisitorState.Idle)
             {
-                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - state {state} is not a movement state and not Idle");
                 return;
             }
 
@@ -4336,30 +4328,24 @@ namespace FaeMaze.Visitors
             var followWisp = GetComponent<FaeMaze.Visitors.FollowWispBehavior>();
             if (followWisp != null && followWisp.IsFollowing)
             {
-                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - currently following a wisp");
                 return;
             }
 
             // Already fascinated by this ring
             if (currentFairyRing == ring)
             {
-                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - already fascinated by this ring");
                 return;
             }
 
             // Immune to this ring (just finished fascination, haven't left trigger yet)
             if (immuneToFairyRing == ring)
             {
-                Debug.Log($"[FairyRing] REJECTED: {gameObject.name} - immune to this ring (recently finished fascination)");
                 return;
             }
-
-            Debug.Log($"[FairyRing] ACCEPTED: {gameObject.name} will become fascinated by ring");
 
             // Clear any existing lantern fascination
             if (currentFaeLantern != null)
             {
-                Debug.Log($"[FairyRing] Clearing existing lantern fascination for {gameObject.name}");
                 ClearLanternInteraction();
             }
 
@@ -4378,15 +4364,12 @@ namespace FaeMaze.Visitors
             float distanceToRing = toVisitor.magnitude;
             fairyRingApproaching = distanceToRing > FairyRingCircleRadius;
 
-            Debug.Log($"[FairyRing] {gameObject.name} fascination setup: distanceToRing={distanceToRing:F2}, circleRadius={FairyRingCircleRadius}, approaching={fairyRingApproaching}, startAngle={fairyRingCircleAngle * Mathf.Rad2Deg:F1}°");
-
             // Clear current path - we're now circling
             worldPath = null;
             worldPathIndex = 0;
             ResetSplineState();
 
             RefreshStateFromFlags();
-            Debug.Log($"[FairyRing] {gameObject.name} final state after RefreshStateFromFlags: state={state}, isFascinated={isFascinated}, currentFairyRing={(currentFairyRing != null ? "set" : "null")}");
         }
 
         /// <summary>
@@ -4394,15 +4377,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void UpdateFairyRingCircling()
         {
-            // Log every 60 frames (roughly once per second at 60fps)
-            if (Time.frameCount % 60 == 0)
-            {
-                Debug.Log($"[FairyRing] UpdateFairyRingCircling for {gameObject.name}: timer={fairyRingFascinationTimer:F1}s, approaching={fairyRingApproaching}, pos={transform.position}");
-            }
-
             if (currentFairyRing == null)
             {
-                Debug.Log($"[FairyRing] {gameObject.name}: currentFairyRing is null, ending fascination");
                 EndFairyRingFascination();
                 return;
             }
@@ -4411,7 +4387,6 @@ namespace FaeMaze.Visitors
             fairyRingFascinationTimer -= Time.deltaTime;
             if (fairyRingFascinationTimer <= 0f)
             {
-                Debug.Log($"[FairyRing] {gameObject.name}: timer expired, ending fascination");
                 EndFairyRingFascination();
                 return;
             }

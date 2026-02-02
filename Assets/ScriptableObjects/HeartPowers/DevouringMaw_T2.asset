@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: DevouringMaw_T2
   m_EditorClassIdentifier:
   powerType: 2
-  displayName: Devouring Maw
-  description: 'Instantly consumes a visitor on the targeted tile, granting essence.
-
-    Tier II - Draining Embrace: Also slows nearby visitors for 4 seconds.'
+  displayName: Nom Nom II
+  description: Consume more threads per chomp.
   tier: 2
   chargeCost: 2
   cooldown: 18

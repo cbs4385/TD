@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: MurmuringPaths_T3
   m_EditorClassIdentifier:
   powerType: 0
-  displayName: Murmuring Paths III
-  description: 'Master path manipulation with seal mode.
-
-    Tier III - Sealed Ways: Toggle between lure mode and seal mode (increases costs to create soft barriers).'
+  displayName: Spooky Fog III
+  description: Tangle their threads in dense, creeping mist.
   tier: 3
   chargeCost: 2
   cooldown: 15

@@ -151,5 +151,5 @@ Shader "Hidden/PostProcess/RadialBlur"
         }
     }
 
-    FallBack Off
+    FallBack "Universal Render Pipeline/Unlit"
 }

@@ -224,9 +224,9 @@ MonoBehaviour:
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
-  m_ReferenceResolution: {x: 800, y: 600}
+  m_ReferenceResolution: {x: 1920, y: 1080}
   m_ScreenMatchMode: 0
-  m_MatchWidthOrHeight: 0
+  m_MatchWidthOrHeight: 0.5
   m_PhysicalUnit: 3
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96
@@ -802,7 +802,7 @@ MonoBehaviour:
   useWorldSpaceRenderer: 0
   autoCenterCamera: 1
   autoAddVoidFog: 1
-  defaultWallPrefab: {fileID: 100000, guid: c2541bd2143b113428d4abd5bcdfd53e, type: 3}
+  defaultWallPrefab: {fileID: 6667140854805589535, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
   defaultUndergrowthPrefab: {fileID: 5635536503766265964, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   defaultWaterPrefab: {fileID: 0}
 --- !u!114 &963194230

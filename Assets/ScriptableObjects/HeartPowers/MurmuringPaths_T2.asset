@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: MurmuringPaths_T2
   m_EditorClassIdentifier:
   powerType: 0
-  displayName: Murmuring Paths II
-  description: 'Enhanced path manipulation with visitor memory.
-
-    Tier II - Labyrinth''s Memory: Visitors who traverse murmuring paths prefer Lost state with Heart bias.'
+  displayName: Spooky Fog II
+  description: Tangle their threads in thicker mist.
   tier: 2
   chargeCost: 1
   cooldown: 12

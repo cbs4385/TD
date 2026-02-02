@@ -7,11 +7,14 @@ Shader "Custom/FocalPointBolt"
     SubShader
     {
         // Render after the void fog so stencil is already written
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-50" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-50" "RenderPipeline"="UniversalPipeline" }
         LOD 100
 
         Pass
         {
+            Name "ForwardLit"
+            Tags { "LightMode"="UniversalForward" }
+
             ZWrite Off
             Blend SrcAlpha One // Additive blending for glow
             Cull Off
@@ -24,38 +27,41 @@ Shader "Custom/FocalPointBolt"
                 Pass Keep
             }
 
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
 
-            struct appdata
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float4 color : COLOR;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 vertex : SV_POSITION;
+                float4 positionHCS : SV_POSITION;
                 float4 color : COLOR;
             };
 
-            fixed4 _Color;
+            CBUFFER_START(UnityPerMaterial)
+                half4 _Color;
+            CBUFFER_END
 
-            v2f vert (appdata v)
+            Varyings vert (Attributes IN)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.color = v.color;
-                return o;
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.color = IN.color;
+                return OUT;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            half4 frag (Varyings IN) : SV_Target
             {
-                return i.color * _Color;
+                return IN.color * _Color;
             }
-            ENDCG
+            ENDHLSL
         }
     }
 

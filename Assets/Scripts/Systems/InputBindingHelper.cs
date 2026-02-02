@@ -10,6 +10,14 @@ namespace FaeMaze.Systems
     /// </summary>
     public static class InputBindingHelper
     {
+        // Threshold for gamepad stick input detection
+        private const float STICK_THRESHOLD = 0.5f;
+
+        // Debug logging toggle - set to true to diagnose input issues
+        private static bool debugLogging = false;
+        private static float lastLogTime = 0f;
+        private const float LOG_INTERVAL = 1f; // Only log once per second to avoid spam
+
         /// <summary>
         /// Check if binding is currently pressed (for hold actions like camera movement).
         /// </summary>
@@ -37,25 +45,61 @@ namespace FaeMaze.Systems
                 };
             }
 
+            // Check gamepad bindings
+            if (IsGamepadBinding(binding))
+            {
+                return IsGamepadBindingPressed(binding);
+            }
+
             // Check keyboard keys
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null)
+            {
+                if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
+                {
+                    Debug.LogWarning($"[InputBindingHelper] Keyboard.current is null! Cannot check binding '{binding}'");
+                    lastLogTime = Time.time;
+                }
                 return false;
+            }
 
             Key? key = ParseKey(binding);
             if (key.HasValue)
             {
                 KeyControl keyControl = keyboard[key.Value];
-                return keyControl != null && keyControl.isPressed;
+                bool isPressed = keyControl != null && keyControl.isPressed;
+                if (debugLogging && isPressed && Time.time - lastLogTime > LOG_INTERVAL)
+                {
+                    Debug.Log($"[InputBindingHelper] Key '{binding}' -> Key.{key.Value} is PRESSED");
+                    lastLogTime = Time.time;
+                }
+                return isPressed;
+            }
+            else if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
+            {
+                // Log failed parse only occasionally
+                Debug.LogWarning($"[InputBindingHelper] ParseKey failed for binding '{binding}'");
+                lastLogTime = Time.time;
             }
 
             // Fallback to legacy Input system for KeyCode
             KeyCode keyCode = ParseKeyCode(binding);
             if (keyCode != KeyCode.None)
             {
-                return Input.GetKey(keyCode);
+                bool isPressed = Input.GetKey(keyCode);
+                if (debugLogging && isPressed && Time.time - lastLogTime > LOG_INTERVAL)
+                {
+                    Debug.Log($"[InputBindingHelper] Key '{binding}' -> KeyCode.{keyCode} (legacy) is PRESSED");
+                    lastLogTime = Time.time;
+                }
+                return isPressed;
             }
 
+            if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
+            {
+                Debug.LogWarning($"[InputBindingHelper] Could not parse binding '{binding}' as Key or KeyCode");
+                lastLogTime = Time.time;
+            }
             return false;
         }
 
@@ -86,6 +130,12 @@ namespace FaeMaze.Systems
                 };
 
                 return result;
+            }
+
+            // Check gamepad bindings
+            if (IsGamepadBinding(binding))
+            {
+                return WasGamepadBindingPressedThisFrame(binding);
             }
 
             // Check keyboard keys
@@ -178,6 +228,46 @@ namespace FaeMaze.Systems
                     2 => "Middle Click",
                     3 => "Mouse 4",
                     4 => "Mouse 5",
+                    _ => binding
+                };
+            }
+
+            // Handle gamepad bindings
+            if (IsGamepadBinding(binding))
+            {
+                return binding switch
+                {
+                    // Face buttons (using generic names that work for Xbox/PlayStation)
+                    "GamepadButtonSouth" => "A / Cross",
+                    "GamepadButtonNorth" => "Y / Triangle",
+                    "GamepadButtonEast" => "B / Circle",
+                    "GamepadButtonWest" => "X / Square",
+                    // Shoulder buttons
+                    "GamepadLeftShoulder" => "LB / L1",
+                    "GamepadRightShoulder" => "RB / R1",
+                    "GamepadLeftTrigger" => "LT / L2",
+                    "GamepadRightTrigger" => "RT / R2",
+                    // Stick buttons
+                    "GamepadLeftStickPress" => "L Stick Press",
+                    "GamepadRightStickPress" => "R Stick Press",
+                    // Menu buttons
+                    "GamepadStart" => "Start / Options",
+                    "GamepadSelect" => "Select / Share",
+                    // D-pad
+                    "GamepadDpadUp" => "D-pad Up",
+                    "GamepadDpadDown" => "D-pad Down",
+                    "GamepadDpadLeft" => "D-pad Left",
+                    "GamepadDpadRight" => "D-pad Right",
+                    // Left stick directions
+                    "GamepadLeftStickUp" => "L Stick Up",
+                    "GamepadLeftStickDown" => "L Stick Down",
+                    "GamepadLeftStickLeft" => "L Stick Left",
+                    "GamepadLeftStickRight" => "L Stick Right",
+                    // Right stick directions
+                    "GamepadRightStickUp" => "R Stick Up",
+                    "GamepadRightStickDown" => "R Stick Down",
+                    "GamepadRightStickLeft" => "R Stick Left",
+                    "GamepadRightStickRight" => "R Stick Right",
                     _ => binding
                 };
             }
@@ -391,6 +481,110 @@ namespace FaeMaze.Systems
         public static string KeyCodeToBindingString(KeyCode keyCode)
         {
             return keyCode.ToString();
+        }
+
+        /// <summary>
+        /// Check if binding represents a gamepad input.
+        /// </summary>
+        public static bool IsGamepadBinding(string binding)
+        {
+            if (string.IsNullOrEmpty(binding))
+                return false;
+
+            return binding.StartsWith("Gamepad", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Check if a gamepad binding is currently pressed.
+        /// </summary>
+        private static bool IsGamepadBindingPressed(string binding)
+        {
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad == null)
+                return false;
+
+            return binding switch
+            {
+                // Face buttons
+                "GamepadButtonSouth" => gamepad.buttonSouth.isPressed,
+                "GamepadButtonNorth" => gamepad.buttonNorth.isPressed,
+                "GamepadButtonEast" => gamepad.buttonEast.isPressed,
+                "GamepadButtonWest" => gamepad.buttonWest.isPressed,
+                // Shoulder buttons
+                "GamepadLeftShoulder" => gamepad.leftShoulder.isPressed,
+                "GamepadRightShoulder" => gamepad.rightShoulder.isPressed,
+                "GamepadLeftTrigger" => gamepad.leftTrigger.isPressed,
+                "GamepadRightTrigger" => gamepad.rightTrigger.isPressed,
+                // Stick buttons
+                "GamepadLeftStickPress" => gamepad.leftStickButton.isPressed,
+                "GamepadRightStickPress" => gamepad.rightStickButton.isPressed,
+                // Menu buttons
+                "GamepadStart" => gamepad.startButton.isPressed,
+                "GamepadSelect" => gamepad.selectButton.isPressed,
+                // D-pad
+                "GamepadDpadUp" => gamepad.dpad.up.isPressed,
+                "GamepadDpadDown" => gamepad.dpad.down.isPressed,
+                "GamepadDpadLeft" => gamepad.dpad.left.isPressed,
+                "GamepadDpadRight" => gamepad.dpad.right.isPressed,
+                // Left stick directions (analog threshold)
+                "GamepadLeftStickUp" => gamepad.leftStick.ReadValue().y > STICK_THRESHOLD,
+                "GamepadLeftStickDown" => gamepad.leftStick.ReadValue().y < -STICK_THRESHOLD,
+                "GamepadLeftStickLeft" => gamepad.leftStick.ReadValue().x < -STICK_THRESHOLD,
+                "GamepadLeftStickRight" => gamepad.leftStick.ReadValue().x > STICK_THRESHOLD,
+                // Right stick directions (analog threshold)
+                "GamepadRightStickUp" => gamepad.rightStick.ReadValue().y > STICK_THRESHOLD,
+                "GamepadRightStickDown" => gamepad.rightStick.ReadValue().y < -STICK_THRESHOLD,
+                "GamepadRightStickLeft" => gamepad.rightStick.ReadValue().x < -STICK_THRESHOLD,
+                "GamepadRightStickRight" => gamepad.rightStick.ReadValue().x > STICK_THRESHOLD,
+                _ => false
+            };
+        }
+
+        /// <summary>
+        /// Check if a gamepad binding was just pressed this frame.
+        /// For analog stick directions, this checks if the stick just crossed the threshold.
+        /// </summary>
+        private static bool WasGamepadBindingPressedThisFrame(string binding)
+        {
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad == null)
+                return false;
+
+            return binding switch
+            {
+                // Face buttons
+                "GamepadButtonSouth" => gamepad.buttonSouth.wasPressedThisFrame,
+                "GamepadButtonNorth" => gamepad.buttonNorth.wasPressedThisFrame,
+                "GamepadButtonEast" => gamepad.buttonEast.wasPressedThisFrame,
+                "GamepadButtonWest" => gamepad.buttonWest.wasPressedThisFrame,
+                // Shoulder buttons
+                "GamepadLeftShoulder" => gamepad.leftShoulder.wasPressedThisFrame,
+                "GamepadRightShoulder" => gamepad.rightShoulder.wasPressedThisFrame,
+                "GamepadLeftTrigger" => gamepad.leftTrigger.wasPressedThisFrame,
+                "GamepadRightTrigger" => gamepad.rightTrigger.wasPressedThisFrame,
+                // Stick buttons
+                "GamepadLeftStickPress" => gamepad.leftStickButton.wasPressedThisFrame,
+                "GamepadRightStickPress" => gamepad.rightStickButton.wasPressedThisFrame,
+                // Menu buttons
+                "GamepadStart" => gamepad.startButton.wasPressedThisFrame,
+                "GamepadSelect" => gamepad.selectButton.wasPressedThisFrame,
+                // D-pad
+                "GamepadDpadUp" => gamepad.dpad.up.wasPressedThisFrame,
+                "GamepadDpadDown" => gamepad.dpad.down.wasPressedThisFrame,
+                "GamepadDpadLeft" => gamepad.dpad.left.wasPressedThisFrame,
+                "GamepadDpadRight" => gamepad.dpad.right.wasPressedThisFrame,
+                // For analog sticks, we use the current pressed state since there's no "wasPressedThisFrame" for analog
+                // This means holding the stick will register as "pressed" - may want to add proper edge detection later
+                "GamepadLeftStickUp" => gamepad.leftStick.ReadValue().y > STICK_THRESHOLD,
+                "GamepadLeftStickDown" => gamepad.leftStick.ReadValue().y < -STICK_THRESHOLD,
+                "GamepadLeftStickLeft" => gamepad.leftStick.ReadValue().x < -STICK_THRESHOLD,
+                "GamepadLeftStickRight" => gamepad.leftStick.ReadValue().x > STICK_THRESHOLD,
+                "GamepadRightStickUp" => gamepad.rightStick.ReadValue().y > STICK_THRESHOLD,
+                "GamepadRightStickDown" => gamepad.rightStick.ReadValue().y < -STICK_THRESHOLD,
+                "GamepadRightStickLeft" => gamepad.rightStick.ReadValue().x < -STICK_THRESHOLD,
+                "GamepadRightStickRight" => gamepad.rightStick.ReadValue().x > STICK_THRESHOLD,
+                _ => false
+            };
         }
     }
 }

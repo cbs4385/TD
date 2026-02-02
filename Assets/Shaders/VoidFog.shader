@@ -10,38 +10,44 @@ Shader "Custom/VoidFog"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-100" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-100" "RenderPipeline"="UniversalPipeline" }
         LOD 100
 
         Pass
         {
+            Name "ForwardLit"
+            Tags { "LightMode"="UniversalForward" }
+
             ZWrite Off
             Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
 
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
 
-            struct appdata
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 vertex : SV_POSITION;
+                float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 float3 worldPos : TEXCOORD1;
             };
 
-            fixed4 _FogColor;
-            float _EdgeFade;
-            float _NoiseScale;
-            float _NoiseSpeed;
-            float _NoiseStrength;
+            CBUFFER_START(UnityPerMaterial)
+                half4 _FogColor;
+                float _EdgeFade;
+                float _NoiseScale;
+                float _NoiseSpeed;
+                float _NoiseStrength;
+            CBUFFER_END
 
             // Simple noise function
             float hash(float2 p)
@@ -67,7 +73,7 @@ Shader "Custom/VoidFog"
             {
                 float value = 0.0;
                 float amplitude = 0.5;
-                for (int i = 0; i < 3; i++)
+                for (int idx = 0; idx < 3; idx++)
                 {
                     value += amplitude * noise(p);
                     p *= 2.0;
@@ -76,23 +82,23 @@ Shader "Custom/VoidFog"
                 return value;
             }
 
-            v2f vert (appdata v)
+            Varyings vert (Attributes IN)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                return o;
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.uv = IN.uv;
+                OUT.worldPos = TransformObjectToWorld(IN.positionOS.xyz);
+                return OUT;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            half4 frag (Varyings IN) : SV_Target
             {
                 // Calculate edge fade (fade out near edges of quad)
-                float2 edgeDist = min(i.uv, 1.0 - i.uv);
+                float2 edgeDist = min(IN.uv, 1.0 - IN.uv);
                 float edgeFade = smoothstep(0.0, _EdgeFade, min(edgeDist.x, edgeDist.y));
 
                 // Animated noise for fog variation
-                float2 noiseUV = i.worldPos.xy * _NoiseScale + _Time.y * _NoiseSpeed;
+                float2 noiseUV = IN.worldPos.xy * _NoiseScale + _Time.y * _NoiseSpeed;
                 float noiseValue = fbm(noiseUV);
 
                 // Apply noise to alpha
@@ -102,9 +108,9 @@ Shader "Custom/VoidFog"
                 // Clamp alpha
                 alpha = saturate(alpha);
 
-                return fixed4(_FogColor.rgb, alpha);
+                return half4(_FogColor.rgb, alpha);
             }
-            ENDCG
+            ENDHLSL
         }
     }
 

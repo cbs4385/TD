@@ -1,4 +1,5 @@
 using UnityEngine;
+using FaeMaze.Roguelike;
 
 namespace FaeMaze.Systems
 {
@@ -214,6 +215,9 @@ namespace FaeMaze.Systems
                 int oldTier = currentTier;
                 currentTier = newTier;
                 OnTierChanged?.Invoke(currentTier);
+
+                // Notify MetaProgressionManager of tier change
+                MetaProgressionManager.Instance?.RecordDifficultyTier(currentTier);
             }
         }
 

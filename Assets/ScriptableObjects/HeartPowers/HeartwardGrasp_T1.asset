@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: HeartwardGrasp_T1
   m_EditorClassIdentifier:
   powerType: 1
-  displayName: Heartward Grasp
-  description: 'Pulls a visitor through a wall toward the Heart.
-
-    Tier I - Extended Reach: Increased pull range to 3 tiles.'
+  displayName: Yoink!
+  description: Snatch a wanderer's fate with a sneaky tongue.
   tier: 1
   essenceCost: 10
   cooldown: 12

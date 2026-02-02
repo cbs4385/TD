@@ -292,6 +292,9 @@ namespace FaeMaze.UI
             UpdateDisplayText();
         }
 
+        // Threshold for detecting stick movement as a binding
+        private const float STICK_THRESHOLD = 0.7f;
+
         private void Update()
         {
             if (!isCapturing)
@@ -305,7 +308,144 @@ namespace FaeMaze.UI
                 return;
             }
 
-            // Check mouse buttons first (more specific)
+            // Check gamepad inputs (before mouse/keyboard for better responsiveness)
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad != null)
+            {
+                // Check gamepad buttons
+                if (gamepad.buttonSouth.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadButtonSouth");
+                    return;
+                }
+                if (gamepad.buttonNorth.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadButtonNorth");
+                    return;
+                }
+                if (gamepad.buttonEast.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadButtonEast");
+                    return;
+                }
+                if (gamepad.buttonWest.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadButtonWest");
+                    return;
+                }
+                if (gamepad.leftShoulder.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadLeftShoulder");
+                    return;
+                }
+                if (gamepad.rightShoulder.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadRightShoulder");
+                    return;
+                }
+                if (gamepad.leftTrigger.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadLeftTrigger");
+                    return;
+                }
+                if (gamepad.rightTrigger.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadRightTrigger");
+                    return;
+                }
+                if (gamepad.leftStickButton.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadLeftStickPress");
+                    return;
+                }
+                if (gamepad.rightStickButton.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadRightStickPress");
+                    return;
+                }
+                if (gamepad.startButton.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadStart");
+                    return;
+                }
+                if (gamepad.selectButton.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadSelect");
+                    return;
+                }
+
+                // Check D-pad
+                if (gamepad.dpad.up.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadDpadUp");
+                    return;
+                }
+                if (gamepad.dpad.down.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadDpadDown");
+                    return;
+                }
+                if (gamepad.dpad.left.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadDpadLeft");
+                    return;
+                }
+                if (gamepad.dpad.right.wasPressedThisFrame)
+                {
+                    CompleteCapture("GamepadDpadRight");
+                    return;
+                }
+
+                // Check analog sticks (directional - requires holding past threshold)
+                Vector2 leftStick = gamepad.leftStick.ReadValue();
+                Vector2 rightStick = gamepad.rightStick.ReadValue();
+
+                // Left stick directions
+                if (leftStick.y > STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadLeftStickUp");
+                    return;
+                }
+                if (leftStick.y < -STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadLeftStickDown");
+                    return;
+                }
+                if (leftStick.x < -STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadLeftStickLeft");
+                    return;
+                }
+                if (leftStick.x > STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadLeftStickRight");
+                    return;
+                }
+
+                // Right stick directions
+                if (rightStick.y > STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadRightStickUp");
+                    return;
+                }
+                if (rightStick.y < -STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadRightStickDown");
+                    return;
+                }
+                if (rightStick.x < -STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadRightStickLeft");
+                    return;
+                }
+                if (rightStick.x > STICK_THRESHOLD)
+                {
+                    CompleteCapture("GamepadRightStickRight");
+                    return;
+                }
+            }
+
+            // Check mouse buttons
             Mouse mouse = Mouse.current;
             if (mouse != null)
             {

@@ -67,7 +67,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4e44fad43795e384f9864410125ba698, type: 3}
   m_Name: RadialBlur
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.PostProcessing.RadialBlurRenderFeature
-  m_Active: 1
+  m_Active: 0
   settings:
     renderPassEvent: 600
     shader: {fileID: 4800000, guid: 3f8a2e5c9b1d4a6e7c8f0a2b3c4d5e6f, type: 3}

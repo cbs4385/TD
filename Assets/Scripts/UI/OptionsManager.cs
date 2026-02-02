@@ -968,7 +968,17 @@ namespace FaeMaze.UI
             if (fullscreenToggle != null)
                 GameSettings.Fullscreen = fullscreenToggle.isOn;
             if (resolutionDropdown != null)
+            {
                 GameSettings.ResolutionIndex = resolutionDropdown.value;
+                // Also save the actual dimensions for reliable resolution setting
+                int index = resolutionDropdown.value;
+                if (index >= 0 && index < availableResolutions.Count)
+                {
+                    Resolution res = availableResolutions[index];
+                    GameSettings.ResolutionWidth = res.width;
+                    GameSettings.ResolutionHeight = res.height;
+                }
+            }
 
             // Camera settings
             GameSettings.CameraFieldOfView = GetSliderValue(fieldOfViewSlider);

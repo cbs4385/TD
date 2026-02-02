@@ -42,6 +42,9 @@ namespace FaeMaze.Systems
 
         private void Awake()
         {
+            // Load default prefabs from Resources if not assigned in inspector
+            LoadDefaultPrefabs();
+
             if (autoAddRenderer)
             {
                 SetupRenderer();
@@ -55,6 +58,41 @@ namespace FaeMaze.Systems
             if (autoCenterCamera)
             {
                 CenterCameraOnMaze();
+            }
+        }
+
+        private void LoadDefaultPrefabs()
+        {
+            // Load wall prefab if not assigned
+            if (defaultWallPrefab == null)
+            {
+#if UNITY_EDITOR
+                defaultWallPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/tree.prefab");
+#else
+                defaultWallPrefab = Resources.Load<GameObject>("Prefabs/Tile/tree");
+#endif
+                if (defaultWallPrefab == null)
+                {
+                    Debug.LogWarning("MazeVisualSetup: Could not load default wall prefab from Resources/Prefabs/Tile/tree");
+                }
+            }
+
+            // Load undergrowth prefab if not assigned
+            if (defaultUndergrowthPrefab == null)
+            {
+#if UNITY_EDITOR
+                defaultUndergrowthPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/undergrowth.prefab");
+#endif
+                // Note: undergrowth prefab may not exist in Resources, which is OK
+            }
+
+            // Load water prefab if not assigned
+            if (defaultWaterPrefab == null)
+            {
+#if UNITY_EDITOR
+                defaultWaterPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/water.prefab");
+#endif
+                // Note: water prefab may not exist in Resources, which is OK
             }
         }
 

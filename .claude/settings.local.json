@@ -30,7 +30,10 @@
       "Bash(type \"$env:LOCALAPPDATA\\\\Unity\\\\Editor\\\\Editor.log\")",
       "Bash(Select-String -Pattern \"error|Error|ERROR|Build completed|Build failed\" -Context 0,2)",
       "Bash(Select-Object -Last 30)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "WebFetch(domain:docs.unity3d.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\" -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit -logFile build_log.txt)"
     ],
     "deny": [],
     "ask": []

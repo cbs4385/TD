@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: HeartwardGrasp_T3
   m_EditorClassIdentifier:
   powerType: 1
-  displayName: Heartward Grasp
-  description: 'Pulls a visitor through a wall toward the Heart.
-
-    Tier III - Crushing Embrace: Pulled visitor becomes Mesmerized for 4 seconds.'
+  displayName: Yoink! III
+  description: Snatch wanderers with lightning speed.
   tier: 3
   chargeCost: 1
   cooldown: 12

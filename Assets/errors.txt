@@ -1,62 +1,429 @@
-=== Options Scene Restructure ===
-UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:40)
+Your project uses Compatibility Mode, which disables the render graph system. Compatibility Mode is deprecated. Migrate your ScriptableRenderPasses to the Render Graph API instead. After you migrate, go to Edit > Project Settings > Player and remove the URP_COMPATIBILITY_MODE define from the Scripting Define Symbols. If you don't remove the define, build time and build size are slightly increased.
+UnityEditor.EditorAssemblies:ProcessInitializeOnLoadMethodAttributes ()
 
-NOTE: For best results, restore Options.unity from git before running this script.
+[MetaProgression] Loaded: 20 Fae Dust, 0 total runs
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:41)
+FaeMaze.Roguelike.MetaProgressionManager:LoadAllData () (at Assets/Scripts/Roguelike/MetaProgressionManager.cs:543)
+FaeMaze.Roguelike.MetaProgressionManager:Initialize () (at Assets/Scripts/Roguelike/MetaProgressionManager.cs:192)
+FaeMaze.Roguelike.MetaProgressionManager:Awake () (at Assets/Scripts/Roguelike/MetaProgressionManager.cs:177)
+UnityEngine.GameObject:AddComponent<FaeMaze.Roguelike.MetaProgressionManager> ()
+FaeMaze.Roguelike.RoguelikeBootstrap:Initialize () (at Assets/Scripts/Roguelike/RoguelikeBootstrap.cs:30)
 
-If AudioSection or CameraSection are missing, their content won't be moved.
+[PowerProgression] Run tiers reset to Tier I
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:42)
+FaeMaze.Roguelike.PowerProgressionManager:ResetRunTiers () (at Assets/Scripts/Roguelike/PowerProgressionManager.cs:152)
+FaeMaze.Roguelike.PowerProgressionManager:Initialize () (at Assets/Scripts/Roguelike/PowerProgressionManager.cs:99)
+FaeMaze.Roguelike.PowerProgressionManager:Awake () (at Assets/Scripts/Roguelike/PowerProgressionManager.cs:87)
+UnityEngine.GameObject:AddComponent<FaeMaze.Roguelike.PowerProgressionManager> ()
+FaeMaze.Roguelike.RoguelikeBootstrap:Initialize () (at Assets/Scripts/Roguelike/RoguelikeBootstrap.cs:42)
 
-Found sections - Audio: False, Camera: False, Visitor: True, VisitorType: True, Wave: True, Flow: True
+[RoguelikeBootstrap] Managers initialized
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:109)
+FaeMaze.Roguelike.RoguelikeBootstrap:Initialize () (at Assets/Scripts/Roguelike/RoguelikeBootstrap.cs:49)
 
-Removing duplicate TabBar: TabBar
+[RandomManager] Initialized with seed: 31415926
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:CleanupExistingTabBars (UnityEngine.Transform) (at Assets/Editor/OptionsSceneRestructure.cs:307)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:114)
+FaeMaze.Systems.RandomManager:Initialize (int) (at Assets/Scripts/Systems/RandomManager.cs:56)
+FaeMaze.Systems.RandomManager:Initialize () (at Assets/Scripts/Systems/RandomManager.cs:33)
+FaeMaze.Systems.GameController:Awake () (at Assets/Scripts/Systems/GameController.cs:164)
 
-Removing duplicate panel: VideoPanel
+[MazeRenderer] ExtractHeartGroundMaterial - Editor AssetDatabase texture: EarthenGroundTexture
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:CleanupDuplicatePanels (UnityEngine.Transform) (at Assets/Editor/OptionsSceneRestructure.cs:352)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:117)
+FaeMaze.Systems.MazeRenderer:ExtractHeartGroundMaterial () (at Assets/Scripts/Systems/MazeRenderer.cs:220)
+FaeMaze.Systems.MazeRenderer:Awake () (at Assets/Scripts/Systems/MazeRenderer.cs:205)
 
-Removing duplicate panel: AudioPanel
+[MazeRenderer] ExtractHeartGroundMaterial - EarthenGroundTextured shader: FOUND
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:CleanupDuplicatePanels (UnityEngine.Transform) (at Assets/Editor/OptionsSceneRestructure.cs:352)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:117)
+FaeMaze.Systems.MazeRenderer:ExtractHeartGroundMaterial () (at Assets/Scripts/Systems/MazeRenderer.cs:234)
+FaeMaze.Systems.MazeRenderer:Awake () (at Assets/Scripts/Systems/MazeRenderer.cs:205)
 
-Creating display rows in Content (parent: DISPLAYSETTINGSSection)
+[MazeRenderer] SUCCESS: Using TEXTURED path material with EarthenGroundTexture.png
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:187)
+FaeMaze.Systems.MazeRenderer:ExtractHeartGroundMaterial () (at Assets/Scripts/Systems/MazeRenderer.cs:244)
+FaeMaze.Systems.MazeRenderer:Awake () (at Assets/Scripts/Systems/MazeRenderer.cs:205)
 
-Created toggle row 'Fullscreen' under Content
+[FairyRing] Added SphereCollider to FairyRing_Node2: radius=2.5, isTrigger=true
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:CreateToggleRow (UnityEngine.Transform,string) (at Assets/Editor/OptionsSceneRestructure.cs:643)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:189)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnFairyRingAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1325)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnNodeProp (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1077)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnPukaAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1102)
+FaeMaze.Systems.DynamicMazeGrowth/<GrowMazeWorldSpaceAsync>d__58:MoveNext () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:614)
+FaeMaze.Systems.DynamicMazeGrowth:GrowMazeSynchronous (ForestMaze.PlanarForestMazeGenerator/ForestMapState) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:321)
+FaeMaze.Systems.DynamicMazeGrowth:RunInitialGrowthStagesSynchronous () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:306)
+FaeMaze.Systems.DynamicMazeGrowth:Awake () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:260)
 
-Created dropdown row 'Resolution' under Content
+[FairyRing] Added Rigidbody to FairyRing_Node2
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:CreateDropdownRow (UnityEngine.Transform,string) (at Assets/Editor/OptionsSceneRestructure.cs:727)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:190)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnFairyRingAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1347)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnNodeProp (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1077)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnPukaAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1102)
+FaeMaze.Systems.DynamicMazeGrowth/<GrowMazeWorldSpaceAsync>d__58:MoveNext () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:614)
+FaeMaze.Systems.DynamicMazeGrowth:GrowMazeSynchronous (ForestMaze.PlanarForestMazeGenerator/ForestMapState) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:321)
+FaeMaze.Systems.DynamicMazeGrowth:RunInitialGrowthStagesSynchronous () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:306)
+FaeMaze.Systems.DynamicMazeGrowth:Awake () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:260)
 
-Display content now has 3 children
+[FairyRing] Added FairyRing component to FairyRing_Node2
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:192)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnFairyRingAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1355)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnNodeProp (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1077)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnPukaAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1102)
+FaeMaze.Systems.DynamicMazeGrowth/<GrowMazeWorldSpaceAsync>d__58:MoveNext () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:614)
+FaeMaze.Systems.DynamicMazeGrowth:GrowMazeSynchronous (ForestMaze.PlanarForestMazeGenerator/ForestMapState) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:321)
+FaeMaze.Systems.DynamicMazeGrowth:RunInitialGrowthStagesSynchronous () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:306)
+FaeMaze.Systems.DynamicMazeGrowth:Awake () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:260)
 
-Gameplay sections remain in GameplayPanel
+[FairyRing] Added SphereCollider to FairyRing_Node4: radius=2.5, isTrigger=true
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:242)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnFairyRingAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1325)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnNodeProp (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1077)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnPukaAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1102)
+FaeMaze.Systems.DynamicMazeGrowth/<GrowMazeWorldSpaceAsync>d__58:MoveNext () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:614)
+FaeMaze.Systems.DynamicMazeGrowth:GrowMazeSynchronous (ForestMaze.PlanarForestMazeGenerator/ForestMapState) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:321)
+FaeMaze.Systems.DynamicMazeGrowth:RunInitialGrowthStagesSynchronous () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:306)
+FaeMaze.Systems.DynamicMazeGrowth:Awake () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:260)
 
-OptionsManager wired up successfully!
+[FairyRing] Added Rigidbody to FairyRing_Node4
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:WireUpOptionsManager (FaeMaze.UI.OptionsManager,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject,UnityEngine.GameObject) (at Assets/Editor/OptionsSceneRestructure.cs:1092)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:257)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnFairyRingAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1347)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnNodeProp (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1077)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnPukaAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1102)
+FaeMaze.Systems.DynamicMazeGrowth/<GrowMazeWorldSpaceAsync>d__58:MoveNext () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:614)
+FaeMaze.Systems.DynamicMazeGrowth:GrowMazeSynchronous (ForestMaze.PlanarForestMazeGenerator/ForestMapState) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:321)
+FaeMaze.Systems.DynamicMazeGrowth:RunInitialGrowthStagesSynchronous () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:306)
+FaeMaze.Systems.DynamicMazeGrowth:Awake () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:260)
 
-Options scene restructured successfully! Save the scene to preserve changes.
+[FairyRing] Added FairyRing component to FairyRing_Node4
 UnityEngine.Debug:Log (object)
-FaeMaze.Editor.OptionsSceneRestructure:RestructureOptionsScene () (at Assets/Editor/OptionsSceneRestructure.cs:263)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnFairyRingAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1355)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnNodeProp (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1077)
+FaeMaze.Systems.DynamicMazeGrowth:SpawnPukaAtNode (ForestMaze.PlanarForestMazeGenerator/Node,int) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:1102)
+FaeMaze.Systems.DynamicMazeGrowth/<GrowMazeWorldSpaceAsync>d__58:MoveNext () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:614)
+FaeMaze.Systems.DynamicMazeGrowth:GrowMazeSynchronous (ForestMaze.PlanarForestMazeGenerator/ForestMapState) (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:321)
+FaeMaze.Systems.DynamicMazeGrowth:RunInitialGrowthStagesSynchronous () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:306)
+FaeMaze.Systems.DynamicMazeGrowth:Awake () (at Assets/Scripts/Systems/DynamicMazeGrowth.cs:260)
+
+[MetaProgression] Run started
+UnityEngine.Debug:Log (object)
+FaeMaze.Roguelike.MetaProgressionManager:OnRunStart () (at Assets/Scripts/Roguelike/MetaProgressionManager.cs:260)
+FaeMaze.Systems.GameController:Start () (at Assets/Scripts/Systems/GameController.cs:199)
+
+[PowerProgression] Run tiers reset to Tier I
+UnityEngine.Debug:Log (object)
+FaeMaze.Roguelike.PowerProgressionManager:ResetRunTiers () (at Assets/Scripts/Roguelike/PowerProgressionManager.cs:152)
+FaeMaze.Systems.GameController:Start () (at Assets/Scripts/Systems/GameController.cs:202)
+
+[CameraController3D] InitializeFocalPoint called, mazeGridBehaviour=exists
+UnityEngine.Debug:Log (object)
+FaeMaze.Cameras.CameraController3D:InitializeFocalPoint () (at Assets/Scripts/Camera/CameraController3D.cs:854)
+FaeMaze.Cameras.CameraController3D:Start () (at Assets/Scripts/Camera/CameraController3D.cs:299)
+
+[CameraController3D] Created Focal Point GameObject
+UnityEngine.Debug:Log (object)
+FaeMaze.Cameras.CameraController3D:InitializeFocalPoint () (at Assets/Scripts/Camera/CameraController3D.cs:872)
+FaeMaze.Cameras.CameraController3D:Start () (at Assets/Scripts/Camera/CameraController3D.cs:299)
+
+[CameraController3D] heartReady=True, GameController=exists, Heart=exists
+UnityEngine.Debug:Log (object)
+FaeMaze.Cameras.CameraController3D:InitializeFocalPoint () (at Assets/Scripts/Camera/CameraController3D.cs:882)
+FaeMaze.Cameras.CameraController3D:Start () (at Assets/Scripts/Camera/CameraController3D.cs:299)
+
+[CameraController3D] Focal point INITIALIZED at (0.00, 0.00, 0.00), focalPointInitialized=true
+UnityEngine.Debug:Log (object)
+FaeMaze.Cameras.CameraController3D:InitializeFocalPoint () (at Assets/Scripts/Camera/CameraController3D.cs:934)
+FaeMaze.Cameras.CameraController3D:Start () (at Assets/Scripts/Camera/CameraController3D.cs:299)
+
+[RandomManager] Initialized with seed: 31415926
+UnityEngine.Debug:Log (object)
+FaeMaze.Systems.RandomManager:Initialize (int) (at Assets/Scripts/Systems/RandomManager.cs:56)
+FaeMaze.Systems.RandomManager:Initialize () (at Assets/Scripts/Systems/RandomManager.cs:33)
+FaeMaze.Systems.RandomManager:EnsureInitialized () (at Assets/Scripts/Systems/RandomManager.cs:66)
+FaeMaze.Systems.RandomManager:Range (single,single) (at Assets/Scripts/Systems/RandomManager.cs:100)
+FaeMaze.Systems.MazeRenderer:CreateWorldSpaceTile (UnityEngine.Vector3,single,char,UnityEngine.Transform,bool,int,FaeMaze.Systems.GraphElementWallContainer) (at Assets/Scripts/Systems/MazeRenderer.cs:1504)
+FaeMaze.Systems.MazeRenderer:RenderEdgeWalls (System.Collections.Generic.IEnumerable`1<ForestMaze.PlanarForestMazeGenerator/Edge>,System.Collections.Generic.IEnumerable`1<ForestMaze.PlanarForestMazeGenerator/Node>,UnityEngine.Transform,System.Collections.Generic.IEnumerable`1<ForestMaze.PlanarForestMazeGenerator/Edge>) (at Assets/Scripts/Systems/MazeRenderer.cs:1161)
+FaeMaze.Systems.MazeRenderer:RenderWallBorder (ForestMaze.PlanarForestMazeGenerator/ForestMapState,UnityEngine.Transform) (at Assets/Scripts/Systems/MazeRenderer.cs:624)
+FaeMaze.Systems.MazeRenderer:RenderWorldSpaceMaze () (at Assets/Scripts/Systems/MazeRenderer.cs:370)
+FaeMaze.Systems.MazeRenderer:Start () (at Assets/Scripts/Systems/MazeRenderer.cs:324)
+
+[FairyRing] FairyRing_Node2 Start: Rigidbody found and configured (isKinematic=True)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:75)
+
+[FairyRing] FairyRing_Node2 Start: Collider found - type=SphereCollider, isTrigger=True, center=(0.00, 0.00, 0.00), size=2.5
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:90)
+
+[FairyRing] FairyRing_Node2 has 10 total colliders (including children)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:99)
+
+[FairyRing]   - FairyRing_Node2: SphereCollider, isTrigger=True
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Cylinder: CapsuleCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere: SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere (6): SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere (7): SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere (1): SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere (2): SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere (3): SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere (4): SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing]   - Sphere (5): SphereCollider, isTrigger=False
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing] Layer collision check: Default(0) vs Visitor(6) = CAN COLLIDE
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:109)
+
+[FairyRing] FairyRing_Node2 is on layer Default (0)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:110)
+
+[FairyRing] FairyRing_Node4 Start: Rigidbody found and configured (isKinematic=True)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:75)
+
+[FairyRing] FairyRing_Node4 Start: Collider found - type=SphereCollider, isTrigger=True, center=(0.00, 0.00, 0.00), size=2.5
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:90)
+
+[FairyRing] FairyRing_Node4 has 10 total colliders (including children)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:99)
+
+[FairyRing]   - FairyRing_Node4: SphereCollider, isTrigger=True
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:102)
+
+[FairyRing] FairyRing_Node4 is on layer Default (0)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:Start () (at Assets/Scripts/Props/FairyRing.cs:110)
+
+[WaveSpawner] LoadSettings: enableRedCap=True, startingEssence=100, redCapPrefab=redcap
+UnityEngine.Debug:Log (object)
+FaeMaze.Systems.WaveSpawner:LoadSettings () (at Assets/Scripts/Systems/WaveSpawner.cs:193)
+FaeMaze.Systems.WaveSpawner:Start () (at Assets/Scripts/Systems/WaveSpawner.cs:152)
+
+[FairyRing] OnTriggerEnter: NodeColumn_4_normal (tag=MazeNode, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on NodeColumn_4_normal or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_-18.1_-1.7 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_-18.1_-1.7 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_._-17.4_-1.4 (tag=MazePath, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_._-17.4_-1.4 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: NodeCenterCollider_4 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on NodeCenterCollider_4 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_-16.7_-1.0 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_-16.7_-1.0 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_-16.0_-1.1 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_-16.0_-1.1 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_._-15.2_-1.1 (tag=MazePath, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_._-15.2_-1.1 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_-14.6_-1.7 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_-14.6_-1.7 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: NodeColumn_2_normal (tag=MazeNode, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on NodeColumn_2_normal or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_10.0_9.4 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_10.0_9.4 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_._10.3_10.1 (tag=MazePath, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_._10.3_10.1 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_10.6_10.9 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_10.6_10.9 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_10.8_7.3 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_10.8_7.3 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_._11.5_6.9 (tag=MazePath, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_._11.5_6.9 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: NodeCenterCollider_2 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on NodeCenterCollider_2 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_12.2_6.6 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_12.2_6.6 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_12.8_6.5 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_12.8_6.5 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_._13.5_6.8 (tag=MazePath, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_._13.5_6.8 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_14.3_7.1 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_14.3_7.1 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_14.6_7.5 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_14.6_7.5 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_._14.9_8.2 (tag=MazePath, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_._14.9_8.2 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[FairyRing] OnTriggerEnter: WorldTile_#_15.3_9.0 (tag=Untagged, layer=Default)
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:177)
+
+[FairyRing] No VisitorControllerBase found on WorldTile_#_15.3_9.0 or its parents
+UnityEngine.Debug:Log (object)
+FaeMaze.Props.FairyRing:OnTriggerEnter (UnityEngine.Collider) (at Assets/Scripts/Props/FairyRing.cs:201)
+
+[CameraController3D] Turn bindings - Left(A):False, LeftAlt(LeftArrow):False, Right(D):False, RightAlt(RightArrow):False
+UnityEngine.Debug:Log (object)
+FaeMaze.Cameras.CameraController3D:HandleFocalPointInput () (at Assets/Scripts/Camera/CameraController3D.cs:470)
+FaeMaze.Cameras.CameraController3D:Update () (at Assets/Scripts/Camera/CameraController3D.cs:331)
+
+[InputBindingHelper] Key 'A' -> Key.A is PRESSED
+UnityEngine.Debug:Log (object)
+FaeMaze.Systems.InputBindingHelper:IsBindingPressed (string) (at Assets/Scripts/Systems/InputBindingHelper.cs:73)
+FaeMaze.Cameras.CameraController3D:HandleFocalPointInput () (at Assets/Scripts/Camera/CameraController3D.cs:463)
+FaeMaze.Cameras.CameraController3D:Update () (at Assets/Scripts/Camera/CameraController3D.cs:331)
+
+[InputBindingHelper] Key 'D' -> Key.D is PRESSED
+UnityEngine.Debug:Log (object)
+FaeMaze.Systems.InputBindingHelper:IsBindingPressed (string) (at Assets/Scripts/Systems/InputBindingHelper.cs:73)
+FaeMaze.Cameras.CameraController3D:HandleFocalPointInput () (at Assets/Scripts/Camera/CameraController3D.cs:465)
+FaeMaze.Cameras.CameraController3D:Update () (at Assets/Scripts/Camera/CameraController3D.cs:331)
+
+[CameraController3D] Turn bindings - Left(A):True, LeftAlt(LeftArrow):False, Right(D):False, RightAlt(RightArrow):False
+UnityEngine.Debug:Log (object)
+FaeMaze.Cameras.CameraController3D:HandleFocalPointInput () (at Assets/Scripts/Camera/CameraController3D.cs:470)
+FaeMaze.Cameras.CameraController3D:Update () (at Assets/Scripts/Camera/CameraController3D.cs:331)
 

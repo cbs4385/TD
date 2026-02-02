@@ -13,155 +13,151 @@ Shader "Custom/EarthenGround"
         _ColorVariation ("Color Variation", Range(0, 1)) = 0.6
         _EdgeDarkening ("Edge Darkening", Range(0, 1)) = 0.1
     }
+
     SubShader
     {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
+        Tags { "RenderType"="Opaque" "Queue"="Geometry" "RenderPipeline"="UniversalPipeline" }
         LOD 200
 
         Pass
         {
-            CGPROGRAM
+            Name "ForwardLit"
+            Tags { "LightMode"="UniversalForward" }
+
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
+            #pragma multi_compile_fog
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
 
-            struct appdata
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
-                float3 normal : NORMAL;
+                float3 normalOS : NORMAL;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 vertex : SV_POSITION;
+                float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 float3 worldPos : TEXCOORD1;
                 float3 worldNormal : TEXCOORD2;
             };
 
-            fixed4 _DeepShadow;
-            fixed4 _DarkBase;
-            fixed4 _MidTone;
-            fixed4 _LightMid;
-            fixed4 _Highlight;
-            float _NoiseScale;
-            float _DetailScale;
-            float _ColorVariation;
-            float _EdgeDarkening;
+            CBUFFER_START(UnityPerMaterial)
+                half4 _DeepShadow;
+                half4 _DarkBase;
+                half4 _MidTone;
+                half4 _LightMid;
+                half4 _Highlight;
+                float _NoiseScale;
+                float _DetailScale;
+                float _ColorVariation;
+                float _EdgeDarkening;
+            CBUFFER_END
 
-            // Hash functions for noise
+            // High quality hash - uses multiple primes to avoid patterns
             float hash(float2 p)
             {
-                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+                p = float2(dot(p, float2(127.1, 311.7)), dot(p, float2(269.5, 183.3)));
+                return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
             }
 
-            float hash3(float3 p)
-            {
-                return frac(sin(dot(p, float3(127.1, 311.7, 74.7))) * 43758.5453);
-            }
-
-            // Value noise
+            // Value noise with smooth interpolation
             float noise(float2 p)
             {
                 float2 i = floor(p);
                 float2 f = frac(p);
-                f = f * f * (3.0 - 2.0 * f);
 
-                float a = hash(i);
+                // Quintic interpolation for smoother results
+                float2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+                float a = hash(i + float2(0.0, 0.0));
                 float b = hash(i + float2(1.0, 0.0));
                 float c = hash(i + float2(0.0, 1.0));
                 float d = hash(i + float2(1.0, 1.0));
 
-                return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+                return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
             }
 
-            // Fractal Brownian Motion for more natural look
+            // Fractal Brownian Motion - unrolled for compatibility
             float fbm(float2 p)
             {
                 float value = 0.0;
-                float amplitude = 0.5;
-                float frequency = 1.0;
+                float amp = 0.5;
 
-                for (int i = 0; i < 4; i++)
-                {
-                    value += amplitude * noise(p * frequency);
-                    amplitude *= 0.5;
-                    frequency *= 2.0;
-                }
+                value += amp * noise(p); p *= 2.0; amp *= 0.5;
+                value += amp * noise(p); p *= 2.0; amp *= 0.5;
+                value += amp * noise(p); p *= 2.0; amp *= 0.5;
+                value += amp * noise(p);
+
                 return value;
             }
 
-            // Voronoi-like pattern for dirt clumps
+            // Voronoi - unrolled loops for compatibility
             float voronoi(float2 p)
             {
                 float2 i = floor(p);
                 float2 f = frac(p);
-
                 float minDist = 1.0;
 
-                for (int y = -1; y <= 1; y++)
-                {
-                    for (int x = -1; x <= 1; x++)
-                    {
-                        float2 neighbor = float2(x, y);
-                        float2 cellPoint = hash(i + neighbor) * 0.5 + 0.25;
-                        float2 diff = neighbor + cellPoint - f;
-                        float dist = length(diff);
-                        minDist = min(minDist, dist);
-                    }
-                }
-                return minDist;
+                // Unrolled 3x3 neighbor check
+                float2 n, cp, diff;
+                float d;
+
+                n = float2(-1, -1); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2( 0, -1); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2( 1, -1); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2(-1,  0); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2( 0,  0); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2( 1,  0); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2(-1,  1); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2( 0,  1); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+                n = float2( 1,  1); cp = float2(hash(i + n), hash(i + n + float2(0.5, 0.5))) * 0.5 + 0.25; diff = n + cp - f; d = dot(diff, diff); minDist = min(minDist, d);
+
+                return sqrt(minDist);
             }
 
-            v2f vert (appdata v)
+            Varyings vert (Attributes IN)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
-                return o;
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.uv = IN.uv;
+                OUT.worldPos = TransformObjectToWorld(IN.positionOS.xyz);
+                OUT.worldNormal = TransformObjectToWorldNormal(IN.normalOS);
+                return OUT;
             }
 
             // Sample the 5-stop gradient based on t (0-1)
-            fixed4 SampleGradient(float t)
+            half4 SampleGradient(float t)
             {
                 t = saturate(t);
 
-                if (t < 0.25)
-                {
-                    // Deep shadow to Dark base
-                    return lerp(_DeepShadow, _DarkBase, t / 0.25);
-                }
-                else if (t < 0.5)
-                {
-                    // Dark base to Mid tone
-                    return lerp(_DarkBase, _MidTone, (t - 0.25) / 0.25);
-                }
-                else if (t < 0.75)
-                {
-                    // Mid tone to Light mid
-                    return lerp(_MidTone, _LightMid, (t - 0.5) / 0.25);
-                }
-                else
-                {
-                    // Light mid to Highlight
-                    return lerp(_LightMid, _Highlight, (t - 0.75) / 0.25);
-                }
+                // Use smoothstep blending between gradient stops
+                half4 color = _DeepShadow;
+                color = lerp(color, _DarkBase, saturate(t * 4.0));
+                color = lerp(color, _MidTone, saturate((t - 0.25) * 4.0));
+                color = lerp(color, _LightMid, saturate((t - 0.5) * 4.0));
+                color = lerp(color, _Highlight, saturate((t - 0.75) * 4.0));
+
+                return color;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            half4 frag (Varyings IN) : SV_Target
             {
                 // Use world position for seamless tiling across tiles
-                float2 worldUV = i.worldPos.xy;
+                float2 worldUV = IN.worldPos.xy;
 
                 // Multiple noise layers at different frequencies for speckled look
                 float noise1 = noise(worldUV * _NoiseScale * 0.5);
                 float noise2 = noise(worldUV * _NoiseScale * 1.2);
                 float noise3 = noise(worldUV * _NoiseScale * 2.5);
-                float noise4 = noise(worldUV * _DetailScale);        // Fine speckle
-                float noise5 = noise(worldUV * _DetailScale * 2.0);  // Extra fine speckle
+                float noise4 = noise(worldUV * _DetailScale);
+                float noise5 = noise(worldUV * _DetailScale * 2.0);
 
                 // FBM for larger variation
                 float largeVariation = fbm(worldUV * _NoiseScale * 0.2);
@@ -169,10 +165,9 @@ Shader "Custom/EarthenGround"
                 // Voronoi for irregular patches
                 float voronoiPattern = voronoi(worldUV * _NoiseScale * 0.4);
 
-                // Create highly speckled base by combining sharp noise transitions
-                float speckle1 = step(0.45, noise4) * step(noise4, 0.55) ? 1.0 : 0.0;
-                float speckle2 = step(0.4, noise5) * step(noise5, 0.6) ? 0.8 : 0.0;
-                float speckleIntensity = max(speckle1, speckle2) * 0.3;
+                // Create speckled base
+                float speckle = step(0.45, noise4) * step(noise4, 0.55) * 0.3;
+                speckle = max(speckle, step(0.4, noise5) * step(noise5, 0.6) * 0.24);
 
                 // Combine noises with more variation
                 float colorMix = noise1 * 0.15 + noise2 * 0.25 + noise3 * 0.2 + largeVariation * 0.2 + noise4 * 0.2;
@@ -182,13 +177,13 @@ Shader "Custom/EarthenGround"
                 colorMix *= lerp(0.5, 1.0, voronoiDark);
 
                 // Add random speckle highlights
-                colorMix += speckleIntensity;
+                colorMix += speckle;
 
                 // Expand range to use full gradient
                 colorMix = saturate(colorMix * 1.3 - 0.1);
 
                 // Sample the 5-stop gradient
-                fixed4 groundColor = SampleGradient(colorMix);
+                half4 groundColor = SampleGradient(colorMix);
 
                 // Add fine grain speckle variation directly to color
                 float grainSpeckle = (noise5 - 0.5) * 0.12 * _ColorVariation;
@@ -200,87 +195,62 @@ Shader "Custom/EarthenGround"
                 groundColor.rgb += spotIntensity * 0.08;
 
                 // Edge darkening based on UV (subtle, for depth between tiles)
-                float2 edgeDist = min(i.uv, 1.0 - i.uv);
+                float2 edgeDist = min(IN.uv, 1.0 - IN.uv);
                 float edgeFactor = smoothstep(0.0, 0.08, min(edgeDist.x, edgeDist.y));
                 groundColor.rgb *= lerp(1.0 - _EdgeDarkening, 1.0, edgeFactor);
 
                 // Very subtle directional lighting
                 float3 lightDir = normalize(float3(0.2, 0.4, -1.0));
-                float ndotl = dot(i.worldNormal, lightDir) * 0.08 + 0.92;
+                float ndotl = dot(IN.worldNormal, lightDir) * 0.08 + 0.92;
                 groundColor.rgb *= ndotl;
 
                 groundColor.a = 1.0;
                 return groundColor;
             }
-            ENDCG
+            ENDHLSL
         }
-    }
 
-    // Fallback for older/integrated GPUs - simplified noise
-    SubShader
-    {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
-        LOD 50
-
+        // Depth pass for shadows
         Pass
         {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #pragma target 2.0
-            #include "UnityCG.cginc"
+            Name "DepthOnly"
+            Tags { "LightMode"="DepthOnly" }
 
-            struct appdata
+            ZWrite On
+            ColorMask 0
+
+            HLSLPROGRAM
+            #pragma vertex DepthOnlyVertex
+            #pragma fragment DepthOnlyFragment
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
+                float4 positionOS : POSITION;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 vertex : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
+                float4 positionHCS : SV_POSITION;
             };
 
-            fixed4 _DarkBase;
-            fixed4 _MidTone;
-            float _NoiseScale;
-
-            float hash(float2 p)
+            Varyings DepthOnlyVertex(Attributes IN)
             {
-                return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                return OUT;
             }
 
-            float noise(float2 p)
+            half4 DepthOnlyFragment(Varyings IN) : SV_Target
             {
-                float2 i = floor(p);
-                float2 f = frac(p);
-                f = f * f * (3.0 - 2.0 * f);
-                float a = hash(i);
-                float b = hash(i + float2(1.0, 0.0));
-                float c = hash(i + float2(0.0, 1.0));
-                float d = hash(i + float2(1.0, 1.0));
-                return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+                return 0;
             }
-
-            v2f vert (appdata v)
-            {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                return o;
-            }
-
-            fixed4 frag (v2f i) : SV_Target
-            {
-                float n = noise(i.worldPos.xy * _NoiseScale);
-                return lerp(_DarkBase, _MidTone, n);
-            }
-            ENDCG
+            ENDHLSL
         }
     }
 
-    FallBack "Universal Render Pipeline/Lit"
+    // NO FALLBACK - if this shader fails, we want to see the error, not silently use wrong shader
+    // FallBack Off would show magenta, which is better for debugging than wrong colors
+    FallBack Off
 }

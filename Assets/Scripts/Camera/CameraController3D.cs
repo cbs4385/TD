@@ -413,10 +413,20 @@ namespace FaeMaze.Cameras
             }
         }
 
+        // Debug logging for camera input
+        private static bool cameraDebugLogging = false;
+        private static float cameraLastLogTime = 0f;
+        private const float CAMERA_LOG_INTERVAL = 2f;
+
         private void HandleFocalPointInput()
         {
             if (!useFocalPointMode || focalPointTransform == null)
             {
+                if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
+                {
+                    Debug.Log($"[CameraController3D] HandleFocalPointInput early exit: useFocalPointMode={useFocalPointMode}, focalPointTransform={(focalPointTransform != null ? "exists" : "null")}");
+                    cameraLastLogTime = Time.time;
+                }
                 return;
             }
 
@@ -424,6 +434,11 @@ namespace FaeMaze.Cameras
             // This prevents user rotation from being overwritten by late initialization
             if (!focalPointInitialized)
             {
+                if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
+                {
+                    Debug.Log($"[CameraController3D] HandleFocalPointInput: focalPointInitialized=false, skipping input");
+                    cameraLastLogTime = Time.time;
+                }
                 return;
             }
 
@@ -445,14 +460,23 @@ namespace FaeMaze.Cameras
             }
 
             float turnInput = 0f;
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding))
+            bool turnLeftPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding);
+            bool turnLeftAltPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding);
+            bool turnRightPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding);
+            bool turnRightAltPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding);
+
+            if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
+            {
+                Debug.Log($"[CameraController3D] Turn bindings - Left({GameSettings.CameraTurnLeftBinding}):{turnLeftPressed}, LeftAlt({GameSettings.CameraTurnLeftAltBinding}):{turnLeftAltPressed}, Right({GameSettings.CameraTurnRightBinding}):{turnRightPressed}, RightAlt({GameSettings.CameraTurnRightAltBinding}):{turnRightAltPressed}");
+                cameraLastLogTime = Time.time;
+            }
+
+            if (turnLeftPressed || turnLeftAltPressed)
             {
                 turnInput -= 1f;
             }
 
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding))
+            if (turnRightPressed || turnRightAltPressed)
             {
                 turnInput += 1f;
             }
@@ -476,12 +500,11 @@ namespace FaeMaze.Cameras
 
             if (Mathf.Abs(turnInput) > 0.001f)
             {
-                Vector3 up = GetMazeUpDirection();
                 float yawDelta = turnInput * focalTurnSpeed * Time.deltaTime;
 
-
-                focalPointTransform.Rotate(up, yawDelta, Space.World);
-
+                // Rotate around Z axis (world up in this game's XY-plane coordinate system)
+                // This changes focalPointTransform.eulerAngles.z which UpdateFocalPointCameraPosition reads
+                focalPointTransform.Rotate(Vector3.forward, yawDelta, Space.World);
             }
         }
 
@@ -528,10 +551,10 @@ namespace FaeMaze.Cameras
                 Vector2 mouseDelta = mouse.delta.ReadValue();
                 if (Mathf.Abs(mouseDelta.x) > 0.001f)
                 {
-                    Vector3 up = GetMazeUpDirection();
                     // Negative because dragging right should rotate the view left (focal point rotates right)
                     float yawDelta = -mouseDelta.x * orbitSpeed * Time.deltaTime;
-                    focalPointTransform.Rotate(up, yawDelta, Space.World);
+                    // Rotate purely around Z axis (XY plane coordinate system)
+                    focalPointTransform.Rotate(Vector3.forward, yawDelta, Space.World);
                 }
             }
 
@@ -825,22 +848,38 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            if (cameraDebugLogging)
+            {
+                Debug.Log($"[CameraController3D] InitializeFocalPoint called, mazeGridBehaviour={(mazeGridBehaviour != null ? "exists" : "null")}");
+            }
 
             if (mazeGridBehaviour == null)
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
+                if (cameraDebugLogging)
+                {
+                    Debug.Log($"[CameraController3D] Found MazeGridBehaviour: {(mazeGridBehaviour != null ? "yes" : "no")}");
+                }
             }
 
             if (focalPointTransform == null)
             {
                 GameObject focalPointObj = new GameObject("Focal Point");
                 focalPointTransform = focalPointObj.transform;
+                if (cameraDebugLogging)
+                {
+                    Debug.Log($"[CameraController3D] Created Focal Point GameObject");
+                }
             }
 
             Vector3 startPosition;
             Quaternion startRotation;
 
             bool heartReady = GameController.Instance != null && GameController.Instance.Heart != null;
+            if (cameraDebugLogging)
+            {
+                Debug.Log($"[CameraController3D] heartReady={heartReady}, GameController={(GameController.Instance != null ? "exists" : "null")}, Heart={(GameController.Instance?.Heart != null ? "exists" : "null")}");
+            }
 
             if (heartReady)
             {
@@ -854,9 +893,10 @@ namespace FaeMaze.Cameras
                     facingDirection = Vector3.up;
                 }
 
-                Vector3 mazeUp = GetMazeUpDirection();
-
-                startRotation = Quaternion.LookRotation(facingDirection, mazeUp);
+                // Calculate yaw angle for Z-axis rotation only (XY plane coordinate system)
+                // This avoids gimbal lock from complex Quaternion.LookRotation
+                float yawAngle = Mathf.Atan2(facingDirection.y, facingDirection.x) * Mathf.Rad2Deg;
+                startRotation = Quaternion.Euler(0f, 0f, yawAngle);
             }
             else if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null)
             {
@@ -869,11 +909,18 @@ namespace FaeMaze.Cameras
                     mazeForward = Vector3.up;
                 }
 
-                startRotation = Quaternion.LookRotation(mazeForward, GetMazeUpDirection());
+                // Calculate yaw angle for Z-axis rotation only (XY plane coordinate system)
+                float yawAngle = Mathf.Atan2(mazeForward.y, mazeForward.x) * Mathf.Rad2Deg;
+                startRotation = Quaternion.Euler(0f, 0f, yawAngle);
             }
             else
             {
                 // Wait until the maze is generated or the heart exists so we can place the focal point correctly.
+                if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
+                {
+                    Debug.Log($"[CameraController3D] InitializeFocalPoint: waiting for maze/heart. mazeGridBehaviour={(mazeGridBehaviour != null ? "exists" : "null")}, WorldSpaceMazeData={(mazeGridBehaviour?.WorldSpaceMazeData != null ? "exists" : "null")}");
+                    cameraLastLogTime = Time.time;
+                }
                 return;
             }
 
@@ -884,6 +931,10 @@ namespace FaeMaze.Cameras
 
             _focusPoint = startPosition;
             focalPointInitialized = true;
+            if (cameraDebugLogging)
+            {
+                Debug.Log($"[CameraController3D] Focal point INITIALIZED at {startPosition}, focalPointInitialized=true");
+            }
         }
 
         private void AddFocalPointGlow()

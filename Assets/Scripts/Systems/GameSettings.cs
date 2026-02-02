@@ -22,6 +22,19 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetInt("ResolutionIndex", value);
         }
 
+        // Store actual resolution dimensions (more reliable than index)
+        public static int ResolutionWidth
+        {
+            get => PlayerPrefs.GetInt("ResolutionWidth", 0); // 0 means use current/default
+            set => PlayerPrefs.SetInt("ResolutionWidth", value);
+        }
+
+        public static int ResolutionHeight
+        {
+            get => PlayerPrefs.GetInt("ResolutionHeight", 0); // 0 means use current/default
+            set => PlayerPrefs.SetInt("ResolutionHeight", value);
+        }
+
         /// <summary>
         /// Light level intensity for the directional light (0.0 to 2.0, default 0.9)
         /// </summary>
@@ -669,8 +682,14 @@ namespace FaeMaze.Systems
         {
             Screen.fullScreen = Fullscreen;
 
-            if (ResolutionIndex >= 0)
+            // Use stored width/height if available, otherwise fall back to index-based lookup
+            if (ResolutionWidth > 0 && ResolutionHeight > 0)
             {
+                Screen.SetResolution(ResolutionWidth, ResolutionHeight, Fullscreen);
+            }
+            else if (ResolutionIndex >= 0)
+            {
+                // Legacy fallback for old saved settings
                 Resolution[] resolutions = Screen.resolutions;
                 if (ResolutionIndex < resolutions.Length)
                 {

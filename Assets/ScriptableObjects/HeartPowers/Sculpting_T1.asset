@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: Sculpting_T1
   m_EditorClassIdentifier:
   powerType: 3
-  displayName: Sculpting
-  description: 'Change the prop type on a node.
-
-    Tier I - Basic Sculpting: Choose from Pond, Lantern, Fairy Ring, or remove existing prop.'
+  displayName: Redecorating
+  description: Reshape the clearing to your whims.
   tier: 1
   essenceCost: 0
   cooldown: 0

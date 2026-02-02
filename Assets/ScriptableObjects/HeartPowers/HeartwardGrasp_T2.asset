@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: HeartwardGrasp_T2
   m_EditorClassIdentifier:
   powerType: 1
-  displayName: Heartward Grasp
-  description: 'Pulls a visitor through a wall toward the Heart.
-
-    Tier II - Relentless Grasp: Much stronger Heart-ward path bias after pull.'
+  displayName: Yoink! II
+  description: Snatch wanderers faster.
   tier: 2
   chargeCost: 1
   cooldown: 12

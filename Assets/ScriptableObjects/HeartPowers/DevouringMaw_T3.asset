@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: DevouringMaw_T3
   m_EditorClassIdentifier:
   powerType: 2
-  displayName: Devouring Maw
-  description: 'Instantly consumes a visitor on the targeted tile, granting essence.
-
-    Tier III - Soul Harvest: Grants +3 bonus essence and +1 temporary charge.'
+  displayName: Nom Nom III
+  description: Devour all nearby threads in a massive chomp.
   tier: 3
   chargeCost: 2
   cooldown: 16

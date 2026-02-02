@@ -232,13 +232,13 @@ namespace FaeMaze.Tutorial
 
             y = CreateSection(parent, "HEART POWERS", leftX, y, new string[]
             {
-                $"<color=#{ColorToHex(KEY_COLOR)}>1</color>  Murmuring Paths (100 essence)",
+                $"<color=#{ColorToHex(KEY_COLOR)}>1</color>  Spooky Fog (100 threads)",
                 "    Creates fog that confuses visitors toward Heart",
-                $"<color=#{ColorToHex(KEY_COLOR)}>2</color>  Heartward Grasp (10 essence)",
+                $"<color=#{ColorToHex(KEY_COLOR)}>2</color>  Yoink! (10 threads)",
                 "    Tongue grabs visitors from walls",
-                $"<color=#{ColorToHex(KEY_COLOR)}>3</color>  Devouring Maw (50 essence)",
+                $"<color=#{ColorToHex(KEY_COLOR)}>3</color>  Nom Nom (50 threads)",
                 "    Mouth consumes visitors at focal point",
-                $"<color=#{ColorToHex(KEY_COLOR)}>4</color>  Sculpting (free)",
+                $"<color=#{ColorToHex(KEY_COLOR)}>4</color>  Redecorating (free)",
                 "    Open menu to place/change props"
             }, lineHeight);
 
@@ -259,8 +259,8 @@ namespace FaeMaze.Tutorial
             y = CreateSection(parent, "PROPS", rightX, y, new string[]
             {
                 "<color=#4488FF>Pond</color>  Drowns visitors (Puka hazard)",
-                "<color=#FFDD44>Lantern</color>  Fascinates, drains essence over time",
-                "<color=#88FF88>Fairy Ring</color>  Traps visitors, drains essence"
+                "<color=#FFDD44>Lantern</color>  Fascinates, drains threads over time",
+                "<color=#88FF88>Fairy Ring</color>  Traps visitors, drains threads"
             }, lineHeight);
 
             y -= sectionSpacing;
@@ -268,11 +268,11 @@ namespace FaeMaze.Tutorial
             y = CreateSection(parent, "GOAL", rightX, y, new string[]
             {
                 "Capture visitors before they escape!",
-                "Essence drains over time - survive as long as possible.",
+                "Threads drain over time - survive as long as possible.",
                 "The Heart's tongue catches nearby visitors.",
                 "Use powers to guide or consume visitors.",
                 "",
-                "<color=#FF6666>Red Cap</color> appears at high essence - kills visitors!"
+                "<color=#FF6666>Goblin</color> appears when threads are high - kills visitors!"
             }, lineHeight);
         }
 

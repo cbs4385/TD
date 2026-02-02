@@ -13,10 +13,8 @@ MonoBehaviour:
   m_Name: MurmuringPaths_T1
   m_EditorClassIdentifier:
   powerType: 0
-  displayName: Murmuring Paths
-  description: 'Creates corridors of desire that tilt pathfinding costs.
-
-    Tier I - Twin Murmurs: Maintain 2 active path segments simultaneously.'
+  displayName: Spooky Fog
+  description: Tangle their threads in creeping mist.
   tier: 1
   essenceCost: 100
   cooldown: 10

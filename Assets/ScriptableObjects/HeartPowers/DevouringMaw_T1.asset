@@ -13,11 +13,8 @@ MonoBehaviour:
   m_Name: DevouringMaw_T1
   m_EditorClassIdentifier: 
   powerType: 2
-  displayName: Devouring Maw
-  description: 'Instantly consumes a visitor on the targeted tile, granting essence.
-
-    Tier
-    I - Echoing Terror: Applies fear to nearby visitors (3 tile radius).'
+  displayName: Nom Nom
+  description: Consume threads in one big chomp.
   tier: 1
   essenceCost: 50
   cooldown: 30

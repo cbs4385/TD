@@ -169,15 +169,15 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "welcome",
                     title: "Welcome to FaeMaze",
-                    description: "You are the spirit of a mystical forest maze. Your goal is to capture visitors and gather their essence before they escape through the exit portals.\n\nUse your powers wisely to survive!",
+                    description: "You are the spirit of a mystical forest maze. Your goal is to capture visitors and gather their threads of fate before they escape through the exit portals.\n\nUse your powers wisely to survive!",
                     trigger: TutorialTriggerType.ButtonClick,
                     pause: true
                 ),
 
                 new TutorialStep(
                     id: "essence_bar",
-                    title: "Essence - Your Life Force",
-                    description: "The red bar at the top shows your Essence. This is your health and resource combined.\n\nEssence slowly drains over time. If it reaches zero, the game ends. Capture visitors to replenish it!\n\nFor this tutorial, you start with 200 Essence.",
+                    title: "Threads - Your Life Force",
+                    description: "The red bar at the top shows your Threads. This is your health and resource combined.\n\nThreads slowly drain over time. If they reach zero, the game ends. Capture visitors to replenish them!\n\nFor this tutorial, you start with 200 Threads.",
                     trigger: TutorialTriggerType.ButtonClick,
                     highlight: TutorialHighlightType.UIElement,
                     highlightTarget: "EssenceBarPanel",
@@ -210,8 +210,8 @@ namespace FaeMaze.Tutorial
                 // Phase 2: Powers
                 new TutorialStep(
                     id: "power_murmuring",
-                    title: "Power 1: Murmuring Paths",
-                    description: "First, move the camera to follow an edge away from the Heart to another node. This positions your focal point along a path.\n\nThen press [1] to activate Murmuring Paths.\n\nThis creates a fog along the path from your focal point back to the Heart. Visitors caught in the fog become confused and walk toward the Heart instead of the exit.\n\nCost: 100 Essence (50% of starting)",
+                    title: "Power 1: Spooky Fog",
+                    description: "First, move the camera to follow an edge away from the Heart to another node. This positions your focal point along a path.\n\nThen press [1] to activate Spooky Fog.\n\nThis creates a fog along the path from your focal point back to the Heart. Visitors caught in the fog become confused and walk toward the Heart instead of the exit.\n\nCost: 100 Threads (50% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "0", // MurmuringPaths index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -222,7 +222,7 @@ namespace FaeMaze.Tutorial
 
                 new TutorialStep(
                     id: "power_murmuring_effect",
-                    title: "Murmuring Paths Active",
+                    title: "Spooky Fog Active",
                     description: "Watch the fog spread along the path from your focal point to the Heart.\n\nVisitors who walk through the fog become confused and start moving toward the Heart instead of the exit.\n\nThe fog fades after a short time.",
                     trigger: TutorialTriggerType.ButtonClick,
                     pause: false,
@@ -231,8 +231,8 @@ namespace FaeMaze.Tutorial
 
                 new TutorialStep(
                     id: "power_grasp",
-                    title: "Power 2: Heartward Grasp",
-                    description: "Press [2] to activate Heartward Grasp.\n\nA tongue emerges from the forest wall near your focal point. It grabs nearby visitors and pulls them deeper into the maze toward the Heart.\n\nCost: 10 Essence (5% of starting)",
+                    title: "Power 2: Yoink!",
+                    description: "Press [2] to activate Yoink!\n\nA tongue emerges from the forest wall near your focal point. It grabs nearby visitors and pulls them deeper into the maze toward the Heart.\n\nCost: 10 Threads (5% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "1", // HeartwardGrasp index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -243,8 +243,8 @@ namespace FaeMaze.Tutorial
 
                 new TutorialStep(
                     id: "power_grasp_effect",
-                    title: "Heartward Grasp Active",
-                    description: "Watch the tongue emerge from the forest wall!\n\nIt will grab any visitor that comes too close and pull them deeper into the maze. This costs a small amount of essence from the grabbed visitor.\n\nThe tongue retracts after catching a visitor or after a short time.",
+                    title: "Yoink! Active",
+                    description: "Watch the tongue emerge from the forest wall!\n\nIt will grab any visitor that comes too close and pull them deeper into the maze. This costs a small amount of threads from the grabbed visitor.\n\nThe tongue retracts after catching a visitor or after a short time.",
                     trigger: TutorialTriggerType.ButtonClick,
                     pause: false, // Let action play - camera will track visitor being grabbed
                     spawn: false // Visitor spawned by HandlePowerGraspEffectStep coroutine
@@ -252,8 +252,8 @@ namespace FaeMaze.Tutorial
 
                 new TutorialStep(
                     id: "power_maw",
-                    title: "Power 3: Devouring Maw",
-                    description: "Press [3] to activate Devouring Maw.\n\nA great mouth emerges at your focal point. Any visitor who touches it is consumed instantly, granting you half their essence.\n\nCost: 50 Essence (25% of starting)",
+                    title: "Power 3: Nom Nom",
+                    description: "Press [3] to activate Nom Nom.\n\nA great mouth emerges at your focal point. Any visitor who touches it is consumed instantly, granting you half their threads.\n\nCost: 50 Threads (25% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "2", // DevouringMaw index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -264,8 +264,8 @@ namespace FaeMaze.Tutorial
 
                 new TutorialStep(
                     id: "power_maw_effect",
-                    title: "Devouring Maw Active",
-                    description: "A monstrous maw has emerged from the ground!\n\nAny visitor who walks into the maw is consumed instantly, granting you half their essence value.\n\nWatch the visitor get devoured...",
+                    title: "Nom Nom Active",
+                    description: "A monstrous maw has emerged from the ground!\n\nAny visitor who walks into the maw is consumed instantly, granting you half their thread value.\n\nWatch the visitor get devoured...",
                     trigger: TutorialTriggerType.Timer, // No Continue button - auto-advances when visitor is consumed
                     pause: false,
                     spawn: false // Visitor spawned by HandlePowerMawEffectStep coroutine
@@ -273,11 +273,11 @@ namespace FaeMaze.Tutorial
 
                 new TutorialStep(
                     id: "power_sculpt",
-                    title: "Power 4: Sculpting",
-                    description: "Press [4] to open the Sculpting menu.\n\nThis lets you place or change props at maze nodes:\n" +
+                    title: "Power 4: Redecorating",
+                    description: "Press [4] to open the Redecorating menu.\n\nThis lets you place or change props at maze nodes:\n" +
                                  "  Pond - Drowns visitors (with Puka hazard)\n" +
-                                 "  Lantern - Fascinates visitors, drains essence\n" +
-                                 "  Fairy Ring - Traps visitors, drains essence\n\n" +
+                                 "  Lantern - Fascinates visitors, drains threads\n" +
+                                 "  Fairy Ring - Traps visitors, drains threads\n\n" +
                                  "Cost: Free",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "3", // Sculpting index
@@ -290,7 +290,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_sculpt_effect",
                     title: "Place a Lantern",
-                    description: "Select the Lantern from the radial menu to place it on this node.\n\nLanterns fascinate visitors, drawing them in and draining their essence over time.",
+                    description: "Select the Lantern from the radial menu to place it on this node.\n\nLanterns fascinate visitors, drawing them in and draining their threads over time.",
                     trigger: TutorialTriggerType.Timer, // Auto-advances when lantern is placed
                     pause: false,
                     rightSideDialog: true // Keep dialog on right during sculpt
@@ -300,15 +300,15 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "lantern_demo",
                     title: "Lantern Fascination",
-                    description: "Watch as a visitor becomes fascinated by the lantern!\n\nFascinated visitors walk toward the lantern and stand mesmerized while their essence slowly drains.\n\nWait for the visitor to be fascinated...",
+                    description: "Watch as a visitor becomes fascinated by the lantern!\n\nFascinated visitors walk toward the lantern and stand mesmerized while their threads slowly drain.\n\nWait for the visitor to be fascinated...",
                     trigger: TutorialTriggerType.Timer, // Auto-advances when visitor is fascinated
                     pause: false
                 ),
 
                 new TutorialStep(
                     id: "essence_gain",
-                    title: "Capturing Essence",
-                    description: "When visitors are consumed by the Heart, the Maw, or drained by props, you gain their essence.\n\nKeep your essence high to survive! The longer you last, the more challenging visitors become.\n\nWait for a visitor to be captured...",
+                    title: "Capturing Threads",
+                    description: "When visitors are consumed by the Heart, Nom Nom'd, or drained by props, you gain their threads.\n\nKeep your threads high to survive! The longer you last, the more challenging visitors become.\n\nWait for a visitor to be captured...",
                     trigger: TutorialTriggerType.EssenceIncreased,
                     pause: false // No highlight - game must continue for essence to increase
                 ),
@@ -319,7 +319,7 @@ namespace FaeMaze.Tutorial
                     description: "You now know the basics of FaeMaze!\n\n" +
                                  "Tips:\n" +
                                  "  - Press [F1] anytime for a quick reference\n" +
-                                 "  - Watch your essence - it drains constantly\n" +
+                                 "  - Watch your threads - they drain constantly\n" +
                                  "  - Position your focal point wisely\n" +
                                  "  - Combine powers for maximum effect\n\n" +
                                  "Good luck, forest spirit!",

@@ -1,6 +1,7 @@
 using UnityEngine;
 using FaeMaze.Maze;
 using FaeMaze.Visitors;
+using FaeMaze.Roguelike;
 using System.Collections.Generic;
 
 namespace FaeMaze.Systems
@@ -44,6 +45,7 @@ namespace FaeMaze.Systems
     /// Core game controller managing the Fae Maze gameplay.
     /// Singleton pattern for easy access from other systems.
     /// </summary>
+    [DefaultExecutionOrder(-200)] // Run before MazeGridBehaviour (-100) to initialize RandomManager first
     public class GameController : MonoBehaviour
     {
         #region Singleton
@@ -193,6 +195,12 @@ namespace FaeMaze.Systems
             // Apply saved settings (light level, video settings, etc.)
             GameSettings.ApplySettings();
 
+            // Notify MetaProgressionManager that a new run is starting
+            MetaProgressionManager.Instance?.OnRunStart();
+
+            // Reset power progression for the new run
+            PowerProgressionManager.Instance?.ResetRunTiers();
+
             // Invoke event for initial essence value
             OnEssenceChanged?.Invoke(currentEssence);
 
@@ -256,6 +264,9 @@ namespace FaeMaze.Systems
 
             // Track maximum essence achieved
             GameStatsTracker.Instance?.UpdateMaxEssence(currentEssence);
+
+            // Record essence for meta-progression (tracks max essence per run)
+            MetaProgressionManager.Instance?.RecordEssence(currentEssence);
         }
 
         /// <summary>

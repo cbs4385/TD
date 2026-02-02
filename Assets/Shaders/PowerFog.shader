@@ -30,54 +30,58 @@ Shader "Custom/PowerFog"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-150" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-150" "RenderPipeline"="UniversalPipeline" }
         LOD 100
 
         Pass
         {
+            Name "ForwardLit"
+            Tags { "LightMode"="UniversalForward" }
+
             ZWrite Off
             Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
 
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
 
-            struct appdata
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 vertex : SV_POSITION;
+                float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 float3 worldPos : TEXCOORD1;
             };
 
-            fixed4 _FogColor;
-            fixed4 _FogColorDark;
-            fixed4 _GlowColor;
-            sampler2D _PathMask;
+            TEXTURE2D(_PathMask);
+            SAMPLER(sampler_PathMask);
 
-            float _CloudScale;
-            float _CloudDetail;
-            float _CloudDensity;
-            float _CloudSharpness;
-
-            float _WindSpeed;
-            float4 _WindDirection;
-
-            float _WaveProgress;
-            float _WaveWidth;
-            float _WaveIntensity;
-            float4 _HeartPosition;
-            float4 _FurthestPosition;
-
-            float _ShadowStrength;
-            float _AmbientLight;
+            CBUFFER_START(UnityPerMaterial)
+                half4 _FogColor;
+                half4 _FogColorDark;
+                half4 _GlowColor;
+                float _CloudScale;
+                float _CloudDetail;
+                float _CloudDensity;
+                float _CloudSharpness;
+                float _WindSpeed;
+                float4 _WindDirection;
+                float _WaveProgress;
+                float _WaveWidth;
+                float _WaveIntensity;
+                float4 _HeartPosition;
+                float4 _FurthestPosition;
+                float _ShadowStrength;
+                float _AmbientLight;
+            CBUFFER_END
 
             // Hash function for noise
             float hash(float2 p)
@@ -112,7 +116,7 @@ Shader "Custom/PowerFog"
                 float frequency = 1.0;
                 float maxValue = 0.0;
 
-                for (int i = 0; i < octaves; i++)
+                for (int idx = 0; idx < octaves; idx++)
                 {
                     value += amplitude * valueNoise(p * frequency);
                     maxValue += amplitude;
@@ -168,27 +172,27 @@ Shader "Custom/PowerFog"
                 return glow * behindWave * _WaveIntensity;
             }
 
-            v2f vert (appdata v)
+            Varyings vert (Attributes IN)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                return o;
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.uv = IN.uv;
+                OUT.worldPos = TransformObjectToWorld(IN.positionOS.xyz);
+                return OUT;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            half4 frag (Varyings IN) : SV_Target
             {
                 // Sample the path mask (1 = affected area, 0 = not affected)
-                float pathMask = tex2D(_PathMask, i.uv).r;
+                float pathMask = SAMPLE_TEXTURE2D(_PathMask, sampler_PathMask, IN.uv).r;
 
                 // Early out if not in affected area
                 if (pathMask < 0.01)
-                    return fixed4(0, 0, 0, 0);
+                    return half4(0, 0, 0, 0);
 
                 // Animate cloud position
                 float2 windOffset = _WindDirection.xy * _Time.y * _WindSpeed;
-                float2 cloudUV = i.worldPos.xy * 0.1 + windOffset;
+                float2 cloudUV = IN.worldPos.xy * 0.1 + windOffset;
 
                 // Generate cloud pattern
                 float cloudValue = cloudNoise(cloudUV);
@@ -197,10 +201,10 @@ Shader "Custom/PowerFog"
                 float lighting = _AmbientLight + cloudValue * _ShadowStrength;
 
                 // Base fog color
-                fixed3 fogCol = lerp(_FogColorDark.rgb, _FogColor.rgb, lighting);
+                half3 fogCol = lerp(_FogColorDark.rgb, _FogColor.rgb, lighting);
 
                 // Calculate wave glow
-                float waveGlow = calculateWaveGlow(i.worldPos.xy);
+                float waveGlow = calculateWaveGlow(IN.worldPos.xy);
 
                 // Add glow color
                 fogCol = lerp(fogCol, _GlowColor.rgb, waveGlow * 0.7);
@@ -219,9 +223,9 @@ Shader "Custom/PowerFog"
                 float edgeNoise = fbm(cloudUV * 3.0 + windOffset * 1.5, 3);
                 finalAlpha *= lerp(edgeNoise * 0.4 + 0.6, 1.0, edgeFade);
 
-                return fixed4(fogCol, saturate(finalAlpha));
+                return half4(fogCol, saturate(finalAlpha));
             }
-            ENDCG
+            ENDHLSL
         }
     }
 

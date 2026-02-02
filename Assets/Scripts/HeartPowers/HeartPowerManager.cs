@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
+using FaeMaze.Roguelike;
 using Object = UnityEngine.Object;
 
 namespace FaeMaze.HeartPowers
@@ -167,6 +168,20 @@ namespace FaeMaze.HeartPowers
             if (devourPrefab == null)
             {
                 devourPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/devour.prefab");
+            }
+#else
+            // In builds, use Resources.Load
+            if (graspPrefab == null)
+            {
+                graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
+            }
+            if (tonguePrefab == null)
+            {
+                tonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
+            }
+            if (devourPrefab == null)
+            {
+                devourPrefab = Resources.Load<GameObject>("Prefabs/Props/devour");
             }
 #endif
         }
@@ -404,6 +419,9 @@ namespace FaeMaze.HeartPowers
 
             OnPowerActivated?.Invoke(powerType);
 
+            // Record power activation for meta-progression
+            MetaProgressionManager.Instance?.RecordPowerActivation(powerType.ToString());
+
             // If this power affects pathfinding, trigger all visitors to recalculate their paths
             if (PowerAffectsPathfinding(powerType))
             {
@@ -562,7 +580,16 @@ namespace FaeMaze.HeartPowers
                 return null;
             }
 
-            int currentTier = powerTiers.GetValueOrDefault(powerType, 1);
+            // Use PowerProgressionManager for run-based tier if available
+            int currentTier;
+            if (PowerProgressionManager.Instance != null)
+            {
+                currentTier = PowerProgressionManager.Instance.GetRunTier(powerType);
+            }
+            else
+            {
+                currentTier = powerTiers.GetValueOrDefault(powerType, 1);
+            }
 
             foreach (var def in powerDefinitions)
             {

@@ -1322,7 +1322,6 @@ namespace FaeMaze.Systems
                 // Radius 2.5 reaches visitors in the walkable ring (1.0 to 3.0 from node center)
                 triggerCollider.radius = 2.5f;
                 triggerCollider.center = Vector3.zero;
-                Debug.Log($"[FairyRing] Added SphereCollider to {ring.name}: radius=2.5, isTrigger=true");
             }
             else
             {
@@ -1330,10 +1329,8 @@ namespace FaeMaze.Systems
                 existingRootSphere.isTrigger = true;
                 if (existingRootSphere.radius < 2.0f)
                 {
-                    Debug.LogWarning($"[FairyRing] {ring.name} has small SphereCollider radius={existingRootSphere.radius}, setting to 2.5");
                     existingRootSphere.radius = 2.5f;
                 }
-                Debug.Log($"[FairyRing] {ring.name} already has SphereCollider: radius={existingRootSphere.radius}, isTrigger={existingRootSphere.isTrigger}");
             }
 
             // Ensure the ring has a kinematic Rigidbody for trigger events to work
@@ -1344,7 +1341,6 @@ namespace FaeMaze.Systems
                 rb = ring.AddComponent<Rigidbody>();
                 rb.isKinematic = true;
                 rb.useGravity = false;
-                Debug.Log($"[FairyRing] Added Rigidbody to {ring.name}");
             }
 
             // Add FairyRing component if not present (for entrancement behavior)
@@ -1352,7 +1348,6 @@ namespace FaeMaze.Systems
             if (fairyRing == null)
             {
                 fairyRing = ring.AddComponent<FaeMaze.Props.FairyRing>();
-                Debug.Log($"[FairyRing] Added FairyRing component to {ring.name}");
             }
 
             // Track the fairy ring

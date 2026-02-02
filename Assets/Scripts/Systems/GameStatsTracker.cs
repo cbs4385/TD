@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using FaeMaze.Visitors;
+using FaeMaze.Roguelike;
 
 namespace FaeMaze.Systems
 {
@@ -155,7 +156,8 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Records a visitor's fate with their archetype and essence value
+        /// Records a visitor's fate with their archetype and essence value.
+        /// Also notifies MetaProgressionManager for lifetime stats tracking.
         /// </summary>
         public void RecordVisitorFate(VisitorArchetype archetype, VisitorFate fate, int essenceValue)
         {
@@ -166,10 +168,44 @@ namespace FaeMaze.Systems
 
             archetypeStats[archetype].FateCounts[fate]++;
             archetypeStats[archetype].EssenceByFate[fate] += essenceValue;
+
+            // Notify MetaProgressionManager for lifetime stats
+            NotifyMetaProgression(archetype, fate);
         }
 
         /// <summary>
-        /// Resets all statistics to zero
+        /// Notifies MetaProgressionManager of visitor fate for lifetime tracking.
+        /// </summary>
+        private void NotifyMetaProgression(VisitorArchetype archetype, VisitorFate fate)
+        {
+            if (MetaProgressionManager.Instance == null)
+                return;
+
+            string archetypeName = archetype.ToString();
+
+            switch (fate)
+            {
+                case VisitorFate.Consumed:
+                    MetaProgressionManager.Instance.RecordHeartConsume(archetypeName);
+                    break;
+                case VisitorFate.Devoured:
+                    MetaProgressionManager.Instance.RecordMawDevour(archetypeName);
+                    break;
+                case VisitorFate.FairyRing:
+                case VisitorFate.Lantern:
+                    MetaProgressionManager.Instance.RecordPropDrain();
+                    break;
+                case VisitorFate.Escaped:
+                    MetaProgressionManager.Instance.RecordEscape();
+                    break;
+                case VisitorFate.RedCapKill:
+                    MetaProgressionManager.Instance.RecordRedCapKill();
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Resets all statistics to zero. Called at the start of a new run.
         /// </summary>
         public void ResetStats()
         {
@@ -179,6 +215,20 @@ namespace FaeMaze.Systems
             archetypeStats.Clear();
             essenceBySource.Clear();
             sessionStartTime = Time.time;
+            // Note: OnRunStart is called from GameController.Start() when the game scene loads
+        }
+
+        /// <summary>
+        /// Called when the run ends (game over). Finalizes stats and triggers meta-progression rewards.
+        /// </summary>
+        public void FinalizeRunStats()
+        {
+            if (MetaProgressionManager.Instance != null)
+            {
+                MetaProgressionManager.Instance.RecordRunDuration(totalTimePlayed);
+                MetaProgressionManager.Instance.RecordEssence(maxEssenceAchieved);
+                MetaProgressionManager.Instance.OnRunEnd();
+            }
         }
 
         /// <summary>

@@ -71,6 +71,9 @@ namespace FaeMaze.UI
             HideOldElements();
             CreateFullScreenUI();
             DisplayStatistics();
+
+            // Finalize run stats for meta-progression (calculates Fae Dust rewards)
+            GameStatsTracker.Instance?.FinalizeRunStats();
         }
 
         private void Update()
@@ -124,7 +127,7 @@ namespace FaeMaze.UI
             runLengthText = CreateHeaderText("RunLengthText", new Vector2(0.5f, 0.84f), "Run Length: 00:00", 28);
 
             // Peak essence
-            peakEssenceText = CreateHeaderText("PeakEssenceText", new Vector2(0.5f, 0.78f), "Peak Essence: 0", 22);
+            peakEssenceText = CreateHeaderText("PeakEssenceText", new Vector2(0.5f, 0.78f), "Peak Threads: 0", 22);
 
             // Essence Ledger container
             essenceLedgerContainer = CreateContainer("EssenceLedger", new Vector2(0.5f, 0.62f), new Vector2(600, 160));
@@ -229,7 +232,7 @@ namespace FaeMaze.UI
             // Peak essence achieved
             if (peakEssenceText != null)
             {
-                peakEssenceText.text = $"Peak Essence: {stats.MaxEssenceAchieved}";
+                peakEssenceText.text = $"Peak Threads: {stats.MaxEssenceAchieved}";
             }
 
             // Build essence ledger
@@ -255,7 +258,7 @@ namespace FaeMaze.UI
             var essenceTotals = stats.GetEssenceTotalsBySource();
 
             // Create header
-            CreateLedgerText("ESSENCE LEDGER", 22, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, 70));
+            CreateLedgerText("THREAD LEDGER", 22, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, 70));
 
             // Gains column (left)
             float leftX = -140f;
@@ -271,7 +274,7 @@ namespace FaeMaze.UI
             if (essenceTotals.TryGetValue(EssenceSource.VisitorConsumedByHeart, out int heartEssence) && heartEssence > 0)
             {
                 int heartCount = stats.GetTotalByFate(VisitorFate.Consumed);
-                CreateLedgerText($"Heart: +{heartEssence} ({heartCount})", 16, FontStyles.Normal, essenceLedgerContainer,
+                CreateLedgerText($"Nommed: +{heartEssence} ({heartCount})", 16, FontStyles.Normal, essenceLedgerContainer,
                     new Vector2(leftX, startY - lineHeight * (yIndex + 1)), heartColor);
                 totalGains += heartEssence;
                 yIndex++;
@@ -281,7 +284,7 @@ namespace FaeMaze.UI
             if (essenceTotals.TryGetValue(EssenceSource.VisitorConsumedByMaw, out int mawEssence) && mawEssence > 0)
             {
                 int mawCount = stats.GetTotalByFate(VisitorFate.Devoured);
-                CreateLedgerText($"Maw: +{mawEssence} ({mawCount})", 16, FontStyles.Normal, essenceLedgerContainer,
+                CreateLedgerText($"Chomped: +{mawEssence} ({mawCount})", 16, FontStyles.Normal, essenceLedgerContainer,
                     new Vector2(leftX, startY - lineHeight * (yIndex + 1)), mawColor);
                 totalGains += mawEssence;
                 yIndex++;
@@ -290,7 +293,7 @@ namespace FaeMaze.UI
             // Lantern fascination
             if (essenceTotals.TryGetValue(EssenceSource.LanternFascination, out int lanternEssence) && lanternEssence > 0)
             {
-                CreateLedgerText($"Lantern: +{lanternEssence}", 16, FontStyles.Normal, essenceLedgerContainer,
+                CreateLedgerText($"Dazzled: +{lanternEssence}", 16, FontStyles.Normal, essenceLedgerContainer,
                     new Vector2(leftX, startY - lineHeight * (yIndex + 1)), lanternColor);
                 totalGains += lanternEssence;
                 yIndex++;
@@ -312,10 +315,10 @@ namespace FaeMaze.UI
                 yIndex++;
             }
 
-            // RedCap penalties
+            // Goblin penalties
             if (essenceTotals.TryGetValue(EssenceSource.RedCapPenalty, out int redCapPenalty) && redCapPenalty < 0)
             {
-                CreateLedgerText($"RedCap: {redCapPenalty}", 16, FontStyles.Normal, essenceLedgerContainer,
+                CreateLedgerText($"Goblin: {redCapPenalty}", 16, FontStyles.Normal, essenceLedgerContainer,
                     new Vector2(rightX, startY - lineHeight * (yIndex + 1)), redCapColor);
                 totalCosts += redCapPenalty;
                 yIndex++;
@@ -367,12 +370,12 @@ namespace FaeMaze.UI
             // Collect hazard data (including Escaped at the end)
             var hazardData = new List<(string name, int count, Color color, VisitorFate fate)>
             {
-                ("Heart Tongue", stats.GetTotalByFate(VisitorFate.Consumed), heartColor, VisitorFate.Consumed),
-                ("Devouring Maw", stats.GetTotalByFate(VisitorFate.Devoured), mawColor, VisitorFate.Devoured),
-                ("Kelpie/Puka", stats.GetTotalByFate(VisitorFate.Drowned), kelpieColor, VisitorFate.Drowned),
-                ("RedCap", stats.GetTotalByFate(VisitorFate.RedCapKill), redCapColor, VisitorFate.RedCapKill),
-                ("Fae Lantern", stats.GetTotalByFate(VisitorFate.Lantern), lanternColor, VisitorFate.Lantern),
-                ("Fairy Ring", stats.GetTotalByFate(VisitorFate.FairyRing), fairyRingColor, VisitorFate.FairyRing)
+                ("Nommed", stats.GetTotalByFate(VisitorFate.Consumed), heartColor, VisitorFate.Consumed),
+                ("Chomped", stats.GetTotalByFate(VisitorFate.Devoured), mawColor, VisitorFate.Devoured),
+                ("Splashed", stats.GetTotalByFate(VisitorFate.Drowned), kelpieColor, VisitorFate.Drowned),
+                ("Goblin'd", stats.GetTotalByFate(VisitorFate.RedCapKill), redCapColor, VisitorFate.RedCapKill),
+                ("Dazzled", stats.GetTotalByFate(VisitorFate.Lantern), lanternColor, VisitorFate.Lantern),
+                ("Danced Out", stats.GetTotalByFate(VisitorFate.FairyRing), fairyRingColor, VisitorFate.FairyRing)
             };
 
             // Sort hazards by count descending
@@ -380,7 +383,7 @@ namespace FaeMaze.UI
 
             // Add Escaped at the end (not sorted with hazards)
             int escapedCount = stats.GetTotalByFate(VisitorFate.Escaped);
-            hazardData.Add(("Escaped", escapedCount, escapedColor, VisitorFate.Escaped));
+            hazardData.Add(("Got Away", escapedCount, escapedColor, VisitorFate.Escaped));
 
             // Find max for bar scaling (include escaped in max calculation)
             int maxCount = hazardData.Max(h => h.count);
@@ -574,7 +577,7 @@ namespace FaeMaze.UI
                 runLengthText.text = "Run Length: 00:00";
 
             if (peakEssenceText != null)
-                peakEssenceText.text = "Peak Essence: 0";
+                peakEssenceText.text = "Peak Threads: 0";
         }
 
         private void ReturnToMainMenu()

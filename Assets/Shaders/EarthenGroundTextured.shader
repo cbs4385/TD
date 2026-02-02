@@ -20,12 +20,6 @@ Shader "Custom/EarthenGroundTextured"
             #pragma vertex vert
             #pragma fragment frag
 
-            // URP lighting keywords
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
-            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
-            #pragma multi_compile_fragment _ _SHADOWS_SOFT
-
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
@@ -83,20 +77,8 @@ Shader "Custom/EarthenGroundTextured"
                 // Add ambient light
                 half3 ambient = albedo * 0.3; // Simple ambient term
 
-                // Calculate additional lights contribution
-                half3 additionalLights = half3(0, 0, 0);
-                #ifdef _ADDITIONAL_LIGHTS
-                uint additionalLightsCount = GetAdditionalLightsCount();
-                for (uint i = 0; i < additionalLightsCount; i++)
-                {
-                    Light light = GetAdditionalLight(i, input.positionWS);
-                    float addNdotL = saturate(dot(normalWS, light.direction));
-                    additionalLights += albedo * light.color * addNdotL * light.distanceAttenuation;
-                }
-                #endif
-
-                // Combine lighting
-                half3 finalColor = ambient + diffuse + additionalLights;
+                // Combine lighting (removed additional lights loop for compatibility)
+                half3 finalColor = ambient + diffuse;
 
                 return half4(finalColor, 1.0);
             }
@@ -188,5 +170,6 @@ Shader "Custom/EarthenGroundTextured"
             ENDHLSL
         }
     }
-    FallBack "Universal Render Pipeline/Lit"
+    // No fallback - if this shader fails, show magenta error color
+    FallBack Off
 }

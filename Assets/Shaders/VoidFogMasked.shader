@@ -23,48 +23,53 @@ Shader "Custom/VoidFogMasked"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent-100" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent-100" "RenderPipeline"="UniversalPipeline" }
         LOD 100
 
         Pass
         {
+            Name "ForwardLit"
+            Tags { "LightMode"="UniversalForward" }
+
             ZWrite Off
             Blend SrcAlpha OneMinusSrcAlpha
             Cull Off
 
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
 
-            struct appdata
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 vertex : SV_POSITION;
+                float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 float3 worldPos : TEXCOORD1;
             };
 
-            fixed4 _FogColor;
-            fixed4 _FogColorDark;
-            sampler2D _PathMask;
+            TEXTURE2D(_PathMask);
+            SAMPLER(sampler_PathMask);
 
-            float _CloudScale;
-            float _CloudDetail;
-            float _CloudDensity;
-            float _CloudSharpness;
-
-            float _WindSpeed;
-            float4 _WindDirection;
-
-            float4 _LightDirection;
-            float _ShadowStrength;
-            float _AmbientLight;
+            CBUFFER_START(UnityPerMaterial)
+                half4 _FogColor;
+                half4 _FogColorDark;
+                float _CloudScale;
+                float _CloudDetail;
+                float _CloudDensity;
+                float _CloudSharpness;
+                float _WindSpeed;
+                float4 _WindDirection;
+                float4 _LightDirection;
+                float _ShadowStrength;
+                float _AmbientLight;
+            CBUFFER_END
 
             // Improved hash function for better randomness
             float hash(float2 p)
@@ -99,7 +104,7 @@ Shader "Custom/VoidFogMasked"
                 float frequency = 1.0;
                 float maxValue = 0.0;
 
-                for (int i = 0; i < octaves; i++)
+                for (int idx = 0; idx < octaves; idx++)
                 {
                     value += amplitude * valueNoise(p * frequency);
                     maxValue += amplitude;
@@ -148,27 +153,27 @@ Shader "Custom/VoidFogMasked"
                 return lighting;
             }
 
-            v2f vert (appdata v)
+            Varyings vert (Attributes IN)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                return o;
+                Varyings OUT;
+                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.uv = IN.uv;
+                OUT.worldPos = TransformObjectToWorld(IN.positionOS.xyz);
+                return OUT;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            half4 frag (Varyings IN) : SV_Target
             {
                 // Sample the path mask (0 = no fog/path, 1 = full fog/void)
-                float pathMask = tex2D(_PathMask, i.uv).r;
+                float pathMask = SAMPLE_TEXTURE2D(_PathMask, sampler_PathMask, IN.uv).r;
 
                 // Early out if completely transparent
                 if (pathMask < 0.01)
-                    return fixed4(0, 0, 0, 0);
+                    return half4(0, 0, 0, 0);
 
                 // Animate cloud position with wind
                 float2 windOffset = _WindDirection.xy * _Time.y * _WindSpeed;
-                float2 cloudUV = i.worldPos.xy * 0.1 + windOffset;
+                float2 cloudUV = IN.worldPos.xy * 0.1 + windOffset;
 
                 // Generate cloud pattern
                 float cloudValue = cloudNoise(cloudUV);
@@ -177,7 +182,7 @@ Shader "Custom/VoidFogMasked"
                 float lighting = cloudLighting(cloudUV, cloudValue);
 
                 // Blend between light and dark fog colors based on lighting
-                fixed3 fogCol = lerp(_FogColorDark.rgb, _FogColor.rgb, lighting);
+                half3 fogCol = lerp(_FogColorDark.rgb, _FogColor.rgb, lighting);
 
                 // Apply cloud shape to alpha
                 // Make clouds more billowy by using the cloud value to modulate alpha
@@ -194,9 +199,9 @@ Shader "Custom/VoidFogMasked"
                 float edgeFade = smoothstep(0.0, 0.3, pathMask);
                 finalAlpha *= lerp(edgeNoise * 0.5 + 0.5, 1.0, edgeFade);
 
-                return fixed4(fogCol, saturate(finalAlpha));
+                return half4(fogCol, saturate(finalAlpha));
             }
-            ENDCG
+            ENDHLSL
         }
     }
 
