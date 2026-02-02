@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using FaeMaze.Systems;
 using FaeMaze.Tutorial;
+using FaeMaze.Roguelike;
 
 namespace FaeMaze.UI
 {
@@ -18,14 +19,25 @@ namespace FaeMaze.UI
 
         [Header("Tutorial")]
         [SerializeField] private Button tutorialButton;
+        [SerializeField] private Toggle tutorialModeToggle;
+
+        [Header("Shrine (Unlock Shop)")]
+        [SerializeField] private Button shrineButton;
 
         [Header("References")]
         [SerializeField] private SceneLoader sceneLoader;
 
+        // Runtime-created UI components
+        private UnlockShopUI _unlockShopUI;
+        private TextMeshProUGUI _faeDustDisplayText;
+
         private void Start()
         {
             LoadSeedSettings();
+            LoadTutorialSetting();
             SetupListeners();
+            CreateShrineUI();
+            CreateFaeDustDisplay();
         }
 
         private void LoadSeedSettings()
@@ -50,6 +62,15 @@ namespace FaeMaze.UI
             }
         }
 
+        private void LoadTutorialSetting()
+        {
+            // Load the "Show Tutorial on First Run" setting into the tutorial mode toggle
+            if (tutorialModeToggle != null)
+            {
+                tutorialModeToggle.isOn = GameSettings.ShowTutorialOnFirstRun;
+            }
+        }
+
         private void SetupListeners()
         {
             if (useFixedSeedToggle != null)
@@ -65,6 +86,88 @@ namespace FaeMaze.UI
             if (randomizeSeedButton != null)
             {
                 randomizeSeedButton.onClick.AddListener(OnRandomizeSeedClicked);
+            }
+
+            if (shrineButton != null)
+            {
+                shrineButton.onClick.AddListener(OpenShrine);
+            }
+
+            if (tutorialModeToggle != null)
+            {
+                tutorialModeToggle.onValueChanged.AddListener(OnTutorialModeChanged);
+            }
+        }
+
+        private void OnTutorialModeChanged(bool enabled)
+        {
+            // Sync with the GameSettings "Show Tutorial on First Run" setting
+            GameSettings.ShowTutorialOnFirstRun = enabled;
+        }
+
+        private void CreateShrineUI()
+        {
+            // Create the UnlockShopUI if it doesn't exist
+            _unlockShopUI = FindFirstObjectByType<UnlockShopUI>();
+            if (_unlockShopUI == null)
+            {
+                GameObject shopObj = new GameObject("UnlockShopUI");
+                _unlockShopUI = shopObj.AddComponent<UnlockShopUI>();
+            }
+        }
+
+        private void CreateFaeDustDisplay()
+        {
+            // Create a small Fae Dust display in the corner of the main menu
+            Canvas canvas = FindFirstObjectByType<Canvas>();
+            if (canvas == null) return;
+
+            GameObject dustObj = new GameObject("FaeDustDisplay");
+            dustObj.transform.SetParent(canvas.transform, false);
+
+            RectTransform rect = dustObj.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(1, 1);
+            rect.anchorMax = new Vector2(1, 1);
+            rect.pivot = new Vector2(1, 1);
+            rect.anchoredPosition = new Vector2(-20, -20);
+            rect.sizeDelta = new Vector2(200, 40);
+
+            _faeDustDisplayText = dustObj.AddComponent<TextMeshProUGUI>();
+            UpdateFaeDustDisplay();
+            _faeDustDisplayText.fontSize = 24;
+            _faeDustDisplayText.fontStyle = FontStyles.Bold;
+            _faeDustDisplayText.alignment = TextAlignmentOptions.MidlineRight;
+            _faeDustDisplayText.color = new Color(0.7f, 0.5f, 1f);
+
+            // Subscribe to Fae Dust changes
+            if (MetaProgressionManager.Instance != null)
+            {
+                MetaProgressionManager.Instance.OnFaeDustChanged += OnFaeDustChanged;
+            }
+        }
+
+        private void UpdateFaeDustDisplay()
+        {
+            if (_faeDustDisplayText != null)
+            {
+                int dust = MetaProgressionManager.Instance?.FaeDust ?? 0;
+                _faeDustDisplayText.text = $"Fae Dust: {dust}";
+            }
+        }
+
+        private void OnFaeDustChanged(int newAmount)
+        {
+            UpdateFaeDustDisplay();
+        }
+
+        /// <summary>
+        /// Opens the Shrine (Unlock Shop) UI.
+        /// </summary>
+        public void OpenShrine()
+        {
+            if (_unlockShopUI != null)
+            {
+                _unlockShopUI.Show();
             }
         }
 
@@ -128,6 +231,15 @@ namespace FaeMaze.UI
                 GameSettings.UseFixedSeed = useFixedSeedToggle.isOn;
             }
 
+            // Check if tutorial mode is enabled - reset tutorial so it will play
+            if (tutorialModeToggle != null && tutorialModeToggle.isOn)
+            {
+                TutorialManager.ResetTutorial();
+            }
+
+            // Save all settings before loading scene
+            GameSettings.Save();
+
             // Load the game scene
             LoadGameScene();
         }
@@ -188,6 +300,21 @@ namespace FaeMaze.UI
             if (randomizeSeedButton != null)
             {
                 randomizeSeedButton.onClick.RemoveListener(OnRandomizeSeedClicked);
+            }
+
+            if (shrineButton != null)
+            {
+                shrineButton.onClick.RemoveListener(OpenShrine);
+            }
+
+            if (tutorialModeToggle != null)
+            {
+                tutorialModeToggle.onValueChanged.RemoveListener(OnTutorialModeChanged);
+            }
+
+            if (MetaProgressionManager.Instance != null)
+            {
+                MetaProgressionManager.Instance.OnFaeDustChanged -= OnFaeDustChanged;
             }
         }
     }

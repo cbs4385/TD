@@ -3,7 +3,7 @@
 This document tracks the implementation of roguelike meta-progression systems for FaeMaze.
 
 **Last Updated**: February 2026
-**Status**: Phase 1 Complete - Core Infrastructure
+**Status**: Phase 3 Complete - Blessings System
 
 ---
 
@@ -42,18 +42,58 @@ FaeMaze is implementing roguelike meta-progression inspired by games like Hades 
 | DifficultyManager hooks | Modified | ✅ | Tier change recording |
 | HeartPowerManager hooks | Modified | ✅ | Power activation recording, run tier lookup |
 
-### Phase 2: Unlock Shop UI 🔲 NOT STARTED
+### Phase 2: Unlock Shop UI ✅ COMPLETE
 
-- Main menu "Shrine" or upgrade shop screen
-- Category tabs (Powers, Blessings, Heart Forms, Mutations)
-- Fae Dust display and spending
-- Lock/unlock visual states
+| Component | File | Status | Description |
+|-----------|------|--------|-------------|
+| UnlockShopUI | `UnlockShopUI.cs` | ✅ | Full-screen shop with category tabs |
+| MainMenuManager | Modified | ✅ | Shrine button, Fae Dust display |
+| GameOverManager | Modified | ✅ | Fae Dust earned display |
 
-### Phase 3: Blessings System 🔲 NOT STARTED
+**Features:**
+- Full-screen "Shrine" shop accessible from main menu
+- Category tabs: Powers, Blessings, Forms, Mutations, Challenges
+- Scrollable unlock cards with:
+  - Name, description, cost
+  - Lock/unlock visual states
+  - Prerequisite display
+  - Purchase button (grayed when locked/unaffordable)
+- Fae Dust display in main menu header
+- Fae Dust earned shown on game over screen
 
-- Run-start blessing selection UI
-- Blessing effects implementation
-- Blessing unlock progression
+### Phase 3: Blessings System ✅ COMPLETE
+
+| Component | File | Status | Description |
+|-----------|------|--------|-------------|
+| BlessingDefinition | `BlessingDefinition.cs` | ✅ | ScriptableObject for blessing properties |
+| BlessingManager | `BlessingManager.cs` | ✅ | Blessing state, selection, effect queries |
+| BlessingSelectionUI | `BlessingSelectionUI.cs` | ✅ | Run-start blessing choice overlay |
+| RuntimeSceneSetup | Modified | ✅ | Blessing selection before wave start |
+| GameController | Modified | ✅ | Starting essence multiplier, Forest's Favor |
+| HeartOfTheMaze | Modified | ✅ | Consumption essence multiplier |
+| HeartPowerManager | Modified | ✅ | Power cost modifiers (Desperate Grasp, Vengeful Spirit, Devouring Hunger) |
+| VisitorControllerBase | Modified | ✅ | Visitor speed multiplier |
+| WaveSpawner | Modified | ✅ | Spawn interval multiplier |
+| HeartPowerEffects | Modified | ✅ | Maw speed multiplier |
+
+**Available Blessings:**
+
+| Blessing | Effect | Cost | Prerequisite |
+|----------|--------|------|--------------|
+| Greedy Heart | +50% essence from consumption, -25% starting essence | 100 | ReachEssence500 |
+| Patient Hunter | -15% visitor speed, +20% spawn rate | 100 | Survive10Minutes |
+| Desperate Grasp | Yoink! costs 0 when below 25 essence | 75 | None |
+| Spreading Corruption | +25% prop effect radius | 100 | None |
+| Devouring Hunger | +50% Maw speed, +25% Maw cost | 100 | None |
+| Forest's Favor | Start with 1 extra Lantern | 100 | None |
+| Vengeful Spirit | -50% power costs when below 50 essence | 125 | None |
+
+**Blessing Selection Flow:**
+1. Game scene loads, maze generates
+2. BlessingSelectionUI appears (game paused)
+3. Player sees 3 random unlocked blessings
+4. Player selects one or skips
+5. Blessing effects applied, waves begin
 
 ### Phase 4: Heart Forms 🔲 NOT STARTED
 
@@ -84,6 +124,8 @@ FaeMaze is implementing roguelike meta-progression inspired by games like Hades 
 | `MetaProgressionManager.cs` | Fae Dust currency, lifetime stats | `MetaProgressionManager`, `LifetimeStats`, `CurrentRunStats` |
 | `UnlockManager.cs` | Unlock state management | `UnlockManager`, `UnlockDefinition`, `UnlockCategory` |
 | `PowerProgressionManager.cs` | Run-based power tiers | `PowerProgressionManager` |
+| `BlessingDefinition.cs` | Blessing properties | `BlessingDefinition`, `BlessingType` |
+| `BlessingManager.cs` | Blessing selection and effects | `BlessingManager` |
 | `RoguelikeBootstrap.cs` | Manager instantiation | `RoguelikeBootstrap` |
 
 ### UI Files (`Assets/Scripts/UI/`)
@@ -91,15 +133,25 @@ FaeMaze is implementing roguelike meta-progression inspired by games like Hades 
 | File | Purpose |
 |------|---------|
 | `TierUpgradeUI.cs` | Tier upgrade modal overlay |
+| `UnlockShopUI.cs` | Unlock shop with category tabs |
+| `BlessingSelectionUI.cs` | Run-start blessing selection |
+| `MainMenuManager.cs` | Modified - Shrine button, Fae Dust display |
+| `GameOverManager.cs` | Modified - Fae Dust earned display |
 
 ### Modified System Files
 
 | File | Changes Made |
 |------|--------------|
-| `GameController.cs` | Added `OnRunStart()`, `ResetRunTiers()`, `RecordEssence()` calls |
-| `GameStatsTracker.cs` | Added `NotifyMetaProgression()`, `FinalizeRunStats()` |
-| `DifficultyManager.cs` | Added `RecordDifficultyTier()` call |
-| `HeartPowerManager.cs` | Modified `GetPowerDefinition()` to use PowerProgressionManager |
+| `GameController.cs` | OnRunStart, BlessingManager hooks, Forest's Favor lanterns, starting essence multiplier |
+| `GameStatsTracker.cs` | NotifyMetaProgression, FinalizeRunStats |
+| `DifficultyManager.cs` | RecordDifficultyTier call |
+| `HeartPowerManager.cs` | GetPowerDefinition uses PowerProgressionManager, GetEffectivePowerCost for blessing modifiers |
+| `HeartOfTheMaze.cs` | Consumption essence multiplier |
+| `VisitorControllerBase.cs` | Visitor speed multiplier from blessing |
+| `WaveSpawner.cs` | Spawn interval multiplier from blessing |
+| `HeartPowerEffects.cs` | DevouringMaw speed/duration multipliers |
+| `RuntimeSceneSetup.cs` | Blessing selection before wave start |
+| `DynamicMazeGrowth.cs` | HasPropAtNode, GetPropTypeAtNode helpers |
 
 ---
 
@@ -107,12 +159,23 @@ FaeMaze is implementing roguelike meta-progression inspired by games like Hades 
 
 ### Run Start
 ```
+RuntimeSceneSetup.StartAfterDelay()
+  └─> Wait for maze growth
+  └─> ShowBlessingSelection()
+       └─> BlessingSelectionUI.Show()
+       └─> Player selects blessing
+       └─> BlessingManager.SelectBlessingForRun()
+  └─> WaveSpawner.StartWave()
+
 GameController.Start()
   └─> MetaProgressionManager.OnRunStart()
        └─> Reset run stats
        └─> Check daily bonus
+  └─> BlessingManager.OnRunStart()
   └─> PowerProgressionManager.ResetRunTiers()
        └─> All powers → Tier I
+  └─> ApplyForestsFavorBlessing()
+       └─> Place extra lanterns if blessing active
 ```
 
 ### During Gameplay
@@ -125,12 +188,21 @@ Essence Change (GameController.AddEssence)
        └─> Check threshold crossings
        └─> Trigger TierUpgradeUI if upgrade available
 
-Visitor Fate (GameStatsTracker.RecordVisitorFate)
-  └─> NotifyMetaProgression()
-       └─> MetaProgressionManager.RecordHeartConsume/RecordMawDevour/etc.
+Visitor Spawn (WaveSpawner.SpawnVisitor)
+  └─> Apply BlessingManager.GetSpawnIntervalMultiplier()
+  └─> Visitor.ApplyDifficultyScaling()
+       └─> Apply BlessingManager.GetVisitorSpeedMultiplier()
 
 Power Activation (HeartPowerManager.TryActivatePower)
+  └─> GetEffectivePowerCost()
+       └─> Check Desperate Grasp (HeartwardGrasp free below threshold)
+       └─> Check Devouring Hunger (Maw costs more)
+       └─> Check Vengeful Spirit (all powers cheaper below threshold)
   └─> MetaProgressionManager.RecordPowerActivation()
+
+Visitor Consumption (HeartOfTheMaze.OnVisitorConsumed)
+  └─> Apply BlessingManager.GetEssenceFromConsumptionMultiplier()
+  └─> GameController.AddEssence()
 ```
 
 ### Game Over
@@ -143,6 +215,8 @@ GameOverManager.Start()
             └─> Calculate Fae Dust rewards
             └─> Update lifetime stats
             └─> Save to PlayerPrefs
+  └─> BlessingManager.OnRunEnd()
+       └─> Clear active blessing
 ```
 
 ---
@@ -172,6 +246,9 @@ GameOverManager.Start()
 | Blessing | GreedyHeart | 100 | Achievement: ReachEssence500 |
 | Blessing | PatientHunter | 100 | Achievement: Survive10Minutes |
 | Blessing | DesperateGrasp | 75 | None |
+| Blessing | SpreadingCorruption | 100 | None |
+| Blessing | DevouringHunger | 100 | None |
+| Blessing | ForestsFavor | 100 | None |
 | Blessing | VengefulSpirit | 125 | None |
 | Heart Form | RavenousHeart | 150 | None |
 | Heart Form | PatientHeart | 200 | None |
@@ -210,6 +287,7 @@ When a threshold is crossed:
 | `FaeMaze_Lifetime_*` | Lifetime statistics |
 | `FaeMaze_Unlock_*` | Unlock states |
 | `FaeMaze_Achievement_*` | Achievement completion |
+| `FaeMaze_Blessing_*` | Blessing unlock states |
 | `FaeMaze_TotalRuns` | Total run count |
 | `FaeMaze_LastDailyRun` | Date of last daily bonus |
 
@@ -234,22 +312,27 @@ When a threshold is crossed:
 - `Debug: Force Tier 2 Upgrade` - Triggers T2 upgrade UI
 - `Debug: Force Tier 3 Upgrade` - Triggers T3 upgrade UI
 
+**BlessingManager**:
+- `Debug: Unlock All Blessings` - Unlocks all blessing types
+- `Debug: Log Blessing State` - Shows current blessing state
+- `Reset All Blessing Unlocks` - Clears blessing unlock state
+
 ---
 
 ## Future Work
 
 ### High Priority
-1. **Unlock Shop UI** - Main menu screen to spend Fae Dust
-2. **Game Over Fae Dust Display** - Show earned dust on game over screen
-3. **Power Tier Visual Feedback** - Show tier level on power UI
+1. ~~**Unlock Shop UI** - Main menu screen to spend Fae Dust~~ ✅
+2. ~~**Game Over Fae Dust Display** - Show earned dust on game over screen~~ ✅
+3. ~~**Blessing Selection UI** - Pre-run blessing choice~~ ✅
+4. ~~**Blessing Effects** - Implement blessing modifiers~~ ✅
 
 ### Medium Priority
-4. **Blessing Selection UI** - Pre-run blessing choice
-5. **Blessing Effects** - Implement blessing modifiers
-6. **Heart Form Selection** - Character selection screen
+5. **Heart Form Selection** - Character selection screen
+6. **Challenge Modifiers** - Risk/reward system
+7. **Power Tier Visual Feedback** - Show tier level on power UI
 
 ### Lower Priority
-7. **Challenge Modifiers** - Risk/reward system
 8. **Prop Mutations** - Mutation effects
 9. **Achievements** - Track milestones
 10. **Cosmetic Unlocks** - Visual customization

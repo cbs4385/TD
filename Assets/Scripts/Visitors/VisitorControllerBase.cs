@@ -5,6 +5,7 @@ using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Maze;
 using FaeMaze.HeartPowers;
+using FaeMaze.Roguelike;
 
 namespace FaeMaze.Visitors
 {
@@ -1314,6 +1315,10 @@ namespace FaeMaze.Visitors
             // Apply speed scaling (visitors get faster at higher tiers)
             float tierSpeedMultiplier = DifficultyScaling.GetVisitorSpeedMultiplier(difficultyTier);
             moveSpeed *= tierSpeedMultiplier;
+
+            // Apply blessing speed multiplier (Patient Hunter makes visitors slower)
+            float blessingSpeedMultiplier = BlessingManager.Instance?.GetVisitorSpeedMultiplier() ?? 1.0f;
+            moveSpeed *= blessingSpeedMultiplier;
         }
 
         /// <summary>

@@ -2,6 +2,7 @@ using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
+using FaeMaze.Roguelike;
 using System;
 using System.Collections.Generic;
 using static FaeMaze.Systems.FrighteningEventManager;
@@ -192,7 +193,11 @@ namespace FaeMaze.Maze
         {
             if (visitor == null) return;
 
-            int essence = visitor.GetEssenceReward();
+            int baseEssence = visitor.GetEssenceReward();
+
+            // Apply blessing multiplier for consumption essence
+            float blessingMultiplier = BlessingManager.Instance?.GetEssenceFromConsumptionMultiplier() ?? 1.0f;
+            int essence = Mathf.RoundToInt(baseEssence * blessingMultiplier);
 
             if (GameStatsTracker.Instance != null)
             {

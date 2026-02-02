@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using TMPro;
 using System.Collections.Generic;
 using FaeMaze.Cameras;
@@ -303,8 +304,8 @@ namespace FaeMaze.HeartPowers
                 return Vector3.zero;
             }
 
-            // Get mouse screen position
-            Vector3 mouseScreenPos = Input.mousePosition;
+            // Get mouse screen position using new Input System
+            Vector3 mouseScreenPos = Mouse.current != null ? Mouse.current.position.ReadValue() : Vector3.zero;
 
             // Convert to world position for orthographic camera
             Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, mainCamera.nearClipPlane));

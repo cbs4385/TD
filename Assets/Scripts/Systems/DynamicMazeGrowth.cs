@@ -1862,6 +1862,22 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Checks if a node has a prop placed at it.
+        /// </summary>
+        public bool HasPropAtNode(int nodeIndex)
+        {
+            return nodeProps.ContainsKey(nodeIndex);
+        }
+
+        /// <summary>
+        /// Gets the prop type at a node, or null if no prop is present.
+        /// </summary>
+        public NodePropType? GetPropTypeAtNode(int nodeIndex)
+        {
+            return nodeProps.TryGetValue(nodeIndex, out var propType) ? propType : null;
+        }
+
+        /// <summary>
         /// Checks if the specified world position is on a node (not an edge).
         /// </summary>
         public bool IsPositionOnNode(Vector3 worldPosition, float searchRadius = 3f)

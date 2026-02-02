@@ -82,22 +82,9 @@ namespace FaeMaze.Systems
                 lastLogTime = Time.time;
             }
 
-            // Fallback to legacy Input system for KeyCode
-            KeyCode keyCode = ParseKeyCode(binding);
-            if (keyCode != KeyCode.None)
-            {
-                bool isPressed = Input.GetKey(keyCode);
-                if (debugLogging && isPressed && Time.time - lastLogTime > LOG_INTERVAL)
-                {
-                    Debug.Log($"[InputBindingHelper] Key '{binding}' -> KeyCode.{keyCode} (legacy) is PRESSED");
-                    lastLogTime = Time.time;
-                }
-                return isPressed;
-            }
-
             if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
             {
-                Debug.LogWarning($"[InputBindingHelper] Could not parse binding '{binding}' as Key or KeyCode");
+                Debug.LogWarning($"[InputBindingHelper] Could not parse binding '{binding}' as Key");
                 lastLogTime = Time.time;
             }
             return false;
@@ -150,13 +137,6 @@ namespace FaeMaze.Systems
                 return keyControl != null && keyControl.wasPressedThisFrame;
             }
 
-            // Fallback to legacy Input system for KeyCode
-            KeyCode keyCode = ParseKeyCode(binding);
-            if (keyCode != KeyCode.None)
-            {
-                return Input.GetKeyDown(keyCode);
-            }
-
             return false;
         }
 
@@ -197,13 +177,6 @@ namespace FaeMaze.Systems
             {
                 KeyControl keyControl = keyboard[key.Value];
                 return keyControl != null && keyControl.wasReleasedThisFrame;
-            }
-
-            // Fallback to legacy Input system for KeyCode
-            KeyCode keyCode = ParseKeyCode(binding);
-            if (keyCode != KeyCode.None)
-            {
-                return Input.GetKeyUp(keyCode);
             }
 
             return false;

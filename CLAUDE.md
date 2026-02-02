@@ -1468,6 +1468,43 @@ To build for macOS from Windows, install the Mac Build Support module via Unity 
 
 ## Session Notes (February 2026)
 
+### Main Menu Tutorial Toggle (Session Feb 2, 2026)
+
+**Status**: Fully implemented and working.
+
+**What was done:**
+1. Replaced separate "Tutorial" button with a checkbox toggle next to "Start Game" button
+2. Tutorial checkbox syncs with `GameSettings.ShowTutorialOnFirstRun` setting
+3. Checkbox is auto-checked on first run (defaults to true)
+4. Tutorial runs every time the checkbox is selected when starting the game
+
+**Key files created/modified:**
+| File | Purpose |
+|------|---------|
+| `Assets/Editor/MainMenuTutorialToggleSetup.cs` | Editor script to set up the toggle UI |
+| `Assets/Editor/OptionsToggleStyleFix.cs` | Editor script to fix Options toggle styling |
+| `Assets/Scripts/UI/MainMenuManager.cs` | Added `tutorialModeToggle` field and sync logic |
+| `Assets/Scripts/Tutorial/TutorialManager.cs` | Fixed `CheckAutoStartTutorial()` to respect `ShowTutorialOnFirstRun` |
+
+**Implementation details:**
+- Toggle styled like "Enable Red Cap" in Options (dark gray background, blue checkmark)
+- `LoadTutorialSetting()` loads `GameSettings.ShowTutorialOnFirstRun` into toggle on Start
+- `OnTutorialModeChanged()` syncs toggle changes back to GameSettings
+- `StartGame()` calls `TutorialManager.ResetTutorial()` when toggle is checked
+- `CheckAutoStartTutorial()` now checks all three conditions:
+  - `autoStartOnFirstRun` (component setting)
+  - `!TutorialCompleted` (not completed or was reset)
+  - `ShowTutorialOnFirstRun` (UI toggle is checked)
+
+**Editor script usage:**
+- Open MainMenu scene
+- Run: **FaeMaze > Setup Main Menu Tutorial Toggle**
+- Save the scene
+
+**Note**: The script also wires the StartGameButton's OnClick to call `MainMenuManager.StartGame()`.
+
+---
+
 ### Multi-Platform Build System (Session Feb 1, 2026)
 
 **Status**: Fully implemented and working for Windows and macOS.

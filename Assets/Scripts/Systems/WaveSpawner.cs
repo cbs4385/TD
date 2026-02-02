@@ -8,6 +8,8 @@ using FaeMaze.Audio;
 using FaeMaze.Visitors;
 using FaeMaze.HeartPowers;
 using FaeMaze.Tutorial;
+using FaeMaze.Roguelike;
+using FaeMaze.UI;
 using FontStyles = TMPro.FontStyles;
 
 namespace FaeMaze.Systems
@@ -178,9 +180,70 @@ namespace FaeMaze.Systems
                 }
                 else
                 {
-                    StartWave();
+                    // Start via coroutine to allow blessing selection first
+                    StartCoroutine(StartWaveWithBlessingSelection());
                 }
             }
+        }
+
+        /// <summary>
+        /// Shows blessing selection UI (if applicable) then starts the first wave.
+        /// </summary>
+        private IEnumerator StartWaveWithBlessingSelection()
+        {
+            // Wait for DynamicMazeGrowth initial growth stages to complete
+            DynamicMazeGrowth dynamicMazeGrowth = FindFirstObjectByType<DynamicMazeGrowth>();
+            if (dynamicMazeGrowth != null && !dynamicMazeGrowth.IsInitialGrowthComplete)
+            {
+                Debug.Log("[WaveSpawner] Waiting for initial maze growth to complete...");
+                while (!dynamicMazeGrowth.IsInitialGrowthComplete)
+                {
+                    yield return new WaitForSeconds(0.5f);
+                }
+            }
+
+            // Show blessing selection UI if player has unlocked blessings
+            var unlockedBlessings = BlessingManager.Instance?.GetUnlockedBlessings();
+            if (unlockedBlessings != null && unlockedBlessings.Count > 0)
+            {
+                Debug.Log($"[WaveSpawner] Showing blessing selection ({unlockedBlessings.Count} unlocked)");
+
+                // Create or find the BlessingSelectionUI
+                var blessingUI = FindFirstObjectByType<BlessingSelectionUI>();
+                if (blessingUI == null)
+                {
+                    GameObject uiObj = new GameObject("BlessingSelectionUI");
+                    blessingUI = uiObj.AddComponent<BlessingSelectionUI>();
+                }
+
+                // Show the UI and wait for selection
+                bool selectionComplete = false;
+                blessingUI.Show((selectedBlessing) =>
+                {
+                    selectionComplete = true;
+                    if (selectedBlessing != null)
+                    {
+                        Debug.Log($"[WaveSpawner] Blessing selected: {selectedBlessing.DisplayName}");
+                    }
+                    else
+                    {
+                        Debug.Log("[WaveSpawner] No blessing selected (skipped)");
+                    }
+                });
+
+                // Wait for selection to complete
+                while (!selectionComplete)
+                {
+                    yield return null;
+                }
+            }
+            else
+            {
+                Debug.Log("[WaveSpawner] No unlocked blessings, skipping selection");
+            }
+
+            // Now start the wave
+            StartWave();
         }
 
         private void LoadSettings()
@@ -305,6 +368,10 @@ namespace FaeMaze.Systems
                 // Calculate spawn interval using asymptotic growth (approaches max, never exceeds)
                 currentSpawnInterval = DifficultyScaling.GetAsymptoticSpawnInterval(
                     totalVisitorsSpawned, baseSpawnInterval);
+
+                // Apply blessing spawn interval multiplier (Patient Hunter makes spawns faster)
+                float blessingMultiplier = BlessingManager.Instance?.GetSpawnIntervalMultiplier() ?? 1.0f;
+                currentSpawnInterval *= blessingMultiplier;
 
                 // Wait for current interval (minimum 0.1 seconds for safety)
                 float waitTime = Mathf.Max(0.1f, currentSpawnInterval);

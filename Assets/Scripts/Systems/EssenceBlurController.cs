@@ -111,6 +111,8 @@ namespace FaeMaze.Systems
 
         #region Blur Initialization
 
+        private bool _hasLoggedVolumeSearch = false;
+
         /// <summary>
         /// Attempts to find and initialize the RadialBlur component.
         /// Called from Update() to handle the case where PostProcessVolumeRuntimeSetup
@@ -122,13 +124,31 @@ namespace FaeMaze.Systems
             if (globalVolume == null)
             {
                 var volumes = FindObjectsByType<Volume>(FindObjectsSortMode.None);
+
+                // Only log once to avoid spam
+                if (!_hasLoggedVolumeSearch)
+                {
+                    Debug.Log($"[EssenceBlurController] TryInitializeBlur: Found {volumes.Length} volumes");
+                }
+
                 foreach (var vol in volumes)
                 {
+                    if (!_hasLoggedVolumeSearch)
+                    {
+                        Debug.Log($"[EssenceBlurController] Checking volume: {vol.name}, profile: {(vol.profile != null ? vol.profile.name : "null")}");
+                    }
                     if (vol.profile != null && vol.profile.TryGet<RadialBlur>(out _))
                     {
+                        Debug.Log($"[EssenceBlurController] Found RadialBlur in volume: {vol.name}");
                         globalVolume = vol;
                         break;
                     }
+                }
+
+                if (globalVolume == null && !_hasLoggedVolumeSearch)
+                {
+                    Debug.LogWarning("[EssenceBlurController] No volume with RadialBlur found (will keep trying)");
+                    _hasLoggedVolumeSearch = true;
                 }
             }
 
@@ -136,6 +156,10 @@ namespace FaeMaze.Systems
             if (globalVolume != null && globalVolume.profile != null)
             {
                 globalVolume.profile.TryGet(out radialBlur);
+                if (radialBlur != null)
+                {
+                    Debug.Log($"[EssenceBlurController] RadialBlur from profile: found");
+                }
             }
 
             // Setup blur effects if found

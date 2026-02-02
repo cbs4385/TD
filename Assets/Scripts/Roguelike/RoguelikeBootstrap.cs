@@ -42,6 +42,12 @@ namespace FaeMaze.Roguelike
                 roguelikeRoot.AddComponent<PowerProgressionManager>();
             }
 
+            // Create BlessingManager if it doesn't exist
+            if (BlessingManager.Instance == null)
+            {
+                roguelikeRoot.AddComponent<BlessingManager>();
+            }
+
             // Create TierUpgradeUI (scene-specific, will be recreated per scene)
             roguelikeRoot.AddComponent<TierUpgradeUI>();
 

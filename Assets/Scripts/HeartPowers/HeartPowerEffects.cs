@@ -5,6 +5,7 @@ using FaeMaze.Props;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
+using FaeMaze.Roguelike;
 using ForestMaze;
 
 namespace FaeMaze.HeartPowers
@@ -4114,11 +4115,17 @@ namespace FaeMaze.HeartPowers
         // Settings - Loaded from GameSettings
         private readonly float triggerRadius;
 
-        // Constants - Architectural (not configurable)
-        private const float DEVOUR_CYCLE_DELAY = 0.25f;
-        private const float EMERGE_DURATION = 1.04f; // 25 frames at 24fps = ~1.04 seconds for full bite animation
-        private const float PAUSE_DURATION = 1.0f; // Full second pause for visibility
-        private const float SINK_DURATION = 0.5f;
+        // Base durations (before blessing multipliers)
+        private const float BASE_DEVOUR_CYCLE_DELAY = 0.25f;
+        private const float BASE_EMERGE_DURATION = 1.04f; // 25 frames at 24fps = ~1.04 seconds for full bite animation
+        private const float BASE_PAUSE_DURATION = 1.0f; // Full second pause for visibility
+        private const float BASE_SINK_DURATION = 0.5f;
+
+        // Effective durations (after blessing speed multiplier applied)
+        private readonly float devourCycleDelay;
+        private readonly float emergeDuration;
+        private readonly float pauseDuration;
+        private readonly float sinkDuration;
         private const float SHAKE_INTENSITY = 0.03f;
         private const float FOG_Z_POSITION = -0.2f;
         private const float PARTICLE_Z_MIN = -0.5f;
@@ -4178,6 +4185,15 @@ namespace FaeMaze.HeartPowers
         {
             // Load settings from GameSettings
             triggerRadius = GameSettings.DevouringMawRadius;
+
+            // Apply blessing speed multiplier (Devouring Hunger: 50% faster = 1.5x speed = 0.67x duration)
+            float speedMultiplier = BlessingManager.Instance?.GetMawSpeedMultiplier() ?? 1.0f;
+            float durationMultiplier = 1.0f / speedMultiplier; // Faster speed = shorter duration
+
+            devourCycleDelay = BASE_DEVOUR_CYCLE_DELAY * durationMultiplier;
+            emergeDuration = BASE_EMERGE_DURATION * durationMultiplier;
+            pauseDuration = BASE_PAUSE_DURATION * durationMultiplier;
+            sinkDuration = BASE_SINK_DURATION * durationMultiplier;
         }
 
         /// <summary>
@@ -4309,7 +4325,7 @@ namespace FaeMaze.HeartPowers
             {
                 // Check for visitors in trigger zone
                 var visitor = FindVisitorInTriggerZone();
-                if (visitor != null && (elapsedTime - lastCycleEndTime) >= DEVOUR_CYCLE_DELAY)
+                if (visitor != null && (elapsedTime - lastCycleEndTime) >= devourCycleDelay)
                 {
                     StartDevourCycle(visitor);
                 }
@@ -4869,7 +4885,7 @@ namespace FaeMaze.HeartPowers
             {
                 case DevourPhase.Emerging:
                     // Translate prefab from z=0 to z=-0.5 while playing full bite animation (frames 1→25)
-                    float emergeT = Mathf.Clamp01(phaseElapsed / EMERGE_DURATION);
+                    float emergeT = Mathf.Clamp01(phaseElapsed / emergeDuration);
                     if (devourVisual != null)
                     {
                         Vector3 pos = devourBasePosition;
@@ -4889,7 +4905,7 @@ namespace FaeMaze.HeartPowers
                     break;
 
                 case DevourPhase.Paused:
-                    // Hold at z=-0.5 for PAUSE_DURATION, then sink along +z
+                    // Hold at z=-0.5 for pauseDuration, then sink along +z
                     // Hold last frame of animation (mouth closed after bite)
                     if (devourVisual != null)
                     {
@@ -4901,7 +4917,7 @@ namespace FaeMaze.HeartPowers
                     // Hold at last frame (closed after bite)
                     SetDevourAnimatorFrame(DEVOUR_ANIMATION_FRAMES);
 
-                    if (phaseElapsed >= PAUSE_DURATION)
+                    if (phaseElapsed >= pauseDuration)
                     {
                         currentPhase = DevourPhase.Sinking;
                         phaseStartTime = elapsedTime;
@@ -4911,7 +4927,7 @@ namespace FaeMaze.HeartPowers
                 case DevourPhase.Sinking:
                     // Translate prefab and visitors along +z (from -0.5 to 1.0)
                     // Hold last frame of animation (mouth stays closed)
-                    float sinkT = Mathf.Clamp01(phaseElapsed / SINK_DURATION);
+                    float sinkT = Mathf.Clamp01(phaseElapsed / sinkDuration);
 
                     float devourZ = Mathf.Lerp(-0.5f, 1f, sinkT);
 

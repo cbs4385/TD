@@ -168,7 +168,9 @@ namespace FaeMaze.Systems
             // Do NOT call Physics.IgnoreLayerCollision at runtime - it causes Unity assertion errors
 
             // Load starting essence from settings (overrides serialized default)
-            startingEssence = GameSettings.StartingEssence;
+            // Apply blessing modifier if one is active
+            float blessingMultiplier = BlessingManager.Instance?.GetStartingEssenceMultiplier() ?? 1.0f;
+            startingEssence = Mathf.RoundToInt(GameSettings.StartingEssence * blessingMultiplier);
 
             // Initialize essence: use persistent value if available, otherwise use starting essence
             if (hasInitializedEssence && persistentEssence.HasValue)
@@ -198,14 +200,65 @@ namespace FaeMaze.Systems
             // Notify MetaProgressionManager that a new run is starting
             MetaProgressionManager.Instance?.OnRunStart();
 
+            // Notify BlessingManager that a new run is starting
+            BlessingManager.Instance?.OnRunStart();
+
             // Reset power progression for the new run
             PowerProgressionManager.Instance?.ResetRunTiers();
+
+            // Apply blessing: Forest's Favor (extra starting lanterns)
+            ApplyForestsFavorBlessing();
 
             // Invoke event for initial essence value
             OnEssenceChanged?.Invoke(currentEssence);
 
             // Check if tutorial should auto-start
             CheckTutorialAutoStart();
+        }
+
+        /// <summary>
+        /// Applies the Forest's Favor blessing effect by placing extra lanterns at the start.
+        /// </summary>
+        private void ApplyForestsFavorBlessing()
+        {
+            int extraLanterns = BlessingManager.Instance?.GetExtraStartingLanterns() ?? 0;
+            if (extraLanterns <= 0) return;
+
+            var dynamicGrowth = FindFirstObjectByType<DynamicMazeGrowth>();
+            if (dynamicGrowth == null) return;
+
+            var mazeData = FindFirstObjectByType<MazeGridBehaviour>()?.WorldSpaceMazeData;
+            if (mazeData?.GraphState?.Nodes == null) return;
+
+            // Find nodes without props that aren't the heart/root node
+            var availableNodes = new List<int>();
+            for (int i = 0; i < mazeData.GraphState.Nodes.Count; i++)
+            {
+                var node = mazeData.GraphState.Nodes[i];
+                if (node.Kind != "root" && !dynamicGrowth.HasPropAtNode(i))
+                {
+                    availableNodes.Add(i);
+                }
+            }
+
+            // Shuffle and place lanterns
+            for (int i = availableNodes.Count - 1; i > 0; i--)
+            {
+                int j = UnityEngine.Random.Range(0, i + 1);
+                (availableNodes[i], availableNodes[j]) = (availableNodes[j], availableNodes[i]);
+            }
+
+            int lanternsPlaced = 0;
+            foreach (int nodeIndex in availableNodes)
+            {
+                if (lanternsPlaced >= extraLanterns) break;
+
+                if (dynamicGrowth.SetNodeProp(nodeIndex, DynamicMazeGrowth.NodePropType.FaeLantern))
+                {
+                    lanternsPlaced++;
+                    Debug.Log($"[GameController] Forest's Favor: Placed lantern at node {nodeIndex}");
+                }
+            }
         }
 
         /// <summary>
@@ -317,7 +370,9 @@ namespace FaeMaze.Systems
             essenceAuditLog.Clear();
 
             // Re-read starting essence from settings in case it changed
-            startingEssence = GameSettings.StartingEssence;
+            // Apply blessing modifier if one is active
+            float blessingMultiplier = BlessingManager.Instance?.GetStartingEssenceMultiplier() ?? 1.0f;
+            startingEssence = Mathf.RoundToInt(GameSettings.StartingEssence * blessingMultiplier);
 
             currentEssence = Mathf.Max(0, startingEssence);
             persistentEssence = currentEssence;

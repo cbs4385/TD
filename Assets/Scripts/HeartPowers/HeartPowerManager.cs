@@ -402,10 +402,11 @@ namespace FaeMaze.HeartPowers
                 return false;
             }
 
-            // Consume essence
-            if (definition.essenceCost > 0)
+            // Consume essence (accounting for blessing modifiers)
+            int effectiveCost = GetEffectivePowerCost(powerType, definition);
+            if (effectiveCost > 0)
             {
-                SpendEssence(definition.essenceCost);
+                SpendEssence(effectiveCost);
             }
 
             // Only start cooldown for non-toggle powers
@@ -463,9 +464,10 @@ namespace FaeMaze.HeartPowers
                 return false;
             }
 
-            if (definition.essenceCost > 0 && CurrentEssence < definition.essenceCost)
+            int effectiveCost = GetEffectivePowerCost(powerType, definition);
+            if (effectiveCost > 0 && CurrentEssence < effectiveCost)
             {
-                reason = $"Not enough essence (need {definition.essenceCost}, have {CurrentEssence})";
+                reason = $"Not enough essence (need {effectiveCost}, have {CurrentEssence})";
                 return false;
             }
 
@@ -486,6 +488,44 @@ namespace FaeMaze.HeartPowers
 
             reason = "";
             return true;
+        }
+
+        /// <summary>
+        /// Calculates the effective essence cost for a power, accounting for blessing effects.
+        /// - Desperate Grasp: HeartwardGrasp costs 0 when below threshold
+        /// - Vengeful Spirit: All powers cost 50% less when below threshold
+        /// - Devouring Hunger: DevouringMaw costs 25% more
+        /// </summary>
+        public int GetEffectivePowerCost(HeartPowerType powerType, HeartPowerDefinition definition)
+        {
+            if (definition == null || definition.essenceCost <= 0)
+                return 0;
+
+            int baseCost = definition.essenceCost;
+            int currentEssence = CurrentEssence;
+
+            // Desperate Grasp: HeartwardGrasp costs 0 when below essence threshold
+            if (powerType == HeartPowerType.HeartwardGrasp)
+            {
+                if (BlessingManager.Instance != null && BlessingManager.Instance.ShouldGraspBeFree(currentEssence))
+                {
+                    return 0;
+                }
+            }
+
+            // Start with base multiplier of 1.0
+            float costMultiplier = 1.0f;
+
+            // Devouring Hunger: DevouringMaw costs 25% more
+            if (powerType == HeartPowerType.DevouringMaw)
+            {
+                costMultiplier *= BlessingManager.Instance?.GetMawCostMultiplier() ?? 1.0f;
+            }
+
+            // Vengeful Spirit: All powers cost 50% less when below essence threshold
+            costMultiplier *= BlessingManager.Instance?.GetPowerCostMultiplier(currentEssence) ?? 1.0f;
+
+            return Mathf.RoundToInt(baseCost * costMultiplier);
         }
 
         /// <summary>

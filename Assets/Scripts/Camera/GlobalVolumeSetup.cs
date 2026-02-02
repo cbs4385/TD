@@ -1,11 +1,12 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using FaeMaze.PostProcessing;
 
 namespace FaeMaze.Cameras
 {
     /// <summary>
-    /// Automatically configures the Global Volume with Bloom and Fog effects for lantern glow.
+    /// Automatically configures the Global Volume with Bloom, Fog, and RadialBlur effects.
     /// Attach this to any Global Volume that needs these effects.
     /// </summary>
     [RequireComponent(typeof(Volume))]
@@ -32,10 +33,30 @@ namespace FaeMaze.Cameras
         [Tooltip("Fog density/thickness")]
         [SerializeField] private float fogDensity = 0.02f;
 
+        [Header("Radial Blur / Vignette Settings")]
+        [Tooltip("Enable radial blur and vignette effect")]
+        [SerializeField] private bool enableRadialBlur = true;
+
+        [Tooltip("Clear radius as percentage of screen (0-100). Higher = more clear area in center.")]
+        [SerializeField] private float blurClearRadius = 85f;
+
+        [Tooltip("Intensity of the blur effect")]
+        [SerializeField] private float blurIntensity = 0.5f;
+
+        [Tooltip("Number of blur samples (higher = better quality)")]
+        [SerializeField] private int blurSamples = 8;
+
+        [Tooltip("Vignette coverage as percentage (0-100). Higher = more screen darkening.")]
+        [SerializeField] private float vignetteCoverage = 30f;
+
+        [Tooltip("Vignette darkness intensity (0-1). Higher = darker vignette.")]
+        [SerializeField] private float vignetteIntensity = 0.8f;
+
         private Volume volume;
 
         private void OnEnable()
         {
+            Debug.Log("[GlobalVolumeSetup] OnEnable() called");
             SetupVolume();
             SetupRenderSettingsFog();
         }
@@ -49,13 +70,20 @@ namespace FaeMaze.Cameras
         private void SetupVolume()
         {
             volume = GetComponent<Volume>();
-            if (volume == null) return;
+            if (volume == null)
+            {
+                Debug.LogError("[GlobalVolumeSetup] No Volume component found!");
+                return;
+            }
+
+            Debug.Log($"[GlobalVolumeSetup] Volume found. Profile exists: {volume.profile != null}");
 
             // Create a new profile if none exists
             if (volume.profile == null)
             {
                 volume.profile = ScriptableObject.CreateInstance<VolumeProfile>();
                 volume.profile.name = "Global Volume Profile";
+                Debug.Log("[GlobalVolumeSetup] Created new runtime VolumeProfile");
             }
 
             // Ensure volume is global
@@ -64,6 +92,11 @@ namespace FaeMaze.Cameras
 
             // Add/configure Bloom
             ConfigureBloom();
+
+            // Add/configure RadialBlur
+            ConfigureRadialBlur();
+
+            Debug.Log($"[GlobalVolumeSetup] Setup complete. Profile component count: {volume.profile.components.Count}");
         }
 
         private void SetupRenderSettingsFog()
@@ -96,6 +129,49 @@ namespace FaeMaze.Cameras
                 bloom.intensity.value = bloomIntensity;
                 bloom.scatter.overrideState = true;
                 bloom.scatter.value = bloomScatter;
+            }
+        }
+
+        private void ConfigureRadialBlur()
+        {
+            if (volume.profile == null)
+            {
+                Debug.LogError("[GlobalVolumeSetup] ConfigureRadialBlur: profile is null!");
+                return;
+            }
+
+            RadialBlur radialBlur;
+            if (!volume.profile.TryGet<RadialBlur>(out radialBlur))
+            {
+                Debug.Log("[GlobalVolumeSetup] Adding RadialBlur to profile");
+                radialBlur = volume.profile.Add<RadialBlur>(true);
+            }
+            else
+            {
+                Debug.Log("[GlobalVolumeSetup] RadialBlur already exists in profile");
+            }
+
+            if (radialBlur != null)
+            {
+                radialBlur.active = true;
+                radialBlur.enabled.overrideState = true;
+                radialBlur.enabled.value = enableRadialBlur;
+                radialBlur.blurAngleDegrees.overrideState = true;
+                radialBlur.blurAngleDegrees.value = blurClearRadius;
+                radialBlur.blurIntensity.overrideState = true;
+                radialBlur.blurIntensity.value = blurIntensity;
+                radialBlur.blurSamples.overrideState = true;
+                radialBlur.blurSamples.value = blurSamples;
+                radialBlur.vignetteCoverage.overrideState = true;
+                radialBlur.vignetteCoverage.value = vignetteCoverage;
+                radialBlur.vignetteIntensity.overrideState = true;
+                radialBlur.vignetteIntensity.value = vignetteIntensity;
+
+                Debug.Log($"[GlobalVolumeSetup] RadialBlur configured: enabled={enableRadialBlur}, active={radialBlur.active}, clearRadius={blurClearRadius}");
+            }
+            else
+            {
+                Debug.LogError("[GlobalVolumeSetup] Failed to add RadialBlur to profile!");
             }
         }
     }

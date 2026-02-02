@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using FaeMaze.Systems;
 using FaeMaze.Visitors;
+using FaeMaze.Roguelike;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -59,6 +60,8 @@ namespace FaeMaze.UI
         private SceneLoader sceneLoader;
         private Canvas canvas;
         private Button createdMainMenuButton;
+        private TextMeshProUGUI faeDustEarnedText;
+        private int _faeDustEarnedThisRun;
 
         private void Awake()
         {
@@ -72,8 +75,16 @@ namespace FaeMaze.UI
             CreateFullScreenUI();
             DisplayStatistics();
 
+            // Capture Fae Dust before finalization to calculate earned amount
+            int dustBefore = MetaProgressionManager.Instance?.FaeDust ?? 0;
+
             // Finalize run stats for meta-progression (calculates Fae Dust rewards)
             GameStatsTracker.Instance?.FinalizeRunStats();
+
+            // Calculate and display earned Fae Dust
+            int dustAfter = MetaProgressionManager.Instance?.FaeDust ?? 0;
+            _faeDustEarnedThisRun = dustAfter - dustBefore;
+            UpdateFaeDustDisplay();
         }
 
         private void Update()
@@ -123,20 +134,35 @@ namespace FaeMaze.UI
             // Title at top (anchor 0.5, 0.93)
             CreateHeaderText("TitleText", new Vector2(0.5f, 0.93f), "GAME OVER", 72, new Color(1f, 0.3f, 0.3f));
 
-            // Run length below title
-            runLengthText = CreateHeaderText("RunLengthText", new Vector2(0.5f, 0.84f), "Run Length: 00:00", 28);
+            // Fae Dust earned (prominent display below title)
+            faeDustEarnedText = CreateHeaderText("FaeDustEarned", new Vector2(0.5f, 0.85f), "+0 Fae Dust", 32, new Color(0.7f, 0.5f, 1f));
+
+            // Run length below Fae Dust
+            runLengthText = CreateHeaderText("RunLengthText", new Vector2(0.5f, 0.79f), "Run Length: 00:00", 24);
 
             // Peak essence
-            peakEssenceText = CreateHeaderText("PeakEssenceText", new Vector2(0.5f, 0.78f), "Peak Threads: 0", 22);
+            peakEssenceText = CreateHeaderText("PeakEssenceText", new Vector2(0.5f, 0.74f), "Peak Threads: 0", 20);
 
-            // Essence Ledger container
-            essenceLedgerContainer = CreateContainer("EssenceLedger", new Vector2(0.5f, 0.62f), new Vector2(600, 160));
+            // Essence Ledger container (adjusted position)
+            essenceLedgerContainer = CreateContainer("EssenceLedger", new Vector2(0.5f, 0.58f), new Vector2(600, 140));
 
             // Hazard Histogram container (positioned to leave room for button at bottom)
-            hazardHistogramContainer = CreateContainer("HazardHistogram", new Vector2(0.5f, 0.32f), new Vector2(700, 280));
+            hazardHistogramContainer = CreateContainer("HazardHistogram", new Vector2(0.5f, 0.30f), new Vector2(700, 260));
 
             // Main Menu button at very bottom
             CreateMainMenuButton();
+        }
+
+        private void UpdateFaeDustDisplay()
+        {
+            if (faeDustEarnedText != null)
+            {
+                faeDustEarnedText.text = $"+{_faeDustEarnedThisRun} Fae Dust";
+
+                // Add total display
+                int totalDust = MetaProgressionManager.Instance?.FaeDust ?? 0;
+                faeDustEarnedText.text += $" (Total: {totalDust})";
+            }
         }
 
         private void CreateMainMenuButton()

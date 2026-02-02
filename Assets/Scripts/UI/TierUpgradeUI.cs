@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using TMPro;
 using FaeMaze.HeartPowers;
 using FaeMaze.Roguelike;
@@ -80,8 +81,8 @@ namespace FaeMaze.UI
 
         private void Update()
         {
-            // Allow ESC to skip upgrade
-            if (_isVisible && Input.GetKeyDown(KeyCode.Escape))
+            // Allow ESC to skip upgrade (using new Input System)
+            if (_isVisible && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             {
                 OnSkipClicked();
             }

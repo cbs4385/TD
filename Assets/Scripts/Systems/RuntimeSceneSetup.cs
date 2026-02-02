@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using FaeMaze.UI;
+using FaeMaze.Roguelike;
 
 namespace FaeMaze.Systems
 {
@@ -239,6 +240,9 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Show blessing selection UI if player has unlocked blessings
+            yield return ShowBlessingSelection();
+
             if (waveSpawner != null)
             {
                 bool started = waveSpawner.StartWave();
@@ -251,6 +255,46 @@ namespace FaeMaze.Systems
             }
 
             Destroy(gameObject);
+        }
+
+        private System.Collections.IEnumerator ShowBlessingSelection()
+        {
+            // Check if player has any unlocked blessings
+            var unlockedBlessings = BlessingManager.Instance?.GetUnlockedBlessings();
+            if (unlockedBlessings == null || unlockedBlessings.Count == 0)
+            {
+                Debug.Log("[DelayedWaveStarter] No unlocked blessings, skipping selection");
+                yield break;
+            }
+
+            // Create or find the BlessingSelectionUI
+            var blessingUI = Object.FindFirstObjectByType<BlessingSelectionUI>();
+            if (blessingUI == null)
+            {
+                GameObject uiObj = new GameObject("BlessingSelectionUI");
+                blessingUI = uiObj.AddComponent<BlessingSelectionUI>();
+            }
+
+            // Show the UI and wait for selection
+            bool selectionComplete = false;
+            blessingUI.Show((selectedBlessing) =>
+            {
+                selectionComplete = true;
+                if (selectedBlessing != null)
+                {
+                    Debug.Log($"[DelayedWaveStarter] Blessing selected: {selectedBlessing.DisplayName}");
+                }
+                else
+                {
+                    Debug.Log("[DelayedWaveStarter] No blessing selected");
+                }
+            });
+
+            // Wait for selection to complete (use realtime since game is paused)
+            while (!selectionComplete)
+            {
+                yield return null;
+            }
         }
     }
 }

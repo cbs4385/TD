@@ -697,6 +697,33 @@ namespace FaeMaze.Systems
                     Screen.SetResolution(res.width, res.height, Fullscreen);
                 }
             }
+            else
+            {
+                // First run - no resolution saved. Auto-select highest available resolution.
+                Resolution[] resolutions = Screen.resolutions;
+                if (resolutions.Length > 0)
+                {
+                    // Find the highest resolution (last in the array is typically highest, but let's sort to be sure)
+                    Resolution highest = resolutions[0];
+                    foreach (Resolution res in resolutions)
+                    {
+                        if (res.width * res.height > highest.width * highest.height)
+                        {
+                            highest = res;
+                        }
+                    }
+
+                    // Apply and save the highest resolution
+                    Debug.Log($"[GameSettings] First run: auto-selecting highest resolution {highest.width}x{highest.height}");
+                    Screen.SetResolution(highest.width, highest.height, Fullscreen);
+
+                    // Save so this only happens once
+                    ResolutionWidth = highest.width;
+                    ResolutionHeight = highest.height;
+                    ResolutionIndex = 0; // Mark as having a saved resolution (index 0 = highest in sorted list)
+                    Save();
+                }
+            }
 
             // Apply light level to directional light
             ApplyLightLevel();

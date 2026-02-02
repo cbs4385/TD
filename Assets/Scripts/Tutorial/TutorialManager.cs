@@ -339,7 +339,9 @@ namespace FaeMaze.Tutorial
         /// </summary>
         public void CheckAutoStartTutorial()
         {
-            if (autoStartOnFirstRun && !GameSettings.TutorialCompleted)
+            // Check both the component's setting AND the GameSettings
+            // GameSettings.ShowTutorialOnFirstRun is controlled by the Options/MainMenu toggle
+            if (autoStartOnFirstRun && !GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun)
             {
                 // Delay start to allow scene to fully initialize
                 Invoke(nameof(StartTutorial), startDelay);

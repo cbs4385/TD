@@ -2,7 +2,6 @@ Shader "Hidden/PostProcess/RadialBlur"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
         _BlurAngleDegrees ("Clear Radius Percentage", Float) = 85.0
         _BlurIntensity ("Blur Intensity", Float) = 0.5
         _BlurSamples ("Blur Samples", Float) = 8.0
@@ -27,8 +26,8 @@ Shader "Hidden/PostProcess/RadialBlur"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
-            TEXTURE2D_X(_MainTex);
-            SAMPLER(sampler_MainTex);
+            // Unity 6 Render Graph uses _BlitTexture (defined in Blit.hlsl)
+            // sampler_LinearClamp is already defined in Core.hlsl
 
             float _BlurAngleDegrees;     // Clear radius as percentage (10 = 10% of screen radius is clear)
             float _BlurIntensity;        // Intensity of the blur effect
@@ -53,7 +52,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                 // If we're inside the clear zone, return unblurred
                 if (normalizedDist < blurStart)
                 {
-                    return SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
+                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
                 }
 
                 // Calculate blur strength from 0 (at blur start) to intensity (at edge)
@@ -74,7 +73,7 @@ Shader "Hidden/PostProcess/RadialBlur"
                     float2 offset = float2(cos(angle), sin(angle)) * blurRadius;
                     float2 sampleUV = uv + offset;
 
-                    blurAccum += SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, sampleUV);
+                    blurAccum += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, sampleUV);
                 }
 
                 float4 finalColor = blurAccum / (float)samples;
@@ -101,7 +100,7 @@ Shader "Hidden/PostProcess/RadialBlur"
         }
     }
 
-    // Fallback for older/integrated GPUs - simpler blur
+    // Fallback for older/integrated GPUs - simpler blur (vignette only)
     SubShader
     {
         Tags { "RenderType"="Opaque" "RenderPipeline"="UniversalPipeline" }
@@ -120,16 +119,13 @@ Shader "Hidden/PostProcess/RadialBlur"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
-            TEXTURE2D_X(_MainTex);
-            SAMPLER(sampler_MainTex);
-
             float _VignetteCoverage;
             float _VignetteIntensity;
 
             float4 Frag(Varyings input) : SV_Target
             {
                 float2 uv = input.texcoord;
-                float4 color = SAMPLE_TEXTURE2D_X(_MainTex, sampler_MainTex, uv);
+                float4 color = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
 
                 // Simple vignette only (no blur)
                 float2 center = float2(0.5, 0.5);
