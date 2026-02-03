@@ -20,12 +20,8 @@ namespace FaeMaze.Systems
         {
             string sceneName = scene.name;
 
-            // Reset RandomManager when loading game scenes to ensure clean state
-            // This prevents static state from persisting incorrectly between editor play sessions
-            if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "PlanarForestMazeScene")
-            {
-                RandomManager.Reset();
-            }
+            // NOTE: RandomManager initialization is handled by GameController.Awake()
+            // Do NOT reset it here - this would overwrite the tutorial seed set by GameController
 
             if (sceneName == "FaeMazeScene" || sceneName == "ProceduralMazeScene" || sceneName == "PlanarForestMazeScene" || sceneName == "Options")
             {
@@ -240,6 +236,15 @@ namespace FaeMaze.Systems
                 }
             }
 
+            // Show heart form selection UI if player has multiple unlocked forms
+            yield return ShowHeartFormSelection();
+
+            // Show challenge selection UI if player has unlocked challenges
+            yield return ShowChallengeSelection();
+
+            // Show mutation selection UI if player has unlocked mutations
+            yield return ShowMutationSelection();
+
             // Show blessing selection UI if player has unlocked blessings
             yield return ShowBlessingSelection();
 
@@ -255,6 +260,126 @@ namespace FaeMaze.Systems
             }
 
             Destroy(gameObject);
+        }
+
+        private System.Collections.IEnumerator ShowHeartFormSelection()
+        {
+            // Check if player has multiple unlocked forms (more than just the default)
+            var unlockedForms = HeartFormManager.Instance?.GetUnlockedForms();
+            if (unlockedForms == null || unlockedForms.Count <= 1)
+            {
+                Debug.Log("[DelayedWaveStarter] Only default form unlocked, skipping form selection");
+                yield break;
+            }
+
+            // Create or find the HeartFormSelectionUI
+            var formUI = Object.FindFirstObjectByType<HeartFormSelectionUI>();
+            if (formUI == null)
+            {
+                GameObject uiObj = new GameObject("HeartFormSelectionUI");
+                formUI = uiObj.AddComponent<HeartFormSelectionUI>();
+            }
+
+            // Show the UI and wait for selection
+            bool selectionComplete = false;
+            formUI.Show((selectedForm) =>
+            {
+                selectionComplete = true;
+                if (selectedForm != null)
+                {
+                    Debug.Log($"[DelayedWaveStarter] Heart Form selected: {selectedForm.DisplayName}");
+                }
+                else
+                {
+                    Debug.Log("[DelayedWaveStarter] Default form selected");
+                }
+            });
+
+            // Wait for selection to complete (use realtime since game is paused)
+            while (!selectionComplete)
+            {
+                yield return null;
+            }
+        }
+
+        private System.Collections.IEnumerator ShowChallengeSelection()
+        {
+            // Check if player has any unlocked challenges
+            var unlockedChallenges = ChallengeModifierManager.Instance?.GetUnlockedChallenges();
+            if (unlockedChallenges == null || unlockedChallenges.Count == 0)
+            {
+                Debug.Log("[DelayedWaveStarter] No unlocked challenges, skipping selection");
+                yield break;
+            }
+
+            // Create or find the ChallengeSelectionUI
+            var challengeUI = Object.FindFirstObjectByType<ChallengeSelectionUI>();
+            if (challengeUI == null)
+            {
+                GameObject uiObj = new GameObject("ChallengeSelectionUI");
+                challengeUI = uiObj.AddComponent<ChallengeSelectionUI>();
+            }
+
+            // Show the UI and wait for selection
+            bool selectionComplete = false;
+            challengeUI.Show((selectedChallenges) =>
+            {
+                selectionComplete = true;
+                if (selectedChallenges != null && selectedChallenges.Count > 0)
+                {
+                    Debug.Log($"[DelayedWaveStarter] {selectedChallenges.Count} challenge(s) selected");
+                }
+                else
+                {
+                    Debug.Log("[DelayedWaveStarter] No challenges selected");
+                }
+            });
+
+            // Wait for selection to complete (use realtime since game is paused)
+            while (!selectionComplete)
+            {
+                yield return null;
+            }
+        }
+
+        private System.Collections.IEnumerator ShowMutationSelection()
+        {
+            // Check if player has any unlocked mutations
+            var unlockedMutations = PropMutationManager.Instance?.GetUnlockedMutations();
+            if (unlockedMutations == null || unlockedMutations.Count == 0)
+            {
+                Debug.Log("[DelayedWaveStarter] No unlocked mutations, skipping selection");
+                yield break;
+            }
+
+            // Create or find the PropMutationSelectionUI
+            var mutationUI = Object.FindFirstObjectByType<PropMutationSelectionUI>();
+            if (mutationUI == null)
+            {
+                GameObject uiObj = new GameObject("PropMutationSelectionUI");
+                mutationUI = uiObj.AddComponent<PropMutationSelectionUI>();
+            }
+
+            // Show the UI and wait for selection
+            bool selectionComplete = false;
+            mutationUI.Show((selectedMutation) =>
+            {
+                selectionComplete = true;
+                if (selectedMutation != null)
+                {
+                    Debug.Log($"[DelayedWaveStarter] Mutation selected: {selectedMutation.DisplayName}");
+                }
+                else
+                {
+                    Debug.Log("[DelayedWaveStarter] No mutation selected");
+                }
+            });
+
+            // Wait for selection to complete (use realtime since game is paused)
+            while (!selectionComplete)
+            {
+                yield return null;
+            }
         }
 
         private System.Collections.IEnumerator ShowBlessingSelection()

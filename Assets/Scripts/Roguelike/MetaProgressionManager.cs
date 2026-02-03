@@ -67,7 +67,7 @@ namespace FaeMaze.Roguelike
             public int TotalVisitorsDevouredByMaw;
             public int TotalVisitorsDrainedByProps;
             public int TotalVisitorsEscaped;
-            public int TotalVisitorsKilledByRedCap;
+            public int TotalVisitorsKilledByGoblin;
             public int TotalVisitorsDrownedByPuka;
             public int TotalEssenceEarned;
             public int TotalEssenceSpentOnPowers;
@@ -107,7 +107,7 @@ namespace FaeMaze.Roguelike
             public int VisitorsDevouredByMaw;
             public int VisitorsDrainedByProps;
             public int VisitorsEscaped;
-            public int VisitorsKilledByRedCap;
+            public int VisitorsKilledByGoblin;
             public int MaxEssence;
             public int MaxDifficultyTier;
             public float RunDurationSeconds;
@@ -123,7 +123,7 @@ namespace FaeMaze.Roguelike
                 VisitorsDevouredByMaw = 0;
                 VisitorsDrainedByProps = 0;
                 VisitorsEscaped = 0;
-                VisitorsKilledByRedCap = 0;
+                VisitorsKilledByGoblin = 0;
                 MaxEssence = 0;
                 MaxDifficultyTier = 1;
                 RunDurationSeconds = 0f;
@@ -278,9 +278,16 @@ namespace FaeMaze.Roguelike
             if (_currentRunStats.Survived5Minutes) dustEarned += DUST_SURVIVE_5_MIN;
             if (_currentRunStats.Survived10Minutes) dustEarned += DUST_SURVIVE_10_MIN;
 
+            // Apply challenge modifier multiplier (stacked from all active challenges)
+            float challengeMultiplier = ChallengeModifierManager.Instance?.GetFaeDustMultiplier() ?? 1.0f;
+            dustEarned = Mathf.RoundToInt(dustEarned * challengeMultiplier);
+
             if (dustEarned > 0)
             {
-                AddFaeDust(dustEarned, "Run completion");
+                string source = challengeMultiplier > 1.0f
+                    ? $"Run completion ({challengeMultiplier:F2}x challenge bonus)"
+                    : "Run completion";
+                AddFaeDust(dustEarned, source);
             }
 
             // Update lifetime stats
@@ -289,7 +296,7 @@ namespace FaeMaze.Roguelike
             _lifetimeStats.TotalVisitorsDevouredByMaw += _currentRunStats.VisitorsDevouredByMaw;
             _lifetimeStats.TotalVisitorsDrainedByProps += _currentRunStats.VisitorsDrainedByProps;
             _lifetimeStats.TotalVisitorsEscaped += _currentRunStats.VisitorsEscaped;
-            _lifetimeStats.TotalVisitorsKilledByRedCap += _currentRunStats.VisitorsKilledByRedCap;
+            _lifetimeStats.TotalVisitorsKilledByGoblin += _currentRunStats.VisitorsKilledByGoblin;
 
             if (_currentRunStats.MaxEssence > _lifetimeStats.MaxEssenceInSingleRun)
                 _lifetimeStats.MaxEssenceInSingleRun = _currentRunStats.MaxEssence;
@@ -351,10 +358,10 @@ namespace FaeMaze.Roguelike
             _currentRunStats.VisitorsEscaped++;
         }
 
-        /// <summary>Record a visitor killed by RedCap</summary>
-        public void RecordRedCapKill()
+        /// <summary>Record a visitor killed by Goblin</summary>
+        public void RecordGoblinKill()
         {
-            _currentRunStats.VisitorsKilledByRedCap++;
+            _currentRunStats.VisitorsKilledByGoblin++;
         }
 
         /// <summary>Record current essence (for max tracking)</summary>
@@ -477,7 +484,7 @@ namespace FaeMaze.Roguelike
             PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "VisitorsDevouredByMaw", _lifetimeStats.TotalVisitorsDevouredByMaw);
             PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "VisitorsDrainedByProps", _lifetimeStats.TotalVisitorsDrainedByProps);
             PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "VisitorsEscaped", _lifetimeStats.TotalVisitorsEscaped);
-            PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "VisitorsKilledByRedCap", _lifetimeStats.TotalVisitorsKilledByRedCap);
+            PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "VisitorsKilledByGoblin", _lifetimeStats.TotalVisitorsKilledByGoblin);
             PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "VisitorsDrownedByPuka", _lifetimeStats.TotalVisitorsDrownedByPuka);
             PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "EssenceEarned", _lifetimeStats.TotalEssenceEarned);
             PlayerPrefs.SetInt(PREFS_LIFETIME_PREFIX + "EssenceSpentOnPowers", _lifetimeStats.TotalEssenceSpentOnPowers);
@@ -514,7 +521,7 @@ namespace FaeMaze.Roguelike
             _lifetimeStats.TotalVisitorsDevouredByMaw = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "VisitorsDevouredByMaw", 0);
             _lifetimeStats.TotalVisitorsDrainedByProps = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "VisitorsDrainedByProps", 0);
             _lifetimeStats.TotalVisitorsEscaped = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "VisitorsEscaped", 0);
-            _lifetimeStats.TotalVisitorsKilledByRedCap = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "VisitorsKilledByRedCap", 0);
+            _lifetimeStats.TotalVisitorsKilledByGoblin = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "VisitorsKilledByGoblin", 0);
             _lifetimeStats.TotalVisitorsDrownedByPuka = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "VisitorsDrownedByPuka", 0);
             _lifetimeStats.TotalEssenceEarned = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "EssenceEarned", 0);
             _lifetimeStats.TotalEssenceSpentOnPowers = PlayerPrefs.GetInt(PREFS_LIFETIME_PREFIX + "EssenceSpentOnPowers", 0);

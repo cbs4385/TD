@@ -17,10 +17,12 @@ namespace FaeMaze.Systems
         LanternFascination,
         VisitorConsumedByHeart,
         VisitorConsumedByMaw,
-        RedCapPenalty,
+        GoblinPenalty,
         PropPlacement,
         HeartPowerCost,
-        HeartPowerBonus
+        HeartPowerBonus,
+        RingTithe,        // From Ring Tithe mutation - player receives portion of ring-drained essence
+        PukaGift          // From Puka's Portion mutation - player receives portion of drowned visitor essence
     }
 
     /// <summary>
@@ -155,7 +157,9 @@ namespace FaeMaze.Systems
 
             // Initialize the random manager FIRST - all other systems depend on it
             // If tutorial will run, use the fixed tutorial seed for consistent maze layout
-            if (!GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun)
+            bool useTutorialSeed = !GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun;
+            Debug.Log($"[GameController] Seed selection: TutorialCompleted={GameSettings.TutorialCompleted}, ShowTutorialOnFirstRun={GameSettings.ShowTutorialOnFirstRun}, useTutorialSeed={useTutorialSeed}");
+            if (useTutorialSeed)
             {
                 RandomManager.Initialize(Tutorial.TutorialManager.TUTORIAL_SEED);
             }
@@ -168,9 +172,10 @@ namespace FaeMaze.Systems
             // Do NOT call Physics.IgnoreLayerCollision at runtime - it causes Unity assertion errors
 
             // Load starting essence from settings (overrides serialized default)
-            // Apply blessing modifier if one is active
+            // Apply blessing modifier and heart form modifier if active
             float blessingMultiplier = BlessingManager.Instance?.GetStartingEssenceMultiplier() ?? 1.0f;
-            startingEssence = Mathf.RoundToInt(GameSettings.StartingEssence * blessingMultiplier);
+            int formModifier = HeartFormManager.Instance?.GetStartingEssenceModifier() ?? 0;
+            startingEssence = Mathf.RoundToInt(GameSettings.StartingEssence * blessingMultiplier) + formModifier;
 
             // Initialize essence: use persistent value if available, otherwise use starting essence
             if (hasInitializedEssence && persistentEssence.HasValue)
@@ -370,9 +375,10 @@ namespace FaeMaze.Systems
             essenceAuditLog.Clear();
 
             // Re-read starting essence from settings in case it changed
-            // Apply blessing modifier if one is active
+            // Apply blessing modifier and heart form modifier if active
             float blessingMultiplier = BlessingManager.Instance?.GetStartingEssenceMultiplier() ?? 1.0f;
-            startingEssence = Mathf.RoundToInt(GameSettings.StartingEssence * blessingMultiplier);
+            int formModifier = HeartFormManager.Instance?.GetStartingEssenceModifier() ?? 0;
+            startingEssence = Mathf.RoundToInt(GameSettings.StartingEssence * blessingMultiplier) + formModifier;
 
             currentEssence = Mathf.Max(0, startingEssence);
             persistentEssence = currentEssence;

@@ -22,7 +22,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Tier thresholds as multipliers of starting essence.
         /// Loaded from GameSettings.TierMultipliers (comma-separated string).
-        /// Tier 1 = start, Tier 2 = 1.5x, Tier 3 = 2x (RedCap), etc.
+        /// Tier 1 = start, Tier 2 = 1.5x, Tier 3 = 2x (Goblin), etc.
         /// </summary>
         private float[] tierMultipliers;
 

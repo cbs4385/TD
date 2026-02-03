@@ -15,7 +15,7 @@ namespace FaeMaze.Systems
     /// Tiers are based on essence multiples of starting essence:
     /// - Tier 1: Start (0+)
     /// - Tier 2: 1.5x starting essence
-    /// - Tier 3: 2.0x starting essence (RedCap spawn point)
+    /// - Tier 3: 2.0x starting essence (Goblin spawn point)
     /// - Tier 4: 3.0x starting essence
     /// - Tier 5: 4.0x starting essence
     /// - Tier 6: 6.0x starting essence
@@ -38,13 +38,13 @@ namespace FaeMaze.Systems
         private static float visitorSpeedMaxMultiplier;
         private static float visitorSpeedGrowthRate;
 
-        // RedCap speed scaling
-        private static float redCapSpeedMaxMultiplier;
-        private static float redCapSpeedGrowthRate;
+        // Goblin speed scaling
+        private static float goblinSpeedMaxMultiplier;
+        private static float goblinSpeedGrowthRate;
 
-        // RedCap penalty scaling
-        private static float redCapPenaltyMaxMultiplier;
-        private static float redCapPenaltyGrowthRate;
+        // Goblin penalty scaling
+        private static float goblinPenaltyMaxMultiplier;
+        private static float goblinPenaltyGrowthRate;
 
         // Confusion chance scaling
         private static float confusionMaxMultiplier;
@@ -70,13 +70,13 @@ namespace FaeMaze.Systems
             visitorSpeedMaxMultiplier = GameSettings.VisitorSpeedMaxMultiplier;
             visitorSpeedGrowthRate = GameSettings.VisitorSpeedGrowthRate;
 
-            // RedCap speed
-            redCapSpeedMaxMultiplier = GameSettings.RedCapSpeedMaxMultiplier;
-            redCapSpeedGrowthRate = GameSettings.RedCapSpeedGrowthRate;
+            // Goblin speed
+            goblinSpeedMaxMultiplier = GameSettings.GoblinSpeedMaxMultiplier;
+            goblinSpeedGrowthRate = GameSettings.GoblinSpeedGrowthRate;
 
-            // RedCap penalty
-            redCapPenaltyMaxMultiplier = GameSettings.RedCapPenaltyMaxMultiplier;
-            redCapPenaltyGrowthRate = GameSettings.RedCapPenaltyGrowthRate;
+            // Goblin penalty
+            goblinPenaltyMaxMultiplier = GameSettings.GoblinPenaltyMaxMultiplier;
+            goblinPenaltyGrowthRate = GameSettings.GoblinPenaltyGrowthRate;
 
             // Confusion
             confusionMaxMultiplier = GameSettings.ConfusionMaxMultiplier;
@@ -168,23 +168,23 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets the RedCap speed multiplier for the given tier.
-        /// Higher values = faster RedCap.
+        /// Gets the Goblin speed multiplier for the given tier.
+        /// Higher values = faster Goblin.
         /// </summary>
-        public static float GetRedCapSpeedMultiplier(int tier)
+        public static float GetGoblinSpeedMultiplier(int tier)
         {
             EnsureSettingsLoaded();
-            return CalculateGrowthMultiplier(tier, redCapSpeedMaxMultiplier, redCapSpeedGrowthRate);
+            return CalculateGrowthMultiplier(tier, goblinSpeedMaxMultiplier, goblinSpeedGrowthRate);
         }
 
         /// <summary>
-        /// Gets the RedCap essence penalty multiplier for the given tier.
-        /// Higher values = more essence lost when RedCap catches a visitor.
+        /// Gets the Goblin essence penalty multiplier for the given tier.
+        /// Higher values = more essence lost when Goblin catches a visitor.
         /// </summary>
-        public static float GetRedCapPenaltyMultiplier(int tier)
+        public static float GetGoblinPenaltyMultiplier(int tier)
         {
             EnsureSettingsLoaded();
-            return CalculateGrowthMultiplier(tier, redCapPenaltyMaxMultiplier, redCapPenaltyGrowthRate);
+            return CalculateGrowthMultiplier(tier, goblinPenaltyMaxMultiplier, goblinPenaltyGrowthRate);
         }
 
         /// <summary>
@@ -217,8 +217,8 @@ namespace FaeMaze.Systems
             {
                 Tier = tier,
                 VisitorSpeed = GetVisitorSpeedMultiplier(tier),
-                RedCapSpeed = GetRedCapSpeedMultiplier(tier),
-                RedCapPenalty = GetRedCapPenaltyMultiplier(tier),
+                GoblinSpeed = GetGoblinSpeedMultiplier(tier),
+                GoblinPenalty = GetGoblinPenaltyMultiplier(tier),
                 ConfusionChance = GetConfusionChanceMultiplier(tier),
                 EssenceReward = GetEssenceRewardMultiplier(tier)
             };
@@ -237,11 +237,11 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets the scaled RedCap speed for a tier.
+        /// Gets the scaled Goblin speed for a tier.
         /// </summary>
-        public static float GetScaledRedCapSpeed(int tier, float baseSpeed)
+        public static float GetScaledGoblinSpeed(int tier, float baseSpeed)
         {
-            return baseSpeed * GetRedCapSpeedMultiplier(tier);
+            return baseSpeed * GetGoblinSpeedMultiplier(tier);
         }
 
         /// <summary>
@@ -249,7 +249,7 @@ namespace FaeMaze.Systems
         /// </summary>
         public static int GetScaledEssencePenalty(int tier, int basePenalty)
         {
-            return Mathf.RoundToInt(basePenalty * GetRedCapPenaltyMultiplier(tier));
+            return Mathf.RoundToInt(basePenalty * GetGoblinPenaltyMultiplier(tier));
         }
 
         /// <summary>
@@ -279,8 +279,8 @@ namespace FaeMaze.Systems
     {
         public int Tier;
         public float VisitorSpeed;
-        public float RedCapSpeed;
-        public float RedCapPenalty;
+        public float GoblinSpeed;
+        public float GoblinPenalty;
         public float ConfusionChance;
         public float EssenceReward;
 
@@ -288,8 +288,8 @@ namespace FaeMaze.Systems
         {
             return $"Tier {Tier} Difficulty:\n" +
                    $"  Visitor Speed: {VisitorSpeed:F2}x\n" +
-                   $"  RedCap Speed: {RedCapSpeed:F2}x\n" +
-                   $"  RedCap Penalty: {RedCapPenalty:F2}x\n" +
+                   $"  Goblin Speed: {GoblinSpeed:F2}x\n" +
+                   $"  Goblin Penalty: {GoblinPenalty:F2}x\n" +
                    $"  Confusion Chance: {ConfusionChance:F2}x\n" +
                    $"  Essence Reward: {EssenceReward:F2}x";
         }

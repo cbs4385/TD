@@ -1107,14 +1107,21 @@ The HGZ is placed at a wall tile position, with the direction determined by find
 
 ### Heart Power Essence Costs
 
-**Player essence costs to activate powers (defined in ScriptableObject assets):**
+**Power costs are percentage-based** - calculated as a percentage of starting essence (default 100).
+The `essenceCostPercent` field in HeartPowerDefinition defines the percentage (0.0 to 1.0).
 
-| Power | Essence Cost | Asset File |
-|-------|-------------|------------|
-| Power 1 (MurmuringPaths) | 100 | `MurmuringPaths_T1.asset` |
-| Power 2 (HeartwardGrasp) | 10 | `HeartwardGrasp_T1.asset` |
-| Power 3 (DevouringMaw) | 50 | `DevouringMaw_T1.asset` |
-| Power 4 (Sculpting) | 0 | Free to use |
+| Power | Cost % | With 100 Start | Asset File |
+|-------|--------|----------------|------------|
+| Power 1 (MurmuringPaths) | 50% | 50 | `MurmuringPaths_T1.asset` |
+| Power 2 (HeartwardGrasp) | 10% | 10 | `HeartwardGrasp_T1.asset` |
+| Power 3 (DevouringMaw) | 50% | 50 | `DevouringMaw_T1.asset` |
+| Power 4 (Sculpting) | 0% | 0 | Free to use |
+
+**Cost calculation** in `HeartPowerManager.GetEffectivePowerCost()`:
+```csharp
+int baseCost = Mathf.RoundToInt(GameSettings.StartingEssence * definition.essenceCostPercent);
+// Then apply blessing/challenge multipliers...
+```
 
 **Visitor essence costs:**
 

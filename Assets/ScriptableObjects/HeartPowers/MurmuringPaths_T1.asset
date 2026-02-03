@@ -16,7 +16,8 @@ MonoBehaviour:
   displayName: Spooky Fog
   description: Tangle their threads in creeping mist.
   tier: 1
-  essenceCost: 100
+  essenceCostPercent: 0.5
+  essenceCost: 0
   cooldown: 10
   duration: 15
   radius: 0

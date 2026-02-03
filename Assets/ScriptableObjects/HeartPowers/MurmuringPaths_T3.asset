@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   powerType: 0
   displayName: Spooky Fog III
-  description: Tangle their threads in dense, creeping mist.
+  description: Even the forest forgets where they're going.
   tier: 3
-  chargeCost: 2
+  essenceCostPercent: 0.5
+  essenceCost: 0
   cooldown: 15
   duration: 20
   radius: 0

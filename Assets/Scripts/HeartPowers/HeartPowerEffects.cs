@@ -5168,13 +5168,14 @@ namespace FaeMaze.HeartPowers
             // Capture position before destroying
             Vector3 consumptionPosition = visitor.transform.position;
 
-            // Award 0.5 * essence value as specified
+            // Award 0.5 * essence value, applying heart form reward multiplier
             int baseEssence = visitor.GetEssenceReward();
-            int essence = Mathf.RoundToInt(baseEssence * 0.5f);
+            float formRewardMultiplier = HeartFormManager.Instance?.GetEssenceRewardMultiplier() ?? 1.0f;
+            int essence = Mathf.RoundToInt(baseEssence * 0.5f * formRewardMultiplier);
 
             if (manager.GameController != null)
             {
-                manager.GameController.AddEssence(essence, EssenceSource.VisitorConsumedByMaw, $"50% of {baseEssence}");
+                manager.GameController.AddEssence(essence, EssenceSource.VisitorConsumedByMaw, $"50% of {baseEssence} x {formRewardMultiplier:F2}");
             }
 
             // Track visitor fate with essence value

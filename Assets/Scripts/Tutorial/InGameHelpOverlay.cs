@@ -239,10 +239,10 @@ namespace FaeMaze.Tutorial
                 $"<color=#{ColorToHex(KEY_COLOR)}>3</color>  Nom Nom (50 threads)",
                 "    Mouth consumes visitors at focal point",
                 $"<color=#{ColorToHex(KEY_COLOR)}>4</color>  Redecorating (free)",
-                "    Open menu to place/change props"
+                "    Open menu to place/change hazards"
             }, lineHeight);
 
-            // RIGHT COLUMN: Props and Gameplay
+            // RIGHT COLUMN: Hazards and Gameplay
             y = startY;
 
             y = CreateSection(parent, "SCULPT MENU", rightX, y, new string[]
@@ -250,13 +250,13 @@ namespace FaeMaze.Tutorial
                 $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptPondBinding)}</color>  Place Pond",
                 $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptLanternBinding)}</color>  Place Lantern",
                 $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptRingBinding)}</color>  Place Fairy Ring",
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptRemoveBinding)}</color>  Remove Prop",
+                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptRemoveBinding)}</color>  Remove Hazard",
                 "<color=#888888>Click center to cancel</color>"
             }, lineHeight);
 
             y -= sectionSpacing;
 
-            y = CreateSection(parent, "PROPS", rightX, y, new string[]
+            y = CreateSection(parent, "HAZARDS", rightX, y, new string[]
             {
                 "<color=#4488FF>Pond</color>  Drowns visitors (Puka hazard)",
                 "<color=#FFDD44>Lantern</color>  Fascinates, drains threads over time",

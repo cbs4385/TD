@@ -100,8 +100,8 @@ namespace FaeMaze.Roguelike
 
             _allBlessings.Add(CreateBlessing(
                 BlessingType.GreedyHeart,
-                "Greedy Heart",
-                "+50% essence from consumed visitors, -25% starting essence",
+                "Hungry, Hungry",
+                "+50% threads from nommed visitors, -25% starting threads",
                 essenceMultiplier: 1.5f,
                 startingEssenceMultiplier: 0.75f,
                 cost: 100,
@@ -110,8 +110,8 @@ namespace FaeMaze.Roguelike
 
             _allBlessings.Add(CreateBlessing(
                 BlessingType.PatientHunter,
-                "Patient Hunter",
-                "Visitors move 15% slower, spawn 20% faster",
+                "Slow and Steady",
+                "Visitors dawdle 15% slower. They arrive 20% faster.",
                 visitorSpeedMultiplier: 0.85f,
                 spawnIntervalMultiplier: 0.8f,
                 cost: 100,
@@ -120,24 +120,24 @@ namespace FaeMaze.Roguelike
 
             _allBlessings.Add(CreateBlessing(
                 BlessingType.DesperateGrasp,
-                "Desperate Grasp",
-                "Yoink! costs 0 essence when below 25 essence",
+                "Last-Ditch Yoink",
+                "Yoink! is free when you're down to 25 threads.",
                 cost: 75,
                 desperateGraspThreshold: 25
             ));
 
             _allBlessings.Add(CreateBlessing(
                 BlessingType.SpreadingCorruption,
-                "Spreading Corruption",
-                "Props affect 25% larger area",
+                "Extra Spooky",
+                "Hazards get 25% more reach. Wider webs to catch wanderers.",
                 propRadiusMultiplier: 1.25f,
                 cost: 100
             ));
 
             _allBlessings.Add(CreateBlessing(
                 BlessingType.DevouringHunger,
-                "Devouring Hunger",
-                "Nom Nom is 50% faster, costs 25% more",
+                "Impatient Maw",
+                "Nom Nom chomps 50% faster but costs 25% more.",
                 mawSpeedMultiplier: 1.5f,
                 mawCostMultiplier: 1.25f,
                 cost: 100
@@ -145,16 +145,16 @@ namespace FaeMaze.Roguelike
 
             _allBlessings.Add(CreateBlessing(
                 BlessingType.ForestsFavor,
-                "Forest's Favor",
-                "Start with 1 extra Lantern placed",
+                "Bonus Bauble",
+                "Start with a free lantern. Shiny!",
                 extraLanterns: 1,
                 cost: 100
             ));
 
             _allBlessings.Add(CreateBlessing(
                 BlessingType.VengefulSpirit,
-                "Vengeful Spirit",
-                "When essence drops below 50, all powers cost 50% less",
+                "Bargain Bin",
+                "Below 50 threads? All powers half off!",
                 vengefulThreshold: 50,
                 cost: 125
             ));

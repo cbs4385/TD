@@ -48,6 +48,24 @@ namespace FaeMaze.Roguelike
                 roguelikeRoot.AddComponent<BlessingManager>();
             }
 
+            // Create HeartFormManager if it doesn't exist
+            if (HeartFormManager.Instance == null)
+            {
+                roguelikeRoot.AddComponent<HeartFormManager>();
+            }
+
+            // Create ChallengeModifierManager if it doesn't exist
+            if (ChallengeModifierManager.Instance == null)
+            {
+                roguelikeRoot.AddComponent<ChallengeModifierManager>();
+            }
+
+            // Create PropMutationManager if it doesn't exist
+            if (PropMutationManager.Instance == null)
+            {
+                roguelikeRoot.AddComponent<PropMutationManager>();
+            }
+
             // Create TierUpgradeUI (scene-specific, will be recreated per scene)
             roguelikeRoot.AddComponent<TierUpgradeUI>();
 

@@ -4,32 +4,32 @@ using UnityEngine;
 namespace FaeMaze.Visitors
 {
     /// <summary>
-    /// Centralized registry for all active RedCaps in the scene.
+    /// Centralized registry for all active Goblins in the scene.
     /// Maintains a cached list to avoid expensive FindObjectsByType calls.
-    /// RedCaps automatically register/unregister themselves on Enable/Disable.
+    /// Goblins automatically register/unregister themselves on Enable/Disable.
     /// </summary>
-    public static class RedCapRegistry
+    public static class GoblinRegistry
     {
-        private static readonly List<RedCapController> _allRedCaps = new List<RedCapController>();
+        private static readonly List<GoblinController> _allGoblins = new List<GoblinController>();
         private static readonly object _lock = new object();
 
         /// <summary>
-        /// Gets a read-only list of all active RedCaps.
+        /// Gets a read-only list of all active Goblins.
         /// This is much more efficient than Object.FindObjectsByType.
         /// </summary>
-        public static IReadOnlyList<RedCapController> All
+        public static IReadOnlyList<GoblinController> All
         {
             get
             {
                 lock (_lock)
                 {
-                    return _allRedCaps.AsReadOnly();
+                    return _allGoblins.AsReadOnly();
                 }
             }
         }
 
         /// <summary>
-        /// Gets the current count of registered RedCaps.
+        /// Gets the current count of registered Goblins.
         /// </summary>
         public static int Count
         {
@@ -37,57 +37,57 @@ namespace FaeMaze.Visitors
             {
                 lock (_lock)
                 {
-                    return _allRedCaps.Count;
+                    return _allGoblins.Count;
                 }
             }
         }
 
         /// <summary>
-        /// Registers a RedCap with the registry.
-        /// Called automatically by RedCapController.OnEnable().
+        /// Registers a Goblin with the registry.
+        /// Called automatically by GoblinController.OnEnable().
         /// </summary>
-        internal static void Register(RedCapController redCap)
+        internal static void Register(GoblinController goblin)
         {
-            if (redCap == null)
+            if (goblin == null)
             {
                 return;
             }
 
             lock (_lock)
             {
-                if (!_allRedCaps.Contains(redCap))
+                if (!_allGoblins.Contains(goblin))
                 {
-                    _allRedCaps.Add(redCap);
+                    _allGoblins.Add(goblin);
                 }
             }
         }
 
         /// <summary>
-        /// Unregisters a RedCap from the registry.
-        /// Called automatically by RedCapController.OnDisable().
+        /// Unregisters a Goblin from the registry.
+        /// Called automatically by GoblinController.OnDisable().
         /// </summary>
-        internal static void Unregister(RedCapController redCap)
+        internal static void Unregister(GoblinController goblin)
         {
-            if (redCap == null)
+            if (goblin == null)
             {
                 return;
             }
 
             lock (_lock)
             {
-                _allRedCaps.Remove(redCap);
+                _allGoblins.Remove(goblin);
             }
         }
 
         /// <summary>
-        /// Clears all registered RedCaps.
+        /// Clears all registered Goblins.
         /// Useful for scene transitions or cleanup.
         /// </summary>
         public static void Clear()
         {
             lock (_lock)
             {
-                _allRedCaps.Clear();
+                _allGoblins.Clear();
             }
         }
     }

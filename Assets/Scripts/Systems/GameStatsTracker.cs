@@ -15,7 +15,7 @@ namespace FaeMaze.Systems
         FairyRing,      // Essence depleted at fairy ring
         Lantern,        // Essence depleted at lantern
         Escaped,        // Escaped through exit portal
-        RedCapKill,     // Killed by RedCap
+        GoblinKill,     // Killed by Goblin
         Drowned         // Drowned by Puka/Kelpie in pond
     }
 
@@ -198,8 +198,8 @@ namespace FaeMaze.Systems
                 case VisitorFate.Escaped:
                     MetaProgressionManager.Instance.RecordEscape();
                     break;
-                case VisitorFate.RedCapKill:
-                    MetaProgressionManager.Instance.RecordRedCapKill();
+                case VisitorFate.GoblinKill:
+                    MetaProgressionManager.Instance.RecordGoblinKill();
                     break;
             }
         }

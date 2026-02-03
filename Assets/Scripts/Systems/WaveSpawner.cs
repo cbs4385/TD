@@ -45,16 +45,16 @@ namespace FaeMaze.Systems
         private SleepwalkingDevoteeController sleepwalkingVisitorPrefab;
 
         [SerializeField]
-        [Tooltip("The Red Cap prefab")]
-        private RedCapController redCapPrefab;
+        [Tooltip("The Goblin prefab")]
+        private GoblinController goblinPrefab;
 
         [Header("Spawning Settings")]
         [SerializeField]
         private float baseSpawnInterval = 5.0f;
 
-        [Header("Red Cap Settings")]
+        [Header("Goblin Settings")]
         [SerializeField]
-        private bool enableRedCap = true;
+        private bool enableGoblin = true;
 
         [Header("UI Configuration")]
         [SerializeField]
@@ -87,7 +87,7 @@ namespace FaeMaze.Systems
         private int totalVisitorsSpawned;
         private List<GameObject> activeVisitors = new List<GameObject>();
 
-        private RedCapController currentRedCap;
+        private GoblinController currentGoblin;
         private int startingEssence;
         private float currentSpawnInterval;
 
@@ -107,8 +107,8 @@ namespace FaeMaze.Systems
         public int CurrentWaveNumber => currentWaveNumber;
         public int TotalVisitorsSpawned => totalVisitorsSpawned;
         public int ActiveVisitorCount => activeVisitors.Count;
-        public bool HasRedCapOnGraph => currentRedCap != null;
-        public RedCapController CurrentRedCap => currentRedCap;
+        public bool HasGoblinOnGraph => currentGoblin != null;
+        public GoblinController CurrentGoblin => currentGoblin;
 
         #endregion
 
@@ -250,10 +250,10 @@ namespace FaeMaze.Systems
         {
             baseSpawnInterval = GameSettings.SpawnInterval > 0 ? GameSettings.SpawnInterval : 5.0f;
             currentSpawnInterval = baseSpawnInterval;
-            enableRedCap = GameSettings.EnableRedCap;
+            enableGoblin = GameSettings.EnableGoblin;
             startingEssence = GameSettings.StartingEssence;
 
-            Debug.Log($"[WaveSpawner] LoadSettings: enableRedCap={enableRedCap}, startingEssence={startingEssence}, redCapPrefab={(redCapPrefab != null ? redCapPrefab.name : "NULL")}");
+            Debug.Log($"[WaveSpawner] LoadSettings: enableGoblin={enableGoblin}, startingEssence={startingEssence}, goblinPrefab={(goblinPrefab != null ? goblinPrefab.name : "NULL")}");
         }
 
         private void Update()
@@ -268,22 +268,22 @@ namespace FaeMaze.Systems
                 return;
             }
 
-            // RedCap spawns when: enabled, no current RedCap, and essence >= 2x starting essence
-            if (enableRedCap && currentRedCap == null && GameController.Instance != null)
+            // Goblin spawns when: enabled, no current Goblin, and essence >= 2x starting essence
+            if (enableGoblin && currentGoblin == null && GameController.Instance != null)
             {
                 int currentEssence = GameController.Instance.CurrentEssence;
                 int spawnThreshold = startingEssence * 2;
 
                 if (currentEssence >= spawnThreshold)
                 {
-                    Debug.Log($"[WaveSpawner] RedCap spawn triggered: currentEssence={currentEssence} >= threshold={spawnThreshold}");
-                    SpawnRedCap();
+                    Debug.Log($"[WaveSpawner] Goblin spawn triggered: currentEssence={currentEssence} >= threshold={spawnThreshold}");
+                    SpawnGoblin();
                 }
             }
-            else if (!enableRedCap)
+            else if (!enableGoblin)
             {
-                // Log once when RedCap is disabled (use a static flag to avoid spam)
-                LogRedCapDisabledOnce();
+                // Log once when Goblin is disabled (use a static flag to avoid spam)
+                LogGoblinDisabledOnce();
             }
 
             activeVisitors.RemoveAll(v => v == null);
@@ -323,11 +323,11 @@ namespace FaeMaze.Systems
                 heartPowerManager.OnWaveStart();
             }
 
-            // Clear any existing RedCap from previous games
-            if (currentRedCap != null)
+            // Clear any existing Goblin from previous games
+            if (currentGoblin != null)
             {
-                Destroy(currentRedCap.gameObject);
-                currentRedCap = null;
+                Destroy(currentGoblin.gameObject);
+                currentGoblin = null;
             }
 
             StartCoroutine(SpawnWaveCoroutine());
@@ -339,10 +339,10 @@ namespace FaeMaze.Systems
             isGameOver = false;
             isWaveActive = false;
 
-            if (currentRedCap != null)
+            if (currentGoblin != null)
             {
-                Destroy(currentRedCap.gameObject);
-                currentRedCap = null;
+                Destroy(currentGoblin.gameObject);
+                currentGoblin = null;
             }
         }
 
@@ -372,6 +372,10 @@ namespace FaeMaze.Systems
                 // Apply blessing spawn interval multiplier (Patient Hunter makes spawns faster)
                 float blessingMultiplier = BlessingManager.Instance?.GetSpawnIntervalMultiplier() ?? 1.0f;
                 currentSpawnInterval *= blessingMultiplier;
+
+                // Apply challenge spawn interval multiplier (Endless Tide makes spawns faster)
+                float challengeMultiplier = ChallengeModifierManager.Instance?.GetSpawnIntervalMultiplier() ?? 1.0f;
+                currentSpawnInterval *= challengeMultiplier;
 
                 // Wait for current interval (minimum 0.1 seconds for safety)
                 float waitTime = Mathf.Max(0.1f, currentSpawnInterval);
@@ -433,6 +437,15 @@ namespace FaeMaze.Systems
             // Apply difficulty tier scaling (essence-threshold based)
             int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
             spawnedVisitor.SetDifficultyTier(tier);
+
+            // Check for elite spawn (ChampionVisitors challenge)
+            float eliteChance = ChallengeModifierManager.Instance?.GetEliteSpawnChance() ?? 0f;
+            if (eliteChance > 0f && RandomManager.Value < eliteChance)
+            {
+                float eliteStats = ChallengeModifierManager.Instance?.GetEliteStatMultiplier() ?? 2f;
+                float eliteReward = ChallengeModifierManager.Instance?.GetEliteRewardMultiplier() ?? 3f;
+                spawnedVisitor.SetElite(eliteStats, eliteReward);
+            }
 
             // Track where visitor spawned from (to prevent retargeting back to origin)
             spawnedVisitor.SetOriginalSpawnPosition(spawnWorldPos);
@@ -520,19 +533,19 @@ namespace FaeMaze.Systems
             return validDestinations[randomIndex];
         }
 
-        private void SpawnRedCap()
+        private void SpawnGoblin()
         {
-            Debug.Log($"[WaveSpawner] SpawnRedCap called: redCapPrefab={(redCapPrefab != null ? redCapPrefab.name : "NULL")}, mazeGridBehaviour={(mazeGridBehaviour != null ? "OK" : "NULL")}");
+            Debug.Log($"[WaveSpawner] SpawnGoblin called: goblinPrefab={(goblinPrefab != null ? goblinPrefab.name : "NULL")}, mazeGridBehaviour={(mazeGridBehaviour != null ? "OK" : "NULL")}");
 
-            if (redCapPrefab == null)
+            if (goblinPrefab == null)
             {
-                Debug.LogError("[WaveSpawner] SpawnRedCap FAILED: redCapPrefab is NULL!");
+                Debug.LogError("[WaveSpawner] SpawnGoblin FAILED: goblinPrefab is NULL!");
                 return;
             }
 
             if (mazeGridBehaviour == null)
             {
-                Debug.LogError("[WaveSpawner] SpawnRedCap FAILED: mazeGridBehaviour is NULL!");
+                Debug.LogError("[WaveSpawner] SpawnGoblin FAILED: mazeGridBehaviour is NULL!");
                 return;
             }
 
@@ -545,47 +558,47 @@ namespace FaeMaze.Systems
                 var keys = new List<char>(spawnPoints.Keys);
                 int randomIndex = RandomManager.Range(0, keys.Count);
                 spawnWorldPos = spawnPoints[keys[randomIndex]];
-                Debug.Log($"[WaveSpawner] RedCap spawn position from spawn point: {spawnWorldPos}");
+                Debug.Log($"[WaveSpawner] Goblin spawn position from spawn point: {spawnWorldPos}");
             }
             else
             {
                 spawnWorldPos = mazeGridBehaviour.HeartWorldPosition;
-                Debug.Log($"[WaveSpawner] RedCap spawn position from heart: {spawnWorldPos}");
+                Debug.Log($"[WaveSpawner] Goblin spawn position from heart: {spawnWorldPos}");
             }
 
-            currentRedCap = Instantiate(redCapPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
+            currentGoblin = Instantiate(goblinPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
 
-            if (currentRedCap == null)
+            if (currentGoblin == null)
             {
-                Debug.LogError("[WaveSpawner] SpawnRedCap FAILED: Instantiate returned NULL!");
+                Debug.LogError("[WaveSpawner] SpawnGoblin FAILED: Instantiate returned NULL!");
                 return;
             }
 
-            // Check if RedCapController component exists
-            var controller = currentRedCap.GetComponent<RedCapController>();
+            // Check if GoblinController component exists
+            var controller = currentGoblin.GetComponent<GoblinController>();
             if (controller == null)
             {
-                Debug.LogError("[WaveSpawner] SpawnRedCap WARNING: Instantiated object has no RedCapController component! Check prefab setup.");
+                Debug.LogError("[WaveSpawner] SpawnGoblin WARNING: Instantiated object has no GoblinController component! Check prefab setup.");
             }
             else
             {
-                Debug.Log($"[WaveSpawner] RedCapController component found on instantiated object");
+                Debug.Log($"[WaveSpawner] GoblinController component found on instantiated object");
             }
 
             int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
-            currentRedCap.SetDifficultyTier(tier);
-            currentRedCap.name = $"RedCap_T{tier}";
+            currentGoblin.SetDifficultyTier(tier);
+            currentGoblin.name = $"Goblin_T{tier}";
 
-            Debug.Log($"[WaveSpawner] RedCap spawned successfully: name={currentRedCap.name}, position={spawnWorldPos}, tier={tier}");
+            Debug.Log($"[WaveSpawner] Goblin spawned successfully: name={currentGoblin.name}, position={spawnWorldPos}, tier={tier}");
         }
 
-        private static bool _redCapDisabledLogged = false;
-        private void LogRedCapDisabledOnce()
+        private static bool _goblinDisabledLogged = false;
+        private void LogGoblinDisabledOnce()
         {
-            if (!_redCapDisabledLogged)
+            if (!_goblinDisabledLogged)
             {
-                Debug.Log("[WaveSpawner] RedCap spawning is DISABLED (enableRedCap=false)");
-                _redCapDisabledLogged = true;
+                Debug.Log("[WaveSpawner] Goblin spawning is DISABLED (enableGoblin=false)");
+                _goblinDisabledLogged = true;
             }
         }
 
@@ -598,10 +611,10 @@ namespace FaeMaze.Systems
             isSpawning = false;
             isGameOver = true;
 
-            if (currentRedCap != null)
+            if (currentGoblin != null)
             {
-                Destroy(currentRedCap.gameObject);
-                currentRedCap = null;
+                Destroy(currentGoblin.gameObject);
+                currentGoblin = null;
             }
 
             OnGameOver?.Invoke();

@@ -48,7 +48,7 @@ namespace FaeMaze.UI
         [SerializeField]
         private Color kelpieColor = new Color(0.2f, 0.5f, 0.8f);
         [SerializeField]
-        private Color redCapColor = new Color(0.4f, 0.2f, 0.2f);
+        private Color goblinColor = new Color(0.4f, 0.2f, 0.2f);
         [SerializeField]
         private Color escapedColor = new Color(0.6f, 0.6f, 0.6f);
 
@@ -342,10 +342,10 @@ namespace FaeMaze.UI
             }
 
             // Goblin penalties
-            if (essenceTotals.TryGetValue(EssenceSource.RedCapPenalty, out int redCapPenalty) && redCapPenalty < 0)
+            if (essenceTotals.TryGetValue(EssenceSource.GoblinPenalty, out int redCapPenalty) && redCapPenalty < 0)
             {
                 CreateLedgerText($"Goblin: {redCapPenalty}", 16, FontStyles.Normal, essenceLedgerContainer,
-                    new Vector2(rightX, startY - lineHeight * (yIndex + 1)), redCapColor);
+                    new Vector2(rightX, startY - lineHeight * (yIndex + 1)), goblinColor);
                 totalCosts += redCapPenalty;
                 yIndex++;
             }
@@ -399,7 +399,7 @@ namespace FaeMaze.UI
                 ("Nommed", stats.GetTotalByFate(VisitorFate.Consumed), heartColor, VisitorFate.Consumed),
                 ("Chomped", stats.GetTotalByFate(VisitorFate.Devoured), mawColor, VisitorFate.Devoured),
                 ("Splashed", stats.GetTotalByFate(VisitorFate.Drowned), kelpieColor, VisitorFate.Drowned),
-                ("Goblin'd", stats.GetTotalByFate(VisitorFate.RedCapKill), redCapColor, VisitorFate.RedCapKill),
+                ("Goblin'd", stats.GetTotalByFate(VisitorFate.GoblinKill), goblinColor, VisitorFate.GoblinKill),
                 ("Dazzled", stats.GetTotalByFate(VisitorFate.Lantern), lanternColor, VisitorFate.Lantern),
                 ("Danced Out", stats.GetTotalByFate(VisitorFate.FairyRing), fairyRingColor, VisitorFate.FairyRing)
             };

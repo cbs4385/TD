@@ -157,10 +157,10 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetFloat("SpawnInterval", Mathf.Max(0.1f, value));
         }
 
-        public static bool EnableRedCap
+        public static bool EnableGoblin
         {
-            get => PlayerPrefs.GetInt("EnableRedCap", 1) == 1;
-            set => PlayerPrefs.SetInt("EnableRedCap", value ? 1 : 0);
+            get => PlayerPrefs.GetInt("EnableGoblin", 1) == 1;
+            set => PlayerPrefs.SetInt("EnableGoblin", value ? 1 : 0);
         }
 
         // Random Seed Settings
@@ -488,7 +488,7 @@ namespace FaeMaze.Systems
 
         private const float DEFAULT_FRIGHTENED_SPEED_MULTIPLIER = 1.3f;
 
-        /// <summary>Speed multiplier when visitor is frightened (fleeing from RedCap)</summary>
+        /// <summary>Speed multiplier when visitor is frightened (fleeing from Goblin)</summary>
         public static float FrightenedSpeedMultiplier
         {
             get => PlayerPrefs.GetFloat("FrightenedSpeedMultiplier", DEFAULT_FRIGHTENED_SPEED_MULTIPLIER);
@@ -551,32 +551,32 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetFloat("VisitorSpeedGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
         }
 
-        /// <summary>Maximum RedCap speed multiplier at highest tier</summary>
-        public static float RedCapSpeedMaxMultiplier
+        /// <summary>Maximum Goblin speed multiplier at highest tier</summary>
+        public static float GoblinSpeedMaxMultiplier
         {
-            get => PlayerPrefs.GetFloat("RedCapSpeedMaxMultiplier", 1.6f);
-            set => PlayerPrefs.SetFloat("RedCapSpeedMaxMultiplier", Mathf.Max(1f, value));
+            get => PlayerPrefs.GetFloat("GoblinSpeedMaxMultiplier", 1.6f);
+            set => PlayerPrefs.SetFloat("GoblinSpeedMaxMultiplier", Mathf.Max(1f, value));
         }
 
-        /// <summary>Growth rate for RedCap speed scaling</summary>
-        public static float RedCapSpeedGrowthRate
+        /// <summary>Growth rate for Goblin speed scaling</summary>
+        public static float GoblinSpeedGrowthRate
         {
-            get => PlayerPrefs.GetFloat("RedCapSpeedGrowthRate", 0.3f);
-            set => PlayerPrefs.SetFloat("RedCapSpeedGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
+            get => PlayerPrefs.GetFloat("GoblinSpeedGrowthRate", 0.3f);
+            set => PlayerPrefs.SetFloat("GoblinSpeedGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
         }
 
-        /// <summary>Maximum RedCap essence penalty multiplier at highest tier</summary>
-        public static float RedCapPenaltyMaxMultiplier
+        /// <summary>Maximum Goblin essence penalty multiplier at highest tier</summary>
+        public static float GoblinPenaltyMaxMultiplier
         {
-            get => PlayerPrefs.GetFloat("RedCapPenaltyMaxMultiplier", 2.5f);
-            set => PlayerPrefs.SetFloat("RedCapPenaltyMaxMultiplier", Mathf.Max(1f, value));
+            get => PlayerPrefs.GetFloat("GoblinPenaltyMaxMultiplier", 2.5f);
+            set => PlayerPrefs.SetFloat("GoblinPenaltyMaxMultiplier", Mathf.Max(1f, value));
         }
 
-        /// <summary>Growth rate for RedCap penalty scaling</summary>
-        public static float RedCapPenaltyGrowthRate
+        /// <summary>Growth rate for Goblin penalty scaling</summary>
+        public static float GoblinPenaltyGrowthRate
         {
-            get => PlayerPrefs.GetFloat("RedCapPenaltyGrowthRate", 0.35f);
-            set => PlayerPrefs.SetFloat("RedCapPenaltyGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
+            get => PlayerPrefs.GetFloat("GoblinPenaltyGrowthRate", 0.35f);
+            set => PlayerPrefs.SetFloat("GoblinPenaltyGrowthRate", Mathf.Clamp(value, 0.1f, 1f));
         }
 
         /// <summary>Maximum confusion chance multiplier at highest tier</summary>

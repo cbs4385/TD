@@ -29,7 +29,7 @@ namespace FaeMaze.UI
             VisitorFate.Devoured => "Chomped",
             VisitorFate.FairyRing => "Danced Out",
             VisitorFate.Lantern => "Dazzled",
-            VisitorFate.RedCapKill => "Goblin'd",
+            VisitorFate.GoblinKill => "Goblin'd",
             VisitorFate.Drowned => "Splashed",
             VisitorFate.Escaped => "Got Away",
             _ => fate.ToString()
@@ -45,7 +45,7 @@ namespace FaeMaze.UI
             EssenceSource.LanternFascination => "Dazzle Bonus",
             EssenceSource.VisitorConsumedByHeart => "Nommed Threads",
             EssenceSource.VisitorConsumedByMaw => "Chomped Threads",
-            EssenceSource.RedCapPenalty => "Goblin Tax",
+            EssenceSource.GoblinPenalty => "Goblin Tax",
             EssenceSource.HeartPowerCost => "Power Cost",
             EssenceSource.HeartPowerBonus => "Power Bonus",
             _ => source.ToString()

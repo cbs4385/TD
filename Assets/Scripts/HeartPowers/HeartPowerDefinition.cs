@@ -24,7 +24,12 @@ namespace FaeMaze.HeartPowers
         public int tier = 1;
 
         [Header("Costs and Cooldown")]
-        [Tooltip("Essence cost to activate this power")]
+        [Tooltip("Essence cost as a percentage of starting essence (0.0 to 1.0). E.g., 0.5 = 50% of starting essence.")]
+        [Range(0f, 1f)]
+        public float essenceCostPercent = 0f;
+
+        [Tooltip("Legacy fixed essence cost (deprecated - use essenceCostPercent instead)")]
+        [HideInInspector]
         public int essenceCost = 0;
 
         [Tooltip("Cooldown duration in seconds")]

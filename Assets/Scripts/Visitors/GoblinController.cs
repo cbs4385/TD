@@ -7,16 +7,16 @@ using ForestMaze;
 namespace FaeMaze.Visitors
 {
     /// <summary>
-    /// Red Cap - A hostile actor that hunts visitors and drains essence.
+    /// Goblin - A hostile actor that hunts visitors and drains essence.
     /// Moves faster than visitors, actively stalks them, and penalizes the player
     /// when catching one.
     /// Uses world-space navigation to pursue targets.
     /// </summary>
-    public class RedCapController : MonoBehaviour
+    public class GoblinController : MonoBehaviour
     {
         #region Enums
 
-        public enum RedCapState
+        public enum GoblinState
         {
             Idle,
             Hunting,
@@ -66,7 +66,7 @@ namespace FaeMaze.Visitors
 
         [Header("Frightening Settings")]
         [SerializeField]
-        [Tooltip("Radius within which visitors become frightened when they see the Red Cap")]
+        [Tooltip("Radius within which visitors become frightened when they see the Goblin")]
         private float frightenRadius = 5.0f;
 
         [SerializeField]
@@ -82,7 +82,7 @@ namespace FaeMaze.Visitors
 
         #region Private Fields
 
-        private RedCapState state = RedCapState.Idle;
+        private GoblinState state = GoblinState.Idle;
         private MazeGridBehaviour mazeGridBehaviour;
         private GameController gameController;
         private List<Vector3> worldPath = new List<Vector3>();
@@ -133,8 +133,8 @@ namespace FaeMaze.Visitors
 
         #region Properties
 
-        /// <summary>Gets the current state of the Red Cap</summary>
-        public RedCapState State => state;
+        /// <summary>Gets the current state of the Goblin</summary>
+        public GoblinState State => state;
 
         /// <summary>Gets the current target visitor</summary>
         public VisitorControllerBase TargetVisitor => targetVisitor;
@@ -153,7 +153,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Sets the difficulty tier for this RedCap and applies scaling.
+        /// Sets the difficulty tier for this Goblin and applies scaling.
         /// Call after instantiation.
         /// </summary>
         public void SetDifficultyTier(int tier)
@@ -163,12 +163,12 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Applies tier-based difficulty scaling to RedCap parameters.
+        /// Applies tier-based difficulty scaling to Goblin parameters.
         /// </summary>
         private void ApplyDifficultyScaling()
         {
-            // Apply speed scaling (RedCap gets faster at higher tiers)
-            float tierSpeedMultiplier = DifficultyScaling.GetRedCapSpeedMultiplier(difficultyTier);
+            // Apply speed scaling (Goblin gets faster at higher tiers)
+            float tierSpeedMultiplier = DifficultyScaling.GetGoblinSpeedMultiplier(difficultyTier);
             moveSpeed = baseMoveSpeed * speedMultiplier * tierSpeedMultiplier;
         }
 
@@ -183,17 +183,17 @@ namespace FaeMaze.Visitors
 
         private void OnEnable()
         {
-            RedCapRegistry.Register(this);
+            GoblinRegistry.Register(this);
         }
 
         private void OnDisable()
         {
-            RedCapRegistry.Unregister(this);
+            GoblinRegistry.Unregister(this);
         }
 
         private void Start()
         {
-            Debug.Log($"[RedCapController] Start() called on {gameObject.name} at position {transform.position}");
+            Debug.Log($"[GoblinController] Start() called on {gameObject.name} at position {transform.position}");
             TryInitialize();
         }
 
@@ -214,11 +214,11 @@ namespace FaeMaze.Visitors
             if (_debugLogTimer >= DEBUG_LOG_INTERVAL)
             {
                 _debugLogTimer = 0f;
-                Debug.Log($"[RedCapController] Update: state={state}, initialized={initialized}, position={transform.position}, targetVisitor={(targetVisitor != null ? targetVisitor.name : "NULL")}, pathCount={worldPath.Count}");
+                Debug.Log($"[GoblinController] Update: state={state}, initialized={initialized}, position={transform.position}, targetVisitor={(targetVisitor != null ? targetVisitor.name : "NULL")}, pathCount={worldPath.Count}");
             }
 
             // Check essence threshold - flee if below starting essence
-            if (state != RedCapState.Fleeing && state != RedCapState.Killing)
+            if (state != GoblinState.Fleeing && state != GoblinState.Killing)
             {
                 if (gameController != null && gameController.CurrentEssence < startingEssence)
                 {
@@ -228,18 +228,18 @@ namespace FaeMaze.Visitors
 
             switch (state)
             {
-                case RedCapState.Hunting:
+                case GoblinState.Hunting:
                     UpdateTargetSelection();
                     FollowPath();
                     CheckForVisitorContact();
                     CheckForVisitorsToFrighten();
                     break;
 
-                case RedCapState.Killing:
+                case GoblinState.Killing:
                     UpdateKilling();
                     break;
 
-                case RedCapState.Fleeing:
+                case GoblinState.Fleeing:
                     FollowPath();
                     CheckForReachedExit();
                     CheckForVisitorsToFrighten();
@@ -254,18 +254,18 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            Debug.Log($"[RedCapController] TryInitialize called on {gameObject.name}");
+            Debug.Log($"[GoblinController] TryInitialize called on {gameObject.name}");
 
             // Find required components
             AcquireDependencies();
             // Look for Animator on this GameObject or children (for Blender imports)
             animator = GetComponentInChildren<Animator>();
 
-            Debug.Log($"[RedCapController] Dependencies: gameController={(gameController != null ? "OK" : "NULL")}, mazeGridBehaviour={(mazeGridBehaviour != null ? "OK" : "NULL")}, animator={(animator != null ? "OK" : "NULL")}");
+            Debug.Log($"[GoblinController] Dependencies: gameController={(gameController != null ? "OK" : "NULL")}, mazeGridBehaviour={(mazeGridBehaviour != null ? "OK" : "NULL")}, animator={(animator != null ? "OK" : "NULL")}");
 
             if (gameController == null || mazeGridBehaviour == null)
             {
-                Debug.LogWarning($"[RedCapController] TryInitialize deferred - waiting for dependencies");
+                Debug.LogWarning($"[GoblinController] TryInitialize deferred - waiting for dependencies");
                 return;
             }
 
@@ -303,10 +303,10 @@ namespace FaeMaze.Visitors
             SetupPhysics();
 
             // Start hunting
-            state = RedCapState.Hunting;
+            state = GoblinState.Hunting;
             initialized = true;
 
-            Debug.Log($"[RedCapController] Initialized successfully! State={state}, startingEssence={startingEssence}, moveSpeed={moveSpeed}");
+            Debug.Log($"[GoblinController] Initialized successfully! State={state}, startingEssence={startingEssence}, moveSpeed={moveSpeed}");
         }
 
         /// <summary>
@@ -314,8 +314,8 @@ namespace FaeMaze.Visitors
         /// </summary>
         private void SetupPhysics()
         {
-            // Set layer to "Visitor" (layer 6) so RedCap doesn't push visitors via physics
-            // RedCap catching visitors is handled via distance checks, not physics collisions
+            // Set layer to "Visitor" (layer 6) so Goblin doesn't push visitors via physics
+            // Goblin catching visitors is handled via distance checks, not physics collisions
             gameObject.layer = 6;  // Visitor layer
 
             rb3D = GetComponent<Rigidbody>();
@@ -419,7 +419,7 @@ namespace FaeMaze.Visitors
                 {
                     targetVisitor = null;
                     worldPath.Clear();
-                    state = RedCapState.Idle;
+                    state = GoblinState.Idle;
                     return;
                 }
 
@@ -650,7 +650,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Checks if the Red Cap is in contact with a visitor.
+        /// Checks if the Goblin is in contact with a visitor.
         /// </summary>
         private void CheckForVisitorContact()
         {
@@ -679,14 +679,14 @@ namespace FaeMaze.Visitors
             }
 
             // Start killing state
-            state = RedCapState.Killing;
+            state = GoblinState.Killing;
             killingTarget = visitor;
             killingTimer = killingDuration;
 
             // Immobilize the visitor (daze them for the kill duration so they can't move)
             visitor.OnWitnessMazeGrowth(killingDuration + 1f);
 
-            // Stop the RedCap's movement
+            // Stop the Goblin's movement
             worldPath.Clear();
             targetVisitor = null;
         }
@@ -717,13 +717,13 @@ namespace FaeMaze.Visitors
                 // Deduct essence from player
                 if (gameController != null)
                 {
-                    gameController.AddEssence(-essencePenalty, EssenceSource.RedCapPenalty, $"Visitor killed (tier {difficultyTier})");
+                    gameController.AddEssence(-essencePenalty, EssenceSource.GoblinPenalty, $"Visitor killed (tier {difficultyTier})");
                 }
 
                 // Track visitor fate - negative essence since it's a penalty
                 if (GameStatsTracker.Instance != null)
                 {
-                    GameStatsTracker.Instance.RecordVisitorFate(killingTarget.Archetype, VisitorFate.RedCapKill, -essencePenalty);
+                    GameStatsTracker.Instance.RecordVisitorFate(killingTarget.Archetype, VisitorFate.GoblinKill, -essencePenalty);
                 }
 
                 // Despawn the visitor
@@ -738,7 +738,7 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                state = RedCapState.Hunting;
+                state = GoblinState.Hunting;
             }
         }
 
@@ -747,14 +747,14 @@ namespace FaeMaze.Visitors
         #region Fleeing Behavior
 
         /// <summary>
-        /// Starts the fleeing state, causing the Red Cap to path to an exit.
+        /// Starts the fleeing state, causing the Goblin to path to an exit.
         /// </summary>
         private void StartFleeing()
         {
-            if (state == RedCapState.Fleeing)
+            if (state == GoblinState.Fleeing)
                 return;
 
-            state = RedCapState.Fleeing;
+            state = GoblinState.Fleeing;
             targetVisitor = null;
 
             // Find and path to nearest exit
@@ -799,7 +799,7 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Checks if the Red Cap has reached an exit and should despawn.
+        /// Checks if the Goblin has reached an exit and should despawn.
         /// </summary>
         private void CheckForReachedExit()
         {
@@ -855,7 +855,7 @@ namespace FaeMaze.Visitors
                 float distance = Vector3.Distance(transform.position, visitor.transform.position);
                 if (distance <= frightenRadius)
                 {
-                    // Frighten the visitor - they flee away from the Red Cap
+                    // Frighten the visitor - they flee away from the Goblin
                     visitor.SetFrightened(transform.position);
                 }
             }
@@ -867,7 +867,7 @@ namespace FaeMaze.Visitors
 
         private void OnDrawGizmos()
         {
-            // Draw Red Cap position
+            // Draw Goblin position
             Gizmos.color = new Color(0.8f, 0.1f, 0.1f, 0.8f);
             Gizmos.DrawWireSphere(transform.position, 0.4f);
 

@@ -91,7 +91,7 @@ namespace FaeMaze.UI
         [SerializeField] private Slider spawnIntervalSlider;  // Now used as difficulty selector (0=Easy, 1=Normal, 2=Hard)
         [SerializeField] private TextMeshProUGUI spawnIntervalText;  // Shows "EASY", "NORMAL", or "HARD"
         [SerializeField] private TMP_InputField spawnIntervalInput;  // Hidden for difficulty mode
-        [SerializeField] private Toggle enableRedCapToggle;
+        [SerializeField] private Toggle enableGoblinToggle;
 
         // Difficulty settings mapping (slider value -> spawn interval in seconds)
         private static readonly string[] difficultyLabels = { "EASY", "NORMAL", "HARD" };
@@ -465,8 +465,8 @@ namespace FaeMaze.UI
                 spawnIntervalSlider.maxValue = 2;
                 spawnIntervalSlider.onValueChanged.AddListener(OnDifficultyChanged);
             }
-            if (enableRedCapToggle != null)
-                enableRedCapToggle.onValueChanged.AddListener(OnEnableRedCapChanged);
+            if (enableGoblinToggle != null)
+                enableGoblinToggle.onValueChanged.AddListener(OnEnableGoblinChanged);
 
             // Hide the input field for difficulty mode (we show labels instead)
             if (spawnIntervalInput != null)
@@ -584,8 +584,8 @@ namespace FaeMaze.UI
                 spawnIntervalSlider.value = difficultyIndex;
             }
             UpdateDifficultyText(difficultyIndex);
-            if (enableRedCapToggle != null)
-                enableRedCapToggle.isOn = GameSettings.EnableRedCap;
+            if (enableGoblinToggle != null)
+                enableGoblinToggle.isOn = GameSettings.EnableGoblin;
 
             // Game Flow
             SetSliderValue(autoStartDelaySlider, GameSettings.AutoStartDelay, 0f, 10f);
@@ -836,7 +836,7 @@ namespace FaeMaze.UI
             return 5f; // Default to Normal (5 seconds)
         }
 
-        private void OnEnableRedCapChanged(bool value)
+        private void OnEnableGoblinChanged(bool value)
         {
             // Toggle is handled directly
         }
@@ -1013,8 +1013,8 @@ namespace FaeMaze.UI
                 int difficultyIndex = Mathf.RoundToInt(spawnIntervalSlider.value);
                 GameSettings.SpawnInterval = DifficultyIndexToSpawnInterval(difficultyIndex);
             }
-            if (enableRedCapToggle != null)
-                GameSettings.EnableRedCap = enableRedCapToggle.isOn;
+            if (enableGoblinToggle != null)
+                GameSettings.EnableGoblin = enableGoblinToggle.isOn;
 
             // Game Flow
             if (autoStartDelaySlider != null)

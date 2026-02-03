@@ -179,7 +179,7 @@ namespace FaeMaze.Roguelike
             {
                 Id = "PowerTier_Sculpting_T2",
                 DisplayName = "Redecorating II",
-                Description = "Unlock Tier II - Enhanced prop variants",
+                Description = "Unlock Tier II - Enhanced hazard variants",
                 Category = UnlockCategory.PowerTier,
                 FaeDustCost = 150,
                 IsDefault = false
@@ -189,7 +189,7 @@ namespace FaeMaze.Roguelike
             {
                 Id = "PowerTier_Sculpting_T3",
                 DisplayName = "Redecorating III",
-                Description = "Unlock Tier III - Corrupted props",
+                Description = "Unlock Tier III - Corrupted hazards",
                 Category = UnlockCategory.PowerTier,
                 FaeDustCost = 300,
                 RequiredUnlock = "PowerTier_Sculpting_T2",
@@ -264,7 +264,7 @@ namespace FaeMaze.Roguelike
             {
                 Id = "HeartForm_PatientHeart",
                 DisplayName = "Patient Heart",
-                Description = "Lanterns 30% more effective, props spawn 25% more often",
+                Description = "Lanterns 30% more effective, hazards spawn 25% more often",
                 Category = UnlockCategory.HeartForm,
                 FaeDustCost = 200,
                 IsDefault = false
@@ -273,8 +273,8 @@ namespace FaeMaze.Roguelike
             RegisterUnlock(new UnlockDefinition
             {
                 Id = "HeartForm_StarvingHeart",
-                DisplayName = "Starving Heart",
-                Description = "Thread rewards +50%, threads decay 2/sec passively",
+                DisplayName = "Famished Heart",
+                Description = "+50% thread rewards, but 2/sec bleeds away.",
                 Category = UnlockCategory.HeartForm,
                 FaeDustCost = 250,
                 IsDefault = false
@@ -304,8 +304,8 @@ namespace FaeMaze.Roguelike
             RegisterUnlock(new UnlockDefinition
             {
                 Id = "Mutation_DrowningGift",
-                DisplayName = "Drowning Gift",
-                Description = "Puka-drowned visitors grant 50% threads to player",
+                DisplayName = "Puka's Portion",
+                Description = "Drowned visitors yield 50% threads to you.",
                 Category = UnlockCategory.PropMutation,
                 FaeDustCost = 100,
                 IsDefault = false

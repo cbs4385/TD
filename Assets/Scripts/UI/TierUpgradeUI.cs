@@ -410,8 +410,8 @@ namespace FaeMaze.UI
                 },
                 HeartPowerType.Sculpting => tier switch
                 {
-                    2 => "Enhanced prop variants",
-                    3 => "Corrupted props with special effects",
+                    2 => "Enhanced hazard variants",
+                    3 => "Corrupted hazards with special effects",
                     _ => ""
                 },
                 _ => ""

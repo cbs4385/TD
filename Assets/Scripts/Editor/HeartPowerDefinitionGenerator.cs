@@ -64,7 +64,7 @@ namespace FaeMaze.Editor
                 assetPath, cooldown: 15f, duration: 1f, radius: 1f);
 
             CreatePowerDefinition(HeartPowerType.Sculpting, "Sculpting",
-                "Change the prop type on a node. Must be activated on a node (not an edge).",
+                "Change the hazard type on a node. Must be activated on a node (not an edge).",
                 assetPath, cooldown: 0f, duration: 0f, radius: 3f);
 
             AssetDatabase.SaveAssets();

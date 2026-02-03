@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   powerType: 2
   displayName: Nom Nom II
-  description: Consume more threads per chomp.
+  description: A wider maw. More guests at the table.
   tier: 2
-  chargeCost: 2
+  essenceCostPercent: 0.5
+  essenceCost: 0
   cooldown: 18
   duration: 0
   radius: 0

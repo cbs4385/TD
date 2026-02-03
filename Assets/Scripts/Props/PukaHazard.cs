@@ -4,6 +4,7 @@ using UnityEngine;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
+using FaeMaze.Roguelike;
 using static FaeMaze.Systems.FrighteningEventManager;
 
 namespace FaeMaze.Props
@@ -545,10 +546,24 @@ namespace FaeMaze.Props
                 // Play sound effect
                 FaeMaze.Audio.SoundManager.Instance?.PlayVisitorConsumed();
 
-                // Track visitor fate - drowned by Puka/Kelpie, no essence gained
+                // Puka's Portion mutation: player receives a share of drowned visitor's essence
+                int essenceAwarded = 0;
+                float pukaShare = PropMutationManager.Instance?.GetPukaEssenceShare() ?? 0f;
+                if (pukaShare > 0f && visitor != null)
+                {
+                    int visitorEssence = Mathf.RoundToInt(visitor.GetEssenceReward());
+                    essenceAwarded = Mathf.RoundToInt(visitorEssence * pukaShare);
+                    if (essenceAwarded > 0)
+                    {
+                        GameController.Instance?.AddEssence(essenceAwarded, EssenceSource.PukaGift,
+                            $"Puka's Portion from {visitor.Archetype}");
+                    }
+                }
+
+                // Track visitor fate - drowned by Puka/Kelpie
                 if (GameStatsTracker.Instance != null)
                 {
-                    GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Drowned, 0);
+                    GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Drowned, essenceAwarded);
                 }
 
                 // Destroy the visitor

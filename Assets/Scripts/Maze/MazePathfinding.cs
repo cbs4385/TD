@@ -6,7 +6,7 @@ namespace ForestMaze
     /// <summary>
     /// Static utility class for maze pathfinding operations.
     /// Provides A* pathfinding through walkable tiles with path simplification.
-    /// Used by both VisitorControllerBase and RedCapController.
+    /// Used by both VisitorControllerBase and GoblinController.
     /// </summary>
     public static class MazePathfinding
     {

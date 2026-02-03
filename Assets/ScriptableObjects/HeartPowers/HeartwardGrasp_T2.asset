@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   powerType: 1
   displayName: Yoink! II
-  description: Snatch wanderers faster.
+  description: A quicker snatch. They barely see it coming.
   tier: 2
-  chargeCost: 1
+  essenceCostPercent: 0.1
+  essenceCost: 0
   cooldown: 12
   duration: 6
   radius: 0

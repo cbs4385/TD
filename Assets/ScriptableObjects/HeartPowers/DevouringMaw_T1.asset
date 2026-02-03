@@ -16,7 +16,8 @@ MonoBehaviour:
   displayName: Nom Nom
   description: Consume threads in one big chomp.
   tier: 1
-  essenceCost: 50
+  essenceCostPercent: 0.5
+  essenceCost: 0
   cooldown: 30
   duration: 0
   radius: 0

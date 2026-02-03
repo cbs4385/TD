@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   powerType: 1
   displayName: Yoink! III
-  description: Snatch wanderers with lightning speed.
+  description: Swift as thought. Gone before they blink.
   tier: 3
-  chargeCost: 1
+  essenceCostPercent: 0.1
+  essenceCost: 0
   cooldown: 12
   duration: 6
   radius: 0

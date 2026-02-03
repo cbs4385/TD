@@ -73,14 +73,14 @@ namespace FaeMaze.Visitors
         [Tooltip("Default duration for Frightened state (seconds)")]
         protected float frightenedDuration = 3f;
 
-        [Header("Red Cap Detection")]
+        [Header("Goblin Detection")]
         [SerializeField]
-        [Tooltip("Distance to detect Red Caps and become frightened")]
-        protected float redCapDetectionRadius = 5f;
+        [Tooltip("Distance to detect Goblins and become frightened")]
+        protected float goblinDetectionRadius = 5f;
 
         [SerializeField]
-        [Tooltip("How often to check for nearby Red Caps (seconds)")]
-        protected float redCapDetectionInterval = 0.5f;
+        [Tooltip("How often to check for nearby Goblins (seconds)")]
+        protected float goblinDetectionInterval = 0.5f;
 
         [Header("Lost Mode Settings")]
         [SerializeField]
@@ -102,6 +102,9 @@ namespace FaeMaze.Visitors
         protected MazeGridBehaviour mazeGridBehaviour;
         protected float speedMultiplier = 1f;
         protected int difficultyTier = 1;  // Difficulty tier when spawned (essence-threshold based)
+        protected bool isElite;              // True if this is an elite visitor (from ChampionVisitors challenge)
+        protected float eliteStatMultiplier = 1f;   // Stat multiplier for elite visitors
+        protected float eliteRewardMultiplier = 1f; // Essence reward multiplier for elite visitors
 
         // Rendering
         protected GameObject modelInstance;
@@ -176,8 +179,8 @@ namespace FaeMaze.Visitors
         protected float frightenedSpeedMultiplier;       // Loaded from GameSettings
         protected float frightenedRecoveryChancePerNode; // Loaded from GameSettings
 
-        // Red Cap detection tracking
-        protected float redCapDetectionTimer;
+        // Goblin detection tracking
+        protected float goblinDetectionTimer;
 
         // Confusion state (simplified for world-space navigation)
         protected bool isConfused;
@@ -447,16 +450,16 @@ namespace FaeMaze.Visitors
 
             FrameProfiler.Checkpoint($"Visitor.AfterLanternCooldown({name})");
 
-            // Check for nearby Red Caps
-            redCapDetectionTimer -= Time.deltaTime;
-            if (redCapDetectionTimer <= 0f)
+            // Check for nearby Goblins
+            goblinDetectionTimer -= Time.deltaTime;
+            if (goblinDetectionTimer <= 0f)
             {
-                redCapDetectionTimer = redCapDetectionInterval;
-                CheckForNearbyRedCaps();
+                goblinDetectionTimer = goblinDetectionInterval;
+                CheckForNearbyGoblins();
                 CheckForFrighteningEvents();
             }
 
-            FrameProfiler.Checkpoint($"Visitor.AfterRedCapCheck({name})");
+            FrameProfiler.Checkpoint($"Visitor.AfterGoblinCheck({name})");
 
             // CRITICAL: Don't process any movement when grabbed, consumed, or escaping
             // The heart controls position directly when grabbed
@@ -519,7 +522,11 @@ namespace FaeMaze.Visitors
                     if (GameController.Instance != null)
                     {
                         // Accumulate fractional essence and award whole amounts
-                        lanternEssenceAwardAccumulator += lanternEssenceAwardPerSecond * Time.deltaTime;
+                        // Apply Heart Form lantern effectiveness multiplier
+                        float formLanternMultiplier = HeartFormManager.Instance?.GetLanternEffectivenessMultiplier() ?? 1.0f;
+                        // Apply Mutation lantern award multiplier (Greedy Glow)
+                        float mutationLanternMultiplier = PropMutationManager.Instance?.GetLanternAwardMultiplier() ?? 1.0f;
+                        lanternEssenceAwardAccumulator += lanternEssenceAwardPerSecond * formLanternMultiplier * mutationLanternMultiplier * Time.deltaTime;
                         if (lanternEssenceAwardAccumulator >= 1f)
                         {
                             int wholeEssence = Mathf.FloorToInt(lanternEssenceAwardAccumulator);
@@ -885,13 +892,12 @@ namespace FaeMaze.Visitors
                 dirFromHeart = Vector2.up;
             }
 
-            // Approach position is at the edge of the heart node (NODE_RADIUS = 3.0)
-            // Subtract 0.5 to stop just inside the detection zone
-            const float HEART_NODE_RADIUS = 3.0f;
-            const float APPROACH_BUFFER = 0.5f;
-            float approachRadius = HEART_NODE_RADIUS - APPROACH_BUFFER;
+            // Approach position is inside the heart's detection zone (detection radius = 2.5)
+            // Use 2.0 units from center to ensure visitor is clearly inside detection range
+            // The walkable ring is 1.0 to 3.0 units from center, so 2.0 is walkable
+            const float APPROACH_RADIUS = 2.0f;
 
-            Vector2 approachPos2D = heartPos2D + dirFromHeart * approachRadius;
+            Vector2 approachPos2D = heartPos2D + dirFromHeart * APPROACH_RADIUS;
             return new Vector3(approachPos2D.x, approachPos2D.y, heartCenter.z);
         }
 
@@ -1235,11 +1241,20 @@ namespace FaeMaze.Visitors
         /// <summary>
         /// Gets the essence reward for consuming this visitor.
         /// Scaled by tier-based difficulty (higher tiers = more essence from harder visitors).
+        /// Elite visitors have additional reward multiplier.
         /// </summary>
         public virtual int GetEssenceReward()
         {
             int baseReward = config != null ? config.EssenceReward : 50;
-            return DifficultyScaling.GetScaledEssenceReward(difficultyTier, baseReward);
+            int scaledReward = DifficultyScaling.GetScaledEssenceReward(difficultyTier, baseReward);
+
+            // Apply elite reward multiplier if this is an elite visitor
+            if (isElite)
+            {
+                scaledReward = Mathf.RoundToInt(scaledReward * eliteRewardMultiplier);
+            }
+
+            return scaledReward;
         }
 
         /// <summary>
@@ -1336,6 +1351,30 @@ namespace FaeMaze.Visitors
         /// Gets the difficulty tier this visitor was spawned at.
         /// </summary>
         public int DifficultyTier => difficultyTier;
+
+        /// <summary>
+        /// Gets whether this visitor is an elite (from ChampionVisitors challenge).
+        /// </summary>
+        public bool IsElite => isElite;
+
+        /// <summary>
+        /// Sets this visitor as an elite with enhanced stats and rewards.
+        /// Call after SetDifficultyTier().
+        /// </summary>
+        public virtual void SetElite(float statMultiplier, float rewardMultiplier)
+        {
+            isElite = true;
+            eliteStatMultiplier = statMultiplier;
+            eliteRewardMultiplier = rewardMultiplier;
+
+            // Apply elite stat multiplier to speed (stacks with difficulty tier scaling)
+            moveSpeed *= statMultiplier;
+
+            // Scale up visual slightly to indicate elite status
+            transform.localScale = initialScale * 1.15f;
+
+            Debug.Log($"[{name}] Marked as ELITE: {statMultiplier}x stats, {rewardMultiplier}x reward");
+        }
 
         #endregion
 
@@ -4004,7 +4043,7 @@ namespace FaeMaze.Visitors
 
             // Check if within viewing distance (use same radius as red cap detection)
             float distance = Vector3.Distance(transform.position, eventPosition);
-            if (distance > redCapDetectionRadius * 2f) // Double the red cap detection radius for witnessing events
+            if (distance > goblinDetectionRadius * 2f) // Double the red cap detection radius for witnessing events
             {
                 return;
             }
@@ -4035,9 +4074,9 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Checks for nearby Red Caps and triggers frightened state if detected.
+        /// Checks for nearby Goblins and triggers frightened state if detected.
         /// </summary>
-        protected virtual void CheckForNearbyRedCaps()
+        protected virtual void CheckForNearbyGoblins()
         {
             // Skip if already frightened, lured (immune to fear), or in terminal state
             if (isFrightened || isLured || state == VisitorState.Consumed || state == VisitorState.Escaping)
@@ -4046,19 +4085,19 @@ namespace FaeMaze.Visitors
             }
 
             // Use cached registry instead of expensive FindObjectsByType
-            var redCaps = RedCapRegistry.All;
+            var goblins = GoblinRegistry.All;
 
-            foreach (var redCap in redCaps)
+            foreach (var goblin in goblins)
             {
-                if (redCap == null || redCap.gameObject == null)
+                if (goblin == null || goblin.gameObject == null)
                     continue;
 
-                float distance = Vector3.Distance(transform.position, redCap.transform.position);
+                float distance = Vector3.Distance(transform.position, goblin.transform.position);
 
-                if (distance <= redCapDetectionRadius)
+                if (distance <= goblinDetectionRadius)
                 {
-                    // Pass the Red Cap's position as the fright source
-                    SetFrightened(redCap.transform.position);
+                    // Pass the Goblin's position as the fright source
+                    SetFrightened(goblin.transform.position);
                     return;
                 }
             }
@@ -4301,6 +4340,55 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Public method to forcibly start lantern fascination (bypasses chance roll).
+        /// Used by tutorial to force the demonstration to work reliably.
+        /// </summary>
+        public virtual void ForceFascinateByLantern(FaeMaze.Props.FaeLantern lantern)
+        {
+            if (lantern == null) return;
+
+            // Allow fascination from movement states OR Idle
+            if (!IsMovementState(state) && state != VisitorState.Idle)
+            {
+                return;
+            }
+
+            Vector3 lanternWorldPos = lantern.transform.position;
+
+            // Force fascination (bypass chance roll and cooldown)
+            isFascinated = true;
+            currentFaeLantern = lantern;
+            fascinationLanternPosition = lanternWorldPos;
+            hasReachedLantern = false;
+            fascinationTimer = 0f;
+            lanternEssenceAwardAccumulator = 0f;
+
+            // Reset detour state
+            ResetDetourState();
+
+            // Calculate stop position at edge of exclusion zone (1 unit from lantern center)
+            const float LANTERN_EXCLUSION_RADIUS = 1f;
+            Vector3 visitorPos = transform.position;
+            Vector2 dirToVisitor = new Vector2(visitorPos.x - lanternWorldPos.x, visitorPos.y - lanternWorldPos.y);
+            if (dirToVisitor.sqrMagnitude < 0.01f)
+            {
+                dirToVisitor = new Vector2(1f, 0f); // Default direction if at lantern center
+            }
+            dirToVisitor.Normalize();
+            Vector2 stopPos2D = new Vector2(lanternWorldPos.x, lanternWorldPos.y) + dirToVisitor * LANTERN_EXCLUSION_RADIUS;
+            Vector3 stopPosition = new Vector3(stopPos2D.x, stopPos2D.y, visitorPos.z);
+
+            // Build path to stop position
+            worldPath = BuildWorldPath(visitorPos, stopPosition);
+            worldPathIndex = 0;
+            worldDestination = stopPosition;
+            ResetSplineState();
+            RefreshStateFromFlags();
+
+            Debug.Log($"[VisitorControllerBase] ForceFascinateByLantern: Visitor now fascinated by {lantern.name}");
+        }
+
+        /// <summary>
         /// Public method to forcibly end FairyRing fascination.
         /// Called when a FairyRing is destroyed/disabled while the visitor is circling it.
         /// </summary>
@@ -4435,7 +4523,20 @@ namespace FaeMaze.Visitors
             }
 
             // Drain visitor essence while circling the ring
-            currentEssence -= ringEssenceDrainPerSecond * Time.deltaTime;
+            float drainAmount = ringEssenceDrainPerSecond * Time.deltaTime;
+            currentEssence -= drainAmount;
+
+            // Ring Tithe mutation: player receives a portion of drained essence
+            float titheRate = PropMutationManager.Instance?.GetRingEssenceTithe() ?? 0f;
+            if (titheRate > 0f && GameController.Instance != null)
+            {
+                int titheAmount = Mathf.FloorToInt(drainAmount * titheRate);
+                if (titheAmount > 0)
+                {
+                    GameController.Instance.AddEssence(titheAmount, EssenceSource.RingTithe);
+                }
+            }
+
             if (currentEssence <= 0f)
             {
                 // Visitor's essence is depleted - they escape

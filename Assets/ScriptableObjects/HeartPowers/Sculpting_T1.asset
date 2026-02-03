@@ -16,6 +16,7 @@ MonoBehaviour:
   displayName: Redecorating
   description: Reshape the clearing to your whims.
   tier: 1
+  essenceCostPercent: 0
   essenceCost: 0
   cooldown: 0
   duration: 0

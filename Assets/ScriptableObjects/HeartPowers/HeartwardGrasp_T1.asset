@@ -16,7 +16,8 @@ MonoBehaviour:
   displayName: Yoink!
   description: Snatch a wanderer's fate with a sneaky tongue.
   tier: 1
-  essenceCost: 10
+  essenceCostPercent: 0.1
+  essenceCost: 0
   cooldown: 12
   duration: 4
   radius: 0

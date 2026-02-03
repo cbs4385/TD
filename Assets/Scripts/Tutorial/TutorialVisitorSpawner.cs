@@ -260,8 +260,15 @@ namespace FaeMaze.Tutorial
                 // Set original spawn position to prevent retargeting back to where they spawned
                 controller.SetOriginalSpawnPosition(spawnPosition);
 
-                // Set their destination to a random exit
+                // Set their destination
                 controller.SetWorldDestination(destinationPosition);
+
+                // If pathing toward heart, mark as lured so they path into the detection zone
+                if (pathTowardHeart)
+                {
+                    controller.SetLured(true);
+                    Debug.Log($"[TutorialVisitorSpawner] Visitor marked as lured for heart approach");
+                }
 
                 Debug.Log($"[TutorialVisitorSpawner] Visitor initialized. State={controller.State}, Destination={destinationPosition}");
             }

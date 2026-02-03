@@ -232,9 +232,11 @@ namespace FaeMaze.UI
             }
 
             // Check if tutorial mode is enabled - reset tutorial so it will play
+            // Explicitly set both flags to ensure GameController.Awake() uses TUTORIAL_SEED
             if (tutorialModeToggle != null && tutorialModeToggle.isOn)
             {
-                TutorialManager.ResetTutorial();
+                TutorialManager.ResetTutorial();  // Sets TutorialCompleted = false
+                GameSettings.ShowTutorialOnFirstRun = true;  // Explicit set to ensure seed logic works
             }
 
             // Save all settings before loading scene
@@ -249,10 +251,12 @@ namespace FaeMaze.UI
         /// </summary>
         public void StartTutorial()
         {
-            // Reset tutorial completion so it will play
-            TutorialManager.ResetTutorial();
+            // Reset tutorial completion and ensure ShowTutorialOnFirstRun is true
+            // Both flags must be set for GameController.Awake() to use TUTORIAL_SEED
+            TutorialManager.ResetTutorial();  // Sets TutorialCompleted = false
+            GameSettings.ShowTutorialOnFirstRun = true;
 
-            // Save seed settings
+            // Save seed settings (these are ignored when tutorial mode is active)
             if (seedInputField != null && int.TryParse(seedInputField.text, out int seed))
             {
                 GameSettings.RandomSeed = seed;
@@ -262,6 +266,9 @@ namespace FaeMaze.UI
             {
                 GameSettings.UseFixedSeed = useFixedSeedToggle.isOn;
             }
+
+            // Save all settings before loading scene
+            GameSettings.Save();
 
             // Load the game scene (tutorial will auto-start)
             LoadGameScene();

@@ -498,10 +498,28 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         public int GetEffectivePowerCost(HeartPowerType powerType, HeartPowerDefinition definition)
         {
-            if (definition == null || definition.essenceCost <= 0)
+            if (definition == null)
                 return 0;
 
-            int baseCost = definition.essenceCost;
+            // Calculate base cost as percentage of starting essence
+            int startingEssence = GameSettings.StartingEssence;
+            int baseCost;
+
+            // Use percentage-based cost if set, otherwise fall back to legacy fixed cost
+            if (definition.essenceCostPercent > 0f)
+            {
+                baseCost = Mathf.RoundToInt(startingEssence * definition.essenceCostPercent);
+            }
+            else if (definition.essenceCost > 0)
+            {
+                // Legacy fallback for old assets
+                baseCost = definition.essenceCost;
+            }
+            else
+            {
+                return 0;
+            }
+
             int currentEssence = CurrentEssence;
 
             // Desperate Grasp: HeartwardGrasp costs 0 when below essence threshold
@@ -524,6 +542,9 @@ namespace FaeMaze.HeartPowers
 
             // Vengeful Spirit: All powers cost 50% less when below essence threshold
             costMultiplier *= BlessingManager.Instance?.GetPowerCostMultiplier(currentEssence) ?? 1.0f;
+
+            // Frugal Heart challenge: Powers cost 50% more
+            costMultiplier *= ChallengeModifierManager.Instance?.GetPowerCostMultiplier() ?? 1.0f;
 
             return Mathf.RoundToInt(baseCost * costMultiplier);
         }
@@ -584,6 +605,37 @@ namespace FaeMaze.HeartPowers
             int nodeIndex = dynamicMazeGrowth.FindNodeIndexAtPosition(worldPosition);
             // Must be on a node (>= 0) and not the heart node (0)
             return nodeIndex > 0;
+        }
+
+        /// <summary>
+        /// Checks if the HeartwardGrasp power can be used at the given position.
+        /// Returns true if there are wall tiles along the ray from focal point to heart.
+        /// </summary>
+        public bool CanUseHeartwardGraspAt(Vector3 worldPosition)
+        {
+            if (MazeGrid == null) return false;
+
+            Vector3 heartPos = new Vector3(MazeGrid.HeartWorldPosition.x, MazeGrid.HeartWorldPosition.y, 0f);
+            Vector3 focalPos = new Vector3(worldPosition.x, worldPosition.y, 0f);
+
+            // Don't allow activation at the heart itself
+            float distToHeart = Vector3.Distance(heartPos, focalPos);
+            if (distToHeart < 3f) return false; // Too close to heart
+
+            Vector3 focalToHeartDir = (heartPos - focalPos).normalized;
+
+            // Raycast from focal toward heart to find wall tiles
+            RaycastHit[] hits = Physics.RaycastAll(focalPos, focalToHeartDir, distToHeart, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+            foreach (var hit in hits)
+            {
+                if (hit.collider != null && hit.collider.gameObject.name.StartsWith("WorldTile_#"))
+                {
+                    return true; // Found at least one wall tile
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

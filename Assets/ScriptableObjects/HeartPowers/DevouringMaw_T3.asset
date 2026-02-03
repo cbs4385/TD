@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   powerType: 2
   displayName: Nom Nom III
-  description: Devour all nearby threads in a massive chomp.
+  description: None nearby shall escape the feast.
   tier: 3
-  chargeCost: 2
+  essenceCostPercent: 0.5
+  essenceCost: 0
   cooldown: 16
   duration: 0
   radius: 0

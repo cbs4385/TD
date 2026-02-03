@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   powerType: 0
   displayName: Spooky Fog II
-  description: Tangle their threads in thicker mist.
+  description: The mist thickens. Their path fades from memory.
   tier: 2
-  chargeCost: 1
+  essenceCostPercent: 0.5
+  essenceCost: 0
   cooldown: 12
   duration: 18
   radius: 0

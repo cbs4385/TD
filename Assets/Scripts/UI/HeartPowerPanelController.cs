@@ -946,6 +946,13 @@ namespace FaeMaze.UI
                     sculptingPositionValid = heartPowerManager.CanUseSculptingAt(focalPointPos);
                 }
 
+                // Special check for HeartwardGrasp - requires wall tiles along ray to heart
+                bool graspPositionValid = true;
+                if (powerType == HeartPowerType.HeartwardGrasp && !isActive)
+                {
+                    graspPositionValid = heartPowerManager.CanUseHeartwardGraspAt(focalPointPos);
+                }
+
                 // Keep buttons always clickable so we can see debug messages
                 // But provide visual feedback about availability
                 powerButtons[i].interactable = true;
@@ -976,7 +983,7 @@ namespace FaeMaze.UI
                 }
 
                 // Determine if power is truly available (including position checks)
-                bool fullyAvailable = canActivate && sculptingPositionValid;
+                bool fullyAvailable = canActivate && sculptingPositionValid && graspPositionValid;
 
                 // Update glow intensity based on availability
                 // Glow effects will be applied by UpdateGlowEffects()

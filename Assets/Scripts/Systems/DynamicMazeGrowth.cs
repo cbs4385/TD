@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ForestMaze;
+using FaeMaze.Roguelike;
 
 namespace FaeMaze.Systems
 {
@@ -1006,39 +1007,41 @@ namespace FaeMaze.Systems
             // Check if any Puka exists in the maze
             bool hasPuka = nodePukas.Count > 0;
 
-            float roll = RandomManager.Value * 100f;
+            // Get Heart Form hazard spawn rate multiplier (increases Ring and Puka chances)
+            float hazardMultiplier = HeartFormManager.Instance?.GetHazardSpawnRateMultiplier() ?? 1.0f;
 
-            // Cumulative thresholds based on whether Puka exists
-            // Base: Pond 50%, Lantern 20%, Ring 15%, Puka 10%, Wisp 5%
-            // If no Puka: Pond 50%, Lantern 20%, Ring 15%, Puka 15% (absorbs Wisp's 5%)
-            if (roll < 50f)
+            // Base weights: Pond 50%, Lantern 20%, Ring 15%, Puka 10%, Wisp 5%
+            // Hazard multiplier boosts Ring and Puka weights
+            float pondWeight = 50f;
+            float lanternWeight = 20f;
+            float ringWeight = 15f * hazardMultiplier;
+            float pukaWeight = (hasPuka ? 10f : 15f) * hazardMultiplier; // Absorbs Wisp's 5% if no Puka
+            float wispWeight = hasPuka ? 5f : 0f;
+
+            // Normalize weights to 100
+            float totalWeight = pondWeight + lanternWeight + ringWeight + pukaWeight + wispWeight;
+            float roll = RandomManager.Value * totalWeight;
+
+            // Select based on cumulative thresholds
+            if (roll < pondWeight)
             {
                 return NodePropType.Pond;
             }
-            else if (roll < 70f) // 50 + 20
+            else if (roll < pondWeight + lanternWeight)
             {
                 return NodePropType.FaeLantern;
             }
-            else if (roll < 85f) // 70 + 15
+            else if (roll < pondWeight + lanternWeight + ringWeight)
             {
                 return NodePropType.FairyRing;
             }
-            else if (hasPuka)
+            else if (roll < pondWeight + lanternWeight + ringWeight + pukaWeight)
             {
-                // Puka exists, so we can spawn wisps
-                if (roll < 95f) // 85 + 10 (Puka)
-                {
-                    return NodePropType.Puka;
-                }
-                else // 95-100 (Wisp)
-                {
-                    return NodePropType.WillowTheWisp;
-                }
+                return NodePropType.Puka;
             }
             else
             {
-                // No Puka exists, Puka gets 15% chance (10% + 5% from Wisp)
-                return NodePropType.Puka;
+                return NodePropType.WillowTheWisp;
             }
         }
 

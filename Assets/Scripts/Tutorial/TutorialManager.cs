@@ -45,7 +45,7 @@ namespace FaeMaze.Tutorial
         public const int TUTORIAL_STARTING_ESSENCE = 200;
 
         /// <summary>Fixed seed for tutorial runs to ensure consistent maze layout</summary>
-        public const int TUTORIAL_SEED = 3141592;
+        public const int TUTORIAL_SEED = 14142135;
 
         #endregion
 
@@ -276,7 +276,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_sculpt",
                     title: "Power 4: Redecorating",
-                    description: "Press [4] to open the Redecorating menu.\n\nThis lets you place or change props at maze nodes:\n" +
+                    description: "Press [4] to open the Redecorating menu.\n\nThis lets you place or change hazards at maze nodes:\n" +
                                  "  Pond - Drowns visitors (with Puka hazard)\n" +
                                  "  Lantern - Fascinates visitors, drains threads\n" +
                                  "  Fairy Ring - Traps visitors, drains threads\n\n" +
@@ -310,7 +310,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "essence_gain",
                     title: "Capturing Threads",
-                    description: "When visitors are consumed by the Heart, Nom Nom'd, or drained by props, you gain their threads.\n\nKeep your threads high to survive! The longer you last, the more challenging visitors become.\n\nWait for a visitor to be captured...",
+                    description: "When visitors are consumed by the Heart, Nom Nom'd, or drained by hazards, you gain their threads.\n\nKeep your threads high to survive! The longer you last, the more challenging visitors become.\n\nWait for a visitor to be captured...",
                     trigger: TutorialTriggerType.EssenceIncreased,
                     pause: false // No highlight - game must continue for essence to increase
                 ),
@@ -1484,6 +1484,7 @@ namespace FaeMaze.Tutorial
                 float trackingTimeout = 20f; // 20 second timeout
                 float trackingStartTime = Time.realtimeSinceStartup;
                 float lastDebugTime = 0f;
+                float closeToLanternTime = 0f; // Track how long visitor has been close to lantern
 
                 while (targetVisitor != null)
                 {
@@ -1494,11 +1495,12 @@ namespace FaeMaze.Tutorial
                         break;
                     }
 
+                    float distToLantern = targetLantern != null ? Vector3.Distance(targetVisitor.transform.position, targetLantern.transform.position) : -1f;
+
                     // Periodic debug logging (every 2 seconds)
                     if (Time.realtimeSinceStartup - lastDebugTime > 2f)
                     {
                         lastDebugTime = Time.realtimeSinceStartup;
-                        float distToLantern = targetLantern != null ? Vector3.Distance(targetVisitor.transform.position, targetLantern.transform.position) : -1f;
                         Debug.Log($"[TutorialManager] Visitor at {targetVisitor.transform.position}, state={targetVisitor.State}, dist to lantern={distToLantern:F2}, fascinated={targetVisitor.CurrentFaeLantern != null}");
                     }
 
@@ -1515,6 +1517,23 @@ namespace FaeMaze.Tutorial
                     {
                         Debug.Log("[TutorialManager] Visitor was consumed/grabbed before fascination");
                         break;
+                    }
+
+                    // Tutorial cheat: If visitor is close to lantern and Idle for 2+ seconds, force fascination
+                    if (targetLantern != null && distToLantern < targetLantern.InfluenceRadius &&
+                        targetVisitor.State == VisitorControllerBase.VisitorState.Idle)
+                    {
+                        closeToLanternTime += Time.unscaledDeltaTime;
+                        if (closeToLanternTime >= 2f)
+                        {
+                            Debug.Log($"[TutorialManager] Tutorial cheat: Forcing visitor fascination (was Idle near lantern for {closeToLanternTime:F1}s)");
+                            targetVisitor.ForceFascinateByLantern(targetLantern);
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        closeToLanternTime = 0f; // Reset if not close or not idle
                     }
 
                     // Track visitor position
@@ -1539,7 +1558,8 @@ namespace FaeMaze.Tutorial
         }
 
         /// <summary>
-        /// Gets the position of a node one edge away from the heart (shortest walkable distance).
+        /// Gets the position of a node one edge away from the heart with the shortest walking distance.
+        /// Walking distance is calculated from the edge's polyline points.
         /// Returns Vector3.zero if no valid node found.
         /// </summary>
         private Vector3 GetNearestNonHeartNodePosition()
@@ -1553,9 +1573,13 @@ namespace FaeMaze.Tutorial
 
             // Get heart node (node 0 is always the heart/root)
             var heartNode = forestState.Nodes[0];
+            Vector2 heartPos = heartNode.Position;
 
-            // Find a node that is one edge away from the heart (directly connected)
-            // This ensures the shortest walkable distance
+            // Find the node directly connected to the heart with the shortest walking distance
+            float shortestWalkingDistance = float.MaxValue;
+            int bestNodeId = -1;
+            Vector2 bestNodePos = Vector2.zero;
+
             foreach (int edgeId in heartNode.IncidentEdges)
             {
                 if (edgeId < 0 || edgeId >= forestState.Edges.Count) continue;
@@ -1576,14 +1600,35 @@ namespace FaeMaze.Tutorial
                 if (otherNodeId > 0 && otherNodeId < forestState.Nodes.Count)
                 {
                     var neighborNode = forestState.Nodes[otherNodeId];
-                    Debug.Log($"[TutorialManager] Found node {otherNodeId} one edge from heart at {neighborNode.Position}");
-                    return new Vector3(neighborNode.Position.x, neighborNode.Position.y, 0f);
+
+                    // Calculate walking distance from polyline points
+                    float walkingDistance = CalculatePolylineLength(edge.PolylinePoints);
+
+                    // If no polyline, fallback to straight-line distance
+                    if (walkingDistance <= 0)
+                    {
+                        walkingDistance = Vector2.Distance(heartPos, neighborNode.Position);
+                    }
+
+                    Debug.Log($"[TutorialManager] Checking node {otherNodeId} at {neighborNode.Position}, walking distance={walkingDistance:F2}");
+
+                    if (walkingDistance < shortestWalkingDistance)
+                    {
+                        shortestWalkingDistance = walkingDistance;
+                        bestNodeId = otherNodeId;
+                        bestNodePos = neighborNode.Position;
+                    }
                 }
+            }
+
+            if (bestNodeId >= 0)
+            {
+                Debug.Log($"[TutorialManager] Selected node {bestNodeId} at {bestNodePos} with shortest walking distance {shortestWalkingDistance:F2}");
+                return new Vector3(bestNodePos.x, bestNodePos.y, 0f);
             }
 
             // Fallback: find nearest node by straight-line distance
             Debug.LogWarning("[TutorialManager] No directly connected node found, falling back to nearest by distance");
-            Vector2 heartPos = heartNode.Position;
             float nearestDist = float.MaxValue;
             Vector2 nearestNodePos = heartPos;
 
@@ -1599,6 +1644,21 @@ namespace FaeMaze.Tutorial
             }
 
             return new Vector3(nearestNodePos.x, nearestNodePos.y, 0f);
+        }
+
+        /// <summary>
+        /// Calculates the total length of a polyline path.
+        /// </summary>
+        private float CalculatePolylineLength(List<Vector2> points)
+        {
+            if (points == null || points.Count < 2) return 0f;
+
+            float totalLength = 0f;
+            for (int i = 1; i < points.Count; i++)
+            {
+                totalLength += Vector2.Distance(points[i - 1], points[i]);
+            }
+            return totalLength;
         }
 
         /// <summary>

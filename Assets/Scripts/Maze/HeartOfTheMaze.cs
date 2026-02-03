@@ -195,9 +195,10 @@ namespace FaeMaze.Maze
 
             int baseEssence = visitor.GetEssenceReward();
 
-            // Apply blessing multiplier for consumption essence
+            // Apply blessing and heart form multipliers for consumption essence
             float blessingMultiplier = BlessingManager.Instance?.GetEssenceFromConsumptionMultiplier() ?? 1.0f;
-            int essence = Mathf.RoundToInt(baseEssence * blessingMultiplier);
+            float formRewardMultiplier = HeartFormManager.Instance?.GetEssenceRewardMultiplier() ?? 1.0f;
+            int essence = Mathf.RoundToInt(baseEssence * blessingMultiplier * formRewardMultiplier);
 
             if (GameStatsTracker.Instance != null)
             {
@@ -250,9 +251,10 @@ namespace FaeMaze.Maze
         /// </summary>
         private void LoadSettingsFromGameSettings()
         {
-            // Load tongue speeds from GameSettings
-            tongueEmergeSpeed = GameSettings.TongueEmergeSpeed;
-            tongueRetractSpeed = GameSettings.TongueRetractSpeed;
+            // Load tongue speeds from GameSettings, applying Heart Form multiplier if active
+            float formSpeedMultiplier = HeartFormManager.Instance?.GetTongueSpeedMultiplier() ?? 1.0f;
+            tongueEmergeSpeed = GameSettings.TongueEmergeSpeed * formSpeedMultiplier;
+            tongueRetractSpeed = GameSettings.TongueRetractSpeed * formSpeedMultiplier;
 
             // Detection radius: use GameSettings if SerializeField is at default (2.5f)
             if (Mathf.Approximately(detectionRadius, 2.5f))
