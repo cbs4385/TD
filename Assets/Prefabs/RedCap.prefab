@@ -110,9 +110,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1237294348150412815}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1717adf33f339694c9b62fd9b37c5f2d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Visitors.RedCapController
+  m_Script: {fileID: 11500000, guid: 0fcb7c1233a18824b8ee9c8517fded42, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Visitors.GoblinController
   speedMultiplier: 1.25
   baseMoveSpeed: 3
   targetUpdateInterval: 0.5

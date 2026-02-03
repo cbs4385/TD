@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Roguelike
 {
@@ -9,14 +10,8 @@ namespace FaeMaze.Roguelike
     /// Manages blessing selection, storage, and effect application.
     /// Blessings are selected at run start and persist for the entire run.
     /// </summary>
-    public class BlessingManager : MonoBehaviour
+    public class BlessingManager : PersistentSingletonMonoBehaviour<BlessingManager>
     {
-        #region Singleton
-
-        private static BlessingManager _instance;
-        public static BlessingManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -59,19 +54,10 @@ namespace FaeMaze.Roguelike
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-                DontDestroyOnLoad(gameObject);
-                LoadBlessings();
-                LoadUnlockedState();
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-            }
+            LoadBlessings();
+            LoadUnlockedState();
         }
 
         #endregion

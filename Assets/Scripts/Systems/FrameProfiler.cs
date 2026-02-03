@@ -10,11 +10,8 @@ namespace FaeMaze.Systems
     /// Runs with Script Execution Order -100 to execute before other scripts.
     /// </summary>
     [DefaultExecutionOrder(-100)]
-    public class FrameProfiler : MonoBehaviour
+    public class FrameProfiler : PersistentSingletonMonoBehaviour<FrameProfiler>
     {
-        private static FrameProfiler _instance;
-        public static FrameProfiler Instance => _instance;
-
         private Stopwatch _frameStopwatch;
         private long _lastFrameStartMs;
         private int _frameCount;
@@ -29,25 +26,17 @@ namespace FaeMaze.Systems
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void CreateInstance()
         {
-            if (_instance == null)
+            if (Instance == null)
             {
                 GameObject go = new GameObject("FrameProfiler");
-                _instance = go.AddComponent<FrameProfiler>();
+                go.AddComponent<FrameProfiler>();
             }
         }
 
         private bool _isValid = false;
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance != null && _instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-            _instance = this;
-            DontDestroyOnLoad(gameObject);
-
             _frameStopwatch = new Stopwatch();
             _lastUpdateTime = Time.realtimeSinceStartup;
             _isValid = true;

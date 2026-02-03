@@ -17,14 +17,8 @@ namespace FaeMaze.Tutorial
     /// Central controller for the tutorial system.
     /// Manages tutorial state, step progression, and coordination between UI and game systems.
     /// </summary>
-    public class TutorialManager : MonoBehaviour
+    public class TutorialManager : SingletonMonoBehaviour<TutorialManager>
     {
-        #region Singleton
-
-        private static TutorialManager _instance;
-        public static TutorialManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -110,18 +104,8 @@ namespace FaeMaze.Tutorial
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
             InitializeTutorialSteps();
         }
 
@@ -142,13 +126,8 @@ namespace FaeMaze.Tutorial
             }
         }
 
-        private void OnDestroy()
+        protected override void OnSingletonDestroyed()
         {
-            if (_instance == this)
-            {
-                _instance = null;
-            }
-
             // Ensure time is restored if destroyed during tutorial
             if (isPaused)
             {

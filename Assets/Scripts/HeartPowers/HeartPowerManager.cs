@@ -11,7 +11,7 @@ namespace FaeMaze.HeartPowers
     /// Central manager for Heart powers.
     /// Manages essence, cooldowns, and power activation.
     /// </summary>
-    public class HeartPowerManager : MonoBehaviour
+    public class HeartPowerManager : SingletonMonoBehaviour<HeartPowerManager>
     {
         #region Static Cache
 
@@ -22,13 +22,6 @@ namespace FaeMaze.HeartPowers
         {
             _allPowerTypes = (HeartPowerType[])Enum.GetValues(typeof(HeartPowerType));
         }
-
-        #endregion
-
-        #region Singleton
-
-        private static HeartPowerManager _instance;
-        public static HeartPowerManager Instance => _instance;
 
         #endregion
 
@@ -84,6 +77,9 @@ namespace FaeMaze.HeartPowers
         // Reusable list for removing expired powers (avoids GC allocation every frame)
         private readonly List<HeartPowerType> _powersToRemove = new List<HeartPowerType>();
 
+        // Factory for creating power effect instances
+        private HeartPowerEffectFactory effectFactory;
+
         #endregion
 
         #region Properties
@@ -124,20 +120,10 @@ namespace FaeMaze.HeartPowers
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            // Singleton pattern enforcement
-            // Note: Unity's null check returns false for destroyed objects, so this handles scene reloads
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else if (_instance != this)
-            {
-                // Another instance exists and is still valid, destroy this duplicate
-                Destroy(gameObject);
-                return;
-            }
+            // Initialize the effect factory
+            effectFactory = new HeartPowerEffectFactory();
 
             // Load prefabs dynamically if not assigned via inspector
             LoadPrefabsIfNeeded();
@@ -749,54 +735,13 @@ namespace FaeMaze.HeartPowers
 
         private void ActivatePower(HeartPowerType powerType, HeartPowerDefinition definition, Vector3 worldPosition)
         {
-            // Dispatch to specific power implementations
-            ActivePowerEffect effect = null;
+            // Use factory to create power effect instance
+            ActivePowerEffect effect = effectFactory.Create(powerType, this, definition, worldPosition);
 
-            switch (powerType)
+            if (effect == null)
             {
-                // Commented out - focusing on powers 2, 8, 9 for now
-                // case HeartPowerType.HeartbeatOfLonging:
-                //     effect = new HeartbeatOfLongingEffect(this, definition, worldPosition);
-                //     break;
-
-                case HeartPowerType.MurmuringPaths:
-                    effect = new MurmuringPathsEffect(this, definition, worldPosition);
-                    break;
-
-                // case HeartPowerType.DreamSnare:
-                //     effect = new DreamSnareEffect(this, definition, worldPosition);
-                //     break;
-
-                // case HeartPowerType.FeastwardPanic:
-                //     effect = new FeastwardPanicEffect(this, definition, worldPosition);
-                //     break;
-
-                // case HeartPowerType.CovenantWithWisps:
-                //     effect = new CovenantWithWispsEffect(this, definition, worldPosition);
-                //     break;
-
-                // case HeartPowerType.PukasBargain:
-                //     effect = new PukasBargainEffect(this, definition, worldPosition);
-                //     break;
-
-                // case HeartPowerType.RingOfInvitations:
-                //     effect = new RingOfInvitationsEffect(this, definition, worldPosition);
-                //     break;
-
-                case HeartPowerType.HeartwardGrasp:
-                    effect = new HeartwardGraspEffect(this, definition, worldPosition);
-                    break;
-
-                case HeartPowerType.DevouringMaw:
-                    effect = new DevouringMawEffect(this, definition, worldPosition);
-                    break;
-
-                case HeartPowerType.Sculpting:
-                    effect = new SculptingEffect(this, definition, worldPosition);
-                    break;
-
-                default:
-                    return;
+                Debug.LogWarning($"[HeartPowerManager] No effect factory registered for {powerType}");
+                return;
             }
 
             if (effect != null)

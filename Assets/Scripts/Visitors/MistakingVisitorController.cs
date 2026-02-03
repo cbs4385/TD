@@ -33,19 +33,6 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Properties
-
-        public override VisitorState State => state;
-        public override float MoveSpeed => moveSpeed;
-        public override float SpeedMultiplier
-        {
-            get => speedMultiplier;
-            set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
-        }
-        public override bool IsFascinated => isFascinated;
-
-        #endregion
-
         #region Unity Lifecycle
 
         protected override void Awake()

@@ -150,6 +150,18 @@ namespace FaeMaze.Systems
                 heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
             }
 
+            // Load goblin prefab via AssetDatabase in editor if not assigned
+#if UNITY_EDITOR
+            if (goblinPrefab == null)
+            {
+                var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/redcap.prefab");
+                if (prefab != null)
+                {
+                    goblinPrefab = prefab.GetComponent<GoblinController>();
+                }
+            }
+#endif
+
             ValidateReferences();
             LoadSettings();
 

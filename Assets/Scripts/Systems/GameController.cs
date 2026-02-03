@@ -48,21 +48,8 @@ namespace FaeMaze.Systems
     /// Singleton pattern for easy access from other systems.
     /// </summary>
     [DefaultExecutionOrder(-200)] // Run before MazeGridBehaviour (-100) to initialize RandomManager first
-    public class GameController : MonoBehaviour
+    public class GameController : SingletonMonoBehaviour<GameController>
     {
-        #region Singleton
-
-        private static GameController _instance;
-
-        public static GameController Instance
-        {
-            get
-            {
-                return _instance;
-            }
-        }
-
-        #endregion
 
         #region Serialized Fields
 
@@ -142,19 +129,8 @@ namespace FaeMaze.Systems
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            // Singleton pattern enforcement
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
             // Initialize the random manager FIRST - all other systems depend on it
             // If tutorial will run, use the fixed tutorial seed for consistent maze layout
             bool useTutorialSeed = !GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun;

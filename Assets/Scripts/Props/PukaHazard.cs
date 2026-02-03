@@ -13,7 +13,7 @@ namespace FaeMaze.Props
     /// A mystical Puka that creates hazards for visitors using world-space coordinates.
     /// When visitors come within range, the Puka becomes active and drags them into the water.
     /// </summary>
-    public class PukaHazard : MonoBehaviour
+    public class PukaHazard : RegistryComponent<PukaHazard>
     {
         #region Enums
 
@@ -22,15 +22,6 @@ namespace FaeMaze.Props
             Idle,
             Active
         }
-
-        #endregion
-
-        #region Static Registry
-
-        private static readonly List<PukaHazard> _allPukas = new List<PukaHazard>();
-
-        /// <summary>Gets all active Pukas in the scene</summary>
-        public static IReadOnlyList<PukaHazard> All => _allPukas;
 
         #endregion
 
@@ -195,19 +186,6 @@ namespace FaeMaze.Props
             }
             propAudio.SetSoundType(PropAudioSource.PropSoundType.Pond);
             propAudio.SetMaxDistance(detectionRadius * 4f);
-        }
-
-        private void OnEnable()
-        {
-            if (!_allPukas.Contains(this))
-            {
-                _allPukas.Add(this);
-            }
-        }
-
-        private void OnDisable()
-        {
-            _allPukas.Remove(this);
         }
 
         private void Update()

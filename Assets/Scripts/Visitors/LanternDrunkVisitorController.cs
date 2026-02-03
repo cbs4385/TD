@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 
@@ -8,15 +7,18 @@ namespace FaeMaze.Visitors
     /// LanternDrunk Pilgrim archetype - highly susceptible to fascination and getting lost.
     /// Slow but easy to keep wandering due to high confusion and lantern susceptibility.
     /// Uses world-space navigation for all pathfinding.
+    /// Inherits from VisitorControllerBase for visitor behavior and RegistryComponent pattern for static registry.
     /// </summary>
     public class LanternDrunkVisitorController : VisitorControllerBase
     {
         #region Static Registry
 
-        private static readonly HashSet<LanternDrunkVisitorController> _activeVisitors = new HashSet<LanternDrunkVisitorController>();
+        // Note: Using manual registry pattern here because we inherit from VisitorControllerBase,
+        // not RegistryComponent. RegistryComponent is for simpler MonoBehaviours.
+        private static readonly System.Collections.Generic.HashSet<LanternDrunkVisitorController> _activeVisitors = new System.Collections.Generic.HashSet<LanternDrunkVisitorController>();
 
         /// <summary>Gets all active LanternDrunk visitors in the scene</summary>
-        public static IReadOnlyCollection<LanternDrunkVisitorController> All => _activeVisitors;
+        public static System.Collections.Generic.IReadOnlyCollection<LanternDrunkVisitorController> All => _activeVisitors;
 
         #endregion
 
@@ -33,25 +35,7 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Properties
-
-        /// <summary>Gets the current state of the visitor</summary>
-        public override VisitorState State => state;
-
-        /// <summary>Gets the current move speed</summary>
-        public override float MoveSpeed => moveSpeed;
-
-        /// <summary>Gets or sets the speed multiplier applied to movement</summary>
-        public override float SpeedMultiplier
-        {
-            get => speedMultiplier;
-            set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
-        }
-
-        /// <summary>Gets whether this visitor is fascinated by a FaeLantern</summary>
-        public override bool IsFascinated => isFascinated;
-
-        #endregion
+        // Properties inherited from base class: State, MoveSpeed, SpeedMultiplier, IsFascinated
 
         #region Unity Lifecycle
 

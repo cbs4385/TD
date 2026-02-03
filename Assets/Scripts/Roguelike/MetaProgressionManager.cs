@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Roguelike
 {
@@ -9,14 +10,8 @@ namespace FaeMaze.Roguelike
     /// Tracks Fae Dust (persistent currency), lifetime statistics, and permanent unlocks.
     /// All data persists via PlayerPrefs.
     /// </summary>
-    public class MetaProgressionManager : MonoBehaviour
+    public class MetaProgressionManager : PersistentSingletonMonoBehaviour<MetaProgressionManager>
     {
-        #region Singleton
-
-        private static MetaProgressionManager _instance;
-        public static MetaProgressionManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -168,18 +163,9 @@ namespace FaeMaze.Roguelike
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-                DontDestroyOnLoad(gameObject);
-                Initialize();
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-            }
+            Initialize();
         }
 
         private void Initialize()

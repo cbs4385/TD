@@ -11,14 +11,8 @@ namespace FaeMaze.Roguelike
     /// Tracks which power tiers are available this run, handles tier upgrade choices,
     /// and integrates with HeartPowerManager to provide active tier levels.
     /// </summary>
-    public class PowerProgressionManager : MonoBehaviour
+    public class PowerProgressionManager : SingletonMonoBehaviour<PowerProgressionManager>
     {
-        #region Singleton
-
-        private static PowerProgressionManager _instance;
-        public static PowerProgressionManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -79,17 +73,9 @@ namespace FaeMaze.Roguelike
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-                Initialize();
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-            }
+            Initialize();
         }
 
         private void Initialize()

@@ -10,17 +10,8 @@ namespace FaeMaze.Props
     /// Visitors entering the influence area abandon their path, move to the lantern,
     /// stand still for 2 seconds, then wander randomly at intersections.
     /// </summary>
-    public class FaeLantern : MonoBehaviour
+    public class FaeLantern : RegistryComponent<FaeLantern>
     {
-        #region Static Registry
-
-        private static readonly HashSet<FaeLantern> _activeLanterns = new HashSet<FaeLantern>();
-
-        /// <summary>Gets all active FaeLanterns in the scene</summary>
-        public static IReadOnlyCollection<FaeLantern> All => _activeLanterns;
-
-        #endregion
-
         #region Serialized Fields
 
         [Header("Influence Settings")]
@@ -154,16 +145,13 @@ namespace FaeMaze.Props
             zoneObj.AddComponent<LanternExclusionZone>();
         }
 
-        private void OnEnable()
+        /// <summary>
+        /// Called when unregistered from the static collection.
+        /// Releases all visitors fascinated by this lantern.
+        /// </summary>
+        protected override void OnUnregistered()
         {
-            _activeLanterns.Add(this);
-        }
-
-        private void OnDisable()
-        {
-            // Release all visitors fascinated by this lantern before removing from registry
             ReleaseAllFascinatedVisitors();
-            _activeLanterns.Remove(this);
         }
 
         /// <summary>

@@ -8,14 +8,8 @@ namespace FaeMaze.Systems
     /// Difficulty tier increases when player accumulates essence milestones.
     /// Uses hysteresis to prevent rapid tier oscillation.
     /// </summary>
-    public class DifficultyManager : MonoBehaviour
+    public class DifficultyManager : SingletonMonoBehaviour<DifficultyManager>
     {
-        #region Singleton
-
-        private static DifficultyManager _instance;
-        public static DifficultyManager Instance => _instance;
-
-        #endregion
 
         #region Tier Multipliers
 
@@ -102,17 +96,9 @@ namespace FaeMaze.Systems
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
+            // Initialization deferred to Start() to ensure GameController is ready
         }
 
         private void Start()

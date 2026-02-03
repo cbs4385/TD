@@ -271,16 +271,20 @@ namespace FaeMaze.Visitors
         #region Properties
 
         /// <summary>Gets the current state of the visitor</summary>
-        public abstract VisitorState State { get; }
+        public virtual VisitorState State => state;
 
         /// <summary>Gets the current move speed</summary>
-        public abstract float MoveSpeed { get; }
+        public virtual float MoveSpeed => moveSpeed;
 
         /// <summary>Gets or sets the speed multiplier applied to movement</summary>
-        public abstract float SpeedMultiplier { get; set; }
+        public virtual float SpeedMultiplier
+        {
+            get => speedMultiplier;
+            set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
+        }
 
         /// <summary>Gets whether this visitor is fascinated (entranced/mesmerized)</summary>
-        public abstract bool IsFascinated { get; }
+        public virtual bool IsFascinated => isFascinated;
 
         /// <summary>Gets the FaeLantern currently fascinating this visitor, or null if none</summary>
         public FaeMaze.Props.FaeLantern CurrentFaeLantern => currentFaeLantern;

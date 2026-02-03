@@ -9,7 +9,7 @@ namespace FaeMaze.Tutorial
     /// Quick-reference help overlay accessible via F1 during gameplay.
     /// Shows controls, powers, and prop effects without pausing the game.
     /// </summary>
-    public class InGameHelpOverlay : MonoBehaviour
+    public class InGameHelpOverlay : SingletonMonoBehaviour<InGameHelpOverlay>
     {
         #region Constants
 
@@ -30,13 +30,6 @@ namespace FaeMaze.Tutorial
 
         #endregion
 
-        #region Singleton
-
-        private static InGameHelpOverlay _instance;
-        public static InGameHelpOverlay Instance => _instance;
-
-        #endregion
-
         #region Private Fields
 
         private Canvas canvas;
@@ -53,26 +46,7 @@ namespace FaeMaze.Tutorial
 
         #region Unity Lifecycle
 
-        private void Awake()
-        {
-            if (_instance == null)
-            {
-                _instance = this;
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-        }
-
-        private void OnDestroy()
-        {
-            if (_instance == this)
-            {
-                _instance = null;
-            }
-        }
+        // Singleton lifecycle handled by base class
 
         #endregion
 

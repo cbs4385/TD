@@ -34,25 +34,7 @@ namespace FaeMaze.Visitors
 
         #endregion
 
-        #region Properties
-
-        /// <summary>Gets the current state of the visitor</summary>
-        public override VisitorState State => state;
-
-        /// <summary>Gets the current move speed</summary>
-        public override float MoveSpeed => moveSpeed;
-
-        /// <summary>Gets or sets the speed multiplier applied to movement</summary>
-        public override float SpeedMultiplier
-        {
-            get => speedMultiplier;
-            set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
-        }
-
-        /// <summary>Gets whether this visitor is fascinated by a FaeLantern</summary>
-        public override bool IsFascinated => isFascinated;
-
-        #endregion
+        // Properties inherited from base class: State, MoveSpeed, SpeedMultiplier, IsFascinated
 
         #region Unity Lifecycle
 

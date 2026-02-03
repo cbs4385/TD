@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Roguelike
 {
@@ -37,14 +38,8 @@ namespace FaeMaze.Roguelike
     /// Manages all unlockable content in the game.
     /// Tracks unlock state, validates unlock requirements, and handles Fae Dust purchases.
     /// </summary>
-    public class UnlockManager : MonoBehaviour
+    public class UnlockManager : PersistentSingletonMonoBehaviour<UnlockManager>
     {
-        #region Singleton
-
-        private static UnlockManager _instance;
-        public static UnlockManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -72,18 +67,9 @@ namespace FaeMaze.Roguelike
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-                DontDestroyOnLoad(gameObject);
-                Initialize();
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-            }
+            Initialize();
         }
 
         private void Initialize()

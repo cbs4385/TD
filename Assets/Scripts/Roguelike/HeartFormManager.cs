@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Roguelike
 {
@@ -10,14 +11,8 @@ namespace FaeMaze.Roguelike
     /// Heart Forms are selected at run start and persist for the entire run.
     /// Forms act like "characters" providing different stat modifiers and playstyles.
     /// </summary>
-    public class HeartFormManager : MonoBehaviour
+    public class HeartFormManager : PersistentSingletonMonoBehaviour<HeartFormManager>
     {
-        #region Singleton
-
-        private static HeartFormManager _instance;
-        public static HeartFormManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -63,20 +58,11 @@ namespace FaeMaze.Roguelike
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-                DontDestroyOnLoad(gameObject);
-                LoadForms();
-                LoadUnlockedState();
-                SetDefaultForm();
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-            }
+            LoadForms();
+            LoadUnlockedState();
+            SetDefaultForm();
         }
 
         private void Update()

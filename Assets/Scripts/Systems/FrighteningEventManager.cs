@@ -8,30 +8,22 @@ namespace FaeMaze.Systems
     /// Manages frightening events that can scare nearby visitors.
     /// Systems register active events, and visitors check for nearby events to become frightened.
     /// </summary>
-    public class FrighteningEventManager : MonoBehaviour
+    public class FrighteningEventManager : SingletonMonoBehaviour<FrighteningEventManager>
     {
-        #region Singleton
-
-        private static FrighteningEventManager _instance;
-        public static FrighteningEventManager Instance
+        /// <summary>
+        /// Gets the instance, auto-creating if not found (lazy singleton).
+        /// </summary>
+        public static FrighteningEventManager GetOrCreate()
         {
-            get
-            {
-                if (_instance == null)
-                {
-                    _instance = FindFirstObjectByType<FrighteningEventManager>();
-                    if (_instance == null)
-                    {
-                        // Auto-create if not found
-                        GameObject go = new GameObject("FrighteningEventManager");
-                        _instance = go.AddComponent<FrighteningEventManager>();
-                    }
-                }
-                return _instance;
-            }
-        }
+            if (Instance != null) return Instance;
 
-        #endregion
+            var found = FindFirstObjectByType<FrighteningEventManager>();
+            if (found != null) return found;
+
+            // Auto-create if not found
+            GameObject go = new GameObject("FrighteningEventManager");
+            return go.AddComponent<FrighteningEventManager>();
+        }
 
         #region Event Types
 
@@ -118,23 +110,7 @@ namespace FaeMaze.Systems
 
         #region Unity Lifecycle
 
-        private void Awake()
-        {
-            if (_instance != null && _instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-            _instance = this;
-        }
-
-        private void OnDestroy()
-        {
-            if (_instance == this)
-            {
-                _instance = null;
-            }
-        }
+        // Singleton lifecycle handled by base class
 
         #endregion
 

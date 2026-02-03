@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Roguelike
 {
@@ -10,14 +11,8 @@ namespace FaeMaze.Roguelike
     /// Challenge Modifiers are optional difficulty increases selected at run start.
     /// Multiple challenges can be active simultaneously for stacking rewards.
     /// </summary>
-    public class ChallengeModifierManager : MonoBehaviour
+    public class ChallengeModifierManager : PersistentSingletonMonoBehaviour<ChallengeModifierManager>
     {
-        #region Singleton
-
-        private static ChallengeModifierManager _instance;
-        public static ChallengeModifierManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -63,19 +58,10 @@ namespace FaeMaze.Roguelike
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-                DontDestroyOnLoad(gameObject);
-                LoadChallenges();
-                LoadUnlockedState();
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-            }
+            LoadChallenges();
+            LoadUnlockedState();
         }
 
         #endregion

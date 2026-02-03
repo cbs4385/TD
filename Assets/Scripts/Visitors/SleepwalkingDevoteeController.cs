@@ -18,18 +18,7 @@ namespace FaeMaze.Visitors
 
         private bool hasInitialized = false;
 
-        #region Properties
-
-        public override VisitorState State => state;
-        public override float MoveSpeed => moveSpeed;
-        public override float SpeedMultiplier
-        {
-            get => speedMultiplier;
-            set => speedMultiplier = Mathf.Clamp(value, 0.1f, 2f);
-        }
-        public override bool IsFascinated => isFascinated;
-
-        #endregion
+        // Properties inherited from base class: State, MoveSpeed, SpeedMultiplier, IsFascinated
 
         #region Unity Lifecycle
 

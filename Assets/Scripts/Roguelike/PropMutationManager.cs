@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Roguelike
 {
@@ -10,14 +11,8 @@ namespace FaeMaze.Roguelike
     /// Prop Mutations are selected at run start and modify how props interact with visitors.
     /// Only one mutation can be active per run.
     /// </summary>
-    public class PropMutationManager : MonoBehaviour
+    public class PropMutationManager : PersistentSingletonMonoBehaviour<PropMutationManager>
     {
-        #region Singleton
-
-        private static PropMutationManager _instance;
-        public static PropMutationManager Instance => _instance;
-
-        #endregion
 
         #region Events
 
@@ -60,19 +55,10 @@ namespace FaeMaze.Roguelike
 
         #region Unity Lifecycle
 
-        private void Awake()
+        protected override void OnAwake()
         {
-            if (_instance == null)
-            {
-                _instance = this;
-                DontDestroyOnLoad(gameObject);
-                LoadMutations();
-                LoadUnlockedState();
-            }
-            else if (_instance != this)
-            {
-                Destroy(gameObject);
-            }
+            LoadMutations();
+            LoadUnlockedState();
         }
 
         #endregion

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ForestMaze;
+using FaeMaze.Props;
 using FaeMaze.Roguelike;
 
 namespace FaeMaze.Systems
@@ -134,6 +135,9 @@ namespace FaeMaze.Systems
         // Unified tracking: maps node index to the type of prop spawned there
         private Dictionary<int, NodePropType> nodeProps = new Dictionary<int, NodePropType>();
 
+        // Factory for prop spawning
+        private NodePropFactory propFactory;
+
         // Track node center colliders (block visitors from walking into node centers)
         private Dictionary<int, GameObject> nodeCenterColliders = new Dictionary<int, GameObject>();
         private Transform nodeCenterCollidersParent;
@@ -254,6 +258,16 @@ namespace FaeMaze.Systems
                 collidersObj.transform.localPosition = Vector3.zero;
                 nodeCenterCollidersParent = collidersObj.transform;
             }
+
+            // Initialize prop factory with spawner methods
+            propFactory = new NodePropFactory();
+            propFactory.RegisterSpawners(
+                pondSpawner: SpawnStandalonePondAtNode,
+                fairyRingSpawner: SpawnFairyRingAtNode,
+                lanternSpawner: SpawnLanternAtNode,
+                wispSpawner: SpawnWispAtNode,
+                pukaSpawner: SpawnPondPropAtNode
+            );
 
             // Run initial growth stages synchronously BEFORE the first frame renders
             if (mazeGridBehaviour != null && mazeGridBehaviour.ForestMapState != null && initialGrowthStages > 0)
@@ -1069,26 +1083,8 @@ namespace FaeMaze.Systems
             // Get a random prop type based on weighted chances
             NodePropType propType = GetRandomPropType();
 
-            // Dispatch to the appropriate spawn method
-            bool success = false;
-            switch (propType)
-            {
-                case NodePropType.Pond:
-                    success = SpawnStandalonePondAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.FairyRing:
-                    success = SpawnFairyRingAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.FaeLantern:
-                    success = SpawnLanternAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.WillowTheWisp:
-                    success = SpawnWispAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.Puka:
-                    success = SpawnPondPropAtNode(node, nodeIndex); // Pond with Puka inside
-                    break;
-            }
+            // Use factory to spawn the prop
+            bool success = propFactory.Spawn(propType, node, nodeIndex);
 
             // Track what was spawned
             if (success)
@@ -1825,27 +1821,9 @@ namespace FaeMaze.Systems
             // Get the node
             var node = forestMapState.Nodes[nodeIndex];
 
-            // Spawn the new prop
+            // Spawn the new prop using factory
             Debug.Log($"[DynamicMazeGrowth] SetNodeProp spawning {propType.Value} at node {nodeIndex}");
-            bool success = false;
-            switch (propType.Value)
-            {
-                case NodePropType.Pond:
-                    success = SpawnStandalonePondAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.FairyRing:
-                    success = SpawnFairyRingAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.FaeLantern:
-                    success = SpawnLanternAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.WillowTheWisp:
-                    success = SpawnWispAtNode(node, nodeIndex);
-                    break;
-                case NodePropType.Puka:
-                    success = SpawnPondPropAtNode(node, nodeIndex);
-                    break;
-            }
+            bool success = propFactory.Spawn(propType.Value, node, nodeIndex);
 
             // Track what was spawned
             if (success)
