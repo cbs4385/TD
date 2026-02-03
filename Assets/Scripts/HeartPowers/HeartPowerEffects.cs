@@ -612,6 +612,17 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
+        /// The focal point where the power was activated (far end of the fog from heart).
+        /// </summary>
+        public Vector3 TargetPosition => targetPosition;
+
+        /// <summary>
+        /// The furthest tile position from the heart on the fog-affected path.
+        /// This is the best spawn point for tutorial visitors that need to walk through the fog.
+        /// </summary>
+        public Vector3 FurthestPosition => furthestPosition;
+
+        /// <summary>
         /// Override IsExpired to use consumption-based expiration instead of duration.
         /// Power expires when consumed visitor count reaches the power tier.
         /// </summary>

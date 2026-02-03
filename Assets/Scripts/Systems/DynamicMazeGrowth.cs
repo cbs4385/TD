@@ -1398,9 +1398,7 @@ namespace FaeMaze.Systems
             lantern.name = $"Lantern_Node{nodeIndex}";
             lantern.transform.position = lanternPos;
 
-            // Lantern rotation is now baked into the prefab (90° around X)
-            // to make the model's +Y (up) point toward world -Z (up)
-            // No additional rotation needed here.
+            // Lantern prefab has 180° X rotation to orient the model correctly.
 
             if (lanternsParent != null)
             {

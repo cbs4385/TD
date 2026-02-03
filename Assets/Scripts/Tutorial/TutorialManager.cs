@@ -492,6 +492,13 @@ namespace FaeMaze.Tutorial
                 return;
             }
 
+            if (step.stepId == "essence_gain")
+            {
+                Debug.Log($"[TutorialManager] Starting HandleEssenceGainStep coroutine");
+                StartCoroutine(HandleEssenceGainStep(step));
+                return;
+            }
+
             // Check if this step highlights a power button - if so, wait for peak brightness
             int powerButtonIndex = GetPowerButtonIndex(step);
             if (powerButtonIndex >= 0)
@@ -956,32 +963,77 @@ namespace FaeMaze.Tutorial
 
             var cameraController = FindFirstObjectByType<CameraController3D>();
 
-            // Spawn visitor that paths toward heart (for Murmuring Paths demonstration)
+            // Record existing visitors so we can identify the newly spawned one
+            var existingVisitors = new HashSet<VisitorControllerBase>(
+                FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None));
+
+            // Spawn visitor at the furthest point on the fog path so they walk THROUGH the fog
             if (visitorSpawner != null)
             {
-                visitorSpawner.SpawnTutorialVisitorTowardHeart();
+                var heartPowerMgr = HeartPowerManager.Instance;
+                // Use the furthest tile position on the fog (farthest from heart)
+                Vector3? furthestPos = heartPowerMgr?.GetActiveMurmuringPathsFurthestPosition();
+                Vector3? fogTarget = heartPowerMgr?.GetActiveMurmuringPathsTargetPosition();
+
+                if (furthestPos.HasValue)
+                {
+                    var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
+                    Vector3 heartPos = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
+
+                    // Spawn at the furthest fog tile - visitor will walk along the fog toward heart
+                    Vector3 spawnPos = furthestPos.Value;
+                    spawnPos.z = 0f;
+
+                    Debug.Log($"[TutorialManager] Spawning misdirect visitor at furthest fog tile {spawnPos} (fog target={fogTarget}, heart={heartPos})");
+                    visitorSpawner.SpawnVisitorForHGZ(spawnPos, heartPos);
+                }
+                else if (fogTarget.HasValue)
+                {
+                    // Fallback: spawn near the fog target
+                    var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
+                    Vector3 heartPos = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
+                    Vector3 spawnPos = fogTarget.Value;
+                    spawnPos.z = 0f;
+
+                    Debug.Log($"[TutorialManager] Spawning misdirect visitor at fog target {spawnPos} (heart={heartPos})");
+                    visitorSpawner.SpawnVisitorForHGZ(spawnPos, heartPos);
+                }
+                else
+                {
+                    Debug.LogWarning("[TutorialManager] No active murmuring paths, falling back to SpawnTutorialVisitorTowardHeart");
+                    visitorSpawner.SpawnTutorialVisitorTowardHeart();
+                }
             }
 
             // Wait for spawn to complete
             yield return new WaitForSecondsRealtime(0.5f);
 
-            // Find a spawned visitor
-            var visitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            // Find the NEWLY spawned visitor (not one from a previous step)
+            var allVisitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
             VisitorControllerBase targetVisitor = null;
-            foreach (var v in visitors)
+            foreach (var v in allVisitors)
             {
                 if (v == null) continue;
-                if (v.transform.position.magnitude > 0)
+                if (!existingVisitors.Contains(v))
                 {
                     targetVisitor = v;
+                    Debug.Log($"[TutorialManager] Found newly spawned misdirect visitor: {v.name} at {v.transform.position}");
                     break;
                 }
             }
 
             // Fallback: take any visitor
-            if (targetVisitor == null && visitors.Length > 0)
+            if (targetVisitor == null && allVisitors.Length > 0)
             {
-                targetVisitor = visitors[0];
+                targetVisitor = allVisitors[0];
+                Debug.LogWarning("[TutorialManager] Could not find new visitor, using first available");
+            }
+
+            // Force the visitor to be lured so they path toward the heart through the fog
+            if (targetVisitor != null)
+            {
+                targetVisitor.SetLured(true);
+                Debug.Log($"[TutorialManager] Forced misdirect visitor to lured state: {targetVisitor.name}");
             }
 
             // Show the step UI
@@ -1463,7 +1515,6 @@ namespace FaeMaze.Tutorial
                 float trackingTimeout = 20f; // 20 second timeout
                 float trackingStartTime = Time.realtimeSinceStartup;
                 float lastDebugTime = 0f;
-                float closeToLanternTime = 0f; // Track how long visitor has been close to lantern
 
                 while (targetVisitor != null)
                 {
@@ -1498,21 +1549,12 @@ namespace FaeMaze.Tutorial
                         break;
                     }
 
-                    // Tutorial cheat: If visitor is close to lantern and Idle for 2+ seconds, force fascination
-                    if (targetLantern != null && distToLantern < targetLantern.InfluenceRadius &&
-                        targetVisitor.State == VisitorControllerBase.VisitorState.Idle)
+                    // Force fascination as soon as visitor enters lantern influence radius
+                    if (targetLantern != null && distToLantern < targetLantern.InfluenceRadius)
                     {
-                        closeToLanternTime += Time.unscaledDeltaTime;
-                        if (closeToLanternTime >= 2f)
-                        {
-                            Debug.Log($"[TutorialManager] Tutorial cheat: Forcing visitor fascination (was Idle near lantern for {closeToLanternTime:F1}s)");
-                            targetVisitor.ForceFascinateByLantern(targetLantern);
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        closeToLanternTime = 0f; // Reset if not close or not idle
+                        Debug.Log($"[TutorialManager] Forcing visitor fascination (entered lantern influence radius, dist={distToLantern:F2})");
+                        targetVisitor.ForceFascinateByLantern(targetLantern);
+                        break;
                     }
 
                     // Track visitor position
@@ -1534,6 +1576,61 @@ namespace FaeMaze.Tutorial
 
             Debug.Log("[TutorialManager] HandleLanternDemoStep complete, auto-advancing");
             AdvanceStep();
+        }
+
+        /// <summary>
+        /// Handles the essence_gain step by keeping the camera focused on the lantern area
+        /// while waiting for essence to increase (via the fascinated visitor draining).
+        /// Without this, the camera would snap back to the focal point after the lantern step.
+        /// </summary>
+        private IEnumerator HandleEssenceGainStep(TutorialStep step)
+        {
+            Debug.Log("[TutorialManager] HandleEssenceGainStep started");
+
+            // Ensure game is unpaused
+            if (isPaused)
+            {
+                PauseGame(false);
+            }
+
+            // Show the step UI
+            ShowStepImmediate(step);
+
+            var cameraController = FindFirstObjectByType<CameraController3D>();
+
+            // Find the lantern to keep camera focused on
+            var lanterns = FindObjectsByType<FaeLantern>(FindObjectsSortMode.None);
+            Vector3 focusPos = Vector3.zero;
+            if (lanterns.Length > 0)
+            {
+                focusPos = lanterns[0].transform.position;
+                focusPos.z = 0f;
+            }
+
+            // Track essence changes - the step trigger (EssenceIncreased) will call AdvanceStep()
+            // via NotifyEssenceChanged(), but we need to keep the camera focused until then
+            float timeout = 30f;
+            float startTime = Time.realtimeSinceStartup;
+
+            while (isActive && CurrentStep != null && CurrentStep.stepId == "essence_gain")
+            {
+                if (Time.realtimeSinceStartup - startTime > timeout)
+                {
+                    Debug.LogWarning("[TutorialManager] HandleEssenceGainStep timed out");
+                    AdvanceStep();
+                    break;
+                }
+
+                // Keep camera on the lantern area
+                if (cameraController != null && focusPos != Vector3.zero)
+                {
+                    cameraController.FocusOnPosition(focusPos, instant: true);
+                }
+
+                yield return null;
+            }
+
+            Debug.Log("[TutorialManager] HandleEssenceGainStep complete");
         }
 
         /// <summary>

@@ -883,6 +883,32 @@ namespace FaeMaze.HeartPowers
             return positions;
         }
 
+        /// <summary>
+        /// Returns the target position of the active Murmuring Paths effect (the focal point where the power was activated).
+        /// Returns null if no Murmuring Paths effect is active.
+        /// </summary>
+        public Vector3? GetActiveMurmuringPathsTargetPosition()
+        {
+            if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect) && effect is MurmuringPathsEffect murmuringEffect)
+            {
+                return murmuringEffect.TargetPosition;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Returns the furthest tile position from the heart on the active MurmuringPaths fog.
+        /// This is the best spawn point for tutorial visitors that need to walk through the fog.
+        /// </summary>
+        public Vector3? GetActiveMurmuringPathsFurthestPosition()
+        {
+            if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect) && effect is MurmuringPathsEffect murmuringEffect)
+            {
+                return murmuringEffect.FurthestPosition;
+            }
+            return null;
+        }
+
         #endregion
 
         #region Gizmos

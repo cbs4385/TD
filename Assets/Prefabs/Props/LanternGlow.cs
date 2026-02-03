@@ -91,6 +91,10 @@ public class LanternGlow : MonoBehaviour
     private float spotlightTimer;
     private Quaternion idleRotation;
 
+    // The correct base orientation for the lantern model (180° around X)
+    // Confirmed by user manual testing in editor
+    private static readonly Quaternion BaseOrientation = Quaternion.Euler(180f, 0f, 0f);
+
     // Track current glow color for spotlight sync
     private Color currentGlowColor;
 
@@ -113,8 +117,10 @@ public class LanternGlow : MonoBehaviour
         // Add per-instance time offset so multiple lanterns don't sync
         timeOffset = Mathf.Abs(gameObject.GetInstanceID()) * 0.0001f;
 
-        // Store idle rotation
-        idleRotation = transform.rotation;
+        // Use the hardcoded base orientation (-90° X) instead of capturing transform.rotation
+        // Capturing at OnEnable was unreliable - the rotation could be wrong if OnEnable fires
+        // before prefab overrides are fully applied or if [ExecuteAlways] interferes
+        idleRotation = BaseOrientation;
 
         Debug.Log($"[LanternGlow] OnEnable called on {gameObject.name}, enableLight={enableLight}");
 
@@ -205,7 +211,7 @@ public class LanternGlow : MonoBehaviour
     {
         // Spin continuously on Z axis at 1 Hz (360 degrees per second)
         float spinAngle = Time.time * 360f; // 1 full rotation per second
-        transform.rotation = Quaternion.Euler(idleRotation.eulerAngles.x, idleRotation.eulerAngles.y, spinAngle);
+        transform.rotation = Quaternion.Euler(0f, 0f, spinAngle) * idleRotation;
 
         // Look for nearby visitors
         VisitorControllerBase closestVisitor = FindClosestVisitorInRange(reactionRadius);
@@ -338,8 +344,8 @@ public class LanternGlow : MonoBehaviour
         // +X forward means we want the angle from +X axis
         float angle = Mathf.Atan2(toVisitor.y, toVisitor.x) * Mathf.Rad2Deg;
 
-        // Apply rotation around Z axis only
-        Quaternion targetRotation = Quaternion.Euler(idleRotation.eulerAngles.x, idleRotation.eulerAngles.y, angle);
+        // Apply rotation around Z axis, then the base orientation
+        Quaternion targetRotation = Quaternion.Euler(0f, 0f, angle) * idleRotation;
 
         // Smooth rotation
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
@@ -500,9 +506,13 @@ public class LanternGlow : MonoBehaviour
         }
     }
 
+    // Bronze color for the lantern body
+    private static readonly Color BronzeColor = new Color(0.72f, 0.45f, 0.20f, 1f);
+    private static readonly Color BronzeSpecular = new Color(0.9f, 0.7f, 0.4f, 1f);
+
     /// <summary>
-    /// Disables emission on all materials in the model hierarchy.
-    /// This removes the baked-in emissive glow from the GLB model.
+    /// Disables emission on all materials in the model hierarchy and applies bronze tint.
+    /// This removes the baked-in emissive glow from the GLB model and skins it as bronze.
     /// </summary>
     private void DisableModelEmissions()
     {
@@ -566,9 +576,46 @@ public class LanternGlow : MonoBehaviour
                     mat.SetOverrideTag("RenderType", "Transparent");
                     mat.renderQueue = 3000;
                 }
+                else
+                {
+                    // Non-emissive material: apply bronze tint
+                    ApplyBronzeTint(mat);
+                }
             }
 
             renderer.materials = materials;
+        }
+    }
+
+    /// <summary>
+    /// Applies a bronze metallic tint to a material.
+    /// </summary>
+    private static void ApplyBronzeTint(Material mat)
+    {
+        // Set base/albedo color to bronze
+        if (mat.HasProperty("_BaseColor"))
+        {
+            mat.SetColor("_BaseColor", BronzeColor);
+        }
+        if (mat.HasProperty("_Color"))
+        {
+            mat.SetColor("_Color", BronzeColor);
+        }
+
+        // Set metallic properties for a bronze look
+        if (mat.HasProperty("_Metallic"))
+        {
+            mat.SetFloat("_Metallic", 0.85f);
+        }
+        if (mat.HasProperty("_Smoothness"))
+        {
+            mat.SetFloat("_Smoothness", 0.5f);
+        }
+
+        // Set specular color if available
+        if (mat.HasProperty("_SpecColor"))
+        {
+            mat.SetColor("_SpecColor", BronzeSpecular);
         }
     }
 
