@@ -5151,9 +5151,13 @@ namespace FaeMaze.Visitors
             {
                 if (rend == null) continue;
 
+                // IMPORTANT: rend.materials returns a COPY - we must assign it back after modification
                 var materials = rend.materials;
-                foreach (var mat in materials)
+                bool materialsModified = false;
+
+                for (int i = 0; i < materials.Length; i++)
                 {
+                    var mat = materials[i];
                     if (mat == null) continue;
 
                     if (shouldFade)
@@ -5179,6 +5183,7 @@ namespace FaeMaze.Visitors
                             c.a = opacity;
                             mat.SetColor("_Color", c);
                         }
+                        materialsModified = true;
                     }
                     else if (renderersAreFading)
                     {
@@ -5201,7 +5206,14 @@ namespace FaeMaze.Visitors
                             c.a = 1f;
                             mat.SetColor("_Color", c);
                         }
+                        materialsModified = true;
                     }
+                }
+
+                // Assign modified materials back to renderer
+                if (materialsModified)
+                {
+                    rend.materials = materials;
                 }
             }
 

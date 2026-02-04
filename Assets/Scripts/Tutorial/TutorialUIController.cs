@@ -538,7 +538,7 @@ namespace FaeMaze.Tutorial
             outline.effectColor = DIALOG_BORDER_COLOR;
             outline.effectDistance = new Vector2(2, 2);
 
-            // Vertical layout - content fills the panel
+            // Vertical layout - content fills the panel, buttons anchored to bottom
             var layout = dialogPanel.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset((int)PADDING, (int)PADDING, (int)PADDING, (int)PADDING);
             layout.spacing = 10f;
@@ -548,6 +548,7 @@ namespace FaeMaze.Tutorial
             layout.childForceExpandHeight = false;
             layout.childForceExpandWidth = true;
             // No ContentSizeFitter - panel size is controlled by anchors
+            // Body text has flexibleHeight=1 so it expands, pushing buttons to bottom
 
             // Title
             var titleGO = new GameObject("Title");
@@ -586,6 +587,7 @@ namespace FaeMaze.Tutorial
 
             var buttonContainerLayout = buttonContainer.AddComponent<LayoutElement>();
             buttonContainerLayout.minHeight = BUTTON_HEIGHT + 6f;
+            buttonContainerLayout.flexibleHeight = 0f; // Don't expand - stay at bottom
 
             // Continue button
             continueButton = CreateButton(buttonContainer.transform, "Continue", OnContinueClicked);
@@ -661,8 +663,12 @@ namespace FaeMaze.Tutorial
             if (dialogPanel == null || !dialogPanel.activeSelf) return;
             if (manager == null || !manager.IsActive) return;
 
-            // A / South button → Continue (same as clicking Continue button)
-            if (InputBindingHelper.WasBindingPressedThisFrame("GamepadButtonSouth"))
+            // Enter/Return key or A / South button → Continue (same as clicking Continue button)
+            var keyboard = UnityEngine.InputSystem.Keyboard.current;
+            bool enterPressed = keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame);
+            bool gamepadContinue = InputBindingHelper.WasBindingPressedThisFrame("GamepadButtonSouth");
+
+            if (enterPressed || gamepadContinue)
             {
                 if (continueButton != null && continueButton.gameObject.activeSelf && continueButton.interactable)
                 {

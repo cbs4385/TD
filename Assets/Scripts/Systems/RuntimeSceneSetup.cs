@@ -175,8 +175,42 @@ namespace FaeMaze.Systems
                 heart.transform.position = mazeGrid.HeartWorldPosition;
             }
 
+            // Create ground blocking cube if it doesn't exist
+            // Cube goes from (-1000,-1000,0.5) to (1000,1000,1) - blocks things from falling through
+            CreateGroundBlockingCube();
+
             // Update camera and other references
             UpdateMazeReferences(mazeGrid);
+        }
+
+        private static void CreateGroundBlockingCube()
+        {
+            // Check if ground cube already exists
+            if (GameObject.Find("GroundBlockingCube") != null)
+            {
+                return;
+            }
+
+            // Create cube from (-1000,-1000,0.5) to (1000,1000,1)
+            // Center: (0, 0, 0.75), Size: (2000, 2000, 0.5)
+            GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cube.name = "GroundBlockingCube";
+            cube.transform.position = new Vector3(0f, 0f, 0.75f);
+            cube.transform.localScale = new Vector3(2000f, 2000f, 0.5f);
+
+            // Remove the mesh renderer - we don't want to see it
+            var renderer = cube.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                Object.Destroy(renderer);
+            }
+
+            // Keep the collider for blocking
+            var collider = cube.GetComponent<BoxCollider>();
+            if (collider != null)
+            {
+                collider.isTrigger = false;
+            }
         }
 
         private static void UpdateMazeReferences(MazeGridBehaviour newMaze)

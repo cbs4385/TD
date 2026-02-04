@@ -324,7 +324,8 @@ namespace FaeMaze.Tutorial
                     triggerParam: "4", // Misdirect index
                     highlight: TutorialHighlightType.UIElementCircular,
                     highlightTarget: "PowerButton_4",
-                    pause: false
+                    pause: false,
+                    rightSideDialog: true // Move dialog to right so visitor is visible
                 ),
 
                 new TutorialStep(
@@ -333,7 +334,8 @@ namespace FaeMaze.Tutorial
                     description: "The edge now glows with an enticing fog, and signs mark both ends.\n\nWatch as a visitor is lured down the misdirected path!\n\nRe-cast Misdirect to move the effect to a different edge.",
                     trigger: TutorialTriggerType.Timer, // Auto-advances when visitor walks along edge
                     pause: false,
-                    spawn: false // Visitor spawned by HandlePowerMisdirectEffectStep coroutine
+                    spawn: false, // Visitor spawned by HandlePowerMisdirectEffectStep coroutine
+                    rightSideDialog: true // Keep dialog on right so visitor is visible
                 ),
 
                 new TutorialStep(
@@ -1374,7 +1376,7 @@ namespace FaeMaze.Tutorial
                 yield break;
             }
 
-            // Determine which end is farther from heart (spawn there), destination is the heart
+            // Determine which end is farther from heart (spawn there)
             Vector3 heartPos = mazeData.GraphState.Nodes[0].Position; // Root node is index 0
             var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
             Vector3 heartWorldPos = mazeGrid != null ? mazeGrid.HeartWorldPosition : new Vector3(heartPos.x, heartPos.y, 0f);
@@ -1395,8 +1397,33 @@ namespace FaeMaze.Tutorial
             Vector3 spawnPos = spawnTile != null
                 ? new Vector3(spawnTile.Position.x, spawnTile.Position.y, 0f)
                 : new Vector3(spawnEnd.x, spawnEnd.y, 0f);
-            // Destination is the heart so the visitor walks the full path through the misdirected edge
-            Vector3 destPos = heartWorldPos;
+
+            // Find an exit portal as destination - this prevents backtracking when tutorial ends
+            // Choose the portal that is on the opposite side of the heart from the spawn position
+            Vector3 destPos = heartWorldPos; // Default fallback
+            var dynamicMaze = FindFirstObjectByType<DynamicMazeGrowth>();
+            if (dynamicMaze != null)
+            {
+                var portalPositions = dynamicMaze.GetPortalPositions();
+                if (portalPositions != null && portalPositions.Count > 0)
+                {
+                    // Find portal that makes the visitor walk through the misdirect edge toward heart
+                    // This is the portal closest to the "dest end" of the misdirect edge (closer to heart)
+                    Vector3 bestPortal = portalPositions[0];
+                    float bestDist = float.MaxValue;
+                    foreach (var portal in portalPositions)
+                    {
+                        // Find portal closest to the destination end of the misdirect edge
+                        float distToDestEnd = Vector2.Distance(new Vector2(portal.x, portal.y), edgeDestEnd);
+                        if (distToDestEnd < bestDist)
+                        {
+                            bestDist = distToDestEnd;
+                            bestPortal = portal;
+                        }
+                    }
+                    destPos = new Vector3(bestPortal.x, bestPortal.y, 0f);
+                }
+            }
 
             // Spawn visitor
             if (visitorSpawner != null)

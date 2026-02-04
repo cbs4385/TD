@@ -337,33 +337,33 @@ namespace FaeMaze.HeartPowers
             panelRect.anchoredPosition = canvasPos;
             panelRect.sizeDelta = new Vector2(menuSize, menuSize);
 
-            // Create circular buttons around center (no labels, with preview images)
-            // Center button (Cancel - red X)
+            // Create circular buttons around center (with preview images and key binding labels)
+            // Center button (Cancel - red X) - no key binding
             centerButton = CreateCircularButton(panelRect, Vector2.zero, centerButtonSize, CancelColor, circleSprite, null, "X", OnCancelClicked);
 
             // Top button (Remove) - uses earth ground texture
             Sprite removeSprite = propPreviewTextures != null && propPreviewTextures[0] != null
                 ? Sprite.Create(propPreviewTextures[0], new Rect(0, 0, propPreviewTextures[0].width, propPreviewTextures[0].height), new Vector2(0.5f, 0.5f))
                 : null;
-            topButton = CreateCircularButton(panelRect, new Vector2(0, menuRadius), buttonSize, RemoveColor, circleSprite, removeSprite, null, OnRemoveClicked);
+            topButton = CreateCircularButton(panelRect, new Vector2(0, menuRadius), buttonSize, RemoveColor, circleSprite, removeSprite, null, OnRemoveClicked, GameSettings.SculptRemoveBinding);
 
             // Left button (Pond)
             Sprite pondSprite = propPreviewTextures != null && propPreviewTextures[1] != null
                 ? Sprite.Create(propPreviewTextures[1], new Rect(0, 0, propPreviewTextures[1].width, propPreviewTextures[1].height), new Vector2(0.5f, 0.5f))
                 : null;
-            leftButton = CreateCircularButton(panelRect, new Vector2(-menuRadius, 0), buttonSize, PondColor, circleSprite, pondSprite, null, OnPondClicked);
+            leftButton = CreateCircularButton(panelRect, new Vector2(-menuRadius, 0), buttonSize, PondColor, circleSprite, pondSprite, null, OnPondClicked, GameSettings.SculptPondBinding);
 
             // Bottom button (Lantern)
             Sprite lanternSprite = propPreviewTextures != null && propPreviewTextures[2] != null
                 ? Sprite.Create(propPreviewTextures[2], new Rect(0, 0, propPreviewTextures[2].width, propPreviewTextures[2].height), new Vector2(0.5f, 0.5f))
                 : null;
-            bottomButton = CreateCircularButton(panelRect, new Vector2(0, -menuRadius), buttonSize, LanternColor, circleSprite, lanternSprite, null, OnLanternClicked);
+            bottomButton = CreateCircularButton(panelRect, new Vector2(0, -menuRadius), buttonSize, LanternColor, circleSprite, lanternSprite, null, OnLanternClicked, GameSettings.SculptLanternBinding);
 
             // Right button (Ring)
             Sprite ringSprite = propPreviewTextures != null && propPreviewTextures[3] != null
                 ? Sprite.Create(propPreviewTextures[3], new Rect(0, 0, propPreviewTextures[3].width, propPreviewTextures[3].height), new Vector2(0.5f, 0.5f))
                 : null;
-            rightButton = CreateCircularButton(panelRect, new Vector2(menuRadius, 0), buttonSize, RingColor, circleSprite, ringSprite, null, OnRingClicked);
+            rightButton = CreateCircularButton(panelRect, new Vector2(menuRadius, 0), buttonSize, RingColor, circleSprite, ringSprite, null, OnRingClicked, GameSettings.SculptRingBinding);
         }
 
         private Sprite CreateCircleSprite(int size)
@@ -415,7 +415,7 @@ namespace FaeMaze.HeartPowers
             propPreviewTextures[3] = Resources.Load<Texture2D>("Textures/PropPreviews/ring_preview");
         }
 
-        private UnityEngine.UI.Button CreateCircularButton(RectTransform parent, Vector2 position, float size, Color bgColor, Sprite circleMask, Sprite contentSprite, string fallbackText, UnityEngine.Events.UnityAction onClick)
+        private UnityEngine.UI.Button CreateCircularButton(RectTransform parent, Vector2 position, float size, Color bgColor, Sprite circleMask, Sprite contentSprite, string fallbackText, UnityEngine.Events.UnityAction onClick, string keyBinding = null)
         {
             // Create outer border circle (slightly larger)
             GameObject borderObj = new GameObject($"CircularButtonBorder");
@@ -504,6 +504,30 @@ namespace FaeMaze.HeartPowers
                 text.color = Color.white;
                 text.fontStyle = TMPro.FontStyles.Bold;
                 text.raycastTarget = false;
+            }
+
+            // Add key binding label below the button (outside the circle mask)
+            if (!string.IsNullOrEmpty(keyBinding))
+            {
+                GameObject keyLabelObj = new GameObject("KeyLabel");
+                keyLabelObj.transform.SetParent(borderObj.transform, false);
+
+                RectTransform keyLabelRect = keyLabelObj.AddComponent<RectTransform>();
+                // Position below the button
+                keyLabelRect.anchoredPosition = new Vector2(0, -borderSize * 0.5f - 12f);
+                keyLabelRect.sizeDelta = new Vector2(size, 24f);
+
+                var keyLabel = keyLabelObj.AddComponent<TMPro.TextMeshProUGUI>();
+                keyLabel.text = $"[{keyBinding}]";
+                keyLabel.fontSize = 18f;
+                keyLabel.alignment = TMPro.TextAlignmentOptions.Center;
+                keyLabel.color = Color.white;
+                keyLabel.fontStyle = TMPro.FontStyles.Bold;
+                keyLabel.raycastTarget = false;
+
+                // Add outline for visibility
+                keyLabel.outlineWidth = 0.2f;
+                keyLabel.outlineColor = Color.black;
             }
 
             return button;

@@ -1657,49 +1657,19 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Checks if the visitor position is on a valid walkable area (path or node tile)
-        /// and NOT colliding with any wall tiles.
+        /// Checks if the visitor position is on a valid walkable area using maze data as the authoritative source.
         /// </summary>
         private bool IsVisitorOnValidWalkableArea(Vector3 visitorPos)
         {
-            // Use XY position for 2D check (this game uses XY as ground plane)
-            Vector3 checkPos = new Vector3(visitorPos.x, visitorPos.y, 0f);
-
-            // Check for collisions at visitor position
-            Collider[] hits = Physics.OverlapSphere(checkPos, VISITOR_CHECK_RADIUS, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
-
-            bool onWalkableTile = false;
-            bool touchingWall = false;
-
-            foreach (var hit in hits)
+            // Use maze data as the authoritative source for walkability
+            var mazeData = manager?.MazeGrid?.WorldSpaceMazeData;
+            if (mazeData == null)
             {
-                string objName = hit.gameObject.name;
-
-                // Check for wall tiles (WorldTile_#)
-                if (objName.StartsWith("WorldTile_#"))
-                {
-                    touchingWall = true;
-                }
-
-                // Check for path tiles (MazePath tag or PathTile/WorldTile_ without #)
-                if (hit.CompareTag("MazePath") ||
-                    objName.StartsWith("PathTile") ||
-                    (objName.StartsWith("WorldTile_") && !objName.StartsWith("WorldTile_#")))
-                {
-                    onWalkableTile = true;
-                }
-
-                // Check for node tiles (MazeNode tag or NodeColumn/NodeCylinder)
-                if (hit.CompareTag("MazeNode") ||
-                    objName.StartsWith("NodeColumn") ||
-                    objName.StartsWith("NodeCylinder"))
-                {
-                    onWalkableTile = true;
-                }
+                return false;
             }
 
-            // Visitor is valid if on a walkable tile AND not touching any walls
-            return onWalkableTile && !touchingWall;
+            Vector2 pos2D = new Vector2(visitorPos.x, visitorPos.y);
+            return mazeData.IsWalkable(pos2D);
         }
 
         private void SetVisitorVisible(VisitorControllerBase visitor, bool visible)
