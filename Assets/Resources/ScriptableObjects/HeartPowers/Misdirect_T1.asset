@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b3856b15c4aaf442992d941adab3ae3, type: 3}
+  m_Name: Misdirect_T1
+  m_EditorClassIdentifier:
+  powerType: 4
+  displayName: Misdirect
+  description: Lure visitors down a deceptive path.
+  tier: 1
+  essenceCostPercent: 0.25
+  essenceCost: 0
+  cooldown: 0
+  duration: 0
+  radius: 0
+  param1: 0
+  param2: 0
+  param3: 0
+  intParam1: 0
+  intParam2: 0
+  flag1: 0
+  flag2: 0

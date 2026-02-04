@@ -70,6 +70,12 @@ namespace FaeMaze.Props
         private Vector3 targetVelocity;
         private float nextDirectionChangeTime;
 
+        // Dancer tracking mode
+        private Transform dancerTarget;
+        private const float DANCER_CONSTRAINT_RADIUS = 1.0f;
+        private const float DANCER_Z_MIN = -0.5f;
+        private const float DANCER_Z_MAX = 0f;
+
         #endregion
 
         #region Unity Lifecycle
@@ -310,11 +316,7 @@ namespace FaeMaze.Props
 
         private void UpdateColor()
         {
-#if UNITY_EDITOR
-            float t = Application.isPlaying ? Time.time : (float)UnityEditor.EditorApplication.timeSinceStartup;
-#else
             float t = Time.time;
-#endif
             t += colorTimeOffset;
 
             Color currentColor = EvaluateRainbowCycle(t, cycleDuration / RainbowHues.Length);
@@ -478,13 +480,20 @@ namespace FaeMaze.Props
             // Smoothly interpolate velocity
             currentVelocity = Vector3.Lerp(currentVelocity, targetVelocity, Time.deltaTime * movementSmoothing);
 
-            // Calculate new position
-            Vector3 newLocalPos = transform.localPosition + currentVelocity * Time.deltaTime;
-
-            // Constrain to cylinder bounds
-            newLocalPos = ConstrainToCylinder(newLocalPos);
-
-            transform.localPosition = newLocalPos;
+            if (dancerTarget != null)
+            {
+                // Dancer tracking mode: constrain to sphere around dancer in world space
+                Vector3 newWorldPos = transform.position + currentVelocity * Time.deltaTime;
+                newWorldPos = ConstrainToDancer(newWorldPos);
+                transform.position = newWorldPos;
+            }
+            else
+            {
+                // Default: constrain to cylinder bounds in local space
+                Vector3 newLocalPos = transform.localPosition + currentVelocity * Time.deltaTime;
+                newLocalPos = ConstrainToCylinder(newLocalPos);
+                transform.localPosition = newLocalPos;
+            }
         }
 
         private Vector3 GetRandomVelocity()
@@ -497,6 +506,40 @@ namespace FaeMaze.Props
             ).normalized;
 
             return randomDir * movementSpeed;
+        }
+
+        private Vector3 ConstrainToDancer(Vector3 worldPos)
+        {
+            if (dancerTarget == null) return worldPos;
+
+            Vector3 dancerPos = dancerTarget.position;
+            Vector3 offset = worldPos - dancerPos;
+
+            // Constrain XY to circle of DANCER_CONSTRAINT_RADIUS
+            Vector2 xy = new Vector2(offset.x, offset.y);
+            if (xy.magnitude > DANCER_CONSTRAINT_RADIUS)
+            {
+                xy = xy.normalized * DANCER_CONSTRAINT_RADIUS;
+                offset.x = xy.x;
+                offset.y = xy.y;
+
+                // Bounce off the edge
+                Vector2 velXY = new Vector2(currentVelocity.x, currentVelocity.y);
+                velXY = -velXY;
+                currentVelocity.x = velXY.x;
+                currentVelocity.y = velXY.y;
+                targetVelocity = GetRandomVelocity();
+            }
+
+            // Constrain Z (above ground, below camera in -Z up system)
+            offset.z = Mathf.Clamp(offset.z, DANCER_Z_MIN, DANCER_Z_MAX);
+            if (offset.z <= DANCER_Z_MIN + 0.01f || offset.z >= DANCER_Z_MAX - 0.01f)
+            {
+                currentVelocity.z = -currentVelocity.z;
+                targetVelocity = GetRandomVelocity();
+            }
+
+            return dancerPos + offset;
         }
 
         private Vector3 ConstrainToCylinder(Vector3 localPos)
@@ -547,6 +590,16 @@ namespace FaeMaze.Props
         public void SetStartingColorIndex(int index)
         {
             startingColorIndex = Mathf.Clamp(index, 0, RainbowHues.Length - 1);
+        }
+
+        /// <summary>
+        /// Assigns a dancer target for this sphere. When set, the sphere constrains
+        /// its movement to a 1-unit radius around the dancer instead of the cylinder.
+        /// Pass null to return to free-roaming cylinder mode.
+        /// </summary>
+        public void SetDancerTarget(Transform dancer)
+        {
+            dancerTarget = dancer;
         }
 
         #endregion

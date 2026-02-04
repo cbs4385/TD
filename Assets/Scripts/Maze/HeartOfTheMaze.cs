@@ -684,20 +684,6 @@ namespace FaeMaze.Maze
 
         private void LoadPrefabs()
         {
-#if UNITY_EDITOR
-            // In editor, use AssetDatabase for faster iteration
-            if (heartBasePrefab == null)
-            {
-                heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-                    "Assets/Prefabs/Tile/heartbase.prefab");
-            }
-            if (heartTonguePrefab == null)
-            {
-                heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-                    "Assets/Prefabs/Tile/heart tongue.prefab");
-            }
-#else
-            // In builds, use Resources.Load
             if (heartBasePrefab == null)
             {
                 heartBasePrefab = Resources.Load<GameObject>("Prefabs/Tile/heartbase");
@@ -714,7 +700,6 @@ namespace FaeMaze.Maze
                     Debug.LogWarning("HeartOfTheMaze: Failed to load heart tongue prefab from Resources");
                 }
             }
-#endif
         }
 
         private void SetupHeartBase()

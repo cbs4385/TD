@@ -18,13 +18,65 @@ namespace FaeMaze.Systems
         private static float lastLogTime = 0f;
         private const float LOG_INTERVAL = 1f; // Only log once per second to avoid spam
 
+        // Gamepad-specific debug state
+        private static float lastGamepadPollLog = 0f;
+        private const float GAMEPAD_POLL_LOG_INTERVAL = 5f; // Log gamepad status every 5 seconds
+
+        /// <summary>
+        /// Check if ANY of the provided bindings is currently pressed.
+        /// Use for checking primary + alt + tertiary bindings together.
+        /// </summary>
+        public static bool IsAnyBindingPressed(string binding1, string binding2, string binding3)
+        {
+            return IsBindingPressed(binding1) || IsBindingPressed(binding2) || IsBindingPressed(binding3);
+        }
+
+        /// <summary>
+        /// Check if ANY of the provided bindings was just pressed this frame.
+        /// Use for checking primary + alt + tertiary bindings together.
+        /// </summary>
+        public static bool WasAnyBindingPressedThisFrame(string binding1, string binding2, string binding3)
+        {
+            return WasBindingPressedThisFrame(binding1) || WasBindingPressedThisFrame(binding2) || WasBindingPressedThisFrame(binding3);
+        }
+
+        /// <summary>
+        /// Check if ANY of the provided bindings was just released this frame.
+        /// Use for checking primary + alt + tertiary bindings together.
+        /// </summary>
+        public static bool WasAnyBindingReleasedThisFrame(string binding1, string binding2, string binding3)
+        {
+            return WasBindingReleasedThisFrame(binding1) || WasBindingReleasedThisFrame(binding2) || WasBindingReleasedThisFrame(binding3);
+        }
+
+        /// <summary>
+        /// Check if a binding string represents a combo (e.g., "LeftShift+W" or "GamepadLeftShoulder+GamepadButtonWest").
+        /// </summary>
+        public static bool IsComboBinding(string binding)
+        {
+            return !string.IsNullOrEmpty(binding) && binding.Contains("+");
+        }
+
         /// <summary>
         /// Check if binding is currently pressed (for hold actions like camera movement).
+        /// Supports combo bindings with "+" separator (all parts must be pressed).
         /// </summary>
         public static bool IsBindingPressed(string binding)
         {
             if (string.IsNullOrEmpty(binding))
                 return false;
+
+            // Handle combo bindings (e.g., "LeftShift+W", "GamepadLeftShoulder+GamepadButtonWest")
+            if (IsComboBinding(binding))
+            {
+                string[] parts = binding.Split('+');
+                foreach (string part in parts)
+                {
+                    if (!IsBindingPressed(part.Trim()))
+                        return false;
+                }
+                return true;
+            }
 
             // Check mouse buttons
             if (IsMouseButton(binding))
@@ -92,11 +144,32 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Check if binding was just pressed this frame (for trigger actions like powers).
+        /// Supports combo bindings: all parts must be held, and at least one must have been pressed this frame.
         /// </summary>
         public static bool WasBindingPressedThisFrame(string binding)
         {
             if (string.IsNullOrEmpty(binding))
                 return false;
+
+            // Handle combo bindings: all parts held, at least one newly pressed this frame
+            if (IsComboBinding(binding))
+            {
+                string[] parts = binding.Split('+');
+                bool allHeld = true;
+                bool anyNewlyPressed = false;
+                foreach (string part in parts)
+                {
+                    string trimmed = part.Trim();
+                    if (!IsBindingPressed(trimmed))
+                    {
+                        allHeld = false;
+                        break;
+                    }
+                    if (WasBindingPressedThisFrame(trimmed))
+                        anyNewlyPressed = true;
+                }
+                return allHeld && anyNewlyPressed;
+            }
 
             // Check mouse buttons
             if (IsMouseButton(binding))
@@ -142,11 +215,26 @@ namespace FaeMaze.Systems
 
         /// <summary>
         /// Check if binding was just released this frame (for drag end detection).
+        /// Supports combo bindings: fires when any part is released while others were held.
         /// </summary>
         public static bool WasBindingReleasedThisFrame(string binding)
         {
             if (string.IsNullOrEmpty(binding))
                 return false;
+
+            // Handle combo bindings: at least one part released, rest were held
+            if (IsComboBinding(binding))
+            {
+                string[] parts = binding.Split('+');
+                bool anyReleased = false;
+                foreach (string part in parts)
+                {
+                    string trimmed = part.Trim();
+                    if (WasBindingReleasedThisFrame(trimmed))
+                        anyReleased = true;
+                }
+                return anyReleased;
+            }
 
             // Check mouse buttons
             if (IsMouseButton(binding))
@@ -165,6 +253,12 @@ namespace FaeMaze.Systems
                     4 => mouse.backButton.wasReleasedThisFrame,
                     _ => false
                 };
+            }
+
+            // Check gamepad bindings
+            if (IsGamepadBinding(binding))
+            {
+                return WasGamepadBindingReleasedThisFrame(binding);
             }
 
             // Check keyboard keys
@@ -189,6 +283,18 @@ namespace FaeMaze.Systems
         {
             if (string.IsNullOrEmpty(binding))
                 return "None";
+
+            // Handle combo display names (e.g., "LeftShift+W" -> "L Shift + W")
+            if (IsComboBinding(binding))
+            {
+                string[] parts = binding.Split('+');
+                string[] displayParts = new string[parts.Length];
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    displayParts[i] = GetDisplayName(parts[i].Trim());
+                }
+                return string.Join(" + ", displayParts);
+            }
 
             // Mouse buttons
             if (IsMouseButton(binding))
@@ -468,22 +574,61 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// Log gamepad connection status periodically. Call from any gamepad method.
+        /// </summary>
+        private static void LogGamepadStatus()
+        {
+            if (!debugLogging) return;
+            if (Time.time - lastGamepadPollLog < GAMEPAD_POLL_LOG_INTERVAL) return;
+            lastGamepadPollLog = Time.time;
+
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad != null)
+            {
+                Debug.Log($"[InputBindingHelper] GAMEPAD CONNECTED: name='{gamepad.name}', " +
+                          $"displayName='{gamepad.displayName}', " +
+                          $"deviceId={gamepad.deviceId}, " +
+                          $"enabled={gamepad.enabled}, " +
+                          $"added={gamepad.added}, " +
+                          $"description='{gamepad.description}'");
+
+                // Log all connected gamepads
+                var allGamepads = Gamepad.all;
+                Debug.Log($"[InputBindingHelper] Total gamepads detected: {allGamepads.Count}");
+                for (int i = 0; i < allGamepads.Count; i++)
+                {
+                    Debug.Log($"[InputBindingHelper]   Gamepad[{i}]: name='{allGamepads[i].name}', " +
+                              $"displayName='{allGamepads[i].displayName}', " +
+                              $"deviceId={allGamepads[i].deviceId}, " +
+                              $"enabled={allGamepads[i].enabled}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[InputBindingHelper] GAMEPAD NOT CONNECTED: Gamepad.current is null. " +
+                                 $"Total gamepads in Gamepad.all: {Gamepad.all.Count}");
+            }
+        }
+
+        /// <summary>
         /// Check if a gamepad binding is currently pressed.
         /// </summary>
         private static bool IsGamepadBindingPressed(string binding)
         {
+            LogGamepadStatus();
+
             Gamepad gamepad = Gamepad.current;
             if (gamepad == null)
             {
                 if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
                 {
-                    Debug.LogWarning($"[InputBindingHelper] Gamepad.current is null! Cannot check gamepad binding '{binding}'");
+                    Debug.LogWarning($"[InputBindingHelper] IsGamepadBindingPressed('{binding}'): Gamepad.current is null!");
                     lastLogTime = Time.time;
                 }
                 return false;
             }
 
-            return binding switch
+            bool result = binding switch
             {
                 // Face buttons
                 "GamepadButtonSouth" => gamepad.buttonSouth.isPressed,
@@ -518,6 +663,13 @@ namespace FaeMaze.Systems
                 "GamepadRightStickRight" => gamepad.rightStick.ReadValue().x > STICK_THRESHOLD,
                 _ => false
             };
+
+            if (debugLogging && result)
+            {
+                Debug.Log($"[InputBindingHelper] IsGamepadBindingPressed('{binding}') = TRUE on gamepad '{gamepad.name}'");
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -526,18 +678,20 @@ namespace FaeMaze.Systems
         /// </summary>
         private static bool WasGamepadBindingPressedThisFrame(string binding)
         {
+            LogGamepadStatus();
+
             Gamepad gamepad = Gamepad.current;
             if (gamepad == null)
             {
                 if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
                 {
-                    Debug.LogWarning($"[InputBindingHelper] Gamepad.current is null! Cannot check gamepad binding '{binding}' for press this frame");
+                    Debug.LogWarning($"[InputBindingHelper] WasGamepadBindingPressedThisFrame('{binding}'): Gamepad.current is null!");
                     lastLogTime = Time.time;
                 }
                 return false;
             }
 
-            return binding switch
+            bool result = binding switch
             {
                 // Face buttons
                 "GamepadButtonSouth" => gamepad.buttonSouth.wasPressedThisFrame,
@@ -572,6 +726,111 @@ namespace FaeMaze.Systems
                 "GamepadRightStickRight" => gamepad.rightStick.ReadValue().x > STICK_THRESHOLD,
                 _ => false
             };
+
+            if (debugLogging && result)
+            {
+                Debug.Log($"[InputBindingHelper] WasGamepadBindingPressedThisFrame('{binding}') = TRUE on gamepad '{gamepad.name}'");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Check if a gamepad binding was just released this frame.
+        /// </summary>
+        private static bool WasGamepadBindingReleasedThisFrame(string binding)
+        {
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad == null)
+                return false;
+
+            bool result = binding switch
+            {
+                // Face buttons
+                "GamepadButtonSouth" => gamepad.buttonSouth.wasReleasedThisFrame,
+                "GamepadButtonNorth" => gamepad.buttonNorth.wasReleasedThisFrame,
+                "GamepadButtonEast" => gamepad.buttonEast.wasReleasedThisFrame,
+                "GamepadButtonWest" => gamepad.buttonWest.wasReleasedThisFrame,
+                // Shoulder buttons
+                "GamepadLeftShoulder" => gamepad.leftShoulder.wasReleasedThisFrame,
+                "GamepadRightShoulder" => gamepad.rightShoulder.wasReleasedThisFrame,
+                "GamepadLeftTrigger" => gamepad.leftTrigger.wasReleasedThisFrame,
+                "GamepadRightTrigger" => gamepad.rightTrigger.wasReleasedThisFrame,
+                // Stick buttons
+                "GamepadLeftStickPress" => gamepad.leftStickButton.wasReleasedThisFrame,
+                "GamepadRightStickPress" => gamepad.rightStickButton.wasReleasedThisFrame,
+                // Menu buttons
+                "GamepadStart" => gamepad.startButton.wasReleasedThisFrame,
+                "GamepadSelect" => gamepad.selectButton.wasReleasedThisFrame,
+                // D-pad
+                "GamepadDpadUp" => gamepad.dpad.up.wasReleasedThisFrame,
+                "GamepadDpadDown" => gamepad.dpad.down.wasReleasedThisFrame,
+                "GamepadDpadLeft" => gamepad.dpad.left.wasReleasedThisFrame,
+                "GamepadDpadRight" => gamepad.dpad.right.wasReleasedThisFrame,
+                // Analog sticks - release = dropping below threshold
+                "GamepadLeftStickUp" => gamepad.leftStick.ReadValue().y <= STICK_THRESHOLD,
+                "GamepadLeftStickDown" => gamepad.leftStick.ReadValue().y >= -STICK_THRESHOLD,
+                "GamepadLeftStickLeft" => gamepad.leftStick.ReadValue().x >= -STICK_THRESHOLD,
+                "GamepadLeftStickRight" => gamepad.leftStick.ReadValue().x <= STICK_THRESHOLD,
+                "GamepadRightStickUp" => gamepad.rightStick.ReadValue().y <= STICK_THRESHOLD,
+                "GamepadRightStickDown" => gamepad.rightStick.ReadValue().y >= -STICK_THRESHOLD,
+                "GamepadRightStickLeft" => gamepad.rightStick.ReadValue().x >= -STICK_THRESHOLD,
+                "GamepadRightStickRight" => gamepad.rightStick.ReadValue().x <= STICK_THRESHOLD,
+                _ => false
+            };
+
+            if (debugLogging && result && !binding.Contains("Stick"))
+            {
+                Debug.Log($"[InputBindingHelper] WasGamepadBindingReleasedThisFrame('{binding}') = TRUE");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Log a raw gamepad state dump. Called periodically when any gamepad button is pressed
+        /// to help diagnose binding mismatches between capture and gameplay.
+        /// </summary>
+        public static void LogRawGamepadState()
+        {
+            if (!debugLogging) return;
+
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad == null)
+            {
+                Debug.LogWarning("[InputBindingHelper] LogRawGamepadState: No gamepad connected");
+                return;
+            }
+
+            // Log all button states that are currently pressed
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            sb.AppendLine($"[InputBindingHelper] RAW GAMEPAD STATE ('{gamepad.name}'):");
+
+            if (gamepad.buttonSouth.isPressed) sb.AppendLine("  buttonSouth (A/Cross) = PRESSED");
+            if (gamepad.buttonNorth.isPressed) sb.AppendLine("  buttonNorth (Y/Triangle) = PRESSED");
+            if (gamepad.buttonEast.isPressed) sb.AppendLine("  buttonEast (B/Circle) = PRESSED");
+            if (gamepad.buttonWest.isPressed) sb.AppendLine("  buttonWest (X/Square) = PRESSED");
+            if (gamepad.leftShoulder.isPressed) sb.AppendLine("  leftShoulder (LB/L1) = PRESSED");
+            if (gamepad.rightShoulder.isPressed) sb.AppendLine("  rightShoulder (RB/R1) = PRESSED");
+            if (gamepad.leftTrigger.isPressed) sb.AppendLine($"  leftTrigger (LT/L2) = PRESSED (value={gamepad.leftTrigger.ReadValue():F3})");
+            if (gamepad.rightTrigger.isPressed) sb.AppendLine($"  rightTrigger (RT/R2) = PRESSED (value={gamepad.rightTrigger.ReadValue():F3})");
+            if (gamepad.leftStickButton.isPressed) sb.AppendLine("  leftStickButton = PRESSED");
+            if (gamepad.rightStickButton.isPressed) sb.AppendLine("  rightStickButton = PRESSED");
+            if (gamepad.startButton.isPressed) sb.AppendLine("  startButton = PRESSED");
+            if (gamepad.selectButton.isPressed) sb.AppendLine("  selectButton = PRESSED");
+            if (gamepad.dpad.up.isPressed) sb.AppendLine("  dpad.up = PRESSED");
+            if (gamepad.dpad.down.isPressed) sb.AppendLine("  dpad.down = PRESSED");
+            if (gamepad.dpad.left.isPressed) sb.AppendLine("  dpad.left = PRESSED");
+            if (gamepad.dpad.right.isPressed) sb.AppendLine("  dpad.right = PRESSED");
+
+            Vector2 leftStick = gamepad.leftStick.ReadValue();
+            Vector2 rightStick = gamepad.rightStick.ReadValue();
+            if (leftStick.magnitude > 0.1f)
+                sb.AppendLine($"  leftStick = ({leftStick.x:F3}, {leftStick.y:F3})");
+            if (rightStick.magnitude > 0.1f)
+                sb.AppendLine($"  rightStick = ({rightStick.x:F3}, {rightStick.y:F3})");
+
+            Debug.Log(sb.ToString());
         }
     }
 }

@@ -146,6 +146,14 @@ namespace FaeMaze.Visitors
         // Cooldown tracking per lantern (prevents immediate re-triggering)
         protected Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
 
+        // Essence-based opacity (visitors fade as essence drains)
+        protected float startingEssence;
+        protected Renderer[] cachedRenderers;
+        protected bool renderersAreFading;
+        protected float lastOpacityUpdate;
+        private const float OPACITY_UPDATE_INTERVAL = 0.1f; // Update every 100ms
+        private const float MIN_OPACITY = 0.15f; // Don't go fully invisible
+
         protected Vector3 initialScale;
 
         protected const float MovementEpsilonSqr = 0.0001f;
@@ -303,6 +311,7 @@ namespace FaeMaze.Visitors
         public void DeductEssence(float amount)
         {
             currentEssence -= amount;
+            UpdateEssenceOpacity();
             if (currentEssence <= 0f)
             {
                 currentEssence = 0f;
@@ -365,6 +374,7 @@ namespace FaeMaze.Visitors
 
             // Initialize visitor's essence pool (drained by props)
             currentEssence = GetEssenceReward();
+            startingEssence = currentEssence;
         }
 
         /// <summary>
@@ -521,6 +531,9 @@ namespace FaeMaze.Visitors
 
                     // Drain visitor essence while at the lantern
                     currentEssence -= lanternEssenceDrainPerSecond * Time.deltaTime;
+
+                    // Update visual opacity based on remaining essence
+                    UpdateEssenceOpacity();
 
                     // Award essence to the player while visitor is at the lantern
                     if (GameController.Instance != null)
@@ -1443,12 +1456,15 @@ namespace FaeMaze.Visitors
                 return new List<Vector3>();
             }
 
+            var edgeCostMultipliers = HeartPowerManager.Instance?.GetMisdirectEdgeCostMultipliers();
+
             var result = ForestMaze.MazePathfinding.BuildWorldPath(
                 mazeGridBehaviour.WorldSpaceMazeData,
                 start,
                 end,
                 heartNodePenalty: 0f,
-                penalizeHeartNode: false // Heart node centers are already unwalkable - no penalty needed
+                penalizeHeartNode: false, // Heart node centers are already unwalkable - no penalty needed
+                edgeCostMultipliers: edgeCostMultipliers
             );
 
             // If pathfinding failed, return empty list - don't use unvalidated destination
@@ -2095,6 +2111,7 @@ namespace FaeMaze.Visitors
                     worldPath?.Clear();
                     worldPathIndex = 0;
                     splineInitialized = false;
+                    FaeMaze.Props.LanternStreamerEffect.SpawnStreamers(transform);
                     return;
                 }
             }
@@ -3309,6 +3326,7 @@ namespace FaeMaze.Visitors
                 }
                 fascinationTimer = duration;
                 state = VisitorState.Idle; // Idle at the lantern
+                FaeMaze.Props.LanternStreamerEffect.SpawnStreamers(transform);
                 return;
             }
 
@@ -3404,6 +3422,9 @@ namespace FaeMaze.Visitors
                 FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorFate(Archetype, fate, 0);
             }
 
+            // Clean up visual effects before destroying
+            FaeMaze.Props.LanternStreamerEffect.DestroyStreamers(transform);
+
             // Clear any fascination state
             isFascinated = false;
             isFrightened = false;
@@ -3419,8 +3440,6 @@ namespace FaeMaze.Visitors
 
             // Set state to Escaping
             state = VisitorState.Escaping;
-
-            // Visual feedback could be added here (fade out, particle effect, etc.)
 
             // Destroy the visitor
             Destroy(gameObject, 0.1f);
@@ -3447,6 +3466,10 @@ namespace FaeMaze.Visitors
             {
                 return;
             }
+
+            // Clean up visual effects
+            FaeMaze.Props.LanternStreamerEffect.DestroyStreamers(transform);
+            FaeMaze.Props.DazeStreamerEffect.DestroyStreamers(transform);
 
             // Clear all state flags
             isFascinated = false;
@@ -3493,6 +3516,9 @@ namespace FaeMaze.Visitors
                 rb3D.position = transform.position;
                 rb3D.linearVelocity = Vector3.zero;
                 rb3D.angularVelocity = Vector3.zero;
+
+                // Restore Z freeze constraint (removed during grab for tongue sinking)
+                rb3D.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ;
             }
 
             // Reset to Idle - RefreshStateFromFlags will set appropriate state based on flags
@@ -3814,25 +3840,21 @@ namespace FaeMaze.Visitors
                     OnGraphSegmentEnter(firstSegment);
 
                     // Debug: Log successful graph path creation (only when verbose logging enabled)
-                    #if UNITY_EDITOR
                     if (logVisitorPathfinding)
                     {
                         Debug.Log($"[GraphNav] {name}: Created graph path with {graphPath.Segments.Count} segments, " +
                             $"first segment: {firstSegment.Type}[{firstSegment.Index}]");
                     }
-                    #endif
                 }
                 else
                 {
                     // Debug: Log graph path failure (only when verbose logging enabled)
-                    #if UNITY_EDITOR
                     if (logVisitorPathfinding)
                     {
                         Debug.LogWarning($"[GraphNav] {name}: Graph path failed! graphPath={graphPath != null}, " +
                             $"IsValid={graphPath?.IsValid}, Segments={graphPath?.Segments?.Count ?? 0}. " +
                             $"From ({transform.position.x:F1},{transform.position.y:F1}) to ({destination.x:F1},{destination.y:F1})");
                     }
-                    #endif
                 }
             }
 
@@ -4024,6 +4046,7 @@ namespace FaeMaze.Visitors
             isDazed = true;
             SetTimedState(VisitorState.Dazed, duration);
             RefreshStateFromFlags();
+            FaeMaze.Props.DazeStreamerEffect.SpawnStreamers(transform);
         }
 
         /// <summary>
@@ -4158,6 +4181,7 @@ namespace FaeMaze.Visitors
                     frightRecoveryNodeCount = 0;
                     break;
                 case VisitorState.Dazed:
+                    FaeMaze.Props.DazeStreamerEffect.DestroyStreamers(transform);
                     isDazed = false;
                     break;
             }
@@ -4167,6 +4191,13 @@ namespace FaeMaze.Visitors
             currentStateTimer = 0f;
 
             RefreshStateFromFlags();
+
+            // Recalculate path after timed state expires, since visitor may have been
+            // moved by physics during daze or the old path may be stale
+            if (state == VisitorState.Walking)
+            {
+                RecalculatePath();
+            }
 
             Debug.Log($"[Visitor] OnStateExpired: {name} new state after refresh: {state}, worldPath={(worldPath != null ? worldPath.Count.ToString() : "null")}");
         }
@@ -4276,6 +4307,8 @@ namespace FaeMaze.Visitors
                 lanternCooldowns[currentFaeLantern] = cooldown;
             }
 
+            FaeMaze.Props.LanternStreamerEffect.DestroyStreamers(transform);
+
             isFascinated = false;
             hasReachedLantern = false;
             fascinationTimer = 0f;
@@ -4314,6 +4347,8 @@ namespace FaeMaze.Visitors
             {
                 return; // Not fascinated by a lantern
             }
+
+            FaeMaze.Props.LanternStreamerEffect.DestroyStreamers(transform);
 
             // Don't set cooldown since the lantern is being destroyed
             isFascinated = false;
@@ -4530,6 +4565,9 @@ namespace FaeMaze.Visitors
             float drainAmount = ringEssenceDrainPerSecond * Time.deltaTime;
             currentEssence -= drainAmount;
 
+            // Update visual opacity based on remaining essence
+            UpdateEssenceOpacity();
+
             // Ring Tithe mutation: player receives a portion of drained essence
             float titheRate = PropMutationManager.Instance?.GetRingEssenceTithe() ?? 0f;
             if (titheRate > 0f && GameController.Instance != null)
@@ -4714,7 +4752,7 @@ namespace FaeMaze.Visitors
             rb3D.isKinematic = false;
             rb3D.useGravity = false;
             rb3D.mass = 10f;  // Higher mass = collision response has more effect
-            rb3D.constraints = RigidbodyConstraints.FreezeRotation;  // No position freeze - let physics work fully
+            rb3D.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ;  // Freeze Z to prevent sinking
             rb3D.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;  // Best for dynamic vs kinematic
             rb3D.interpolation = RigidbodyInterpolation.Interpolate;
             rb3D.linearDamping = 5f;  // Drag to slow down when not actively moving
@@ -5054,6 +5092,110 @@ namespace FaeMaze.Visitors
             {
                 animator = modelInstance.GetComponentInChildren<Animator>();
             }
+
+            // Cache renderers for opacity effects
+            cachedRenderers = modelInstance.GetComponentsInChildren<Renderer>(true);
+        }
+
+        #endregion
+
+        #region Essence Opacity
+
+        /// <summary>
+        /// Updates the visitor's visual opacity based on current essence vs starting essence.
+        /// Called periodically during essence drain to show visitors fading as they lose essence.
+        /// </summary>
+        protected void UpdateEssenceOpacity()
+        {
+            // Lazy-initialize renderers if not cached yet (e.g., visitor IS the model, no modelPrefab)
+            if (cachedRenderers == null || cachedRenderers.Length == 0)
+            {
+                cachedRenderers = GetComponentsInChildren<Renderer>(true);
+                if (cachedRenderers == null || cachedRenderers.Length == 0) return;
+            }
+            if (startingEssence <= 0f) return;
+
+            // Throttle updates for performance
+            if (Time.time - lastOpacityUpdate < OPACITY_UPDATE_INTERVAL) return;
+            lastOpacityUpdate = Time.time;
+
+            float essenceRatio = Mathf.Clamp01(currentEssence / startingEssence);
+
+            // Only start fading once essence drops below 80%
+            float opacity;
+            if (essenceRatio >= 0.8f)
+            {
+                // Restore full opacity if essence is above 80%
+                if (!renderersAreFading) return;
+                opacity = 1f;
+            }
+            else
+            {
+                // Map 0.8 → 1.0 opacity, 0.0 → MIN_OPACITY
+                opacity = Mathf.Lerp(MIN_OPACITY, 1f, essenceRatio / 0.8f);
+            }
+
+            bool shouldFade = opacity < 0.99f;
+
+            foreach (var rend in cachedRenderers)
+            {
+                if (rend == null) continue;
+
+                var materials = rend.materials;
+                foreach (var mat in materials)
+                {
+                    if (mat == null) continue;
+
+                    if (shouldFade)
+                    {
+                        // Switch to transparent rendering mode
+                        mat.SetFloat("_Surface", 1); // 1 = Transparent in URP
+                        mat.SetFloat("_Blend", 0);   // Alpha blend
+                        mat.SetOverrideTag("RenderType", "Transparent");
+                        mat.renderQueue = 3000;
+                        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                        mat.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+
+                        // Set alpha on base color
+                        if (mat.HasProperty("_BaseColor"))
+                        {
+                            Color c = mat.GetColor("_BaseColor");
+                            c.a = opacity;
+                            mat.SetColor("_BaseColor", c);
+                        }
+                        if (mat.HasProperty("_Color"))
+                        {
+                            Color c = mat.GetColor("_Color");
+                            c.a = opacity;
+                            mat.SetColor("_Color", c);
+                        }
+                    }
+                    else if (renderersAreFading)
+                    {
+                        // Restore opaque rendering mode
+                        mat.SetFloat("_Surface", 0); // 0 = Opaque in URP
+                        mat.SetOverrideTag("RenderType", "Opaque");
+                        mat.renderQueue = -1;
+                        mat.EnableKeyword("_SURFACE_TYPE_OPAQUE");
+                        mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+
+                        if (mat.HasProperty("_BaseColor"))
+                        {
+                            Color c = mat.GetColor("_BaseColor");
+                            c.a = 1f;
+                            mat.SetColor("_BaseColor", c);
+                        }
+                        if (mat.HasProperty("_Color"))
+                        {
+                            Color c = mat.GetColor("_Color");
+                            c.a = 1f;
+                            mat.SetColor("_Color", c);
+                        }
+                    }
+                }
+            }
+
+            renderersAreFading = shouldFade;
         }
 
         #endregion
@@ -5571,13 +5713,6 @@ namespace FaeMaze.Visitors
                     }
                 }
 
-                // Draw waypoint indices as text labels (every 10th waypoint for clarity)
-                #if UNITY_EDITOR
-                for (int i = 0; i < worldPath.Count; i += 10)
-                {
-                    UnityEditor.Handles.Label(worldPath[i] + Vector3.up * 0.5f, i.ToString());
-                }
-                #endif
             }
 
             // Draw destination
@@ -5656,13 +5791,6 @@ namespace FaeMaze.Visitors
                     }
                 }
 
-                // Label segment
-                #if UNITY_EDITOR
-                Vector3 labelPos = new Vector3(segment.EntryPoint.x, segment.EntryPoint.y, 0f) + Vector3.up * 0.8f;
-                string label = $"{segIdx}: {segment.Type}[{segment.Index}]";
-                if (isCurrentSegment) label += " (CURRENT)";
-                UnityEditor.Handles.Label(labelPos, label);
-                #endif
             }
 
             // Draw current position on graph if in edge movement
@@ -5676,10 +5804,6 @@ namespace FaeMaze.Visitors
                     Gizmos.color = Color.red;
                     Gizmos.DrawSphere(new Vector3(currentGraphPos.x, currentGraphPos.y, 0f), 0.3f);
 
-                    #if UNITY_EDITOR
-                    UnityEditor.Handles.Label(new Vector3(currentGraphPos.x, currentGraphPos.y + 0.5f, 0f),
-                        $"Progress: {graphSegmentProgress:F2}");
-                    #endif
                 }
             }
         }

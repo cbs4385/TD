@@ -8,6 +8,7 @@ namespace FaeMaze.Tutorial
     /// <summary>
     /// Quick-reference help overlay accessible via F1 during gameplay.
     /// Shows controls, powers, and prop effects without pausing the game.
+    /// Rebuilds content each time it's shown so bindings are always current.
     /// </summary>
     public class InGameHelpOverlay : SingletonMonoBehaviour<InGameHelpOverlay>
     {
@@ -20,13 +21,12 @@ namespace FaeMaze.Tutorial
         private static readonly Color DIM_TEXT_COLOR = new Color(0.7f, 0.7f, 0.7f, 1f);
         private static readonly Color KEY_COLOR = new Color(0.4f, 0.9f, 0.5f, 1f); // Green for keys
 
-        private const float OVERLAY_WIDTH_PERCENT = 0.85f;
-        private const float OVERLAY_HEIGHT_PERCENT = 0.85f;
-        private const float HEADER_SIZE = 32f;
-        private const float SUBHEADER_SIZE = 24f;
-        private const float BODY_SIZE = 18f;
-        private const float PADDING = 30f;
-        private const float COLUMN_SPACING = 60f;
+        private const float HEADER_SIZE = 26f;
+        private const float SUBHEADER_SIZE = 18f;
+        private const float BODY_SIZE = 14f;
+        private const float PADDING = 16f;
+        private const float LINE_HEIGHT = 18f;
+        private const float SECTION_SPACING = 8f;
 
         #endregion
 
@@ -34,6 +34,7 @@ namespace FaeMaze.Tutorial
 
         private Canvas canvas;
         private GameObject overlayRoot;
+        private GameObject contentContainer; // Destroyed and rebuilt each Show()
         private bool isVisible;
 
         #endregion
@@ -68,14 +69,21 @@ namespace FaeMaze.Tutorial
         }
 
         /// <summary>
-        /// Shows the help overlay.
+        /// Shows the help overlay. Rebuilds content each time to reflect current bindings.
         /// </summary>
         public void Show()
         {
             if (overlayRoot == null)
             {
-                CreateOverlay();
+                CreateOverlayRoot();
             }
+
+            // Destroy old content and rebuild with current bindings
+            if (contentContainer != null)
+            {
+                Destroy(contentContainer);
+            }
+            CreateContent();
 
             overlayRoot.SetActive(true);
             isVisible = true;
@@ -97,12 +105,12 @@ namespace FaeMaze.Tutorial
 
         #region UI Creation
 
-        private void CreateOverlay()
+        private void CreateOverlayRoot()
         {
             // Find or create canvas
             canvas = FindOrCreateCanvas();
 
-            // Create overlay root
+            // Create overlay root (persistent - not destroyed between shows)
             overlayRoot = new GameObject("HelpOverlay");
             overlayRoot.transform.SetParent(canvas.transform, false);
 
@@ -118,34 +126,35 @@ namespace FaeMaze.Tutorial
             var bgImage = overlayRoot.AddComponent<Image>();
             bgImage.color = new Color(0, 0, 0, 0.5f);
 
-            // Content panel (centered, sized to percentage of screen)
-            var contentPanel = new GameObject("ContentPanel");
-            contentPanel.transform.SetParent(overlayRoot.transform, false);
+            overlayRoot.SetActive(false);
+        }
 
-            var contentRect = contentPanel.AddComponent<RectTransform>();
-            contentRect.anchorMin = new Vector2(0.5f, 0.5f);
-            contentRect.anchorMax = new Vector2(0.5f, 0.5f);
-            contentRect.pivot = new Vector2(0.5f, 0.5f);
-            contentRect.sizeDelta = new Vector2(
-                Screen.width * OVERLAY_WIDTH_PERCENT,
-                Screen.height * OVERLAY_HEIGHT_PERCENT
-            );
+        private void CreateContent()
+        {
+            // Content panel (centered, using anchor-based sizing for proper scaling)
+            contentContainer = new GameObject("ContentPanel");
+            contentContainer.transform.SetParent(overlayRoot.transform, false);
 
-            var contentBg = contentPanel.AddComponent<Image>();
+            var contentRect = contentContainer.AddComponent<RectTransform>();
+            // Use anchors for responsive sizing (10% margin on each side)
+            contentRect.anchorMin = new Vector2(0.08f, 0.05f);
+            contentRect.anchorMax = new Vector2(0.92f, 0.95f);
+            contentRect.offsetMin = Vector2.zero;
+            contentRect.offsetMax = Vector2.zero;
+
+            var contentBg = contentContainer.AddComponent<Image>();
             contentBg.color = OVERLAY_BG_COLOR;
 
             // Add outline
-            var outline = contentPanel.AddComponent<Outline>();
+            var outline = contentContainer.AddComponent<Outline>();
             outline.effectColor = new Color(0.4f, 0.4f, 0.5f, 1f);
             outline.effectDistance = new Vector2(2, 2);
 
-            // Create content layout
-            CreateHelpContent(contentPanel.transform);
+            // Create content layout with current bindings
+            CreateHelpContent(contentContainer.transform);
 
             // Close instruction at bottom
-            CreateCloseInstruction(contentPanel.transform);
-
-            overlayRoot.SetActive(false);
+            CreateCloseInstruction(contentContainer.transform);
         }
 
         private Canvas FindOrCreateCanvas()
@@ -177,87 +186,117 @@ namespace FaeMaze.Tutorial
 
         private void CreateHelpContent(Transform parent)
         {
+            string kc = ColorToHex(KEY_COLOR);
+
             // Main title
             CreateText(parent, "FAEMAZE QUICK REFERENCE", HEADER_SIZE, HEADER_COLOR,
                 new Vector2(0, -PADDING), TextAnchor.UpperCenter, fontStyle: FontStyles.Bold);
 
-            // Two-column layout
-            float leftX = -350f;
-            float rightX = 150f;
-            float startY = -80f;
-            float lineHeight = 26f;
-            float sectionSpacing = 40f;
+            // Three-column layout for better fit
+            float col1X = -420f;
+            float col2X = -50f;
+            float col3X = 260f;
+            float startY = -50f;
 
-            // LEFT COLUMN: Controls
+            // COLUMN 1: Camera Controls + Heart Powers
             float y = startY;
 
-            y = CreateSection(parent, "CAMERA CONTROLS", leftX, y, new string[]
+            string moveForward = Bind(GameSettings.CameraMoveForwardBinding);
+            string moveBack = Bind(GameSettings.CameraMoveBackwardBinding);
+            string turnLeft = Bind(GameSettings.CameraTurnLeftBinding);
+            string turnRight = Bind(GameSettings.CameraTurnRightBinding);
+            string orbit = Bind(GameSettings.CameraOrbitBinding);
+            string pan = Bind(GameSettings.CameraPanBinding);
+            string focusHeart = Bind(GameSettings.CameraFocusHeartBinding);
+            string focusEntrance = Bind(GameSettings.CameraFocusEntranceBinding);
+            string focusVisitor = Bind(GameSettings.CameraFocusVisitorBinding);
+
+            y = CreateSection(parent, "CAMERA", col1X, y, new string[]
             {
-                $"<color=#{ColorToHex(KEY_COLOR)}>W/A/S/D</color> or <color=#{ColorToHex(KEY_COLOR)}>Arrow Keys</color>  Move camera",
-                $"<color=#{ColorToHex(KEY_COLOR)}>Scroll Wheel</color>  Zoom in/out",
-                $"<color=#{ColorToHex(KEY_COLOR)}>Right-click + Drag</color>  Orbit around focal point",
-                $"<color=#{ColorToHex(KEY_COLOR)}>Middle-click + Drag</color>  Pan camera",
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.CameraFocusHeartBinding)}</color>  Focus on Heart",
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.CameraFocusEntranceBinding)}</color>  Focus on Entrance",
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.CameraFocusVisitorBinding)}</color>  Focus on Visitor"
-            }, lineHeight);
+                $"<color=#{kc}>{moveForward}/{moveBack}/{turnLeft}/{turnRight}</color>  Move",
+                $"<color=#{kc}>Scroll Wheel</color>  Zoom",
+                $"<color=#{kc}>{orbit} + Drag</color>  Orbit",
+                $"<color=#{kc}>{pan} + Drag</color>  Pan",
+                $"<color=#{kc}>{focusHeart}</color>  Focus Heart",
+                $"<color=#{kc}>{focusEntrance}</color>  Focus Entrance",
+                $"<color=#{kc}>{focusVisitor}</color>  Focus Visitor"
+            });
 
-            y -= sectionSpacing;
+            y -= SECTION_SPACING;
 
-            y = CreateSection(parent, "HEART POWERS", leftX, y, new string[]
+            string p1 = Bind(GameSettings.HeartPower1Binding);
+            string p2 = Bind(GameSettings.HeartPower2Binding);
+            string p3 = Bind(GameSettings.HeartPower3Binding);
+            string p4 = Bind(GameSettings.HeartPower4Binding);
+            string p5 = Bind(GameSettings.HeartPower5Binding);
+
+            y = CreateSection(parent, "HEART POWERS", col1X, y, new string[]
             {
-                $"<color=#{ColorToHex(KEY_COLOR)}>1</color>  Spooky Fog (100 threads)",
-                "    Creates fog that confuses visitors toward Heart",
-                $"<color=#{ColorToHex(KEY_COLOR)}>2</color>  Yoink! (10 threads)",
-                "    Tongue grabs visitors from walls",
-                $"<color=#{ColorToHex(KEY_COLOR)}>3</color>  Nom Nom (50 threads)",
-                "    Mouth consumes visitors at focal point",
-                $"<color=#{ColorToHex(KEY_COLOR)}>4</color>  Redecorating (free)",
-                "    Open menu to place/change hazards"
-            }, lineHeight);
+                $"<color=#{kc}>{p1}</color>  Spooky Fog — confuse toward Heart",
+                $"<color=#{kc}>{p2}</color>  Yoink! — tongue grabs from walls",
+                $"<color=#{kc}>{p3}</color>  Nom Nom — consume at focal point",
+                $"<color=#{kc}>{p4}</color>  Redecorating — place/change hazards",
+                $"<color=#{kc}>{p5}</color>  Misdirect — lure down chosen edge"
+            });
 
-            // RIGHT COLUMN: Hazards and Gameplay
+            // COLUMN 2: Sculpt Menu + Hazards
             y = startY;
 
-            y = CreateSection(parent, "SCULPT MENU", rightX, y, new string[]
+            string sculptPond = Bind(GameSettings.SculptPondBinding);
+            string sculptLantern = Bind(GameSettings.SculptLanternBinding);
+            string sculptRing = Bind(GameSettings.SculptRingBinding);
+            string sculptRemove = Bind(GameSettings.SculptRemoveBinding);
+
+            y = CreateSection(parent, "SCULPT MENU", col2X, y, new string[]
             {
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptPondBinding)}</color>  Place Pond",
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptLanternBinding)}</color>  Place Lantern",
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptRingBinding)}</color>  Place Fairy Ring",
-                $"<color=#{ColorToHex(KEY_COLOR)}>{GetBinding(GameSettings.SculptRemoveBinding)}</color>  Remove Hazard",
+                $"<color=#{kc}>{sculptPond}</color>  Place Pond",
+                $"<color=#{kc}>{sculptLantern}</color>  Place Lantern",
+                $"<color=#{kc}>{sculptRing}</color>  Place Fairy Ring",
+                $"<color=#{kc}>{sculptRemove}</color>  Remove Hazard",
                 "<color=#888888>Click center to cancel</color>"
-            }, lineHeight);
+            });
 
-            y -= sectionSpacing;
+            y -= SECTION_SPACING;
 
-            y = CreateSection(parent, "HAZARDS", rightX, y, new string[]
+            y = CreateSection(parent, "HAZARDS", col2X, y, new string[]
             {
-                "<color=#4488FF>Pond</color>  Drowns visitors (Puka hazard)",
-                "<color=#FFDD44>Lantern</color>  Fascinates, drains threads over time",
-                "<color=#88FF88>Fairy Ring</color>  Traps visitors, drains threads"
-            }, lineHeight);
+                "<color=#4488FF>Pond</color>  Drowns visitors (Puka)",
+                "<color=#FFDD44>Lantern</color>  Fascinates, drains threads",
+                "<color=#88FF88>Fairy Ring</color>  Traps, drains threads"
+            });
 
-            y -= sectionSpacing;
+            // COLUMN 3: Goal + Tips
+            y = startY;
 
-            y = CreateSection(parent, "GOAL", rightX, y, new string[]
+            y = CreateSection(parent, "GOAL", col3X, y, new string[]
             {
-                "Capture visitors before they escape!",
-                "Threads drain over time - survive as long as possible.",
-                "The Heart's tongue catches nearby visitors.",
-                "Use powers to guide or consume visitors.",
+                "Capture visitors before escape!",
+                "Threads drain over time.",
+                "Heart's tongue catches nearby.",
+                "Use powers to guide or consume.",
                 "",
-                "<color=#FF6666>Goblin</color> appears when threads are high - kills visitors!"
-            }, lineHeight);
+                "<color=#FF6666>Goblin</color> appears at high threads!"
+            });
+
+            y -= SECTION_SPACING;
+
+            y = CreateSection(parent, "TIPS", col3X, y, new string[]
+            {
+                "Position focal point wisely",
+                "Combine powers for effect",
+                "Watch thread drain rate",
+                "Place hazards on busy paths"
+            });
         }
 
         private float CreateSection(Transform parent, string header, float x, float y,
-            string[] lines, float lineHeight)
+            string[] lines)
         {
             // Section header
             CreateText(parent, header, SUBHEADER_SIZE, SUBHEADER_COLOR,
                 new Vector2(x, y), TextAnchor.UpperLeft, fontStyle: FontStyles.Bold);
 
-            y -= lineHeight + 5f;
+            y -= LINE_HEIGHT + 2f;
 
             // Section content
             foreach (string line in lines)
@@ -265,9 +304,9 @@ namespace FaeMaze.Tutorial
                 if (!string.IsNullOrEmpty(line))
                 {
                     CreateRichText(parent, line, BODY_SIZE, TEXT_COLOR,
-                        new Vector2(x + 10, y), TextAnchor.UpperLeft);
+                        new Vector2(x + 8, y), TextAnchor.UpperLeft);
                 }
-                y -= lineHeight;
+                y -= LINE_HEIGHT;
             }
 
             return y;
@@ -284,7 +323,7 @@ namespace FaeMaze.Tutorial
             rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
             rect.anchoredPosition = position;
-            rect.sizeDelta = new Vector2(600, fontSize + 10);
+            rect.sizeDelta = new Vector2(800, fontSize + 10);
 
             var tmp = textGO.AddComponent<TextMeshProUGUI>();
             tmp.text = text;
@@ -306,7 +345,7 @@ namespace FaeMaze.Tutorial
             rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
             rect.anchoredPosition = position;
-            rect.sizeDelta = new Vector2(450, fontSize + 10);
+            rect.sizeDelta = new Vector2(380, fontSize + 10);
 
             var tmp = textGO.AddComponent<TextMeshProUGUI>();
             tmp.text = text;
@@ -315,6 +354,7 @@ namespace FaeMaze.Tutorial
             tmp.richText = true;
             tmp.alignment = AnchorToAlignment(anchor);
             tmp.raycastTarget = false;
+            tmp.overflowMode = TextOverflowModes.Truncate;
         }
 
         private void CreateCloseInstruction(Transform parent)
@@ -326,12 +366,12 @@ namespace FaeMaze.Tutorial
             rect.anchorMin = new Vector2(0.5f, 0f);
             rect.anchorMax = new Vector2(0.5f, 0f);
             rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = new Vector2(0, PADDING);
+            rect.anchoredPosition = new Vector2(0, 10);
             rect.sizeDelta = new Vector2(400, 30);
 
             var tmp = textGO.AddComponent<TextMeshProUGUI>();
             tmp.text = "Press F1 or click anywhere to close";
-            tmp.fontSize = 18f;
+            tmp.fontSize = 16f;
             tmp.color = DIM_TEXT_COLOR;
             tmp.fontStyle = FontStyles.Italic;
             tmp.alignment = TextAlignmentOptions.Center;
@@ -364,17 +404,12 @@ namespace FaeMaze.Tutorial
             return ColorUtility.ToHtmlStringRGB(color);
         }
 
-        private string GetBinding(string binding)
+        /// <summary>
+        /// Get the display name for a binding using InputBindingHelper.
+        /// </summary>
+        private string Bind(string binding)
         {
-            if (string.IsNullOrEmpty(binding)) return "?";
-
-            // Clean up binding display
-            if (binding.StartsWith("Alpha"))
-                return binding.Substring(5);
-            if (binding.StartsWith("Mouse"))
-                return "Mouse " + binding.Substring(5);
-
-            return binding;
+            return InputBindingHelper.GetDisplayName(binding);
         }
 
         #endregion

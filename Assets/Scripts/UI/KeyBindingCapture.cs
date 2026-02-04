@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using TMPro;
 using System;
+using System.Collections.Generic;
 
 namespace FaeMaze.UI
 {
@@ -57,6 +58,12 @@ namespace FaeMaze.UI
         private string currentBinding;
         private bool isCapturing = false;
         private GameObject clearButtonObj; // Runtime-created clear button
+
+        // Combo capture support
+        private const float COMBO_WINDOW = 0.2f; // Seconds to wait for additional simultaneous inputs
+        private List<string> comboBuffer = new List<string>();
+        private float comboTimer = 0f;
+        private bool isAccumulatingCombo = false;
 
         /// <summary>
         /// Event fired when a new binding is captured.
@@ -282,6 +289,7 @@ namespace FaeMaze.UI
                 return;
 
             isCapturing = false;
+            ResetComboState();
 
             // Turn off the toggle without triggering another callback
             if (captureToggle != null && captureToggle.isOn)
@@ -300,184 +308,208 @@ namespace FaeMaze.UI
             if (!isCapturing)
                 return;
 
-            // Check for Escape to cancel
+            // Check for Escape to cancel (always immediate, never part of a combo)
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             {
+                ResetComboState();
                 CancelCapture();
                 return;
             }
 
-            // Check gamepad inputs (before mouse/keyboard for better responsiveness)
+            // If we're accumulating a combo, check for new inputs to add
+            if (isAccumulatingCombo)
+            {
+                // Collect any newly pressed inputs this frame
+                CollectNewlyPressedInputs();
+
+                // Count down the combo window timer
+                comboTimer -= Time.unscaledDeltaTime;
+
+                // Update display to show combo-in-progress
+                UpdateComboDisplayText();
+
+                // Finalize when the combo window expires
+                if (comboTimer <= 0f)
+                {
+                    FinalizeCombo();
+                    return;
+                }
+
+                // Also finalize if all combo keys have been released (user let go quickly)
+                if (!AnyComboKeyStillHeld())
+                {
+                    FinalizeCombo();
+                    return;
+                }
+
+                return;
+            }
+
+            // Not yet accumulating - detect the first input to start combo accumulation
+            string firstInput = DetectNewlyPressedInput();
+            if (firstInput != null)
+            {
+                // Also collect any OTHER inputs already held this frame (e.g., Shift was held before T was pressed)
+                comboBuffer.Clear();
+
+                // First add any modifier keys / buttons that are already held (but not the one just pressed)
+                CollectHeldModifiers(firstInput);
+
+                // Add the newly pressed input
+                if (!comboBuffer.Contains(firstInput))
+                    comboBuffer.Add(firstInput);
+
+                // Start the combo accumulation window
+                isAccumulatingCombo = true;
+                comboTimer = COMBO_WINDOW;
+
+                UpdateComboDisplayText();
+            }
+        }
+
+        /// <summary>
+        /// Detect a single newly-pressed input this frame (keyboard, gamepad, or mouse).
+        /// Returns the binding string, or null if nothing was pressed.
+        /// </summary>
+        private string DetectNewlyPressedInput()
+        {
+            // Check gamepad inputs first
             Gamepad gamepad = Gamepad.current;
             if (gamepad != null)
             {
-                // Check gamepad buttons
-                if (gamepad.buttonSouth.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadButtonSouth");
-                    return;
-                }
-                if (gamepad.buttonNorth.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadButtonNorth");
-                    return;
-                }
-                if (gamepad.buttonEast.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadButtonEast");
-                    return;
-                }
-                if (gamepad.buttonWest.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadButtonWest");
-                    return;
-                }
-                if (gamepad.leftShoulder.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadLeftShoulder");
-                    return;
-                }
-                if (gamepad.rightShoulder.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadRightShoulder");
-                    return;
-                }
-                if (gamepad.leftTrigger.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadLeftTrigger");
-                    return;
-                }
-                if (gamepad.rightTrigger.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadRightTrigger");
-                    return;
-                }
-                if (gamepad.leftStickButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadLeftStickPress");
-                    return;
-                }
-                if (gamepad.rightStickButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadRightStickPress");
-                    return;
-                }
-                if (gamepad.startButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadStart");
-                    return;
-                }
-                if (gamepad.selectButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadSelect");
-                    return;
-                }
-
-                // Check D-pad
-                if (gamepad.dpad.up.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadDpadUp");
-                    return;
-                }
-                if (gamepad.dpad.down.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadDpadDown");
-                    return;
-                }
-                if (gamepad.dpad.left.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadDpadLeft");
-                    return;
-                }
-                if (gamepad.dpad.right.wasPressedThisFrame)
-                {
-                    CompleteCapture("GamepadDpadRight");
-                    return;
-                }
-
-                // Check analog sticks (directional - requires holding past threshold)
-                Vector2 leftStick = gamepad.leftStick.ReadValue();
-                Vector2 rightStick = gamepad.rightStick.ReadValue();
-
-                // Left stick directions
-                if (leftStick.y > STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadLeftStickUp");
-                    return;
-                }
-                if (leftStick.y < -STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadLeftStickDown");
-                    return;
-                }
-                if (leftStick.x < -STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadLeftStickLeft");
-                    return;
-                }
-                if (leftStick.x > STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadLeftStickRight");
-                    return;
-                }
-
-                // Right stick directions
-                if (rightStick.y > STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadRightStickUp");
-                    return;
-                }
-                if (rightStick.y < -STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadRightStickDown");
-                    return;
-                }
-                if (rightStick.x < -STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadRightStickLeft");
-                    return;
-                }
-                if (rightStick.x > STICK_THRESHOLD)
-                {
-                    CompleteCapture("GamepadRightStickRight");
-                    return;
-                }
+                string gpInput = DetectNewlyPressedGamepadInput(gamepad);
+                if (gpInput != null) return gpInput;
             }
 
             // Check mouse buttons
             Mouse mouse = Mouse.current;
             if (mouse != null)
             {
-                // Left click - now works cleanly since checkbox activation is separate
-                if (mouse.leftButton.wasPressedThisFrame)
+                if (mouse.leftButton.wasPressedThisFrame) return "Mouse0";
+                if (mouse.rightButton.wasPressedThisFrame) return "Mouse1";
+                if (mouse.middleButton.wasPressedThisFrame) return "Mouse2";
+                if (mouse.forwardButton.wasPressedThisFrame) return "Mouse3";
+                if (mouse.backButton.wasPressedThisFrame) return "Mouse4";
+            }
+
+            // Check keyboard keys
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null)
+            {
+                foreach (KeyControl key in keyboard.allKeys)
                 {
-                    CompleteCapture("Mouse0");
-                    return;
-                }
-                if (mouse.rightButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("Mouse1");
-                    return;
-                }
-                if (mouse.middleButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("Mouse2");
-                    return;
-                }
-                if (mouse.forwardButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("Mouse3");
-                    return;
-                }
-                if (mouse.backButton.wasPressedThisFrame)
-                {
-                    CompleteCapture("Mouse4");
-                    return;
+                    if (key != null && key.wasPressedThisFrame && key.keyCode != Key.Escape)
+                    {
+                        return FaeMaze.Systems.InputBindingHelper.KeyToBindingString(key.keyCode);
+                    }
                 }
             }
 
-            // Check all keyboard keys
+            return null;
+        }
+
+        /// <summary>
+        /// Detect a newly pressed gamepad button/direction this frame.
+        /// </summary>
+        private string DetectNewlyPressedGamepadInput(Gamepad gamepad)
+        {
+            // Face buttons
+            if (gamepad.buttonSouth.wasPressedThisFrame) return "GamepadButtonSouth";
+            if (gamepad.buttonNorth.wasPressedThisFrame) return "GamepadButtonNorth";
+            if (gamepad.buttonEast.wasPressedThisFrame) return "GamepadButtonEast";
+            if (gamepad.buttonWest.wasPressedThisFrame) return "GamepadButtonWest";
+            // Shoulder buttons
+            if (gamepad.leftShoulder.wasPressedThisFrame) return "GamepadLeftShoulder";
+            if (gamepad.rightShoulder.wasPressedThisFrame) return "GamepadRightShoulder";
+            if (gamepad.leftTrigger.wasPressedThisFrame) return "GamepadLeftTrigger";
+            if (gamepad.rightTrigger.wasPressedThisFrame) return "GamepadRightTrigger";
+            // Stick buttons
+            if (gamepad.leftStickButton.wasPressedThisFrame) return "GamepadLeftStickPress";
+            if (gamepad.rightStickButton.wasPressedThisFrame) return "GamepadRightStickPress";
+            // Menu buttons
+            if (gamepad.startButton.wasPressedThisFrame) return "GamepadStart";
+            if (gamepad.selectButton.wasPressedThisFrame) return "GamepadSelect";
+            // D-pad
+            if (gamepad.dpad.up.wasPressedThisFrame) return "GamepadDpadUp";
+            if (gamepad.dpad.down.wasPressedThisFrame) return "GamepadDpadDown";
+            if (gamepad.dpad.left.wasPressedThisFrame) return "GamepadDpadLeft";
+            if (gamepad.dpad.right.wasPressedThisFrame) return "GamepadDpadRight";
+
+            // Analog sticks (directional threshold)
+            Vector2 leftStick = gamepad.leftStick.ReadValue();
+            Vector2 rightStick = gamepad.rightStick.ReadValue();
+            if (leftStick.y > STICK_THRESHOLD) return "GamepadLeftStickUp";
+            if (leftStick.y < -STICK_THRESHOLD) return "GamepadLeftStickDown";
+            if (leftStick.x < -STICK_THRESHOLD) return "GamepadLeftStickLeft";
+            if (leftStick.x > STICK_THRESHOLD) return "GamepadLeftStickRight";
+            if (rightStick.y > STICK_THRESHOLD) return "GamepadRightStickUp";
+            if (rightStick.y < -STICK_THRESHOLD) return "GamepadRightStickDown";
+            if (rightStick.x < -STICK_THRESHOLD) return "GamepadRightStickLeft";
+            if (rightStick.x > STICK_THRESHOLD) return "GamepadRightStickRight";
+
+            return null;
+        }
+
+        /// <summary>
+        /// Collect any modifier keys or buttons that are currently held but not already in the combo buffer.
+        /// Called when the first key is detected to pick up modifiers that were pressed before the main key.
+        /// </summary>
+        private void CollectHeldModifiers(string excludeBinding)
+        {
+            // Keyboard modifiers
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null)
+            {
+                if (keyboard.leftShiftKey.isPressed) TryAddToCombo("LeftShift", excludeBinding);
+                if (keyboard.rightShiftKey.isPressed) TryAddToCombo("RightShift", excludeBinding);
+                if (keyboard.leftCtrlKey.isPressed) TryAddToCombo("LeftControl", excludeBinding);
+                if (keyboard.rightCtrlKey.isPressed) TryAddToCombo("RightControl", excludeBinding);
+                if (keyboard.leftAltKey.isPressed) TryAddToCombo("LeftAlt", excludeBinding);
+                if (keyboard.rightAltKey.isPressed) TryAddToCombo("RightAlt", excludeBinding);
+            }
+
+            // Gamepad shoulder/trigger modifiers (common combo modifiers)
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad != null)
+            {
+                if (gamepad.leftShoulder.isPressed) TryAddToCombo("GamepadLeftShoulder", excludeBinding);
+                if (gamepad.rightShoulder.isPressed) TryAddToCombo("GamepadRightShoulder", excludeBinding);
+                if (gamepad.leftTrigger.isPressed) TryAddToCombo("GamepadLeftTrigger", excludeBinding);
+                if (gamepad.rightTrigger.isPressed) TryAddToCombo("GamepadRightTrigger", excludeBinding);
+            }
+        }
+
+        /// <summary>
+        /// During combo accumulation, collect any newly pressed inputs this frame and add to the buffer.
+        /// </summary>
+        private void CollectNewlyPressedInputs()
+        {
+            // Check gamepad
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad != null)
+            {
+                string gpInput = DetectNewlyPressedGamepadInput(gamepad);
+                if (gpInput != null && !comboBuffer.Contains(gpInput))
+                {
+                    comboBuffer.Add(gpInput);
+                    comboTimer = COMBO_WINDOW; // Reset window for each new input
+                }
+            }
+
+            // Check mouse
+            Mouse mouse = Mouse.current;
+            if (mouse != null)
+            {
+                if (mouse.leftButton.wasPressedThisFrame) TryAddToComboAndResetTimer("Mouse0");
+                if (mouse.rightButton.wasPressedThisFrame) TryAddToComboAndResetTimer("Mouse1");
+                if (mouse.middleButton.wasPressedThisFrame) TryAddToComboAndResetTimer("Mouse2");
+                if (mouse.forwardButton.wasPressedThisFrame) TryAddToComboAndResetTimer("Mouse3");
+                if (mouse.backButton.wasPressedThisFrame) TryAddToComboAndResetTimer("Mouse4");
+            }
+
+            // Check keyboard
+            Keyboard keyboard = Keyboard.current;
             if (keyboard != null)
             {
                 foreach (KeyControl key in keyboard.allKeys)
@@ -485,11 +517,134 @@ namespace FaeMaze.UI
                     if (key != null && key.wasPressedThisFrame && key.keyCode != Key.Escape)
                     {
                         string binding = FaeMaze.Systems.InputBindingHelper.KeyToBindingString(key.keyCode);
-                        CompleteCapture(binding);
-                        return;
+                        TryAddToComboAndResetTimer(binding);
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Add a binding to the combo buffer if not already present. Resets the combo timer on success.
+        /// </summary>
+        private void TryAddToComboAndResetTimer(string binding)
+        {
+            if (!comboBuffer.Contains(binding))
+            {
+                comboBuffer.Add(binding);
+                comboTimer = COMBO_WINDOW;
+            }
+        }
+
+        /// <summary>
+        /// Add a binding to the combo buffer if it differs from the excluded binding.
+        /// </summary>
+        private void TryAddToCombo(string binding, string excludeBinding)
+        {
+            if (binding != excludeBinding && !comboBuffer.Contains(binding))
+            {
+                comboBuffer.Add(binding);
+            }
+        }
+
+        /// <summary>
+        /// Check if any key in the combo buffer is still physically held.
+        /// </summary>
+        private bool AnyComboKeyStillHeld()
+        {
+            foreach (string binding in comboBuffer)
+            {
+                if (FaeMaze.Systems.InputBindingHelper.IsBindingPressed(binding))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Sort combo buffer to put modifiers first, then action keys.
+        /// This ensures consistent ordering (e.g., "LeftShift+W" not "W+LeftShift").
+        /// </summary>
+        private void SortComboBuffer()
+        {
+            comboBuffer.Sort((a, b) => GetBindingPriority(a).CompareTo(GetBindingPriority(b)));
+        }
+
+        /// <summary>
+        /// Returns sort priority for a binding. Lower = earlier in combo string.
+        /// Modifiers come first, then gamepad shoulders/triggers, then regular keys.
+        /// </summary>
+        private int GetBindingPriority(string binding)
+        {
+            // Keyboard modifiers first
+            if (binding == "LeftControl" || binding == "RightControl") return 0;
+            if (binding == "LeftAlt" || binding == "RightAlt") return 1;
+            if (binding == "LeftShift" || binding == "RightShift") return 2;
+            // Gamepad shoulders/triggers next
+            if (binding == "GamepadLeftShoulder" || binding == "GamepadRightShoulder") return 3;
+            if (binding == "GamepadLeftTrigger" || binding == "GamepadRightTrigger") return 4;
+            // Everything else
+            return 10;
+        }
+
+        /// <summary>
+        /// Finalize the combo buffer into a binding string and complete the capture.
+        /// </summary>
+        private void FinalizeCombo()
+        {
+            if (comboBuffer.Count == 0)
+            {
+                ResetComboState();
+                return;
+            }
+
+            // Sort modifiers first for consistent display
+            SortComboBuffer();
+
+            // Join with "+" for combo, or just the single key
+            string finalBinding;
+            if (comboBuffer.Count == 1)
+            {
+                finalBinding = comboBuffer[0];
+            }
+            else
+            {
+                finalBinding = string.Join("+", comboBuffer);
+            }
+
+            ResetComboState();
+            CompleteCapture(finalBinding);
+        }
+
+        /// <summary>
+        /// Reset combo accumulation state.
+        /// </summary>
+        private void ResetComboState()
+        {
+            isAccumulatingCombo = false;
+            comboBuffer.Clear();
+            comboTimer = 0f;
+        }
+
+        /// <summary>
+        /// Update the display text to show the combo being built (e.g., "L Shift + ..." while waiting).
+        /// </summary>
+        private void UpdateComboDisplayText()
+        {
+            if (bindingText == null || comboBuffer.Count == 0)
+                return;
+
+            // Sort for display
+            var displayBuffer = new List<string>(comboBuffer);
+            displayBuffer.Sort((a, b) => GetBindingPriority(a).CompareTo(GetBindingPriority(b)));
+
+            // Build display string showing accumulated keys
+            var parts = new string[displayBuffer.Count];
+            for (int i = 0; i < displayBuffer.Count; i++)
+            {
+                parts[i] = FaeMaze.Systems.InputBindingHelper.GetDisplayName(displayBuffer[i]);
+            }
+            string comboDisplay = string.Join(" + ", parts) + " + ...";
+            bindingText.text = comboDisplay;
+            bindingText.color = captureTextColor;
         }
 
         private void CompleteCapture(string newBinding)

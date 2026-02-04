@@ -1116,11 +1116,7 @@ namespace FaeMaze.Systems
             // Try to load prefab if not assigned
             if (pondPrefab == null)
             {
-#if UNITY_EDITOR
-                pondPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/Pond.prefab");
-#else
                 pondPrefab = Resources.Load<GameObject>("Prefabs/Tile/Pond");
-#endif
             }
 
             if (pondPrefab == null)
@@ -1165,11 +1161,7 @@ namespace FaeMaze.Systems
             // Try to load prefab if not assigned
             if (pondPrefab == null)
             {
-#if UNITY_EDITOR
-                pondPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/Pond.prefab");
-#else
                 pondPrefab = Resources.Load<GameObject>("Prefabs/Tile/Pond");
-#endif
             }
 
             if (pondPrefab == null)
@@ -1214,11 +1206,7 @@ namespace FaeMaze.Systems
             // Try to load kelpie model prefab if not assigned
             if (kelpieModelPrefab == null)
             {
-#if UNITY_EDITOR
-                kelpieModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Animations/Kelpie/kelpie_react.glb");
-#else
                 kelpieModelPrefab = Resources.Load<GameObject>("Animations/Kelpie/kelpie_react");
-#endif
             }
 
             if (kelpieModelPrefab == null)
@@ -1229,11 +1217,7 @@ namespace FaeMaze.Systems
             // Try to load animator controller if not assigned
             if (kelpieAnimatorController == null)
             {
-#if UNITY_EDITOR
-                kelpieAnimatorController = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Animations/Kelpie/kelpie_react.controller");
-#else
                 kelpieAnimatorController = Resources.Load<RuntimeAnimatorController>("Animations/Kelpie/kelpie_react");
-#endif
             }
 
             // Instantiate the kelpie model directly (it contains the mesh and animations)
@@ -1281,11 +1265,7 @@ namespace FaeMaze.Systems
             // Try to load FairyRing prefab if not assigned
             if (fairyRingPrefab == null)
             {
-#if UNITY_EDITOR
-                fairyRingPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/ring.prefab");
-#else
                 fairyRingPrefab = Resources.Load<GameObject>("Prefabs/Props/ring");
-#endif
             }
 
             if (fairyRingPrefab == null)
@@ -1376,12 +1356,7 @@ namespace FaeMaze.Systems
             // Try to load FaeLantern prefab if not assigned
             if (lanternPrefab == null)
             {
-#if UNITY_EDITOR
-                lanternPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/lantern2.prefab");
-                Debug.Log($"[DynamicMazeGrowth] Loaded lanternPrefab via AssetDatabase: {(lanternPrefab != null ? lanternPrefab.name : "NULL")}");
-#else
                 lanternPrefab = Resources.Load<GameObject>("Prefabs/Props/lantern2");
-#endif
             }
 
             if (lanternPrefab == null)
@@ -1399,6 +1374,7 @@ namespace FaeMaze.Systems
             lantern.transform.position = lanternPos;
 
             // Lantern prefab has 180° X rotation to orient the model correctly.
+            // Do NOT set rotation to identity — the prefab rotation is needed.
 
             if (lanternsParent != null)
             {
@@ -1451,11 +1427,7 @@ namespace FaeMaze.Systems
             // Try to load WillowTheWisp prefab if not assigned
             if (wispPrefab == null)
             {
-#if UNITY_EDITOR
-                wispPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/WillowTheWisp.prefab");
-#else
                 wispPrefab = Resources.Load<GameObject>("Prefabs/Props/WillowTheWisp");
-#endif
             }
 
             if (wispPrefab == null)
@@ -1587,11 +1559,7 @@ namespace FaeMaze.Systems
             // Try to load kelpie model prefab if not assigned
             if (kelpieModelPrefab == null)
             {
-#if UNITY_EDITOR
-                kelpieModelPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Animations/Kelpie/kelpie_react.glb");
-#else
                 kelpieModelPrefab = Resources.Load<GameObject>("Animations/Kelpie/kelpie_react");
-#endif
             }
 
             if (kelpieModelPrefab == null)
@@ -1602,11 +1570,7 @@ namespace FaeMaze.Systems
             // Try to load animator controller if not assigned
             if (kelpieAnimatorController == null)
             {
-#if UNITY_EDITOR
-                kelpieAnimatorController = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Animations/Kelpie/kelpie_react.controller");
-#else
                 kelpieAnimatorController = Resources.Load<RuntimeAnimatorController>("Animations/Kelpie/kelpie_react");
-#endif
             }
 
             // Calculate world position at node center - use same Z as pond (0) for alignment
@@ -1658,11 +1622,7 @@ namespace FaeMaze.Systems
             // Try to load prefab if not assigned
             if (pondPrefab == null)
             {
-#if UNITY_EDITOR
-                pondPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/Pond.prefab");
-#else
                 pondPrefab = Resources.Load<GameObject>("Prefabs/Tile/Pond");
-#endif
             }
 
             if (pondPrefab == null)

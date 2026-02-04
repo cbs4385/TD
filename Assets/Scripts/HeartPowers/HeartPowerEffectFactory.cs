@@ -39,6 +39,7 @@ namespace FaeMaze.HeartPowers
             Register(HeartPowerType.HeartwardGrasp, (m, d, p) => new HeartwardGraspEffect(m, d, p));
             Register(HeartPowerType.DevouringMaw, (m, d, p) => new DevouringMawEffect(m, d, p));
             Register(HeartPowerType.Sculpting, (m, d, p) => new SculptingEffect(m, d, p));
+            Register(HeartPowerType.Misdirect, (m, d, p) => new MisdirectEffect(m, d, p));
 
             // Disabled powers (can be registered later when enabled)
             // Register(HeartPowerType.HeartbeatOfLonging, (m, d, p) => new HeartbeatOfLongingEffect(m, d, p));

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Visitors;
 using FaeMaze.Audio;
@@ -50,6 +51,8 @@ namespace FaeMaze.Props
 
         private Vector3 originalScale;
         private PropAudioSource propAudio;
+        private FairyRingSphere[] cachedSpheres;
+        private readonly List<Transform> dancerBuffer = new List<Transform>();
 
         #endregion
 
@@ -126,6 +129,8 @@ namespace FaeMaze.Props
             {
                 UpdatePulse();
             }
+
+            UpdateSphereAssignments();
         }
 
         private void OnTriggerEnter(Collider other)
@@ -246,8 +251,11 @@ namespace FaeMaze.Props
 
             if (totalSpheres == 0)
             {
+                cachedSpheres = new FairyRingSphere[0];
                 return;
             }
+
+            cachedSpheres = new FairyRingSphere[totalSpheres];
 
             // Second pass: setup spheres
             foreach (var t in children)
@@ -279,7 +287,70 @@ namespace FaeMaze.Props
                     int colorIndex = sphereIndex % 7;
                     sphereScript.SetStartingColorIndex(colorIndex);
 
+                    cachedSpheres[sphereIndex] = sphereScript;
                     sphereIndex++;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Dancer Sphere Assignment
+
+        /// <summary>
+        /// Collects all visitors currently dancing at this ring.
+        /// </summary>
+        private void GetDancingVisitors(List<Transform> result)
+        {
+            result.Clear();
+            foreach (var visitor in VisitorRegistry.All)
+            {
+                if (visitor != null && visitor.CurrentFairyRing == this)
+                {
+                    result.Add(visitor.transform);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Redistributes spheres to orbit around dancers when present.
+        /// When no dancers, spheres return to free-roaming cylinder mode.
+        /// </summary>
+        private void UpdateSphereAssignments()
+        {
+            if (cachedSpheres == null || cachedSpheres.Length == 0) return;
+
+            GetDancingVisitors(dancerBuffer);
+            int dancerCount = dancerBuffer.Count;
+
+            if (dancerCount == 0)
+            {
+                // No dancers - all spheres free-roam in cylinder
+                for (int i = 0; i < cachedSpheres.Length; i++)
+                {
+                    if (cachedSpheres[i] != null)
+                    {
+                        cachedSpheres[i].SetDancerTarget(null);
+                    }
+                }
+                return;
+            }
+
+            // Distribute spheres evenly across dancers
+            int spheresPerDancer = cachedSpheres.Length / dancerCount;
+            int remainder = cachedSpheres.Length % dancerCount;
+
+            int sphereIdx = 0;
+            for (int d = 0; d < dancerCount; d++)
+            {
+                int count = spheresPerDancer + (d < remainder ? 1 : 0);
+                for (int s = 0; s < count && sphereIdx < cachedSpheres.Length; s++)
+                {
+                    if (cachedSpheres[sphereIdx] != null)
+                    {
+                        cachedSpheres[sphereIdx].SetDancerTarget(dancerBuffer[d]);
+                    }
+                    sphereIdx++;
                 }
             }
         }

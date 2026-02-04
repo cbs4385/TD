@@ -9,7 +9,7 @@ namespace FaeMaze.HeartPowers
 {
     /// <summary>
     /// Central manager for Heart powers.
-    /// Manages essence, cooldowns, and power activation.
+    /// Manages essence and power activation.
     /// </summary>
     public class HeartPowerManager : SingletonMonoBehaviour<HeartPowerManager>
     {
@@ -63,7 +63,6 @@ namespace FaeMaze.HeartPowers
 
         #region Private Fields
 
-        private Dictionary<HeartPowerType, float> cooldownTimers = new Dictionary<HeartPowerType, float>();
         private Dictionary<HeartPowerType, int> powerTiers = new Dictionary<HeartPowerType, int>();
         private Dictionary<HeartPowerType, bool> unlockedPowers = new Dictionary<HeartPowerType, bool>();
 
@@ -134,7 +133,6 @@ namespace FaeMaze.HeartPowers
             // Initialize all powers as locked, tier 1 (using cached array)
             foreach (HeartPowerType powerType in _allPowerTypes)
             {
-                cooldownTimers[powerType] = 0f;
                 powerTiers[powerType] = 1;
                 unlockedPowers[powerType] = true; // Start with all unlocked for testing
             }
@@ -142,21 +140,6 @@ namespace FaeMaze.HeartPowers
 
         private void LoadPrefabsIfNeeded()
         {
-#if UNITY_EDITOR
-            if (graspPrefab == null)
-            {
-                graspPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/grasp.prefab");
-            }
-            if (tonguePrefab == null)
-            {
-                tonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
-            }
-            if (devourPrefab == null)
-            {
-                devourPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/devour.prefab");
-            }
-#else
-            // In builds, use Resources.Load
             if (graspPrefab == null)
             {
                 graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
@@ -169,7 +152,6 @@ namespace FaeMaze.HeartPowers
             {
                 devourPrefab = Resources.Load<GameObject>("Prefabs/Props/devour");
             }
-#endif
         }
 
         private void LoadPowerDefinitionsFromResources()
@@ -180,26 +162,12 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-#if UNITY_EDITOR
-            // Load all HeartPowerDefinition assets from ScriptableObjects folder using AssetDatabase
-            string[] guids = UnityEditor.AssetDatabase.FindAssets("t:HeartPowerDefinition", new[] { "Assets/ScriptableObjects/HeartPowers" });
-            var loadedDefinitions = new List<HeartPowerDefinition>();
-
-            foreach (string guid in guids)
+            // Load all HeartPowerDefinition assets from Resources folder
+            var loaded = Resources.LoadAll<HeartPowerDefinition>("ScriptableObjects/HeartPowers");
+            if (loaded != null && loaded.Length > 0)
             {
-                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-                var def = UnityEditor.AssetDatabase.LoadAssetAtPath<HeartPowerDefinition>(path);
-                if (def != null)
-                {
-                    loadedDefinitions.Add(def);
-                }
+                powerDefinitions = loaded;
             }
-
-            if (loadedDefinitions.Count > 0)
-            {
-                powerDefinitions = loadedDefinitions.ToArray();
-            }
-#endif
         }
 
         private void Start()
@@ -267,8 +235,8 @@ namespace FaeMaze.HeartPowers
 
         private void Update()
         {
-            // Screenshot capture - configurable key (always available)
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.ScreenshotBinding))
+            // Screenshot capture - configurable key (always available, all 3 columns)
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.ScreenshotBinding, GameSettings.ScreenshotAltBinding, GameSettings.ScreenshotTertiaryBinding))
             {
                 CaptureScreenshot();
             }
@@ -276,15 +244,6 @@ namespace FaeMaze.HeartPowers
             if (!isGameActive)
             {
                 return;
-            }
-
-            // Update cooldowns (using cached array to avoid Enum.GetValues allocation)
-            foreach (HeartPowerType powerType in _allPowerTypes)
-            {
-                if (cooldownTimers.TryGetValue(powerType, out float cooldown) && cooldown > 0)
-                {
-                    cooldownTimers[powerType] = Mathf.Max(0, cooldown - Time.deltaTime);
-                }
             }
 
             // Cleanup expired path modifiers
@@ -304,17 +263,6 @@ namespace FaeMaze.HeartPowers
 
             foreach (var powerType in _powersToRemove)
             {
-                // For toggle powers WITH cooldown (like DevouringMaw), start cooldown when the effect expires
-                // Other toggle powers (MurmuringPaths, HeartwardGrasp, Sculpting) can be reused immediately
-                if (IsTogglePowerWithCooldown(powerType))
-                {
-                    var definition = GetPowerDefinition(powerType);
-                    if (definition != null && definition.cooldown > 0)
-                    {
-                        cooldownTimers[powerType] = definition.cooldown;
-                    }
-                }
-
                 activePowers.Remove(powerType);
                 OnPowerDeactivated?.Invoke(powerType);
             }
@@ -395,10 +343,15 @@ namespace FaeMaze.HeartPowers
                 SpendEssence(effectiveCost);
             }
 
-            // Only start cooldown for non-toggle powers
-            if (!IsTogglePower(powerType))
+            // Misdirect: end existing effect before creating a new one (re-cast replaces)
+            if (powerType == HeartPowerType.Misdirect && IsPowerActive(powerType))
             {
-                cooldownTimers[powerType] = definition.cooldown;
+                if (activePowers.TryGetValue(powerType, out var existing))
+                {
+                    existing.OnEnd();
+                    activePowers.Remove(powerType);
+                    OnPowerDeactivated?.Invoke(powerType);
+                }
             }
 
             // Activate the power
@@ -458,17 +411,10 @@ namespace FaeMaze.HeartPowers
             }
 
             // Toggle powers (like MurmuringPaths) cannot be activated while already active
-            if (IsTogglePower(powerType) && IsPowerActive(powerType))
+            // Exception: Misdirect can be re-cast to move the effect (replacement)
+            if (IsTogglePower(powerType) && IsPowerActive(powerType) && powerType != HeartPowerType.Misdirect)
             {
                 reason = "Power is already active";
-                return false;
-            }
-
-            // Check cooldowns for non-toggle powers OR toggle powers with cooldown (like DevouringMaw)
-            bool hasCooldown = !IsTogglePower(powerType) || IsTogglePowerWithCooldown(powerType);
-            if (hasCooldown && cooldownTimers.GetValueOrDefault(powerType, 0) > 0)
-            {
-                reason = $"On cooldown ({cooldownTimers[powerType]:F1}s remaining)";
                 return false;
             }
 
@@ -536,23 +482,15 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Checks if a power type is a toggle power (no cooldown, expires on conditions).
+        /// Checks if a power type is a toggle power (expires on conditions).
         /// </summary>
         public bool IsTogglePower(HeartPowerType powerType)
         {
             return powerType == HeartPowerType.MurmuringPaths ||
                    powerType == HeartPowerType.HeartwardGrasp ||
                    powerType == HeartPowerType.DevouringMaw ||
-                   powerType == HeartPowerType.Sculpting;
-        }
-
-        /// <summary>
-        /// Checks if a toggle power has a cooldown after expiration.
-        /// Most toggle powers can be reused immediately; DevouringMaw has a cooldown.
-        /// </summary>
-        public bool IsTogglePowerWithCooldown(HeartPowerType powerType)
-        {
-            return powerType == HeartPowerType.DevouringMaw;
+                   powerType == HeartPowerType.Sculpting ||
+                   powerType == HeartPowerType.Misdirect;
         }
 
         /// <summary>
@@ -569,14 +507,6 @@ namespace FaeMaze.HeartPowers
         public bool IsAnyPowerActive()
         {
             return activePowers.Count > 0;
-        }
-
-        /// <summary>
-        /// Gets the remaining cooldown time for a power.
-        /// </summary>
-        public float GetCooldownRemaining(HeartPowerType powerType)
-        {
-            return cooldownTimers.GetValueOrDefault(powerType, 0f);
         }
 
         /// <summary>
@@ -805,6 +735,7 @@ namespace FaeMaze.HeartPowers
                 // case HeartPowerType.DreamSnare:
                 // case HeartPowerType.FeastwardPanic:
                 case HeartPowerType.HeartwardGrasp:
+                case HeartPowerType.Misdirect:
                     return true;
                 default:
                     return false;
@@ -905,6 +836,57 @@ namespace FaeMaze.HeartPowers
             if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect) && effect is MurmuringPathsEffect murmuringEffect)
             {
                 return murmuringEffect.FurthestPosition;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Returns edge cost multipliers from the active Misdirect effect.
+        /// Returns null if no Misdirect is active.
+        /// </summary>
+        public Dictionary<int, float> GetMisdirectEdgeCostMultipliers()
+        {
+            if (activePowers.TryGetValue(HeartPowerType.Misdirect, out var effect) && effect is MisdirectEffect misdirectEffect)
+            {
+                return misdirectEffect.GetEdgeCostMultipliers();
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Returns the edge index of the active Misdirect effect, or -1 if none active.
+        /// </summary>
+        public int GetMisdirectEdgeIndex()
+        {
+            if (activePowers.TryGetValue(HeartPowerType.Misdirect, out var effect) && effect is MisdirectEffect misdirectEffect)
+            {
+                return misdirectEffect.GetMisdirectEdgeIndex();
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Returns the affected edge indices from the active MurmuringPaths effect.
+        /// Used by the minimap to highlight fog-affected edges.
+        /// </summary>
+        public HashSet<int> GetMurmuringPathsAffectedEdges()
+        {
+            if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect) && effect is MurmuringPathsEffect murmuringEffect)
+            {
+                return murmuringEffect.AffectedEdgeIndices;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Returns the affected node indices from the active MurmuringPaths effect.
+        /// Used by the minimap to highlight fog-affected nodes.
+        /// </summary>
+        public HashSet<int> GetMurmuringPathsAffectedNodes()
+        {
+            if (activePowers.TryGetValue(HeartPowerType.MurmuringPaths, out var effect) && effect is MurmuringPathsEffect murmuringEffect)
+            {
+                return murmuringEffect.AffectedNodeIndices;
             }
             return null;
         }

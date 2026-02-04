@@ -184,19 +184,11 @@ namespace FaeMaze.Systems
             // Load heart prefabs dynamically if not assigned via inspector
             if (heartBasePrefab == null)
             {
-#if UNITY_EDITOR
-                heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heartbase.prefab");
-#else
                 heartBasePrefab = Resources.Load<GameObject>("Prefabs/Tile/heartbase");
-#endif
             }
             if (heartTonguePrefab == null)
             {
-#if UNITY_EDITOR
-                heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
-#else
                 heartTonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
-#endif
             }
 
             // Extract EarthenRingGround material from heart base prefab if available
@@ -215,17 +207,8 @@ namespace FaeMaze.Systems
             // First, try to load the extracted texture file
             Texture2D texture = null;
 
-            #if UNITY_EDITOR
-            texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/EarthenGroundTexture.png");
-            Debug.Log($"[MazeRenderer] ExtractHeartGroundMaterial - Editor AssetDatabase texture: {(texture != null ? texture.name : "null")}");
-            #endif
-
-            // Also try Resources folder at runtime
-            if (texture == null)
-            {
-                texture = Resources.Load<Texture2D>("EarthenGroundTexture");
-                Debug.Log($"[MazeRenderer] ExtractHeartGroundMaterial - Resources.Load texture: {(texture != null ? texture.name : "null")}");
-            }
+            texture = Resources.Load<Texture2D>("EarthenGroundTexture");
+            Debug.Log($"[MazeRenderer] ExtractHeartGroundMaterial - Resources.Load texture: {(texture != null ? texture.name : "null")}");
 
             if (texture != null)
             {

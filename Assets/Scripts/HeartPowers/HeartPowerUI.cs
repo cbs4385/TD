@@ -9,7 +9,7 @@ using FaeMaze.Systems;
 namespace FaeMaze.HeartPowers
 {
     /// <summary>
-    /// UI controller for Heart powers - displays power buttons, cooldowns, and resources.
+    /// UI controller for Heart powers - displays power buttons and resources.
     /// </summary>
     public class HeartPowerUI : MonoBehaviour
     {
@@ -42,11 +42,6 @@ namespace FaeMaze.HeartPowers
         [Tooltip("Button for Devouring Maw (Key: 9)")]
         private Button devourButton;
 
-        [Header("Button Text Elements")]
-        [SerializeField]
-        [Tooltip("Text elements for displaying cooldowns on buttons")]
-        private TextMeshProUGUI[] buttonCooldownTexts;
-
         [Header("Settings")]
         [SerializeField]
         [Tooltip("Enable keyboard shortcuts (1-7)")]
@@ -57,7 +52,6 @@ namespace FaeMaze.HeartPowers
         #region Private Fields
 
         private Dictionary<HeartPowerType, Button> powerButtons = new Dictionary<HeartPowerType, Button>();
-        private Dictionary<HeartPowerType, TextMeshProUGUI> cooldownTexts = new Dictionary<HeartPowerType, TextMeshProUGUI>();
         private Camera mainCamera;
 
         #endregion
@@ -88,14 +82,6 @@ namespace FaeMaze.HeartPowers
             if (devourButton != null)
                 powerButtons[HeartPowerType.DevouringMaw] = devourButton;
 
-            // Map cooldown texts
-            if (buttonCooldownTexts != null && buttonCooldownTexts.Length >= 3)
-            {
-                cooldownTexts[HeartPowerType.MurmuringPaths] = buttonCooldownTexts[0];
-                cooldownTexts[HeartPowerType.HeartwardGrasp] = buttonCooldownTexts[1];
-                cooldownTexts[HeartPowerType.DevouringMaw] = buttonCooldownTexts[2];
-            }
-
             SetupButtons();
         }
 
@@ -122,8 +108,8 @@ namespace FaeMaze.HeartPowers
 
         private void Update()
         {
-            // Update cooldown displays
-            UpdateCooldownDisplays();
+            // Update button interactability
+            UpdateButtonStates();
 
             // Handle keyboard shortcuts
             if (enableKeyboardShortcuts)
@@ -196,24 +182,47 @@ namespace FaeMaze.HeartPowers
 
         #region Keyboard Input
 
+        // Gamepad debug logging for power bindings
+        private static float lastPowerBindingLog = 0f;
+        private const float POWER_BINDING_LOG_INTERVAL = 10f;
+
         private void HandleKeyboardInput()
         {
-            // Use InputBindingHelper for configurable key/mouse bindings
-            string power1Binding = GameSettings.HeartPower1Binding;
-            if (InputBindingHelper.WasBindingPressedThisFrame(power1Binding))
+            // Periodically log what binding strings are configured for powers
+            if (Time.time - lastPowerBindingLog > POWER_BINDING_LOG_INTERVAL)
             {
+                lastPowerBindingLog = Time.time;
+                Debug.Log($"[HeartPowerUI] Current power bindings: " +
+                          $"P1='{GameSettings.HeartPower1Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower1Binding)}), " +
+                          $"P2='{GameSettings.HeartPower2Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower2Binding)}), " +
+                          $"P3='{GameSettings.HeartPower3Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower3Binding)}), " +
+                          $"P4='{GameSettings.HeartPower4Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower4Binding)})");
+            }
+
+            // Use InputBindingHelper for configurable key/mouse bindings
+            // Check all three columns (primary, alt, tertiary) for each power
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower1Binding, GameSettings.HeartPower1AltBinding, GameSettings.HeartPower1TertiaryBinding))
+            {
+                Debug.Log($"[HeartPowerUI] Power 1 (MurmuringPaths) ACTIVATED");
                 ActivatePower(HeartPowerType.MurmuringPaths);
             }
-            else if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.HeartPower2Binding))
+            else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower2Binding, GameSettings.HeartPower2AltBinding, GameSettings.HeartPower2TertiaryBinding))
             {
+                Debug.Log($"[HeartPowerUI] Power 2 (HeartwardGrasp) ACTIVATED");
                 ActivatePower(HeartPowerType.HeartwardGrasp);
             }
-            else if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.HeartPower3Binding))
+            else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower3Binding, GameSettings.HeartPower3AltBinding, GameSettings.HeartPower3TertiaryBinding))
             {
+                Debug.Log($"[HeartPowerUI] Power 3 (DevouringMaw) ACTIVATED");
                 ActivatePower(HeartPowerType.DevouringMaw);
             }
-            else if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.HeartPower4Binding))
+            else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower4Binding, GameSettings.HeartPower4AltBinding, GameSettings.HeartPower4TertiaryBinding))
             {
+                Debug.Log($"[HeartPowerUI] Power 4 (Sculpting) ACTIVATED via binding '{GameSettings.HeartPower4Binding}'");
                 ActivatePower(HeartPowerType.Sculpting);
             }
         }
@@ -251,7 +260,7 @@ namespace FaeMaze.HeartPowers
             }
         }
 
-        private void UpdateCooldownDisplays()
+        private void UpdateButtonStates()
         {
             if (heartPowerManager == null)
             {
@@ -271,21 +280,6 @@ namespace FaeMaze.HeartPowers
                 // Update button interactability
                 bool canActivate = heartPowerManager.CanActivatePower(powerType, out string reason);
                 button.interactable = canActivate;
-
-                // Update cooldown text
-                if (cooldownTexts.TryGetValue(powerType, out TextMeshProUGUI cooldownText) && cooldownText != null)
-                {
-                    float cooldownRemaining = heartPowerManager.GetCooldownRemaining(powerType);
-                    if (cooldownRemaining > 0)
-                    {
-                        cooldownText.text = $"{cooldownRemaining:F1}s";
-                        cooldownText.gameObject.SetActive(true);
-                    }
-                    else
-                    {
-                        cooldownText.gameObject.SetActive(false);
-                    }
-                }
             }
         }
 

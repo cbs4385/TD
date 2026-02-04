@@ -544,7 +544,7 @@ namespace FaeMaze.HeartPowers
     /// Affects all visitors on the targeted node or edge.
     /// Uses visitor pathfinding to find path to heart.
     /// Lures affected visitors toward the heart tile.
-    /// Toggle power: no cooldown, expires when visitors consumed equals power tier.
+    /// Toggle power: expires when visitors consumed equals power tier.
     /// Visualizes with fairy ring style lights that trace paths to the heart from all affected positions.
     /// </summary>
     public class MurmuringPathsEffect : ActivePowerEffect
@@ -621,6 +621,18 @@ namespace FaeMaze.HeartPowers
         /// This is the best spawn point for tutorial visitors that need to walk through the fog.
         /// </summary>
         public Vector3 FurthestPosition => furthestPosition;
+
+        /// <summary>
+        /// Returns the set of all edge indices affected by this fog effect.
+        /// Used by the minimap to highlight affected edges.
+        /// </summary>
+        public HashSet<int> AffectedEdgeIndices => allAffectedEdgeIndices;
+
+        /// <summary>
+        /// Returns the set of all node indices affected by this fog effect.
+        /// Used by the minimap to highlight affected nodes.
+        /// </summary>
+        public HashSet<int> AffectedNodeIndices => allAffectedNodeIndices;
 
         /// <summary>
         /// Override IsExpired to use consumption-based expiration instead of duration.
@@ -4186,7 +4198,7 @@ namespace FaeMaze.HeartPowers
     #region Devouring Maw
 
     /// <summary>
-    /// Duration/cooldown power that creates a trigger zone to detect and devour visitors.
+    /// Toggle power that creates a trigger zone to detect and devour visitors.
     /// When active, path tiles in the area shake with particles and fog effects.
     /// Visitors entering the zone are devoured sequentially with a 0.25s delay between each.
     /// </summary>
@@ -4358,7 +4370,7 @@ namespace FaeMaze.HeartPowers
             hasExpired = false;
 
             // Duration for tile visualizer display (not used for expiration)
-            powerDuration = definition.cooldown > 0 ? definition.cooldown : 10f;
+            powerDuration = definition.duration > 0 ? definition.duration : 10f;
             cycleInProgress = false;
             lastCycleEndTime = 0f;
 
@@ -4542,11 +4554,7 @@ namespace FaeMaze.HeartPowers
 
         private Texture2D LoadEarthenGroundTexture()
         {
-            Texture2D texture = null;
-
-            #if UNITY_EDITOR
-            texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/EarthenGroundTexture.png");
-            #endif
+            Texture2D texture = Resources.Load<Texture2D>("EarthenGroundTexture");
 
             return texture;
         }
@@ -5117,13 +5125,11 @@ namespace FaeMaze.HeartPowers
                 // Load controller if not assigned
                 if (controller == null)
                 {
-#if UNITY_EDITOR
-                    controller = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Animations/Devour/devour.controller");
+                    controller = Resources.Load<RuntimeAnimatorController>("Animations/Devour/devour");
                     if (controller != null)
                     {
                         devourAnimator.runtimeAnimatorController = controller;
                     }
-#endif
                 }
 
                 if (controller != null)
@@ -5478,24 +5484,28 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Keyboard shortcuts for sculpt menu options
+            // Keyboard/gamepad shortcuts for sculpt menu options (check all 3 columns)
             // In tutorial mode, only lantern shortcut is allowed
-            if (!tutorialLanternOnlyMode && InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptPondBinding))
+            if (!tutorialLanternOnlyMode && InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.SculptPondBinding, GameSettings.SculptPondAltBinding, GameSettings.SculptPondTertiaryBinding))
             {
                 OnPondClicked();
                 return;
             }
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptLanternBinding))
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.SculptLanternBinding, GameSettings.SculptLanternAltBinding, GameSettings.SculptLanternTertiaryBinding))
             {
                 OnLanternClicked();
                 return;
             }
-            if (!tutorialLanternOnlyMode && InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRingBinding))
+            if (!tutorialLanternOnlyMode && InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.SculptRingBinding, GameSettings.SculptRingAltBinding, GameSettings.SculptRingTertiaryBinding))
             {
                 OnRingClicked();
                 return;
             }
-            if (!tutorialLanternOnlyMode && InputBindingHelper.WasBindingPressedThisFrame(GameSettings.SculptRemoveBinding))
+            if (!tutorialLanternOnlyMode && InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.SculptRemoveBinding, GameSettings.SculptRemoveAltBinding, GameSettings.SculptRemoveTertiaryBinding))
             {
                 OnRemoveClicked();
                 return;
@@ -5661,19 +5671,17 @@ namespace FaeMaze.HeartPowers
             // These are screenshots taken from the editor with correct orientations
             propPreviewTextures = new Texture2D[4];
 
-#if UNITY_EDITOR
             // 0: Remove - earth ground texture
-            propPreviewTextures[0] = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/EarthenGroundTexture.png");
+            propPreviewTextures[0] = Resources.Load<Texture2D>("EarthenGroundTexture");
 
             // 1: Pond preview
-            propPreviewTextures[1] = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/PropPreviews/pond_preview.png");
+            propPreviewTextures[1] = Resources.Load<Texture2D>("Textures/PropPreviews/pond_preview");
 
             // 2: Lantern preview
-            propPreviewTextures[2] = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/PropPreviews/lantern_preview.png");
+            propPreviewTextures[2] = Resources.Load<Texture2D>("Textures/PropPreviews/lantern_preview");
 
             // 3: Ring preview
-            propPreviewTextures[3] = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/PropPreviews/ring_preview.png");
-#endif
+            propPreviewTextures[3] = Resources.Load<Texture2D>("Textures/PropPreviews/ring_preview");
         }
 
         private UnityEngine.UI.Button CreateCircularButton(RectTransform parent, Vector2 position, float size, Color bgColor, Sprite circleMask, Sprite contentSprite, string fallbackText, UnityEngine.Events.UnityAction onClick)
@@ -5872,8 +5880,7 @@ namespace FaeMaze.HeartPowers
             float volume = FaeMaze.Systems.GameSettings.SculptVolume * FaeMaze.Systems.GameSettings.SfxVolume;
             if (volume <= 0f) return;
 
-#if UNITY_EDITOR
-            AudioClip sculptClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SFX/sculpt.mp3");
+            AudioClip sculptClip = Resources.Load<AudioClip>("Audio/SFX/sculpt");
             if (sculptClip != null)
             {
                 // Create a temporary audio source for 3D positional audio
@@ -5889,7 +5896,6 @@ namespace FaeMaze.HeartPowers
                 audioSource.Play();
                 Object.Destroy(audioObj, sculptClip.length + 0.1f);
             }
-#endif
         }
 
         /// <summary>
@@ -6206,6 +6212,563 @@ namespace FaeMaze.HeartPowers
             );
 
             targetImage.color = pulsedColor;
+        }
+    }
+
+    #endregion
+
+    #region Misdirect (Heart Power 5)
+
+    /// <summary>
+    /// Misdirect effect: placed near a node/edge junction, reduces the perceived pathfinding
+    /// cost of the nearest edge to 1/20th normal, making visitors strongly prefer it.
+    /// Permanent until re-cast (which replaces the existing effect).
+    /// </summary>
+    public class MisdirectEffect : ActivePowerEffect
+    {
+        private int misdirectEdgeIndex = -1;
+        private Dictionary<int, float> edgeCostMultipliers;
+
+        // Edge appears 1/20th its real length to pathfinding
+        private const float EDGE_COST_MULTIPLIER = 0.05f;
+
+        // Visual feedback - fog quad (same approach as Power 1 MurmuringPaths)
+        private GameObject fogContainer;
+        private GameObject fogQuad;
+        private Material fogMaterial;
+        private Texture2D pathMaskTexture;
+        private Bounds fogBounds;
+        private List<GameObject> signInstances = new List<GameObject>();
+        private float pulseTime = 0f;
+        private const float FOG_Z_POSITION = -0.15f;
+        private const float FOG_PADDING = 2.0f;
+        private const float MASK_PIXELS_PER_UNIT = 4.0f;
+
+        // Cyan/teal fog colors
+        private static readonly Color FogColor = new Color(0.1f, 0.6f, 0.7f, 0.5f);
+        private static readonly Color FogColorDark = new Color(0.05f, 0.4f, 0.5f, 0.5f);
+        private static readonly Color GlowColor = new Color(0.3f, 0.9f, 1.0f, 1.0f);
+
+        // Sign prefab
+        private static GameObject signPrefab;
+        private const string SIGN_PREFAB_PATH = "Prefabs/Props/sign";
+
+        // Misdirect sign positions (for collider-based redirect)
+        private Vector3 signPositionA;
+        private Vector3 signPositionB;
+
+        // Permanent until replaced
+        public override bool IsExpired => false;
+
+        public MisdirectEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
+            : base(manager, definition, targetPosition)
+        {
+            edgeCostMultipliers = new Dictionary<int, float>();
+            LoadSignPrefab();
+        }
+
+        public override void OnStart()
+        {
+            FindNearestEdge();
+
+            if (misdirectEdgeIndex >= 0)
+            {
+                edgeCostMultipliers[misdirectEdgeIndex] = EDGE_COST_MULTIPLIER;
+                CreateEdgeVisual();
+                PlaceSignsAtEdgeEnds();
+
+                // Recalculate paths for all walking visitors so they respond to the new edge cost
+                foreach (var visitor in FaeMaze.Visitors.VisitorRegistry.All)
+                {
+                    if (visitor != null && visitor.State == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking)
+                    {
+                        visitor.RecalculatePath();
+                    }
+                }
+            }
+        }
+
+        public override void Update(float deltaTime)
+        {
+            base.Update(deltaTime);
+            pulseTime += deltaTime;
+
+            // Animate fog wave - slow oscillating pulse
+            if (fogMaterial != null)
+            {
+                float wave = (Mathf.Sin(pulseTime * 0.5f * Mathf.PI) + 1f) * 0.5f;
+                fogMaterial.SetFloat("_WaveProgress", wave);
+            }
+
+        }
+
+        public override void OnEnd()
+        {
+            if (fogMaterial != null)
+            {
+                Object.Destroy(fogMaterial);
+                fogMaterial = null;
+            }
+            if (pathMaskTexture != null)
+            {
+                Object.Destroy(pathMaskTexture);
+                pathMaskTexture = null;
+            }
+            if (fogContainer != null)
+            {
+                Object.Destroy(fogContainer);
+                fogContainer = null;
+            }
+            fogQuad = null;
+
+            foreach (var obj in signInstances)
+            {
+                if (obj != null) Object.Destroy(obj);
+            }
+            signInstances.Clear();
+            MisdirectSignTrigger.ClearRedirectTracking();
+
+            edgeCostMultipliers.Clear();
+            misdirectEdgeIndex = -1;
+        }
+
+        public override void ApplyWorldOffset(Vector3 worldOffset)
+        {
+            if (fogContainer != null)
+            {
+                fogContainer.transform.position += worldOffset;
+            }
+            foreach (var obj in signInstances)
+            {
+                if (obj != null)
+                {
+                    obj.transform.position += worldOffset;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns the edge cost multipliers for pathfinding, or null if no edge is affected.
+        /// </summary>
+        public Dictionary<int, float> GetEdgeCostMultipliers()
+        {
+            return edgeCostMultipliers.Count > 0 ? edgeCostMultipliers : null;
+        }
+
+        /// <summary>
+        /// Returns the index of the misdirected edge.
+        /// </summary>
+        public int GetMisdirectEdgeIndex() => misdirectEdgeIndex;
+
+        /// <summary>
+        /// Returns the position of the OTHER misdirect sign (the one the visitor should walk toward).
+        /// Returns Vector3.zero if no valid position exists.
+        /// </summary>
+        public Vector3 GetOtherSignPosition(Vector3 thisSignPosition)
+        {
+            float distA = Vector3.Distance(thisSignPosition, signPositionA);
+            float distB = Vector3.Distance(thisSignPosition, signPositionB);
+            return distA < distB ? signPositionB : signPositionA;
+        }
+
+        /// <summary>
+        /// Finds the nearest edge to the target position.
+        /// Prioritizes edge tiles over node tiles.
+        /// </summary>
+        private void FindNearestEdge()
+        {
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
+                return;
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+            Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
+
+            float searchRadius = 5f;
+            var nearbyTiles = mazeData.GetTilesNear(targetPos2D, searchRadius);
+
+            float minDist = float.MaxValue;
+
+            foreach (var tile in nearbyTiles)
+            {
+                if (!tile.Walkable) continue;
+                if (tile.EdgeIndex < 0) continue; // Only edge tiles
+
+                float dist = Vector2.Distance(targetPos2D, tile.Position);
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    misdirectEdgeIndex = tile.EdgeIndex;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Creates a fog effect covering the misdirected edge, using the same PowerFog shader as Power 1.
+        /// </summary>
+        private void CreateEdgeVisual()
+        {
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
+                return;
+
+            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
+
+            // Collect all tile positions on the misdirected edge
+            var edgeTilePositions = new List<Vector3>();
+            foreach (var tile in mazeData.Tiles)
+            {
+                if (tile.EdgeIndex != misdirectEdgeIndex) continue;
+                if (!tile.Walkable) continue;
+                edgeTilePositions.Add(new Vector3(tile.Position.x, tile.Position.y, 0f));
+            }
+
+            if (edgeTilePositions.Count == 0) return;
+
+            fogContainer = new GameObject("MisdirectFog");
+
+            // Calculate bounds
+            fogBounds = new Bounds(edgeTilePositions[0], Vector3.zero);
+            foreach (var pos in edgeTilePositions)
+            {
+                fogBounds.Encapsulate(pos);
+            }
+            fogBounds.Expand(FOG_PADDING * 2f);
+
+            // Generate path mask texture
+            GenerateMisdirectMask(edgeTilePositions);
+
+            // Create fog material using PowerFog shader
+            CreateMisdirectFogMaterial(edgeTilePositions);
+
+            // Create fog quad
+            CreateMisdirectFogQuad();
+        }
+
+        /// <summary>
+        /// Generates a mask texture showing only the misdirected edge area.
+        /// </summary>
+        private void GenerateMisdirectMask(List<Vector3> tilePositions)
+        {
+            int texWidth = Mathf.CeilToInt(fogBounds.size.x * MASK_PIXELS_PER_UNIT);
+            int texHeight = Mathf.CeilToInt(fogBounds.size.y * MASK_PIXELS_PER_UNIT);
+            texWidth = Mathf.Clamp(texWidth, 32, 512);
+            texHeight = Mathf.Clamp(texHeight, 32, 512);
+
+            pathMaskTexture = new Texture2D(texWidth, texHeight, TextureFormat.R8, false);
+            pathMaskTexture.filterMode = FilterMode.Bilinear;
+            pathMaskTexture.wrapMode = TextureWrapMode.Clamp;
+
+            Color[] pixels = new Color[texWidth * texHeight];
+            for (int i = 0; i < pixels.Length; i++)
+                pixels[i] = Color.black;
+
+            float worldToTexX = texWidth / fogBounds.size.x;
+            float worldToTexY = texHeight / fogBounds.size.y;
+            float tileRadius = 1.5f;
+            int radiusPixels = Mathf.CeilToInt(tileRadius * Mathf.Max(worldToTexX, worldToTexY));
+
+            foreach (var pos in tilePositions)
+            {
+                float worldX = pos.x - fogBounds.min.x;
+                float worldY = pos.y - fogBounds.min.y;
+                int centerTexX = Mathf.RoundToInt(worldX * worldToTexX);
+                int centerTexY = Mathf.RoundToInt(worldY * worldToTexY);
+
+                for (int dy = -radiusPixels; dy <= radiusPixels; dy++)
+                {
+                    for (int dx = -radiusPixels; dx <= radiusPixels; dx++)
+                    {
+                        int px = centerTexX + dx;
+                        int py = centerTexY + dy;
+                        if (px < 0 || px >= texWidth || py < 0 || py >= texHeight)
+                            continue;
+
+                        float distWorld = Mathf.Sqrt(dx * dx / (worldToTexX * worldToTexX) + dy * dy / (worldToTexY * worldToTexY));
+                        float fogAmount;
+                        if (distWorld <= tileRadius * 0.5f)
+                            fogAmount = 1f;
+                        else if (distWorld <= tileRadius)
+                        {
+                            float t = (distWorld - tileRadius * 0.5f) / (tileRadius * 0.5f);
+                            fogAmount = Mathf.SmoothStep(1f, 0f, t);
+                        }
+                        else
+                            fogAmount = 0f;
+
+                        int pixelIndex = py * texWidth + px;
+                        pixels[pixelIndex].r = Mathf.Max(pixels[pixelIndex].r, fogAmount);
+                    }
+                }
+            }
+
+            pathMaskTexture.SetPixels(pixels);
+            pathMaskTexture.Apply();
+        }
+
+        /// <summary>
+        /// Creates the fog material with the PowerFog shader using cyan/teal colors.
+        /// </summary>
+        private void CreateMisdirectFogMaterial(List<Vector3> tilePositions)
+        {
+            var shader = Shader.Find("Custom/PowerFog");
+            if (shader == null)
+            {
+                shader = Shader.Find("Sprites/Default");
+                Debug.LogWarning("[MisdirectEffect] PowerFog shader not found, using fallback");
+            }
+
+            fogMaterial = new Material(shader);
+            fogMaterial.SetColor("_FogColor", FogColor);
+            fogMaterial.SetColor("_FogColorDark", FogColorDark);
+            fogMaterial.SetColor("_GlowColor", GlowColor);
+
+            if (pathMaskTexture != null)
+                fogMaterial.SetTexture("_PathMask", pathMaskTexture);
+
+            // Use edge endpoints as heart/furthest for wave animation direction
+            Vector3 startPos = tilePositions[0];
+            Vector3 endPos = tilePositions[tilePositions.Count - 1];
+            fogMaterial.SetVector("_HeartPosition", new Vector4(startPos.x, startPos.y, 0, 0));
+            fogMaterial.SetVector("_FurthestPosition", new Vector4(endPos.x, endPos.y, 0, 0));
+            fogMaterial.SetFloat("_WaveProgress", 0.5f);
+            fogMaterial.SetFloat("_WaveIntensity", 1.0f);
+            fogMaterial.SetFloat("_WindSpeed", 0.03f);
+        }
+
+        /// <summary>
+        /// Creates the fog quad covering the misdirected edge area.
+        /// </summary>
+        private void CreateMisdirectFogQuad()
+        {
+            fogQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            fogQuad.name = "MisdirectFogQuad";
+            fogQuad.transform.SetParent(fogContainer.transform);
+
+            fogQuad.transform.position = new Vector3(fogBounds.center.x, fogBounds.center.y, FOG_Z_POSITION);
+            fogQuad.transform.localScale = new Vector3(fogBounds.size.x, fogBounds.size.y, 1f);
+            fogQuad.transform.rotation = Quaternion.identity;
+
+            var collider = fogQuad.GetComponent<Collider>();
+            if (collider != null) Object.Destroy(collider);
+
+            var renderer = fogQuad.GetComponent<Renderer>();
+            renderer.material = fogMaterial;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        /// <summary>
+        /// Loads the sign prefab from Resources.
+        /// </summary>
+        private void LoadSignPrefab()
+        {
+            if (signPrefab != null)
+            {
+                Debug.Log("[MisdirectEffect] Sign prefab already loaded (static cache)");
+                return;
+            }
+
+            signPrefab = Resources.Load<GameObject>(SIGN_PREFAB_PATH);
+            Debug.Log($"[MisdirectEffect] Resources.Load result: {(signPrefab != null ? signPrefab.name : "NULL")}");
+
+            if (signPrefab == null)
+            {
+                Debug.LogWarning("[MisdirectEffect] Could not load sign prefab from " + SIGN_PREFAB_PATH);
+            }
+        }
+
+        /// <summary>
+        /// Places sign prefab instances at each end of the misdirected edge.
+        /// Signs face away from the connected node (along the edge direction).
+        /// The sign model's forward is +X, up is -Z (world up).
+        /// </summary>
+        private void PlaceSignsAtEdgeEnds()
+        {
+            if (signPrefab == null)
+            {
+                Debug.LogWarning("[MisdirectEffect] PlaceSignsAtEdgeEnds: signPrefab is null, skipping");
+                return;
+            }
+            if (manager.MazeGrid == null || manager.MazeGrid.WorldSpaceMazeData == null)
+            {
+                Debug.LogWarning("[MisdirectEffect] PlaceSignsAtEdgeEnds: MazeGrid or WorldSpaceMazeData is null");
+                return;
+            }
+
+            var graphState = manager.MazeGrid.WorldSpaceMazeData.GraphState;
+            if (graphState == null)
+            {
+                Debug.LogWarning("[MisdirectEffect] PlaceSignsAtEdgeEnds: GraphState is null");
+                return;
+            }
+            if (misdirectEdgeIndex < 0 || misdirectEdgeIndex >= graphState.Edges.Count)
+            {
+                Debug.LogWarning($"[MisdirectEffect] PlaceSignsAtEdgeEnds: misdirectEdgeIndex={misdirectEdgeIndex} out of range (Edges.Count={graphState.Edges.Count})");
+                return;
+            }
+
+            var edge = graphState.Edges[misdirectEdgeIndex];
+            var polyline = edge.PolylinePoints;
+            if (polyline == null || polyline.Count < 2)
+            {
+                Debug.LogWarning($"[MisdirectEffect] Edge {misdirectEdgeIndex} has no polyline points or < 2 points");
+                return;
+            }
+            Debug.Log($"[MisdirectEffect] Placing signs on edge {misdirectEdgeIndex} with {polyline.Count} polyline points");
+
+            // NodeA end: PolylinePoints[0] is near NodeA
+            // Direction away from NodeA = from node center toward the edge
+            {
+                Vector2 edgePoint = polyline[0];
+                Vector2 nextPoint = polyline[1];
+                Vector2 dirAwayFromNode = (nextPoint - edgePoint).normalized;
+
+                signPositionA = new Vector3(edgePoint.x, edgePoint.y, 0f);
+                PlaceSign(edgePoint, dirAwayFromNode);
+            }
+
+            // NodeB end: PolylinePoints[last] is near NodeB (if it exists)
+            if (edge.NodeB.HasValue)
+            {
+                int last = polyline.Count - 1;
+                Vector2 edgePoint = polyline[last];
+                Vector2 prevPoint = polyline[last - 1];
+                Vector2 dirAwayFromNode = (prevPoint - edgePoint).normalized;
+
+                signPositionB = new Vector3(edgePoint.x, edgePoint.y, 0f);
+                PlaceSign(edgePoint, dirAwayFromNode);
+            }
+
+            // Now wire up the trigger components with references to the other sign's position
+            foreach (var sign in signInstances)
+            {
+                var trigger = sign.GetComponent<MisdirectSignTrigger>();
+                if (trigger != null)
+                {
+                    trigger.SetEffect(this);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Instantiates a sign at the given position, rotated so it faces the given direction.
+        /// The sign prefab has a baked-in Y=180 rotation that must be preserved.
+        /// We compose the Z rotation (for XY plane orientation) with the prefab's default rotation.
+        /// Scale set to 0.5 to match the maze proportions.
+        /// </summary>
+        private void PlaceSign(Vector2 position, Vector2 faceDirection)
+        {
+            if (signPrefab == null) return;
+
+            float angle = Mathf.Atan2(faceDirection.y, faceDirection.x) * Mathf.Rad2Deg;
+            GameObject sign = Object.Instantiate(signPrefab);
+            sign.name = "MisdirectSign";
+            sign.transform.position = new Vector3(position.x, position.y, 0f);
+
+            // Compose Z rotation (XY plane orientation) with the prefab's baked-in rotation
+            // Prefab has Y=180 rotation baked in; we apply Z rotation on top of that
+            Quaternion zRotation = Quaternion.Euler(0f, 0f, angle);
+            sign.transform.rotation = zRotation * sign.transform.rotation;
+
+            // Scale down to fit maze proportions
+            sign.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+
+            // Add trigger collider for visitor redirection (radius 1 in world space)
+            var sphere = sign.AddComponent<SphereCollider>();
+            sphere.isTrigger = true;
+            sphere.radius = 2.0f; // Local radius; sign scale is 0.5, so world radius = 1.0
+            sphere.center = Vector3.zero;
+
+            // Add redirect trigger component
+            sign.AddComponent<MisdirectSignTrigger>();
+
+            Debug.Log($"[MisdirectEffect] Placed sign at ({position.x:F2}, {position.y:F2}), angle={angle:F1}°, rotation={sign.transform.rotation.eulerAngles}");
+            signInstances.Add(sign);
+        }
+    }
+
+    /// <summary>
+    /// Trigger component placed on misdirect signs. When a walking visitor enters the trigger,
+    /// recalculates their path so the A* edge cost multiplier routes them along the misdirected edge.
+    /// All visitors approaching from any edge are affected. To prevent ping-pong, the destination
+    /// sign (the one they were sent toward) won't re-redirect them for 10 seconds after they leave it.
+    /// </summary>
+    public class MisdirectSignTrigger : MonoBehaviour
+    {
+        private MisdirectEffect effect;
+
+        // Tracks per-visitor: which sign last redirected them (by sign instance ID),
+        // and when the cooldown expires (10s after leaving the destination sign).
+        // Key: visitor instance ID, Value: (redirectingSignId, expiryTime)
+        // expiryTime = float.MaxValue means actively in transit (hasn't left destination sign yet)
+        private static Dictionary<int, (int signId, float expiry)> redirectCooldowns =
+            new Dictionary<int, (int, float)>();
+        private const float REDIRECT_COOLDOWN = 10f;
+
+        public void SetEffect(MisdirectEffect misdirectEffect)
+        {
+            effect = misdirectEffect;
+        }
+
+        /// <summary>
+        /// Clears redirect tracking. Called when the misdirect effect is re-cast.
+        /// </summary>
+        public static void ClearRedirectTracking()
+        {
+            redirectCooldowns.Clear();
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            if (effect == null) return;
+
+            var visitor = other.GetComponentInParent<FaeMaze.Visitors.VisitorControllerBase>();
+            if (visitor == null) return;
+
+            if (visitor.State != FaeMaze.Visitors.VisitorControllerBase.VisitorState.Walking)
+                return;
+
+            int visitorId = visitor.GetInstanceID();
+            int thisSignId = gameObject.GetInstanceID();
+
+            // Only block if THIS sign is the destination sign from the last redirect
+            // (i.e., the OTHER sign sent the visitor here — don't ping-pong back)
+            if (redirectCooldowns.TryGetValue(visitorId, out var cooldown))
+            {
+                // The visitor was redirected by a DIFFERENT sign (meaning this is the destination sign)
+                if (cooldown.signId != thisSignId)
+                {
+                    // Still in transit or cooldown not expired — block
+                    if (cooldown.expiry == float.MaxValue || Time.time < cooldown.expiry)
+                        return;
+                }
+                // If this is the same sign that last redirected them, allow (they looped back)
+            }
+
+            // Record that THIS sign redirected the visitor
+            redirectCooldowns[visitorId] = (thisSignId, float.MaxValue);
+
+            // Recalculate the visitor's path — the A* cost multiplier will route them along the edge
+            visitor.RecalculatePath();
+
+            Debug.Log($"[MisdirectSignTrigger] Redirected {visitor.name} at sign ({transform.position.x:F1},{transform.position.y:F1})");
+        }
+
+        private void OnTriggerExit(Collider other)
+        {
+            if (effect == null) return;
+
+            var visitor = other.GetComponentInParent<FaeMaze.Visitors.VisitorControllerBase>();
+            if (visitor == null) return;
+
+            int visitorId = visitor.GetInstanceID();
+            int thisSignId = gameObject.GetInstanceID();
+
+            // Start the 10 second cooldown only when the visitor leaves the DESTINATION sign
+            // (the one they were sent toward, i.e., the sign that did NOT redirect them)
+            if (redirectCooldowns.TryGetValue(visitorId, out var cooldown) && cooldown.signId != thisSignId)
+            {
+                redirectCooldowns[visitorId] = (cooldown.signId, Time.time + REDIRECT_COOLDOWN);
+            }
         }
     }
 

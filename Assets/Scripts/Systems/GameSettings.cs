@@ -252,6 +252,12 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetString("HeartPower4Binding", value);
         }
 
+        public static string HeartPower5Binding
+        {
+            get => PlayerPrefs.GetString("HeartPower5Binding", "Alpha5");
+            set => PlayerPrefs.SetString("HeartPower5Binding", value);
+        }
+
         // Legacy KeyCode properties for backwards compatibility
         public static KeyCode HeartPower1Key
         {
@@ -275,6 +281,12 @@ namespace FaeMaze.Systems
         {
             get => InputBindingHelper.ParseKeyCode(HeartPower4Binding);
             set => HeartPower4Binding = InputBindingHelper.KeyCodeToBindingString(value);
+        }
+
+        public static KeyCode HeartPower5Key
+        {
+            get => InputBindingHelper.ParseKeyCode(HeartPower5Binding);
+            set => HeartPower5Binding = InputBindingHelper.KeyCodeToBindingString(value);
         }
 
         // Sculpt Menu Keybindings (when sculpt radial menu is open)
@@ -404,6 +416,210 @@ namespace FaeMaze.Systems
         {
             get => InputBindingHelper.ParseKeyCode(ScreenshotBinding);
             set => ScreenshotBinding = InputBindingHelper.KeyCodeToBindingString(value);
+        }
+
+        // ===== Alt Bindings (column 2) for controls that previously had no alt =====
+        // Heart Power Alt Bindings (default empty - no alt binding)
+        public static string HeartPower1AltBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower1AltBinding", "");
+            set => PlayerPrefs.SetString("HeartPower1AltBinding", value);
+        }
+        public static string HeartPower2AltBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower2AltBinding", "");
+            set => PlayerPrefs.SetString("HeartPower2AltBinding", value);
+        }
+        public static string HeartPower3AltBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower3AltBinding", "");
+            set => PlayerPrefs.SetString("HeartPower3AltBinding", value);
+        }
+        public static string HeartPower4AltBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower4AltBinding", "");
+            set => PlayerPrefs.SetString("HeartPower4AltBinding", value);
+        }
+        public static string HeartPower5AltBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower5AltBinding", "");
+            set => PlayerPrefs.SetString("HeartPower5AltBinding", value);
+        }
+
+        // Sculpt Menu Alt Bindings (default empty)
+        public static string SculptPondAltBinding
+        {
+            get => PlayerPrefs.GetString("SculptPondAltBinding", "");
+            set => PlayerPrefs.SetString("SculptPondAltBinding", value);
+        }
+        public static string SculptLanternAltBinding
+        {
+            get => PlayerPrefs.GetString("SculptLanternAltBinding", "");
+            set => PlayerPrefs.SetString("SculptLanternAltBinding", value);
+        }
+        public static string SculptRingAltBinding
+        {
+            get => PlayerPrefs.GetString("SculptRingAltBinding", "");
+            set => PlayerPrefs.SetString("SculptRingAltBinding", value);
+        }
+        public static string SculptRemoveAltBinding
+        {
+            get => PlayerPrefs.GetString("SculptRemoveAltBinding", "");
+            set => PlayerPrefs.SetString("SculptRemoveAltBinding", value);
+        }
+
+        // Camera Focus Alt Bindings (default empty)
+        public static string CameraFocusHeartAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusHeartAltBinding", "");
+            set => PlayerPrefs.SetString("CameraFocusHeartAltBinding", value);
+        }
+        public static string CameraFocusEntranceAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusEntranceAltBinding", "");
+            set => PlayerPrefs.SetString("CameraFocusEntranceAltBinding", value);
+        }
+        public static string CameraFocusVisitorAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusVisitorAltBinding", "");
+            set => PlayerPrefs.SetString("CameraFocusVisitorAltBinding", value);
+        }
+
+        // Camera Mouse Alt Bindings (default empty)
+        public static string CameraForwardAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraForwardAltBinding", "");
+            set => PlayerPrefs.SetString("CameraForwardAltBinding", value);
+        }
+        public static string CameraOrbitAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraOrbitAltBinding", "");
+            set => PlayerPrefs.SetString("CameraOrbitAltBinding", value);
+        }
+        public static string CameraPanAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraPanAltBinding", "");
+            set => PlayerPrefs.SetString("CameraPanAltBinding", value);
+        }
+
+        // Screenshot Alt Binding (default empty)
+        public static string ScreenshotAltBinding
+        {
+            get => PlayerPrefs.GetString("ScreenshotAltBinding", "");
+            set => PlayerPrefs.SetString("ScreenshotAltBinding", value);
+        }
+
+        // ===== Tertiary Bindings (column 3) - defaults to gamepad layout =====
+        // Heart Power Tertiary: D-pad directions (Up=P1, Right=P2, Down=P3, Left=P4)
+        public static string HeartPower1TertiaryBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower1TertiaryBinding", "GamepadDpadUp");
+            set => PlayerPrefs.SetString("HeartPower1TertiaryBinding", value);
+        }
+        public static string HeartPower2TertiaryBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower2TertiaryBinding", "GamepadDpadRight");
+            set => PlayerPrefs.SetString("HeartPower2TertiaryBinding", value);
+        }
+        public static string HeartPower3TertiaryBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower3TertiaryBinding", "GamepadDpadDown");
+            set => PlayerPrefs.SetString("HeartPower3TertiaryBinding", value);
+        }
+        public static string HeartPower4TertiaryBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower4TertiaryBinding", "GamepadDpadLeft");
+            set => PlayerPrefs.SetString("HeartPower4TertiaryBinding", value);
+        }
+        public static string HeartPower5TertiaryBinding
+        {
+            get => PlayerPrefs.GetString("HeartPower5TertiaryBinding", "");
+            set => PlayerPrefs.SetString("HeartPower5TertiaryBinding", value);
+        }
+
+        // Sculpt Menu Tertiary: Face buttons (South=Pond, East=Lantern, West=Ring, North=Remove)
+        public static string SculptPondTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("SculptPondTertiaryBinding", "GamepadButtonSouth");
+            set => PlayerPrefs.SetString("SculptPondTertiaryBinding", value);
+        }
+        public static string SculptLanternTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("SculptLanternTertiaryBinding", "GamepadButtonEast");
+            set => PlayerPrefs.SetString("SculptLanternTertiaryBinding", value);
+        }
+        public static string SculptRingTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("SculptRingTertiaryBinding", "GamepadButtonWest");
+            set => PlayerPrefs.SetString("SculptRingTertiaryBinding", value);
+        }
+        public static string SculptRemoveTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("SculptRemoveTertiaryBinding", "GamepadButtonNorth");
+            set => PlayerPrefs.SetString("SculptRemoveTertiaryBinding", value);
+        }
+
+        // Camera Movement Tertiary: Left stick directions
+        public static string CameraMoveForwardTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraMoveForwardTertiaryBinding", "GamepadLeftStickUp");
+            set => PlayerPrefs.SetString("CameraMoveForwardTertiaryBinding", value);
+        }
+        public static string CameraMoveBackwardTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraMoveBackwardTertiaryBinding", "GamepadLeftStickDown");
+            set => PlayerPrefs.SetString("CameraMoveBackwardTertiaryBinding", value);
+        }
+        public static string CameraTurnLeftTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraTurnLeftTertiaryBinding", "GamepadLeftStickLeft");
+            set => PlayerPrefs.SetString("CameraTurnLeftTertiaryBinding", value);
+        }
+        public static string CameraTurnRightTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraTurnRightTertiaryBinding", "GamepadLeftStickRight");
+            set => PlayerPrefs.SetString("CameraTurnRightTertiaryBinding", value);
+        }
+
+        // Camera Focus Tertiary: Left Shoulder, Right Shoulder, Right Stick Press
+        public static string CameraFocusHeartTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusHeartTertiaryBinding", "GamepadLeftShoulder");
+            set => PlayerPrefs.SetString("CameraFocusHeartTertiaryBinding", value);
+        }
+        public static string CameraFocusEntranceTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusEntranceTertiaryBinding", "GamepadRightShoulder");
+            set => PlayerPrefs.SetString("CameraFocusEntranceTertiaryBinding", value);
+        }
+        public static string CameraFocusVisitorTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraFocusVisitorTertiaryBinding", "GamepadRightStickPress");
+            set => PlayerPrefs.SetString("CameraFocusVisitorTertiaryBinding", value);
+        }
+
+        // Camera Mouse Tertiary: Right Stick for orbit, Left Stick Press for click
+        public static string CameraForwardTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraForwardTertiaryBinding", "GamepadLeftStickPress");
+            set => PlayerPrefs.SetString("CameraForwardTertiaryBinding", value);
+        }
+        public static string CameraOrbitTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraOrbitTertiaryBinding", "GamepadRightTrigger");
+            set => PlayerPrefs.SetString("CameraOrbitTertiaryBinding", value);
+        }
+        public static string CameraPanTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraPanTertiaryBinding", "GamepadLeftTrigger");
+            set => PlayerPrefs.SetString("CameraPanTertiaryBinding", value);
+        }
+
+        // Screenshot Tertiary: Select/Share button
+        public static string ScreenshotTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("ScreenshotTertiaryBinding", "GamepadSelect");
+            set => PlayerPrefs.SetString("ScreenshotTertiaryBinding", value);
         }
 
         #region Props - Essence Mechanics

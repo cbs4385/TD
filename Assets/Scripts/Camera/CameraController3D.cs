@@ -352,16 +352,12 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // Cancel focus when user manually controls camera
+            // Cancel focus when user manually controls camera (check all 3 columns)
             bool anyMovementPressed =
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardAltBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardAltBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding);
+                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveForwardBinding, GameSettings.CameraMoveForwardAltBinding, GameSettings.CameraMoveForwardTertiaryBinding) ||
+                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveBackwardBinding, GameSettings.CameraMoveBackwardAltBinding, GameSettings.CameraMoveBackwardTertiaryBinding) ||
+                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnLeftBinding, GameSettings.CameraTurnLeftAltBinding, GameSettings.CameraTurnLeftTertiaryBinding) ||
+                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnRightBinding, GameSettings.CameraTurnRightAltBinding, GameSettings.CameraTurnRightTertiaryBinding);
 
             if (isFocusing && anyMovementPressed)
             {
@@ -370,13 +366,11 @@ namespace FaeMaze.Cameras
 
             // W/S or ↑/↓ (or configured bindings): Move focus point forward/backward
             float forwardInput = 0f;
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardAltBinding))
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveForwardBinding, GameSettings.CameraMoveForwardAltBinding, GameSettings.CameraMoveForwardTertiaryBinding))
             {
                 forwardInput += 1f;
             }
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardAltBinding))
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveBackwardBinding, GameSettings.CameraMoveBackwardAltBinding, GameSettings.CameraMoveBackwardTertiaryBinding))
             {
                 forwardInput -= 1f;
             }
@@ -394,13 +388,11 @@ namespace FaeMaze.Cameras
 
             // A/D or ←/→ (or configured bindings): Orbit yaw (keyboard orbit)
             float yawInput = 0f;
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding))
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnRightBinding, GameSettings.CameraTurnRightAltBinding, GameSettings.CameraTurnRightTertiaryBinding))
             {
                 yawInput += 1f;
             }
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding))
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnLeftBinding, GameSettings.CameraTurnLeftAltBinding, GameSettings.CameraTurnLeftTertiaryBinding))
             {
                 yawInput -= 1f;
             }
@@ -414,12 +406,29 @@ namespace FaeMaze.Cameras
         }
 
         // Debug logging for camera input
-        private static bool cameraDebugLogging = false;
+        private static bool cameraDebugLogging = true;
         private static float cameraLastLogTime = 0f;
         private const float CAMERA_LOG_INTERVAL = 2f;
+        private static float cameraBindingLogTime = 0f;
+        private const float CAMERA_BINDING_LOG_INTERVAL = 10f;
 
         private void HandleFocalPointInput()
         {
+            // Periodically log camera binding configuration
+            if (cameraDebugLogging && Time.time - cameraBindingLogTime > CAMERA_BINDING_LOG_INTERVAL)
+            {
+                cameraBindingLogTime = Time.time;
+                Debug.Log($"[CameraController3D] Camera bindings: " +
+                          $"Forward='{GameSettings.CameraMoveForwardBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraMoveForwardBinding)}), " +
+                          $"Back='{GameSettings.CameraMoveBackwardBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraMoveBackwardBinding)}), " +
+                          $"Left='{GameSettings.CameraTurnLeftBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraTurnLeftBinding)}), " +
+                          $"Right='{GameSettings.CameraTurnRightBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraTurnRightBinding)}), " +
+                          $"Orbit='{GameSettings.CameraOrbitBinding}', " +
+                          $"Pan='{GameSettings.CameraPanBinding}', " +
+                          $"FocusHeart='{GameSettings.CameraFocusHeartBinding}', " +
+                          $"FocusEntrance='{GameSettings.CameraFocusEntranceBinding}'");
+            }
+
             if (!useFocalPointMode || focalPointTransform == null)
             {
                 if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
@@ -445,38 +454,28 @@ namespace FaeMaze.Cameras
             // Handle mouse controls for focal point mode
             HandleFocalPointMouseControls();
 
-            // Use configurable bindings (primary and alt)
+            // Use configurable bindings (all 3 columns: primary, alt, tertiary)
             float moveInput = 0f;
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveForwardAltBinding))
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveForwardBinding, GameSettings.CameraMoveForwardAltBinding, GameSettings.CameraMoveForwardTertiaryBinding))
             {
                 moveInput += 1f;
             }
 
-            if (InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardBinding) ||
-                InputBindingHelper.IsBindingPressed(GameSettings.CameraMoveBackwardAltBinding))
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveBackwardBinding, GameSettings.CameraMoveBackwardAltBinding, GameSettings.CameraMoveBackwardTertiaryBinding))
             {
                 moveInput -= 1f;
             }
 
             float turnInput = 0f;
-            bool turnLeftPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftBinding);
-            bool turnLeftAltPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnLeftAltBinding);
-            bool turnRightPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightBinding);
-            bool turnRightAltPressed = InputBindingHelper.IsBindingPressed(GameSettings.CameraTurnRightAltBinding);
+            bool turnLeftAny = InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnLeftBinding, GameSettings.CameraTurnLeftAltBinding, GameSettings.CameraTurnLeftTertiaryBinding);
+            bool turnRightAny = InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnRightBinding, GameSettings.CameraTurnRightAltBinding, GameSettings.CameraTurnRightTertiaryBinding);
 
-            if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
-            {
-                Debug.Log($"[CameraController3D] Turn bindings - Left({GameSettings.CameraTurnLeftBinding}):{turnLeftPressed}, LeftAlt({GameSettings.CameraTurnLeftAltBinding}):{turnLeftAltPressed}, Right({GameSettings.CameraTurnRightBinding}):{turnRightPressed}, RightAlt({GameSettings.CameraTurnRightAltBinding}):{turnRightAltPressed}");
-                cameraLastLogTime = Time.time;
-            }
-
-            if (turnLeftPressed || turnLeftAltPressed)
+            if (turnLeftAny)
             {
                 turnInput -= 1f;
             }
 
-            if (turnRightPressed || turnRightAltPressed)
+            if (turnRightAny)
             {
                 turnInput += 1f;
             }
@@ -521,32 +520,29 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // Orbit control (configurable, default: right mouse button)
-            // In focal point mode, this rotates the focal point direction
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraOrbitBinding))
+            // Orbit control (configurable, default: right mouse button) - all 3 columns
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.CameraOrbitBinding, GameSettings.CameraOrbitAltBinding, GameSettings.CameraOrbitTertiaryBinding))
             {
                 isOrbiting = true;
             }
-            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraOrbitBinding))
+            if (InputBindingHelper.WasAnyBindingReleasedThisFrame(GameSettings.CameraOrbitBinding, GameSettings.CameraOrbitAltBinding, GameSettings.CameraOrbitTertiaryBinding))
             {
                 isOrbiting = false;
             }
 
-            // Pan control (configurable, default: middle mouse button)
-            // In focal point mode, this moves the focal point position
-            // We use SCREEN-SPACE tracking to avoid feedback loops (camera moves when focal point moves)
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraPanBinding))
+            // Pan control (configurable, default: middle mouse button) - all 3 columns
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.CameraPanBinding, GameSettings.CameraPanAltBinding, GameSettings.CameraPanTertiaryBinding))
             {
                 isPanning = true;
                 lastMouseScreenPosition = mouse.position.ReadValue();
             }
-            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraPanBinding))
+            if (InputBindingHelper.WasAnyBindingReleasedThisFrame(GameSettings.CameraPanBinding, GameSettings.CameraPanAltBinding, GameSettings.CameraPanTertiaryBinding))
             {
                 isPanning = false;
             }
 
             // Handle orbit drag - rotate focal point direction
-            if (isOrbiting && InputBindingHelper.IsBindingPressed(GameSettings.CameraOrbitBinding))
+            if (isOrbiting && InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraOrbitBinding, GameSettings.CameraOrbitAltBinding, GameSettings.CameraOrbitTertiaryBinding))
             {
                 Vector2 mouseDelta = mouse.delta.ReadValue();
                 if (Mathf.Abs(mouseDelta.x) > 0.001f)
@@ -561,7 +557,7 @@ namespace FaeMaze.Cameras
             // Handle pan drag - move focal point position using SCREEN-SPACE delta
             // This avoids the feedback loop where moving the focal point moves the camera,
             // which changes what GetMouseWorldPosition() returns, causing oscillation.
-            if (isPanning && InputBindingHelper.IsBindingPressed(GameSettings.CameraPanBinding))
+            if (isPanning && InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraPanBinding, GameSettings.CameraPanAltBinding, GameSettings.CameraPanTertiaryBinding))
             {
                 Vector2 currentMouseScreen = mouse.position.ReadValue();
                 Vector2 screenDelta = currentMouseScreen - lastMouseScreenPosition;
@@ -606,17 +602,17 @@ namespace FaeMaze.Cameras
 
         private void HandleFocusShortcuts()
         {
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusHeartBinding))
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.CameraFocusHeartBinding, GameSettings.CameraFocusHeartAltBinding, GameSettings.CameraFocusHeartTertiaryBinding))
             {
                 FocusOnHeart(true);
             }
 
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusEntranceBinding))
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.CameraFocusEntranceBinding, GameSettings.CameraFocusEntranceAltBinding, GameSettings.CameraFocusEntranceTertiaryBinding))
             {
                 CycleToNextPortal();
             }
 
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraFocusVisitorBinding))
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.CameraFocusVisitorBinding, GameSettings.CameraFocusVisitorAltBinding, GameSettings.CameraFocusVisitorTertiaryBinding))
             {
                 CycleToNextVisitor();
             }
@@ -630,29 +626,29 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            // Orbit control (configurable, default: right mouse button)
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraOrbitBinding))
+            // Orbit control (configurable, default: right mouse button) - all 3 columns
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.CameraOrbitBinding, GameSettings.CameraOrbitAltBinding, GameSettings.CameraOrbitTertiaryBinding))
             {
                 isOrbiting = true;
             }
-            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraOrbitBinding))
+            if (InputBindingHelper.WasAnyBindingReleasedThisFrame(GameSettings.CameraOrbitBinding, GameSettings.CameraOrbitAltBinding, GameSettings.CameraOrbitTertiaryBinding))
             {
                 isOrbiting = false;
             }
 
-            // Pan control (configurable, default: middle mouse button)
-            if (InputBindingHelper.WasBindingPressedThisFrame(GameSettings.CameraPanBinding))
+            // Pan control (configurable, default: middle mouse button) - all 3 columns
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(GameSettings.CameraPanBinding, GameSettings.CameraPanAltBinding, GameSettings.CameraPanTertiaryBinding))
             {
                 isPanning = true;
                 lastMouseWorldPosition = GetMouseWorldPosition();
             }
-            if (InputBindingHelper.WasBindingReleasedThisFrame(GameSettings.CameraPanBinding))
+            if (InputBindingHelper.WasAnyBindingReleasedThisFrame(GameSettings.CameraPanBinding, GameSettings.CameraPanAltBinding, GameSettings.CameraPanTertiaryBinding))
             {
                 isPanning = false;
             }
 
             // Handle orbit drag
-            if (isOrbiting && InputBindingHelper.IsBindingPressed(GameSettings.CameraOrbitBinding))
+            if (isOrbiting && InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraOrbitBinding, GameSettings.CameraOrbitAltBinding, GameSettings.CameraOrbitTertiaryBinding))
             {
                 Vector2 mouseDelta = mouse.delta.ReadValue();
                 _yawDeg += mouseDelta.x * orbitSpeed * Time.deltaTime;
@@ -667,7 +663,7 @@ namespace FaeMaze.Cameras
             }
 
             // Handle pan drag
-            if (isPanning && InputBindingHelper.IsBindingPressed(GameSettings.CameraPanBinding))
+            if (isPanning && InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraPanBinding, GameSettings.CameraPanAltBinding, GameSettings.CameraPanTertiaryBinding))
             {
                 Vector3 currentMouseWorldPosition = GetMouseWorldPosition();
                 Vector3 delta = lastMouseWorldPosition - currentMouseWorldPosition;

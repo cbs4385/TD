@@ -79,10 +79,7 @@ namespace FaeMaze.Visitors
             glowLight.range = glowRange;
             glowLight.intensity = glowMaxIntensity;
 
-#if UNITY_EDITOR
-            // Set light to use realtime mode for URP (editor-only property)
-            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
-#endif
+            glowLight.renderMode = LightRenderMode.ForcePixel;
 
             // Disable shadows for performance
             glowLight.shadows = LightShadows.None;

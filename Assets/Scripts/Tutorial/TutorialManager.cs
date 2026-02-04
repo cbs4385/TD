@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -10,6 +10,7 @@ using FaeMaze.Visitors;
 using FaeMaze.Props;
 using FaeMaze.Maze;
 using ForestMaze;
+using Object = UnityEngine.Object;
 
 namespace FaeMaze.Tutorial
 {
@@ -140,10 +141,30 @@ namespace FaeMaze.Tutorial
         #region Tutorial Step Definitions
 
         /// <summary>
+        /// Gets the display name for a binding using InputBindingHelper.
+        /// </summary>
+        private string Bind(string binding)
+        {
+            return InputBindingHelper.GetDisplayName(binding);
+        }
+
+        /// <summary>
         /// Initializes all tutorial steps with their content and triggers.
+        /// Uses current binding settings so control callouts are always accurate.
         /// </summary>
         private void InitializeTutorialSteps()
         {
+            // Resolve current bindings for display
+            string p1Key = Bind(GameSettings.HeartPower1Binding);
+            string p2Key = Bind(GameSettings.HeartPower2Binding);
+            string p3Key = Bind(GameSettings.HeartPower3Binding);
+            string p4Key = Bind(GameSettings.HeartPower4Binding);
+            string p5Key = Bind(GameSettings.HeartPower5Binding);
+            string focusHeartKey = Bind(GameSettings.CameraFocusHeartBinding);
+            string moveKeys = $"{Bind(GameSettings.CameraMoveForwardBinding)}/{Bind(GameSettings.CameraMoveBackwardBinding)}/{Bind(GameSettings.CameraTurnLeftBinding)}/{Bind(GameSettings.CameraTurnRightBinding)}";
+            string orbitKey = Bind(GameSettings.CameraOrbitBinding);
+            string panKey = Bind(GameSettings.CameraPanBinding);
+
             steps = new List<TutorialStep>
             {
                 // Phase 1: Introduction
@@ -168,7 +189,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "heart_intro",
                     title: "The Heart of the Maze",
-                    description: "At the center of the maze is the Heart - your core. When visitors come close, a tongue emerges to capture them.\n\nYou can press [F5] anytime to return the camera focus here.",
+                    description: $"At the center of the maze is the Heart - your core. When visitors come close, a tongue emerges to capture them.\n\nYou can press [{focusHeartKey}] anytime to return the camera focus here.",
                     trigger: TutorialTriggerType.ButtonClick,
                     highlight: TutorialHighlightType.WorldPosition,
                     pause: false
@@ -179,10 +200,10 @@ namespace FaeMaze.Tutorial
                     title: "Camera & Focal Point",
                     description: "The center of your screen is the Focal Point - your powers target wherever this point is located in the maze.\n\n" +
                                  "Control the camera to position it:\n\n" +
-                                 "  WASD / Arrow Keys - Move camera\n" +
+                                 $"  {moveKeys} - Move camera\n" +
                                  "  Scroll Wheel - Zoom in/out\n" +
-                                 "  Right-click drag - Orbit around focal point\n" +
-                                 "  Middle-click drag - Pan camera\n\n" +
+                                 $"  {orbitKey} drag - Orbit around focal point\n" +
+                                 $"  {panKey} drag - Pan camera\n\n" +
                                  "Try moving the camera now.",
                     trigger: TutorialTriggerType.CameraMove,
                     pause: false
@@ -192,7 +213,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_murmuring",
                     title: "Power 1: Spooky Fog",
-                    description: "Press [1] to activate Spooky Fog.\n\nThis creates a fog along the path from your focal point back to the Heart. Visitors caught in the fog become confused and walk toward the Heart instead of the exit.\n\nThe fog persists until a visitor is consumed or grabbed by the Heart.\n\nCost: 100 Threads (50% of starting)",
+                    description: $"Press [{p1Key}] to activate Spooky Fog.\n\nThis creates a fog along the path from your focal point back to the Heart. Visitors caught in the fog become confused and walk toward the Heart instead of the exit.\n\nThe fog persists until a visitor is consumed or grabbed by the Heart.\n\nCost: 100 Threads (50% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "0", // MurmuringPaths index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -205,7 +226,7 @@ namespace FaeMaze.Tutorial
                     id: "power_murmuring_effect",
                     title: "Spooky Fog Active",
                     description: "Watch the fog spread along the path from your focal point to the Heart.\n\nVisitors who walk through the fog become confused and start moving toward the Heart instead of the exit.\n\nThe fog persists until a visitor is consumed or grabbed by the Heart.",
-                    trigger: TutorialTriggerType.ButtonClick,
+                    trigger: TutorialTriggerType.Timer,
                     pause: false,
                     spawn: false // Visitor spawned by HandlePowerMurmuringEffectStep coroutine
                 ),
@@ -213,7 +234,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_grasp",
                     title: "Power 2: Yoink!",
-                    description: "Press [2] to activate Yoink!\n\nA tongue emerges from the forest wall near your focal point. It grabs nearby visitors and pulls them deeper into the maze toward the Heart.\n\nCost: 10 Threads (5% of starting)",
+                    description: $"Press [{p2Key}] to activate Yoink!\n\nA tongue emerges from the forest wall near your focal point. It grabs nearby visitors and pulls them deeper into the maze toward the Heart.\n\nCost: 10 Threads (5% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "1", // HeartwardGrasp index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -226,7 +247,7 @@ namespace FaeMaze.Tutorial
                     id: "power_grasp_effect",
                     title: "Yoink! Active",
                     description: "Watch the tongue emerge from the forest wall!\n\nIt will grab any visitor that comes too close and pull them deeper into the maze. This costs a small amount of threads from the grabbed visitor.\n\nThe tongue retracts after catching a visitor.",
-                    trigger: TutorialTriggerType.ButtonClick,
+                    trigger: TutorialTriggerType.Timer,
                     pause: false, // Let action play - camera will track visitor being grabbed
                     spawn: false // Visitor spawned by HandlePowerGraspEffectStep coroutine
                 ),
@@ -234,7 +255,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_maw",
                     title: "Power 3: Nom Nom",
-                    description: "Press [3] to activate Nom Nom.\n\nA great mouth emerges at your focal point. Any visitor who touches it is consumed instantly, granting you half their threads.\n\nCost: 50 Threads (25% of starting)",
+                    description: $"Press [{p3Key}] to activate Nom Nom.\n\nA great mouth emerges at your focal point. Any visitor who touches it is consumed instantly, granting you half their threads.\n\nCost: 50 Threads (25% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "2", // DevouringMaw index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -255,7 +276,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_sculpt",
                     title: "Power 4: Redecorating",
-                    description: "Press [4] to open the Redecorating menu.\n\nThis lets you place or change hazards at maze nodes:\n" +
+                    description: $"Press [{p4Key}] to open the Redecorating menu.\n\nThis lets you place or change hazards at maze nodes:\n" +
                                  "  Pond - Drowns visitors (with Puka hazard)\n" +
                                  "  Lantern - Fascinates visitors, drains threads\n" +
                                  "  Fairy Ring - Traps visitors, drains threads\n\n" +
@@ -292,6 +313,27 @@ namespace FaeMaze.Tutorial
                     description: "When visitors are consumed by the Heart, Nom Nom'd, or drained by hazards, you gain their threads.\n\nKeep your threads high to survive! The longer you last, the more challenging visitors become.\n\nWait for a visitor to be captured...",
                     trigger: TutorialTriggerType.EssenceIncreased,
                     pause: false // No highlight - game must continue for essence to increase
+                ),
+
+                // Phase 4: Misdirect (after lantern fascination demo)
+                new TutorialStep(
+                    id: "power_misdirect",
+                    title: "Power 5: Misdirect",
+                    description: $"Press [{p5Key}] to activate Misdirect.\n\nPlace it near a node/edge junction to make the nearest edge irresistible to visitors. They will strongly prefer that path when passing through the connected node.\n\nThe effect is permanent until you re-cast it on a different edge.\n\nCost: 50 Threads (25% of starting)",
+                    trigger: TutorialTriggerType.PowerActivated,
+                    triggerParam: "4", // Misdirect index
+                    highlight: TutorialHighlightType.UIElementCircular,
+                    highlightTarget: "PowerButton_4",
+                    pause: false
+                ),
+
+                new TutorialStep(
+                    id: "power_misdirect_effect",
+                    title: "Misdirect Active",
+                    description: "The edge now glows with an enticing fog, and signs mark both ends.\n\nWatch as a visitor is lured down the misdirected path!\n\nRe-cast Misdirect to move the effect to a different edge.",
+                    trigger: TutorialTriggerType.Timer, // Auto-advances when visitor walks along edge
+                    pause: false,
+                    spawn: false // Visitor spawned by HandlePowerMisdirectEffectStep coroutine
                 ),
 
                 new TutorialStep(
@@ -349,6 +391,13 @@ namespace FaeMaze.Tutorial
                 originalStartingEssence = GameSettings.StartingEssence;
                 GameController.Instance.SetEssence(TUTORIAL_STARTING_ESSENCE);
                 previousEssence = TUTORIAL_STARTING_ESSENCE;
+            }
+
+            // Lock all heart power buttons until tutorial explicitly enables them
+            var panelController = FindFirstObjectByType<HeartPowerPanelController>();
+            if (panelController != null)
+            {
+                panelController.SetTutorialPowerLock(true);
             }
 
             var cam = Camera.main;
@@ -438,10 +487,11 @@ namespace FaeMaze.Tutorial
             Debug.Log($"[TutorialManager] Now at step: id={step.stepId}, title={step.title}, trigger={step.triggerType}, highlight={step.highlightType}");
 
             // For all power activation steps, always do cinematic camera move to ensure focal point is in correct position
+            // NOTE: power_sculpt is NOT included here - it has a dedicated handler that waits for DevouringMaw to finish
             bool isPowerActivationStep = step.stepId == "power_murmuring" ||
                                          step.stepId == "power_grasp" ||
                                          step.stepId == "power_maw" ||
-                                         step.stepId == "power_sculpt";
+                                         step.stepId == "power_misdirect";
             if (isPowerActivationStep)
             {
                 Debug.Log($"[TutorialManager] {step.stepId} step - performing cinematic camera move");
@@ -482,6 +532,13 @@ namespace FaeMaze.Tutorial
             {
                 Debug.Log($"[TutorialManager] Starting HandlePowerSculptEffectStep coroutine");
                 StartCoroutine(HandlePowerSculptEffectStep(step));
+                return;
+            }
+
+            if (step.stepId == "power_misdirect_effect")
+            {
+                Debug.Log($"[TutorialManager] Starting HandlePowerMisdirectEffectStep coroutine");
+                StartCoroutine(HandlePowerMisdirectEffectStep(step));
                 return;
             }
 
@@ -574,8 +631,11 @@ namespace FaeMaze.Tutorial
             // Lock the button at peak brightness so it stays bright while step is shown
             panelController.LockButtonAtPeakBrightness(buttonIndex);
 
-            // Now show the step
+            // Now show the step (modal appears telling player to press the button)
             ShowStepImmediate(step);
+
+            // AFTER the modal is shown, unlock this power so the player can activate it
+            panelController.EnablePowerForTutorial(buttonIndex);
         }
 
         /// <summary>
@@ -598,6 +658,14 @@ namespace FaeMaze.Tutorial
             // When highlightType is None, the player should see the game clearly without pause
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
             Debug.Log($"[TutorialManager] Pause logic: pauseGame={step.pauseGame}, highlightType={step.highlightType}, shouldPause={shouldPause}, isPaused={isPaused}");
+
+            // For PowerActivated trigger steps, we must unpause so the player can activate the power
+            // and the power effect can initialize (some use coroutines with WaitForSeconds)
+            if (step.triggerType == TutorialTriggerType.PowerActivated && isPaused)
+            {
+                PauseGame(false);
+                shouldPause = false;
+            }
 
             if (shouldPause && !isPaused)
             {
@@ -755,9 +823,9 @@ namespace FaeMaze.Tutorial
             Vector3 spawnPos = hgzPos - dirToHeart * 5f; // 5 units beyond HGZ away from heart
             spawnPos.z = 0f; // Ensure on ground plane
 
-            // Visitor destination is just past the HGZ toward the heart
-            // This ensures the visitor's path goes directly through the HGZ detection zone
-            Vector3 visitorDestination = hgzPos + dirToHeart * 3f; // 3 units past HGZ toward heart
+            // Destination is the heart - visitor walks through the HGZ detection zone on its way
+            // Using a short destination caused the visitor to reach it and go Idle before being grabbed
+            Vector3 visitorDestination = heartPos;
             visitorDestination.z = 0f;
 
             // Camera focal point is at the midpoint of the visitor-to-HGZ ray
@@ -1074,12 +1142,11 @@ namespace FaeMaze.Tutorial
 
                 Debug.Log($"[TutorialManager] Visitor tracking ended for Murmuring Paths, consumed={visitorWasConsumed}");
 
-                // If visitor wasn't consumed (timeout), destroy them to prevent issues with subsequent powers
+                // If visitor wasn't consumed (timeout), assign them a random exit instead of destroying
                 if (!visitorWasConsumed && targetVisitor != null)
                 {
-                    Debug.Log("[TutorialManager] Destroying unconsumed visitor to prevent subsequent power issues");
-                    UnityEngine.Object.Destroy(targetVisitor.gameObject);
-                    yield return new WaitForSecondsRealtime(0.5f);
+                    Debug.Log("[TutorialManager] Assigning random exit to unconsumed murmuring paths visitor");
+                    AssignRandomExitToVisitor(targetVisitor);
                 }
             }
             else
@@ -1218,6 +1285,9 @@ namespace FaeMaze.Tutorial
             // Small delay after devour despawns for visual clarity
             yield return new WaitForSecondsRealtime(0.3f);
 
+            // Perform cinematic camera transition to position focal point on a node
+            yield return CinematicCameraTransition(advanceAfter: false);
+
             // Check if this step highlights a power button
             int powerButtonIndex = GetPowerButtonIndex(step);
             if (powerButtonIndex >= 0)
@@ -1262,6 +1332,9 @@ namespace FaeMaze.Tutorial
 
             panelController.LockButtonAtPeakBrightness(buttonIndex);
             ShowStepImmediate(step);
+
+            // AFTER the modal is shown, unlock this power so the player can activate it
+            panelController.EnablePowerForTutorial(buttonIndex);
         }
 
         /// <summary>
@@ -1339,6 +1412,169 @@ namespace FaeMaze.Tutorial
             }
 
             Debug.Log("[TutorialManager] HandlePowerSculptEffectStep complete, auto-advancing");
+            AdvanceStep();
+        }
+
+        /// <summary>
+        /// Handles the power_misdirect_effect step.
+        /// Spawns a visitor at one end of the misdirected edge and tracks them walking along it.
+        /// Auto-advances when the visitor reaches the other end or after a timeout.
+        /// </summary>
+        private IEnumerator HandlePowerMisdirectEffectStep(TutorialStep step)
+        {
+            Debug.Log("[TutorialManager] HandlePowerMisdirectEffectStep started");
+
+            // Ensure unpaused
+            bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
+            if (!shouldPause && isPaused)
+            {
+                Debug.Log("[TutorialManager] Unpausing game for power_misdirect_effect step");
+                PauseGame(false);
+            }
+
+            // Check if the misdirect power is still active - if not, skip this step
+            var heartPowerManager = HeartPowerManager.Instance;
+            if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.Misdirect))
+            {
+                Debug.Log("[TutorialManager] Misdirect power not active, skipping effect step");
+                AdvanceStep();
+                yield break;
+            }
+
+            // Get the misdirected edge endpoints to determine spawn/destination
+            int edgeIndex = heartPowerManager.GetMisdirectEdgeIndex();
+            var mazeData = FindFirstObjectByType<MazeGridBehaviour>()?.WorldSpaceMazeData;
+
+            if (edgeIndex < 0 || mazeData == null || mazeData.GraphState == null)
+            {
+                Debug.LogWarning("[TutorialManager] Cannot find misdirected edge data, skipping visitor spawn");
+                ShowStepImmediate(step);
+                yield return new WaitForSecondsRealtime(3f);
+                AdvanceStep();
+                yield break;
+            }
+
+            var edge = mazeData.GraphState.Edges[edgeIndex];
+            var polyline = edge.PolylinePoints;
+            if (polyline == null || polyline.Count < 2)
+            {
+                Debug.LogWarning("[TutorialManager] Misdirected edge has no polyline, skipping visitor spawn");
+                ShowStepImmediate(step);
+                yield return new WaitForSecondsRealtime(3f);
+                AdvanceStep();
+                yield break;
+            }
+
+            // Determine which end is farther from heart (spawn there), destination is the heart
+            Vector3 heartPos = mazeData.GraphState.Nodes[0].Position; // Root node is index 0
+            var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
+            Vector3 heartWorldPos = mazeGrid != null ? mazeGrid.HeartWorldPosition : new Vector3(heartPos.x, heartPos.y, 0f);
+            heartWorldPos.z = 0f;
+
+            Vector2 endA = polyline[0];
+            Vector2 endB = polyline[polyline.Count - 1];
+            float distA = Vector2.Distance(endA, new Vector2(heartPos.x, heartPos.y));
+            float distB = Vector2.Distance(endB, new Vector2(heartPos.x, heartPos.y));
+
+            Vector2 spawnEnd = distA > distB ? endA : endB;
+            Vector2 edgeDestEnd = distA > distB ? endB : endA; // End closer to heart (node B)
+
+            // Find nearest walkable tile to spawn position
+            var spawnTile = ForestMaze.MazePathfinding.FindNearestWalkableTile(
+                mazeData, spawnEnd);
+
+            Vector3 spawnPos = spawnTile != null
+                ? new Vector3(spawnTile.Position.x, spawnTile.Position.y, 0f)
+                : new Vector3(spawnEnd.x, spawnEnd.y, 0f);
+            // Destination is the heart so the visitor walks the full path through the misdirected edge
+            Vector3 destPos = heartWorldPos;
+
+            Debug.Log($"[TutorialManager] Misdirect demo: spawning visitor at {spawnPos} -> heart {destPos}");
+
+            // Spawn visitor
+            if (visitorSpawner != null)
+            {
+                visitorSpawner.SpawnVisitorForHGZ(spawnPos, destPos);
+            }
+
+            // Wait for spawn to complete
+            yield return new WaitForSecondsRealtime(0.5f);
+
+            // Find the spawned visitor
+            var visitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
+            VisitorControllerBase targetVisitor = null;
+            float minDist = float.MaxValue;
+            foreach (var v in visitors)
+            {
+                if (v == null) continue;
+                float d = Vector3.Distance(v.transform.position, spawnPos);
+                if (d < minDist)
+                {
+                    minDist = d;
+                    targetVisitor = v;
+                }
+            }
+
+            // Set the visitor as lured so it paths toward the heart through the misdirected edge
+            if (targetVisitor != null)
+            {
+                targetVisitor.SetLured(true);
+                Debug.Log($"[TutorialManager] Set misdirect demo visitor to lured state: {targetVisitor.name}");
+            }
+
+            // Show the step UI
+            ShowStepImmediate(step);
+
+            // Track visitor with camera as they walk along the misdirected edge toward heart
+            var cameraController = FindFirstObjectByType<CameraController3D>();
+            float trackingTimeout = 20f;
+            float trackingStartTime = Time.realtimeSinceStartup;
+
+            if (targetVisitor != null && cameraController != null)
+            {
+                Debug.Log($"[TutorialManager] Tracking misdirect demo visitor {targetVisitor.name}");
+
+                while (targetVisitor != null &&
+                       targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
+                       targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
+                {
+                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
+                    {
+                        Debug.Log("[TutorialManager] Misdirect tracking timeout");
+                        break;
+                    }
+
+                    // Check if visitor reached the destination end of the misdirected edge (node B)
+                    Vector2 visitorPos2D = new Vector2(targetVisitor.transform.position.x, targetVisitor.transform.position.y);
+                    float distToEdgeEnd = Vector2.Distance(visitorPos2D, edgeDestEnd);
+                    if (distToEdgeEnd < 3.0f) // NODE_RADIUS - visitor has entered the destination node
+                    {
+                        Debug.Log($"[TutorialManager] Visitor reached destination end of misdirect edge (dist={distToEdgeEnd:F1})");
+                        break;
+                    }
+
+                    Vector3 visitorPos = targetVisitor.transform.position;
+                    visitorPos.z = 0f;
+                    cameraController.FocusOnPosition(visitorPos, instant: true);
+                    yield return null;
+                }
+
+                // Assign visitor a random exit instead of destroying them
+                if (targetVisitor != null &&
+                    targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
+                    targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
+                {
+                    Debug.Log("[TutorialManager] Assigning random exit to misdirect demo visitor");
+                    AssignRandomExitToVisitor(targetVisitor);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[TutorialManager] Could not find visitor or camera for misdirect demo");
+                yield return new WaitForSecondsRealtime(3f);
+            }
+
+            Debug.Log("[TutorialManager] HandlePowerMisdirectEffectStep complete, auto-advancing");
             AdvanceStep();
         }
 
@@ -1812,11 +2048,12 @@ namespace FaeMaze.Tutorial
             isActive = false;
             currentStepIndex = -1;
 
-            // Unlock any power button that was locked at peak brightness
+            // Unlock all power buttons and release tutorial lock
             var panelController = FindFirstObjectByType<HeartPowerPanelController>();
             if (panelController != null)
             {
                 panelController.UnlockButtonBrightness();
+                panelController.SetTutorialPowerLock(false);
             }
 
             // Ensure game is unpaused
@@ -1833,6 +2070,31 @@ namespace FaeMaze.Tutorial
             GameSettings.Save();
 
             OnTutorialCompleted?.Invoke();
+        }
+
+        /// <summary>
+        /// Assigns a random exit portal destination to a single visitor instead of destroying them.
+        /// The visitor continues walking to the exit naturally.
+        /// </summary>
+        private void AssignRandomExitToVisitor(VisitorControllerBase visitor)
+        {
+            if (visitor == null) return;
+
+            var dynamicMaze = FindFirstObjectByType<DynamicMazeGrowth>();
+            if (dynamicMaze == null) return;
+
+            var portalPositions = dynamicMaze.GetPortalPositions();
+            if (portalPositions == null || portalPositions.Count == 0) return;
+
+            // Pick a random exit portal
+            Vector3 exitPos = portalPositions[FaeMaze.Systems.RandomManager.Range(0, portalPositions.Count)];
+
+            visitor.SetLured(false);
+            visitor.SetWorldDestination(exitPos);
+            visitor.Resume();
+            visitor.RecalculatePath();
+
+            Debug.Log($"[TutorialManager] Assigned random exit to {visitor.name} at ({exitPos.x:F1}, {exitPos.y:F1})");
         }
 
         /// <summary>

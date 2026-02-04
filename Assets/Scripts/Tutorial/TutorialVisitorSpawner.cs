@@ -478,19 +478,8 @@ namespace FaeMaze.Tutorial
                 }
             }
 
-            // Try to load from assets
-#if UNITY_EDITOR
-            var visitor = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-                "Assets/Prefabs/Characters/Visitor.prefab");
-            if (visitor != null) return visitor;
-
-            visitor = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-                "Assets/Prefabs/Visitor.prefab");
-            if (visitor != null) return visitor;
-#endif
-
-            // Try Resources.Load as last resort
-            var loaded = Resources.Load<GameObject>("Visitor");
+            // Try to load from Resources
+            var loaded = Resources.Load<GameObject>("Prefabs/Visitors/Visitor_FestivalTourist");
             if (loaded != null) return loaded;
 
             return null;

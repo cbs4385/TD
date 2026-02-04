@@ -70,13 +70,8 @@ namespace FaeMaze.Systems
                 GameObject heartBasePrefab = null;
                 GameObject heartTonguePrefab = null;
 
-#if UNITY_EDITOR
-                heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heartbase.prefab");
-                heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Tile/heart tongue.prefab");
-#else
                 heartBasePrefab = Resources.Load<GameObject>("Prefabs/Tile/heartbase");
                 heartTonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
-#endif
 
                 FaeMaze.Maze.HeartOfTheMaze heart = Object.FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
 

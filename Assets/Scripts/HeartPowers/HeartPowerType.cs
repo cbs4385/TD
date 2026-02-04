@@ -15,6 +15,7 @@ namespace FaeMaze.HeartPowers
         // RingOfInvitations,      // Enhance FairyRing entrancement
         HeartwardGrasp,         // Pull visitor through wall to Heart
         DevouringMaw,           // Instantly consume visitor on tile
-        Sculpting               // Change node prop type
+        Sculpting,              // Change node prop type
+        Misdirect               // Reduce edge pathfinding cost to lure visitors
     }
 }

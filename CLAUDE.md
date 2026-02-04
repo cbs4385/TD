@@ -89,6 +89,44 @@ Resources.Load<Texture2D>("EarthenGroundTexture");
 
 **READ THIS BEFORE WRITING ANY ROTATION CODE!**
 
+### 🚨 MODEL ORIENTATION — ALL MODELS ALREADY HAVE -Z AS UP 🚨
+
+**ALL models (GLB/prefabs) in this project are ALREADY oriented with -Z as their up direction.**
+**They match the game's coordinate system. Do NOT apply rotation "fixes" to compensate for Y-up.**
+
+This has been a REPEATED source of bugs. Every single time:
+1. Claude assumes the model was built with standard Y-up orientation
+2. Claude adds `Quaternion.Euler(180f, 0f, 0f)` to "fix" the orientation
+3. This flips an already-correct model upside down
+4. The user has to correct this mistake AGAIN
+
+**THE RULE:**
+- Models are ALREADY correctly oriented for -Z up
+- When spawning a model, use `Quaternion.identity` (or don't set rotation at all)
+- **NEVER** add 180° X rotation to "fix" a model — it is already correct
+- If a model appears upside down, the bug is elsewhere (e.g., wrong prefab, wrong Z position), NOT in the model's orientation
+
+**VIOLATION — DO NOT DO THIS:**
+```csharp
+// WRONG — model is already oriented correctly, this flips it upside down!
+lantern.transform.rotation = Quaternion.Euler(180f, 0f, 0f);
+
+// WRONG — assuming GLB models use Y-up and need correction
+// "The GLB model has +Y as up, but the game uses -Z as up"
+// NO! The models already have -Z as up!
+```
+
+**CORRECT:**
+```csharp
+// Model already has -Z as up — use identity rotation
+lantern.transform.rotation = Quaternion.identity;
+
+// Or simply don't set rotation — Instantiate preserves the prefab's correct rotation
+GameObject obj = Instantiate(prefab);
+obj.transform.position = targetPos;
+// No rotation assignment needed
+```
+
 ---
 
 # 🚨🚨🚨 CRITICAL: NODE CENTER IS UNWALKABLE 🚨🚨🚨
@@ -1116,6 +1154,7 @@ The `essenceCostPercent` field in HeartPowerDefinition defines the percentage (0
 | Power 2 (HeartwardGrasp) | 10% | 10 | `HeartwardGrasp_T1.asset` |
 | Power 3 (DevouringMaw) | 50% | 50 | `DevouringMaw_T1.asset` |
 | Power 4 (Sculpting) | 0% | 0 | Free to use |
+| Power 5 (Misdirect) | 25% | 25 | `Misdirect_T1.asset` |
 
 **Cost calculation** in `HeartPowerManager.GetEffectivePowerCost()`:
 ```csharp
@@ -1176,6 +1215,38 @@ When a prop is changed/removed:
 - `VisitorControllerBase.CurrentFairyRing` - public property to check which ring is fascinating visitor
 - `VisitorControllerBase.EndLanternFascination()` - forcibly ends lantern fascination without cooldown
 - `VisitorControllerBase.EndRingFascination()` - forcibly ends ring fascination without immunity
+
+---
+
+### Completed - Misdirect (Heart Power 5)
+
+**Status**: Fully implemented.
+
+**What it does**: Player activates near a node/edge junction. The nearest edge becomes the "misdirect edge" — its A* pathfinding cost is reduced to 1/20th normal (multiplier 0.05), making visitors strongly prefer that edge. Permanent until re-cast (which replaces the existing effect). Costs 25% of starting essence.
+
+**Key files:**
+- `HeartPowerEffects.cs` - `MisdirectEffect` class
+- `MazePathfinding.cs` - `edgeCostMultipliers` parameter in `BuildWorldPath` and `FindTilePath`
+- `HeartPowerManager.cs` - `GetMisdirectEdgeCostMultipliers()`, re-cast replacement logic
+- `HeartPowerPanelController.cs` - 5th power button
+- `GameSettings.cs` - `HeartPower5Binding` (default: Alpha5)
+
+**Implementation details:**
+- Edge cost multiplier applied as multiplicative factor in A* step cost (before additive penalties)
+- `Dictionary<int, float>` maps edge index to multiplier (0.05 = 1/20th cost)
+- Re-casting replaces existing effect (ends old, creates new) with essence cost each time
+- Visual: cyan/teal glow quads on all tiles of the misdirected edge with pulse animation
+- Triggers `RecalculatePath()` on all walking visitors when activated
+- WaryWayfarer also responds to misdirect (hazard avoidance composes with cost reduction)
+- RedCap/Goblin NOT affected (their BuildWorldPath doesn't pass multipliers)
+
+**Key constants:**
+| Constant | Value | Description |
+|----------|-------|-------------|
+| EDGE_COST_MULTIPLIER | 0.05 | Edge appears 1/20th its real length |
+| GLOW_COLOR | (0.2, 0.8, 0.9, 0.35) | Cyan/teal glow color |
+| GLOW_Z | -0.15 | Z position of glow quads (above path) |
+| PULSE_SPEED | 1.5 | Glow pulse animation speed |
 
 ---
 
@@ -1474,6 +1545,42 @@ To build for macOS from Windows, install the Mac Build Support module via Unity 
 ---
 
 ## Session Notes (February 2026)
+
+### Tutorial Fixes - Lantern Orientation, Camera Tracking, Misdirect Spawn (Session Feb 3, 2026)
+
+**Status**: Committed and pushed to `progression` branch. Needs testing.
+
+**Issues Fixed:**
+
+1. **Lantern model spawned upside down**: The lantern2 prefab rotation was wrong. After multiple attempts (-90° X, identity, etc.), user confirmed via manual editor testing that **180° X rotation** is correct (Quaternion x=1, w=0). The root cause was `LanternGlow.cs` (with `[ExecuteAlways]`) overwriting rotation at runtime via `OnEnable()` capturing `transform.rotation`. Fix: hardcoded `BaseOrientation = Quaternion.Euler(180f, 0f, 0f)` to prevent unreliable runtime capture.
+
+2. **Camera jumps to different node after lantern fascination step**: After the lantern fascination tutorial step, the camera would snap back to the player's focal point instead of staying on the lantern for the `essence_gain` step. Fix: added `HandleEssenceGainStep()` coroutine that keeps camera focused on lantern position during that step.
+
+3. **Misdirect visitor doesn't follow fog path**: The visitor spawned for the misdirect demo walked through fog but continued on its original path. Fix: spawn visitor at `MurmuringPathsEffect.FurthestPosition` (the tile farthest from heart on the fog path) so they walk through the full fog coverage toward the heart. Added `FurthestPosition` property to `MurmuringPathsEffect` and `GetActiveMurmuringPathsFurthestPosition()` to `HeartPowerManager`.
+
+**Key findings:**
+- Lantern model needs **180° X** rotation (NOT -90°, NOT identity)
+- `[ExecuteAlways]` + `OnEnable()` rotation capture is unreliable — always use hardcoded `BaseOrientation`
+- The stashed changes in the main repo had brass coloring (replacing bronze) and Misdirect power methods — these were preserved during conflict resolution
+
+**Files modified:**
+| File | Change |
+|------|--------|
+| `Assets/Prefabs/Props/LanternGlow.cs` | `BaseOrientation = Quaternion.Euler(180f, 0f, 0f)`, brass coloring preserved |
+| `Assets/Prefabs/Props/lantern2.prefab` | Rotation override: w=0, x=1 (180° X) |
+| `Assets/Resources/Prefabs/Props/lantern2.prefab` | Same rotation fix |
+| `Assets/Scripts/HeartPowers/HeartPowerEffects.cs` | Added `FurthestPosition` property to `MurmuringPathsEffect` |
+| `Assets/Scripts/HeartPowers/HeartPowerManager.cs` | Added `GetActiveMurmuringPathsFurthestPosition()`, kept Misdirect methods |
+| `Assets/Scripts/Systems/DynamicMazeGrowth.cs` | Updated comment to 180° X, removed identity rotation override |
+| `Assets/Scripts/Tutorial/TutorialManager.cs` | Added `HandleEssenceGainStep()`, rewrote misdirect spawn logic |
+
+**Pending testing:**
+- [ ] Verify lantern displays right-side-up in game (not just editor)
+- [ ] Verify camera stays on lantern during essence_gain tutorial step
+- [ ] Verify misdirect visitor spawns at fog edge and walks through fog toward heart
+- [ ] Verify `DynamicMazeGrowth.SpawnLanternAtNode()` doesn't override prefab rotation (removed identity rotation line)
+
+---
 
 ### Tutorial Fixes - Lantern Fascination and Exit Destinations (Session Feb 2, 2026)
 
@@ -1856,6 +1963,7 @@ private float zPosition = -1.2f;
 | Heart Power 2 (Grasp) | 2 | Heart Powers |
 | Heart Power 3 (Devour) | 3 | Heart Powers |
 | Heart Power 4 (Sculpt) | 4 | Heart Powers |
+| Heart Power 5 (Misdirect) | 5 | Heart Powers |
 | Sculpt Pond | Z | Sculpt Menu |
 | Sculpt Lantern | X | Sculpt Menu |
 | Sculpt Ring | C | Sculpt Menu |

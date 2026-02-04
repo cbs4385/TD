@@ -1272,9 +1272,7 @@ namespace FaeMaze.Props
             glowLight.color = glowColor;
             glowLight.range = glowRange;
             glowLight.intensity = glowMaxIntensity;
-#if UNITY_EDITOR
-            glowLight.lightmapBakeType = LightmapBakeType.Realtime;
-#endif
+            glowLight.renderMode = LightRenderMode.ForcePixel;
             glowLight.shadows = LightShadows.None;
         }
 

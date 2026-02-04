@@ -268,10 +268,34 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Gets essence totals by source from the GameController's audit log
+        /// Snapshots essence totals from GameController's audit log into persistent storage.
+        /// MUST be called before scene transition to GameOver (GameController is destroyed on scene change).
+        /// </summary>
+        public void SnapshotEssenceTotals()
+        {
+            essenceBySource.Clear();
+
+            if (GameController.Instance == null) return;
+
+            foreach (var transaction in GameController.Instance.EssenceAuditLog)
+            {
+                if (!essenceBySource.ContainsKey(transaction.Source))
+                    essenceBySource[transaction.Source] = 0;
+                essenceBySource[transaction.Source] += transaction.Amount;
+            }
+        }
+
+        /// <summary>
+        /// Gets essence totals by source. Returns snapshotted data if available,
+        /// otherwise aggregates from GameController's live audit log.
         /// </summary>
         public Dictionary<EssenceSource, int> GetEssenceTotalsBySource()
         {
+            // Return snapshot if populated (used after scene transition to GameOver)
+            if (essenceBySource.Count > 0)
+                return new Dictionary<EssenceSource, int>(essenceBySource);
+
+            // Fallback: aggregate from live audit log if GameController still exists
             var totals = new Dictionary<EssenceSource, int>();
 
             if (GameController.Instance == null)

@@ -366,6 +366,9 @@ namespace FaeMaze.Systems
             // Count all remaining visitors on the graph as escaped
             RecordRemainingVisitorsAsEscaped();
 
+            // Snapshot essence totals before scene transition destroys GameController
+            GameStatsTracker.Instance?.SnapshotEssenceTotals();
+
             // Load the GameOver scene
             try
             {

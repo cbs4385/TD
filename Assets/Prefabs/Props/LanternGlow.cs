@@ -506,13 +506,14 @@ public class LanternGlow : MonoBehaviour
         }
     }
 
-    // Bronze color for the lantern body
-    private static readonly Color BronzeColor = new Color(0.72f, 0.45f, 0.20f, 1f);
-    private static readonly Color BronzeSpecular = new Color(0.9f, 0.7f, 0.4f, 1f);
+    // Brass/antique gold color for the lantern body
+    private static readonly Color BrassColor = new Color(0.72f, 0.53f, 0.20f, 1f);
+    private static readonly Color BrassSpecular = new Color(0.85f, 0.65f, 0.30f, 1f);
 
     /// <summary>
-    /// Disables emission on all materials in the model hierarchy and applies bronze tint.
-    /// This removes the baked-in emissive glow from the GLB model and skins it as bronze.
+    /// Disables emission on all materials and applies a brass tint to structural materials.
+    /// Emissive/glow materials (plasma, flame, etc.) are hidden so the point light controls the glow.
+    /// Structural materials get a brass color to give the lantern its metallic look.
     /// </summary>
     private void DisableModelEmissions()
     {
@@ -554,11 +555,13 @@ public class LanternGlow : MonoBehaviour
                     mat.SetFloat("_EmissionIntensity", 0f);
                 }
 
-                // Check if this is a "Plasma" or emissive-named material - make it invisible
+                // Check if this is an emissive-named material (plasma, flame, etc.) - make it invisible
                 string matName = mat.name.ToLower();
-                if (matName.Contains("plasma") || matName.Contains("flame") ||
+                bool isEmissiveMaterial = matName.Contains("plasma") || matName.Contains("flame") ||
                     matName.Contains("glow") || matName.Contains("emissive") ||
-                    matName.Contains("fire") || matName.Contains("light"))
+                    matName.Contains("fire") || matName.Contains("light");
+
+                if (isEmissiveMaterial)
                 {
                     // Make the material completely transparent/invisible
                     if (mat.HasProperty("_BaseColor"))
@@ -578,8 +581,35 @@ public class LanternGlow : MonoBehaviour
                 }
                 else
                 {
-                    // Non-emissive material: apply bronze tint
-                    ApplyBronzeTint(mat);
+                    // Structural material - apply brass coloring
+                    // This ensures the lantern body has a consistent brass appearance
+                    // regardless of whether the GLB material loaded correctly
+                    if (mat.HasProperty("_BaseColor"))
+                    {
+                        mat.SetColor("_BaseColor", BrassColor);
+                    }
+                    if (mat.HasProperty("_Color"))
+                    {
+                        mat.SetColor("_Color", BrassColor);
+                    }
+
+                    // Set metallic properties for a shiny brass look
+                    if (mat.HasProperty("_Metallic"))
+                    {
+                        mat.SetFloat("_Metallic", 0.7f);
+                    }
+                    if (mat.HasProperty("_Smoothness"))
+                    {
+                        mat.SetFloat("_Smoothness", 0.6f);
+                    }
+
+                    // Ensure material is opaque
+                    if (mat.HasProperty("_Surface"))
+                    {
+                        mat.SetFloat("_Surface", 0); // 0 = Opaque in URP
+                    }
+                    mat.SetOverrideTag("RenderType", "Opaque");
+                    mat.renderQueue = -1; // Use shader default
                 }
             }
 
@@ -588,21 +618,21 @@ public class LanternGlow : MonoBehaviour
     }
 
     /// <summary>
-    /// Applies a bronze metallic tint to a material.
+    /// Applies a brass metallic tint to a material.
     /// </summary>
-    private static void ApplyBronzeTint(Material mat)
+    private static void ApplyBrassTint(Material mat)
     {
-        // Set base/albedo color to bronze
+        // Set base/albedo color to brass
         if (mat.HasProperty("_BaseColor"))
         {
-            mat.SetColor("_BaseColor", BronzeColor);
+            mat.SetColor("_BaseColor", BrassColor);
         }
         if (mat.HasProperty("_Color"))
         {
-            mat.SetColor("_Color", BronzeColor);
+            mat.SetColor("_Color", BrassColor);
         }
 
-        // Set metallic properties for a bronze look
+        // Set metallic properties for a brass look
         if (mat.HasProperty("_Metallic"))
         {
             mat.SetFloat("_Metallic", 0.85f);
@@ -615,7 +645,7 @@ public class LanternGlow : MonoBehaviour
         // Set specular color if available
         if (mat.HasProperty("_SpecColor"))
         {
-            mat.SetColor("_SpecColor", BronzeSpecular);
+            mat.SetColor("_SpecColor", BrassSpecular);
         }
     }
 

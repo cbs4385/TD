@@ -144,7 +144,7 @@ namespace FaeMaze.UI
             peakEssenceText = CreateHeaderText("PeakEssenceText", new Vector2(0.5f, 0.74f), "Peak Threads: 0", 20);
 
             // Essence Ledger container (adjusted position)
-            essenceLedgerContainer = CreateContainer("EssenceLedger", new Vector2(0.5f, 0.58f), new Vector2(600, 140));
+            essenceLedgerContainer = CreateContainer("EssenceLedger", new Vector2(0.5f, 0.52f), new Vector2(600, 300));
 
             // Hazard Histogram container (positioned to leave room for button at bottom)
             hazardHistogramContainer = CreateContainer("HazardHistogram", new Vector2(0.5f, 0.30f), new Vector2(700, 260));
@@ -269,7 +269,8 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Builds the essence ledger showing gains and costs side by side
+        /// Builds the essence ledger as a single-column list of all essence sources.
+        /// Shows each source with +/- amount. Excludes StartingEssence.
         /// </summary>
         private void BuildEssenceLedger(GameStatsTracker stats)
         {
@@ -283,78 +284,55 @@ namespace FaeMaze.UI
 
             var essenceTotals = stats.GetEssenceTotalsBySource();
 
-            // Create header
-            CreateLedgerText("THREAD LEDGER", 22, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, 70));
+            // Header
+            float headerY = 140f;
+            CreateLedgerText("THREAD LEDGER", 22, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, headerY));
 
-            // Gains column (left)
-            float leftX = -140f;
-            float startY = 40f;
-            float lineHeight = 24f;
-
-            CreateLedgerText("GAINS", 18, FontStyles.Bold, essenceLedgerContainer, new Vector2(leftX, startY), new Color(0.5f, 0.9f, 0.5f));
-
-            int yIndex = 0;
-            int totalGains = 0;
-
-            // Heart consumption
-            if (essenceTotals.TryGetValue(EssenceSource.VisitorConsumedByHeart, out int heartEssence) && heartEssence > 0)
+            // Define display order: gains first, then costs
+            var ledgerEntries = new List<(EssenceSource source, string label, Color color, VisitorFate? fate)>
             {
-                int heartCount = stats.GetTotalByFate(VisitorFate.Consumed);
-                CreateLedgerText($"Nommed: +{heartEssence} ({heartCount})", 16, FontStyles.Normal, essenceLedgerContainer,
-                    new Vector2(leftX, startY - lineHeight * (yIndex + 1)), heartColor);
-                totalGains += heartEssence;
-                yIndex++;
+                (EssenceSource.VisitorConsumedByHeart, "Nommed",       heartColor,                             VisitorFate.Consumed),
+                (EssenceSource.VisitorConsumedByMaw,   "Chomped",      mawColor,                               VisitorFate.Devoured),
+                (EssenceSource.LanternFascination,     "Dazzled",      lanternColor,                           null),
+                (EssenceSource.RingTithe,              "Ring Tithe",   fairyRingColor,                         null),
+                (EssenceSource.PukaGift,               "Puka Gift",    kelpieColor,                            null),
+                (EssenceSource.HeartPowerBonus,        "Bonuses",      new Color(0.5f, 0.9f, 0.5f),            null),
+                (EssenceSource.HeartPowerCost,         "Powers",       new Color(0.9f, 0.5f, 0.5f),            null),
+                (EssenceSource.GoblinPenalty,          "Goblin",       goblinColor,                            null),
+                (EssenceSource.EssenceDecay,           "Thread Drain", new Color(0.7f, 0.4f, 0.4f),            null),
+            };
+
+            float lineHeight = 26f;
+            float startY = headerY - 35f;
+            int displayedIndex = 0;
+
+            foreach (var (source, label, color, fate) in ledgerEntries)
+            {
+                if (!essenceTotals.TryGetValue(source, out int amount) || amount == 0)
+                    continue;
+
+                string amountStr = amount > 0 ? $"+{amount}" : amount.ToString();
+                string text = $"{label}: {amountStr}";
+
+                // For consumption sources, append visitor count
+                if (fate.HasValue)
+                {
+                    int count = stats.GetTotalByFate(fate.Value);
+                    if (count > 0)
+                        text += $"  ({count})";
+                }
+
+                float yPos = startY - (displayedIndex * lineHeight);
+                CreateLedgerText(text, 18, FontStyles.Normal, essenceLedgerContainer, new Vector2(0, yPos), color);
+                displayedIndex++;
             }
 
-            // Maw consumption
-            if (essenceTotals.TryGetValue(EssenceSource.VisitorConsumedByMaw, out int mawEssence) && mawEssence > 0)
+            // If nothing to display, show a message
+            if (displayedIndex == 0)
             {
-                int mawCount = stats.GetTotalByFate(VisitorFate.Devoured);
-                CreateLedgerText($"Chomped: +{mawEssence} ({mawCount})", 16, FontStyles.Normal, essenceLedgerContainer,
-                    new Vector2(leftX, startY - lineHeight * (yIndex + 1)), mawColor);
-                totalGains += mawEssence;
-                yIndex++;
+                CreateLedgerText("No thread activity recorded", 16, FontStyles.Italic, essenceLedgerContainer,
+                    new Vector2(0, startY), new Color(0.5f, 0.5f, 0.5f));
             }
-
-            // Lantern fascination
-            if (essenceTotals.TryGetValue(EssenceSource.LanternFascination, out int lanternEssence) && lanternEssence > 0)
-            {
-                CreateLedgerText($"Dazzled: +{lanternEssence}", 16, FontStyles.Normal, essenceLedgerContainer,
-                    new Vector2(leftX, startY - lineHeight * (yIndex + 1)), lanternColor);
-                totalGains += lanternEssence;
-                yIndex++;
-            }
-
-            // Costs column (right)
-            float rightX = 140f;
-            yIndex = 0;
-            int totalCosts = 0;
-
-            CreateLedgerText("COSTS", 18, FontStyles.Bold, essenceLedgerContainer, new Vector2(rightX, startY), new Color(0.9f, 0.5f, 0.5f));
-
-            // Heart power costs
-            if (essenceTotals.TryGetValue(EssenceSource.HeartPowerCost, out int powerCost) && powerCost < 0)
-            {
-                CreateLedgerText($"Powers: {powerCost}", 16, FontStyles.Normal, essenceLedgerContainer,
-                    new Vector2(rightX, startY - lineHeight * (yIndex + 1)), Color.white);
-                totalCosts += powerCost;
-                yIndex++;
-            }
-
-            // Goblin penalties
-            if (essenceTotals.TryGetValue(EssenceSource.GoblinPenalty, out int redCapPenalty) && redCapPenalty < 0)
-            {
-                CreateLedgerText($"Goblin: {redCapPenalty}", 16, FontStyles.Normal, essenceLedgerContainer,
-                    new Vector2(rightX, startY - lineHeight * (yIndex + 1)), goblinColor);
-                totalCosts += redCapPenalty;
-                yIndex++;
-            }
-
-            // Net essence at bottom
-            int netEssence = totalGains + totalCosts;
-            string netStr = netEssence >= 0 ? $"+{netEssence}" : netEssence.ToString();
-            Color netColor = netEssence >= 0 ? new Color(0.5f, 0.9f, 0.5f) : new Color(0.9f, 0.5f, 0.5f);
-            CreateLedgerText($"Net: {netStr}", 20, FontStyles.Bold, essenceLedgerContainer, new Vector2(0, -70), netColor);
         }
 
         private TextMeshProUGUI CreateLedgerText(string text, float fontSize, FontStyles style, Transform parent, Vector2 position, Color? color = null)
@@ -367,7 +345,7 @@ namespace FaeMaze.UI
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = position;
-            rect.sizeDelta = new Vector2(280, 30);
+            rect.sizeDelta = new Vector2(500, 30);
 
             TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
             tmp.text = text;

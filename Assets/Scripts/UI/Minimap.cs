@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using FaeMaze.Systems;
 using FaeMaze.Visitors;
 using FaeMaze.Maze;
+using FaeMaze.HeartPowers;
 using ForestMaze;
 using System.Collections.Generic;
 
@@ -78,6 +79,18 @@ namespace FaeMaze.UI
         [SerializeField]
         [Tooltip("Graph edge color")]
         private Color graphEdgeColor = new Color(0.3f, 0.5f, 0.3f, 0.4f);
+
+        [SerializeField]
+        [Tooltip("Color for edges/nodes affected by Murmuring Paths fog")]
+        private Color fogHighlightColor = new Color(0.6f, 0.3f, 0.7f, 0.8f);
+
+        [SerializeField]
+        [Tooltip("Color for the Misdirect-affected edge")]
+        private Color misdirectHighlightColor = new Color(0.2f, 0.8f, 0.9f, 0.8f);
+
+        [SerializeField]
+        [Tooltip("Width multiplier for highlighted edges")]
+        private float highlightEdgeWidthMultiplier = 2f;
 
         [Header("Dot Sizes")]
         [SerializeField]
@@ -800,6 +813,9 @@ namespace FaeMaze.UI
 
         private void UpdateGraphNodes(PlanarForestMazeGenerator.ForestMapState graphState, Vector3 focalWorldPos, float pixelsPerUnit, float mapRadius)
         {
+            // Get active power highlight data
+            HashSet<int> fogNodes = HeartPowerManager.Instance?.GetMurmuringPathsAffectedNodes();
+
             // Create or update node dots
             int nodeCount = graphState.Nodes.Count;
 
@@ -827,6 +843,18 @@ namespace FaeMaze.UI
                     float minimapX = relativePos.x * pixelsPerUnit;
                     float minimapY = relativePos.y * pixelsPerUnit;
                     nodeDot.rectTransform.anchoredPosition = new Vector2(minimapX, minimapY);
+
+                    // Highlight fog-affected nodes
+                    if (fogNodes != null && fogNodes.Contains(node.Id))
+                    {
+                        nodeDot.color = fogHighlightColor;
+                        nodeDot.rectTransform.sizeDelta = new Vector2(graphNodeSize * highlightEdgeWidthMultiplier, graphNodeSize * highlightEdgeWidthMultiplier);
+                    }
+                    else
+                    {
+                        nodeDot.color = graphNodeColor;
+                        nodeDot.rectTransform.sizeDelta = new Vector2(graphNodeSize, graphNodeSize);
+                    }
                 }
                 else
                 {
@@ -843,6 +871,10 @@ namespace FaeMaze.UI
 
         private void UpdateGraphEdges(PlanarForestMazeGenerator.ForestMapState graphState, Vector3 focalWorldPos, float pixelsPerUnit, float mapRadius)
         {
+            // Get active power highlight data
+            HashSet<int> fogEdges = HeartPowerManager.Instance?.GetMurmuringPathsAffectedEdges();
+            int misdirectEdge = HeartPowerManager.Instance?.GetMisdirectEdgeIndex() ?? -1;
+
             int edgeCount = graphState.Edges.Count;
 
             // Ensure we have enough edge segment lists
@@ -858,6 +890,21 @@ namespace FaeMaze.UI
             {
                 var edge = graphState.Edges[i];
                 List<RectTransform> segments = graphEdgeSegments[i];
+
+                // Determine highlight color and width for this edge
+                Color edgeColor = graphEdgeColor;
+                float edgeWidth = graphEdgeWidth;
+
+                if (misdirectEdge >= 0 && edge.Id == misdirectEdge)
+                {
+                    edgeColor = misdirectHighlightColor;
+                    edgeWidth = graphEdgeWidth * highlightEdgeWidthMultiplier;
+                }
+                else if (fogEdges != null && fogEdges.Contains(edge.Id))
+                {
+                    edgeColor = fogHighlightColor;
+                    edgeWidth = graphEdgeWidth * highlightEdgeWidthMultiplier;
+                }
 
                 // Get polyline points
                 if (edge.PolylinePoints.Count < 2)
@@ -953,7 +1000,14 @@ namespace FaeMaze.UI
                     Vector2 endMinimap = clampedEnd * pixelsPerUnit;
 
                     // Position and rotate the line
-                    PositionEdgeLine(segmentLine, startMinimap, endMinimap);
+                    PositionEdgeLine(segmentLine, startMinimap, endMinimap, edgeWidth);
+
+                    // Apply highlight color
+                    Image lineImage = segmentLine.GetComponent<Image>();
+                    if (lineImage != null)
+                    {
+                        lineImage.color = edgeColor;
+                    }
                 }
 
                 // Hide unused segments for this edge
@@ -1016,8 +1070,10 @@ namespace FaeMaze.UI
             return lineRect;
         }
 
-        private void PositionEdgeLine(RectTransform lineRect, Vector2 start, Vector2 end)
+        private void PositionEdgeLine(RectTransform lineRect, Vector2 start, Vector2 end, float width = 0f)
         {
+            if (width <= 0f) width = graphEdgeWidth;
+
             // Calculate line properties
             Vector2 direction = end - start;
             float length = direction.magnitude;
@@ -1027,7 +1083,7 @@ namespace FaeMaze.UI
             lineRect.anchoredPosition = start;
 
             // Set size (width = length, height = line width)
-            lineRect.sizeDelta = new Vector2(length, graphEdgeWidth);
+            lineRect.sizeDelta = new Vector2(length, width);
 
             // Rotate to point toward end
             lineRect.localRotation = Quaternion.Euler(0f, 0f, angle);

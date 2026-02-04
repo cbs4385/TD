@@ -65,17 +65,7 @@ namespace FaeMaze.Cameras
             // Try to find profile
             VolumeProfile profile = null;
 
-            #if UNITY_EDITOR
-            string[] guids = UnityEditor.AssetDatabase.FindAssets("t:VolumeProfile PostProcessingProfile");
-            if (guids.Length > 0)
-            {
-                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]);
-                profile = UnityEditor.AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
-            }
-            #else
-            // In build, try to load from Resources
             profile = Resources.Load<VolumeProfile>("PostProcessingProfile");
-            #endif
 
             if (profile == null)
             {

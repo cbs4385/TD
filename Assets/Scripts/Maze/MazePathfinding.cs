@@ -27,7 +27,8 @@ namespace ForestMaze
             Vector3 end,
             float heartNodePenalty = 0f,
             bool penalizeHeartNode = true,
-            System.Func<UnityEngine.Vector2, float> hazardCostFunction = null)
+            System.Func<UnityEngine.Vector2, float> hazardCostFunction = null,
+            Dictionary<int, float> edgeCostMultipliers = null)
         {
             if (mazeData == null)
             {
@@ -54,7 +55,7 @@ namespace ForestMaze
             }
 
             // A* through walkable tiles
-            var tilePath = FindTilePath(mazeData, startTile, endTile, heartNodePenalty, penalizeHeartNode, hazardCostFunction);
+            var tilePath = FindTilePath(mazeData, startTile, endTile, heartNodePenalty, penalizeHeartNode, hazardCostFunction, edgeCostMultipliers);
 
             if (tilePath == null || tilePath.Count == 0)
             {
@@ -159,7 +160,8 @@ namespace ForestMaze
             WorldSpaceTile endTile,
             float heartNodePenalty,
             bool penalizeHeartNode,
-            System.Func<UnityEngine.Vector2, float> hazardCostFunction = null)
+            System.Func<UnityEngine.Vector2, float> hazardCostFunction = null,
+            Dictionary<int, float> edgeCostMultipliers = null)
         {
             if (startTile == endTile)
             {
@@ -171,6 +173,19 @@ namespace ForestMaze
             var parent = new Dictionary<WorldSpaceTile, WorldSpaceTile>();
             var closedSet = new HashSet<WorldSpaceTile>();
 
+            // When edge cost multipliers reduce costs below 1.0, the Euclidean heuristic
+            // overestimates and becomes inadmissible. Scale the heuristic by the minimum
+            // multiplier to keep A* optimal and allow it to discover cheaper misdirected paths.
+            float heuristicScale = 1f;
+            if (edgeCostMultipliers != null)
+            {
+                foreach (var kvp in edgeCostMultipliers)
+                {
+                    if (kvp.Value < heuristicScale)
+                        heuristicScale = kvp.Value;
+                }
+            }
+
             // Use a sorted set as a priority queue (ordered by fScore, then by order for uniqueness)
             // This gives O(log n) insertion and O(log n) removal of min element
             // We use lazy deletion: when we find a better path, we add a new entry
@@ -178,7 +193,7 @@ namespace ForestMaze
             var openSet = new SortedSet<(float fScore, int order, WorldSpaceTile tile)>();
             int insertOrder = 0; // Tie-breaker for equal fScores
 
-            float startF = Vector2.Distance(startTile.Position, endTile.Position);
+            float startF = Vector2.Distance(startTile.Position, endTile.Position) * heuristicScale;
             gScore[startTile] = 0f;
             openSet.Add((startF, insertOrder++, startTile));
             parent[startTile] = null;
@@ -240,8 +255,16 @@ namespace ForestMaze
                         continue;
 
                     // Calculate tentative gScore
-                    // Add penalty for heart node tiles to discourage crossing through the heart
                     float stepCost = stepDist;
+
+                    // Apply edge cost multiplier (for Misdirect power)
+                    if (edgeCostMultipliers != null && neighbor.EdgeIndex >= 0 &&
+                        edgeCostMultipliers.TryGetValue(neighbor.EdgeIndex, out float edgeMultiplier))
+                    {
+                        stepCost *= edgeMultiplier;
+                    }
+
+                    // Add penalty for heart node tiles to discourage crossing through the heart
                     if (penalizeHeartNode && neighbor.NodeIndex == 0 && heartNodePenalty > 0f)
                     {
                         stepCost += heartNodePenalty;
@@ -262,7 +285,7 @@ namespace ForestMaze
                         // (old entry will be skipped via lazy deletion when we pop it)
                         parent[neighbor] = current;
                         gScore[neighbor] = tentativeG;
-                        float newF = tentativeG + Vector2.Distance(neighbor.Position, endTile.Position);
+                        float newF = tentativeG + Vector2.Distance(neighbor.Position, endTile.Position) * heuristicScale;
                         openSet.Add((newF, insertOrder++, neighbor));
                     }
                 }

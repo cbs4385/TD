@@ -37,18 +37,6 @@ namespace FaeMaze.Cameras
             {
                 profile = Resources.Load<VolumeProfile>("PostProcessingProfile");
 
-                // If not in Resources, try to find it in the project
-                if (profile == null)
-                {
-                    #if UNITY_EDITOR
-                    string[] guids = UnityEditor.AssetDatabase.FindAssets("t:VolumeProfile PostProcessingProfile");
-                    if (guids.Length > 0)
-                    {
-                        string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]);
-                        profile = UnityEditor.AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
-                    }
-                    #endif
-                }
             }
 
             if (profile == null)
@@ -80,20 +68,5 @@ namespace FaeMaze.Cameras
             }
         }
 
-        #if UNITY_EDITOR
-        private void OnValidate()
-        {
-            // Auto-find profile in editor
-            if (profile == null && autoFindProfile)
-            {
-                string[] guids = UnityEditor.AssetDatabase.FindAssets("t:VolumeProfile PostProcessingProfile");
-                if (guids.Length > 0)
-                {
-                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]);
-                    profile = UnityEditor.AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
-                }
-            }
-        }
-        #endif
     }
 }

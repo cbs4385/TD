@@ -5,6 +5,7 @@ using TMPro;
 using FaeMaze.Cameras;
 using FaeMaze.Maze;
 using FaeMaze.HeartPowers;
+using FaeMaze.Systems;
 
 namespace FaeMaze.Tutorial
 {
@@ -127,6 +128,9 @@ namespace FaeMaze.Tutorial
 
         private void Update()
         {
+            // Gamepad input for tutorial navigation
+            HandleGamepadInput();
+
             // Update highlight ring pulse animation (pulse alpha for rectangular highlight)
             if (highlightRing != null && highlightRing.activeSelf)
             {
@@ -609,7 +613,7 @@ namespace FaeMaze.Tutorial
             continueButton = CreateButton(buttonContainer.transform, "Continue", OnContinueClicked);
 
             // Skip button
-            skipButton = CreateButton(buttonContainer.transform, "Skip Tutorial", OnSkipClicked);
+            skipButton = CreateButton(buttonContainer.transform, "Exit Tutorial", OnSkipClicked);
             var skipColors = skipButton.colors;
             skipColors.normalColor = new Color(0.4f, 0.2f, 0.2f, 1f);
             skipColors.highlightedColor = new Color(0.5f, 0.3f, 0.3f, 1f);
@@ -667,6 +671,38 @@ namespace FaeMaze.Tutorial
             text.alignment = TextAlignmentOptions.Center;
 
             return button;
+        }
+
+        #endregion
+
+        #region Gamepad Input
+
+        /// <summary>
+        /// Handles gamepad input for tutorial button navigation.
+        /// A/South button = Continue, B/East button = Exit Tutorial.
+        /// </summary>
+        private void HandleGamepadInput()
+        {
+            if (dialogPanel == null || !dialogPanel.activeSelf) return;
+            if (manager == null || !manager.IsActive) return;
+
+            // A / South button → Continue (same as clicking Continue button)
+            if (InputBindingHelper.WasBindingPressedThisFrame("GamepadButtonSouth"))
+            {
+                if (continueButton != null && continueButton.gameObject.activeSelf && continueButton.interactable)
+                {
+                    OnContinueClicked();
+                }
+            }
+
+            // B / East button → Exit Tutorial
+            if (InputBindingHelper.WasBindingPressedThisFrame("GamepadButtonEast"))
+            {
+                if (skipButton != null && skipButton.gameObject.activeSelf)
+                {
+                    OnSkipClicked();
+                }
+            }
         }
 
         #endregion

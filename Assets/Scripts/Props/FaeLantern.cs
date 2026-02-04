@@ -17,7 +17,7 @@ namespace FaeMaze.Props
         [Header("Influence Settings")]
         [SerializeField]
         [Tooltip("Radius of influence in world units")]
-        private float influenceRadius = 6f;
+        private float influenceRadius = 3f;
 
         [SerializeField]
         [Tooltip("Duration in seconds that visitor stands fascinated at the lantern")]

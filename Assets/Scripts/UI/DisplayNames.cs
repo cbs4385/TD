@@ -48,6 +48,8 @@ namespace FaeMaze.UI
             EssenceSource.GoblinPenalty => "Goblin Tax",
             EssenceSource.HeartPowerCost => "Power Cost",
             EssenceSource.HeartPowerBonus => "Power Bonus",
+            EssenceSource.RingTithe => "Ring Tithe",
+            EssenceSource.PukaGift => "Puka Gift",
             _ => source.ToString()
         };
     }

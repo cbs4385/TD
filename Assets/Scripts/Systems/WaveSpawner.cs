@@ -150,17 +150,15 @@ namespace FaeMaze.Systems
                 heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
             }
 
-            // Load goblin prefab via AssetDatabase in editor if not assigned
-#if UNITY_EDITOR
+            // Load goblin prefab if not assigned
             if (goblinPrefab == null)
             {
-                var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/redcap.prefab");
+                var prefab = Resources.Load<GameObject>("Prefabs/redcap");
                 if (prefab != null)
                 {
                     goblinPrefab = prefab.GetComponent<GoblinController>();
                 }
             }
-#endif
 
             ValidateReferences();
             LoadSettings();
@@ -817,9 +815,6 @@ namespace FaeMaze.Systems
                 Gizmos.color = GetSpawnMarkerColor(spawnId);
                 Gizmos.DrawWireSphere(worldPos, 0.5f);
 
-                #if UNITY_EDITOR
-                UnityEditor.Handles.Label(worldPos + Vector3.up * 0.7f, spawnId.ToString());
-                #endif
             }
 
             // Draw lines between spawn points

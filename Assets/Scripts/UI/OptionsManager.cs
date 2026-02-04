@@ -117,6 +117,7 @@ namespace FaeMaze.UI
         [SerializeField] private TMP_Dropdown heartPower2KeyDropdown;
         [SerializeField] private TMP_Dropdown heartPower3KeyDropdown;
         [SerializeField] private TMP_Dropdown heartPower4KeyDropdown;
+        [SerializeField] private TMP_Dropdown heartPower5KeyDropdown;
 
         [Header("Video - Screenshot Settings")]
         [SerializeField] private TMP_InputField screenshotPathInput;
@@ -136,10 +137,12 @@ namespace FaeMaze.UI
         private KeyBindingCapture activeCapture = null;
 
         // Binding values (cached from UI, saved on Apply)
+        // Primary bindings (column 1)
         private string bindingHeartPower1;
         private string bindingHeartPower2;
         private string bindingHeartPower3;
         private string bindingHeartPower4;
+        private string bindingHeartPower5;
         private string bindingSculptPond;
         private string bindingSculptLantern;
         private string bindingSculptRing;
@@ -148,10 +151,6 @@ namespace FaeMaze.UI
         private string bindingCameraMoveBackward;
         private string bindingCameraTurnLeft;
         private string bindingCameraTurnRight;
-        private string bindingCameraMoveForwardAlt;
-        private string bindingCameraMoveBackwardAlt;
-        private string bindingCameraTurnLeftAlt;
-        private string bindingCameraTurnRightAlt;
         private string bindingCameraFocusHeart;
         private string bindingCameraFocusEntrance;
         private string bindingCameraFocusVisitor;
@@ -159,6 +158,50 @@ namespace FaeMaze.UI
         private string bindingCameraOrbit;
         private string bindingCameraPan;
         private string bindingScreenshot;
+
+        // Alt bindings (column 2)
+        private string bindingHeartPower1Alt;
+        private string bindingHeartPower2Alt;
+        private string bindingHeartPower3Alt;
+        private string bindingHeartPower4Alt;
+        private string bindingHeartPower5Alt;
+        private string bindingSculptPondAlt;
+        private string bindingSculptLanternAlt;
+        private string bindingSculptRingAlt;
+        private string bindingSculptRemoveAlt;
+        private string bindingCameraMoveForwardAlt;
+        private string bindingCameraMoveBackwardAlt;
+        private string bindingCameraTurnLeftAlt;
+        private string bindingCameraTurnRightAlt;
+        private string bindingCameraFocusHeartAlt;
+        private string bindingCameraFocusEntranceAlt;
+        private string bindingCameraFocusVisitorAlt;
+        private string bindingCameraForwardAlt;
+        private string bindingCameraOrbitAlt;
+        private string bindingCameraPanAlt;
+        private string bindingScreenshotAlt;
+
+        // Tertiary bindings (column 3)
+        private string bindingHeartPower1Tertiary;
+        private string bindingHeartPower2Tertiary;
+        private string bindingHeartPower3Tertiary;
+        private string bindingHeartPower4Tertiary;
+        private string bindingHeartPower5Tertiary;
+        private string bindingSculptPondTertiary;
+        private string bindingSculptLanternTertiary;
+        private string bindingSculptRingTertiary;
+        private string bindingSculptRemoveTertiary;
+        private string bindingCameraMoveForwardTertiary;
+        private string bindingCameraMoveBackwardTertiary;
+        private string bindingCameraTurnLeftTertiary;
+        private string bindingCameraTurnRightTertiary;
+        private string bindingCameraFocusHeartTertiary;
+        private string bindingCameraFocusEntranceTertiary;
+        private string bindingCameraFocusVisitorTertiary;
+        private string bindingCameraForwardTertiary;
+        private string bindingCameraOrbitTertiary;
+        private string bindingCameraPanTertiary;
+        private string bindingScreenshotTertiary;
 
         // Common keybinding options for dropdowns
         private static readonly KeyCode[] keybindOptions = new KeyCode[]
@@ -198,6 +241,7 @@ namespace FaeMaze.UI
             PopulateDropdown(heartPower2KeyDropdown, options);
             PopulateDropdown(heartPower3KeyDropdown, options);
             PopulateDropdown(heartPower4KeyDropdown, options);
+            PopulateDropdown(heartPower5KeyDropdown, options);
             PopulateDropdown(screenshotKeyDropdown, options);
         }
 
@@ -616,6 +660,7 @@ namespace FaeMaze.UI
             SetDropdownValue(heartPower2KeyDropdown, KeyCodeToDropdownIndex(GameSettings.HeartPower2Key));
             SetDropdownValue(heartPower3KeyDropdown, KeyCodeToDropdownIndex(GameSettings.HeartPower3Key));
             SetDropdownValue(heartPower4KeyDropdown, KeyCodeToDropdownIndex(GameSettings.HeartPower4Key));
+            SetDropdownValue(heartPower5KeyDropdown, KeyCodeToDropdownIndex(GameSettings.HeartPower5Key));
 
             // Screenshot Settings
             if (screenshotPathInput != null)
@@ -911,26 +956,7 @@ namespace FaeMaze.UI
         // Screenshot callbacks
         private void OnBrowseScreenshotPath()
         {
-#if UNITY_EDITOR
-            // In editor, use EditorUtility folder panel
-            string currentPath = screenshotPathInput != null ? screenshotPathInput.text : "";
-            if (string.IsNullOrEmpty(currentPath))
-            {
-                currentPath = Application.persistentDataPath;
-            }
-
-            string selectedPath = UnityEditor.EditorUtility.OpenFolderPanel("Select Screenshot Directory", currentPath, "");
-            if (!string.IsNullOrEmpty(selectedPath))
-            {
-                if (screenshotPathInput != null)
-                {
-                    screenshotPathInput.text = selectedPath;
-                }
-            }
-#else
-            // At runtime, use a simple file browser or show current path
-            // For standalone builds, we'd need a runtime file browser asset
-            // For now, open the folder in the system file explorer so user can copy the path
+            // Open the folder in the system file explorer so user can copy the path
             string currentPath = screenshotPathInput != null ? screenshotPathInput.text : Application.persistentDataPath;
             if (System.IO.Directory.Exists(currentPath))
             {
@@ -940,7 +966,6 @@ namespace FaeMaze.UI
             {
                 Application.OpenURL("file://" + Application.persistentDataPath);
             }
-#endif
         }
 
         // Button handlers
@@ -1040,6 +1065,7 @@ namespace FaeMaze.UI
             // Note: Screenshot key dropdown is deprecated - use Controls tab binding instead
 
             // Key Bindings (from Controls tab)
+            // Primary bindings (column 1)
             if (!string.IsNullOrEmpty(bindingHeartPower1))
                 GameSettings.HeartPower1Binding = bindingHeartPower1;
             if (!string.IsNullOrEmpty(bindingHeartPower2))
@@ -1048,6 +1074,8 @@ namespace FaeMaze.UI
                 GameSettings.HeartPower3Binding = bindingHeartPower3;
             if (!string.IsNullOrEmpty(bindingHeartPower4))
                 GameSettings.HeartPower4Binding = bindingHeartPower4;
+            if (!string.IsNullOrEmpty(bindingHeartPower5))
+                GameSettings.HeartPower5Binding = bindingHeartPower5;
             if (!string.IsNullOrEmpty(bindingSculptPond))
                 GameSettings.SculptPondBinding = bindingSculptPond;
             if (!string.IsNullOrEmpty(bindingSculptLantern))
@@ -1064,14 +1092,6 @@ namespace FaeMaze.UI
                 GameSettings.CameraTurnLeftBinding = bindingCameraTurnLeft;
             if (!string.IsNullOrEmpty(bindingCameraTurnRight))
                 GameSettings.CameraTurnRightBinding = bindingCameraTurnRight;
-            if (!string.IsNullOrEmpty(bindingCameraMoveForwardAlt))
-                GameSettings.CameraMoveForwardAltBinding = bindingCameraMoveForwardAlt;
-            if (!string.IsNullOrEmpty(bindingCameraMoveBackwardAlt))
-                GameSettings.CameraMoveBackwardAltBinding = bindingCameraMoveBackwardAlt;
-            if (!string.IsNullOrEmpty(bindingCameraTurnLeftAlt))
-                GameSettings.CameraTurnLeftAltBinding = bindingCameraTurnLeftAlt;
-            if (!string.IsNullOrEmpty(bindingCameraTurnRightAlt))
-                GameSettings.CameraTurnRightAltBinding = bindingCameraTurnRightAlt;
             if (!string.IsNullOrEmpty(bindingCameraFocusHeart))
                 GameSettings.CameraFocusHeartBinding = bindingCameraFocusHeart;
             if (!string.IsNullOrEmpty(bindingCameraFocusEntrance))
@@ -1086,6 +1106,50 @@ namespace FaeMaze.UI
                 GameSettings.CameraPanBinding = bindingCameraPan;
             if (!string.IsNullOrEmpty(bindingScreenshot))
                 GameSettings.ScreenshotBinding = bindingScreenshot;
+
+            // Alt bindings (column 2) - save even if empty (cleared binding)
+            GameSettings.HeartPower1AltBinding = bindingHeartPower1Alt ?? "";
+            GameSettings.HeartPower2AltBinding = bindingHeartPower2Alt ?? "";
+            GameSettings.HeartPower3AltBinding = bindingHeartPower3Alt ?? "";
+            GameSettings.HeartPower4AltBinding = bindingHeartPower4Alt ?? "";
+            GameSettings.HeartPower5AltBinding = bindingHeartPower5Alt ?? "";
+            GameSettings.SculptPondAltBinding = bindingSculptPondAlt ?? "";
+            GameSettings.SculptLanternAltBinding = bindingSculptLanternAlt ?? "";
+            GameSettings.SculptRingAltBinding = bindingSculptRingAlt ?? "";
+            GameSettings.SculptRemoveAltBinding = bindingSculptRemoveAlt ?? "";
+            GameSettings.CameraMoveForwardAltBinding = bindingCameraMoveForwardAlt ?? "";
+            GameSettings.CameraMoveBackwardAltBinding = bindingCameraMoveBackwardAlt ?? "";
+            GameSettings.CameraTurnLeftAltBinding = bindingCameraTurnLeftAlt ?? "";
+            GameSettings.CameraTurnRightAltBinding = bindingCameraTurnRightAlt ?? "";
+            GameSettings.CameraFocusHeartAltBinding = bindingCameraFocusHeartAlt ?? "";
+            GameSettings.CameraFocusEntranceAltBinding = bindingCameraFocusEntranceAlt ?? "";
+            GameSettings.CameraFocusVisitorAltBinding = bindingCameraFocusVisitorAlt ?? "";
+            GameSettings.CameraForwardAltBinding = bindingCameraForwardAlt ?? "";
+            GameSettings.CameraOrbitAltBinding = bindingCameraOrbitAlt ?? "";
+            GameSettings.CameraPanAltBinding = bindingCameraPanAlt ?? "";
+            GameSettings.ScreenshotAltBinding = bindingScreenshotAlt ?? "";
+
+            // Tertiary bindings (column 3) - save even if empty (cleared binding)
+            GameSettings.HeartPower1TertiaryBinding = bindingHeartPower1Tertiary ?? "";
+            GameSettings.HeartPower2TertiaryBinding = bindingHeartPower2Tertiary ?? "";
+            GameSettings.HeartPower3TertiaryBinding = bindingHeartPower3Tertiary ?? "";
+            GameSettings.HeartPower4TertiaryBinding = bindingHeartPower4Tertiary ?? "";
+            GameSettings.HeartPower5TertiaryBinding = bindingHeartPower5Tertiary ?? "";
+            GameSettings.SculptPondTertiaryBinding = bindingSculptPondTertiary ?? "";
+            GameSettings.SculptLanternTertiaryBinding = bindingSculptLanternTertiary ?? "";
+            GameSettings.SculptRingTertiaryBinding = bindingSculptRingTertiary ?? "";
+            GameSettings.SculptRemoveTertiaryBinding = bindingSculptRemoveTertiary ?? "";
+            GameSettings.CameraMoveForwardTertiaryBinding = bindingCameraMoveForwardTertiary ?? "";
+            GameSettings.CameraMoveBackwardTertiaryBinding = bindingCameraMoveBackwardTertiary ?? "";
+            GameSettings.CameraTurnLeftTertiaryBinding = bindingCameraTurnLeftTertiary ?? "";
+            GameSettings.CameraTurnRightTertiaryBinding = bindingCameraTurnRightTertiary ?? "";
+            GameSettings.CameraFocusHeartTertiaryBinding = bindingCameraFocusHeartTertiary ?? "";
+            GameSettings.CameraFocusEntranceTertiaryBinding = bindingCameraFocusEntranceTertiary ?? "";
+            GameSettings.CameraFocusVisitorTertiaryBinding = bindingCameraFocusVisitorTertiary ?? "";
+            GameSettings.CameraForwardTertiaryBinding = bindingCameraForwardTertiary ?? "";
+            GameSettings.CameraOrbitTertiaryBinding = bindingCameraOrbitTertiary ?? "";
+            GameSettings.CameraPanTertiaryBinding = bindingCameraPanTertiary ?? "";
+            GameSettings.ScreenshotTertiaryBinding = bindingScreenshotTertiary ?? "";
 
             GameSettings.Save();
         }
@@ -1214,10 +1278,12 @@ namespace FaeMaze.UI
         /// </summary>
         private void LoadBindingSettings()
         {
+            // Primary bindings (column 1)
             bindingHeartPower1 = GameSettings.HeartPower1Binding;
             bindingHeartPower2 = GameSettings.HeartPower2Binding;
             bindingHeartPower3 = GameSettings.HeartPower3Binding;
             bindingHeartPower4 = GameSettings.HeartPower4Binding;
+            bindingHeartPower5 = GameSettings.HeartPower5Binding;
             bindingSculptPond = GameSettings.SculptPondBinding;
             bindingSculptLantern = GameSettings.SculptLanternBinding;
             bindingSculptRing = GameSettings.SculptRingBinding;
@@ -1226,10 +1292,6 @@ namespace FaeMaze.UI
             bindingCameraMoveBackward = GameSettings.CameraMoveBackwardBinding;
             bindingCameraTurnLeft = GameSettings.CameraTurnLeftBinding;
             bindingCameraTurnRight = GameSettings.CameraTurnRightBinding;
-            bindingCameraMoveForwardAlt = GameSettings.CameraMoveForwardAltBinding;
-            bindingCameraMoveBackwardAlt = GameSettings.CameraMoveBackwardAltBinding;
-            bindingCameraTurnLeftAlt = GameSettings.CameraTurnLeftAltBinding;
-            bindingCameraTurnRightAlt = GameSettings.CameraTurnRightAltBinding;
             bindingCameraFocusHeart = GameSettings.CameraFocusHeartBinding;
             bindingCameraFocusEntrance = GameSettings.CameraFocusEntranceBinding;
             bindingCameraFocusVisitor = GameSettings.CameraFocusVisitorBinding;
@@ -1238,12 +1300,235 @@ namespace FaeMaze.UI
             bindingCameraPan = GameSettings.CameraPanBinding;
             bindingScreenshot = GameSettings.ScreenshotBinding;
 
+            // Alt bindings (column 2)
+            bindingHeartPower1Alt = GameSettings.HeartPower1AltBinding;
+            bindingHeartPower2Alt = GameSettings.HeartPower2AltBinding;
+            bindingHeartPower3Alt = GameSettings.HeartPower3AltBinding;
+            bindingHeartPower4Alt = GameSettings.HeartPower4AltBinding;
+            bindingHeartPower5Alt = GameSettings.HeartPower5AltBinding;
+            bindingSculptPondAlt = GameSettings.SculptPondAltBinding;
+            bindingSculptLanternAlt = GameSettings.SculptLanternAltBinding;
+            bindingSculptRingAlt = GameSettings.SculptRingAltBinding;
+            bindingSculptRemoveAlt = GameSettings.SculptRemoveAltBinding;
+            bindingCameraMoveForwardAlt = GameSettings.CameraMoveForwardAltBinding;
+            bindingCameraMoveBackwardAlt = GameSettings.CameraMoveBackwardAltBinding;
+            bindingCameraTurnLeftAlt = GameSettings.CameraTurnLeftAltBinding;
+            bindingCameraTurnRightAlt = GameSettings.CameraTurnRightAltBinding;
+            bindingCameraFocusHeartAlt = GameSettings.CameraFocusHeartAltBinding;
+            bindingCameraFocusEntranceAlt = GameSettings.CameraFocusEntranceAltBinding;
+            bindingCameraFocusVisitorAlt = GameSettings.CameraFocusVisitorAltBinding;
+            bindingCameraForwardAlt = GameSettings.CameraForwardAltBinding;
+            bindingCameraOrbitAlt = GameSettings.CameraOrbitAltBinding;
+            bindingCameraPanAlt = GameSettings.CameraPanAltBinding;
+            bindingScreenshotAlt = GameSettings.ScreenshotAltBinding;
+
+            // Tertiary bindings (column 3)
+            bindingHeartPower1Tertiary = GameSettings.HeartPower1TertiaryBinding;
+            bindingHeartPower2Tertiary = GameSettings.HeartPower2TertiaryBinding;
+            bindingHeartPower3Tertiary = GameSettings.HeartPower3TertiaryBinding;
+            bindingHeartPower4Tertiary = GameSettings.HeartPower4TertiaryBinding;
+            bindingHeartPower5Tertiary = GameSettings.HeartPower5TertiaryBinding;
+            bindingSculptPondTertiary = GameSettings.SculptPondTertiaryBinding;
+            bindingSculptLanternTertiary = GameSettings.SculptLanternTertiaryBinding;
+            bindingSculptRingTertiary = GameSettings.SculptRingTertiaryBinding;
+            bindingSculptRemoveTertiary = GameSettings.SculptRemoveTertiaryBinding;
+            bindingCameraMoveForwardTertiary = GameSettings.CameraMoveForwardTertiaryBinding;
+            bindingCameraMoveBackwardTertiary = GameSettings.CameraMoveBackwardTertiaryBinding;
+            bindingCameraTurnLeftTertiary = GameSettings.CameraTurnLeftTertiaryBinding;
+            bindingCameraTurnRightTertiary = GameSettings.CameraTurnRightTertiaryBinding;
+            bindingCameraFocusHeartTertiary = GameSettings.CameraFocusHeartTertiaryBinding;
+            bindingCameraFocusEntranceTertiary = GameSettings.CameraFocusEntranceTertiaryBinding;
+            bindingCameraFocusVisitorTertiary = GameSettings.CameraFocusVisitorTertiaryBinding;
+            bindingCameraForwardTertiary = GameSettings.CameraForwardTertiaryBinding;
+            bindingCameraOrbitTertiary = GameSettings.CameraOrbitTertiaryBinding;
+            bindingCameraPanTertiary = GameSettings.CameraPanTertiaryBinding;
+            bindingScreenshotTertiary = GameSettings.ScreenshotTertiaryBinding;
+
             // Update any KeyBindingCapture components in the controls panel
             UpdateBindingCaptureDisplays();
         }
 
         /// <summary>
+        /// Determines the column (primary/alt/tertiary) from the object name.
+        /// Returns 0 for primary, 1 for alt, 2 for tertiary.
+        /// </summary>
+        private int GetBindingColumn(string objName)
+        {
+            if (objName.Contains("tertiary")) return 2;
+            if (objName.Contains("alt")) return 1;
+            return 0;
+        }
+
+        /// <summary>
+        /// Identifies the binding category from the object name (ignoring column suffix).
+        /// Returns a category string or null if unrecognized.
+        /// </summary>
+        private string GetBindingCategory(string objName)
+        {
+            // Heart powers
+            if (objName.Contains("heartpower1") || objName.Contains("murmuring")) return "heartpower1";
+            if (objName.Contains("heartpower2") || objName.Contains("grasp")) return "heartpower2";
+            if (objName.Contains("heartpower3") || objName.Contains("devour")) return "heartpower3";
+            if (objName.Contains("heartpower4") || objName.Contains("sculpting")) return "heartpower4";
+            if (objName.Contains("heartpower5") || objName.Contains("misdirect")) return "heartpower5";
+            // Sculpt menu
+            if (objName.Contains("sculptpond") || objName.Contains("placepond")) return "sculptpond";
+            if (objName.Contains("sculptlantern") || objName.Contains("placelantern")) return "sculptlantern";
+            if (objName.Contains("sculptring") || objName.Contains("placering")) return "sculptring";
+            if (objName.Contains("sculptremove") || objName.Contains("removeprop")) return "sculptremove";
+            // Camera movement - check more specific names first
+            if (objName.Contains("moveforward")) return "moveforward";
+            if (objName.Contains("movebackward")) return "movebackward";
+            if (objName.Contains("turnleft")) return "turnleft";
+            if (objName.Contains("turnright")) return "turnright";
+            // Camera focus
+            if (objName.Contains("focusheart")) return "focusheart";
+            if (objName.Contains("focusentrance")) return "focusentrance";
+            if (objName.Contains("focusvisitor")) return "focusvisitor";
+            // Camera mouse - "forwardmouse" must come before generic "forward"
+            if (objName.Contains("forward") && objName.Contains("mouse")) return "forwardmouse";
+            if (objName.Contains("orbit")) return "orbit";
+            if (objName.Contains("pan")) return "pan";
+            // Screenshot
+            if (objName.Contains("screenshot")) return "screenshot";
+            // Camera movement fallbacks (cameraforward without "mouse")
+            if (objName.Contains("cameraforward")) return "moveforward";
+            if (objName.Contains("camerabackward")) return "movebackward";
+            if (objName.Contains("cameraleft")) return "turnleft";
+            if (objName.Contains("cameraright")) return "turnright";
+            return null;
+        }
+
+        /// <summary>
+        /// Gets the cached binding value and assigns the callback for a given category and column.
+        /// </summary>
+        private void WireBinding(KeyBindingCapture capture, string category, int column)
+        {
+            // Get the correct value and callback for this category+column combination
+            string value;
+            System.Action<string> callback;
+
+            switch (category)
+            {
+                case "heartpower1":
+                    if (column == 0) { value = bindingHeartPower1; callback = b => bindingHeartPower1 = b; }
+                    else if (column == 1) { value = bindingHeartPower1Alt; callback = b => bindingHeartPower1Alt = b; }
+                    else { value = bindingHeartPower1Tertiary; callback = b => bindingHeartPower1Tertiary = b; }
+                    break;
+                case "heartpower2":
+                    if (column == 0) { value = bindingHeartPower2; callback = b => bindingHeartPower2 = b; }
+                    else if (column == 1) { value = bindingHeartPower2Alt; callback = b => bindingHeartPower2Alt = b; }
+                    else { value = bindingHeartPower2Tertiary; callback = b => bindingHeartPower2Tertiary = b; }
+                    break;
+                case "heartpower3":
+                    if (column == 0) { value = bindingHeartPower3; callback = b => bindingHeartPower3 = b; }
+                    else if (column == 1) { value = bindingHeartPower3Alt; callback = b => bindingHeartPower3Alt = b; }
+                    else { value = bindingHeartPower3Tertiary; callback = b => bindingHeartPower3Tertiary = b; }
+                    break;
+                case "heartpower4":
+                    if (column == 0) { value = bindingHeartPower4; callback = b => bindingHeartPower4 = b; }
+                    else if (column == 1) { value = bindingHeartPower4Alt; callback = b => bindingHeartPower4Alt = b; }
+                    else { value = bindingHeartPower4Tertiary; callback = b => bindingHeartPower4Tertiary = b; }
+                    break;
+                case "heartpower5":
+                    if (column == 0) { value = bindingHeartPower5; callback = b => bindingHeartPower5 = b; }
+                    else if (column == 1) { value = bindingHeartPower5Alt; callback = b => bindingHeartPower5Alt = b; }
+                    else { value = bindingHeartPower5Tertiary; callback = b => bindingHeartPower5Tertiary = b; }
+                    break;
+                case "sculptpond":
+                    if (column == 0) { value = bindingSculptPond; callback = b => bindingSculptPond = b; }
+                    else if (column == 1) { value = bindingSculptPondAlt; callback = b => bindingSculptPondAlt = b; }
+                    else { value = bindingSculptPondTertiary; callback = b => bindingSculptPondTertiary = b; }
+                    break;
+                case "sculptlantern":
+                    if (column == 0) { value = bindingSculptLantern; callback = b => bindingSculptLantern = b; }
+                    else if (column == 1) { value = bindingSculptLanternAlt; callback = b => bindingSculptLanternAlt = b; }
+                    else { value = bindingSculptLanternTertiary; callback = b => bindingSculptLanternTertiary = b; }
+                    break;
+                case "sculptring":
+                    if (column == 0) { value = bindingSculptRing; callback = b => bindingSculptRing = b; }
+                    else if (column == 1) { value = bindingSculptRingAlt; callback = b => bindingSculptRingAlt = b; }
+                    else { value = bindingSculptRingTertiary; callback = b => bindingSculptRingTertiary = b; }
+                    break;
+                case "sculptremove":
+                    if (column == 0) { value = bindingSculptRemove; callback = b => bindingSculptRemove = b; }
+                    else if (column == 1) { value = bindingSculptRemoveAlt; callback = b => bindingSculptRemoveAlt = b; }
+                    else { value = bindingSculptRemoveTertiary; callback = b => bindingSculptRemoveTertiary = b; }
+                    break;
+                case "moveforward":
+                    if (column == 0) { value = bindingCameraMoveForward; callback = b => bindingCameraMoveForward = b; }
+                    else if (column == 1) { value = bindingCameraMoveForwardAlt; callback = b => bindingCameraMoveForwardAlt = b; }
+                    else { value = bindingCameraMoveForwardTertiary; callback = b => bindingCameraMoveForwardTertiary = b; }
+                    break;
+                case "movebackward":
+                    if (column == 0) { value = bindingCameraMoveBackward; callback = b => bindingCameraMoveBackward = b; }
+                    else if (column == 1) { value = bindingCameraMoveBackwardAlt; callback = b => bindingCameraMoveBackwardAlt = b; }
+                    else { value = bindingCameraMoveBackwardTertiary; callback = b => bindingCameraMoveBackwardTertiary = b; }
+                    break;
+                case "turnleft":
+                    if (column == 0) { value = bindingCameraTurnLeft; callback = b => bindingCameraTurnLeft = b; }
+                    else if (column == 1) { value = bindingCameraTurnLeftAlt; callback = b => bindingCameraTurnLeftAlt = b; }
+                    else { value = bindingCameraTurnLeftTertiary; callback = b => bindingCameraTurnLeftTertiary = b; }
+                    break;
+                case "turnright":
+                    if (column == 0) { value = bindingCameraTurnRight; callback = b => bindingCameraTurnRight = b; }
+                    else if (column == 1) { value = bindingCameraTurnRightAlt; callback = b => bindingCameraTurnRightAlt = b; }
+                    else { value = bindingCameraTurnRightTertiary; callback = b => bindingCameraTurnRightTertiary = b; }
+                    break;
+                case "focusheart":
+                    if (column == 0) { value = bindingCameraFocusHeart; callback = b => bindingCameraFocusHeart = b; }
+                    else if (column == 1) { value = bindingCameraFocusHeartAlt; callback = b => bindingCameraFocusHeartAlt = b; }
+                    else { value = bindingCameraFocusHeartTertiary; callback = b => bindingCameraFocusHeartTertiary = b; }
+                    break;
+                case "focusentrance":
+                    if (column == 0) { value = bindingCameraFocusEntrance; callback = b => bindingCameraFocusEntrance = b; }
+                    else if (column == 1) { value = bindingCameraFocusEntranceAlt; callback = b => bindingCameraFocusEntranceAlt = b; }
+                    else { value = bindingCameraFocusEntranceTertiary; callback = b => bindingCameraFocusEntranceTertiary = b; }
+                    break;
+                case "focusvisitor":
+                    if (column == 0) { value = bindingCameraFocusVisitor; callback = b => bindingCameraFocusVisitor = b; }
+                    else if (column == 1) { value = bindingCameraFocusVisitorAlt; callback = b => bindingCameraFocusVisitorAlt = b; }
+                    else { value = bindingCameraFocusVisitorTertiary; callback = b => bindingCameraFocusVisitorTertiary = b; }
+                    break;
+                case "forwardmouse":
+                    if (column == 0) { value = bindingCameraForward; callback = b => bindingCameraForward = b; }
+                    else if (column == 1) { value = bindingCameraForwardAlt; callback = b => bindingCameraForwardAlt = b; }
+                    else { value = bindingCameraForwardTertiary; callback = b => bindingCameraForwardTertiary = b; }
+                    break;
+                case "orbit":
+                    if (column == 0) { value = bindingCameraOrbit; callback = b => bindingCameraOrbit = b; }
+                    else if (column == 1) { value = bindingCameraOrbitAlt; callback = b => bindingCameraOrbitAlt = b; }
+                    else { value = bindingCameraOrbitTertiary; callback = b => bindingCameraOrbitTertiary = b; }
+                    break;
+                case "pan":
+                    if (column == 0) { value = bindingCameraPan; callback = b => bindingCameraPan = b; }
+                    else if (column == 1) { value = bindingCameraPanAlt; callback = b => bindingCameraPanAlt = b; }
+                    else { value = bindingCameraPanTertiary; callback = b => bindingCameraPanTertiary = b; }
+                    break;
+                case "screenshot":
+                    if (column == 0)
+                    {
+                        value = bindingScreenshot;
+                        callback = b => { bindingScreenshot = b; SyncScreenshotBindings(b); };
+                    }
+                    else if (column == 1) { value = bindingScreenshotAlt; callback = b => bindingScreenshotAlt = b; }
+                    else { value = bindingScreenshotTertiary; callback = b => bindingScreenshotTertiary = b; }
+                    break;
+                default:
+                    return; // Unknown category
+            }
+
+            capture.SetBinding(value ?? "");
+            // Use a local variable capture for the lambda to avoid closure issues
+            var cb = callback;
+            // Remove any previously attached lambda by storing in a dictionary would be complex,
+            // so we use named methods for the capture callback approach
+            capture.OnBindingCaptured += cb;
+        }
+
+        /// <summary>
         /// Finds KeyBindingCapture components in all panels and updates their display values.
+        /// All three columns (primary, alt, tertiary) are now fully supported.
         /// </summary>
         private void UpdateBindingCaptureDisplays()
         {
@@ -1259,223 +1544,20 @@ namespace FaeMaze.UI
             if (audioPanel != null)
                 allCaptures.AddRange(audioPanel.GetComponentsInChildren<KeyBindingCapture>(true));
 
-            var captures = allCaptures;
-            foreach (var capture in captures)
+            foreach (var capture in allCaptures)
             {
                 string objName = capture.gameObject.name.ToLower();
+                int column = GetBindingColumn(objName);
+                string category = GetBindingCategory(objName);
 
-                // IMPORTANT: Check "tertiary" and "alt" suffixes FIRST before checking base names
-                // Otherwise "heartpower1" matches "heartpower1alt_button" and "heartpower1tertiary_button"
-
-                // Skip tertiary bindings - they have no stored values and should remain empty
-                // Users can assign them through the UI if desired
-                if (objName.Contains("tertiary"))
+                if (category == null)
                 {
-                    // Leave tertiary bindings unset (empty) - no callback needed for now
-                    capture.SetBinding("");
+                    Debug.LogWarning($"[OptionsManager] Unrecognized KeyBindingCapture object: '{capture.gameObject.name}'");
                     continue;
                 }
 
-                // Handle Alt bindings for controls that don't have stored Alt values
-                // These should be empty unless explicitly set by the user
-                if (objName.Contains("heartpower") && objName.Contains("alt"))
-                {
-                    // Heart power Alt bindings - not stored, leave empty
-                    capture.SetBinding("");
-                    continue;
-                }
-                if ((objName.Contains("sculptpond") || objName.Contains("sculptlantern") ||
-                     objName.Contains("sculptring") || objName.Contains("sculptremove") ||
-                     objName.Contains("placepond") || objName.Contains("placelantern") ||
-                     objName.Contains("placering") || objName.Contains("removeprop")) && objName.Contains("alt"))
-                {
-                    // Sculpt menu Alt bindings - not stored, leave empty
-                    capture.SetBinding("");
-                    continue;
-                }
-                if ((objName.Contains("focusheart") || objName.Contains("focusentrance") ||
-                     objName.Contains("focusvisitor") || objName.Contains("orbit") ||
-                     objName.Contains("pan") || objName.Contains("screenshot")) && objName.Contains("alt"))
-                {
-                    // Other Alt bindings - not stored, leave empty
-                    capture.SetBinding("");
-                    continue;
-                }
-
-                // Match by object name to determine which binding to use
-                if (objName.Contains("heartpower1") || objName.Contains("murmuring"))
-                {
-                    capture.SetBinding(bindingHeartPower1);
-                    capture.OnBindingCaptured -= OnHeartPower1BindingChanged;
-                    capture.OnBindingCaptured += OnHeartPower1BindingChanged;
-                }
-                else if (objName.Contains("heartpower2") || objName.Contains("grasp"))
-                {
-                    capture.SetBinding(bindingHeartPower2);
-                    capture.OnBindingCaptured -= OnHeartPower2BindingChanged;
-                    capture.OnBindingCaptured += OnHeartPower2BindingChanged;
-                }
-                else if (objName.Contains("heartpower3") || objName.Contains("devour"))
-                {
-                    capture.SetBinding(bindingHeartPower3);
-                    capture.OnBindingCaptured -= OnHeartPower3BindingChanged;
-                    capture.OnBindingCaptured += OnHeartPower3BindingChanged;
-                }
-                else if (objName.Contains("heartpower4") || objName.Contains("sculpting"))
-                {
-                    capture.SetBinding(bindingHeartPower4);
-                    capture.OnBindingCaptured -= OnHeartPower4BindingChanged;
-                    capture.OnBindingCaptured += OnHeartPower4BindingChanged;
-                }
-                else if (objName.Contains("sculptpond") || objName.Contains("placepond"))
-                {
-                    capture.SetBinding(bindingSculptPond);
-                    capture.OnBindingCaptured -= OnSculptPondBindingChanged;
-                    capture.OnBindingCaptured += OnSculptPondBindingChanged;
-                }
-                else if (objName.Contains("sculptlantern") || objName.Contains("placelantern"))
-                {
-                    capture.SetBinding(bindingSculptLantern);
-                    capture.OnBindingCaptured -= OnSculptLanternBindingChanged;
-                    capture.OnBindingCaptured += OnSculptLanternBindingChanged;
-                }
-                else if (objName.Contains("sculptring") || objName.Contains("placering"))
-                {
-                    capture.SetBinding(bindingSculptRing);
-                    capture.OnBindingCaptured -= OnSculptRingBindingChanged;
-                    capture.OnBindingCaptured += OnSculptRingBindingChanged;
-                }
-                else if (objName.Contains("sculptremove") || objName.Contains("removeprop"))
-                {
-                    capture.SetBinding(bindingSculptRemove);
-                    capture.OnBindingCaptured -= OnSculptRemoveBindingChanged;
-                    capture.OnBindingCaptured += OnSculptRemoveBindingChanged;
-                }
-                // Alt/Secondary bindings for camera movement (arrow keys by default)
-                // IMPORTANT: Check Alt versions FIRST since "moveforward" would match both "moveforward" and "moveforwardalt"
-                else if (objName.Contains("moveforwardalt") || objName.Contains("cameramoveforwardalt"))
-                {
-                    capture.SetBinding(bindingCameraMoveForwardAlt);
-                    capture.OnBindingCaptured -= OnCameraMoveForwardAltBindingChanged;
-                    capture.OnBindingCaptured += OnCameraMoveForwardAltBindingChanged;
-                }
-                else if (objName.Contains("movebackwardalt") || objName.Contains("cameramovebackwardalt"))
-                {
-                    capture.SetBinding(bindingCameraMoveBackwardAlt);
-                    capture.OnBindingCaptured -= OnCameraMoveBackwardAltBindingChanged;
-                    capture.OnBindingCaptured += OnCameraMoveBackwardAltBindingChanged;
-                }
-                else if (objName.Contains("turnleftalt") || objName.Contains("cameraturnleftalt"))
-                {
-                    capture.SetBinding(bindingCameraTurnLeftAlt);
-                    capture.OnBindingCaptured -= OnCameraTurnLeftAltBindingChanged;
-                    capture.OnBindingCaptured += OnCameraTurnLeftAltBindingChanged;
-                }
-                else if (objName.Contains("turnrightalt") || objName.Contains("cameraturnrightalt"))
-                {
-                    capture.SetBinding(bindingCameraTurnRightAlt);
-                    capture.OnBindingCaptured -= OnCameraTurnRightAltBindingChanged;
-                    capture.OnBindingCaptured += OnCameraTurnRightAltBindingChanged;
-                }
-                // Primary bindings for camera movement (WASD by default)
-                else if (objName.Contains("moveforward") || objName.Contains("cameraforward"))
-                {
-                    capture.SetBinding(bindingCameraMoveForward);
-                    capture.OnBindingCaptured -= OnCameraMoveForwardBindingChanged;
-                    capture.OnBindingCaptured += OnCameraMoveForwardBindingChanged;
-                }
-                else if (objName.Contains("movebackward") || objName.Contains("camerabackward"))
-                {
-                    capture.SetBinding(bindingCameraMoveBackward);
-                    capture.OnBindingCaptured -= OnCameraMoveBackwardBindingChanged;
-                    capture.OnBindingCaptured += OnCameraMoveBackwardBindingChanged;
-                }
-                else if (objName.Contains("turnleft") || objName.Contains("cameraleft"))
-                {
-                    capture.SetBinding(bindingCameraTurnLeft);
-                    capture.OnBindingCaptured -= OnCameraTurnLeftBindingChanged;
-                    capture.OnBindingCaptured += OnCameraTurnLeftBindingChanged;
-                }
-                else if (objName.Contains("turnright") || objName.Contains("cameraright"))
-                {
-                    capture.SetBinding(bindingCameraTurnRight);
-                    capture.OnBindingCaptured -= OnCameraTurnRightBindingChanged;
-                    capture.OnBindingCaptured += OnCameraTurnRightBindingChanged;
-                }
-                else if (objName.Contains("focusheart"))
-                {
-                    capture.SetBinding(bindingCameraFocusHeart);
-                    capture.OnBindingCaptured -= OnCameraFocusHeartBindingChanged;
-                    capture.OnBindingCaptured += OnCameraFocusHeartBindingChanged;
-                }
-                else if (objName.Contains("focusentrance"))
-                {
-                    capture.SetBinding(bindingCameraFocusEntrance);
-                    capture.OnBindingCaptured -= OnCameraFocusEntranceBindingChanged;
-                    capture.OnBindingCaptured += OnCameraFocusEntranceBindingChanged;
-                }
-                else if (objName.Contains("focusvisitor"))
-                {
-                    capture.SetBinding(bindingCameraFocusVisitor);
-                    capture.OnBindingCaptured -= OnCameraFocusVisitorBindingChanged;
-                    capture.OnBindingCaptured += OnCameraFocusVisitorBindingChanged;
-                }
-                else if (objName.Contains("forward") && objName.Contains("mouse"))
-                {
-                    capture.SetBinding(bindingCameraForward);
-                    capture.OnBindingCaptured -= OnCameraForwardBindingChanged;
-                    capture.OnBindingCaptured += OnCameraForwardBindingChanged;
-                }
-                else if (objName.Contains("orbit"))
-                {
-                    capture.SetBinding(bindingCameraOrbit);
-                    capture.OnBindingCaptured -= OnCameraOrbitBindingChanged;
-                    capture.OnBindingCaptured += OnCameraOrbitBindingChanged;
-                }
-                else if (objName.Contains("pan"))
-                {
-                    capture.SetBinding(bindingCameraPan);
-                    capture.OnBindingCaptured -= OnCameraPanBindingChanged;
-                    capture.OnBindingCaptured += OnCameraPanBindingChanged;
-                }
-                else if (objName.Contains("screenshot"))
-                {
-                    capture.SetBinding(bindingScreenshot);
-                    capture.OnBindingCaptured -= OnScreenshotBindingChanged;
-                    capture.OnBindingCaptured += OnScreenshotBindingChanged;
-                }
+                WireBinding(capture, category, column);
             }
-        }
-
-        // Binding change callbacks
-        private void OnHeartPower1BindingChanged(string binding) => bindingHeartPower1 = binding;
-        private void OnHeartPower2BindingChanged(string binding) => bindingHeartPower2 = binding;
-        private void OnHeartPower3BindingChanged(string binding) => bindingHeartPower3 = binding;
-        private void OnHeartPower4BindingChanged(string binding) => bindingHeartPower4 = binding;
-        private void OnSculptPondBindingChanged(string binding) => bindingSculptPond = binding;
-        private void OnSculptLanternBindingChanged(string binding) => bindingSculptLantern = binding;
-        private void OnSculptRingBindingChanged(string binding) => bindingSculptRing = binding;
-        private void OnSculptRemoveBindingChanged(string binding) => bindingSculptRemove = binding;
-        private void OnCameraMoveForwardBindingChanged(string binding) => bindingCameraMoveForward = binding;
-        private void OnCameraMoveBackwardBindingChanged(string binding) => bindingCameraMoveBackward = binding;
-        private void OnCameraTurnLeftBindingChanged(string binding) => bindingCameraTurnLeft = binding;
-        private void OnCameraTurnRightBindingChanged(string binding) => bindingCameraTurnRight = binding;
-        private void OnCameraMoveForwardAltBindingChanged(string binding) => bindingCameraMoveForwardAlt = binding;
-        private void OnCameraMoveBackwardAltBindingChanged(string binding) => bindingCameraMoveBackwardAlt = binding;
-        private void OnCameraTurnLeftAltBindingChanged(string binding) => bindingCameraTurnLeftAlt = binding;
-        private void OnCameraTurnRightAltBindingChanged(string binding) => bindingCameraTurnRightAlt = binding;
-        private void OnCameraFocusHeartBindingChanged(string binding) => bindingCameraFocusHeart = binding;
-        private void OnCameraFocusEntranceBindingChanged(string binding) => bindingCameraFocusEntrance = binding;
-        private void OnCameraFocusVisitorBindingChanged(string binding) => bindingCameraFocusVisitor = binding;
-        private void OnCameraForwardBindingChanged(string binding) => bindingCameraForward = binding;
-        private void OnCameraOrbitBindingChanged(string binding) => bindingCameraOrbit = binding;
-        private void OnCameraPanBindingChanged(string binding) => bindingCameraPan = binding;
-
-        private void OnScreenshotBindingChanged(string binding)
-        {
-            bindingScreenshot = binding;
-            // Sync all screenshot captures across panels (VIDEO and CONTROLS may both have one)
-            SyncScreenshotBindings(binding);
         }
 
         /// <summary>

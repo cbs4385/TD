@@ -39,7 +39,13 @@
       "Bash(git commit:*)",
       "Bash(git mv:*)",
       "Bash(git -C \"C:/Users/chris/source/repos/TD\" diff --stat Assets/Scripts/HeartPowers/HeartPowerEffects.cs)",
-      "Bash(git -C \"C:/Users/chris/source/repos/TD\" checkout -- Assets/Scripts/HeartPowers/HeartPowerEffects.cs)"
+      "Bash(git -C \"C:/Users/chris/source/repos/TD\" checkout -- Assets/Scripts/HeartPowers/HeartPowerEffects.cs)",
+      "Bash(powershell -File:*)",
+      "Bash(do echo -n \" $name: \" find \"C:/Users/chris/source/repos/TD/Assets/Audio/\" -name \"$name*\")",
+      "Bash(# Check exact SIGN_PREFAB_PATH grep -n \"\"SIGN_PREFAB_PATH\"\" \"\"C:/Users/chris/source/repos/TD/Assets/Scripts/HeartPowers/HeartPowerEffects.cs\"\" echo \"\"\"\" # Check PropAudioSource clip paths grep -n \"\"clipPath\\\\|Resources.Load\"\" \"\"C:/Users/chris/source/repos/TD/Assets/Scripts/Audio/PropAudioSource.cs\"\")",
+      "Bash(echo:*)",
+      "Bash(py -c:*)",
+      "Bash(where:*)"
     ],
     "deny": [],
     "ask": []

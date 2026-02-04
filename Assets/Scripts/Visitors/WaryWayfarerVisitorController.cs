@@ -213,12 +213,15 @@ namespace FaeMaze.Visitors
                 hazardCost = GetHazardCostForPosition;
             }
 
+            var edgeCostMultipliers = HeartPowerManager.Instance?.GetMisdirectEdgeCostMultipliers();
+
             return ForestMaze.MazePathfinding.BuildWorldPath(
                 mazeGridBehaviour.WorldSpaceMazeData,
                 start, end,
                 heartNodePenalty: 0f,
                 penalizeHeartNode: false,
-                hazardCostFunction: hazardCost
+                hazardCostFunction: hazardCost,
+                edgeCostMultipliers: edgeCostMultipliers
             );
         }
 

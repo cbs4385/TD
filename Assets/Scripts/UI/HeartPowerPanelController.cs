@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using TMPro;
+using System.Collections.Generic;
 using FaeMaze.HeartPowers;
 using FaeMaze.Systems;
 using FaeMaze.Cameras;
@@ -46,11 +47,11 @@ namespace FaeMaze.UI
 
         #region Private Fields
 
-        // 4 active powers (MurmuringPaths, HeartwardGrasp, DevouringMaw, Sculpting)
-        private Button[] powerButtons = new Button[4];
-        private Image[] buttonImages = new Image[4];
-        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[4];
-        private TextMeshProUGUI[] cooldownTexts = new TextMeshProUGUI[4];
+        // 5 active powers (MurmuringPaths, HeartwardGrasp, DevouringMaw, Sculpting, Misdirect)
+        private Button[] powerButtons = new Button[5];
+        private Image[] buttonImages = new Image[5];
+        private Image[] iconImages = new Image[5];
+        private TextMeshProUGUI[] buttonLabels = new TextMeshProUGUI[5];
 
         // Right panel UI elements
         private TextMeshProUGUI runTimerText;
@@ -59,10 +60,11 @@ namespace FaeMaze.UI
 
         private readonly string[] powerNames = new string[]
         {
-            "1: Murmuring\nPaths",
-            "2: Heartward\nGrasp",
-            "3: Devouring\nMaw",
-            "4: Sculpting"
+            "Spooky\nFog",
+            "Yoink!",
+            "Nom\nNom",
+            "Redecorating",
+            "Misdirect"
         };
 
         private readonly HeartPowerType[] powerTypes = new HeartPowerType[]
@@ -70,16 +72,18 @@ namespace FaeMaze.UI
             HeartPowerType.MurmuringPaths,
             HeartPowerType.HeartwardGrasp,
             HeartPowerType.DevouringMaw,
-            HeartPowerType.Sculpting
+            HeartPowerType.Sculpting,
+            HeartPowerType.Misdirect
         };
 
-        // ROYGBIV spectrum colors for each power (4 active powers)
+        // ROYGBIV spectrum colors for each power (5 active powers)
         private readonly Color[] roygbivColors = new Color[]
         {
             new Color(1.0f, 0.5f, 0.0f, 1f),  // MurmuringPaths: Warm Orange
             new Color(0.9f, 0.1f, 0.5f, 1f),  // HeartwardGrasp: Crimson
             new Color(0.5f, 0.0f, 0.2f, 1f),  // DevouringMaw: Dark Burgundy
-            new Color(0.2f, 0.6f, 0.4f, 1f)   // Sculpting: Forest Green
+            new Color(0.2f, 0.6f, 0.4f, 1f),  // Sculpting: Forest Green
+            new Color(0.2f, 0.7f, 0.9f, 1f)   // Misdirect: Cyan/Teal
         };
 
         // Base colors (darker versions for inactive state)
@@ -88,14 +92,15 @@ namespace FaeMaze.UI
             new Color(0.35f, 0.18f, 0.0f, 1f),  // Dim Orange (MurmuringPaths)
             new Color(0.32f, 0.05f, 0.18f, 1f), // Dim Crimson (HeartwardGrasp)
             new Color(0.18f, 0.0f, 0.08f, 1f),  // Dim Dark Burgundy (DevouringMaw)
-            new Color(0.08f, 0.22f, 0.15f, 1f)  // Dim Forest Green (Sculpting)
+            new Color(0.08f, 0.22f, 0.15f, 1f), // Dim Forest Green (Sculpting)
+            new Color(0.08f, 0.25f, 0.32f, 1f)  // Dim Cyan/Teal (Misdirect)
         };
 
-        // Glow animation tracking (4 active powers)
-        private float[] glowPhase = new float[4];
-        private float[] glowIntensity = new float[4];
-        private float[] flashIntensity = new float[4]; // Flash effect when power is activated
-        private bool[] isActivePower = new bool[4]; // Track which toggle powers are currently active
+        // Glow animation tracking (5 active powers)
+        private float[] glowPhase = new float[5];
+        private float[] glowIntensity = new float[5];
+        private float[] flashIntensity = new float[5]; // Flash effect when power is activated
+        private bool[] isActivePower = new bool[5]; // Track which toggle powers are currently active
         private float glowSpeed = 2.0f;
         private float glowPulseSpeed = 3.0f;
         private float flashDecaySpeed = 5.0f;
@@ -103,10 +108,14 @@ namespace FaeMaze.UI
         // Tutorial highlight lock - when set, that button is frozen at peak brightness
         private int lockedAtPeakButtonIndex = -1;
 
+        // Tutorial power lock - when true, all powers are disabled unless explicitly unlocked
+        private bool tutorialPowersLocked = false;
+        private HashSet<int> tutorialUnlockedPowers = new HashSet<int>();
+
         private Camera mainCamera;
 
         // Power button sprites (loaded at runtime)
-        private Sprite[] powerButtonSprites = new Sprite[4];
+        private Sprite[] powerButtonSprites = new Sprite[5];
 
         // Circular sprite for round button backgrounds
         private Sprite circleSprite;
@@ -158,6 +167,9 @@ namespace FaeMaze.UI
             // Initialize UI controls
             InitializeControls();
 
+            // Update button labels to reflect current bindings
+            RefreshButtonLabels();
+
             // Initialize glow effects with staggered phases
             for (int i = 0; i < glowPhase.Length; i++)
             {
@@ -176,7 +188,7 @@ namespace FaeMaze.UI
                 TogglePanel();
             }
 
-            // Update cooldown displays and button states
+            // Update button states
             UpdateButtonStates();
 
             // Update ROYGBIV glow effects
@@ -292,8 +304,7 @@ namespace FaeMaze.UI
         #region UI Creation
 
         /// <summary>
-        /// Loads sprites for power buttons from the Assets/Textures/PowerModels folder.
-        /// Uses AssetDatabase in editor, Resources.Load in builds.
+        /// Loads sprites for power buttons from the Resources/PowerModels folder.
         /// Also creates a procedural circle sprite for round button backgrounds.
         /// </summary>
         private void LoadPowerButtonSprites()
@@ -304,56 +315,11 @@ namespace FaeMaze.UI
                 "PowerModels/path",
                 "PowerModels/grasp",
                 "PowerModels/devour",
-                "PowerModels/sculpt"
+                "PowerModels/sculpt",
+                "PowerModels/misdirect"
             };
 
-#if UNITY_EDITOR
-            // In editor, use AssetDatabase for faster iteration
-            string[] editorPaths = new string[]
-            {
-                "Assets/Textures/PowerModels/path.png",
-                "Assets/Textures/PowerModels/grasp.png",
-                "Assets/Textures/PowerModels/devour.png",
-                "Assets/Textures/PowerModels/sculpt.png"
-            };
-
-            for (int i = 0; i < 4; i++)
-            {
-                // First try loading as Sprite (if texture type is set correctly and Sprite Mode is Single)
-                powerButtonSprites[i] = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(editorPaths[i]);
-
-                // If that fails, try loading all sprites at that path (handles Multiple sprite mode)
-                if (powerButtonSprites[i] == null)
-                {
-                    Object[] allSprites = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(editorPaths[i]);
-                    foreach (Object obj in allSprites)
-                    {
-                        if (obj is Sprite sprite)
-                        {
-                            powerButtonSprites[i] = sprite;
-                            break;
-                        }
-                    }
-                }
-
-                // If still null, load as Texture2D and create sprite manually
-                if (powerButtonSprites[i] == null)
-                {
-                    Texture2D tex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(editorPaths[i]);
-                    if (tex != null)
-                    {
-                        powerButtonSprites[i] = Sprite.Create(
-                            tex,
-                            new Rect(0, 0, tex.width, tex.height),
-                            new Vector2(0.5f, 0.5f),
-                            100f
-                        );
-                    }
-                }
-            }
-#else
-            // In builds, use Resources.Load
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 5; i++)
             {
                 // Try loading as Sprite first
                 powerButtonSprites[i] = Resources.Load<Sprite>(resourceNames[i]);
@@ -377,7 +343,6 @@ namespace FaeMaze.UI
                     }
                 }
             }
-#endif
 
             // Create a procedural circle sprite for round button backgrounds
             circleSprite = CreateCircleSprite(128);
@@ -453,14 +418,18 @@ namespace FaeMaze.UI
         /// </summary>
         private void FindExistingButtons(Transform canvasTransform)
         {
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 5; i++)
             {
                 Transform btn = canvasTransform.Find($"PowerButton_{i}");
                 if (btn != null)
                 {
                     powerButtons[i] = btn.GetComponent<Button>();
                     buttonImages[i] = btn.GetComponent<Image>();
-                    cooldownTexts[i] = btn.GetComponentInChildren<TextMeshProUGUI>();
+                    Transform iconTransform = btn.Find("Icon");
+                    if (iconTransform != null)
+                    {
+                        iconImages[i] = iconTransform.GetComponent<Image>();
+                    }
                 }
             }
         }
@@ -487,8 +456,8 @@ namespace FaeMaze.UI
             float bottomPadding = 65f; // Button center at y=140 (65 + 150/2 = 140)
             float leftPadding = 30f;
 
-            // Create 4 power buttons in a horizontal row at bottom-left
-            for (int i = 0; i < 4; i++)
+            // Create 5 power buttons in a horizontal row at bottom-left
+            for (int i = 0; i < 5; i++)
             {
                 float xPos = leftPadding + (i * (buttonSize + buttonSpacing)) + buttonSize / 2f;
                 float yPos = bottomPadding + buttonSize / 2f;
@@ -677,7 +646,7 @@ namespace FaeMaze.UI
                 iconRect.anchoredPosition = Vector2.zero;
 
                 // Icon size is 80% of button size, with per-icon multipliers
-                float[] iconSizeMultipliers = { 1.0f, 1.5f, 1.0f, 1.0f }; // Power 2 (grasp) is 50% larger
+                float[] iconSizeMultipliers = { 1.0f, 1.5f, 1.0f, 1.0f, 1.0f }; // Power 2 (grasp) is 50% larger
                 float iconSize = buttonSize * 0.8f * iconSizeMultipliers[index];
                 iconRect.sizeDelta = new Vector2(iconSize, iconSize);
 
@@ -689,6 +658,9 @@ namespace FaeMaze.UI
 
                 // Use Sliced or Simple image type to ensure proper scaling
                 iconImage.type = Image.Type.Simple;
+
+                // Store icon image for tinting when unavailable
+                iconImages[index] = iconImage;
             }
 
             Button button = buttonObj.AddComponent<Button>();
@@ -713,7 +685,7 @@ namespace FaeMaze.UI
             textRect.sizeDelta = new Vector2(40f, 40f);
 
             TextMeshProUGUI text = textObj.AddComponent<TextMeshProUGUI>();
-            text.text = (index + 1).ToString();
+            text.text = GetPrimaryBindingLabel(index);
             text.fontSize = Mathf.Max(10, buttonSize * 0.3f);
             text.alignment = TextAlignmentOptions.TopLeft;
             text.color = Color.white;
@@ -724,28 +696,6 @@ namespace FaeMaze.UI
 
             buttonLabels[index] = text;
 
-            // Create cooldown text overlay
-            GameObject cooldownObj = new GameObject("Cooldown");
-            cooldownObj.transform.SetParent(buttonObj.transform, false);
-
-            RectTransform cooldownRect = cooldownObj.AddComponent<RectTransform>();
-            cooldownRect.anchorMin = Vector2.zero;
-            cooldownRect.anchorMax = Vector2.one;
-            cooldownRect.offsetMin = Vector2.zero;
-            cooldownRect.offsetMax = Vector2.zero;
-
-            TextMeshProUGUI cooldownText = cooldownObj.AddComponent<TextMeshProUGUI>();
-            cooldownText.text = "";
-            cooldownText.fontSize = Mathf.Max(8, buttonSize * 0.25f);
-            cooldownText.fontStyle = FontStyles.Bold;
-            cooldownText.alignment = TextAlignmentOptions.Center;
-            cooldownText.color = new Color(1f, 0.3f, 0.3f, 1f);
-            cooldownText.raycastTarget = false;
-            cooldownText.outlineWidth = 0.2f;
-            cooldownText.outlineColor = Color.black;
-
-            cooldownTexts[index] = cooldownText;
-            cooldownObj.SetActive(false);
 
 
             return button;
@@ -763,6 +713,13 @@ namespace FaeMaze.UI
         {
             if (heartPowerManager == null)
             {
+                return;
+            }
+
+            // Block power activation during tutorial until explicitly unlocked
+            if (tutorialPowersLocked && !tutorialUnlockedPowers.Contains(index))
+            {
+                Debug.Log($"[HeartPowerPanelController] Power {index} blocked by tutorial lock");
                 return;
             }
 
@@ -835,28 +792,39 @@ namespace FaeMaze.UI
         #region Keyboard Input
 
         /// <summary>
-        /// Handles keyboard shortcuts for activating powers (1-7 keys).
+        /// Handles keyboard/gamepad shortcuts for activating powers using configurable bindings.
         /// </summary>
         private void HandleKeyboardInput()
         {
-            if (Keyboard.current == null) return;
-
-            // 4 active powers - keys 1, 2, 3, 4
-            if (Keyboard.current.digit1Key.wasPressedThisFrame || Keyboard.current.numpad1Key.wasPressedThisFrame)
+            // Power 1: Spooky Fog
+            if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower1Binding, GameSettings.HeartPower1AltBinding, GameSettings.HeartPower1TertiaryBinding))
             {
-                OnPowerButtonClicked(0); // MurmuringPaths
+                OnPowerButtonClicked(0);
             }
-            else if (Keyboard.current.digit2Key.wasPressedThisFrame || Keyboard.current.numpad2Key.wasPressedThisFrame)
+            // Power 2: Yoink!
+            else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower2Binding, GameSettings.HeartPower2AltBinding, GameSettings.HeartPower2TertiaryBinding))
             {
-                OnPowerButtonClicked(1); // HeartwardGrasp
+                OnPowerButtonClicked(1);
             }
-            else if (Keyboard.current.digit3Key.wasPressedThisFrame || Keyboard.current.numpad3Key.wasPressedThisFrame)
+            // Power 3: Nom Nom
+            else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower3Binding, GameSettings.HeartPower3AltBinding, GameSettings.HeartPower3TertiaryBinding))
             {
-                OnPowerButtonClicked(2); // DevouringMaw
+                OnPowerButtonClicked(2);
             }
-            else if (Keyboard.current.digit4Key.wasPressedThisFrame || Keyboard.current.numpad4Key.wasPressedThisFrame)
+            // Power 4: Redecorating
+            else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower4Binding, GameSettings.HeartPower4AltBinding, GameSettings.HeartPower4TertiaryBinding))
             {
-                OnPowerButtonClicked(3); // Sculpting
+                OnPowerButtonClicked(3);
+            }
+            // Power 5: Misdirect
+            else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
+                GameSettings.HeartPower5Binding, GameSettings.HeartPower5AltBinding, GameSettings.HeartPower5TertiaryBinding))
+            {
+                OnPowerButtonClicked(4);
             }
         }
 
@@ -919,7 +887,7 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
-        /// Updates button states and cooldown displays.
+        /// Updates button states.
         /// </summary>
         private void UpdateButtonStates()
         {
@@ -960,47 +928,35 @@ namespace FaeMaze.UI
                 // Track active state for glow effects
                 isActivePower[i] = isTogglePower && isActive;
 
-                // Update display based on power type
-                if (isTogglePower)
-                {
-                    // Toggle power: active state shown via button color (no text)
-                    cooldownTexts[i].gameObject.SetActive(false);
-                }
-                else
-                {
-                    // Non-toggle power: show cooldown
-                    float cooldownRemaining = heartPowerManager.GetCooldownRemaining(powerType);
-                    if (cooldownRemaining > 0)
-                    {
-                        cooldownTexts[i].text = $"{cooldownRemaining:F1}s";
-                        cooldownTexts[i].color = new Color(1f, 0.3f, 0.3f, 1f); // Red for cooldown
-                        cooldownTexts[i].gameObject.SetActive(true);
-                    }
-                    else
-                    {
-                        cooldownTexts[i].gameObject.SetActive(false);
-                    }
-                }
 
                 // Determine if power is truly available (including position checks)
                 bool fullyAvailable = canActivate && sculptingPositionValid && graspPositionValid;
 
+                // During tutorial, locked powers that haven't been unlocked should appear consistently unavailable
+                if (tutorialPowersLocked && !tutorialUnlockedPowers.Contains(i))
+                {
+                    fullyAvailable = false;
+                }
+
                 // Update glow intensity based on availability
+                // Use unscaledDeltaTime so glow updates continue during pause (e.g., tutorial)
+                float dt = Time.unscaledDeltaTime * glowSpeed;
+
                 // Glow effects will be applied by UpdateGlowEffects()
                 if (isTogglePower && isActive)
                 {
                     // Active toggle power - keep high glow intensity
-                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.2f, Time.deltaTime * glowSpeed);
+                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.2f, dt);
                 }
                 else if (fullyAvailable)
                 {
                     // Power is ready - increase glow intensity
-                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.0f, Time.deltaTime * glowSpeed);
+                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.0f, dt);
                 }
                 else
                 {
                     // Power not ready - decrease glow intensity
-                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 0.3f, Time.deltaTime * glowSpeed);
+                    glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 0.3f, dt);
                 }
             }
         }
@@ -1086,6 +1042,19 @@ namespace FaeMaze.UI
 
                 // Apply the color to the button image
                 buttonImages[i].color = finalColor;
+
+                // Tint icon to match availability - dark when unavailable, white when active
+                if (iconImages[i] != null)
+                {
+                    if (isUnavailable && !isLockedAtPeak && flashIntensity[i] <= 0)
+                    {
+                        iconImages[i].color = new Color(0.4f, 0.4f, 0.4f, 1f);
+                    }
+                    else
+                    {
+                        iconImages[i].color = Color.white;
+                    }
+                }
             }
         }
 
@@ -1129,6 +1098,38 @@ namespace FaeMaze.UI
         }
 
         /// <summary>
+        /// Gets the display label for a power button's primary binding.
+        /// </summary>
+        private string GetPrimaryBindingLabel(int index)
+        {
+            string binding = index switch
+            {
+                0 => GameSettings.HeartPower1Binding,
+                1 => GameSettings.HeartPower2Binding,
+                2 => GameSettings.HeartPower3Binding,
+                3 => GameSettings.HeartPower4Binding,
+                4 => GameSettings.HeartPower5Binding,
+                _ => ""
+            };
+            return InputBindingHelper.GetDisplayName(binding);
+        }
+
+        /// <summary>
+        /// Refreshes button labels to reflect current binding settings.
+        /// Call this after bindings change (e.g., returning from Options).
+        /// </summary>
+        public void RefreshButtonLabels()
+        {
+            for (int i = 0; i < buttonLabels.Length; i++)
+            {
+                if (buttonLabels[i] != null)
+                {
+                    buttonLabels[i].text = GetPrimaryBindingLabel(i);
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets the current pulse brightness (0 to 1) for a specific power button.
         /// Used by tutorial system to sync pause with maximum brightness.
         /// </summary>
@@ -1136,7 +1137,7 @@ namespace FaeMaze.UI
         /// <returns>Current pulse value from 0 (dimmest) to 1 (brightest)</returns>
         public float GetButtonPulseBrightness(int buttonIndex)
         {
-            if (buttonIndex < 0 || buttonIndex >= 4) return 0f;
+            if (buttonIndex < 0 || buttonIndex >= 5) return 0f;
 
             // Calculate the same way as UpdateGlowEffects()
             // Uses unscaledTime to match the glow animation (works during pause)
@@ -1156,7 +1157,7 @@ namespace FaeMaze.UI
         /// <returns>Time in seconds until next peak brightness (0 to period/2)</returns>
         public float GetTimeUntilPeakBrightness(int buttonIndex)
         {
-            if (buttonIndex < 0 || buttonIndex >= 4) return 0f;
+            if (buttonIndex < 0 || buttonIndex >= 5) return 0f;
 
             // Calculate current phase (uses unscaledTime to match glow animation)
             float phaseOffset = buttonIndex * 0.5f;
@@ -1219,6 +1220,29 @@ namespace FaeMaze.UI
                 Debug.Log($"[HeartPowerPanelController] Button {lockedAtPeakButtonIndex} unlocked from peak brightness");
             }
             lockedAtPeakButtonIndex = -1;
+        }
+
+        /// <summary>
+        /// Locks all power buttons during tutorial. No power can be activated until
+        /// explicitly unlocked via EnablePowerForTutorial().
+        /// </summary>
+        public void SetTutorialPowerLock(bool locked)
+        {
+            tutorialPowersLocked = locked;
+            if (!locked)
+            {
+                tutorialUnlockedPowers.Clear();
+            }
+            Debug.Log($"[HeartPowerPanelController] Tutorial power lock: {locked}");
+        }
+
+        /// <summary>
+        /// Unlocks a specific power button during tutorial, allowing the player to activate it.
+        /// </summary>
+        public void EnablePowerForTutorial(int powerIndex)
+        {
+            tutorialUnlockedPowers.Add(powerIndex);
+            Debug.Log($"[HeartPowerPanelController] Power {powerIndex} unlocked for tutorial");
         }
 
         #endregion

@@ -136,20 +136,18 @@ namespace FaeMaze.Audio
         {
             if (audioClip != null) return;
 
-#if UNITY_EDITOR
             string clipPath = soundType switch
             {
-                PropSoundType.Lantern => "Assets/Audio/SFX/lantern.mp3",
-                PropSoundType.FairyRing => "Assets/Audio/SFX/ring.mp3",
-                PropSoundType.Pond => "Assets/Audio/SFX/puka.mp3",
+                PropSoundType.Lantern => "Audio/SFX/lantern",
+                PropSoundType.FairyRing => "Audio/SFX/ring",
+                PropSoundType.Pond => "Audio/SFX/puka",
                 _ => null
             };
 
             if (!string.IsNullOrEmpty(clipPath))
             {
-                audioClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(clipPath);
+                audioClip = Resources.Load<AudioClip>(clipPath);
             }
-#endif
         }
 
         #endregion
