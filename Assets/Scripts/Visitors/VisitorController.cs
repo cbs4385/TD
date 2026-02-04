@@ -77,6 +77,21 @@ namespace FaeMaze.Visitors
             if (mazeGridBehaviour == null || gameController == null)
                 return;
 
+            // Misdirected visitors must not detour or recalculate -- stay on forced path
+            if (isMisdirected)
+            {
+                // Just advance waypoint index
+                if (worldPath != null && worldPathIndex < worldPath.Count)
+                {
+                    worldPathIndex++;
+                    if (worldPathIndex >= worldPath.Count)
+                    {
+                        OnPathCompleted();
+                    }
+                }
+                return;
+            }
+
             // Check if state has changed since last waypoint
             if (state != previousState)
             {

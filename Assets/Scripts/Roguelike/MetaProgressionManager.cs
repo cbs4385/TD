@@ -192,7 +192,6 @@ namespace FaeMaze.Roguelike
             SaveFaeDust();
             OnFaeDustChanged?.Invoke(_faeDust);
 
-            Debug.Log($"[MetaProgression] +{finalAmount} Fae Dust ({source}). Total: {_faeDust}");
         }
 
         /// <summary>
@@ -203,7 +202,6 @@ namespace FaeMaze.Roguelike
         {
             if (_faeDust < amount)
             {
-                Debug.Log($"[MetaProgression] Cannot spend {amount} Fae Dust - only have {_faeDust}");
                 return false;
             }
 
@@ -211,7 +209,6 @@ namespace FaeMaze.Roguelike
             SaveFaeDust();
             OnFaeDustChanged?.Invoke(_faeDust);
 
-            Debug.Log($"[MetaProgression] Spent {amount} Fae Dust ({purpose}). Remaining: {_faeDust}");
             return true;
         }
 
@@ -243,7 +240,6 @@ namespace FaeMaze.Roguelike
                 AddFaeDust(DUST_FIRST_RUN_OF_DAY, "First run of day");
             }
 
-            Debug.Log("[MetaProgression] Run started");
         }
 
         /// <summary>
@@ -299,7 +295,6 @@ namespace FaeMaze.Roguelike
 
             SaveLifetimeStats();
 
-            Debug.Log($"[MetaProgression] Run ended. Earned {dustEarned} Fae Dust. Total runs: {_lifetimeStats.TotalRuns}");
         }
 
         #endregion
@@ -422,7 +417,6 @@ namespace FaeMaze.Roguelike
             PlayerPrefs.Save();
 
             OnUnlockAcquired?.Invoke(unlockId);
-            Debug.Log($"[MetaProgression] Unlocked: {unlockId}");
         }
 
         /// <summary>Get all unlocked items</summary>
@@ -446,7 +440,6 @@ namespace FaeMaze.Roguelike
             PlayerPrefs.Save();
 
             OnAchievementCompleted?.Invoke(achievementId);
-            Debug.Log($"[MetaProgression] Achievement completed: {achievementId}");
         }
 
         /// <summary>Get all completed achievements</summary>
@@ -533,7 +526,6 @@ namespace FaeMaze.Roguelike
             // Note: Unlocks and achievements are loaded on-demand from PlayerPrefs
             // using HasKey checks in IsUnlocked/IsAchievementCompleted
 
-            Debug.Log($"[MetaProgression] Loaded: {_faeDust} Fae Dust, {_lifetimeStats.TotalRuns} total runs");
         }
 
         /// <summary>
@@ -556,7 +548,6 @@ namespace FaeMaze.Roguelike
             // but they will be overwritten on next save
             PlayerPrefs.Save();
 
-            Debug.Log("[MetaProgression] All progress reset!");
         }
 
         #endregion
@@ -578,14 +569,6 @@ namespace FaeMaze.Roguelike
         [ContextMenu("Debug: Log Stats")]
         public void DebugLogStats()
         {
-            Debug.Log($"=== Meta Progression Stats ===\n" +
-                $"Fae Dust: {_faeDust}\n" +
-                $"Total Runs: {_lifetimeStats.TotalRuns}\n" +
-                $"Total Heart Consumes: {_lifetimeStats.TotalVisitorsConsumedByHeart}\n" +
-                $"Total Maw Devours: {_lifetimeStats.TotalVisitorsDevouredByMaw}\n" +
-                $"Max Essence: {_lifetimeStats.MaxEssenceInSingleRun}\n" +
-                $"Max Difficulty: Tier {_lifetimeStats.MaxDifficultyTierReached}\n" +
-                $"Longest Run: {_lifetimeStats.LongestRunSeconds:F1}s");
         }
 
         #endregion

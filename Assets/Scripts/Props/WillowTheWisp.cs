@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
+using FaeMaze.Utilities;
 using ForestMaze;
 using static FaeMaze.Systems.FrighteningEventManager;
 
@@ -1239,13 +1240,7 @@ namespace FaeMaze.Props
 
         private void SetupColliders()
         {
-            rb = GetComponent<Rigidbody>();
-            if (rb == null)
-            {
-                rb = gameObject.AddComponent<Rigidbody>();
-            }
-            rb.isKinematic = true;
-            rb.useGravity = false;
+            rb = gameObject.AddKinematicRigidbody();
 
             SphereCollider collider = GetComponent<SphereCollider>();
             if (collider == null)

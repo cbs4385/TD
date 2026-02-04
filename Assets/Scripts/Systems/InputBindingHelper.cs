@@ -13,14 +13,6 @@ namespace FaeMaze.Systems
         // Threshold for gamepad stick input detection
         private const float STICK_THRESHOLD = 0.5f;
 
-        // Debug logging toggle - set to true to diagnose input issues
-        private static bool debugLogging = true;
-        private static float lastLogTime = 0f;
-        private const float LOG_INTERVAL = 1f; // Only log once per second to avoid spam
-
-        // Gamepad-specific debug state
-        private static float lastGamepadPollLog = 0f;
-        private const float GAMEPAD_POLL_LOG_INTERVAL = 5f; // Log gamepad status every 5 seconds
 
         /// <summary>
         /// Check if ANY of the provided bindings is currently pressed.
@@ -106,39 +98,15 @@ namespace FaeMaze.Systems
             // Check keyboard keys
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null)
-            {
-                if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
-                {
-                    Debug.LogWarning($"[InputBindingHelper] Keyboard.current is null! Cannot check binding '{binding}'");
-                    lastLogTime = Time.time;
-                }
                 return false;
-            }
 
             Key? key = ParseKey(binding);
             if (key.HasValue)
             {
                 KeyControl keyControl = keyboard[key.Value];
-                bool isPressed = keyControl != null && keyControl.isPressed;
-                if (debugLogging && isPressed && Time.time - lastLogTime > LOG_INTERVAL)
-                {
-                    Debug.Log($"[InputBindingHelper] Key '{binding}' -> Key.{key.Value} is PRESSED");
-                    lastLogTime = Time.time;
-                }
-                return isPressed;
-            }
-            else if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
-            {
-                // Log failed parse only occasionally
-                Debug.LogWarning($"[InputBindingHelper] ParseKey failed for binding '{binding}'");
-                lastLogTime = Time.time;
+                return keyControl != null && keyControl.isPressed;
             }
 
-            if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
-            {
-                Debug.LogWarning($"[InputBindingHelper] Could not parse binding '{binding}' as Key");
-                lastLogTime = Time.time;
-            }
             return false;
         }
 
@@ -574,59 +542,13 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
-        /// Log gamepad connection status periodically. Call from any gamepad method.
-        /// </summary>
-        private static void LogGamepadStatus()
-        {
-            if (!debugLogging) return;
-            if (Time.time - lastGamepadPollLog < GAMEPAD_POLL_LOG_INTERVAL) return;
-            lastGamepadPollLog = Time.time;
-
-            Gamepad gamepad = Gamepad.current;
-            if (gamepad != null)
-            {
-                Debug.Log($"[InputBindingHelper] GAMEPAD CONNECTED: name='{gamepad.name}', " +
-                          $"displayName='{gamepad.displayName}', " +
-                          $"deviceId={gamepad.deviceId}, " +
-                          $"enabled={gamepad.enabled}, " +
-                          $"added={gamepad.added}, " +
-                          $"description='{gamepad.description}'");
-
-                // Log all connected gamepads
-                var allGamepads = Gamepad.all;
-                Debug.Log($"[InputBindingHelper] Total gamepads detected: {allGamepads.Count}");
-                for (int i = 0; i < allGamepads.Count; i++)
-                {
-                    Debug.Log($"[InputBindingHelper]   Gamepad[{i}]: name='{allGamepads[i].name}', " +
-                              $"displayName='{allGamepads[i].displayName}', " +
-                              $"deviceId={allGamepads[i].deviceId}, " +
-                              $"enabled={allGamepads[i].enabled}");
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[InputBindingHelper] GAMEPAD NOT CONNECTED: Gamepad.current is null. " +
-                                 $"Total gamepads in Gamepad.all: {Gamepad.all.Count}");
-            }
-        }
-
-        /// <summary>
         /// Check if a gamepad binding is currently pressed.
         /// </summary>
         private static bool IsGamepadBindingPressed(string binding)
         {
-            LogGamepadStatus();
-
             Gamepad gamepad = Gamepad.current;
             if (gamepad == null)
-            {
-                if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
-                {
-                    Debug.LogWarning($"[InputBindingHelper] IsGamepadBindingPressed('{binding}'): Gamepad.current is null!");
-                    lastLogTime = Time.time;
-                }
                 return false;
-            }
 
             bool result = binding switch
             {
@@ -664,11 +586,6 @@ namespace FaeMaze.Systems
                 _ => false
             };
 
-            if (debugLogging && result)
-            {
-                Debug.Log($"[InputBindingHelper] IsGamepadBindingPressed('{binding}') = TRUE on gamepad '{gamepad.name}'");
-            }
-
             return result;
         }
 
@@ -678,18 +595,9 @@ namespace FaeMaze.Systems
         /// </summary>
         private static bool WasGamepadBindingPressedThisFrame(string binding)
         {
-            LogGamepadStatus();
-
             Gamepad gamepad = Gamepad.current;
             if (gamepad == null)
-            {
-                if (debugLogging && Time.time - lastLogTime > LOG_INTERVAL)
-                {
-                    Debug.LogWarning($"[InputBindingHelper] WasGamepadBindingPressedThisFrame('{binding}'): Gamepad.current is null!");
-                    lastLogTime = Time.time;
-                }
                 return false;
-            }
 
             bool result = binding switch
             {
@@ -726,11 +634,6 @@ namespace FaeMaze.Systems
                 "GamepadRightStickRight" => gamepad.rightStick.ReadValue().x > STICK_THRESHOLD,
                 _ => false
             };
-
-            if (debugLogging && result)
-            {
-                Debug.Log($"[InputBindingHelper] WasGamepadBindingPressedThisFrame('{binding}') = TRUE on gamepad '{gamepad.name}'");
-            }
 
             return result;
         }
@@ -779,58 +682,8 @@ namespace FaeMaze.Systems
                 _ => false
             };
 
-            if (debugLogging && result && !binding.Contains("Stick"))
-            {
-                Debug.Log($"[InputBindingHelper] WasGamepadBindingReleasedThisFrame('{binding}') = TRUE");
-            }
-
             return result;
         }
 
-        /// <summary>
-        /// Log a raw gamepad state dump. Called periodically when any gamepad button is pressed
-        /// to help diagnose binding mismatches between capture and gameplay.
-        /// </summary>
-        public static void LogRawGamepadState()
-        {
-            if (!debugLogging) return;
-
-            Gamepad gamepad = Gamepad.current;
-            if (gamepad == null)
-            {
-                Debug.LogWarning("[InputBindingHelper] LogRawGamepadState: No gamepad connected");
-                return;
-            }
-
-            // Log all button states that are currently pressed
-            System.Text.StringBuilder sb = new System.Text.StringBuilder();
-            sb.AppendLine($"[InputBindingHelper] RAW GAMEPAD STATE ('{gamepad.name}'):");
-
-            if (gamepad.buttonSouth.isPressed) sb.AppendLine("  buttonSouth (A/Cross) = PRESSED");
-            if (gamepad.buttonNorth.isPressed) sb.AppendLine("  buttonNorth (Y/Triangle) = PRESSED");
-            if (gamepad.buttonEast.isPressed) sb.AppendLine("  buttonEast (B/Circle) = PRESSED");
-            if (gamepad.buttonWest.isPressed) sb.AppendLine("  buttonWest (X/Square) = PRESSED");
-            if (gamepad.leftShoulder.isPressed) sb.AppendLine("  leftShoulder (LB/L1) = PRESSED");
-            if (gamepad.rightShoulder.isPressed) sb.AppendLine("  rightShoulder (RB/R1) = PRESSED");
-            if (gamepad.leftTrigger.isPressed) sb.AppendLine($"  leftTrigger (LT/L2) = PRESSED (value={gamepad.leftTrigger.ReadValue():F3})");
-            if (gamepad.rightTrigger.isPressed) sb.AppendLine($"  rightTrigger (RT/R2) = PRESSED (value={gamepad.rightTrigger.ReadValue():F3})");
-            if (gamepad.leftStickButton.isPressed) sb.AppendLine("  leftStickButton = PRESSED");
-            if (gamepad.rightStickButton.isPressed) sb.AppendLine("  rightStickButton = PRESSED");
-            if (gamepad.startButton.isPressed) sb.AppendLine("  startButton = PRESSED");
-            if (gamepad.selectButton.isPressed) sb.AppendLine("  selectButton = PRESSED");
-            if (gamepad.dpad.up.isPressed) sb.AppendLine("  dpad.up = PRESSED");
-            if (gamepad.dpad.down.isPressed) sb.AppendLine("  dpad.down = PRESSED");
-            if (gamepad.dpad.left.isPressed) sb.AppendLine("  dpad.left = PRESSED");
-            if (gamepad.dpad.right.isPressed) sb.AppendLine("  dpad.right = PRESSED");
-
-            Vector2 leftStick = gamepad.leftStick.ReadValue();
-            Vector2 rightStick = gamepad.rightStick.ReadValue();
-            if (leftStick.magnitude > 0.1f)
-                sb.AppendLine($"  leftStick = ({leftStick.x:F3}, {leftStick.y:F3})");
-            if (rightStick.magnitude > 0.1f)
-                sb.AppendLine($"  rightStick = ({rightStick.x:F3}, {rightStick.y:F3})");
-
-            Debug.Log(sb.ToString());
-        }
     }
 }

@@ -99,17 +99,7 @@ namespace FaeMaze.UI
 
         private void SetupCanvas()
         {
-            canvas = FindFirstObjectByType<Canvas>();
-            if (canvas == null)
-            {
-                GameObject canvasObj = new GameObject("GameOverCanvas");
-                canvas = canvasObj.AddComponent<Canvas>();
-                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                var scaler = canvasObj.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
-                canvasObj.AddComponent<GraphicRaycaster>();
-            }
+            canvas = UIFactory.FindOrCreateCanvas(this, "GameOverCanvas", 0, new Vector2(1920, 1080));
         }
 
         /// <summary>
@@ -189,10 +179,7 @@ namespace FaeMaze.UI
             textObj.transform.SetParent(buttonObj.transform, false);
 
             RectTransform textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(textRect);
 
             TextMeshProUGUI tmp = textObj.AddComponent<TextMeshProUGUI>();
             tmp.text = "Return to Main Menu";

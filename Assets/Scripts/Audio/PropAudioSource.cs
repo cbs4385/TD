@@ -291,6 +291,18 @@ namespace FaeMaze.Audio
         }
 
         /// <summary>
+        /// Gets or adds a PropAudioSource component and configures its sound type.
+        /// </summary>
+        public static PropAudioSource EnsureOnGameObject(GameObject obj, PropSoundType soundType)
+        {
+            var audio = obj.GetComponent<PropAudioSource>();
+            if (audio == null)
+                audio = obj.AddComponent<PropAudioSource>();
+            audio.SetSoundType(soundType);
+            return audio;
+        }
+
+        /// <summary>
         /// Sets the sound type for volume control.
         /// </summary>
         public void SetSoundType(PropSoundType type)

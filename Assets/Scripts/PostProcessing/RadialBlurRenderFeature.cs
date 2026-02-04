@@ -21,15 +21,12 @@ namespace FaeMaze.PostProcessing
 
         public override void Create()
         {
-            Debug.Log($"[RadialBlurRenderFeature] Create() called. Shader assigned: {settings.shader != null}");
-
             if (settings.shader == null)
             {
                 Debug.LogError("[RadialBlurRenderFeature] Shader is NULL! RadialBlur will not work.");
                 return;
             }
 
-            Debug.Log($"[RadialBlurRenderFeature] Creating material from shader: {settings.shader.name}");
             material = CoreUtils.CreateEngineMaterial(settings.shader);
 
             if (material == null)
@@ -38,21 +35,14 @@ namespace FaeMaze.PostProcessing
                 return;
             }
 
-            Debug.Log("[RadialBlurRenderFeature] Material created successfully");
             renderPass = new RadialBlurRenderPass(material);
             renderPass.renderPassEvent = settings.renderPassEvent;
-            Debug.Log($"[RadialBlurRenderFeature] RenderPass created with event: {settings.renderPassEvent}");
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
             if (renderPass == null || material == null)
             {
-                // Log occasionally to avoid spam
-                if (Time.frameCount % 300 == 0)
-                {
-                    Debug.LogWarning($"[RadialBlurRenderFeature] AddRenderPasses skipped - renderPass null: {renderPass == null}, material null: {material == null}");
-                }
                 return;
             }
 
@@ -112,29 +102,12 @@ namespace FaeMaze.PostProcessing
 
             if (radialBlur == null)
             {
-                if (!_hasLoggedOnce && Time.frameCount > 60)
-                {
-                    Debug.LogWarning("[RadialBlurRenderPass] RadialBlur component not found in volume stack");
-                    _hasLoggedOnce = true;
-                }
                 return;
             }
 
             if (!radialBlur.IsActive())
             {
-                if (!_hasLoggedOnce && Time.frameCount > 60)
-                {
-                    Debug.Log($"[RadialBlurRenderPass] RadialBlur found but not active. enabled.value={radialBlur.enabled.value}");
-                    _hasLoggedOnce = true;
-                }
                 return;
-            }
-
-            // Log once that we're actually rendering
-            if (!_hasLoggedOnce)
-            {
-                Debug.Log($"[RadialBlurRenderPass] RadialBlur IS ACTIVE - blurAngle={radialBlur.blurAngleDegrees.value}, intensity={radialBlur.blurIntensity.value}");
-                _hasLoggedOnce = true;
             }
 
             // Set shader properties

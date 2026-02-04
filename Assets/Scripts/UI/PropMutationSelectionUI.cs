@@ -53,39 +53,13 @@ namespace FaeMaze.UI
 
         private void CreateCanvas()
         {
-            // Find existing canvas or create new one
-            _canvas = GetComponentInParent<Canvas>();
-            if (_canvas == null)
-            {
-                _canvas = FindFirstObjectByType<Canvas>();
-            }
-            if (_canvas == null)
-            {
-                GameObject canvasObj = new GameObject("PropMutationSelectionCanvas");
-                _canvas = canvasObj.AddComponent<Canvas>();
-                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                _canvas.sortingOrder = 215; // Between form and challenge UI
-                var scaler = canvasObj.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
-                canvasObj.AddComponent<GraphicRaycaster>();
-            }
+            _canvas = UIFactory.FindOrCreateCanvas(this, "PropMutationSelectionCanvas", 215, new Vector2(1920, 1080));
         }
 
         private void CreateUI()
         {
             // Main panel (full screen overlay)
-            _panel = new GameObject("PropMutationSelectionPanel");
-            _panel.transform.SetParent(_canvas.transform, false);
-
-            RectTransform panelRect = _panel.AddComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
-
-            Image panelBg = _panel.AddComponent<Image>();
-            panelBg.color = _panelColor;
+            _panel = UIFactory.CreateFullScreenPanel(_canvas.transform, "PropMutationSelectionPanel", _panelColor);
 
             // Title
             GameObject titleObj = new GameObject("Title");
@@ -173,10 +147,7 @@ namespace FaeMaze.UI
             skipTextObj.transform.SetParent(skipObj.transform, false);
 
             RectTransform textRect = skipTextObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(textRect);
 
             TextMeshProUGUI skipText = skipTextObj.AddComponent<TextMeshProUGUI>();
             skipText.text = "No Mutation";
@@ -322,7 +293,6 @@ namespace FaeMaze.UI
             // If no mutations available, skip UI
             if (unlockedMutations.Count == 0)
             {
-                Debug.Log("[PropMutationSelectionUI] No unlocked mutations, skipping");
                 _onSelectionComplete?.Invoke(null);
                 return;
             }
@@ -371,8 +341,6 @@ namespace FaeMaze.UI
 
         private void OnMutationSelected(PropMutationDefinition mutation)
         {
-            Debug.Log($"[PropMutationSelectionUI] Selected mutation: {mutation.DisplayName}");
-
             // Set the mutation in the manager
             PropMutationManager.Instance?.SelectMutationForRun(mutation);
 
@@ -385,8 +353,6 @@ namespace FaeMaze.UI
 
         private void OnSkipClicked()
         {
-            Debug.Log("[PropMutationSelectionUI] Skipped mutation selection");
-
             // Clear any selected mutation
             PropMutationManager.Instance?.ClearActiveMutation();
 

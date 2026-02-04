@@ -179,7 +179,14 @@ namespace FaeMaze.Visitors
         protected bool isFrightened;
         protected bool isLured;
         protected bool isDazed;
-        protected bool isTutorialVisitor;  // Tutorial visitors are immune to frightening
+        protected bool isTutorialVisitor;  // Tutorial visitors are immune to frightening and daze
+        protected bool isFascinationImmune; // When true, visitor ignores lantern fascination
+
+        // Misdirect state tracking
+        protected bool isMisdirected;                // Currently being forced along a misdirect edge
+        protected Vector3 misdirectOriginalDestination;  // Saved destination before misdirect override
+        protected int misdirectEdgeIndex = -1;       // Edge index being traversed (for backtrack prevention)
+        protected HashSet<int> completedMisdirectEdges = new HashSet<int>(); // Edges already traversed via misdirect (anti-backtrack)
 
         // Frightened state tracking
         protected Vector3 frightSourcePosition;  // Position of what frightened the visitor (to flee away from)
@@ -259,9 +266,6 @@ namespace FaeMaze.Visitors
         // Physics-based movement: calculate in Update, apply in FixedUpdate
         protected Vector3 desiredPosition;
         protected bool hasDesiredPosition = false;
-
-        // Tongue collision tracking - stop applying force when colliding
-        protected int tongueCollisionCount = 0;  // Number of active tongue collider contacts
 
         // State aura visual feedback
         protected GameObject stateAuraObject;
@@ -482,17 +486,6 @@ namespace FaeMaze.Visitors
                 UpdateStateAura();
                 UpdateAnimatorSpeed();
                 return;
-            }
-
-            // NOTE: Tongue collision is handled by Unity physics via solid colliders on the tongue bones
-            // No manual blocking check needed - the visitor's Rigidbody collides with the tongue's kinematic colliders
-
-            // DEBUG: Manual overlap check to verify colliders are actually overlapping
-            if (FaeMaze.Maze.HeartOfTheMaze.IsTongueActiveWithColliders && Time.frameCount % 30 == 0)
-            {
-                Vector3 myPos = transform.position;
-                // Check for any overlapping colliders using a sphere at visitor position
-                Collider[] overlaps = Physics.OverlapSphere(myPos, 0.5f, ~0, QueryTriggerInteraction.Ignore);
             }
 
             // Handle FairyRing circling (takes priority over lantern fascination)
@@ -937,6 +930,105 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Sets whether this visitor is immune to lantern/ring fascination.
+        /// Used on tutorial visitors that need to walk through lantern areas without stopping.
+        /// </summary>
+        public void SetFascinationImmune(bool immune)
+        {
+            isFascinationImmune = immune;
+        }
+
+        /// <summary>
+        /// Called when a visitor enters a misdirect sign trigger. Forces the visitor to
+        /// abandon their current path and walk to the far sign position (other end of the edge).
+        /// The original destination is saved so it can be restored after completing the edge.
+        /// </summary>
+        /// <param name="farSignPosition">Position of the sign at the other end of the misdirect edge</param>
+        /// <param name="edgeIndex">Index of the misdirect edge (for backtrack prevention)</param>
+        public void SetMisdirectDestination(Vector3 farSignPosition, int edgeIndex)
+        {
+            // Save original destination before overriding (only if not already misdirected)
+            if (!isMisdirected)
+            {
+                misdirectOriginalDestination = originalDestination;
+            }
+            isMisdirected = true;
+            misdirectEdgeIndex = edgeIndex;
+
+            // Override destination to the far sign — forces visitor to walk the entire edge
+            worldDestination = farSignPosition;
+            worldPath = BuildWorldPath(transform.position, farSignPosition);
+            worldPathIndex = 0;
+            ResetSplineState();
+        }
+
+        /// <summary>
+        /// Called when a misdirected visitor reaches the far sign. Restores their original
+        /// destination and recalculates the path with the misdirect edge heavily penalized
+        /// to prevent backtracking through it.
+        /// </summary>
+        public void CompleteMisdirect()
+        {
+            if (!isMisdirected) return;
+
+            isMisdirected = false;
+            int completedEdgeIndex = misdirectEdgeIndex;
+            misdirectEdgeIndex = -1;
+
+            // Remember this edge so all future path calculations penalize it
+            completedMisdirectEdges.Add(completedEdgeIndex);
+
+            // Restore the original destination
+            worldDestination = misdirectOriginalDestination;
+            originalDestination = misdirectOriginalDestination;
+
+            // Build path with the misdirect edge penalized to prevent backtracking.
+            // We temporarily override edge cost multipliers for this single path calculation.
+            var antiBacktrackMultipliers = new Dictionary<int, float>();
+
+            // Get existing misdirect multipliers (the attractive 0.05x)
+            var existingMultipliers = HeartPowerManager.Instance?.GetMisdirectEdgeCostMultipliers();
+            if (existingMultipliers != null)
+            {
+                foreach (var kvp in existingMultipliers)
+                    antiBacktrackMultipliers[kvp.Key] = kvp.Value;
+            }
+
+            // Override the just-completed edge with a high penalty to prevent backtracking
+            antiBacktrackMultipliers[completedEdgeIndex] = 50f;
+
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null)
+            {
+                worldPath = ForestMaze.MazePathfinding.BuildWorldPath(
+                    mazeGridBehaviour.WorldSpaceMazeData,
+                    transform.position,
+                    misdirectOriginalDestination,
+                    heartNodePenalty: 0f,
+                    penalizeHeartNode: false,
+                    edgeCostMultipliers: antiBacktrackMultipliers
+                );
+                worldPathIndex = 0;
+                ResetSplineState();
+            }
+        }
+
+        /// <summary>
+        /// Whether this visitor is currently being forced along a misdirect edge.
+        /// </summary>
+        public bool IsMisdirected => isMisdirected;
+
+        /// <summary>
+        /// Clears the misdirect state without rebuilding a path or restoring the original destination.
+        /// Used when externally overriding the visitor's destination (e.g., tutorial assigning exit portals).
+        /// </summary>
+        public void ClearMisdirectState()
+        {
+            isMisdirected = false;
+            misdirectEdgeIndex = -1;
+            completedMisdirectEdges.Clear();
+        }
+
+        /// <summary>
         /// Retargets visitor to the nearest spawn point by walking distance from current position.
         /// Excludes the original spawn point to prevent visitors from going backwards.
         /// If no valid spawn points are available, falls back to the heart.
@@ -1098,8 +1190,6 @@ namespace FaeMaze.Visitors
                 || visitorState == VisitorState.Fascinated
                 || visitorState == VisitorState.Confused
                 || visitorState == VisitorState.Frightened
-                || visitorState == VisitorState.Fascinated
-                || visitorState == VisitorState.Confused
                 || visitorState == VisitorState.Lured;
         }
 
@@ -1390,7 +1480,6 @@ namespace FaeMaze.Visitors
             // Scale up visual slightly to indicate elite status
             transform.localScale = initialScale * 1.15f;
 
-            Debug.Log($"[{name}] Marked as ELITE: {statMultiplier}x stats, {rewardMultiplier}x reward");
         }
 
         #endregion
@@ -1457,6 +1546,21 @@ namespace FaeMaze.Visitors
             }
 
             var edgeCostMultipliers = HeartPowerManager.Instance?.GetMisdirectEdgeCostMultipliers();
+
+            // Apply anti-backtrack penalty for misdirect edges this visitor already traversed
+            if (completedMisdirectEdges.Count > 0)
+            {
+                var merged = new Dictionary<int, float>();
+                if (edgeCostMultipliers != null)
+                {
+                    foreach (var kvp in edgeCostMultipliers)
+                        merged[kvp.Key] = kvp.Value;
+                }
+                // Override completed edges with heavy penalty to prevent backtracking
+                foreach (int edgeIdx in completedMisdirectEdges)
+                    merged[edgeIdx] = 50f;
+                edgeCostMultipliers = merged;
+            }
 
             var result = ForestMaze.MazePathfinding.BuildWorldPath(
                 mazeGridBehaviour.WorldSpaceMazeData,
@@ -2061,10 +2165,6 @@ namespace FaeMaze.Visitors
 
             if (!hasGraphPath && !hasTilePath)
             {
-                Debug.LogWarning($"[Visitor] {name} UpdateWorldSpaceWalking: No valid path! " +
-                    $"graphPath={(graphPath != null ? "valid" : "null")}, " +
-                    $"worldPath={(worldPath != null ? worldPath.Count.ToString() : "null")}, " +
-                    $"worldPathIndex={worldPathIndex}, pos={transform.position}, dest={worldDestination}");
                 state = VisitorState.Idle;
                 return;
             }
@@ -3314,6 +3414,13 @@ namespace FaeMaze.Visitors
                 LogVisitorPath($"reached world-space destination at {worldDestination}");
             }
 
+            // If misdirected, completing the path means we reached the far sign position
+            if (isMisdirected)
+            {
+                CompleteMisdirect();
+                return;
+            }
+
             // Check if fascinated - visitor has reached the lantern stop position
             if (isFascinated && !hasReachedLantern)
             {
@@ -3430,6 +3537,8 @@ namespace FaeMaze.Visitors
             isFrightened = false;
             frightRecoveryNodeCount = 0;
             isLured = false;
+            isMisdirected = false;
+            misdirectEdgeIndex = -1;
             isConfused = false;
             hasReachedLantern = false;
 
@@ -3477,6 +3586,8 @@ namespace FaeMaze.Visitors
             frightRecoveryNodeCount = 0;
             isLured = false;
             isDazed = false;
+            isMisdirected = false;
+            misdirectEdgeIndex = -1;
             isConfused = false;
             currentFairyRing = null;  // Clear fairy ring reference to stop circling
             currentFaeLantern = null; // Clear lantern reference
@@ -3586,16 +3697,6 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void CheckFaeLanternInfluence()
         {
-            // Debug: Log lantern count if this is a tutorial visitor (helps diagnose registration issues)
-            if (isTutorialVisitor && FaeMaze.Props.FaeLantern.All.Count == 0)
-            {
-                // Only log once per second to avoid spam
-                if (Time.frameCount % 60 == 0)
-                {
-                    Debug.LogWarning($"[{name}] CheckFaeLanternInfluence: FaeLantern.All is EMPTY - lantern not registered!");
-                }
-            }
-
             // Check all active FaeLanterns using world-space distance
             foreach (var lantern in FaeMaze.Props.FaeLantern.All)
             {
@@ -3604,12 +3705,6 @@ namespace FaeMaze.Visitors
 
                 // Check if visitor is within lantern's influence radius (world-space)
                 float distanceToLantern = Vector3.Distance(transform.position, lantern.transform.position);
-
-                // Debug: Log distance for tutorial visitors
-                if (isTutorialVisitor && Time.frameCount % 60 == 0)
-                {
-                    Debug.Log($"[{name}] Distance to lantern {lantern.name}: {distanceToLantern:F2} (influence radius: {lantern.InfluenceRadius})");
-                }
 
                 if (distanceToLantern <= lantern.InfluenceRadius)
                 {
@@ -3625,6 +3720,9 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern)
         {
+            // Fascination-immune visitors (e.g., tutorial power demo visitors) ignore lanterns
+            if (isFascinationImmune || isMisdirected) return;
+
             Vector3 lanternWorldPos = lantern.transform.position;
 
             // If already fascinated by this same lantern, ignore
@@ -3818,6 +3916,12 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            // Misdirected visitors are being forced along the misdirect edge -- don't override their path
+            if (isMisdirected)
+            {
+                return;
+            }
+
             isCalculatingPath = true;
 
             Vector3 destination = GetDestinationForCurrentState();
@@ -3839,22 +3943,13 @@ namespace FaeMaze.Visitors
                     }
                     OnGraphSegmentEnter(firstSegment);
 
-                    // Debug: Log successful graph path creation (only when verbose logging enabled)
-                    if (logVisitorPathfinding)
-                    {
-                        Debug.Log($"[GraphNav] {name}: Created graph path with {graphPath.Segments.Count} segments, " +
-                            $"first segment: {firstSegment.Type}[{firstSegment.Index}]");
-                    }
+
+
                 }
                 else
                 {
-                    // Debug: Log graph path failure (only when verbose logging enabled)
-                    if (logVisitorPathfinding)
-                    {
-                        Debug.LogWarning($"[GraphNav] {name}: Graph path failed! graphPath={graphPath != null}, " +
-                            $"IsValid={graphPath?.IsValid}, Segments={graphPath?.Segments?.Count ?? 0}. " +
-                            $"From ({transform.position.x:F1},{transform.position.y:F1}) to ({destination.x:F1},{destination.y:F1})");
-                    }
+
+
                 }
             }
 
@@ -4019,6 +4114,8 @@ namespace FaeMaze.Visitors
             isFrightened = false;
             frightRecoveryNodeCount = 0;
             isLured = false;
+            isMisdirected = false;
+            misdirectEdgeIndex = -1;
             isConfused = false;
 
             // Clear path
@@ -4037,6 +4134,9 @@ namespace FaeMaze.Visitors
         /// <param name="duration">How long the visitor remains dazed (default 15 seconds)</param>
         public virtual void OnWitnessMazeGrowth(float duration = 15f)
         {
+            // Tutorial visitors are immune to daze so they follow tutorial pathing
+            if (isTutorialVisitor) return;
+
             // Don't daze if already in a terminal state
             if (state == VisitorState.Consumed || state == VisitorState.Escaping)
             {
@@ -4166,8 +4266,6 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void OnStateExpired(VisitorState expiredState)
         {
-            Debug.Log($"[Visitor] OnStateExpired: {name} expiring state {expiredState}, pos={transform.position}, dest={worldDestination}");
-
             switch (expiredState)
             {
                 case VisitorState.Fascinated:
@@ -4199,7 +4297,6 @@ namespace FaeMaze.Visitors
                 RecalculatePath();
             }
 
-            Debug.Log($"[Visitor] OnStateExpired: {name} new state after refresh: {state}, worldPath={(worldPath != null ? worldPath.Count.ToString() : "null")}");
         }
 
         /// <summary>
@@ -4211,87 +4308,13 @@ namespace FaeMaze.Visitors
 
             isFascinated = false;
             isFrightened = false;
+            isMisdirected = false;
+            misdirectEdgeIndex = -1;
             frightRecoveryNodeCount = 0;
             hasReachedLantern = false;
             ClearLanternInteraction();
 
             Destroy(gameObject, 0.2f);
-        }
-
-        /// <summary>
-        /// Makes this visitor fascinated by a FaeLantern at the given world position.
-        /// The visitor will slowly walk (taking 2 seconds) to stop 1.5 units away from the lantern and idle there.
-        /// </summary>
-        public virtual void BecomeFascinated(Vector3 lanternWorldPosition)
-        {
-            // Allow fascination from movement states OR Idle (visitors standing near a lantern)
-            if (!IsMovementState(state) && state != VisitorState.Idle)
-            {
-                return;
-            }
-
-            isFascinated = true;
-            fascinationLanternPosition = lanternWorldPosition;
-            hasReachedLantern = false;
-            lanternEssenceAwardAccumulator = 0f; // Reset essence award accumulator
-            RefreshStateFromFlags();
-
-            ResetDetourState();
-            waypointsTraversedSinceSpawn = 0;
-
-            // Calculate stop position 1.5 units away from the lantern (XY plane only, ignore Z)
-            Vector2 lanternXY = new Vector2(lanternWorldPosition.x, lanternWorldPosition.y);
-            Vector2 visitorXY = new Vector2(transform.position.x, transform.position.y);
-            Vector2 directionToLanternXY = (lanternXY - visitorXY).normalized;
-            Vector2 stopPositionXY = lanternXY - directionToLanternXY * 1.5f;
-            Vector3 stopPosition = new Vector3(stopPositionXY.x, stopPositionXY.y, transform.position.z);
-
-            // Build path to the stop position
-            worldPath = BuildWorldPath(transform.position, stopPosition);
-            worldPathIndex = 0;
-            ResetSplineState();
-
-            // CRITICAL: The lantern should NEVER be a waypoint. The path should terminate
-            // at the stop location (1.5 units from lantern in XY plane). Remove ALL waypoints that are
-            // within the stop distance of the lantern, then add the stop position as the final waypoint.
-            const float stopDistance = 1.5f;
-            if (worldPath != null && worldPath.Count > 0)
-            {
-                // Find the first waypoint that gets too close to the lantern (XY distance only)
-                int firstBadIndex = -1;
-                for (int i = 0; i < worldPath.Count; i++)
-                {
-                    Vector2 waypointXY = new Vector2(worldPath[i].x, worldPath[i].y);
-                    float distToLanternXY = Vector2.Distance(waypointXY, lanternXY);
-                    if (distToLanternXY <= stopDistance)
-                    {
-                        firstBadIndex = i;
-                        break;
-                    }
-                }
-
-                if (firstBadIndex >= 0)
-                {
-                    // Remove all waypoints from firstBadIndex onward (these are too close to lantern)
-                    worldPath.RemoveRange(firstBadIndex, worldPath.Count - firstBadIndex);
-                }
-
-                // Use the last valid path waypoint as the stop position instead of adding
-                // the calculated stop position, which might be in an unwalkable zone (node center)
-                if (worldPath.Count > 0)
-                {
-                    stopPosition = worldPath[worldPath.Count - 1];
-                }
-                else
-                {
-                    // No valid path waypoints remain, stay at current position
-                    stopPosition = transform.position;
-                    worldPath.Add(stopPosition);
-                }
-            }
-
-            // Set destination to the stop position
-            worldDestination = stopPosition;
         }
 
         /// <summary>
@@ -4386,6 +4409,9 @@ namespace FaeMaze.Visitors
         {
             if (lantern == null) return;
 
+            // Fascination-immune visitors ignore all lantern fascination
+            if (isFascinationImmune) return;
+
             // Allow fascination from movement states OR Idle
             if (!IsMovementState(state) && state != VisitorState.Idle)
             {
@@ -4424,7 +4450,6 @@ namespace FaeMaze.Visitors
             ResetSplineState();
             RefreshStateFromFlags();
 
-            Debug.Log($"[VisitorControllerBase] ForceFascinateByLantern: Visitor now fascinated by {lantern.name}");
         }
 
         /// <summary>
@@ -4489,6 +4514,8 @@ namespace FaeMaze.Visitors
         /// <param name="slowFactor">Speed multiplier while fascinated (0.5 = 50% speed)</param>
         public virtual void BecomeFascinatedByRing(FaeMaze.Props.FairyRing ring, float duration, float slowFactor)
         {
+            if (isFascinationImmune || isMisdirected) return;
+
             if (!IsMovementState(state) && state != VisitorState.Idle)
             {
                 return;
@@ -5013,8 +5040,6 @@ namespace FaeMaze.Visitors
         {
             if (collision.gameObject.name.StartsWith("SolidCollider_"))
             {
-                tongueCollisionCount++;
-
                 // Notify HeartOfTheMaze that we touched the tongue
                 var heart = FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
                 if (heart != null)
@@ -5032,21 +5057,6 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Called by Unity physics when collision ends.
-        /// </summary>
-        protected virtual void OnCollisionExit(Collision collision)
-        {
-            if (collision.gameObject.name.StartsWith("SolidCollider_"))
-            {
-                tongueCollisionCount = Mathf.Max(0, tongueCollisionCount - 1);
-            }
-        }
-
-        protected virtual void OnCollisionStay(Collision collision)
-        {
-            // Tongue collision tracking - actual blocking handled by physics
-        }
-
         /// <summary>
         /// Called by Unity physics when this visitor's collider enters a trigger collider.
         /// BoneCollider_N trigger colliders overlap with SolidCollider_N solid colliders.

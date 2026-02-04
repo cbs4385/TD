@@ -1552,7 +1552,6 @@ namespace FaeMaze.UI
 
                 if (category == null)
                 {
-                    Debug.LogWarning($"[OptionsManager] Unrecognized KeyBindingCapture object: '{capture.gameObject.name}'");
                     continue;
                 }
 

@@ -80,7 +80,6 @@ namespace FaeMaze.Roguelike
                 CreateDefaultChallenges();
             }
 
-            Debug.Log($"[ChallengeModifierManager] Loaded {_allChallenges.Count} challenges");
         }
 
         private void CreateDefaultChallenges()
@@ -214,7 +213,6 @@ namespace FaeMaze.Roguelike
             PlayerPrefs.SetInt(key, 1);
             PlayerPrefs.Save();
 
-            Debug.Log($"[ChallengeModifierManager] Unlocked challenge: {type}");
         }
 
         /// <summary>Get all unlocked challenges.</summary>
@@ -237,11 +235,6 @@ namespace FaeMaze.Roguelike
         public void SetChallengesForRun(List<ChallengeModifierDefinition> challenges)
         {
             _activeChallenges = challenges ?? new List<ChallengeModifierDefinition>();
-            Debug.Log($"[ChallengeModifierManager] Set {_activeChallenges.Count} challenges for run");
-            foreach (var c in _activeChallenges)
-            {
-                Debug.Log($"  - {c.DisplayName} ({c.FaeDustMultiplier:F2}x)");
-            }
             OnChallengesSet?.Invoke(_activeChallenges);
         }
 
@@ -380,11 +373,6 @@ namespace FaeMaze.Roguelike
         [ContextMenu("Debug: Log Challenge State")]
         private void DebugLogState()
         {
-            Debug.Log($"[ChallengeModifierManager] Active challenges: {_activeChallenges.Count}");
-            foreach (var c in _activeChallenges)
-                Debug.Log($"  - {c.DisplayName}");
-            Debug.Log($"[ChallengeModifierManager] Unlocked count: {_unlockedChallenges.Count}");
-            Debug.Log($"[ChallengeModifierManager] Combined Fae Dust multiplier: {GetFaeDustMultiplier():F2}x");
         }
 
         [ContextMenu("Reset All Challenge Unlocks")]
@@ -397,7 +385,6 @@ namespace FaeMaze.Roguelike
             }
             _unlockedChallenges.Clear();
             PlayerPrefs.Save();
-            Debug.Log("[ChallengeModifierManager] Reset all challenge unlocks");
         }
 
         #endregion

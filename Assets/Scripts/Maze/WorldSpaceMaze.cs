@@ -217,7 +217,6 @@ namespace ForestMaze
                     {
                         tile.Walkable = false;
                         markedCount++;
-                        // UnityEngine.Debug.Log($"[WorldSpaceMazeData] Marked tile at {tile.Position} (category: {tile.Category}) as unwalkable");
                     }
                 }
             }

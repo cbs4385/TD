@@ -29,7 +29,6 @@ namespace ForestMaze
             // Only fire if this is the collider we're tracking
             if (TrackedCollider != null && other == TrackedCollider)
             {
-                Debug.Log($"[TipTriggerHandler] Tip exited detection zone: {other.name}");
                 OnTipExitedTrigger?.Invoke(other);
             }
         }

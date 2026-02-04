@@ -415,20 +415,16 @@ namespace FaeMaze.Tutorial
         /// </summary>
         public void AdvanceStep()
         {
-            Debug.Log($"[TutorialManager] AdvanceStep called. isActive={isActive}, isTransitioning={isTransitioning}, currentStepIndex={currentStepIndex}");
-
             if (!isActive) return;
 
             // Don't advance if we're in the middle of a transition
             if (isTransitioning)
             {
-                Debug.Log("[TutorialManager] AdvanceStep blocked - transition in progress");
                 return;
             }
 
             // Check if we just completed a step that requires camera transition to non-heart node
             var previousStep = CurrentStep;
-            Debug.Log($"[TutorialManager] Previous step: {previousStep?.stepId ?? "null"}");
 
             // Steps that need camera transition away from heart before advancing
             bool needsCameraTransition = previousStep != null && (
@@ -440,7 +436,24 @@ namespace FaeMaze.Tutorial
 
             if (needsCameraTransition && IsFocalPointOnHeartNode())
             {
-                Debug.Log($"[TutorialManager] Starting cinematic camera transition from {previousStep.stepId} step (focal point on heart)");
+                // Check if the NEXT step is a power activation step that will do its own cinematic transition.
+                // If so, skip this intermediate transition to avoid a double camera move.
+                int nextIndex = currentStepIndex + 1;
+                if (nextIndex < steps.Count)
+                {
+                    string nextStepId = steps[nextIndex].stepId;
+                    bool nextStepHasOwnTransition = nextStepId == "power_murmuring" ||
+                                                     nextStepId == "power_grasp" ||
+                                                     nextStepId == "power_maw" ||
+                                                     nextStepId == "power_misdirect";
+                    if (nextStepHasOwnTransition)
+                    {
+                        // Skip intermediate transition — the next step will handle camera movement
+                        AdvanceStepInternal();
+                        return;
+                    }
+                }
+
                 // Start the cinematic camera transition instead of immediately advancing
                 if (transitionCoroutine != null)
                 {
@@ -468,11 +481,9 @@ namespace FaeMaze.Tutorial
             }
 
             currentStepIndex++;
-            Debug.Log($"[TutorialManager] AdvanceStepInternal: new currentStepIndex={currentStepIndex}, totalSteps={steps?.Count ?? 0}");
 
             if (currentStepIndex >= steps.Count)
             {
-                Debug.Log("[TutorialManager] Tutorial complete - all steps finished");
                 CompleteTutorial();
                 return;
             }
@@ -484,8 +495,6 @@ namespace FaeMaze.Tutorial
                 return;
             }
 
-            Debug.Log($"[TutorialManager] Now at step: id={step.stepId}, title={step.title}, trigger={step.triggerType}, highlight={step.highlightType}");
-
             // For all power activation steps, always do cinematic camera move to ensure focal point is in correct position
             // NOTE: power_sculpt is NOT included here - it has a dedicated handler that waits for DevouringMaw to finish
             bool isPowerActivationStep = step.stepId == "power_murmuring" ||
@@ -494,7 +503,6 @@ namespace FaeMaze.Tutorial
                                          step.stepId == "power_misdirect";
             if (isPowerActivationStep)
             {
-                Debug.Log($"[TutorialManager] {step.stepId} step - performing cinematic camera move");
                 StartCoroutine(CinematicCameraTransitionThenShowStep(step));
                 return;
             }
@@ -502,56 +510,48 @@ namespace FaeMaze.Tutorial
             // Special handling for power effect steps - spawn visitor and track with focal point
             if (step.stepId == "power_murmuring_effect")
             {
-                Debug.Log($"[TutorialManager] Starting HandlePowerMurmuringEffectStep coroutine");
                 StartCoroutine(HandlePowerMurmuringEffectStep(step));
                 return;
             }
 
             if (step.stepId == "power_grasp_effect")
             {
-                Debug.Log($"[TutorialManager] Starting HandlePowerGraspEffectStep coroutine");
                 StartCoroutine(HandlePowerGraspEffectStep(step));
                 return;
             }
 
             if (step.stepId == "power_maw_effect")
             {
-                Debug.Log($"[TutorialManager] Starting HandlePowerMawEffectStep coroutine");
                 StartCoroutine(HandlePowerMawEffectStep(step));
                 return;
             }
 
             if (step.stepId == "power_sculpt")
             {
-                Debug.Log($"[TutorialManager] Starting HandlePowerSculptStep coroutine (waits for devour despawn)");
                 StartCoroutine(HandlePowerSculptStep(step));
                 return;
             }
 
             if (step.stepId == "power_sculpt_effect")
             {
-                Debug.Log($"[TutorialManager] Starting HandlePowerSculptEffectStep coroutine");
                 StartCoroutine(HandlePowerSculptEffectStep(step));
                 return;
             }
 
             if (step.stepId == "power_misdirect_effect")
             {
-                Debug.Log($"[TutorialManager] Starting HandlePowerMisdirectEffectStep coroutine");
                 StartCoroutine(HandlePowerMisdirectEffectStep(step));
                 return;
             }
 
             if (step.stepId == "lantern_demo")
             {
-                Debug.Log($"[TutorialManager] Starting HandleLanternDemoStep coroutine");
                 StartCoroutine(HandleLanternDemoStep(step));
                 return;
             }
 
             if (step.stepId == "essence_gain")
             {
-                Debug.Log($"[TutorialManager] Starting HandleEssenceGainStep coroutine");
                 StartCoroutine(HandleEssenceGainStep(step));
                 return;
             }
@@ -560,7 +560,6 @@ namespace FaeMaze.Tutorial
             int powerButtonIndex = GetPowerButtonIndex(step);
             if (powerButtonIndex >= 0)
             {
-                Debug.Log($"[TutorialManager] Step highlights PowerButton_{powerButtonIndex}, starting brightness sync");
                 StartCoroutine(WaitForPeakBrightnessThenShowStep(step, powerButtonIndex));
                 return;
             }
@@ -600,7 +599,6 @@ namespace FaeMaze.Tutorial
             var panelController = FindFirstObjectByType<HeartPowerPanelController>();
             if (panelController == null)
             {
-                Debug.LogWarning("[TutorialManager] HeartPowerPanelController not found, showing step immediately");
                 ShowStepImmediate(step);
                 yield break;
             }
@@ -616,16 +614,10 @@ namespace FaeMaze.Tutorial
                 float brightness = panelController.GetButtonPulseBrightness(buttonIndex);
                 if (brightness >= BRIGHTNESS_THRESHOLD)
                 {
-                    Debug.Log($"[TutorialManager] Button {buttonIndex} reached peak brightness ({brightness:F2}) after {Time.unscaledTime - startTime:F2}s");
                     break;
                 }
 
                 yield return null;
-            }
-
-            if (Time.unscaledTime - startTime >= MAX_WAIT_TIME)
-            {
-                Debug.Log($"[TutorialManager] Max wait time reached, showing step anyway");
             }
 
             // Lock the button at peak brightness so it stays bright while step is shown
@@ -649,7 +641,11 @@ namespace FaeMaze.Tutorial
             // activated the power during the transition, we should still advance
             if (step.triggerType == TutorialTriggerType.PowerActivated && IsPowerAlreadyActiveForCurrentStep())
             {
-                Debug.Log($"[TutorialManager] Power already active for step {step.stepId}, auto-advancing");
+                Debug.Log($"[TutorialPower] Power already active for step {step.stepId}, auto-advancing and locking all");
+                // Lock all powers — the activated power has served its purpose
+                var pc = FindFirstObjectByType<HeartPowerPanelController>();
+                if (pc != null) pc.DisableAllPowersForTutorial();
+
                 AdvanceStep();
                 return;
             }
@@ -657,7 +653,6 @@ namespace FaeMaze.Tutorial
             // Handle pause state - pause when dim overlay is visible (highlightType != None)
             // When highlightType is None, the player should see the game clearly without pause
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
-            Debug.Log($"[TutorialManager] Pause logic: pauseGame={step.pauseGame}, highlightType={step.highlightType}, shouldPause={shouldPause}, isPaused={isPaused}");
 
             // For PowerActivated trigger steps, we must unpause so the player can activate the power
             // and the power effect can initialize (some use coroutines with WaitForSeconds)
@@ -679,7 +674,6 @@ namespace FaeMaze.Tutorial
             // Spawn visitor if needed
             if (step.spawnVisitor && visitorSpawner != null)
             {
-                Debug.Log($"[TutorialManager] Spawning visitor for step {step.stepId}");
                 visitorSpawner.SpawnTutorialVisitor();
             }
 
@@ -695,7 +689,6 @@ namespace FaeMaze.Tutorial
                 previousCameraPosition = cam.transform.position;
             }
 
-            Debug.Log($"[TutorialManager] Invoking OnStepChanged event for step index {currentStepIndex}");
             OnStepChanged?.Invoke(currentStepIndex);
         }
 
@@ -703,71 +696,49 @@ namespace FaeMaze.Tutorial
         /// Performs a cinematic camera transition: dims scene, pauses, moves camera smoothly.
         /// </summary>
         /// <param name="advanceAfter">If true, advances to next step after transition. If false, just does the camera move.</param>
-        private IEnumerator CinematicCameraTransition(bool advanceAfter = true)
+        private IEnumerator CinematicCameraTransition(bool advanceAfter = true, bool useFurthestNode = false)
         {
-            Debug.Log($"[TutorialManager] CinematicCameraTransition started (advanceAfter={advanceAfter})");
             isTransitioning = true;
 
-            // Step 1: Dim the scene and pause (this will be done via uiController notifying of a special state)
-            // Pause the game so the world freezes during the transition
+            // Step 1: Dim the scene and pause
             PauseGame(true);
-            Debug.Log("[TutorialManager] Game paused for transition");
 
             // Notify UI to show dim overlay during transition
             uiController?.ShowTransitionOverlay(true);
-            Debug.Log("[TutorialManager] Transition overlay shown");
 
             // Small delay to let the dim effect be visible
             yield return new WaitForSecondsRealtime(0.3f);
-            Debug.Log("[TutorialManager] After 0.3s delay");
 
-            // Step 2: Start smooth camera movement to nearest non-heart node
-            Vector3 targetPos = GetNearestNonHeartNodePosition();
-            Debug.Log($"[TutorialManager] Target position for camera: {targetPos}");
+            // Step 2: Start smooth camera movement to target node
+            Vector3 targetPos = useFurthestNode
+                ? GetFurthestNonHeartNodePosition()
+                : GetNearestNonHeartNodePosition();
 
             var cameraController = FindFirstObjectByType<CameraController3D>();
 
             if (cameraController != null && targetPos != Vector3.zero)
             {
-                Debug.Log("[TutorialManager] Starting smooth camera movement");
-                // Use smooth movement (instant: false) with a comfortable speed
                 cameraController.FocusOnPosition(targetPos, instant: false, lerpSpeed: 8f);
 
                 // Step 3: Wait for camera to finish moving
-                // Check IsFocalPointMoving property until it's false
-                int waitFrames = 0;
                 while (cameraController.IsFocalPointMoving)
                 {
-                    waitFrames++;
-                    if (waitFrames % 60 == 0)
-                    {
-                        Debug.Log($"[TutorialManager] Waiting for camera... frames={waitFrames}, pos={cameraController.FocalPointPosition}");
-                    }
-                    yield return null; // Wait one frame (uses unscaled time since game is paused)
+                    yield return null;
                 }
-                Debug.Log($"[TutorialManager] Camera movement complete after {waitFrames} frames");
-            }
-            else
-            {
-                Debug.LogWarning($"[TutorialManager] Camera movement skipped: cameraController={cameraController != null}, targetPos={targetPos}");
             }
 
             // Small delay after arriving to let the new view settle
             yield return new WaitForSecondsRealtime(0.2f);
-            Debug.Log("[TutorialManager] After settle delay");
 
             // Step 4: Complete transition
             isTransitioning = false;
-            Debug.Log("[TutorialManager] Hiding transition overlay");
             uiController?.ShowTransitionOverlay(false);
 
             // Optionally advance to the next step
             if (advanceAfter)
             {
-                Debug.Log("[TutorialManager] Calling AdvanceStepInternal from transition");
                 AdvanceStepInternal();
             }
-            Debug.Log("[TutorialManager] CinematicCameraTransition complete");
         }
 
         /// <summary>
@@ -777,15 +748,10 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerGraspEffectStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandlePowerGraspEffectStep started");
-
             // CRITICAL: Always unpause first if needed - the game must be running
-            // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
-            Debug.Log($"[TutorialManager] HandlePowerGraspEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
             if (!shouldPause && isPaused)
             {
-                Debug.Log("[TutorialManager] Unpausing game for power_grasp_effect step");
                 PauseGame(false);
             }
 
@@ -793,7 +759,6 @@ namespace FaeMaze.Tutorial
             var heartPowerManager = HeartPowerManager.Instance;
             if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.HeartwardGrasp))
             {
-                Debug.Log("[TutorialManager] HeartwardGrasp power not active, skipping effect step");
                 AdvanceStep();
                 yield break;
             }
@@ -802,7 +767,6 @@ namespace FaeMaze.Tutorial
             var graspEffect = HeartwardGraspEffect.ActiveInstance;
             if (graspEffect == null)
             {
-                Debug.LogWarning("[TutorialManager] No active HeartwardGraspEffect for power_grasp_effect step, skipping");
                 AdvanceStep();
                 yield break;
             }
@@ -810,12 +774,10 @@ namespace FaeMaze.Tutorial
             // Get the path-side grabbing position (where visitor should walk near)
             // This is the point on the walkable path, not the forest wall position
             Vector3 hgzPos = graspEffect.GrabbingPathPosition;
-            Debug.Log($"[TutorialManager] HGZ path position: {hgzPos}");
 
             // Get heart position for calculating spawn direction
             var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
             Vector3 heartPos = mazeGrid != null ? mazeGrid.HeartWorldPosition : Vector3.zero;
-            Debug.Log($"[TutorialManager] Heart position: {heartPos}");
 
             // Calculate spawn position: beyond the HGZ, away from heart, so visitor walks toward heart
             // The visitor will walk FROM spawnPos THROUGH the HGZ detection zone
@@ -833,14 +795,10 @@ namespace FaeMaze.Tutorial
             Vector3 cameraFocalPos = (spawnPos + hgzPos) / 2f;
             cameraFocalPos.z = 0f;
 
-            Debug.Log($"[TutorialManager] Spawn pos: {spawnPos}, HGZ pos: {hgzPos}, Visitor dest: {visitorDestination}");
-            Debug.Log($"[TutorialManager] Camera focal pos (ray midpoint): {cameraFocalPos}");
-
             // Move focal point to the calculated position
             var cameraController = FindFirstObjectByType<CameraController3D>();
             if (cameraController != null)
             {
-                Debug.Log("[TutorialManager] Moving focal point to node-side position");
                 cameraController.FocusOnPosition(cameraFocalPos, instant: false, lerpSpeed: 8f);
 
                 // Wait for camera to finish moving
@@ -848,10 +806,7 @@ namespace FaeMaze.Tutorial
                 {
                     yield return null;
                 }
-                Debug.Log("[TutorialManager] Camera arrived at node-side position");
             }
-
-            Debug.Log($"[TutorialManager] Spawning visitor at {spawnPos} heading toward {visitorDestination}");
 
             // Spawn visitor at calculated position - destination goes through HGZ
             if (visitorSpawner != null)
@@ -878,8 +833,6 @@ namespace FaeMaze.Tutorial
             }
 
             // Show the step UI (game not paused - action continues)
-            Debug.Log("[TutorialManager] Showing power_grasp_effect step UI");
-
             // Pause state already handled at start of method - no need to check again
 
             // Update tracking for triggers
@@ -904,14 +857,11 @@ namespace FaeMaze.Tutorial
 
             if (targetVisitor != null && cameraController != null)
             {
-                Debug.Log($"[TutorialManager] Starting direct focal point tracking of visitor {targetVisitor.name}");
-
                 // Phase 1: Track until visitor is grabbed
                 while (targetVisitor != null && targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
                 {
                     if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
                     {
-                        Debug.Log("[TutorialManager] HGZ tracking timeout (phase 1) - visitor did not get grabbed in time");
                         break;
                     }
                     Vector3 visitorPos = targetVisitor.transform.position;
@@ -919,8 +869,6 @@ namespace FaeMaze.Tutorial
                     cameraController.FocusOnPosition(visitorPos, instant: true);
                     yield return null;
                 }
-
-                Debug.Log("[TutorialManager] Visitor grabbed, transitioning camera to pushing HGZ");
 
                 // Phase 2: Move camera to pushing HGZ and rotate to look along heart->pushing axis
                 if (targetVisitor != null && graspEffect != null && targetVisitor.State == VisitorControllerBase.VisitorState.Grabbed)
@@ -933,7 +881,6 @@ namespace FaeMaze.Tutorial
                     Vector2 pushingPos2D = new Vector2(pushingPos.x, pushingPos.y);
                     Vector2 dirHeartToPushing = (pushingPos2D - heartPos2D).normalized;
 
-                    Debug.Log($"[TutorialManager] Moving focal point to pushing HGZ at {pushingPos}");
                     cameraController.FocusOnPosition(pushingPos, instant: false, lerpSpeed: 12f);
                     cameraController.SetFocalPointDirection(dirHeartToPushing);
 
@@ -943,21 +890,16 @@ namespace FaeMaze.Tutorial
                         yield return null;
                     }
 
-                    Debug.Log("[TutorialManager] Camera at pushing HGZ, waiting for visitor to emerge");
-
                     // Phase 3: Wait for visitor to become visible (back on ground) with timeout
                     float phase3StartTime = Time.realtimeSinceStartup;
                     while (targetVisitor != null && !IsVisitorVisible(targetVisitor))
                     {
                         if (Time.realtimeSinceStartup - phase3StartTime > 10f)
                         {
-                            Debug.Log("[TutorialManager] HGZ tracking timeout (phase 3) - visitor did not become visible");
                             break;
                         }
                         yield return null;
                     }
-
-                    Debug.Log("[TutorialManager] Visitor visible, resuming tracking until consumed");
 
                     // Phase 4: Track visitor until consumed with timeout
                     float phase4StartTime = Time.realtimeSinceStartup;
@@ -965,7 +907,6 @@ namespace FaeMaze.Tutorial
                     {
                         if (Time.realtimeSinceStartup - phase4StartTime > 15f)
                         {
-                            Debug.Log("[TutorialManager] HGZ tracking timeout (phase 4) - visitor did not get consumed");
                             break;
                         }
                         Vector3 visitorPos = targetVisitor.transform.position;
@@ -974,15 +915,9 @@ namespace FaeMaze.Tutorial
                         yield return null;
                     }
 
-                    Debug.Log("[TutorialManager] Visitor consumed, tracking complete");
                 }
             }
-            else
-            {
-                Debug.LogWarning("[TutorialManager] Could not find spawned visitor to track");
-            }
 
-            Debug.Log("[TutorialManager] HandlePowerGraspEffectStep complete");
             AdvanceStep();
         }
 
@@ -1008,15 +943,11 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerMurmuringEffectStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandlePowerMurmuringEffectStep started");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
-            Debug.Log($"[TutorialManager] HandlePowerMurmuringEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
             if (!shouldPause && isPaused)
             {
-                Debug.Log("[TutorialManager] Unpausing game for power_murmuring_effect step");
                 PauseGame(false);
             }
 
@@ -1024,7 +955,6 @@ namespace FaeMaze.Tutorial
             var heartPowerManager = HeartPowerManager.Instance;
             if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.MurmuringPaths))
             {
-                Debug.Log("[TutorialManager] MurmuringPaths power not active, skipping effect step");
                 AdvanceStep();
                 yield break;
             }
@@ -1048,27 +978,53 @@ namespace FaeMaze.Tutorial
                     var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
                     Vector3 heartPos = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
 
-                    // Spawn at the furthest fog tile - visitor will walk along the fog toward heart
-                    Vector3 spawnPos = furthestPos.Value;
+                    // Offset the spawn position 90 degrees around the node so the visitor
+                    // approaches along the walkable ring instead of straight through the
+                    // unwalkable node center (where the pond prop sits).
+                    Vector3 dirToHeart = (heartPos - furthestPos.Value).normalized;
+                    Vector3 perpDir = new Vector3(-dirToHeart.y, dirToHeart.x, 0f);
+                    Vector3 spawnPos = furthestPos.Value + perpDir * 3f;
                     spawnPos.z = 0f;
 
-                    Debug.Log($"[TutorialManager] Spawning misdirect visitor at furthest fog tile {spawnPos} (fog target={fogTarget}, heart={heartPos})");
+                    // Find nearest walkable tile to the offset position
+                    var mazeData = mazeGrid?.WorldSpaceMazeData;
+                    if (mazeData != null)
+                    {
+                        var walkableTile = ForestMaze.MazePathfinding.FindNearestWalkableTile(
+                            mazeData, new Vector2(spawnPos.x, spawnPos.y));
+                        if (walkableTile != null)
+                        {
+                            spawnPos = new Vector3(walkableTile.Position.x, walkableTile.Position.y, 0f);
+                        }
+                    }
+
                     visitorSpawner.SpawnVisitorForHGZ(spawnPos, heartPos);
                 }
                 else if (fogTarget.HasValue)
                 {
-                    // Fallback: spawn near the fog target
                     var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
                     Vector3 heartPos = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
-                    Vector3 spawnPos = fogTarget.Value;
+
+                    Vector3 dirToHeart = (heartPos - fogTarget.Value).normalized;
+                    Vector3 perpDir = new Vector3(-dirToHeart.y, dirToHeart.x, 0f);
+                    Vector3 spawnPos = fogTarget.Value + perpDir * 3f;
                     spawnPos.z = 0f;
 
-                    Debug.Log($"[TutorialManager] Spawning misdirect visitor at fog target {spawnPos} (heart={heartPos})");
+                    var mazeData = mazeGrid?.WorldSpaceMazeData;
+                    if (mazeData != null)
+                    {
+                        var walkableTile = ForestMaze.MazePathfinding.FindNearestWalkableTile(
+                            mazeData, new Vector2(spawnPos.x, spawnPos.y));
+                        if (walkableTile != null)
+                        {
+                            spawnPos = new Vector3(walkableTile.Position.x, walkableTile.Position.y, 0f);
+                        }
+                    }
+
                     visitorSpawner.SpawnVisitorForHGZ(spawnPos, heartPos);
                 }
                 else
                 {
-                    Debug.LogWarning("[TutorialManager] No active murmuring paths, falling back to SpawnTutorialVisitorTowardHeart");
                     visitorSpawner.SpawnTutorialVisitorTowardHeart();
                 }
             }
@@ -1085,7 +1041,6 @@ namespace FaeMaze.Tutorial
                 if (!existingVisitors.Contains(v))
                 {
                     targetVisitor = v;
-                    Debug.Log($"[TutorialManager] Found newly spawned misdirect visitor: {v.name} at {v.transform.position}");
                     break;
                 }
             }
@@ -1094,14 +1049,12 @@ namespace FaeMaze.Tutorial
             if (targetVisitor == null && allVisitors.Length > 0)
             {
                 targetVisitor = allVisitors[0];
-                Debug.LogWarning("[TutorialManager] Could not find new visitor, using first available");
             }
 
             // Force the visitor to be lured so they path toward the heart through the fog
             if (targetVisitor != null)
             {
                 targetVisitor.SetLured(true);
-                Debug.Log($"[TutorialManager] Forced misdirect visitor to lured state: {targetVisitor.name}");
             }
 
             // Show the step UI
@@ -1116,7 +1069,6 @@ namespace FaeMaze.Tutorial
 
             if (targetVisitor != null && cameraController != null)
             {
-                Debug.Log($"[TutorialManager] Starting focal point tracking of visitor {targetVisitor.name} for Murmuring Paths, state={targetVisitor.State}");
 
                 while (targetVisitor != null &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
@@ -1125,7 +1077,6 @@ namespace FaeMaze.Tutorial
                     // Check for timeout
                     if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
                     {
-                        Debug.Log("[TutorialManager] Murmuring Paths tracking timeout - visitor did not get consumed in time");
                         break;
                     }
 
@@ -1140,24 +1091,15 @@ namespace FaeMaze.Tutorial
                                      targetVisitor.State == VisitorControllerBase.VisitorState.Consumed ||
                                      targetVisitor.State == VisitorControllerBase.VisitorState.Grabbed;
 
-                Debug.Log($"[TutorialManager] Visitor tracking ended for Murmuring Paths, consumed={visitorWasConsumed}");
-
                 // If visitor wasn't consumed (timeout), assign them a random exit instead of destroying
                 if (!visitorWasConsumed && targetVisitor != null)
                 {
-                    Debug.Log("[TutorialManager] Assigning random exit to unconsumed murmuring paths visitor");
                     AssignRandomExitToVisitor(targetVisitor);
                 }
             }
-            else
-            {
-                Debug.LogWarning("[TutorialManager] Could not find spawned visitor to track for Murmuring Paths");
-            }
-
             // Wait for heart consumption animation to complete
             yield return new WaitForSecondsRealtime(1.5f);
 
-            Debug.Log("[TutorialManager] HandlePowerMurmuringEffectStep complete");
             AdvanceStep();
         }
 
@@ -1167,15 +1109,11 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerMawEffectStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandlePowerMawEffectStep started");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
-            Debug.Log($"[TutorialManager] HandlePowerMawEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
             if (!shouldPause && isPaused)
             {
-                Debug.Log("[TutorialManager] Unpausing game for power_maw_effect step");
                 PauseGame(false);
             }
 
@@ -1183,7 +1121,6 @@ namespace FaeMaze.Tutorial
             var heartPowerManager = HeartPowerManager.Instance;
             if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.DevouringMaw))
             {
-                Debug.Log("[TutorialManager] DevouringMaw power not active, skipping effect step");
                 AdvanceStep();
                 yield break;
             }
@@ -1228,8 +1165,6 @@ namespace FaeMaze.Tutorial
 
             if (targetVisitor != null && cameraController != null)
             {
-                Debug.Log($"[TutorialManager] Starting focal point tracking of visitor {targetVisitor.name} for Devouring Maw, state={targetVisitor.State}");
-
                 while (targetVisitor != null &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
@@ -1237,7 +1172,6 @@ namespace FaeMaze.Tutorial
                     // Check for timeout
                     if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
                     {
-                        Debug.Log("[TutorialManager] Maw tracking timeout - visitor did not reach maw in time");
                         break;
                     }
 
@@ -1247,19 +1181,15 @@ namespace FaeMaze.Tutorial
                     yield return null;
                 }
 
-                Debug.Log("[TutorialManager] Visitor tracking ended for Devouring Maw");
-
                 // Wait a moment for the maw animation to complete
                 yield return new WaitForSecondsRealtime(1.5f);
             }
             else
             {
-                Debug.LogWarning("[TutorialManager] Could not find spawned visitor to track for Devouring Maw");
                 // Wait a bit even if no visitor, so player sees the maw
                 yield return new WaitForSecondsRealtime(2.0f);
             }
 
-            Debug.Log("[TutorialManager] HandlePowerMawEffectStep complete, auto-advancing");
             AdvanceStep();
         }
 
@@ -1269,8 +1199,6 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerSculptStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandlePowerSculptStep started - waiting for devour to despawn");
-
             // Wait for DevouringMaw power to finish (no longer active)
             var heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
             if (heartPowerManager != null)
@@ -1279,7 +1207,6 @@ namespace FaeMaze.Tutorial
                 {
                     yield return null;
                 }
-                Debug.Log("[TutorialManager] Devour effect has despawned");
             }
 
             // Small delay after devour despawns for visual clarity
@@ -1300,7 +1227,6 @@ namespace FaeMaze.Tutorial
                 ShowStepImmediate(step);
             }
 
-            Debug.Log("[TutorialManager] HandlePowerSculptStep complete");
         }
 
         /// <summary>
@@ -1311,7 +1237,6 @@ namespace FaeMaze.Tutorial
             var panelController = FindFirstObjectByType<HeartPowerPanelController>();
             if (panelController == null)
             {
-                Debug.LogWarning("[TutorialManager] HeartPowerPanelController not found, showing step immediately");
                 ShowStepImmediate(step);
                 yield break;
             }
@@ -1343,15 +1268,11 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerSculptEffectStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandlePowerSculptEffectStep started");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
-            Debug.Log($"[TutorialManager] HandlePowerSculptEffectStep: shouldPause={shouldPause}, isPaused={isPaused}");
             if (!shouldPause && isPaused)
             {
-                Debug.Log("[TutorialManager] Unpausing game for power_sculpt_effect step");
                 PauseGame(false);
             }
 
@@ -1359,7 +1280,6 @@ namespace FaeMaze.Tutorial
             var heartPowerManager = HeartPowerManager.Instance;
             if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.Sculpting))
             {
-                Debug.Log("[TutorialManager] Sculpting power not active, skipping effect step");
                 AdvanceStep();
                 yield break;
             }
@@ -1376,7 +1296,6 @@ namespace FaeMaze.Tutorial
             {
                 Vector3 focalPos = cameraController.FocalPointPosition;
                 targetNodeIndex = dynamicMaze.FindNodeIndexAtPosition(focalPos);
-                Debug.Log($"[TutorialManager] Target node for lantern: {targetNodeIndex} at focal pos {focalPos}");
             }
 
             // Wait for the sculpt menu to open, then highlight only the lantern button
@@ -1386,7 +1305,6 @@ namespace FaeMaze.Tutorial
             }
 
             // Highlight only the lantern button and disable others
-            Debug.Log("[TutorialManager] Sculpt menu opened, highlighting lantern button only");
             SculptingEffect.ActiveInstance.HighlightLanternButtonOnly();
 
             // Wait for the sculpt menu to close OR for a lantern to be placed
@@ -1401,17 +1319,14 @@ namespace FaeMaze.Tutorial
             {
                 var propType = dynamicMaze.GetNodePropType(targetNodeIndex);
                 lanternPlaced = propType == DynamicMazeGrowth.NodePropType.FaeLantern;
-                Debug.Log($"[TutorialManager] After sculpt menu closed: lanternPlaced={lanternPlaced}, propType={propType}");
             }
 
             // If lantern wasn't placed, place one automatically
             if (!lanternPlaced && dynamicMaze != null && targetNodeIndex > 0)
             {
-                Debug.Log("[TutorialManager] Lantern not placed by player, placing automatically");
                 dynamicMaze.SetNodeProp(targetNodeIndex, DynamicMazeGrowth.NodePropType.FaeLantern);
             }
 
-            Debug.Log("[TutorialManager] HandlePowerSculptEffectStep complete, auto-advancing");
             AdvanceStep();
         }
 
@@ -1422,13 +1337,10 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerMisdirectEffectStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandlePowerMisdirectEffectStep started");
-
             // Ensure unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
             if (!shouldPause && isPaused)
             {
-                Debug.Log("[TutorialManager] Unpausing game for power_misdirect_effect step");
                 PauseGame(false);
             }
 
@@ -1436,7 +1348,6 @@ namespace FaeMaze.Tutorial
             var heartPowerManager = HeartPowerManager.Instance;
             if (heartPowerManager == null || !heartPowerManager.IsPowerActive(HeartPowerType.Misdirect))
             {
-                Debug.Log("[TutorialManager] Misdirect power not active, skipping effect step");
                 AdvanceStep();
                 yield break;
             }
@@ -1447,7 +1358,6 @@ namespace FaeMaze.Tutorial
 
             if (edgeIndex < 0 || mazeData == null || mazeData.GraphState == null)
             {
-                Debug.LogWarning("[TutorialManager] Cannot find misdirected edge data, skipping visitor spawn");
                 ShowStepImmediate(step);
                 yield return new WaitForSecondsRealtime(3f);
                 AdvanceStep();
@@ -1458,7 +1368,6 @@ namespace FaeMaze.Tutorial
             var polyline = edge.PolylinePoints;
             if (polyline == null || polyline.Count < 2)
             {
-                Debug.LogWarning("[TutorialManager] Misdirected edge has no polyline, skipping visitor spawn");
                 ShowStepImmediate(step);
                 yield return new WaitForSecondsRealtime(3f);
                 AdvanceStep();
@@ -1489,8 +1398,6 @@ namespace FaeMaze.Tutorial
             // Destination is the heart so the visitor walks the full path through the misdirected edge
             Vector3 destPos = heartWorldPos;
 
-            Debug.Log($"[TutorialManager] Misdirect demo: spawning visitor at {spawnPos} -> heart {destPos}");
-
             // Spawn visitor
             if (visitorSpawner != null)
             {
@@ -1519,7 +1426,6 @@ namespace FaeMaze.Tutorial
             if (targetVisitor != null)
             {
                 targetVisitor.SetLured(true);
-                Debug.Log($"[TutorialManager] Set misdirect demo visitor to lured state: {targetVisitor.name}");
             }
 
             // Show the step UI
@@ -1532,7 +1438,6 @@ namespace FaeMaze.Tutorial
 
             if (targetVisitor != null && cameraController != null)
             {
-                Debug.Log($"[TutorialManager] Tracking misdirect demo visitor {targetVisitor.name}");
 
                 while (targetVisitor != null &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
@@ -1540,7 +1445,6 @@ namespace FaeMaze.Tutorial
                 {
                     if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
                     {
-                        Debug.Log("[TutorialManager] Misdirect tracking timeout");
                         break;
                     }
 
@@ -1549,7 +1453,6 @@ namespace FaeMaze.Tutorial
                     float distToEdgeEnd = Vector2.Distance(visitorPos2D, edgeDestEnd);
                     if (distToEdgeEnd < 3.0f) // NODE_RADIUS - visitor has entered the destination node
                     {
-                        Debug.Log($"[TutorialManager] Visitor reached destination end of misdirect edge (dist={distToEdgeEnd:F1})");
                         break;
                     }
 
@@ -1564,17 +1467,14 @@ namespace FaeMaze.Tutorial
                     targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
                     targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
                 {
-                    Debug.Log("[TutorialManager] Assigning random exit to misdirect demo visitor");
                     AssignRandomExitToVisitor(targetVisitor);
                 }
             }
             else
             {
-                Debug.LogWarning("[TutorialManager] Could not find visitor or camera for misdirect demo");
                 yield return new WaitForSecondsRealtime(3f);
             }
 
-            Debug.Log("[TutorialManager] HandlePowerMisdirectEffectStep complete, auto-advancing");
             AdvanceStep();
         }
 
@@ -1584,37 +1484,22 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandleLanternDemoStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandleLanternDemoStep started");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
-            Debug.Log($"[TutorialManager] HandleLanternDemoStep: shouldPause={shouldPause}, isPaused={isPaused}");
             if (!shouldPause && isPaused)
             {
-                Debug.Log("[TutorialManager] Unpausing game for lantern_demo step");
                 PauseGame(false);
             }
 
             // Find the lantern we just placed
             var lanterns = FindObjectsByType<FaeLantern>(FindObjectsSortMode.None);
-            Debug.Log($"[TutorialManager] Found {lanterns.Length} FaeLantern components");
-
-            // Also check for LanternGlow components (debug)
-            var lanternGlows = FindObjectsByType<LanternGlow>(FindObjectsSortMode.None);
-            Debug.Log($"[TutorialManager] Found {lanternGlows.Length} LanternGlow components for comparison");
 
             FaeLantern targetLantern = null;
 
             if (lanterns.Length > 0)
             {
                 targetLantern = lanterns[0]; // Use the first lantern found
-                Debug.Log($"[TutorialManager] Found lantern at {targetLantern.transform.position}");
-            }
-            else
-            {
-                Debug.LogWarning("[TutorialManager] No FaeLantern components found! Checking static registry...");
-                Debug.Log($"[TutorialManager] FaeLantern.All contains {FaeLantern.All.Count} lanterns");
             }
 
             // Show the step UI
@@ -1645,24 +1530,17 @@ namespace FaeMaze.Tutorial
                 {
                     heartPos = GameController.Instance.Heart.transform.position;
                     heartPos.z = 0f;
-                    Debug.Log($"[TutorialManager] Got heart position from GameController.Heart: {heartPos}");
                 }
                 // Second try: MazeGridBehaviour.HeartWorldPosition
                 else if (mazeGrid != null && mazeGrid.HeartWorldPosition.sqrMagnitude > 0.01f)
                 {
                     heartPos = mazeGrid.HeartWorldPosition;
-                    Debug.Log($"[TutorialManager] Got heart position from MazeGridBehaviour: {heartPos}");
                 }
                 // Third try: ForestMapState node 0
                 else if (mazeGrid != null && mazeGrid.ForestMapState != null && mazeGrid.ForestMapState.Nodes.Count > 0)
                 {
                     var seedNode = mazeGrid.ForestMapState.Nodes[0];
                     heartPos = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
-                    Debug.Log($"[TutorialManager] Got heart position from ForestMapState: {heartPos}");
-                }
-                else
-                {
-                    Debug.LogWarning("[TutorialManager] Could not get heart position! Visitor may not path correctly.");
                 }
 
                 // Direction from lantern to heart
@@ -1670,11 +1548,13 @@ namespace FaeMaze.Tutorial
                 if (dirToHeart.sqrMagnitude < 0.01f)
                 {
                     dirToHeart = new Vector3(1f, 0f, 0f); // Fallback direction
-                    Debug.LogWarning("[TutorialManager] Using fallback direction for visitor spawn");
                 }
 
-                // Calculate ideal spawn position: opposite side of lantern from heart
-                Vector3 idealSpawnPos = lanternPos - dirToHeart * 5f;
+                // Calculate ideal spawn position: perpendicular to heart direction
+                // Rotate 90 degrees in XY plane so the visitor approaches along the walkable ring
+                // instead of bouncing through the unwalkable node center
+                Vector3 perpDir = new Vector3(-dirToHeart.y, dirToHeart.x, 0f);
+                Vector3 idealSpawnPos = lanternPos + perpDir * 5f;
                 idealSpawnPos.z = 0f;
 
                 // CRITICAL: Find the nearest walkable tile to the ideal spawn position
@@ -1689,18 +1569,15 @@ namespace FaeMaze.Tutorial
                     if (nearestWalkableTile != null)
                     {
                         spawnPos = new Vector3(nearestWalkableTile.Position.x, nearestWalkableTile.Position.y, 0f);
-                        Debug.Log($"[TutorialManager] Found walkable tile at {spawnPos} (ideal was {idealSpawnPos})");
                     }
                     else
                     {
-                        Debug.LogWarning("[TutorialManager] No walkable tile found near ideal spawn, using lantern position");
                         spawnPos = lanternPos - dirToHeart * 2f;
                         spawnPos.z = 0f;
                     }
                 }
                 else
                 {
-                    Debug.LogWarning("[TutorialManager] No maze data available, using ideal spawn position");
                     spawnPos = idealSpawnPos;
                 }
 
@@ -1708,12 +1585,8 @@ namespace FaeMaze.Tutorial
                 Vector3 destPos = heartPos;
                 destPos.z = 0f;
 
-                Debug.Log($"[TutorialManager] Spawning visitor at {spawnPos} to walk through lantern at {lanternPos} toward {destPos}");
-                visitorSpawner.SpawnVisitorForHGZ(spawnPos, destPos);
-            }
-            else
-            {
-                Debug.LogWarning($"[TutorialManager] Cannot spawn lantern demo visitor: visitorSpawner={visitorSpawner != null}, targetLantern={targetLantern != null}");
+                // Lantern demo visitor must NOT be fascination-immune
+                visitorSpawner.SpawnVisitorForHGZ(spawnPos, destPos, fascinationImmune: false);
             }
 
             // Wait for spawn to complete
@@ -1740,40 +1613,23 @@ namespace FaeMaze.Tutorial
             // Track visitor until they become fascinated by the lantern
             if (targetVisitor != null && cameraController != null)
             {
-                Debug.Log($"[TutorialManager] Tracking visitor {targetVisitor.name} until fascinated");
-                Debug.Log($"[TutorialManager] FaeLantern.All count: {FaeMaze.Props.FaeLantern.All.Count}");
-                foreach (var l in FaeMaze.Props.FaeLantern.All)
-                {
-                    Debug.Log($"[TutorialManager] FaeLantern in registry: {l.name} at {l.transform.position}, influence radius: {l.InfluenceRadius}");
-                }
-
                 // Track visitor position with camera (with timeout to prevent infinite loop)
                 float trackingTimeout = 20f; // 20 second timeout
                 float trackingStartTime = Time.realtimeSinceStartup;
-                float lastDebugTime = 0f;
 
                 while (targetVisitor != null)
                 {
                     // Check timeout
                     if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
                     {
-                        Debug.LogWarning("[TutorialManager] Lantern fascination tracking timed out after 20s");
                         break;
                     }
 
                     float distToLantern = targetLantern != null ? Vector3.Distance(targetVisitor.transform.position, targetLantern.transform.position) : -1f;
 
-                    // Periodic debug logging (every 2 seconds)
-                    if (Time.realtimeSinceStartup - lastDebugTime > 2f)
-                    {
-                        lastDebugTime = Time.realtimeSinceStartup;
-                        Debug.Log($"[TutorialManager] Visitor at {targetVisitor.transform.position}, state={targetVisitor.State}, dist to lantern={distToLantern:F2}, fascinated={targetVisitor.CurrentFaeLantern != null}");
-                    }
-
                     // Check if visitor is fascinated by a lantern
                     if (targetVisitor.CurrentFaeLantern != null)
                     {
-                        Debug.Log("[TutorialManager] Visitor became fascinated by lantern!");
                         break;
                     }
 
@@ -1781,14 +1637,12 @@ namespace FaeMaze.Tutorial
                     if (targetVisitor.State == VisitorControllerBase.VisitorState.Consumed ||
                         targetVisitor.State == VisitorControllerBase.VisitorState.Grabbed)
                     {
-                        Debug.Log("[TutorialManager] Visitor was consumed/grabbed before fascination");
                         break;
                     }
 
                     // Force fascination as soon as visitor enters lantern influence radius
                     if (targetLantern != null && distToLantern < targetLantern.InfluenceRadius)
                     {
-                        Debug.Log($"[TutorialManager] Forcing visitor fascination (entered lantern influence radius, dist={distToLantern:F2})");
                         targetVisitor.ForceFascinateByLantern(targetLantern);
                         break;
                     }
@@ -1803,14 +1657,12 @@ namespace FaeMaze.Tutorial
             }
             else
             {
-                Debug.LogWarning("[TutorialManager] Could not find visitor to track for lantern demo");
                 yield return new WaitForSecondsRealtime(2f);
             }
 
             // Short pause to let player see the fascination effect
             yield return new WaitForSecondsRealtime(1.5f);
 
-            Debug.Log("[TutorialManager] HandleLanternDemoStep complete, auto-advancing");
             AdvanceStep();
         }
 
@@ -1821,8 +1673,6 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandleEssenceGainStep(TutorialStep step)
         {
-            Debug.Log("[TutorialManager] HandleEssenceGainStep started");
-
             // Ensure game is unpaused
             if (isPaused)
             {
@@ -1852,7 +1702,6 @@ namespace FaeMaze.Tutorial
             {
                 if (Time.realtimeSinceStartup - startTime > timeout)
                 {
-                    Debug.LogWarning("[TutorialManager] HandleEssenceGainStep timed out");
                     AdvanceStep();
                     break;
                 }
@@ -1866,7 +1715,6 @@ namespace FaeMaze.Tutorial
                 yield return null;
             }
 
-            Debug.Log("[TutorialManager] HandleEssenceGainStep complete");
         }
 
         /// <summary>
@@ -1922,8 +1770,6 @@ namespace FaeMaze.Tutorial
                         walkingDistance = Vector2.Distance(heartPos, neighborNode.Position);
                     }
 
-                    Debug.Log($"[TutorialManager] Checking node {otherNodeId} at {neighborNode.Position}, walking distance={walkingDistance:F2}");
-
                     if (walkingDistance < shortestWalkingDistance)
                     {
                         shortestWalkingDistance = walkingDistance;
@@ -1935,12 +1781,10 @@ namespace FaeMaze.Tutorial
 
             if (bestNodeId >= 0)
             {
-                Debug.Log($"[TutorialManager] Selected node {bestNodeId} at {bestNodePos} with shortest walking distance {shortestWalkingDistance:F2}");
                 return new Vector3(bestNodePos.x, bestNodePos.y, 0f);
             }
 
             // Fallback: find nearest node by straight-line distance
-            Debug.LogWarning("[TutorialManager] No directly connected node found, falling back to nearest by distance");
             float nearestDist = float.MaxValue;
             Vector2 nearestNodePos = heartPos;
 
@@ -1956,6 +1800,39 @@ namespace FaeMaze.Tutorial
             }
 
             return new Vector3(nearestNodePos.x, nearestNodePos.y, 0f);
+        }
+
+        /// <summary>
+        /// Gets the position of the non-heart node furthest from the heart (by walking distance).
+        /// Used for Yoink! demo to show the power reaching across the maze.
+        /// </summary>
+        private Vector3 GetFurthestNonHeartNodePosition()
+        {
+            var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
+            if (mazeGrid == null || mazeGrid.ForestMapState == null) return Vector3.zero;
+
+            var forestState = mazeGrid.ForestMapState;
+            if (forestState.Nodes == null || forestState.Nodes.Count < 2) return Vector3.zero;
+
+            // Find the node with the greatest straight-line distance from heart
+            var heartNode = forestState.Nodes[0];
+            Vector2 heartPos = heartNode.Position;
+
+            float furthestDist = 0f;
+            Vector2 furthestNodePos = heartPos;
+
+            for (int i = 1; i < forestState.Nodes.Count; i++)
+            {
+                var node = forestState.Nodes[i];
+                float dist = Vector2.Distance(heartPos, node.Position);
+                if (dist > furthestDist)
+                {
+                    furthestDist = dist;
+                    furthestNodePos = node.Position;
+                }
+            }
+
+            return new Vector3(furthestNodePos.x, furthestNodePos.y, 0f);
         }
 
         /// <summary>
@@ -1999,7 +1876,6 @@ namespace FaeMaze.Tutorial
 
             // Consider on heart if within NODE_RADIUS
             bool onHeart = distToHeart <= NODE_RADIUS;
-            Debug.Log($"[TutorialManager] IsFocalPointOnHeartNode: dist={distToHeart:F2}, threshold={NODE_RADIUS}, onHeart={onHeart}");
             return onHeart;
         }
 
@@ -2009,14 +1885,16 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator CinematicCameraTransitionThenShowStep(TutorialStep step)
         {
+            // For Yoink! (power_grasp), move camera to the furthest node to better demonstrate the power
+            bool useFurthest = step.stepId == "power_grasp";
+
             // Perform the cinematic camera transition WITHOUT auto-advancing
-            yield return CinematicCameraTransition(advanceAfter: false);
+            yield return CinematicCameraTransition(advanceAfter: false, useFurthestNode: useFurthest);
 
             // Now show the step normally (will go through power button brightness sync)
             int powerButtonIndex = GetPowerButtonIndex(step);
             if (powerButtonIndex >= 0)
             {
-                Debug.Log($"[TutorialManager] After camera transition, showing step with PowerButton_{powerButtonIndex} highlight");
                 StartCoroutine(WaitForPeakBrightnessThenShowStep(step, powerButtonIndex));
             }
             else
@@ -2090,11 +1968,10 @@ namespace FaeMaze.Tutorial
             Vector3 exitPos = portalPositions[FaeMaze.Systems.RandomManager.Range(0, portalPositions.Count)];
 
             visitor.SetLured(false);
+            visitor.ClearMisdirectState();
             visitor.SetWorldDestination(exitPos);
             visitor.Resume();
             visitor.RecalculatePath();
-
-            Debug.Log($"[TutorialManager] Assigned random exit to {visitor.name} at ({exitPos.x:F1}, {exitPos.y:F1})");
         }
 
         /// <summary>
@@ -2106,14 +1983,12 @@ namespace FaeMaze.Tutorial
             var dynamicMaze = FindFirstObjectByType<DynamicMazeGrowth>();
             if (dynamicMaze == null)
             {
-                Debug.LogWarning("[TutorialManager] Cannot assign exit destinations - DynamicMazeGrowth not found");
                 return;
             }
 
             var portalPositions = dynamicMaze.GetPortalPositions();
             if (portalPositions == null || portalPositions.Count == 0)
             {
-                Debug.LogWarning("[TutorialManager] Cannot assign exit destinations - no portal positions found");
                 return;
             }
 
@@ -2129,6 +2004,13 @@ namespace FaeMaze.Tutorial
                 if (state == VisitorControllerBase.VisitorState.Consumed ||
                     state == VisitorControllerBase.VisitorState.Grabbed ||
                     state == VisitorControllerBase.VisitorState.Escaping)
+                {
+                    continue;
+                }
+
+                // Skip misdirected visitors — let them finish walking the misdirect edge naturally.
+                // CompleteMisdirect() will restore their original destination when they reach the end.
+                if (visitor.IsMisdirected)
                 {
                     continue;
                 }
@@ -2160,11 +2042,7 @@ namespace FaeMaze.Tutorial
                 visitor.Resume(); // Ensure visitor is not stuck in Idle state
                 visitor.RecalculatePath();
                 assignedCount++;
-
-                Debug.Log($"[TutorialManager] Assigned exit destination to {visitor.name} at ({bestExit.x:F1}, {bestExit.y:F1})");
             }
-
-            Debug.Log($"[TutorialManager] Assigned exit destinations to {assignedCount} remaining visitors");
         }
 
         /// <summary>
@@ -2209,9 +2087,18 @@ namespace FaeMaze.Tutorial
             if (!isActive || CurrentStep == null) return;
 
             var step = CurrentStep;
+            Debug.Log($"[TutorialPower] NotifyPowerActivated({powerIndex}), currentStep={step.stepId}, trigger={step.triggerType}, param={step.triggerParameter}");
+
             if (step.triggerType == TutorialTriggerType.PowerActivated &&
                 step.triggerParameter == powerIndex.ToString())
             {
+                // Lock all powers immediately — the activated power has served its purpose
+                var panelController = FindFirstObjectByType<HeartPowerPanelController>();
+                if (panelController != null)
+                {
+                    panelController.DisableAllPowersForTutorial();
+                }
+
                 AdvanceStep();
             }
         }

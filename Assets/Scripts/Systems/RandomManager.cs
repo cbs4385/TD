@@ -53,7 +53,6 @@ namespace FaeMaze.Systems
             UnityEngine.Random.InitState(seed);
 
             isInitialized = true;
-            Debug.Log($"[RandomManager] Initialized with seed: {seed}");
         }
 
         /// <summary>

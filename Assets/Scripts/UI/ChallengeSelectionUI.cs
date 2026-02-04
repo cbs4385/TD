@@ -59,23 +59,7 @@ namespace FaeMaze.UI
 
         private void CreateCanvas()
         {
-            // Find existing canvas or create new one
-            _canvas = GetComponentInParent<Canvas>();
-            if (_canvas == null)
-            {
-                _canvas = FindFirstObjectByType<Canvas>();
-            }
-            if (_canvas == null)
-            {
-                GameObject canvasObj = new GameObject("ChallengeSelectionCanvas");
-                _canvas = canvasObj.AddComponent<Canvas>();
-                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                _canvas.sortingOrder = 220; // Above form and blessing UI
-                var scaler = canvasObj.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
-                canvasObj.AddComponent<GraphicRaycaster>();
-            }
+            _canvas = UIFactory.FindOrCreateCanvas(this, "ChallengeSelectionCanvas", 220, new Vector2(1920, 1080));
         }
 
         private void CreateUI()
@@ -85,10 +69,7 @@ namespace FaeMaze.UI
             _panel.transform.SetParent(_canvas.transform, false);
 
             RectTransform panelRect = _panel.AddComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(panelRect);
 
             Image panelBg = _panel.AddComponent<Image>();
             panelBg.color = _panelColor;
@@ -451,7 +432,6 @@ namespace FaeMaze.UI
             // If no challenges available, skip UI
             if (_availableChallenges.Count == 0)
             {
-                Debug.Log("[ChallengeSelectionUI] No unlocked challenges, skipping");
                 _onSelectionComplete?.Invoke(new List<ChallengeModifierDefinition>());
                 return;
             }
@@ -517,7 +497,6 @@ namespace FaeMaze.UI
                 var indicator = card?.Find("SelectionIndicator")?.GetComponent<Image>();
                 if (indicator != null) indicator.color = Color.clear;
 
-                Debug.Log($"[ChallengeSelectionUI] Deselected: {challenge.DisplayName}");
             }
             else
             {
@@ -529,8 +508,6 @@ namespace FaeMaze.UI
                 var card = cardBg.transform.parent;
                 var indicator = card?.Find("SelectionIndicator")?.GetComponent<Image>();
                 if (indicator != null) indicator.color = _rewardColor;
-
-                Debug.Log($"[ChallengeSelectionUI] Selected: {challenge.DisplayName}");
             }
 
             UpdateMultiplierDisplay();
@@ -563,8 +540,6 @@ namespace FaeMaze.UI
 
         private void OnStartClicked()
         {
-            Debug.Log($"[ChallengeSelectionUI] Starting with {_selectedChallenges.Count} challenges");
-
             // Set challenges in manager
             var challengeList = _selectedChallenges.ToList();
             ChallengeModifierManager.Instance?.SetChallengesForRun(challengeList);
@@ -578,8 +553,6 @@ namespace FaeMaze.UI
 
         private void OnSkipClicked()
         {
-            Debug.Log("[ChallengeSelectionUI] Skipped challenge selection");
-
             // Clear any challenges
             ChallengeModifierManager.Instance?.ClearActiveChallenges();
 

@@ -35,7 +35,6 @@ namespace FaeMaze.HeartPowers
         {
             if (ownerEffect == null)
             {
-                Debug.Log($"[DevourTriggerHandler] TryCapture: ownerEffect is null");
                 return;
             }
 
@@ -46,12 +45,7 @@ namespace FaeMaze.HeartPowers
                 VisitorControllerBase visitor = other.GetComponentInParent<VisitorControllerBase>();
                 if (visitor != null)
                 {
-                    Debug.Log($"[DevourTriggerHandler] TryCapture: Attempting to capture {visitor.name}");
                     ownerEffect.NotifyVisitorEnteredMaw(visitor);
-                }
-                else
-                {
-                    Debug.Log($"[DevourTriggerHandler] TryCapture: No VisitorControllerBase found on {other.gameObject.name}");
                 }
             }
         }

@@ -423,7 +423,6 @@ namespace FaeMaze.Roguelike
         {
             if (!CanUnlock(unlockId, out string reason))
             {
-                Debug.Log($"[UnlockManager] Cannot unlock {unlockId}: {reason}");
                 return false;
             }
 
@@ -445,7 +444,6 @@ namespace FaeMaze.Roguelike
             OnItemUnlocked?.Invoke(unlockId);
             OnUnlockStateChanged?.Invoke();
 
-            Debug.Log($"[UnlockManager] Unlocked: {definition.DisplayName}");
             return true;
         }
 
@@ -568,7 +566,6 @@ namespace FaeMaze.Roguelike
             }
 
             OnUnlockStateChanged?.Invoke();
-            Debug.Log("[UnlockManager] All unlocks reset!");
         }
 
         #endregion
@@ -578,12 +575,7 @@ namespace FaeMaze.Roguelike
         [ContextMenu("Debug: Log All Unlocks")]
         public void DebugLogAllUnlocks()
         {
-            Debug.Log("=== Unlock Manager State ===");
-            foreach (var kvp in _allUnlocks)
-            {
-                bool unlocked = IsUnlocked(kvp.Key);
-                Debug.Log($"  [{(unlocked ? "X" : " ")}] {kvp.Value.DisplayName} ({kvp.Key}) - {kvp.Value.FaeDustCost} Dust");
-            }
+            // Logging removed - use GetUnlocksByCategory() to inspect state programmatically
         }
 
         [ContextMenu("Debug: Unlock All")]
@@ -598,7 +590,6 @@ namespace FaeMaze.Roguelike
                 }
             }
             OnUnlockStateChanged?.Invoke();
-            Debug.Log("[UnlockManager] All items unlocked (debug)!");
         }
 
         #endregion

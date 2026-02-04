@@ -208,13 +208,11 @@ namespace FaeMaze.Systems
             Texture2D texture = null;
 
             texture = Resources.Load<Texture2D>("EarthenGroundTexture");
-            Debug.Log($"[MazeRenderer] ExtractHeartGroundMaterial - Resources.Load texture: {(texture != null ? texture.name : "null")}");
 
             if (texture != null)
             {
                 // Use the texture-based shader
                 var shader = Shader.Find("Custom/EarthenGroundTextured");
-                Debug.Log($"[MazeRenderer] ExtractHeartGroundMaterial - EarthenGroundTextured shader: {(shader != null ? "FOUND" : "NOT FOUND")}");
                 if (shader != null)
                 {
                     heartGroundMaterial = new Material(shader);
@@ -224,7 +222,6 @@ namespace FaeMaze.Systems
                     heartGroundMaterial.SetFloat("_Metallic", 0.0f); // Match glTF-pbrMetallic defaults
                     heartGroundMaterial.SetFloat("_Smoothness", 0.2f); // Matte earthy surface
                     heartGroundMaterial.SetFloat("_EdgeDarkening", 0.0f); // Disabled to match heart material
-                    Debug.Log($"[MazeRenderer] SUCCESS: Using TEXTURED path material with EarthenGroundTexture.png, shader={shader.name}");
 
                     // Verify the material is using the correct shader
                     if (heartGroundMaterial.shader.name != "Custom/EarthenGroundTextured")
@@ -234,8 +231,6 @@ namespace FaeMaze.Systems
                     return;
                 }
             }
-
-            Debug.LogWarning($"[MazeRenderer] Texture or shader not found. Trying heartbase prefab fallback...");
 
             // Fallback: Try to use the material from the heart base prefab directly
             if (heartBasePrefab != null)
@@ -259,17 +254,13 @@ namespace FaeMaze.Systems
                     if (renderer != null && renderer.sharedMaterial != null)
                     {
                         heartGroundMaterial = renderer.sharedMaterial;
-                        Debug.Log($"[MazeRenderer] FALLBACK: Using material from heartbase prefab");
                         return;
                     }
                 }
             }
 
-            Debug.LogWarning($"[MazeRenderer] Heartbase prefab fallback failed. Trying procedural shader...");
-
             // Fallback: Try to find the procedural EarthenGround shader
             var proceduralShader = Shader.Find("Custom/EarthenGround");
-            Debug.Log($"[MazeRenderer] ExtractHeartGroundMaterial - EarthenGround (procedural) shader: {(proceduralShader != null ? "FOUND" : "NOT FOUND")}");
             if (proceduralShader == null)
             {
                 Debug.LogError("[MazeRenderer] CRITICAL: No path shader found! Paths will render incorrectly.");
@@ -289,7 +280,6 @@ namespace FaeMaze.Systems
             heartGroundMaterial.SetFloat("_DetailScale", 30f);
             heartGroundMaterial.SetFloat("_ColorVariation", 0.7f);
             heartGroundMaterial.SetFloat("_EdgeDarkening", 0.05f);
-            Debug.Log($"[MazeRenderer] FALLBACK: Using PROCEDURAL EarthenGround shader - this may cause banding!");
         }
 
         private void Start()

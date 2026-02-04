@@ -4,6 +4,7 @@ using UnityEngine;
 using ForestMaze;
 using FaeMaze.Props;
 using FaeMaze.Roguelike;
+using FaeMaze.Utilities;
 
 namespace FaeMaze.Systems
 {
@@ -1314,13 +1315,7 @@ namespace FaeMaze.Systems
 
             // Ensure the ring has a kinematic Rigidbody for trigger events to work
             // Unity requires at least one colliding object to have a Rigidbody for OnTriggerEnter
-            var rb = ring.GetComponent<Rigidbody>();
-            if (rb == null)
-            {
-                rb = ring.AddComponent<Rigidbody>();
-                rb.isKinematic = true;
-                rb.useGravity = false;
-            }
+            ring.AddKinematicRigidbody();
 
             // Add FairyRing component if not present (for entrancement behavior)
             var fairyRing = ring.GetComponent<FaeMaze.Props.FairyRing>();
@@ -1344,12 +1339,9 @@ namespace FaeMaze.Systems
         /// <returns>True if spawn was successful</returns>
         private bool SpawnLanternAtNode(ForestMaze.PlanarForestMazeGenerator.Node node, int nodeIndex)
         {
-            Debug.Log($"[DynamicMazeGrowth] SpawnLanternAtNode called for node {nodeIndex}");
-
             // Skip if lantern already exists at this node
             if (nodeLanterns.ContainsKey(nodeIndex))
             {
-                Debug.Log($"[DynamicMazeGrowth] Lantern already exists at node {nodeIndex}, skipping");
                 return false;
             }
 
@@ -1386,22 +1378,13 @@ namespace FaeMaze.Systems
             if (lanternComponent == null)
             {
                 lanternComponent = lantern.AddComponent<FaeMaze.Props.FaeLantern>();
-                Debug.Log($"[DynamicMazeGrowth] Added FaeLantern component to {lantern.name}");
-            }
-            else
-            {
-                Debug.Log($"[DynamicMazeGrowth] FaeLantern component already exists on {lantern.name}");
             }
 
             // Ensure the component is enabled (registers in FaeLantern.All via OnEnable)
             if (!lanternComponent.enabled)
             {
                 lanternComponent.enabled = true;
-                Debug.Log($"[DynamicMazeGrowth] Enabled FaeLantern component on {lantern.name}");
             }
-
-            // Verify registration in the static collection
-            Debug.Log($"[DynamicMazeGrowth] FaeLantern.All count after spawn: {FaeMaze.Props.FaeLantern.All.Count}");
 
             // Track the lantern
             nodeLanterns[nodeIndex] = lantern;
@@ -1460,13 +1443,7 @@ namespace FaeMaze.Systems
                     sphereCollider.radius = 0.4f;
                     sphereCollider.center = Vector3.zero; // XY-plane collision
                 }
-                var rigidbody = wisp.GetComponent<Rigidbody>();
-                if (rigidbody == null)
-                {
-                    rigidbody = wisp.AddComponent<Rigidbody>();
-                    rigidbody.isKinematic = true;
-                    rigidbody.useGravity = false;
-                }
+                wisp.AddKinematicRigidbody();
                 wispComponent = wisp.AddComponent<FaeMaze.Props.WillowTheWisp>();
             }
 
@@ -1780,18 +1757,12 @@ namespace FaeMaze.Systems
             var node = forestMapState.Nodes[nodeIndex];
 
             // Spawn the new prop using factory
-            Debug.Log($"[DynamicMazeGrowth] SetNodeProp spawning {propType.Value} at node {nodeIndex}");
             bool success = propFactory.Spawn(propType.Value, node, nodeIndex);
 
             // Track what was spawned
             if (success)
             {
                 nodeProps[nodeIndex] = propType.Value;
-                Debug.Log($"[DynamicMazeGrowth] Successfully spawned {propType.Value} at node {nodeIndex}");
-            }
-            else
-            {
-                Debug.LogWarning($"[DynamicMazeGrowth] Failed to spawn {propType.Value} at node {nodeIndex}");
             }
 
             return success;

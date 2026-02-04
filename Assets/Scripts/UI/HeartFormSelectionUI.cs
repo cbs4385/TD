@@ -54,39 +54,13 @@ namespace FaeMaze.UI
 
         private void CreateCanvas()
         {
-            // Find existing canvas or create new one
-            _canvas = GetComponentInParent<Canvas>();
-            if (_canvas == null)
-            {
-                _canvas = FindFirstObjectByType<Canvas>();
-            }
-            if (_canvas == null)
-            {
-                GameObject canvasObj = new GameObject("HeartFormSelectionCanvas");
-                _canvas = canvasObj.AddComponent<Canvas>();
-                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                _canvas.sortingOrder = 210; // Above blessing UI
-                var scaler = canvasObj.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
-                canvasObj.AddComponent<GraphicRaycaster>();
-            }
+            _canvas = UIFactory.FindOrCreateCanvas(this, "HeartFormSelectionCanvas", 210, new Vector2(1920, 1080));
         }
 
         private void CreateUI()
         {
             // Main panel (full screen overlay)
-            _panel = new GameObject("HeartFormSelectionPanel");
-            _panel.transform.SetParent(_canvas.transform, false);
-
-            RectTransform panelRect = _panel.AddComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
-
-            Image panelBg = _panel.AddComponent<Image>();
-            panelBg.color = _panelColor;
+            _panel = UIFactory.CreateFullScreenPanel(_canvas.transform, "HeartFormSelectionPanel", _panelColor);
 
             // Title
             GameObject titleObj = new GameObject("Title");
@@ -386,7 +360,6 @@ namespace FaeMaze.UI
             // If no forms available, skip UI and select default
             if (unlockedForms.Count == 0)
             {
-                Debug.LogWarning("[HeartFormSelectionUI] No unlocked forms, selecting default");
                 OnFormSelected(null);
                 return;
             }
@@ -394,7 +367,6 @@ namespace FaeMaze.UI
             // If only one form (just HungryHeart), skip UI and select it
             if (unlockedForms.Count == 1)
             {
-                Debug.Log("[HeartFormSelectionUI] Only one form unlocked, auto-selecting");
                 OnFormSelected(unlockedForms[0]);
                 return;
             }
@@ -443,8 +415,6 @@ namespace FaeMaze.UI
 
         private void OnFormSelected(HeartFormDefinition form)
         {
-            Debug.Log($"[HeartFormSelectionUI] Selected form: {form?.DisplayName ?? "Default"}");
-
             // Set the form in the manager
             HeartFormManager.Instance?.SelectFormForRun(form);
 

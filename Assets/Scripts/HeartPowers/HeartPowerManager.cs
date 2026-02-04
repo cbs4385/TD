@@ -670,7 +670,6 @@ namespace FaeMaze.HeartPowers
 
             if (effect == null)
             {
-                Debug.LogWarning($"[HeartPowerManager] No effect factory registered for {powerType}");
                 return;
             }
 

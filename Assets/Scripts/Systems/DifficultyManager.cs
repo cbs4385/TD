@@ -50,15 +50,13 @@ namespace FaeMaze.Systems
                     if (!float.TryParse(parts[i].Trim(), System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out tierMultipliers[i]))
                     {
-                        Debug.LogWarning($"DifficultyManager: Failed to parse tier multiplier '{parts[i]}', using default");
                         tierMultipliers = DEFAULT_tierMultipliers;
                         return;
                     }
                 }
             }
-            catch (System.Exception e)
+            catch (System.Exception)
             {
-                Debug.LogWarning($"DifficultyManager: Error parsing tier multipliers: {e.Message}, using default");
                 tierMultipliers = DEFAULT_tierMultipliers;
             }
         }

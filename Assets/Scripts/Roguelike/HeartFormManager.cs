@@ -90,7 +90,6 @@ namespace FaeMaze.Roguelike
                 CreateDefaultForms();
             }
 
-            Debug.Log($"[HeartFormManager] Loaded {_allForms.Count} Heart Forms");
         }
 
         private void CreateDefaultForms()
@@ -222,7 +221,6 @@ namespace FaeMaze.Roguelike
             PlayerPrefs.SetInt(key, 1);
             PlayerPrefs.Save();
 
-            Debug.Log($"[HeartFormManager] Unlocked Heart Form: {type}");
         }
 
         /// <summary>Get all unlocked Heart Forms.</summary>
@@ -246,7 +244,6 @@ namespace FaeMaze.Roguelike
         {
             _activeForm = form ?? _allForms.FirstOrDefault(f => f.Type == HeartFormType.HungryHeart);
             _essenceDecayAccumulator = 0f;
-            Debug.Log($"[HeartFormManager] Selected form for run: {_activeForm?.DisplayName ?? "None"}");
             OnFormSelected?.Invoke(_activeForm);
         }
 
@@ -370,10 +367,6 @@ namespace FaeMaze.Roguelike
         [ContextMenu("Debug: Log Form State")]
         private void DebugLogState()
         {
-            Debug.Log($"[HeartFormManager] Active: {_activeForm?.DisplayName ?? "None"}");
-            Debug.Log($"[HeartFormManager] Unlocked count: {_unlockedForms.Count}");
-            foreach (var type in _unlockedForms)
-                Debug.Log($"  - {type}");
         }
 
         [ContextMenu("Reset All Form Unlocks")]
@@ -387,7 +380,6 @@ namespace FaeMaze.Roguelike
             _unlockedForms.Clear();
             _unlockedForms.Add(HeartFormType.HungryHeart); // HungryHeart always unlocked
             PlayerPrefs.Save();
-            Debug.Log("[HeartFormManager] Reset all form unlocks");
         }
 
         #endregion

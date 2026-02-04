@@ -67,10 +67,6 @@ namespace FaeMaze.Systems
             if (defaultWallPrefab == null)
             {
                 defaultWallPrefab = Resources.Load<GameObject>("Prefabs/Tile/tree");
-                if (defaultWallPrefab == null)
-                {
-                    Debug.LogWarning("MazeVisualSetup: Could not load default wall prefab from Resources/Prefabs/Tile/tree");
-                }
             }
 
             // Load undergrowth prefab if not assigned

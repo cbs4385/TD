@@ -95,18 +95,7 @@ namespace FaeMaze.UI
         private void CreateUI()
         {
             // Find or create canvas
-            _canvas = FindFirstObjectByType<Canvas>();
-            if (_canvas == null)
-            {
-                GameObject canvasObj = new GameObject("TierUpgradeCanvas");
-                _canvas = canvasObj.AddComponent<Canvas>();
-                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                _canvas.sortingOrder = 100; // Above most UI
-                var scaler = canvasObj.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
-                canvasObj.AddComponent<GraphicRaycaster>();
-            }
+            _canvas = UIFactory.FindOrCreateCanvas(this, "TierUpgradeCanvas", 100, new Vector2(1920, 1080));
 
             // Create panel root
             _panelRoot = new GameObject("TierUpgradePanel");
@@ -195,10 +184,7 @@ namespace FaeMaze.UI
             skipTextObj.transform.SetParent(skipObj.transform, false);
 
             RectTransform skipTextRect = skipTextObj.AddComponent<RectTransform>();
-            skipTextRect.anchorMin = Vector2.zero;
-            skipTextRect.anchorMax = Vector2.one;
-            skipTextRect.offsetMin = Vector2.zero;
-            skipTextRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(skipTextRect);
 
             TextMeshProUGUI skipText = skipTextObj.AddComponent<TextMeshProUGUI>();
             skipText.text = "Skip (ESC)";
@@ -366,7 +352,6 @@ namespace FaeMaze.UI
         private void OnUpgradeApplied(HeartPowerType powerType, int tier)
         {
             Hide();
-            Debug.Log($"[TierUpgradeUI] Applied upgrade: {powerType} to Tier {tier}");
         }
 
         #endregion

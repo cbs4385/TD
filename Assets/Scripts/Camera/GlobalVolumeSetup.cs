@@ -56,7 +56,6 @@ namespace FaeMaze.Cameras
 
         private void OnEnable()
         {
-            Debug.Log("[GlobalVolumeSetup] OnEnable() called");
             SetupVolume();
             SetupRenderSettingsFog();
         }
@@ -76,14 +75,11 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            Debug.Log($"[GlobalVolumeSetup] Volume found. Profile exists: {volume.profile != null}");
-
             // Create a new profile if none exists
             if (volume.profile == null)
             {
                 volume.profile = ScriptableObject.CreateInstance<VolumeProfile>();
                 volume.profile.name = "Global Volume Profile";
-                Debug.Log("[GlobalVolumeSetup] Created new runtime VolumeProfile");
             }
 
             // Ensure volume is global
@@ -96,7 +92,6 @@ namespace FaeMaze.Cameras
             // Add/configure RadialBlur
             ConfigureRadialBlur();
 
-            Debug.Log($"[GlobalVolumeSetup] Setup complete. Profile component count: {volume.profile.components.Count}");
         }
 
         private void SetupRenderSettingsFog()
@@ -143,12 +138,7 @@ namespace FaeMaze.Cameras
             RadialBlur radialBlur;
             if (!volume.profile.TryGet<RadialBlur>(out radialBlur))
             {
-                Debug.Log("[GlobalVolumeSetup] Adding RadialBlur to profile");
                 radialBlur = volume.profile.Add<RadialBlur>(true);
-            }
-            else
-            {
-                Debug.Log("[GlobalVolumeSetup] RadialBlur already exists in profile");
             }
 
             if (radialBlur != null)
@@ -167,7 +157,6 @@ namespace FaeMaze.Cameras
                 radialBlur.vignetteIntensity.overrideState = true;
                 radialBlur.vignetteIntensity.value = vignetteIntensity;
 
-                Debug.Log($"[GlobalVolumeSetup] RadialBlur configured: enabled={enableRadialBlur}, active={radialBlur.active}, clearRadius={blurClearRadius}");
             }
             else
             {

@@ -52,21 +52,7 @@ namespace FaeMaze.UI
 
         private void CreateCanvas()
         {
-            // Find existing canvas or create new one
-            _canvas = GetComponentInParent<Canvas>();
-            if (_canvas == null)
-            {
-                _canvas = FindFirstObjectByType<Canvas>();
-            }
-            if (_canvas == null)
-            {
-                GameObject canvasObj = new GameObject("BlessingSelectionCanvas");
-                _canvas = canvasObj.AddComponent<Canvas>();
-                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                _canvas.sortingOrder = 200; // Above other UI
-                canvasObj.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                canvasObj.AddComponent<GraphicRaycaster>();
-            }
+            _canvas = UIFactory.FindOrCreateCanvas(this, "BlessingSelectionCanvas", 200);
         }
 
         private void CreateUI()
@@ -76,10 +62,7 @@ namespace FaeMaze.UI
             _panel.transform.SetParent(_canvas.transform, false);
 
             RectTransform panelRect = _panel.AddComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(panelRect);
 
             Image panelBg = _panel.AddComponent<Image>();
             panelBg.color = _panelColor;
@@ -371,8 +354,6 @@ namespace FaeMaze.UI
 
         private void OnBlessingSelected(BlessingDefinition blessing)
         {
-            Debug.Log($"[BlessingSelectionUI] Selected blessing: {blessing.DisplayName}");
-
             // Set the blessing in the manager
             BlessingManager.Instance?.SelectBlessingForRun(blessing);
 
@@ -385,8 +366,6 @@ namespace FaeMaze.UI
 
         private void OnSkipClicked()
         {
-            Debug.Log("[BlessingSelectionUI] Skipped blessing selection");
-
             // Clear any selected blessing
             BlessingManager.Instance?.ClearActiveBlessing();
 

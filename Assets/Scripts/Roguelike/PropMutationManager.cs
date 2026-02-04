@@ -77,7 +77,8 @@ namespace FaeMaze.Roguelike
                 CreateDefaultMutations();
             }
 
-            Debug.Log($"[PropMutationManager] Loaded {_allMutations.Count} mutations");
+
+
         }
 
         private void CreateDefaultMutations()
@@ -173,7 +174,8 @@ namespace FaeMaze.Roguelike
             PlayerPrefs.SetInt(key, 1);
             PlayerPrefs.Save();
 
-            Debug.Log($"[PropMutationManager] Unlocked mutation: {type}");
+
+
         }
 
         /// <summary>Get all unlocked mutations.</summary>
@@ -196,7 +198,6 @@ namespace FaeMaze.Roguelike
         public void SelectMutationForRun(PropMutationDefinition mutation)
         {
             _activeMutation = mutation;
-            Debug.Log($"[PropMutationManager] Selected mutation for run: {_activeMutation?.DisplayName ?? "None"}");
             OnMutationSelected?.Invoke(_activeMutation);
         }
 
@@ -271,10 +272,8 @@ namespace FaeMaze.Roguelike
         [ContextMenu("Debug: Log Mutation State")]
         private void DebugLogState()
         {
-            Debug.Log($"[PropMutationManager] Active: {_activeMutation?.DisplayName ?? "None"}");
-            Debug.Log($"[PropMutationManager] Unlocked count: {_unlockedMutations.Count}");
-            foreach (var type in _unlockedMutations)
-                Debug.Log($"  - {type}");
+
+
         }
 
         [ContextMenu("Reset All Mutation Unlocks")]
@@ -287,7 +286,6 @@ namespace FaeMaze.Roguelike
             }
             _unlockedMutations.Clear();
             PlayerPrefs.Save();
-            Debug.Log("[PropMutationManager] Reset all mutation unlocks");
         }
 
         #endregion

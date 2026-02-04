@@ -135,7 +135,6 @@ namespace FaeMaze.Roguelike
             }
 
             OnRunTiersReset?.Invoke();
-            Debug.Log("[PowerProgression] Run tiers reset to Tier I");
         }
 
         #endregion
@@ -237,7 +236,6 @@ namespace FaeMaze.Roguelike
             var upgradablePowers = GetUpgradablePowers(tier);
             if (upgradablePowers.Count == 0)
             {
-                Debug.Log($"[PowerProgression] Tier {tier} threshold crossed but no upgradable powers");
                 return;
             }
 
@@ -245,7 +243,6 @@ namespace FaeMaze.Roguelike
             _pendingUpgradeTier = tier;
 
             OnTierUpgradeAvailable?.Invoke(tier);
-            Debug.Log($"[PowerProgression] Tier {tier} upgrade available! {upgradablePowers.Count} powers can be upgraded");
         }
 
         /// <summary>
@@ -273,13 +270,11 @@ namespace FaeMaze.Roguelike
         {
             if (!_hasPendingUpgrade)
             {
-                Debug.LogWarning("[PowerProgression] No pending upgrade to apply");
                 return false;
             }
 
             if (!CanUpgradePower(powerType, _pendingUpgradeTier))
             {
-                Debug.LogWarning($"[PowerProgression] Cannot upgrade {powerType} to tier {_pendingUpgradeTier}");
                 return false;
             }
 
@@ -292,7 +287,6 @@ namespace FaeMaze.Roguelike
             _pendingUpgradeTier = 0;
 
             OnPowerTierUpgraded?.Invoke(powerType, upgradedTier);
-            Debug.Log($"[PowerProgression] Upgraded {powerType} to Tier {upgradedTier}");
 
             return true;
         }
@@ -304,7 +298,6 @@ namespace FaeMaze.Roguelike
         {
             if (_hasPendingUpgrade)
             {
-                Debug.Log($"[PowerProgression] Skipped Tier {_pendingUpgradeTier} upgrade");
                 _hasPendingUpgrade = false;
                 _pendingUpgradeTier = 0;
             }
@@ -317,13 +310,11 @@ namespace FaeMaze.Roguelike
         [ContextMenu("Debug: Log Run Tiers")]
         public void DebugLogRunTiers()
         {
-            Debug.Log("=== Run Power Tiers ===");
             foreach (HeartPowerType powerType in _allPowerTypes)
             {
                 int runTier = GetRunTier(powerType);
                 int rawTier = GetRawRunTier(powerType);
                 int maxUnlocked = UnlockManager.Instance?.GetMaxUnlockedTier(powerType.ToString()) ?? 3;
-                Debug.Log($"  {powerType}: Tier {runTier} (raw: {rawTier}, max unlocked: {maxUnlocked})");
             }
         }
 

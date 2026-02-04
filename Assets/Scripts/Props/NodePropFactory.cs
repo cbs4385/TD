@@ -77,7 +77,6 @@ namespace FaeMaze.Props
                 return spawner(node, nodeIndex);
             }
 
-            Debug.LogWarning($"[NodePropFactory] No spawner registered for prop type: {propType}");
             return false;
         }
 

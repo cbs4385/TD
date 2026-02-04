@@ -263,7 +263,6 @@ namespace FaeMaze.Systems
             var unlockedForms = HeartFormManager.Instance?.GetUnlockedForms();
             if (unlockedForms == null || unlockedForms.Count <= 1)
             {
-                Debug.Log("[DelayedWaveStarter] Only default form unlocked, skipping form selection");
                 yield break;
             }
 
@@ -280,14 +279,6 @@ namespace FaeMaze.Systems
             formUI.Show((selectedForm) =>
             {
                 selectionComplete = true;
-                if (selectedForm != null)
-                {
-                    Debug.Log($"[DelayedWaveStarter] Heart Form selected: {selectedForm.DisplayName}");
-                }
-                else
-                {
-                    Debug.Log("[DelayedWaveStarter] Default form selected");
-                }
             });
 
             // Wait for selection to complete (use realtime since game is paused)
@@ -303,7 +294,6 @@ namespace FaeMaze.Systems
             var unlockedChallenges = ChallengeModifierManager.Instance?.GetUnlockedChallenges();
             if (unlockedChallenges == null || unlockedChallenges.Count == 0)
             {
-                Debug.Log("[DelayedWaveStarter] No unlocked challenges, skipping selection");
                 yield break;
             }
 
@@ -320,14 +310,6 @@ namespace FaeMaze.Systems
             challengeUI.Show((selectedChallenges) =>
             {
                 selectionComplete = true;
-                if (selectedChallenges != null && selectedChallenges.Count > 0)
-                {
-                    Debug.Log($"[DelayedWaveStarter] {selectedChallenges.Count} challenge(s) selected");
-                }
-                else
-                {
-                    Debug.Log("[DelayedWaveStarter] No challenges selected");
-                }
             });
 
             // Wait for selection to complete (use realtime since game is paused)
@@ -343,7 +325,6 @@ namespace FaeMaze.Systems
             var unlockedMutations = PropMutationManager.Instance?.GetUnlockedMutations();
             if (unlockedMutations == null || unlockedMutations.Count == 0)
             {
-                Debug.Log("[DelayedWaveStarter] No unlocked mutations, skipping selection");
                 yield break;
             }
 
@@ -360,14 +341,6 @@ namespace FaeMaze.Systems
             mutationUI.Show((selectedMutation) =>
             {
                 selectionComplete = true;
-                if (selectedMutation != null)
-                {
-                    Debug.Log($"[DelayedWaveStarter] Mutation selected: {selectedMutation.DisplayName}");
-                }
-                else
-                {
-                    Debug.Log("[DelayedWaveStarter] No mutation selected");
-                }
             });
 
             // Wait for selection to complete (use realtime since game is paused)
@@ -383,7 +356,6 @@ namespace FaeMaze.Systems
             var unlockedBlessings = BlessingManager.Instance?.GetUnlockedBlessings();
             if (unlockedBlessings == null || unlockedBlessings.Count == 0)
             {
-                Debug.Log("[DelayedWaveStarter] No unlocked blessings, skipping selection");
                 yield break;
             }
 
@@ -400,14 +372,6 @@ namespace FaeMaze.Systems
             blessingUI.Show((selectedBlessing) =>
             {
                 selectionComplete = true;
-                if (selectedBlessing != null)
-                {
-                    Debug.Log($"[DelayedWaveStarter] Blessing selected: {selectedBlessing.DisplayName}");
-                }
-                else
-                {
-                    Debug.Log("[DelayedWaveStarter] No blessing selected");
-                }
             });
 
             // Wait for selection to complete (use realtime since game is paused)

@@ -76,7 +76,6 @@ namespace FaeMaze.Roguelike
                 CreateDefaultBlessings();
             }
 
-            Debug.Log($"[BlessingManager] Loaded {_allBlessings.Count} blessings");
         }
 
         private void CreateDefaultBlessings()
@@ -235,7 +234,6 @@ namespace FaeMaze.Roguelike
             PlayerPrefs.SetInt(key, 1);
             PlayerPrefs.Save();
 
-            Debug.Log($"[BlessingManager] Unlocked blessing: {type}");
         }
 
         /// <summary>Get all unlocked blessings.</summary>
@@ -264,7 +262,6 @@ namespace FaeMaze.Roguelike
         public void SelectBlessingForRun(BlessingDefinition blessing)
         {
             _activeBlessing = blessing;
-            Debug.Log($"[BlessingManager] Selected blessing for run: {blessing?.DisplayName ?? "None"}");
             OnBlessingSelected?.Invoke(blessing);
         }
 
@@ -388,10 +385,6 @@ namespace FaeMaze.Roguelike
         [ContextMenu("Debug: Log Blessing State")]
         private void DebugLogState()
         {
-            Debug.Log($"[BlessingManager] Active: {_activeBlessing?.DisplayName ?? "None"}");
-            Debug.Log($"[BlessingManager] Unlocked count: {_unlockedBlessings.Count}");
-            foreach (var type in _unlockedBlessings)
-                Debug.Log($"  - {type}");
         }
 
         [ContextMenu("Reset All Blessing Unlocks")]
@@ -404,7 +397,6 @@ namespace FaeMaze.Roguelike
             }
             _unlockedBlessings.Clear();
             PlayerPrefs.Save();
-            Debug.Log("[BlessingManager] Reset all blessing unlocks");
         }
 
         #endregion

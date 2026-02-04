@@ -930,7 +930,6 @@ namespace FaeMaze.Systems
                     }
 
                     // Apply and save the highest resolution
-                    Debug.Log($"[GameSettings] First run: auto-selecting highest resolution {highest.width}x{highest.height}");
                     Screen.SetResolution(highest.width, highest.height, Fullscreen);
 
                     // Save so this only happens once

@@ -45,7 +45,9 @@
       "Bash(# Check exact SIGN_PREFAB_PATH grep -n \"\"SIGN_PREFAB_PATH\"\" \"\"C:/Users/chris/source/repos/TD/Assets/Scripts/HeartPowers/HeartPowerEffects.cs\"\" echo \"\"\"\" # Check PropAudioSource clip paths grep -n \"\"clipPath\\\\|Resources.Load\"\" \"\"C:/Users/chris/source/repos/TD/Assets/Scripts/Audio/PropAudioSource.cs\"\")",
       "Bash(echo:*)",
       "Bash(py -c:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(git rm:*)",
+      "Bash(git -C \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\" log --oneline --all -- \"Assets/Scripts/HeartPowers/HeartPowerEffects.cs\")"
     ],
     "deny": [],
     "ask": []

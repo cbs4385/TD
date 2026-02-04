@@ -89,7 +89,6 @@ namespace ForestMaze
 
             if (mapState == null || mapState.Nodes.Count == 0)
             {
-                Debug.LogWarning("[GraphNav.FindPath] mapState is null or empty");
                 return path;
             }
 
@@ -99,8 +98,6 @@ namespace ForestMaze
 
             if (!startLocation.IsValid || !endLocation.IsValid)
             {
-                Debug.LogWarning($"[GraphNav.FindPath] Invalid locations: start={startLocation.IsValid} ({startLocation.Type}[{startLocation.Index}]), " +
-                    $"end={endLocation.IsValid} ({endLocation.Type}[{endLocation.Index}])");
                 return path;
             }
 
@@ -118,7 +115,6 @@ namespace ForestMaze
 
             if (startNodeIndex < 0 || endNodeIndex < 0)
             {
-                Debug.LogWarning($"[GraphNav.FindPath] Invalid node indices: startNode={startNodeIndex}, endNode={endNodeIndex}");
                 return path;
             }
 
@@ -126,7 +122,6 @@ namespace ForestMaze
             var nodePath = FindNodePath(mapState, startNodeIndex, endNodeIndex);
             if (nodePath == null || nodePath.Count == 0)
             {
-                Debug.LogWarning($"[GraphNav.FindPath] A* failed: nodePath={nodePath?.Count ?? -1}");
                 return path;
             }
 
@@ -480,7 +475,6 @@ namespace ForestMaze
 
                     if (connectingEdgeIndex < 0)
                     {
-                        Debug.LogWarning($"No edge found connecting node {nodeIndex} to {nextNodeIndex}");
                         continue;
                     }
 

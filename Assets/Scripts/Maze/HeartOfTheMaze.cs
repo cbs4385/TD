@@ -3,6 +3,8 @@ using FaeMaze.Systems;
 using FaeMaze.Audio;
 using FaeMaze.Visitors;
 using FaeMaze.Roguelike;
+using FaeMaze.HeartPowers;
+using FaeMaze.Utilities;
 using System;
 using System.Collections.Generic;
 using static FaeMaze.Systems.FrighteningEventManager;
@@ -140,24 +142,14 @@ namespace FaeMaze.Maze
         // Tongue Z position (controls how much tongue is above ground)
         // High Z = tongue below ground, Low Z = tongue above ground
         // The tongue rises by DECREASING Z, retracts by INCREASING Z
-        private float tongueZPosition = TONGUE_START_Z;
+        private float tongueZPosition = TongueUtility.TONGUE_START_Z;
 
         // Tongue movement speeds - loaded from GameSettings
         private float tongueEmergeSpeed;
         private float tongueRetractSpeed;
 
-        // Tongue geometry constants
-        private const float TONGUE_HIDDEN_Z = 1000f;      // Z position when pooled (far underground)
-        private const float TONGUE_START_Z = 28.0f;       // Z position to start emerging (must be > tongue length ~27)
-        private const float TONGUE_GROUND_Z = 0.0f;       // Ground level (Z=0)
-        private const int BEND_BONE_COUNT = 5;            // Number of bones for the 90° bend at ground level
-
-        // Tongue armature
-        private Transform[] tongueBones;
-        private Vector3[] boneRestPositions;
-        private Quaternion[] boneRestRotations;
-        private SkinnedMeshRenderer tongueSkinnedRenderer;
-        private float tongueLength = 0f;
+        // Tongue armature (consolidated via TongueUtility)
+        private TongueBoneData tongueBoneData;
 
         // Current target angle (updated every frame during extending)
         private float currentTargetAngle = 0f;
@@ -366,7 +358,7 @@ namespace FaeMaze.Maze
             MoveVisitorToTip();
 
             // Check if fully retracted
-            if (tongueZPosition >= TONGUE_START_Z)
+            if (tongueZPosition >= TongueUtility.TONGUE_START_Z)
             {
                 OnVisitorConsumed(targetVisitor);
                 targetVisitor = null;
@@ -383,11 +375,11 @@ namespace FaeMaze.Maze
 
             // Calculate how much of the tongue is above ground
             // tongueZPosition is the Z of the tongue BASE
-            // The tip is at tongueZPosition - tongueLength (in unrotated space)
-            float tipZ = tongueZPosition - tongueLength;
+            // The tip is at tongueZPosition - tongue length (in unrotated space)
+            float tipZ = tongueZPosition - (tongueBoneData != null ? tongueBoneData.Length : 0f);
 
             // Phase transition: Emerging -> Extending when tip reaches ground level
-            if (tonguePhase == TonguePhase.Emerging && tipZ <= TONGUE_GROUND_Z)
+            if (tonguePhase == TonguePhase.Emerging && tipZ <= TongueUtility.TONGUE_GROUND_Z)
             {
                 tonguePhase = TonguePhase.Extending;
             }
@@ -409,7 +401,7 @@ namespace FaeMaze.Maze
             currentState = HeartState.Idle;
             targetVisitor = null;
             tonguePhase = TonguePhase.Emerging;
-            tongueZPosition = TONGUE_START_Z;
+            tongueZPosition = TongueUtility.TONGUE_START_Z;
             currentTargetAngle = 0f;
 
             // Unregister frightening event
@@ -427,7 +419,7 @@ namespace FaeMaze.Maze
 
                 // Hide tongue at pooled position
                 Vector3 localPos = heartTongueInstance.transform.localPosition;
-                localPos.z = TONGUE_HIDDEN_Z;
+                localPos.z = TongueUtility.TONGUE_HIDDEN_Z;
                 heartTongueInstance.transform.localPosition = localPos;
             }
 
@@ -438,7 +430,7 @@ namespace FaeMaze.Maze
         {
             currentState = HeartState.Reaching;
             tonguePhase = TonguePhase.Emerging;
-            tongueZPosition = TONGUE_START_Z;
+            tongueZPosition = TongueUtility.TONGUE_START_Z;
 
             UpdateTargetAngle();
 
@@ -504,116 +496,27 @@ namespace FaeMaze.Maze
 
         /// <summary>
         /// Applies bone rotations to create the frog-tongue effect.
-        ///
-        /// The tongue model extends in local +Y from base (bone 0) to tip (bone N-1).
-        /// At rest, the tongue points straight up (-Z in world space due to prefab rotation).
-        ///
-        /// We calculate which bone is at ground level (the "bend bone") and:
-        /// - Bones BELOW ground level: stay at rest pose (pointing up)
-        /// - Bones AT the bend: rotate 90° from vertical to horizontal toward visitor
-        /// - Bones ABOVE ground level: point horizontally toward visitor
+        /// Delegates to TongueUtility for the actual bone rotation math.
         /// </summary>
         private void ApplyTongueBoneRotations()
         {
-            if (tongueBones == null || tongueBones.Length == 0) return;
+            if (tongueBoneData == null || tongueBoneData.Bones == null || tongueBoneData.Bones.Length == 0) return;
 
-            int boneCount = tongueBones.Length;
-            float boneSpacing = tongueLength / Mathf.Max(1, boneCount);
+            int groundBoneIndex = TongueUtility.FindGroundBoneIndex(
+                tongueZPosition, tongueBoneData.Length, tongueBoneData.Bones.Length);
 
-            // Find which bone is at ground level (Z=0)
-            // Bone i's unrotated Z position = tongueZPosition - (i * boneSpacing)
-            int groundBoneIndex = -1;
-            for (int i = 0; i < boneCount; i++)
-            {
-                float boneZ = tongueZPosition - (i * boneSpacing);
-                if (boneZ <= TONGUE_GROUND_Z)
-                {
-                    groundBoneIndex = i;
-                    break;
-                }
-            }
-
-            // If no bone has emerged yet, keep all at rest
             if (groundBoneIndex < 0)
             {
-                ResetTongueBonesToRest();
+                TongueUtility.ResetBonesToRest(tongueBoneData);
                 return;
             }
 
-            // Target direction: horizontal toward visitor
-            Vector3 targetDirWorld = new Vector3(
-                Mathf.Cos(currentTargetAngle * Mathf.Deg2Rad),
-                Mathf.Sin(currentTargetAngle * Mathf.Deg2Rad),
-                0f
-            );
-
-            Vector3 upDir = Vector3.back;  // -Z is up in our coordinate system
-
-            // Apply rotations
-            for (int i = 0; i < boneCount; i++)
-            {
-                if (tongueBones[i] == null) continue;
-
-                // Reset position (bones don't translate, only rotate)
-                tongueBones[i].localPosition = boneRestPositions[i];
-
-                if (i < groundBoneIndex)
-                {
-                    // Below ground: rest pose (pointing up)
-                    tongueBones[i].localRotation = boneRestRotations[i];
-                }
-                else if (i < groundBoneIndex + BEND_BONE_COUNT)
-                {
-                    // Bend zone: interpolate from vertical to horizontal
-                    float t = (float)(i - groundBoneIndex + 1) / BEND_BONE_COUNT;
-                    t = Mathf.Clamp01(t);
-
-                    Vector3 desiredDir = Vector3.Slerp(upDir, targetDirWorld, t);
-                    ApplyBoneRotationToward(i, desiredDir);
-                }
-                else
-                {
-                    // Above bend zone: point horizontally toward visitor
-                    ApplyBoneRotationToward(i, targetDirWorld);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Rotates a bone so its forward direction (+Y in local space) points toward desiredDir in world space.
-        /// </summary>
-        private void ApplyBoneRotationToward(int boneIndex, Vector3 desiredDirWorld)
-        {
-            if (tongueBones[boneIndex] == null) return;
-
-            Transform bone = tongueBones[boneIndex];
-            Quaternion parentWorldRot = bone.parent != null ? bone.parent.rotation : Quaternion.identity;
-
-            // Bone's forward direction in local space is +Y
-            Vector3 boneLocalForward = Vector3.up;
-
-            // Current world direction of the bone's forward
-            Vector3 boneWorldForward = parentWorldRot * boneRestRotations[boneIndex] * boneLocalForward;
-
-            // Compute rotation to align bone's forward with desired direction
-            Quaternion worldCorrection = Quaternion.FromToRotation(boneWorldForward, desiredDirWorld);
-            Quaternion newLocalRot = Quaternion.Inverse(parentWorldRot) * worldCorrection * parentWorldRot * boneRestRotations[boneIndex];
-
-            bone.localRotation = newLocalRot;
+            TongueUtility.ApplyBoneRotations(tongueBoneData, groundBoneIndex, currentTargetAngle);
         }
 
         private void ResetTongueBonesToRest()
         {
-            if (tongueBones == null || boneRestPositions == null || boneRestRotations == null) return;
-
-            for (int i = 0; i < tongueBones.Length; i++)
-            {
-                if (tongueBones[i] != null)
-                {
-                    tongueBones[i].localPosition = boneRestPositions[i];
-                    tongueBones[i].localRotation = boneRestRotations[i];
-                }
-            }
+            TongueUtility.ResetBonesToRest(tongueBoneData);
         }
 
         /// <summary>
@@ -621,12 +524,12 @@ namespace FaeMaze.Maze
         /// </summary>
         private void MoveVisitorToTip()
         {
-            if (tongueBones == null || tongueBones.Length == 0 || targetVisitor == null) return;
+            if (tongueBoneData == null || tongueBoneData.Bones == null || tongueBoneData.Bones.Length == 0 || targetVisitor == null) return;
 
-            int tipBoneIndex = tongueBones.Length - 1;
-            if (tongueBones[tipBoneIndex] == null) return;
+            int tipBoneIndex = tongueBoneData.Bones.Length - 1;
+            if (tongueBoneData.Bones[tipBoneIndex] == null) return;
 
-            Vector3 tipPos = tongueBones[tipBoneIndex].position;
+            Vector3 tipPos = tongueBoneData.Bones[tipBoneIndex].position;
 
             // Move visitor to tip's XY position, keep their Z
             targetVisitor.transform.position = new Vector3(tipPos.x, tipPos.y, targetVisitor.transform.position.z);
@@ -687,18 +590,10 @@ namespace FaeMaze.Maze
             if (heartBasePrefab == null)
             {
                 heartBasePrefab = Resources.Load<GameObject>("Prefabs/Tile/heartbase");
-                if (heartBasePrefab == null)
-                {
-                    Debug.LogWarning("HeartOfTheMaze: Failed to load heartbase prefab from Resources");
-                }
             }
             if (heartTonguePrefab == null)
             {
                 heartTonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
-                if (heartTonguePrefab == null)
-                {
-                    Debug.LogWarning("HeartOfTheMaze: Failed to load heart tongue prefab from Resources");
-                }
             }
         }
 
@@ -760,23 +655,12 @@ namespace FaeMaze.Maze
 
         private void SetupRigidbody()
         {
-            var rb = GetComponent<Rigidbody>();
-            if (rb == null)
-            {
-                rb = gameObject.AddComponent<Rigidbody>();
-            }
-            rb.isKinematic = true;
-            rb.useGravity = false;
+            gameObject.AddKinematicRigidbody();
         }
 
         private void PreCreateTongueInstance()
         {
-            if (heartTonguePrefab == null)
-            {
-                Debug.LogWarning("[HeartOfTheMaze] Heart tongue prefab not assigned!");
-                return;
-            }
-
+            if (heartTonguePrefab == null) return;
             if (tonguePoolInitialized) return;
 
             heartTongueInstance = Instantiate(heartTonguePrefab, transform);
@@ -784,7 +668,7 @@ namespace FaeMaze.Maze
 
             // Hide at pooled position
             Vector3 localPos = heartTongueInstance.transform.localPosition;
-            localPos.z = TONGUE_HIDDEN_Z;
+            localPos.z = TongueUtility.TONGUE_HIDDEN_Z;
             heartTongueInstance.transform.localPosition = localPos;
 
             // Remove lights from tongue model
@@ -793,103 +677,13 @@ namespace FaeMaze.Maze
                 Destroy(light);
             }
 
-            // Find bones
-            FindTongueBones();
-            CalculateTongueLength();
+            // Find bones and store rest poses
+            tongueBoneData = TongueUtility.SetupTongueBones(heartTongueInstance);
             FindBoneColliders();
 
             tonguePoolInitialized = true;
         }
 
-        private void FindTongueBones()
-        {
-            if (heartTongueInstance == null) return;
-
-            tongueSkinnedRenderer = heartTongueInstance.GetComponentInChildren<SkinnedMeshRenderer>();
-
-            if (tongueSkinnedRenderer != null && tongueSkinnedRenderer.bones != null && tongueSkinnedRenderer.bones.Length > 0)
-            {
-                tongueBones = tongueSkinnedRenderer.bones;
-            }
-            else
-            {
-                // Fallback: find bones by name and SORT them by bone number
-                var boneList = new List<Transform>();
-                foreach (var t in heartTongueInstance.GetComponentsInChildren<Transform>())
-                {
-                    string nameLower = t.name.ToLower();
-                    if (nameLower.Contains("bone") || nameLower.Contains("joint"))
-                    {
-                        boneList.Add(t);
-                    }
-                }
-
-                // CRITICAL: Sort bones by their number (Bone_000, Bone_001, etc.)
-                // Without sorting, bones may be in arbitrary order which breaks the bending logic
-                boneList.Sort((a, b) => ExtractBoneNumber(a.name).CompareTo(ExtractBoneNumber(b.name)));
-
-                tongueBones = boneList.ToArray();
-            }
-
-            // Store rest poses
-            if (tongueBones != null && tongueBones.Length > 0)
-            {
-                boneRestPositions = new Vector3[tongueBones.Length];
-                boneRestRotations = new Quaternion[tongueBones.Length];
-
-                for (int i = 0; i < tongueBones.Length; i++)
-                {
-                    if (tongueBones[i] != null)
-                    {
-                        boneRestPositions[i] = tongueBones[i].localPosition;
-                        boneRestRotations[i] = tongueBones[i].localRotation;
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Extracts the bone number from a bone name like "Bone_000", "Bone.001", "Bone123", etc.
-        /// </summary>
-        private int ExtractBoneNumber(string boneName)
-        {
-            string digits = "";
-            foreach (char c in boneName)
-            {
-                if (char.IsDigit(c))
-                {
-                    digits += c;
-                }
-            }
-
-            if (string.IsNullOrEmpty(digits))
-            {
-                return 0;
-            }
-
-            if (int.TryParse(digits, out int result))
-            {
-                return result;
-            }
-
-            return 0;
-        }
-
-        private void CalculateTongueLength()
-        {
-            tongueLength = 0f;
-            if (tongueBones == null || tongueBones.Length < 2) return;
-
-            Vector3 firstBone = tongueBones[0].position;
-            Vector3 lastBone = tongueBones[tongueBones.Length - 1].position;
-            tongueLength = Vector3.Distance(firstBone, lastBone);
-
-            // Add one more bone segment for the tip
-            if (tongueBones.Length > 1)
-            {
-                tongueLength += tongueLength / (tongueBones.Length - 1);
-            }
-        }
 
         private void FindBoneColliders()
         {

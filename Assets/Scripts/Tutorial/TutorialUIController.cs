@@ -6,6 +6,7 @@ using FaeMaze.Cameras;
 using FaeMaze.Maze;
 using FaeMaze.HeartPowers;
 using FaeMaze.Systems;
+using FaeMaze.UI;
 
 namespace FaeMaze.Tutorial
 {
@@ -186,10 +187,7 @@ namespace FaeMaze.Tutorial
             tutorialRoot = new GameObject("TutorialRoot");
             tutorialRoot.transform.SetParent(canvas.transform, false);
             var rootRect = tutorialRoot.AddComponent<RectTransform>();
-            rootRect.anchorMin = Vector2.zero;
-            rootRect.anchorMax = Vector2.one;
-            rootRect.offsetMin = Vector2.zero;
-            rootRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(rootRect);
 
             // Create dim overlay (behind dialog, but blocks input)
             CreateDimOverlay();
@@ -219,17 +217,9 @@ namespace FaeMaze.Tutorial
             //  200: tutorial canvas (dimOverlay, cutout masks)
             //  201: highlighted UI elements
             //  202: dialog panel, highlight rings
-            var canvasGO = new GameObject("TutorialCanvas");
-            var newCanvas = canvasGO.AddComponent<Canvas>();
-            newCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            newCanvas.sortingOrder = 200; // Above game UI (100)
-
-            var scaler = canvasGO.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            var newCanvas = UIFactory.CreateOverlayCanvas("TutorialCanvas", 200, new Vector2(1920, 1080));
+            var scaler = newCanvas.GetComponent<CanvasScaler>();
             scaler.matchWidthOrHeight = 0.5f;
-
-            canvasGO.AddComponent<GraphicRaycaster>();
 
             return newCanvas;
         }
@@ -240,10 +230,7 @@ namespace FaeMaze.Tutorial
             dimOverlay.transform.SetParent(tutorialRoot.transform, false);
 
             var rect = dimOverlay.AddComponent<RectTransform>();
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(rect);
 
             var image = dimOverlay.AddComponent<Image>();
             image.color = DIM_OVERLAY_COLOR;
@@ -258,10 +245,7 @@ namespace FaeMaze.Tutorial
             uiHighlightMask.transform.SetParent(tutorialRoot.transform, false);
 
             var rect = uiHighlightMask.AddComponent<RectTransform>();
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(rect);
 
             var image = uiHighlightMask.AddComponent<Image>();
             image.color = new Color(0f, 0f, 0f, 0.75f); // 75% opaque black
@@ -274,10 +258,7 @@ namespace FaeMaze.Tutorial
             worldCutoutMask.transform.SetParent(tutorialRoot.transform, false);
 
             var cutoutRect = worldCutoutMask.AddComponent<RectTransform>();
-            cutoutRect.anchorMin = Vector2.zero;
-            cutoutRect.anchorMax = Vector2.one;
-            cutoutRect.offsetMin = Vector2.zero;
-            cutoutRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(cutoutRect);
 
             worldCutoutImage = worldCutoutMask.AddComponent<Image>();
             worldCutoutImage.raycastTarget = false;
@@ -387,10 +368,7 @@ namespace FaeMaze.Tutorial
             var innerRing = new GameObject("InnerRing");
             innerRing.transform.SetParent(circularHighlight.transform, false);
             var innerRect = innerRing.AddComponent<RectTransform>();
-            innerRect.anchorMin = Vector2.zero;
-            innerRect.anchorMax = Vector2.one;
-            innerRect.offsetMin = Vector2.zero;
-            innerRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(innerRect);
             var innerImg = innerRing.AddComponent<Image>();
             innerImg.sprite = CreateCircleRingSprite(128, 6);
             innerImg.color = HIGHLIGHT_COLOR;
@@ -659,10 +637,7 @@ namespace FaeMaze.Tutorial
             var textGO = new GameObject("Text");
             textGO.transform.SetParent(buttonGO.transform, false);
             var textRect = textGO.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(textRect);
 
             var text = textGO.AddComponent<TextMeshProUGUI>();
             text.text = label;
@@ -711,11 +686,8 @@ namespace FaeMaze.Tutorial
 
         private void OnTutorialStarted()
         {
-            Debug.Log("[TutorialUIController] OnTutorialStarted called");
-
             if (tutorialRoot == null)
             {
-                Debug.Log("[TutorialUIController] Creating tutorial UI");
                 CreateTutorialUI();
             }
 
@@ -724,14 +696,10 @@ namespace FaeMaze.Tutorial
 
             // Always show the dim overlay during tutorial for consistent background
             dimOverlay.SetActive(true);
-
-            Debug.Log("[TutorialUIController] Tutorial UI activated");
         }
 
         private void OnStepChanged(int stepIndex)
         {
-            Debug.Log($"[TutorialUIController] OnStepChanged called for stepIndex={stepIndex}");
-
             var step = manager.CurrentStep;
             if (step == null)
             {
@@ -739,13 +707,10 @@ namespace FaeMaze.Tutorial
                 return;
             }
 
-            Debug.Log($"[TutorialUIController] Step: id={step.stepId}, title={step.title}");
-
             // Ensure dialog panel is visible (may have been hidden by transition overlay)
             if (dialogPanel != null)
             {
                 dialogPanel.SetActive(true);
-                Debug.Log("[TutorialUIController] Dialog panel set active");
             }
 
             // Update dialog content
@@ -768,8 +733,6 @@ namespace FaeMaze.Tutorial
 
             // Update highlights (dimOverlay stays active throughout tutorial)
             UpdateHighlight(step);
-
-            Debug.Log($"[TutorialUIController] OnStepChanged complete. dialogPanel.activeSelf={dialogPanel?.activeSelf}");
         }
 
         private void OnTutorialCompleted()
@@ -836,11 +799,8 @@ namespace FaeMaze.Tutorial
         /// <param name="show">True to show the transition overlay, false to hide it.</param>
         public void ShowTransitionOverlay(bool show)
         {
-            Debug.Log($"[TutorialUIController] ShowTransitionOverlay({show})");
-
             if (tutorialRoot == null)
             {
-                Debug.Log("[TutorialUIController] Creating tutorial UI");
                 CreateTutorialUI();
             }
 
@@ -858,13 +818,11 @@ namespace FaeMaze.Tutorial
                 uiHighlightMask.SetActive(false);
                 worldCutoutMask.SetActive(false);
 
-                Debug.Log("[TutorialUIController] Transition overlay shown (dialog hidden)");
             }
             else
             {
                 // Hide the transition overlay (dialog will be shown by OnStepChanged)
                 dimOverlay.SetActive(false);
-                Debug.Log("[TutorialUIController] Transition overlay hidden (dimOverlay off)");
             }
         }
 
@@ -963,7 +921,6 @@ namespace FaeMaze.Tutorial
 
             if (target == null)
             {
-                Debug.LogWarning($"[Tutorial] Could not find UI element: {elementName}");
                 return;
             }
 
@@ -1102,7 +1059,6 @@ namespace FaeMaze.Tutorial
 
             if (target == null)
             {
-                Debug.LogWarning($"[Tutorial] Could not find UI element: {elementName}");
                 return;
             }
 

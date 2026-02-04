@@ -182,47 +182,28 @@ namespace FaeMaze.HeartPowers
 
         #region Keyboard Input
 
-        // Gamepad debug logging for power bindings
-        private static float lastPowerBindingLog = 0f;
-        private const float POWER_BINDING_LOG_INTERVAL = 10f;
-
         private void HandleKeyboardInput()
         {
-            // Periodically log what binding strings are configured for powers
-            if (Time.time - lastPowerBindingLog > POWER_BINDING_LOG_INTERVAL)
-            {
-                lastPowerBindingLog = Time.time;
-                Debug.Log($"[HeartPowerUI] Current power bindings: " +
-                          $"P1='{GameSettings.HeartPower1Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower1Binding)}), " +
-                          $"P2='{GameSettings.HeartPower2Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower2Binding)}), " +
-                          $"P3='{GameSettings.HeartPower3Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower3Binding)}), " +
-                          $"P4='{GameSettings.HeartPower4Binding}' (isGamepad={InputBindingHelper.IsGamepadBinding(GameSettings.HeartPower4Binding)})");
-            }
-
             // Use InputBindingHelper for configurable key/mouse bindings
             // Check all three columns (primary, alt, tertiary) for each power
             if (InputBindingHelper.WasAnyBindingPressedThisFrame(
                 GameSettings.HeartPower1Binding, GameSettings.HeartPower1AltBinding, GameSettings.HeartPower1TertiaryBinding))
             {
-                Debug.Log($"[HeartPowerUI] Power 1 (MurmuringPaths) ACTIVATED");
                 ActivatePower(HeartPowerType.MurmuringPaths);
             }
             else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
                 GameSettings.HeartPower2Binding, GameSettings.HeartPower2AltBinding, GameSettings.HeartPower2TertiaryBinding))
             {
-                Debug.Log($"[HeartPowerUI] Power 2 (HeartwardGrasp) ACTIVATED");
                 ActivatePower(HeartPowerType.HeartwardGrasp);
             }
             else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
                 GameSettings.HeartPower3Binding, GameSettings.HeartPower3AltBinding, GameSettings.HeartPower3TertiaryBinding))
             {
-                Debug.Log($"[HeartPowerUI] Power 3 (DevouringMaw) ACTIVATED");
                 ActivatePower(HeartPowerType.DevouringMaw);
             }
             else if (InputBindingHelper.WasAnyBindingPressedThisFrame(
                 GameSettings.HeartPower4Binding, GameSettings.HeartPower4AltBinding, GameSettings.HeartPower4TertiaryBinding))
             {
-                Debug.Log($"[HeartPowerUI] Power 4 (Sculpting) ACTIVATED via binding '{GameSettings.HeartPower4Binding}'");
                 ActivatePower(HeartPowerType.Sculpting);
             }
         }

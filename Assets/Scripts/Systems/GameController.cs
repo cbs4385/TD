@@ -134,7 +134,6 @@ namespace FaeMaze.Systems
             // Initialize the random manager FIRST - all other systems depend on it
             // If tutorial will run, use the fixed tutorial seed for consistent maze layout
             bool useTutorialSeed = !GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun;
-            Debug.Log($"[GameController] Seed selection: TutorialCompleted={GameSettings.TutorialCompleted}, ShowTutorialOnFirstRun={GameSettings.ShowTutorialOnFirstRun}, useTutorialSeed={useTutorialSeed}");
             if (useTutorialSeed)
             {
                 RandomManager.Initialize(Tutorial.TutorialManager.TUTORIAL_SEED);
@@ -237,7 +236,6 @@ namespace FaeMaze.Systems
                 if (dynamicGrowth.SetNodeProp(nodeIndex, DynamicMazeGrowth.NodePropType.FaeLantern))
                 {
                     lanternsPlaced++;
-                    Debug.Log($"[GameController] Forest's Favor: Placed lantern at node {nodeIndex}");
                 }
             }
         }

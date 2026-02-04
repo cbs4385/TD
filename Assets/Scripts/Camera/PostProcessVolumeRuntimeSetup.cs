@@ -18,13 +18,10 @@ namespace FaeMaze.Cameras
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void SetupPostProcessVolume()
         {
-            Debug.Log("[PostProcessVolumeRuntimeSetup] SetupPostProcessVolume() called");
-
             // Only setup once per scene load
             if (hasSetup)
             {
                 hasSetup = false; // Reset for next scene
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Already setup this scene, skipping");
                 return;
             }
 
@@ -35,10 +32,8 @@ namespace FaeMaze.Cameras
 
             // Check if Volume already exists
             Volume existingVolume = UnityEngine.Object.FindFirstObjectByType<Volume>();
-            Debug.Log($"[PostProcessVolumeRuntimeSetup] Existing volume found: {existingVolume != null}");
             if (existingVolume != null)
             {
-                Debug.Log($"[PostProcessVolumeRuntimeSetup] Existing volume profile: {existingVolume.profile != null}, isGlobal: {existingVolume.isGlobal}");
                 // Add Vignette for edge darkening effect
                 if (existingVolume.profile != null && !existingVolume.profile.TryGet<Vignette>(out var existingVignette))
                 {
@@ -69,10 +64,8 @@ namespace FaeMaze.Cameras
 
             if (profile == null)
             {
-                Debug.LogWarning("[PostProcessVolumeRuntimeSetup] No profile found, returning early");
                 return;
             }
-            Debug.Log($"[PostProcessVolumeRuntimeSetup] Using profile: {profile.name}");
 
             // Create new Volume GameObject
             GameObject volumeObject = new GameObject("PostProcessVolume");
@@ -134,11 +127,8 @@ namespace FaeMaze.Cameras
         /// </summary>
         private static void TryAddRadialBlur(VolumeProfile profile)
         {
-            Debug.Log($"[PostProcessVolumeRuntimeSetup] TryAddRadialBlur called. Profile: {(profile != null ? profile.name : "null")}");
-
             if (profile == null)
             {
-                Debug.LogWarning("[PostProcessVolumeRuntimeSetup] TryAddRadialBlur: profile is null");
                 return;
             }
 
@@ -146,12 +136,9 @@ namespace FaeMaze.Cameras
             RadialBlur radialBlur;
             bool isNew = !profile.TryGet<RadialBlur>(out radialBlur);
 
-            Debug.Log($"[PostProcessVolumeRuntimeSetup] RadialBlur exists in profile: {!isNew}");
-
             if (isNew)
             {
                 // Add RadialBlur component
-                Debug.Log("[PostProcessVolumeRuntimeSetup] Adding RadialBlur to profile");
                 radialBlur = profile.Add<RadialBlur>(true);
             }
 
@@ -180,7 +167,6 @@ namespace FaeMaze.Cameras
                     }
                 }
 
-                Debug.Log($"[PostProcessVolumeRuntimeSetup] RadialBlur configured: active={radialBlur.active}, enabled={radialBlur.enabled.value}, blurAngle={radialBlur.blurAngleDegrees.value}");
             }
             else
             {

@@ -1,5 +1,6 @@
 using UnityEngine;
 using FaeMaze.Systems;
+using FaeMaze.Utilities;
 
 namespace FaeMaze.Maze
 {
@@ -83,13 +84,7 @@ namespace FaeMaze.Maze
 
         private void SetupTriggerCollider()
         {
-            Rigidbody rb = GetComponent<Rigidbody>();
-            if (rb == null)
-            {
-                rb = gameObject.AddComponent<Rigidbody>();
-                rb.isKinematic = true;
-                rb.useGravity = false;
-            }
+            gameObject.AddKinematicRigidbody();
 
             triggerCollider = GetComponent<SphereCollider>();
             if (triggerCollider == null)

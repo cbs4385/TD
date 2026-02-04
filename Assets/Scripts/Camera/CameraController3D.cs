@@ -405,37 +405,10 @@ namespace FaeMaze.Cameras
             }
         }
 
-        // Debug logging for camera input
-        private static bool cameraDebugLogging = true;
-        private static float cameraLastLogTime = 0f;
-        private const float CAMERA_LOG_INTERVAL = 2f;
-        private static float cameraBindingLogTime = 0f;
-        private const float CAMERA_BINDING_LOG_INTERVAL = 10f;
-
         private void HandleFocalPointInput()
         {
-            // Periodically log camera binding configuration
-            if (cameraDebugLogging && Time.time - cameraBindingLogTime > CAMERA_BINDING_LOG_INTERVAL)
-            {
-                cameraBindingLogTime = Time.time;
-                Debug.Log($"[CameraController3D] Camera bindings: " +
-                          $"Forward='{GameSettings.CameraMoveForwardBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraMoveForwardBinding)}), " +
-                          $"Back='{GameSettings.CameraMoveBackwardBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraMoveBackwardBinding)}), " +
-                          $"Left='{GameSettings.CameraTurnLeftBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraTurnLeftBinding)}), " +
-                          $"Right='{GameSettings.CameraTurnRightBinding}' (gp={InputBindingHelper.IsGamepadBinding(GameSettings.CameraTurnRightBinding)}), " +
-                          $"Orbit='{GameSettings.CameraOrbitBinding}', " +
-                          $"Pan='{GameSettings.CameraPanBinding}', " +
-                          $"FocusHeart='{GameSettings.CameraFocusHeartBinding}', " +
-                          $"FocusEntrance='{GameSettings.CameraFocusEntranceBinding}'");
-            }
-
             if (!useFocalPointMode || focalPointTransform == null)
             {
-                if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
-                {
-                    Debug.Log($"[CameraController3D] HandleFocalPointInput early exit: useFocalPointMode={useFocalPointMode}, focalPointTransform={(focalPointTransform != null ? "exists" : "null")}");
-                    cameraLastLogTime = Time.time;
-                }
                 return;
             }
 
@@ -443,11 +416,6 @@ namespace FaeMaze.Cameras
             // This prevents user rotation from being overwritten by late initialization
             if (!focalPointInitialized)
             {
-                if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
-                {
-                    Debug.Log($"[CameraController3D] HandleFocalPointInput: focalPointInitialized=false, skipping input");
-                    cameraLastLogTime = Time.time;
-                }
                 return;
             }
 
@@ -844,38 +812,21 @@ namespace FaeMaze.Cameras
                 return;
             }
 
-            if (cameraDebugLogging)
-            {
-                Debug.Log($"[CameraController3D] InitializeFocalPoint called, mazeGridBehaviour={(mazeGridBehaviour != null ? "exists" : "null")}");
-            }
-
             if (mazeGridBehaviour == null)
             {
                 mazeGridBehaviour = FindFirstObjectByType<MazeGridBehaviour>();
-                if (cameraDebugLogging)
-                {
-                    Debug.Log($"[CameraController3D] Found MazeGridBehaviour: {(mazeGridBehaviour != null ? "yes" : "no")}");
-                }
             }
 
             if (focalPointTransform == null)
             {
                 GameObject focalPointObj = new GameObject("Focal Point");
                 focalPointTransform = focalPointObj.transform;
-                if (cameraDebugLogging)
-                {
-                    Debug.Log($"[CameraController3D] Created Focal Point GameObject");
-                }
             }
 
             Vector3 startPosition;
             Quaternion startRotation;
 
             bool heartReady = GameController.Instance != null && GameController.Instance.Heart != null;
-            if (cameraDebugLogging)
-            {
-                Debug.Log($"[CameraController3D] heartReady={heartReady}, GameController={(GameController.Instance != null ? "exists" : "null")}, Heart={(GameController.Instance?.Heart != null ? "exists" : "null")}");
-            }
 
             if (heartReady)
             {
@@ -912,11 +863,6 @@ namespace FaeMaze.Cameras
             else
             {
                 // Wait until the maze is generated or the heart exists so we can place the focal point correctly.
-                if (cameraDebugLogging && Time.time - cameraLastLogTime > CAMERA_LOG_INTERVAL)
-                {
-                    Debug.Log($"[CameraController3D] InitializeFocalPoint: waiting for maze/heart. mazeGridBehaviour={(mazeGridBehaviour != null ? "exists" : "null")}, WorldSpaceMazeData={(mazeGridBehaviour?.WorldSpaceMazeData != null ? "exists" : "null")}");
-                    cameraLastLogTime = Time.time;
-                }
                 return;
             }
 
@@ -927,10 +873,6 @@ namespace FaeMaze.Cameras
 
             _focusPoint = startPosition;
             focalPointInitialized = true;
-            if (cameraDebugLogging)
-            {
-                Debug.Log($"[CameraController3D] Focal point INITIALIZED at {startPosition}, focalPointInitialized=true");
-            }
         }
 
         private void AddFocalPointGlow()

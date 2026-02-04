@@ -95,12 +95,7 @@ namespace FaeMaze.Props
 
         private void SetupAudio()
         {
-            propAudio = GetComponent<PropAudioSource>();
-            if (propAudio == null)
-            {
-                propAudio = gameObject.AddComponent<PropAudioSource>();
-            }
-            propAudio.SetSoundType(PropAudioSource.PropSoundType.FairyRing);
+            propAudio = PropAudioSource.EnsureOnGameObject(gameObject, PropAudioSource.PropSoundType.FairyRing);
             propAudio.SetMaxDistance(10f);
             // Only play sound when actively fascinating a visitor
             propAudio.SetActiveStateCallback(HasFascinatedVisitor);

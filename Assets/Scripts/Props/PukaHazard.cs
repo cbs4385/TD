@@ -179,12 +179,7 @@ namespace FaeMaze.Props
 
         private void SetupAudio()
         {
-            propAudio = GetComponent<PropAudioSource>();
-            if (propAudio == null)
-            {
-                propAudio = gameObject.AddComponent<PropAudioSource>();
-            }
-            propAudio.SetSoundType(PropAudioSource.PropSoundType.Pond);
+            propAudio = PropAudioSource.EnsureOnGameObject(gameObject, PropAudioSource.PropSoundType.Pond);
             propAudio.SetMaxDistance(detectionRadius * 4f);
         }
 

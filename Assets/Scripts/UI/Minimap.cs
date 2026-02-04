@@ -195,16 +195,7 @@ namespace FaeMaze.UI
         private void CreateMinimapUI()
         {
             // Create canvas
-            GameObject canvasObj = new GameObject("MinimapCanvas");
-            canvas = canvasObj.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 100;
-
-            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-
-            canvasObj.AddComponent<GraphicRaycaster>();
+            canvas = UIFactory.CreateOverlayCanvas("MinimapCanvas", 100, new Vector2(1920, 1080));
 
             // Create minimap panel (outer container for positioning)
             GameObject panelObj = new GameObject("MinimapPanel");

@@ -70,7 +70,6 @@ namespace FaeMaze.Roguelike
             roguelikeRoot.AddComponent<TierUpgradeUI>();
 
             _initialized = true;
-            Debug.Log("[RoguelikeBootstrap] Managers initialized");
         }
 
         /// <summary>

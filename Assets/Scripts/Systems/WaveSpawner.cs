@@ -184,11 +184,7 @@ namespace FaeMaze.Systems
                 bool tutorialWillRun = !GameSettings.TutorialCompleted && GameSettings.ShowTutorialOnFirstRun;
                 bool tutorialIsActive = TutorialManager.Instance != null && TutorialManager.Instance.IsActive;
 
-                if (tutorialWillRun || tutorialIsActive)
-                {
-                    Debug.Log($"[WaveSpawner] Tutorial controls spawning, skipping auto-start (willRun={tutorialWillRun}, isActive={tutorialIsActive})");
-                }
-                else
+                if (!tutorialWillRun && !tutorialIsActive)
                 {
                     // Start via coroutine to allow blessing selection first
                     StartCoroutine(StartWaveWithBlessingSelection());
@@ -205,7 +201,6 @@ namespace FaeMaze.Systems
             DynamicMazeGrowth dynamicMazeGrowth = FindFirstObjectByType<DynamicMazeGrowth>();
             if (dynamicMazeGrowth != null && !dynamicMazeGrowth.IsInitialGrowthComplete)
             {
-                Debug.Log("[WaveSpawner] Waiting for initial maze growth to complete...");
                 while (!dynamicMazeGrowth.IsInitialGrowthComplete)
                 {
                     yield return new WaitForSeconds(0.5f);
@@ -216,8 +211,6 @@ namespace FaeMaze.Systems
             var unlockedBlessings = BlessingManager.Instance?.GetUnlockedBlessings();
             if (unlockedBlessings != null && unlockedBlessings.Count > 0)
             {
-                Debug.Log($"[WaveSpawner] Showing blessing selection ({unlockedBlessings.Count} unlocked)");
-
                 // Create or find the BlessingSelectionUI
                 var blessingUI = FindFirstObjectByType<BlessingSelectionUI>();
                 if (blessingUI == null)
@@ -231,14 +224,6 @@ namespace FaeMaze.Systems
                 blessingUI.Show((selectedBlessing) =>
                 {
                     selectionComplete = true;
-                    if (selectedBlessing != null)
-                    {
-                        Debug.Log($"[WaveSpawner] Blessing selected: {selectedBlessing.DisplayName}");
-                    }
-                    else
-                    {
-                        Debug.Log("[WaveSpawner] No blessing selected (skipped)");
-                    }
                 });
 
                 // Wait for selection to complete
@@ -247,11 +232,6 @@ namespace FaeMaze.Systems
                     yield return null;
                 }
             }
-            else
-            {
-                Debug.Log("[WaveSpawner] No unlocked blessings, skipping selection");
-            }
-
             // Now start the wave
             StartWave();
         }
@@ -263,7 +243,6 @@ namespace FaeMaze.Systems
             enableGoblin = GameSettings.EnableGoblin;
             startingEssence = GameSettings.StartingEssence;
 
-            Debug.Log($"[WaveSpawner] LoadSettings: enableGoblin={enableGoblin}, startingEssence={startingEssence}, goblinPrefab={(goblinPrefab != null ? goblinPrefab.name : "NULL")}");
         }
 
         private void Update()
@@ -286,14 +265,8 @@ namespace FaeMaze.Systems
 
                 if (currentEssence >= spawnThreshold)
                 {
-                    Debug.Log($"[WaveSpawner] Goblin spawn triggered: currentEssence={currentEssence} >= threshold={spawnThreshold}");
                     SpawnGoblin();
                 }
-            }
-            else if (!enableGoblin)
-            {
-                // Log once when Goblin is disabled (use a static flag to avoid spam)
-                LogGoblinDisabledOnce();
             }
 
             activeVisitors.RemoveAll(v => v == null);
@@ -545,8 +518,6 @@ namespace FaeMaze.Systems
 
         private void SpawnGoblin()
         {
-            Debug.Log($"[WaveSpawner] SpawnGoblin called: goblinPrefab={(goblinPrefab != null ? goblinPrefab.name : "NULL")}, mazeGridBehaviour={(mazeGridBehaviour != null ? "OK" : "NULL")}");
-
             if (goblinPrefab == null)
             {
                 Debug.LogError("[WaveSpawner] SpawnGoblin FAILED: goblinPrefab is NULL!");
@@ -568,12 +539,10 @@ namespace FaeMaze.Systems
                 var keys = new List<char>(spawnPoints.Keys);
                 int randomIndex = RandomManager.Range(0, keys.Count);
                 spawnWorldPos = spawnPoints[keys[randomIndex]];
-                Debug.Log($"[WaveSpawner] Goblin spawn position from spawn point: {spawnWorldPos}");
             }
             else
             {
                 spawnWorldPos = mazeGridBehaviour.HeartWorldPosition;
-                Debug.Log($"[WaveSpawner] Goblin spawn position from heart: {spawnWorldPos}");
             }
 
             currentGoblin = Instantiate(goblinPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
@@ -590,26 +559,10 @@ namespace FaeMaze.Systems
             {
                 Debug.LogError("[WaveSpawner] SpawnGoblin WARNING: Instantiated object has no GoblinController component! Check prefab setup.");
             }
-            else
-            {
-                Debug.Log($"[WaveSpawner] GoblinController component found on instantiated object");
-            }
 
             int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
             currentGoblin.SetDifficultyTier(tier);
             currentGoblin.name = $"Goblin_T{tier}";
-
-            Debug.Log($"[WaveSpawner] Goblin spawned successfully: name={currentGoblin.name}, position={spawnWorldPos}, tier={tier}");
-        }
-
-        private static bool _goblinDisabledLogged = false;
-        private void LogGoblinDisabledOnce()
-        {
-            if (!_goblinDisabledLogged)
-            {
-                Debug.Log("[WaveSpawner] Goblin spawning is DISABLED (enableGoblin=false)");
-                _goblinDisabledLogged = true;
-            }
         }
 
         private void HandleGameOver()
@@ -638,19 +591,7 @@ namespace FaeMaze.Systems
         {
             if (uiCanvas == null)
             {
-                uiCanvas = FindFirstObjectByType<Canvas>();
-                if (uiCanvas == null)
-                {
-                    GameObject canvasObj = new GameObject("WaveSpawnerCanvas");
-                    uiCanvas = canvasObj.AddComponent<Canvas>();
-                    uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-
-                    CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                    scaler.referenceResolution = new Vector2(1920, 1080);
-
-                    canvasObj.AddComponent<GraphicRaycaster>();
-                }
+                uiCanvas = UIFactory.FindOrCreateCanvas(this, "WaveSpawnerCanvas", 0, new Vector2(1920, 1080));
             }
 
             uiPanel = new GameObject("WaveInfoPanel");

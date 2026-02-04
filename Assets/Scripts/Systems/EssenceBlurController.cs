@@ -125,21 +125,10 @@ namespace FaeMaze.Systems
             {
                 var volumes = FindObjectsByType<Volume>(FindObjectsSortMode.None);
 
-                // Only log once to avoid spam
-                if (!_hasLoggedVolumeSearch)
-                {
-                    Debug.Log($"[EssenceBlurController] TryInitializeBlur: Found {volumes.Length} volumes");
-                }
-
                 foreach (var vol in volumes)
                 {
-                    if (!_hasLoggedVolumeSearch)
-                    {
-                        Debug.Log($"[EssenceBlurController] Checking volume: {vol.name}, profile: {(vol.profile != null ? vol.profile.name : "null")}");
-                    }
                     if (vol.profile != null && vol.profile.TryGet<RadialBlur>(out _))
                     {
-                        Debug.Log($"[EssenceBlurController] Found RadialBlur in volume: {vol.name}");
                         globalVolume = vol;
                         break;
                     }
@@ -147,7 +136,6 @@ namespace FaeMaze.Systems
 
                 if (globalVolume == null && !_hasLoggedVolumeSearch)
                 {
-                    Debug.LogWarning("[EssenceBlurController] No volume with RadialBlur found (will keep trying)");
                     _hasLoggedVolumeSearch = true;
                 }
             }
@@ -156,10 +144,6 @@ namespace FaeMaze.Systems
             if (globalVolume != null && globalVolume.profile != null)
             {
                 globalVolume.profile.TryGet(out radialBlur);
-                if (radialBlur != null)
-                {
-                    Debug.Log($"[EssenceBlurController] RadialBlur from profile: found");
-                }
             }
 
             // Setup blur effects if found
@@ -190,7 +174,6 @@ namespace FaeMaze.Systems
 
                 // Mark as initialized so we don't keep searching
                 hasInitializedBlur = true;
-                Debug.Log("[EssenceBlurController] RadialBlur initialized successfully");
             }
         }
 

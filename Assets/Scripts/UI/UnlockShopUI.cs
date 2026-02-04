@@ -103,32 +103,14 @@ namespace FaeMaze.UI
         private void CreateUI()
         {
             // Find or create canvas
-            _canvas = GetComponentInParent<Canvas>();
-            if (_canvas == null)
-            {
-                _canvas = FindFirstObjectByType<Canvas>();
-            }
-            if (_canvas == null)
-            {
-                GameObject canvasObj = new GameObject("ShopCanvas");
-                _canvas = canvasObj.AddComponent<Canvas>();
-                _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                _canvas.sortingOrder = 50;
-                var scaler = canvasObj.AddComponent<CanvasScaler>();
-                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
-                canvasObj.AddComponent<GraphicRaycaster>();
-            }
+            _canvas = UIFactory.FindOrCreateCanvas(this, "ShopCanvas", 50, new Vector2(1920, 1080));
 
             // Create panel root
             _panelRoot = new GameObject("UnlockShopPanel");
             _panelRoot.transform.SetParent(_canvas.transform, false);
 
             RectTransform panelRect = _panelRoot.AddComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(panelRect);
 
             // Full-screen background
             Image panelBg = _panelRoot.AddComponent<Image>();
@@ -247,10 +229,7 @@ namespace FaeMaze.UI
             textObj.transform.SetParent(tabObj.transform, false);
 
             RectTransform textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(textRect);
 
             TextMeshProUGUI tabText = textObj.AddComponent<TextMeshProUGUI>();
             tabText.text = label;
@@ -353,10 +332,7 @@ namespace FaeMaze.UI
             textObj.transform.SetParent(closeObj.transform, false);
 
             RectTransform textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(textRect);
 
             TextMeshProUGUI closeText = textObj.AddComponent<TextMeshProUGUI>();
             closeText.text = "Close (ESC)";
@@ -497,10 +473,7 @@ namespace FaeMaze.UI
             textObj.transform.SetParent(badgeObj.transform, false);
 
             RectTransform textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(textRect);
 
             TextMeshProUGUI badgeText = textObj.AddComponent<TextMeshProUGUI>();
             badgeText.text = "UNLOCKED";
@@ -544,10 +517,7 @@ namespace FaeMaze.UI
             costObj.transform.SetParent(buttonObj.transform, false);
 
             RectTransform costRect = costObj.AddComponent<RectTransform>();
-            costRect.anchorMin = Vector2.zero;
-            costRect.anchorMax = Vector2.one;
-            costRect.offsetMin = Vector2.zero;
-            costRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(costRect);
 
             TextMeshProUGUI costText = costObj.AddComponent<TextMeshProUGUI>();
 
@@ -621,11 +591,7 @@ namespace FaeMaze.UI
         {
             if (UnlockManager.Instance == null) return;
 
-            if (UnlockManager.Instance.TryPurchaseUnlock(unlockId))
-            {
-                // Success - UI will refresh via event
-                Debug.Log($"[UnlockShopUI] Purchased: {unlockId}");
-            }
+            UnlockManager.Instance.TryPurchaseUnlock(unlockId);
         }
 
         private void OnFaeDustChanged(int newAmount)

@@ -41,13 +41,6 @@ namespace FaeMaze.HeartPowers
             Register(HeartPowerType.Sculpting, (m, d, p) => new SculptingEffect(m, d, p));
             Register(HeartPowerType.Misdirect, (m, d, p) => new MisdirectEffect(m, d, p));
 
-            // Disabled powers (can be registered later when enabled)
-            // Register(HeartPowerType.HeartbeatOfLonging, (m, d, p) => new HeartbeatOfLongingEffect(m, d, p));
-            // Register(HeartPowerType.DreamSnare, (m, d, p) => new DreamSnareEffect(m, d, p));
-            // Register(HeartPowerType.FeastwardPanic, (m, d, p) => new FeastwardPanicEffect(m, d, p));
-            // Register(HeartPowerType.CovenantWithWisps, (m, d, p) => new CovenantWithWispsEffect(m, d, p));
-            // Register(HeartPowerType.PukasBargain, (m, d, p) => new PukasBargainEffect(m, d, p));
-            // Register(HeartPowerType.RingOfInvitations, (m, d, p) => new RingOfInvitationsEffect(m, d, p));
         }
 
         /// <summary>
@@ -96,7 +89,6 @@ namespace FaeMaze.HeartPowers
                 return creator(manager, definition, worldPosition);
             }
 
-            Debug.LogWarning($"[HeartPowerEffectFactory] No factory registered for power type: {powerType}");
             return null;
         }
 

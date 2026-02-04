@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using FaeMaze.Systems;
+using FaeMaze.UI;
 
 namespace FaeMaze.Tutorial
 {
@@ -115,10 +116,7 @@ namespace FaeMaze.Tutorial
             overlayRoot.transform.SetParent(canvas.transform, false);
 
             var rootRect = overlayRoot.AddComponent<RectTransform>();
-            rootRect.anchorMin = Vector2.zero;
-            rootRect.anchorMax = Vector2.one;
-            rootRect.offsetMin = Vector2.zero;
-            rootRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(rootRect);
 
             // Click-to-close background
             var bgButton = overlayRoot.AddComponent<Button>();
@@ -169,17 +167,9 @@ namespace FaeMaze.Tutorial
             }
 
             // Create high-priority canvas for help overlay
-            var canvasGO = new GameObject("HelpOverlayCanvas");
-            var newCanvas = canvasGO.AddComponent<Canvas>();
-            newCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            newCanvas.sortingOrder = 150;
-
-            var scaler = canvasGO.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            var newCanvas = UIFactory.CreateOverlayCanvas("HelpOverlayCanvas", 150, new Vector2(1920, 1080));
+            var scaler = newCanvas.GetComponent<CanvasScaler>();
             scaler.matchWidthOrHeight = 0.5f;
-
-            canvasGO.AddComponent<GraphicRaycaster>();
 
             return newCanvas;
         }

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
+using FaeMaze.Utilities;
 
 namespace FaeMaze.Props
 {
@@ -93,12 +94,7 @@ namespace FaeMaze.Props
 
         private void SetupAudio()
         {
-            _propAudio = GetComponent<PropAudioSource>();
-            if (_propAudio == null)
-            {
-                _propAudio = gameObject.AddComponent<PropAudioSource>();
-            }
-            _propAudio.SetSoundType(PropAudioSource.PropSoundType.Lantern);
+            _propAudio = PropAudioSource.EnsureOnGameObject(gameObject, PropAudioSource.PropSoundType.Lantern);
             _propAudio.SetMaxDistance(influenceRadius * 1.5f);
             // Only play sound when actively fascinating a visitor
             _propAudio.SetActiveStateCallback(HasFascinatedVisitor);
@@ -133,9 +129,7 @@ namespace FaeMaze.Props
             zoneObj.transform.localPosition = Vector3.zero;
 
             // Add kinematic Rigidbody for trigger detection
-            var rb = zoneObj.AddComponent<Rigidbody>();
-            rb.isKinematic = true;
-            rb.useGravity = false;
+            zoneObj.AddKinematicRigidbody();
 
             // Add sphere collider and exclusion zone component
             var collider = zoneObj.AddComponent<SphereCollider>();

@@ -122,8 +122,6 @@ public class LanternGlow : MonoBehaviour
         // before prefab overrides are fully applied or if [ExecuteAlways] interferes
         idleRotation = BaseOrientation;
 
-        Debug.Log($"[LanternGlow] OnEnable called on {gameObject.name}, enableLight={enableLight}");
-
         // Disable any existing lights from the model (except our own)
         DisableModelLights();
 
@@ -134,10 +132,6 @@ public class LanternGlow : MonoBehaviour
         if (enableLight)
         {
             CreatePointLight();
-        }
-        else
-        {
-            Debug.Log("[LanternGlow] enableLight is FALSE, not creating point light");
         }
     }
 
@@ -163,7 +157,6 @@ public class LanternGlow : MonoBehaviour
         }
         else if (Application.isPlaying && enableLight && Time.frameCount % 60 == 0)
         {
-            Debug.LogWarning($"[LanternGlow] pointLight is NULL on {gameObject.name}, trying to recreate...");
             CreatePointLight();
         }
 
@@ -465,14 +458,18 @@ public class LanternGlow : MonoBehaviour
 
     private void TriggerFascinationTest(VisitorControllerBase visitor)
     {
+        // Find the FaeLantern component on this or parent object
+        var lantern = GetComponentInParent<FaeMaze.Props.FaeLantern>();
+        if (lantern == null) return;
+
         // Use the visitor's fascination chance from their archetype
         float fascinationChance = visitor.GetFascinationChance();
         float roll = RandomManager.Value;
 
         if (roll <= fascinationChance)
         {
-            // Visitor becomes fascinated - use BecomeFascinated method
-            visitor.BecomeFascinated(transform.position);
+            // Chance roll passed - force fascination (bypasses EnterFaeInfluence's own roll)
+            visitor.ForceFascinateByLantern(lantern);
         }
     }
 
@@ -486,23 +483,16 @@ public class LanternGlow : MonoBehaviour
     private void DisableModelLights()
     {
         var lights = GetComponentsInChildren<Light>(true);
-        Debug.Log($"[LanternGlow] DisableModelLights: found {lights.Length} lights");
         foreach (var light in lights)
         {
             if (light == null) continue;
 
-            Debug.Log($"[LanternGlow]   Checking light on '{light.gameObject.name}'");
-
             // Don't disable our own lights
             if (light.gameObject.name == "GlowLight" || light.gameObject.name == "SpotLight")
-            {
-                Debug.Log($"[LanternGlow]   Keeping light '{light.gameObject.name}' (our own light)");
                 continue;
-            }
 
             // Disable the light from the model
             light.enabled = false;
-            Debug.Log($"[LanternGlow] Disabled model light: {light.gameObject.name}");
         }
     }
 
@@ -651,44 +641,27 @@ public class LanternGlow : MonoBehaviour
 
     private void CreatePointLight()
     {
-        Debug.Log($"[LanternGlow] CreatePointLight called on {gameObject.name}, current pointLight={pointLight}, enabled={pointLight?.enabled}");
-
         // First, check if we already have a reference that's enabled
         if (pointLight != null && pointLight.enabled)
-        {
-            Debug.Log("[LanternGlow] pointLight already exists and is enabled, skipping");
             return;
-        }
-
-        // Log all children for debugging
-        Debug.Log($"[LanternGlow] {gameObject.name} has {transform.childCount} children:");
-        for (int i = 0; i < transform.childCount; i++)
-        {
-            var child = transform.GetChild(i);
-            Debug.Log($"[LanternGlow]   Child {i}: '{child.name}' Light={child.GetComponent<Light>()}");
-        }
 
         // Look for existing GlowLight child (our own light)
         Transform existingLightTransform = transform.Find("GlowLight");
-        Debug.Log($"[LanternGlow] transform.Find('GlowLight') = {existingLightTransform}");
 
         if (existingLightTransform != null)
         {
             pointLight = existingLightTransform.GetComponent<Light>();
-            Debug.Log($"[LanternGlow] Found existing GlowLight child, Light component = {pointLight}");
             if (pointLight != null)
             {
                 pointLight.enabled = true;
                 // Update position in case offset changed
                 existingLightTransform.localPosition = new Vector3(0, lightYOffset, 0);
-                Debug.Log($"[LanternGlow] Enabled existing light, intensity={pointLight.intensity}, range={pointLight.range}");
             }
         }
 
         // Only create a new light if we don't have one named GlowLight
         if (pointLight == null)
         {
-            Debug.Log("[LanternGlow] No existing GlowLight found, creating new light");
             // Create new light
             GameObject lightObj = new GameObject("GlowLight");
             lightObj.transform.SetParent(transform);
@@ -702,7 +675,6 @@ public class LanternGlow : MonoBehaviour
         pointLight.range = lightRange;
         // Disable shadows to avoid shadow atlas overflow warnings
         pointLight.shadows = LightShadows.None;
-        Debug.Log($"[LanternGlow] CreatePointLight complete, light enabled={pointLight.enabled}, intensity={pointLight.intensity}");
     }
 
     #endregion

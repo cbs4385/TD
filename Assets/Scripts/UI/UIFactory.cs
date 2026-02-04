@@ -1,0 +1,77 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace FaeMaze.UI
+{
+    /// <summary>
+    /// Shared UI creation utilities to eliminate duplicated canvas and panel setup code.
+    /// </summary>
+    public static class UIFactory
+    {
+        /// <summary>
+        /// Finds an existing canvas on or above the component, falling back to any canvas in the scene,
+        /// or creates a new ScreenSpaceOverlay canvas if none exists.
+        /// </summary>
+        public static Canvas FindOrCreateCanvas(MonoBehaviour context, string canvasName, int sortingOrder, Vector2? referenceResolution = null)
+        {
+            Canvas canvas = context.GetComponentInParent<Canvas>();
+            if (canvas == null)
+            {
+                canvas = Object.FindFirstObjectByType<Canvas>();
+            }
+            if (canvas == null)
+            {
+                canvas = CreateOverlayCanvas(canvasName, sortingOrder, referenceResolution);
+            }
+            return canvas;
+        }
+
+        /// <summary>
+        /// Creates a new ScreenSpaceOverlay canvas with CanvasScaler and GraphicRaycaster.
+        /// </summary>
+        public static Canvas CreateOverlayCanvas(string canvasName, int sortingOrder, Vector2? referenceResolution = null)
+        {
+            GameObject canvasObj = new GameObject(canvasName);
+            Canvas canvas = canvasObj.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = sortingOrder;
+            var scaler = canvasObj.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            if (referenceResolution.HasValue)
+            {
+                scaler.referenceResolution = referenceResolution.Value;
+            }
+            canvasObj.AddComponent<GraphicRaycaster>();
+            return canvas;
+        }
+
+        /// <summary>
+        /// Sets up a RectTransform to fill its parent completely (anchors at corners, zero offsets).
+        /// </summary>
+        public static void StretchToFillParent(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+        }
+
+        /// <summary>
+        /// Creates a full-screen panel with a background Image under the given parent.
+        /// Returns the panel GameObject with RectTransform already stretched to fill parent.
+        /// </summary>
+        public static GameObject CreateFullScreenPanel(Transform parent, string panelName, Color backgroundColor)
+        {
+            GameObject panel = new GameObject(panelName);
+            panel.transform.SetParent(parent, false);
+
+            RectTransform panelRect = panel.AddComponent<RectTransform>();
+            StretchToFillParent(panelRect);
+
+            Image panelBg = panel.AddComponent<Image>();
+            panelBg.color = backgroundColor;
+
+            return panel;
+        }
+    }
+}

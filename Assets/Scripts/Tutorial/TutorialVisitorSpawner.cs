@@ -78,8 +78,6 @@ namespace FaeMaze.Tutorial
                 spawnerWasActive = waveSpawner.IsWaveActive;
                 if (spawnerWasActive)
                 {
-                    // Stop the wave spawner so tutorial controls all visitor spawning
-                    Debug.Log("[TutorialVisitorSpawner] Stopping wave spawner for tutorial");
                     waveSpawner.ResetWaveState();
                 }
             }
@@ -87,11 +85,8 @@ namespace FaeMaze.Tutorial
 
         private void OnTutorialCompleted()
         {
-            // Re-enable normal spawning after tutorial
             if (waveSpawner != null)
             {
-                // Start the wave after tutorial completes
-                Debug.Log("[TutorialVisitorSpawner] Tutorial completed, restarting wave spawner");
                 waveSpawner.StartWave();
             }
         }
@@ -128,8 +123,6 @@ namespace FaeMaze.Tutorial
 
         private IEnumerator SpawnVisitorThroughMawCoroutine()
         {
-            Debug.Log("[TutorialVisitorSpawner] SpawnVisitorThroughMawCoroutine started");
-
             // Get the active Maw position
             var heartPowerManager = HeartPowerManager.Instance;
             if (heartPowerManager == null)
@@ -149,7 +142,6 @@ namespace FaeMaze.Tutorial
 
             Vector3 mawPos = mawPositions[0];
             mawPos.z = 0f;
-            Debug.Log($"[TutorialVisitorSpawner] Maw position: {mawPos}");
 
             // Get heart position to determine direction
             Vector3 heartPos = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
@@ -181,11 +173,9 @@ namespace FaeMaze.Tutorial
             if (nearestWalkableTile != null)
             {
                 spawnPos = new Vector3(nearestWalkableTile.Position.x, nearestWalkableTile.Position.y, 0f);
-                Debug.Log($"[TutorialVisitorSpawner] Found walkable tile at {spawnPos} (ideal was {idealSpawnPos})");
             }
             else
             {
-                Debug.LogWarning("[TutorialVisitorSpawner] No walkable tile found near ideal spawn, using Maw position");
                 // Fallback: use a position closer to the Maw which should be on a path
                 spawnPos = mawPos - dirToHeart * 2f;
                 spawnPos.z = 0f;
@@ -195,8 +185,6 @@ namespace FaeMaze.Tutorial
             // Using heart as destination ensures the visitor has a valid path through the Maw
             Vector3 destPos = heartPos;
             destPos.z = 0f;
-
-            Debug.Log($"[TutorialVisitorSpawner] Maw spawn: {spawnPos} -> {destPos} (through maw at {mawPos})");
 
             // Use existing spawn method
             SpawnVisitorForHGZ(spawnPos, destPos);
@@ -208,14 +196,11 @@ namespace FaeMaze.Tutorial
 
         private IEnumerator SpawnVisitorCoroutine(bool pathTowardHeart = false)
         {
-            Debug.Log($"[TutorialVisitorSpawner] SpawnVisitorCoroutine started, pathTowardHeart={pathTowardHeart}");
-
             // Small delay for visual effect
             yield return new WaitForSecondsRealtime(0.5f);
 
             // Find spawn position at edge of focused node
             Vector3 spawnPosition = GetSpawnPositionAtFocusedNode();
-            Debug.Log($"[TutorialVisitorSpawner] Spawn position determined: {spawnPosition}");
 
             // Get destination - heart position or random exit based on parameter
             Vector3 destinationPosition;
@@ -223,13 +208,10 @@ namespace FaeMaze.Tutorial
             {
                 // Path toward heart/seed node for power demonstrations
                 destinationPosition = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
-                Debug.Log($"[TutorialVisitorSpawner] Destination (heart): {destinationPosition}");
             }
             else
             {
-                // Get a random exit as destination
                 destinationPosition = GetRandomExitPosition(spawnPosition);
-                Debug.Log($"[TutorialVisitorSpawner] Destination (random exit): {destinationPosition}");
             }
 
             // Get visitor prefab from wave spawner or load it
@@ -239,23 +221,22 @@ namespace FaeMaze.Tutorial
                 Debug.LogError("[TutorialVisitorSpawner] Could not find visitor prefab!");
                 yield break;
             }
-            Debug.Log($"[TutorialVisitorSpawner] Using prefab: {visitorPrefab.name}");
-
             // Spawn the visitor
             GameObject visitor = Instantiate(visitorPrefab, spawnPosition, Quaternion.identity);
             visitorsSpawned++;
-            Debug.Log($"[TutorialVisitorSpawner] Instantiated visitor: {visitor.name}");
 
             // Initialize visitor
             var controller = visitor.GetComponent<VisitorControllerBase>();
             if (controller != null)
             {
-                Debug.Log($"[TutorialVisitorSpawner] Initializing visitor controller: {controller.GetType().Name}");
                 // Initialize with GameController (visitor will find maze data internally)
                 controller.Initialize();
 
-                // Mark as tutorial visitor - immune to being frightened
+                // Mark as tutorial visitor - immune to being frightened and dazed
                 controller.SetTutorialVisitor(true);
+
+                // Power demo visitors are immune to fascination so they reach their targets
+                controller.SetFascinationImmune(true);
 
                 // Set original spawn position to prevent retargeting back to where they spawned
                 controller.SetOriginalSpawnPosition(spawnPosition);
@@ -267,14 +248,7 @@ namespace FaeMaze.Tutorial
                 if (pathTowardHeart)
                 {
                     controller.SetLured(true);
-                    Debug.Log($"[TutorialVisitorSpawner] Visitor marked as lured for heart approach");
                 }
-
-                Debug.Log($"[TutorialVisitorSpawner] Visitor initialized. State={controller.State}, Destination={destinationPosition}");
-            }
-            else
-            {
-                Debug.LogWarning("[TutorialVisitorSpawner] Visitor has no VisitorControllerBase component!");
             }
 
             // Notify event triggers
@@ -283,7 +257,6 @@ namespace FaeMaze.Tutorial
                 eventTriggers.NotifyVisitorSpawned();
             }
 
-            Debug.Log($"[TutorialVisitorSpawner] Spawned tutorial visitor #{visitorsSpawned} at {spawnPosition} -> {destinationPosition}");
         }
 
         /// <summary>
@@ -300,7 +273,6 @@ namespace FaeMaze.Tutorial
             }
             else
             {
-                Debug.LogWarning("[TutorialVisitorSpawner] No focal point - falling back to heart position");
                 focalPos = mazeGrid?.HeartWorldPosition ?? Vector3.zero;
             }
 
@@ -308,7 +280,6 @@ namespace FaeMaze.Tutorial
             var mapState = mazeGrid?.WorldSpaceMazeData?.GraphState;
             if (mapState == null || mapState.Nodes.Count == 0)
             {
-                Debug.LogWarning("[TutorialVisitorSpawner] No map state - using focal position");
                 return focalPos;
             }
 
@@ -332,11 +303,8 @@ namespace FaeMaze.Tutorial
 
             if (closestNodeIndex < 0)
             {
-                Debug.LogWarning("[TutorialVisitorSpawner] Could not find closest node");
                 return focalPos;
             }
-
-            Debug.Log($"[TutorialVisitorSpawner] Found closest node {closestNodeIndex} at {closestNodeCenter}, dist={closestDist}");
 
             // Find an exit position to determine direction for spawning
             Vector3 exitPos = GetRandomExitPositionInternal(Vector3.zero);
@@ -354,7 +322,6 @@ namespace FaeMaze.Tutorial
             // Spawn at edge of node (NODE_RADIUS from center) in the direction of the exit
             Vector2 spawnPos2D = closestNodeCenter + dirToExit * NODE_RADIUS;
 
-            Debug.Log($"[TutorialVisitorSpawner] Spawning at node edge: {spawnPos2D} (dir to exit: {dirToExit})");
             return new Vector3(spawnPos2D.x, spawnPos2D.y, 0f);
         }
 
@@ -403,8 +370,6 @@ namespace FaeMaze.Tutorial
                 }
             }
 
-            // Fallback: use heart position
-            Debug.LogWarning("[TutorialVisitorSpawner] No portal positions found, using heart as destination");
             return mazeGrid?.HeartWorldPosition ?? Vector3.zero;
         }
 
@@ -412,13 +377,12 @@ namespace FaeMaze.Tutorial
         /// Spawns a tutorial visitor at a specific position heading toward a destination.
         /// Used for HeartwardGrasp demonstration where visitor needs to walk through the HGZ.
         /// </summary>
-        public void SpawnVisitorForHGZ(Vector3 spawnPosition, Vector3 destinationPosition)
+        public void SpawnVisitorForHGZ(Vector3 spawnPosition, Vector3 destinationPosition, bool fascinationImmune = true)
         {
-            Debug.Log($"[TutorialVisitorSpawner] SpawnVisitorForHGZ called: spawn={spawnPosition}, dest={destinationPosition}");
-            StartCoroutine(SpawnVisitorAtPositionCoroutine(spawnPosition, destinationPosition));
+            StartCoroutine(SpawnVisitorAtPositionCoroutine(spawnPosition, destinationPosition, fascinationImmune));
         }
 
-        private IEnumerator SpawnVisitorAtPositionCoroutine(Vector3 spawnPosition, Vector3 destinationPosition)
+        private IEnumerator SpawnVisitorAtPositionCoroutine(Vector3 spawnPosition, Vector3 destinationPosition, bool fascinationImmune = true)
         {
             // Small delay for visual effect
             yield return new WaitForSecondsRealtime(0.3f);
@@ -432,23 +396,21 @@ namespace FaeMaze.Tutorial
 
             GameObject visitor = Instantiate(visitorPrefab, spawnPosition, Quaternion.identity);
             visitorsSpawned++;
-            Debug.Log($"[TutorialVisitorSpawner] Instantiated HGZ visitor: {visitor.name} at {spawnPosition}");
 
             var controller = visitor.GetComponent<VisitorControllerBase>();
             if (controller != null)
             {
                 controller.Initialize();
 
-                // Mark as tutorial visitor - immune to being frightened
+                // Mark as tutorial visitor - immune to being frightened and dazed
                 controller.SetTutorialVisitor(true);
+
+                // Set fascination immunity - power demo visitors should ignore lanterns,
+                // but lantern demo visitors need to be fascinated
+                controller.SetFascinationImmune(fascinationImmune);
 
                 controller.SetOriginalSpawnPosition(spawnPosition);
                 controller.SetWorldDestination(destinationPosition);
-                Debug.Log($"[TutorialVisitorSpawner] HGZ visitor initialized. State={controller.State}, Destination={destinationPosition}");
-            }
-            else
-            {
-                Debug.LogWarning("[TutorialVisitorSpawner] HGZ visitor has no VisitorControllerBase component!");
             }
 
             if (eventTriggers != null)
@@ -456,7 +418,6 @@ namespace FaeMaze.Tutorial
                 eventTriggers.NotifyVisitorSpawned();
             }
 
-            Debug.Log($"[TutorialVisitorSpawner] Spawned HGZ tutorial visitor #{visitorsSpawned} at {spawnPosition} -> {destinationPosition}");
         }
 
         private GameObject GetVisitorPrefab()

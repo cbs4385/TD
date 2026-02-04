@@ -337,10 +337,6 @@ namespace FaeMaze.UI
                             100f
                         );
                     }
-                    else
-                    {
-                        Debug.LogWarning($"Failed to load power button sprite: {resourceNames[i]}");
-                    }
                 }
             }
 
@@ -384,12 +380,8 @@ namespace FaeMaze.UI
         private void CreateHeartPowersPanelUI()
         {
             // Find existing canvas (should be GameRoot > Canvas)
-            Canvas canvas = FindFirstObjectByType<Canvas>();
-            if (canvas == null)
-            {
-                canvas = CreateCanvas();
-            }
-            else
+            Canvas canvas = UIFactory.FindOrCreateCanvas(this, "HeartPowersCanvas", 100, new Vector2(1920, 1080));
+            if (canvas != null)
             {
                 // Ensure the existing canvas has a GraphicRaycaster for button clicks
                 GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
@@ -468,28 +460,6 @@ namespace FaeMaze.UI
             CreateRightPanelUI(canvas.transform, buttonSize);
         }
 
-        /// <summary>
-        /// Creates a Canvas for the UI (fallback if none exists).
-        /// </summary>
-        private Canvas CreateCanvas()
-        {
-            GameObject canvasObj = new GameObject("HeartPowersCanvas");
-            canvasObj.transform.SetParent(null, false); // Don't parent to this controller
-
-            Canvas canvas = canvasObj.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 100; // High priority to be on top
-
-            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-
-            GraphicRaycaster raycaster = canvasObj.AddComponent<GraphicRaycaster>();
-            raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
-
-
-            return canvas;
-        }
 
         /// <summary>
         /// Creates or finds the run timer display at bottom-right and essence bar controller.
@@ -719,11 +689,12 @@ namespace FaeMaze.UI
             // Block power activation during tutorial until explicitly unlocked
             if (tutorialPowersLocked && !tutorialUnlockedPowers.Contains(index))
             {
-                Debug.Log($"[HeartPowerPanelController] Power {index} blocked by tutorial lock");
+                Debug.Log($"[TutorialPower] Power {index} BLOCKED (locked={tutorialPowersLocked}, unlocked=[{string.Join(",", tutorialUnlockedPowers)}])");
                 return;
             }
 
             HeartPowerType powerType = powerTypes[index];
+            Debug.Log($"[TutorialPower] Power {index} ({powerType}) ACTIVATED (locked={tutorialPowersLocked}, unlocked=[{string.Join(",", tutorialUnlockedPowers)}])");
 
             // Get the focal point position from the camera controller
             Vector3 targetPosition = GetFocalPointPosition();
@@ -925,8 +896,9 @@ namespace FaeMaze.UI
                 // But provide visual feedback about availability
                 powerButtons[i].interactable = true;
 
-                // Track active state for glow effects
-                isActivePower[i] = isTogglePower && isActive;
+                // Track active state for glow effects (tutorial-locked powers don't show as active)
+                bool isTutorialLocked = tutorialPowersLocked && !tutorialUnlockedPowers.Contains(i);
+                isActivePower[i] = isTogglePower && isActive && !isTutorialLocked;
 
 
                 // Determine if power is truly available (including position checks)
@@ -943,9 +915,9 @@ namespace FaeMaze.UI
                 float dt = Time.unscaledDeltaTime * glowSpeed;
 
                 // Glow effects will be applied by UpdateGlowEffects()
-                if (isTogglePower && isActive)
+                if (isTogglePower && isActive && fullyAvailable)
                 {
-                    // Active toggle power - keep high glow intensity
+                    // Active toggle power (and not tutorial-locked) - keep high glow intensity
                     glowIntensity[i] = Mathf.Lerp(glowIntensity[i], 1.2f, dt);
                 }
                 else if (fullyAvailable)
@@ -1206,7 +1178,6 @@ namespace FaeMaze.UI
         public void LockButtonAtPeakBrightness(int buttonIndex)
         {
             lockedAtPeakButtonIndex = buttonIndex;
-            Debug.Log($"[HeartPowerPanelController] Button {buttonIndex} locked at peak brightness");
         }
 
         /// <summary>
@@ -1215,10 +1186,6 @@ namespace FaeMaze.UI
         /// </summary>
         public void UnlockButtonBrightness()
         {
-            if (lockedAtPeakButtonIndex >= 0)
-            {
-                Debug.Log($"[HeartPowerPanelController] Button {lockedAtPeakButtonIndex} unlocked from peak brightness");
-            }
             lockedAtPeakButtonIndex = -1;
         }
 
@@ -1233,16 +1200,28 @@ namespace FaeMaze.UI
             {
                 tutorialUnlockedPowers.Clear();
             }
-            Debug.Log($"[HeartPowerPanelController] Tutorial power lock: {locked}");
+            Debug.Log($"[TutorialPower] SetTutorialPowerLock({locked}) — all powers {(locked ? "LOCKED" : "UNLOCKED")}");
         }
 
         /// <summary>
         /// Unlocks a specific power button during tutorial, allowing the player to activate it.
+        /// Clears all previously unlocked powers first so only one power is ever available at a time.
         /// </summary>
         public void EnablePowerForTutorial(int powerIndex)
         {
+            tutorialUnlockedPowers.Clear();
             tutorialUnlockedPowers.Add(powerIndex);
-            Debug.Log($"[HeartPowerPanelController] Power {powerIndex} unlocked for tutorial");
+            Debug.Log($"[TutorialPower] EnablePowerForTutorial({powerIndex}) — only power {powerIndex} unlocked");
+        }
+
+        /// <summary>
+        /// Re-locks ALL power buttons during tutorial.
+        /// Used after a power activation trigger fires to ensure no powers remain unlocked.
+        /// </summary>
+        public void DisableAllPowersForTutorial()
+        {
+            tutorialUnlockedPowers.Clear();
+            Debug.Log($"[TutorialPower] DisableAllPowersForTutorial — all powers locked");
         }
 
         #endregion

@@ -91,11 +91,7 @@ namespace FaeMaze.UI
         private void CreateEssenceBarUI()
         {
             // Find existing canvas (should be GameRoot > Canvas)
-            Canvas canvas = FindFirstObjectByType<Canvas>();
-            if (canvas == null)
-            {
-                canvas = CreateCanvas();
-            }
+            Canvas canvas = UIFactory.FindOrCreateCanvas(this, "EssenceBarCanvas", 100, new Vector2(1920, 1080));
 
             // Check if EssenceBarPanel already exists (avoid duplicates)
             Transform existingPanel = canvas.transform.Find("EssenceBarPanel");
@@ -163,20 +159,14 @@ namespace FaeMaze.UI
             fillAreaObj.transform.SetParent(sliderObj.transform, false);
 
             RectTransform fillAreaRect = fillAreaObj.AddComponent<RectTransform>();
-            fillAreaRect.anchorMin = Vector2.zero;
-            fillAreaRect.anchorMax = Vector2.one;
-            fillAreaRect.offsetMin = Vector2.zero;
-            fillAreaRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(fillAreaRect);
 
             // Create the main fill (bright candy red)
             GameObject fillObj = new GameObject("Fill");
             fillObj.transform.SetParent(fillAreaObj.transform, false);
 
             RectTransform fillRect = fillObj.AddComponent<RectTransform>();
-            fillRect.anchorMin = Vector2.zero;
-            fillRect.anchorMax = Vector2.one;
-            fillRect.offsetMin = Vector2.zero;
-            fillRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(fillRect);
 
             fillImage = fillObj.AddComponent<Image>();
             fillImage.color = fillColorBright;
@@ -232,10 +222,7 @@ namespace FaeMaze.UI
             textObj.transform.SetParent(essenceBarPanel.transform, false);
 
             RectTransform textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
+            UIFactory.StretchToFillParent(textRect);
 
             essenceText = textObj.AddComponent<TextMeshProUGUI>();
             essenceText.text = "0";
@@ -249,26 +236,6 @@ namespace FaeMaze.UI
             essenceTextShadow = shadowText;
         }
 
-        /// <summary>
-        /// Creates a Canvas if one doesn't exist.
-        /// </summary>
-        private Canvas CreateCanvas()
-        {
-            GameObject canvasObj = new GameObject("EssenceBarCanvas");
-            canvasObj.transform.SetParent(null, false);
-
-            Canvas canvas = canvasObj.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 100;
-
-            CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-
-            canvasObj.AddComponent<GraphicRaycaster>();
-
-            return canvas;
-        }
 
         #endregion
 
