@@ -5,48 +5,46 @@ These rules exist because violations have caused repeated bugs that took hours t
 
 ---
 
-# 🚨🚨🚨 CRITICAL: NO RESOURCES.LOAD - SEARCH FIRST 🚨🚨🚨
+# 🚨🚨🚨 CRITICAL: ASSET LOADING - NO FALLBACKS, NO Resources.Load 🚨🚨🚨
 
-## NEVER USE Resources.Load() - ALWAYS SEARCH FOR EXISTING PATTERNS FIRST
+## USE AssetDatabase ONLY - NEVER Resources.Load, NEVER FALLBACKS
 
-**Before writing ANY asset loading code:**
-1. **STOP and SEARCH** the codebase for how similar assets are already loaded
-2. **COPY the EXACT pattern** from existing working code
-3. **DO NOT invent new approaches or use Resources.Load**
+**All assets live under `Assets/Resources/`.** Load them with `AssetDatabase.LoadAssetAtPath` using the full path including `Assets/Resources/`.
 
-### Existing Patterns to Copy:
+**NEVER write fallback code.** No "else" branches, no "backup" paths, no "workaround" alternatives. If the asset isn't found, let it be null. Fallback code has repeatedly introduced bugs that take hours to diagnose because the fallback silently does the wrong thing.
 
-**EarthenGroundTexture (COPY FROM MazeRenderer.cs line ~222):**
+### The ONE correct pattern:
 ```csharp
-Texture2D texture = null;
-
 #if UNITY_EDITOR
-texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/EarthenGroundTexture.png");
+if (myPrefab == null)
+{
+    myPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Props/devour.prefab");
+}
 #endif
 ```
 
-**Prefabs (COPY FROM HeartPowerManager):**
-```csharp
-[SerializeField] private GameObject devourPrefab;
-public GameObject DevourPrefab => devourPrefab;
-```
+### Asset locations (ALL under Assets/Resources/):
+| Asset Type | Path |
+|-----------|------|
+| Prefabs (Props) | `Assets/Resources/Prefabs/Props/` |
+| Prefabs (Tile) | `Assets/Resources/Prefabs/Tile/` |
+| Prefabs (Visitors) | `Assets/Resources/Prefabs/Visitors/` |
+| ScriptableObjects | `Assets/Resources/ScriptableObjects/HeartPowers/` |
+| Textures | `Assets/Textures/` |
+| Shaders | `Shader.Find("Custom/ShaderName")` |
 
 ### VIOLATIONS - NEVER DO THESE:
 ```csharp
-// WRONG - Resources.Load fails, assets not in Resources folder
+// WRONG - Resources.Load (uses different path resolution, causes silent failures)
 Resources.Load<GameObject>("Prefabs/Props/devour");
-Resources.Load<Texture2D>("EarthenGroundTexture");
 
-// WRONG - Never copy files to Resources folder
-// WRONG - Never create new SerializeField when AssetDatabase pattern exists for that asset
+// WRONG - Fallback code that silently does something different
+if (prefab == null) { CreateFallbackVisual(); }  // NO! Just return/skip!
+if (renderer.bones == null) { /* use GetComponentsInChildren instead */ }  // NO!
+
+// WRONG - Old asset paths (assets moved to Resources/)
+AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/devour.prefab");  // WRONG PATH!
 ```
-
-### Reference Files:
-| Need to load... | Look at this file first |
-|-----------------|------------------------|
-| EarthenGroundTexture | `MazeRenderer.cs` ExtractHeartGroundMaterial() |
-| Prefabs | `HeartPowerManager.cs` serialized fields |
-| Shaders | `Shader.Find("Custom/ShaderName")` |
 
 **SEARCH THE CODEBASE BEFORE WRITING ASSET LOADING CODE!**
 

@@ -76,9 +76,6 @@ namespace FaeMaze.Maze
         [SerializeField]
         private GameObject heartTonguePrefab;
 
-        [SerializeField]
-        private float modelSize = 0.012f;
-
         [Header("Detection Settings")]
         [SerializeField]
         private float detectionRadius = 2.5f;
@@ -163,6 +160,14 @@ namespace FaeMaze.Maze
         // Frightening event (registered when tongue is active)
         private FrighteningEvent currentFrighteningEvent;
 
+        // Grab-time relative transform: visitor's rotation relative to tip bone at grab moment
+        private Quaternion grabRotationOffset;
+        private Vector3 grabPositionOffset;
+
+        // The tongue bend point (where it transitions from vertical to horizontal).
+        // Above the HeartBase model top, at the same Z as visitors so the tongue can reach them.
+        private const float HEART_TONGUE_BEND_Z = -0.25f;
+
         #endregion
 
         #region Properties
@@ -185,12 +190,8 @@ namespace FaeMaze.Maze
         {
             if (visitor == null) return;
 
-            int baseEssence = visitor.GetEssenceReward();
-
             // Apply blessing and heart form multipliers for consumption essence
-            float blessingMultiplier = BlessingManager.Instance?.GetEssenceFromConsumptionMultiplier() ?? 1.0f;
-            float formRewardMultiplier = HeartFormManager.Instance?.GetEssenceRewardMultiplier() ?? 1.0f;
-            int essence = Mathf.RoundToInt(baseEssence * blessingMultiplier * formRewardMultiplier);
+            int essence = HeartPowerUtils.CalculateConsumptionEssence(visitor, additionalMultiplier: 1.0f, applyBlessingMultiplier: true);
 
             if (GameStatsTracker.Instance != null)
             {
@@ -330,11 +331,11 @@ namespace FaeMaze.Maze
             // Update tongue position and phase
             UpdateTongueEmerging();
 
-            // Apply bone rotations based on current state
-            ApplyTongueBoneRotations();
-
-            // Update tongue transform
+            // Update tongue transform BEFORE bone rotations so bones[0].position.z is current
             UpdateTongueTransform();
+
+            // Apply bone rotations (FindGroundBoneIndex uses cached Z offsets)
+            ApplyTongueBoneRotations();
         }
 
         private void UpdateGrabbingState()
@@ -348,11 +349,11 @@ namespace FaeMaze.Maze
             // Retract tongue (increase Z)
             tongueZPosition += tongueRetractSpeed * Time.deltaTime;
 
-            // Apply bone rotations (same as extending, but tongue is descending)
-            ApplyTongueBoneRotations();
-
-            // Update tongue transform
+            // Update tongue transform BEFORE bone rotations so bones[0].position.z is current
             UpdateTongueTransform();
+
+            // Apply bone rotations (FindGroundBoneIndex uses cached Z offsets)
+            ApplyTongueBoneRotations();
 
             // Move visitor to follow the tip
             MoveVisitorToTip();
@@ -373,13 +374,12 @@ namespace FaeMaze.Maze
             // Tongue rises by decreasing Z
             tongueZPosition -= tongueEmergeSpeed * dt;
 
-            // Calculate how much of the tongue is above ground
-            // tongueZPosition is the Z of the tongue BASE
-            // The tip is at tongueZPosition - tongue length (in unrotated space)
-            float tipZ = tongueZPosition - (tongueBoneData != null ? tongueBoneData.Length : 0f);
-
-            // Phase transition: Emerging -> Extending when tip reaches ground level
-            if (tonguePhase == TonguePhase.Emerging && tipZ <= TongueUtility.TONGUE_GROUND_Z)
+            // Phase transition: Emerging -> Extending when tip bone reaches bend Z
+            // Use actual tip bone world Z (not mathematical estimate) to match FindGroundBoneIndex
+            float tipZ = tongueBoneData?.Bones != null && tongueBoneData.Bones.Length > 0
+                ? tongueBoneData.Bones[tongueBoneData.Bones.Length - 1].position.z
+                : tongueZPosition;
+            if (tonguePhase == TonguePhase.Emerging && tipZ <= HEART_TONGUE_BEND_Z)
             {
                 tonguePhase = TonguePhase.Extending;
             }
@@ -463,6 +463,21 @@ namespace FaeMaze.Maze
 
             if (targetVisitor != null)
             {
+                // Capture the visitor's transform relative to the tongue chain direction at grab time.
+                // Uses TongueUtility.GetChainRotationAtTip for the actual curve direction.
+                if (tongueBoneData?.Bones != null && tongueBoneData.Bones.Length > 0)
+                {
+                    int tipIndex = tongueBoneData.Bones.Length - 1;
+                    Transform tipBone = tongueBoneData.Bones[tipIndex];
+                    if (tipBone != null)
+                    {
+                        Quaternion chainRot = TongueUtility.GetChainRotationAtTip(tongueBoneData);
+                        Quaternion inverseChainRot = Quaternion.Inverse(chainRot);
+                        grabRotationOffset = inverseChainRot * targetVisitor.transform.rotation;
+                        grabPositionOffset = inverseChainRot * (targetVisitor.transform.position - tipBone.position);
+                    }
+                }
+
                 targetVisitor.SetGrabbedByHeart();
                 OnVisitorGrabbed?.Invoke(targetVisitor.transform.position);
                 DisableVisitorLights(targetVisitor);
@@ -502,8 +517,29 @@ namespace FaeMaze.Maze
         {
             if (tongueBoneData == null || tongueBoneData.Bones == null || tongueBoneData.Bones.Length == 0) return;
 
-            int groundBoneIndex = TongueUtility.FindGroundBoneIndex(
-                tongueZPosition, tongueBoneData.Length, tongueBoneData.Bones.Length);
+            int groundBoneIndex = TongueUtility.FindGroundBoneIndex(tongueBoneData, HEART_TONGUE_BEND_Z, heartTongueInstance);
+
+            // --- DIAGNOSTIC: Per-frame bone listing, individual logs to avoid truncation ---
+            {
+                float instanceWorldZ = heartTongueInstance.transform.position.z;
+                float instanceLocalZ = heartTongueInstance.transform.localPosition.z;
+                int boneCount = tongueBoneData.Bones.Length;
+                int frame = Time.frameCount;
+                Debug.Log($"[TongueDiag] Frame={frame} phase={tonguePhase} tongueZPos={tongueZPosition:F4} instanceWorldZ={instanceWorldZ:F4} instanceLocalZ={instanceLocalZ:F4} parentWorldZ={transform.position.z:F4} boneCount={boneCount} groundZ={HEART_TONGUE_BEND_Z:F4} result={groundBoneIndex}");
+
+                // Log every bone from index 0 to tip, one per log statement
+                for (int i = 0; i < boneCount; i++)
+                {
+                    if (tongueBoneData.Bones[i] == null) { Debug.Log($"[TD F={frame}] [{i}] NULL"); continue; }
+                    float offset = (tongueBoneData.RestWorldZOffsets != null && i < tongueBoneData.RestWorldZOffsets.Length)
+                        ? tongueBoneData.RestWorldZOffsets[i] : float.NaN;
+                    float expectedZ = instanceWorldZ + offset;
+                    bool passesThreshold = expectedZ <= HEART_TONGUE_BEND_Z;
+                    string marker = (i == groundBoneIndex) ? " <<< LIP" : "";
+                    Debug.Log($"[TD F={frame}] [{i}] {tongueBoneData.Bones[i].name} offset={offset:F4} expectedZ={expectedZ:F4} passes={passesThreshold}{marker}");
+                }
+            }
+            // --- END DIAGNOSTIC ---
 
             if (groundBoneIndex < 0)
             {
@@ -520,19 +556,22 @@ namespace FaeMaze.Maze
         }
 
         /// <summary>
-        /// Moves the grabbed visitor to follow the tongue tip.
+        /// Moves the grabbed visitor to follow the tongue tip bone.
+        /// Uses TongueUtility.GetChainRotationAtTip to derive the actual travel direction
+        /// from nearby bone positions, so the visitor follows the tongue's curvature as it
+        /// retracts underground (tipBone.rotation stays horizontal until the very end).
         /// </summary>
         private void MoveVisitorToTip()
         {
             if (tongueBoneData == null || tongueBoneData.Bones == null || tongueBoneData.Bones.Length == 0 || targetVisitor == null) return;
 
             int tipBoneIndex = tongueBoneData.Bones.Length - 1;
-            if (tongueBoneData.Bones[tipBoneIndex] == null) return;
+            Transform tipBone = tongueBoneData.Bones[tipBoneIndex];
+            if (tipBone == null) return;
 
-            Vector3 tipPos = tongueBoneData.Bones[tipBoneIndex].position;
-
-            // Move visitor to tip's XY position, keep their Z
-            targetVisitor.transform.position = new Vector3(tipPos.x, tipPos.y, targetVisitor.transform.position.z);
+            Quaternion chainRot = TongueUtility.GetChainRotationAtTip(tongueBoneData);
+            targetVisitor.transform.position = tipBone.position + chainRot * grabPositionOffset;
+            targetVisitor.transform.rotation = chainRot * grabRotationOffset;
         }
 
         #endregion
@@ -587,45 +626,24 @@ namespace FaeMaze.Maze
 
         private void LoadPrefabs()
         {
+#if UNITY_EDITOR
             if (heartBasePrefab == null)
             {
-                heartBasePrefab = Resources.Load<GameObject>("Prefabs/Tile/heartbase");
+                heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Tile/heartbase.prefab");
             }
             if (heartTonguePrefab == null)
             {
-                heartTonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
+                heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Tile/heart tongue.prefab");
             }
+#endif
         }
 
         private void SetupHeartBase()
         {
-            if (heartBasePrefab == null)
-            {
-                CreateFallbackHeartVisual();
-                return;
-            }
+            if (heartBasePrefab == null) return;
 
             heartBaseInstance = Instantiate(heartBasePrefab, transform);
             heartBaseInstance.name = "HeartBase";
-        }
-
-        private void CreateFallbackHeartVisual()
-        {
-            heartBaseInstance = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            heartBaseInstance.transform.SetParent(transform);
-            heartBaseInstance.transform.localPosition = new Vector3(0, 0, -0.3f);
-            heartBaseInstance.transform.localScale = Vector3.one * modelSize * 100f;
-            heartBaseInstance.name = "Heart_Fallback";
-
-            MeshRenderer renderer = heartBaseInstance.GetComponent<MeshRenderer>();
-            if (renderer != null)
-            {
-                Material heartMat = PBRMaterialFactory.CreateEmissiveMaterial(
-                    new Color(0.9f, 0.35f, 0.35f), emissionColor, 2.0f);
-                renderer.material = heartMat;
-                materials = new Material[] { heartMat };
-                meshRenderers = new MeshRenderer[] { renderer };
-            }
         }
 
         private void SetupDetectionCollider()
@@ -679,6 +697,7 @@ namespace FaeMaze.Maze
 
             // Find bones and store rest poses
             tongueBoneData = TongueUtility.SetupTongueBones(heartTongueInstance);
+            TongueUtility.CacheRestWorldZOffsets(tongueBoneData, heartTongueInstance);
             FindBoneColliders();
 
             tonguePoolInitialized = true;

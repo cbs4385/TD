@@ -689,12 +689,10 @@ namespace FaeMaze.UI
             // Block power activation during tutorial until explicitly unlocked
             if (tutorialPowersLocked && !tutorialUnlockedPowers.Contains(index))
             {
-                Debug.Log($"[TutorialPower] Power {index} BLOCKED (locked={tutorialPowersLocked}, unlocked=[{string.Join(",", tutorialUnlockedPowers)}])");
                 return;
             }
 
             HeartPowerType powerType = powerTypes[index];
-            Debug.Log($"[TutorialPower] Power {index} ({powerType}) ACTIVATED (locked={tutorialPowersLocked}, unlocked=[{string.Join(",", tutorialUnlockedPowers)}])");
 
             // Get the focal point position from the camera controller
             Vector3 targetPosition = GetFocalPointPosition();
@@ -1200,7 +1198,6 @@ namespace FaeMaze.UI
             {
                 tutorialUnlockedPowers.Clear();
             }
-            Debug.Log($"[TutorialPower] SetTutorialPowerLock({locked}) — all powers {(locked ? "LOCKED" : "UNLOCKED")}");
         }
 
         /// <summary>
@@ -1211,7 +1208,6 @@ namespace FaeMaze.UI
         {
             tutorialUnlockedPowers.Clear();
             tutorialUnlockedPowers.Add(powerIndex);
-            Debug.Log($"[TutorialPower] EnablePowerForTutorial({powerIndex}) — only power {powerIndex} unlocked");
         }
 
         /// <summary>
@@ -1221,7 +1217,6 @@ namespace FaeMaze.UI
         public void DisableAllPowersForTutorial()
         {
             tutorialUnlockedPowers.Clear();
-            Debug.Log($"[TutorialPower] DisableAllPowersForTutorial — all powers locked");
         }
 
         #endregion

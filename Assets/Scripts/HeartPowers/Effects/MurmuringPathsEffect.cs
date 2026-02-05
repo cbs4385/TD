@@ -19,7 +19,7 @@ namespace FaeMaze.HeartPowers
     /// Toggle power: expires when visitors consumed equals power tier.
     /// Visualizes with fairy ring style lights that trace paths to the heart from all affected positions.
     /// </summary>
-    public class MurmuringPathsEffect : ActivePowerEffect
+    public class MurmuringPathsEffect : ConsumptionBasedPowerEffect
     {
         private List<Vector3> pathPositions = new List<Vector3>();
         private const string ModifierSourceId = "MurmuringPaths";
@@ -38,10 +38,6 @@ namespace FaeMaze.HeartPowers
         // Track visitors affected by this power instance
         private HashSet<VisitorControllerBase> affectedVisitors = new HashSet<VisitorControllerBase>();
 
-        // Toggle power expiration: expires when consumedCount reaches powerTier
-        private int consumedCount = 0;
-        private int requiredConsumptions = 1; // Set to power tier on start
-        private bool hasExpired = false;
 
         // Visual elements - fog quad covering affected area
         private GameObject visualContainer;
@@ -105,40 +101,6 @@ namespace FaeMaze.HeartPowers
         /// Used by the minimap to highlight affected nodes.
         /// </summary>
         public HashSet<int> AffectedNodeIndices => allAffectedNodeIndices;
-
-        /// <summary>
-        /// Override IsExpired to use consumption-based expiration instead of duration.
-        /// Power expires when consumed visitor count reaches the power tier.
-        /// </summary>
-        public override bool IsExpired => hasExpired;
-
-        /// <summary>
-        /// Called by HeartPowerManager when a visitor is consumed.
-        /// Increments the consumption count and triggers expiration when threshold is reached.
-        /// </summary>
-        public void OnVisitorConsumed()
-        {
-            if (hasExpired)
-            {
-                return;
-            }
-
-            consumedCount++;
-            if (consumedCount >= requiredConsumptions)
-            {
-                hasExpired = true;
-            }
-        }
-
-        /// <summary>
-        /// Gets the current consumption progress (for UI display).
-        /// </summary>
-        public int GetConsumedCount() => consumedCount;
-
-        /// <summary>
-        /// Gets the required consumption count to expire (power tier).
-        /// </summary>
-        public int GetRequiredConsumptions() => requiredConsumptions;
 
         public override void OnStart()
         {

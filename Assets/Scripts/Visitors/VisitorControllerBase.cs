@@ -3637,6 +3637,19 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Syncs the Rigidbody internal position to match the current transform position.
+        /// Call this when moving a grabbed visitor via transform.position to prevent
+        /// physics interpolation from teleporting the visitor back to stale positions.
+        /// </summary>
+        public void SyncRigidbodyPosition()
+        {
+            if (rb3D != null)
+            {
+                rb3D.position = transform.position;
+            }
+        }
+
+        /// <summary>
         /// Disables all Light components on the visitor and its children.
         /// Called when the visitor is grabbed by the heart tongue.
         /// </summary>
@@ -4839,7 +4852,7 @@ namespace FaeMaze.Visitors
             detectTransform.SetParent(transform, false);  // false = don't preserve world position
             detectTransform.localRotation = Quaternion.identity;
             detectTransform.localPosition = Vector3.zero;
-            detectTransform.localScale = Vector3.one;
+            detectTransform.localScale = Vector3.one * 0.5f;
 
             // Get the CapsuleCollider on the Detect object
             CapsuleCollider detectCollider = detectTransform.GetComponent<CapsuleCollider>();
@@ -5032,53 +5045,44 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Called by Unity physics when this visitor's collider starts touching another solid collider.
-        /// We track tongue collisions but don't rely on physics impulses - they're too unreliable.
-        /// Actual blocking is done via DepenetrateFromTongueColliders() in FixedUpdate.
+        /// Shared handler for tongue contact detection from both collision and trigger events.
+        /// Notifies HeartOfTheMaze and HeartwardGrasp when visitor touches tongue colliders.
         /// </summary>
-        protected virtual void OnCollisionEnter(Collision collision)
+        private void HandleTongueContact(string objectName)
         {
-            if (collision.gameObject.name.StartsWith("SolidCollider_"))
-            {
-                // Notify HeartOfTheMaze that we touched the tongue
-                var heart = FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
-                if (heart != null)
-                {
-                    heart.NotifyVisitorTouchedTongue(this);
-                }
+            bool isTongueCollider = objectName.StartsWith("SolidCollider_") ||
+                                    objectName.StartsWith("BoneCollider_") ||
+                                    objectName == "TipTrigger";
 
-                // Also notify HeartwardGrasp if active
-                var graspEffect = HeartPowers.HeartwardGraspEffect.ActiveInstance;
-                if (graspEffect != null)
-                {
-                    graspEffect.NotifyVisitorTouchedGraspTongue(this);
-                }
+            if (!isTongueCollider) return;
+
+            var heart = FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
+            if (heart != null)
+            {
+                heart.NotifyVisitorTouchedTongue(this);
+            }
+
+            var graspEffect = HeartPowers.HeartwardGraspEffect.ActiveInstance;
+            if (graspEffect != null)
+            {
+                graspEffect.NotifyVisitorTouchedGraspTongue(this);
             }
         }
 
         /// <summary>
+        /// Called by Unity physics when this visitor's collider starts touching another solid collider.
+        /// </summary>
+        protected virtual void OnCollisionEnter(Collision collision)
+        {
+            HandleTongueContact(collision.gameObject.name);
+        }
+
         /// <summary>
         /// Called by Unity physics when this visitor's collider enters a trigger collider.
-        /// BoneCollider_N trigger colliders overlap with SolidCollider_N solid colliders.
         /// </summary>
         protected virtual void OnTriggerEnter(Collider other)
         {
-            if (other.gameObject.name.StartsWith("BoneCollider_") || other.gameObject.name == "TipTrigger")
-            {
-                // Notify HeartOfTheMaze that we touched the tongue
-                var heart = FindFirstObjectByType<FaeMaze.Maze.HeartOfTheMaze>();
-                if (heart != null)
-                {
-                    heart.NotifyVisitorTouchedTongue(this);
-                }
-
-                // Also notify HeartwardGrasp if active
-                var graspEffect = HeartPowers.HeartwardGraspEffect.ActiveInstance;
-                if (graspEffect != null)
-                {
-                    graspEffect.NotifyVisitorTouchedGraspTongue(this);
-                }
-            }
+            HandleTongueContact(other.gameObject.name);
         }
 
         protected virtual void Setup3DModel()

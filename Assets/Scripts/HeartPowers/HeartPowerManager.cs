@@ -140,18 +140,20 @@ namespace FaeMaze.HeartPowers
 
         private void LoadPrefabsIfNeeded()
         {
+#if UNITY_EDITOR
             if (graspPrefab == null)
             {
-                graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
+                graspPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Props/grasp.prefab");
             }
             if (tonguePrefab == null)
             {
-                tonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
+                tonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Tile/heart tongue.prefab");
             }
             if (devourPrefab == null)
             {
-                devourPrefab = Resources.Load<GameObject>("Prefabs/Props/devour");
+                devourPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Props/devour.prefab");
             }
+#endif
         }
 
         private void LoadPowerDefinitionsFromResources()
@@ -162,12 +164,24 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Load all HeartPowerDefinition assets from Resources folder
-            var loaded = Resources.LoadAll<HeartPowerDefinition>("ScriptableObjects/HeartPowers");
-            if (loaded != null && loaded.Length > 0)
+#if UNITY_EDITOR
+            // Load all HeartPowerDefinition assets from the ScriptableObjects folder
+            var guids = UnityEditor.AssetDatabase.FindAssets("t:HeartPowerDefinition", new[] { "Assets/Resources/ScriptableObjects/HeartPowers" });
+            if (guids.Length > 0)
             {
-                powerDefinitions = loaded;
+                var definitions = new List<HeartPowerDefinition>();
+                foreach (var guid in guids)
+                {
+                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                    var def = UnityEditor.AssetDatabase.LoadAssetAtPath<HeartPowerDefinition>(path);
+                    if (def != null) definitions.Add(def);
+                }
+                if (definitions.Count > 0)
+                {
+                    powerDefinitions = definitions.ToArray();
+                }
             }
+#endif
         }
 
         private void Start()
@@ -949,6 +963,38 @@ namespace FaeMaze.HeartPowers
         public virtual void Update(float deltaTime) { elapsedTime += deltaTime; }
         public virtual void OnEnd() { }
         public virtual void ApplyWorldOffset(Vector3 worldOffset) { }
+    }
+
+    /// <summary>
+    /// Base class for power effects that expire after a certain number of visitor consumptions/captures.
+    /// Provides shared consumption tracking fields and methods used by MurmuringPaths, DevouringMaw,
+    /// and HeartwardGrasp effects.
+    /// </summary>
+    public abstract class ConsumptionBasedPowerEffect : ActivePowerEffect
+    {
+        protected int consumedCount = 0;
+        protected int requiredConsumptions = 1;
+        protected bool hasExpired = false;
+
+        protected ConsumptionBasedPowerEffect(HeartPowerManager manager, HeartPowerDefinition definition, Vector3 targetPosition)
+            : base(manager, definition, targetPosition) { }
+
+        public override float Duration => float.MaxValue;
+        public override bool IsExpired => hasExpired;
+
+        /// <summary>
+        /// Called when a visitor is consumed/captured. Increments count and triggers expiration at threshold.
+        /// </summary>
+        public virtual void OnVisitorConsumed()
+        {
+            if (hasExpired) return;
+            consumedCount++;
+            if (consumedCount >= requiredConsumptions)
+                hasExpired = true;
+        }
+
+        public int GetConsumedCount() => consumedCount;
+        public int GetRequiredConsumptions() => requiredConsumptions;
     }
 
     #endregion

@@ -13,6 +13,7 @@ namespace FaeMaze.HeartPowers
         public Transform[] Bones;
         public Vector3[] RestPositions;
         public Quaternion[] RestRotations;
+        public float[] RestWorldZOffsets;  // Each bone's world Z relative to tongue instance Z in rest pose
         public SkinnedMeshRenderer Renderer;
         public float Length;
     }
@@ -68,27 +69,21 @@ namespace FaeMaze.HeartPowers
 
             data.Renderer = tongueInstance.GetComponentInChildren<SkinnedMeshRenderer>();
 
-            if (data.Renderer != null && data.Renderer.bones != null && data.Renderer.bones.Length > 0)
+            // Get bones from hierarchy, filtering to only Bone_* transforms.
+            // Excludes BoneCollider_N, SolidCollider_N, TipTrigger, etc. which are
+            // baked physics objects parented to bones. Without filtering, these
+            // interleave with real bones and their 10× deeper Z offsets cause
+            // FindGroundBoneIndex to jump erratically.
             {
-                data.Bones = data.Renderer.bones;
-            }
-            else
-            {
-                // Fallback: find bones by name and sort them by bone number
                 var boneList = new List<Transform>();
                 foreach (var t in tongueInstance.GetComponentsInChildren<Transform>())
                 {
-                    string nameLower = t.name.ToLower();
-                    if (nameLower.Contains("bone") || nameLower.Contains("joint"))
+                    if (t.name.StartsWith("Bone_"))
                     {
                         boneList.Add(t);
                     }
                 }
-
-                // CRITICAL: Sort bones by their number (Bone_000, Bone_001, etc.)
-                // Without sorting, bones may be in arbitrary order which breaks the bending logic
                 boneList.Sort((a, b) => ExtractBoneNumber(a.name).CompareTo(ExtractBoneNumber(b.name)));
-
                 data.Bones = boneList.ToArray();
             }
 
@@ -151,14 +146,44 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Applies bone rotations for tongue extending horizontally at ground level.
-        /// Bones from lipBoneIndex onward are rotated to bend 90° and extend toward targetAngle.
-        /// Bones below lipBoneIndex stay at rest pose (pointing up).
-        ///
-        /// This is the canonical implementation with NaN checks and edge-case handling.
+        /// Caches each bone's world Z offset relative to the tongue instance's world Z.
+        /// Must be called once after SetupTongueBones, with bones in rest pose.
+        /// After caching, FindGroundBoneIndex uses these offsets instead of reading
+        /// potentially stale bone world positions after ResetBonesToRest.
+        /// </summary>
+        public static void CacheRestWorldZOffsets(TongueBoneData data, GameObject tongueInstance)
+        {
+            if (data?.Bones == null || tongueInstance == null) return;
+
+            ResetBonesToRest(data);
+
+            float instanceWorldZ = tongueInstance.transform.position.z;
+            data.RestWorldZOffsets = new float[data.Bones.Length];
+
+            for (int i = 0; i < data.Bones.Length; i++)
+            {
+                if (data.Bones[i] != null)
+                {
+                    data.RestWorldZOffsets[i] = data.Bones[i].position.z - instanceWorldZ;
+                }
+            }
+
+            // Diagnostic: log setup context
+            Debug.Log($"[TongueDiag] CacheRestWorldZOffsets: boneCount={data.Bones.Length} instanceWorldZ={instanceWorldZ:F4} " +
+                $"instanceLocalZ={tongueInstance.transform.localPosition.z:F4} " +
+                $"bone[0]={data.Bones[0]?.name} offset[0]={data.RestWorldZOffsets[0]:F4} " +
+                $"bone[last]={data.Bones[data.Bones.Length - 1]?.name} offset[last]={data.RestWorldZOffsets[data.Bones.Length - 1]:F4}");
+        }
+
+        /// <summary>
+        /// Applies bone rotations for tongue extending horizontally toward a target.
+        /// All bones are already at rest pose (set by FindGroundBoneIndex's ResetBonesToRest call).
+        /// Bones below lipBoneIndex stay at rest (vertical column underground).
+        /// Bones from lipBoneIndex to lipBoneIndex+BEND_BONE_COUNT interpolate from vertical to horizontal.
+        /// Bones past the bend zone point fully horizontal toward the target.
         /// </summary>
         /// <param name="data">Tongue bone data with bones and rest poses</param>
-        /// <param name="lipBoneIndex">Index of the bone at ground level (the start of the bend)</param>
+        /// <param name="lipBoneIndex">Index of the bone at ground level (start of bend)</param>
         /// <param name="targetAngle">Angle in degrees toward target in the XY plane</param>
         public static void ApplyBoneRotations(TongueBoneData data, int lipBoneIndex, float targetAngle)
         {
@@ -168,27 +193,18 @@ namespace FaeMaze.HeartPowers
             int boneCount = data.Bones.Length;
             int bendEndIndex = Mathf.Min(lipBoneIndex + BEND_BONE_COUNT, boneCount - 1);
 
-            // Direction toward target (horizontal)
+            // Direction toward target (horizontal in XY plane)
             Vector3 targetDirWorld = new Vector3(
                 Mathf.Cos(targetAngle * Mathf.Deg2Rad),
                 Mathf.Sin(targetAngle * Mathf.Deg2Rad),
                 0f
             );
 
-            // Reset bones below lip to rest pose
-            for (int i = 0; i < Mathf.Min(lipBoneIndex, boneCount); i++)
+            // Bones below lip are already at rest (FindGroundBoneIndex calls ResetBonesToRest).
+            // Apply rotations from lip bone to tip.
+            for (int i = lipBoneIndex; i < boneCount; i++)
             {
                 if (data.Bones[i] == null) continue;
-                data.Bones[i].localPosition = data.RestPositions[i];
-                data.Bones[i].localRotation = data.RestRotations[i];
-            }
-
-            // Apply rotations from lip bone to tip
-            for (int i = lipBoneIndex; i < boneCount && lipBoneIndex >= 0; i++)
-            {
-                if (data.Bones[i] == null) continue;
-
-                // Reset position (bones don't translate, only rotate)
                 data.Bones[i].localPosition = data.RestPositions[i];
 
                 Quaternion parentWorldRot = data.Bones[i].parent != null ?
@@ -199,22 +215,19 @@ namespace FaeMaze.HeartPowers
                 Vector3 boneWorldDir = parentWorldRot * data.RestRotations[i] * boneLocalDir;
 
                 Vector3 desiredDir;
-
                 if (i >= lipBoneIndex && i <= bendEndIndex)
                 {
-                    // Bones in bend zone: interpolate from vertical (-Z is up) to horizontal
+                    // Bend zone: interpolate from vertical (Vector3.back = -Z = up in game) to horizontal
                     float bendT = (float)(i - lipBoneIndex) / (float)BEND_BONE_COUNT;
                     bendT = Mathf.Clamp01(bendT);
-                    Vector3 upDir = Vector3.back;  // -Z is up
-                    desiredDir = Vector3.Slerp(upDir, targetDirWorld, bendT);
+                    desiredDir = Vector3.Slerp(Vector3.back, targetDirWorld, bendT);
                 }
                 else
                 {
-                    // Bones past bend zone: point horizontally toward target
+                    // Past bend zone: fully horizontal toward target
                     desiredDir = targetDirWorld;
                 }
 
-                // Compute rotation to align bone toward desired direction
                 if (desiredDir.sqrMagnitude > 0.0001f && boneWorldDir.sqrMagnitude > 0.0001f)
                 {
                     desiredDir = desiredDir.normalized;
@@ -242,7 +255,8 @@ namespace FaeMaze.HeartPowers
 
                     Quaternion newLocalRot = Quaternion.Inverse(parentWorldRot) * worldCorrection * parentWorldRot * data.RestRotations[i];
 
-                    if (!float.IsNaN(newLocalRot.x) && !float.IsNaN(newLocalRot.y) && !float.IsNaN(newLocalRot.z) && !float.IsNaN(newLocalRot.w))
+                    if (!float.IsNaN(newLocalRot.x) && !float.IsNaN(newLocalRot.y) &&
+                        !float.IsNaN(newLocalRot.z) && !float.IsNaN(newLocalRot.w))
                     {
                         data.Bones[i].localRotation = newLocalRot;
                     }
@@ -251,27 +265,71 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Calculates the ground bone index (lip bone) for a tongue at the given Z position.
-        /// Returns -1 if no bone has emerged above ground yet.
+        /// Finds the first bone whose rest-pose world Z position is at or above groundZ.
+        /// Returns -1 if no bone has reached groundZ yet.
+        ///
+        /// Uses cached RestWorldZOffsets (computed at setup time) instead of reading bone
+        /// world positions directly. Reading bone.position.z after ResetBonesToRest can
+        /// return stale values because Unity may not fully propagate world transforms
+        /// through the bone hierarchy within the same frame.
+        ///
+        /// Still resets bones to rest pose so ApplyBoneRotations (called after this)
+        /// starts from a clean state.
         /// </summary>
-        /// <param name="tongueZPosition">Current Z position of the tongue root</param>
-        /// <param name="tongueLength">Total tongue length</param>
-        /// <param name="boneCount">Number of bones</param>
-        /// <param name="groundZ">Ground level Z (typically 0)</param>
-        public static int FindGroundBoneIndex(float tongueZPosition, float tongueLength, int boneCount, float groundZ = TONGUE_GROUND_Z)
+        /// <param name="data">Tongue bone data with cached rest Z offsets</param>
+        /// <param name="groundZ">World Z at which the bend should occur (e.g. -0.25)</param>
+        /// <param name="tongueInstance">The tongue GameObject whose world Z is used as reference</param>
+        public static int FindGroundBoneIndex(TongueBoneData data, float groundZ, GameObject tongueInstance)
         {
-            float boneSpacing = tongueLength / Mathf.Max(1, boneCount);
+            if (data?.Bones == null || data.RestWorldZOffsets == null || tongueInstance == null) return -1;
+
+            // Reset bones to rest pose for the subsequent ApplyBoneRotations call
+            ResetBonesToRest(data);
+
+            float instanceWorldZ = tongueInstance.transform.position.z;
+            int boneCount = data.Bones.Length;
 
             for (int i = 0; i < boneCount; i++)
             {
-                float boneZ = tongueZPosition - (i * boneSpacing);
-                if (boneZ <= groundZ)
+                if (data.Bones[i] == null) continue;
+                float expectedWorldZ = instanceWorldZ + data.RestWorldZOffsets[i];
+                if (expectedWorldZ <= groundZ)
                 {
                     return i;
                 }
             }
-
             return -1;
+        }
+
+        /// <summary>
+        /// Computes a rotation representing the actual travel direction at the tongue tip
+        /// by looking at the direction from a nearby bone to the tip bone in world space.
+        ///
+        /// ApplyBoneRotations keeps tip bones pointing horizontal until the very end of
+        /// retraction (when the tip enters the bend zone). The bone chain's world positions
+        /// however DO follow the curve. This method derives the true curve direction from
+        /// the bone positions, so a grabbed visitor follows the tongue's curvature smoothly
+        /// rather than staying horizontal and then snapping to vertical.
+        /// </summary>
+        /// <param name="data">Tongue bone data</param>
+        /// <param name="lookbackCount">Number of bones to look back from the tip (default 10)</param>
+        /// <returns>A rotation facing along the chain direction at the tip</returns>
+        public static Quaternion GetChainRotationAtTip(TongueBoneData data, int lookbackCount = 10)
+        {
+            if (data == null || data.Bones == null || data.Bones.Length == 0) return Quaternion.identity;
+
+            int tipIndex = data.Bones.Length - 1;
+            Transform tipBone = data.Bones[tipIndex];
+            if (tipBone == null) return Quaternion.identity;
+
+            int lookbackIndex = Mathf.Max(0, tipIndex - lookbackCount);
+            Transform lookbackBone = data.Bones[lookbackIndex];
+            if (lookbackBone == null) return tipBone.rotation;
+
+            Vector3 chainDir = (tipBone.position - lookbackBone.position).normalized;
+            if (chainDir.sqrMagnitude < 0.001f) return tipBone.rotation;
+
+            return Quaternion.LookRotation(chainDir, tipBone.up);
         }
     }
 }

@@ -242,6 +242,63 @@ namespace FaeMaze.HeartPowers
 
         #endregion
 
+        #region Shader Helpers
+
+        /// <summary>
+        /// Gets the best available particle shader with URP fallbacks.
+        /// </summary>
+        public static Shader GetParticleShader()
+        {
+            return Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                ?? Shader.Find("Particles/Standard Unlit")
+                ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended")
+                ?? Shader.Find("Sprites/Default");
+        }
+
+        #endregion
+
+        #region Mesh Helpers
+
+        /// <summary>
+        /// Creates a circular mesh with the given radius and segment count.
+        /// Center vertex at origin, vertices arranged in a fan.
+        /// </summary>
+        public static Mesh CreateCircleMesh(float radius, int segments = 32, string name = "CircleMesh")
+        {
+            Mesh mesh = new Mesh();
+            mesh.name = name;
+
+            Vector3[] vertices = new Vector3[segments + 1];
+            Vector2[] uvs = new Vector2[segments + 1];
+            int[] triangles = new int[segments * 3];
+
+            vertices[0] = Vector3.zero;
+            uvs[0] = new Vector2(0.5f, 0.5f);
+
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = (float)i / segments * Mathf.PI * 2f;
+                float x = Mathf.Cos(angle) * radius;
+                float y = Mathf.Sin(angle) * radius;
+
+                vertices[i + 1] = new Vector3(x, y, 0f);
+                uvs[i + 1] = new Vector2(0.5f + Mathf.Cos(angle) * 0.5f, 0.5f + Mathf.Sin(angle) * 0.5f);
+
+                triangles[i * 3] = 0;
+                triangles[i * 3 + 1] = i + 1;
+                triangles[i * 3 + 2] = (i + 1) % segments + 1;
+            }
+
+            mesh.vertices = vertices;
+            mesh.uv = uvs;
+            mesh.triangles = triangles;
+            mesh.RecalculateNormals();
+
+            return mesh;
+        }
+
+        #endregion
+
         #region Particle System Helpers
 
         /// <summary>
@@ -307,7 +364,11 @@ namespace FaeMaze.HeartPowers
             // Use default particle material
             var renderer = particleObj.GetComponent<ParticleSystemRenderer>();
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
-            renderer.material = new Material(Shader.Find("Particles/Standard Unlit"));
+            Shader particleShader = GetParticleShader();
+            if (particleShader != null)
+            {
+                renderer.material = new Material(particleShader);
+            }
 
             particles.Play();
 
@@ -325,6 +386,29 @@ namespace FaeMaze.HeartPowers
                 Object.Destroy(particles.gameObject);
                 particles = null;
             }
+        }
+
+        #endregion
+
+        #region Essence Reward
+
+        /// <summary>
+        /// Calculates the essence reward for consuming a visitor, applying heart form and optional blessing multipliers.
+        /// </summary>
+        /// <param name="visitor">The consumed visitor</param>
+        /// <param name="additionalMultiplier">Extra multiplier (e.g., 0.5 for maw's half reward)</param>
+        /// <param name="applyBlessingMultiplier">Whether to apply the blessing consumption multiplier</param>
+        public static int CalculateConsumptionEssence(VisitorControllerBase visitor, float additionalMultiplier = 1.0f, bool applyBlessingMultiplier = false)
+        {
+            if (visitor == null) return 0;
+
+            int baseEssence = visitor.GetEssenceReward();
+            float formMultiplier = HeartFormManager.Instance?.GetEssenceRewardMultiplier() ?? 1.0f;
+            float blessingMultiplier = applyBlessingMultiplier
+                ? (BlessingManager.Instance?.GetEssenceFromConsumptionMultiplier() ?? 1.0f)
+                : 1.0f;
+
+            return Mathf.RoundToInt(baseEssence * additionalMultiplier * formMultiplier * blessingMultiplier);
         }
 
         #endregion

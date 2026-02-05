@@ -20,7 +20,7 @@ namespace FaeMaze.HeartPowers
     /// Toggle power: deactivates after firing its effect (tier-count captures).
     /// Animation is frame-based using the Animator component.
     /// </summary>
-    public class HeartwardGraspEffect : ActivePowerEffect
+    public class HeartwardGraspEffect : ConsumptionBasedPowerEffect
     {
         #region Static Properties
 
@@ -58,8 +58,9 @@ namespace FaeMaze.HeartPowers
 
         // Constants - Architectural (not configurable)
         private const int MIN_WALL_THICKNESS = 3;         // Minimum wall models required for valid wall intersection
-        private const float HGZ_WALL_OFFSET = 1.6f;       // Offset into forest (2 wall layers deep, second rank)
+        private const float HGZ_WALL_OFFSET = 0.8f;       // Offset from first wall hit to second rank (middle of 3 layers)
         private const float MIN_EDGE_DISTANCE = 3.0f;     // Minimum distance from path/node edge (~4 wall tiles * 0.8 spacing)
+        private const float TONGUE_BEND_Z = -0.25f;       // Z where tongue bends from vertical to horizontal (middle of wall models)
 
         // Settings - Loaded from GameSettings
         private readonly float graspZoneRadius;           // Detection radius for HeartwardGrasp zones
@@ -105,6 +106,12 @@ namespace FaeMaze.HeartPowers
         private VisitorControllerBase currentVisitor;
         private Vector3 heartNodePosition;
 
+        // Grab-time relative transform: visitor's rotation/position offset from tip bone at grab moment
+        private Quaternion grabRotationOffset;
+        private Vector3 grabPositionOffset;
+        private bool pushVisitorRealigned;  // True once visitor rotation is reset to identity during push Extending
+        private Vector3 pushWorldPositionOffset;  // World-space offset from tip bone to visitor after realignment
+
         // Particle effects
         private ParticleSystem grabbingParticles;
         private ParticleSystem pushingParticles;
@@ -112,11 +119,6 @@ namespace FaeMaze.HeartPowers
         // Affected wall tiles in grabbing zone
         private List<GameObject> affectedGrabbingWalls = new List<GameObject>();
         private Dictionary<GameObject, Vector3> originalWallPositions = new Dictionary<GameObject, Vector3>();
-
-        // Toggle power expiration
-        private int capturedCount = 0;
-        private int requiredCaptures = 1;
-        private bool hasExpired = false;
 
         // Frightening event (registered when tongue is active)
         private FrighteningEventManager.FrighteningEvent currentFrighteningEvent;
@@ -134,8 +136,6 @@ namespace FaeMaze.HeartPowers
             tongueRetractSpeed = GameSettings.TongueRetractSpeed;
             grabEssenceCost = GameSettings.HeartwardGraspEssenceCost;
         }
-
-        public override bool IsExpired => hasExpired;
 
         /// <summary>
         /// Gets the position of the grabbing HGZ zone (for tutorial camera tracking).
@@ -157,8 +157,8 @@ namespace FaeMaze.HeartPowers
 
         public override void OnStart()
         {
-            requiredCaptures = manager.GetPowerTier(HeartPowerType.HeartwardGrasp);
-            capturedCount = 0;
+            requiredConsumptions = manager.GetPowerTier(HeartPowerType.HeartwardGrasp);
+            consumedCount = 0;
             hasExpired = false;
 
             // Set static instance for collision callbacks
@@ -270,49 +270,48 @@ namespace FaeMaze.HeartPowers
             // Store the placement position (path-side point) for tutorial spawning
             this.grabbingPlacementPos = new Vector3(localGrabbingPlacementPos.x, localGrabbingPlacementPos.y, 0f);
 
-            // ===== PUSHING HGZ: Ray from HEART toward FOCAL =====
-            // First wall hit along this ray is the pushing placement point
-            RaycastHit[] pushingHits = Physics.RaycastAll(heartPos3D, heartToFocalDir, totalDist, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+            // ===== PUSHING HGZ: Fixed distance from heart, in the heart node's wall ring =====
+            // Place at NODE_RADIUS/2 + HGZ_WALL_OFFSET from heart center (in the second wall rank).
+            // Start in the heart→focal direction; if that lands on a walkable path or too close
+            // to an edge boundary, rotate around the heart until finding a valid position.
+            float pushingDistance = 3.0f + HGZ_WALL_OFFSET * 1.5f;  // Layer 1 center: NODE_RADIUS + WALL_SPACING * 1.5 = 4.2
+            var mazeData = manager.MazeGrid?.WorldSpaceMazeData;
 
-            // Filter to only wall tiles and sort by distance from heart
-            var pushingWallHits = new System.Collections.Generic.List<RaycastHit>();
-            foreach (var hit in pushingHits)
-            {
-                if (hit.collider != null && hit.collider.gameObject.name.StartsWith("WorldTile_#"))
-                {
-                    pushingWallHits.Add(hit);
-                }
-            }
-            pushingWallHits.Sort((a, b) => a.distance.CompareTo(b.distance));
+            Vector2 pushingDir = heartToFocalDir2D;
+            Vector2 pushingPlacementPos = heartPos2D + pushingDir * pushingDistance;
 
-            Vector2 pushingPlacementPos;
-            if (pushingWallHits.Count > 0)
+            // Position must be non-walkable AND at least MIN_EDGE_CLEARANCE from any walkable tile
+            // (edge boundary). This prevents the pushing HGZ from being placed where an edge
+            // connects to the heart node, which would be too close to the path.
+            const float MIN_EDGE_CLEARANCE = 1.2f;  // 1.5 × WALL_SPACING (0.8)
+
+            if (mazeData != null && !IsValidPushingHGZPosition(mazeData, pushingPlacementPos, MIN_EDGE_CLEARANCE))
             {
-                // First wall hit = pushing placement point
-                var firstPushingWall = pushingWallHits[0];
-                pushingPlacementPos = new Vector2(firstPushingWall.collider.transform.position.x, firstPushingWall.collider.transform.position.y);
-            }
-            else
-            {
-                // No wall hits - find wall closest to the heart-to-focal ray
-                Transform closestWall = FindClosestWallToRay(heartPos2D, heartToFocalDir2D, totalDist);
-                if (closestWall != null)
+                const float ANGLE_STEP = 5f;
+                float baseAngle = Mathf.Atan2(heartToFocalDir2D.y, heartToFocalDir2D.x) * Mathf.Rad2Deg;
+
+                for (float offset = ANGLE_STEP; offset <= 180f; offset += ANGLE_STEP)
                 {
-                    pushingPlacementPos = new Vector2(closestWall.position.x, closestWall.position.y);
+                    // Try both clockwise and counter-clockwise
+                    for (int sign = 1; sign >= -1; sign -= 2)
+                    {
+                        float testAngle = (baseAngle + offset * sign) * Mathf.Deg2Rad;
+                        Vector2 testDir = new Vector2(Mathf.Cos(testAngle), Mathf.Sin(testAngle));
+                        Vector2 testPos = heartPos2D + testDir * pushingDistance;
+
+                        if (IsValidPushingHGZPosition(mazeData, testPos, MIN_EDGE_CLEARANCE))
+                        {
+                            pushingDir = testDir;
+                            pushingPlacementPos = testPos;
+                            goto foundPushingPos;
+                        }
+                    }
                 }
-                else
-                {
-                    // Ultimate fallback - use a point along the ray at NODE_RADIUS from heart
-                    const float NODE_RADIUS = 3.0f;
-                    pushingPlacementPos = heartPos2D + heartToFocalDir2D * NODE_RADIUS;
-                }
+                foundPushingPos:;
             }
 
-            // Offset pushing placement into forest
-            Vector2 pushingForestDir = FindForestDirection(pushingPlacementPos, heartToFocalDir2D, heartPos2D);
-            Vector2 pushingOffset = pushingForestDir * HGZ_WALL_OFFSET;
-            pushingWallPos = new Vector3(pushingPlacementPos.x + pushingOffset.x, pushingPlacementPos.y + pushingOffset.y, -0.4f);
-            pushingWallNormal = new Vector3(pushingForestDir.x, pushingForestDir.y, 0f);
+            pushingWallPos = new Vector3(pushingPlacementPos.x, pushingPlacementPos.y, -0.4f);
+            pushingWallNormal = new Vector3(pushingDir.x, pushingDir.y, 0f);
 
         }
 
@@ -507,6 +506,31 @@ namespace FaeMaze.HeartPowers
             Vector2 heartPos2D = new Vector2(heartNodePosition.x, heartNodePosition.y);
             Vector2 awayFromHeart = (position - heartPos2D).normalized;
             return awayFromHeart;
+        }
+
+        /// <summary>
+        /// Checks if a candidate position is valid for the pushing HGZ:
+        /// must be non-walkable AND at least minClearance distance from any walkable tile.
+        /// Samples 12 directions around the position at the clearance radius.
+        /// </summary>
+        private bool IsValidPushingHGZPosition(WorldSpaceMazeData mazeData, Vector2 pos, float minClearance)
+        {
+            // Must be non-walkable (in the wall ring, not on a path)
+            if (mazeData.IsWalkable(pos)) return false;
+
+            // Check that no walkable tile is within minClearance distance.
+            // Sample 12 evenly spaced directions around the candidate position.
+            const int CLEARANCE_SAMPLES = 12;
+            for (int s = 0; s < CLEARANCE_SAMPLES; s++)
+            {
+                float sampleAngle = s * (360f / CLEARANCE_SAMPLES) * Mathf.Deg2Rad;
+                Vector2 samplePos = pos + new Vector2(
+                    Mathf.Cos(sampleAngle), Mathf.Sin(sampleAngle)) * minClearance;
+                if (mazeData.IsWalkable(samplePos))
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -801,16 +825,19 @@ namespace FaeMaze.HeartPowers
             // Initial angle toward visitor (will be updated each frame during Extending)
             UpdateGrabbingTargetAngle();
 
-            // Instantiate tongue as child of grabbing zone at wall tile position
-            // Like HeartOfTheMaze, the tongue is a child positioned at the "heart" (wall tile)
-            grabbingTongueInstance = Object.Instantiate(tonguePrefab, grabbingZoneObject.transform);
+            // Instantiate tongue as a root object (NOT parented to zone object).
+            // The zone is at Z=-0.4 (wall depth) which offsets all bone world Z positions,
+            // causing FindGroundBoneIndex to fail (bones can't reach TONGUE_BEND_Z within
+            // 540 bones when shifted by -0.4). Using Z=0 matches HeartOfTheMaze behavior.
+            grabbingTongueInstance = Object.Instantiate(tonguePrefab);
             grabbingTongueInstance.name = "GrabbingTongue";
 
             // Initialize Z position (below ground, like HeartOfTheMaze)
             grabbingTongueZPosition = TONGUE_START_Z;
-            Vector3 localPos = Vector3.zero;
-            localPos.z = grabbingTongueZPosition;
-            grabbingTongueInstance.transform.localPosition = localPos;
+            grabbingTongueInstance.transform.position = new Vector3(
+                grabbingZoneObject.transform.position.x,
+                grabbingZoneObject.transform.position.y,
+                grabbingTongueZPosition);
 
             // Remove any Light components
             foreach (var light in grabbingTongueInstance.GetComponentsInChildren<Light>())
@@ -820,6 +847,7 @@ namespace FaeMaze.HeartPowers
 
             // Find and store bone references via shared utility
             grabbingTongueData = TongueUtility.SetupTongueBones(grabbingTongueInstance);
+            TongueUtility.CacheRestWorldZOffsets(grabbingTongueData, grabbingTongueInstance);
 
             // Find solid colliders that are baked into the prefab (for collision detection)
             FindGrabbingSolidColliders();
@@ -844,15 +872,17 @@ namespace FaeMaze.HeartPowers
                 Object.Destroy(pushingTongueInstance);
             }
 
-            // Instantiate tongue as child of pushing zone
-            pushingTongueInstance = Object.Instantiate(tonguePrefab, pushingZoneObject.transform);
+            // Instantiate tongue as a root object (NOT parented to zone object).
+            // Same reason as grabbing tongue — zone Z=-0.4 offsets bones, breaking FindGroundBoneIndex.
+            pushingTongueInstance = Object.Instantiate(tonguePrefab);
             pushingTongueInstance.name = "PushingTongue";
 
             // Initialize Z position (below ground, visitor attached - reverse of grab end state)
             pushingTongueZPosition = TONGUE_START_Z;
-            Vector3 localPos = Vector3.zero;
-            localPos.z = pushingTongueZPosition;
-            pushingTongueInstance.transform.localPosition = localPos;
+            pushingTongueInstance.transform.position = new Vector3(
+                pushingZoneObject.transform.position.x,
+                pushingZoneObject.transform.position.y,
+                pushingTongueZPosition);
 
             // Remove lights
             foreach (var light in pushingTongueInstance.GetComponentsInChildren<Light>())
@@ -862,6 +892,7 @@ namespace FaeMaze.HeartPowers
 
             // Find bones via shared utility
             pushingTongueData = TongueUtility.SetupTongueBones(pushingTongueInstance);
+            TongueUtility.CacheRestWorldZOffsets(pushingTongueData, pushingTongueInstance);
         }
 
 
@@ -930,52 +961,42 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Updates the grabbing tongue's Z position (vertical emergence like HeartOfTheMaze).
+        /// Updates a tongue instance's world Z position (vertical emergence).
         /// </summary>
-        private void UpdateGrabbingTongueZPosition()
+        private void UpdateTongueZPosition(GameObject tongueInstance, float zPosition)
         {
-            if (grabbingTongueInstance == null) return;
+            if (tongueInstance == null) return;
 
-            // Update local Z position (tongue is child of grabbing zone at wall tile)
-            Vector3 localPos = grabbingTongueInstance.transform.localPosition;
-            localPos.z = grabbingTongueZPosition;
-            grabbingTongueInstance.transform.localPosition = localPos;
+            // Tongues are root objects (not parented to zone objects), so use world position
+            Vector3 pos = tongueInstance.transform.position;
+            pos.z = zPosition;
+            tongueInstance.transform.position = pos;
         }
 
         private void CreateParticleSystem(GameObject parent, ref ParticleSystem particles)
         {
             if (parent == null) return;
 
-            GameObject particleObj = new GameObject("DebrisParticles");
-            particleObj.transform.position = parent.transform.position;
-            particleObj.transform.SetParent(parent.transform);
+            // Use shared utility for base setup
+            particles = HeartPowerUtils.CreateBasicParticleSystem(
+                parent,
+                "DebrisParticles",
+                parent.transform.position,
+                emissionRate: 8f,
+                startSize: new Vector2(0.15f, 0.35f),
+                startSpeed: new Vector2(0.3f, 0.8f),
+                lifetime: new Vector2(2f, 2f),
+                color1: LeafGreen,
+                color2: BarkBrown,
+                shapeRadius: graspZoneRadius * 0.5f
+            );
 
-            particles = particleObj.AddComponent<ParticleSystem>();
-            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-
+            // Customize beyond base: sphere shape, lower max particles, alpha fade
             var main = particles.main;
-            main.loop = true;
-            main.startLifetime = 2f;
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 0.8f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
-            main.startColor = new ParticleSystem.MinMaxGradient(LeafGreen, BarkBrown);
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.maxParticles = 100;
-            main.playOnAwake = false;
-
-            var emission = particles.emission;
-            emission.enabled = true;
-            emission.rateOverTime = 8f;
 
             var shape = particles.shape;
-            shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = graspZoneRadius * 0.5f;
-
-            var sizeOverLifetime = particles.sizeOverLifetime;
-            sizeOverLifetime.enabled = true;
-            AnimationCurve sizeCurve = AnimationCurve.Linear(0f, 1f, 1f, 0.3f);
-            sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
 
             var colorOverLifetime = particles.colorOverLifetime;
             colorOverLifetime.enabled = true;
@@ -985,21 +1006,6 @@ namespace FaeMaze.HeartPowers
                 new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.5f, 0.7f), new GradientAlphaKey(0f, 1f) }
             );
             colorOverLifetime.color = gradient;
-
-            var renderer = particleObj.GetComponent<ParticleSystemRenderer>();
-            renderer.renderMode = ParticleSystemRenderMode.Billboard;
-
-            Shader particleShader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                ?? Shader.Find("Particles/Standard Unlit")
-                ?? Shader.Find("Legacy Shaders/Particles/Alpha Blended")
-                ?? Shader.Find("Sprites/Default");
-
-            if (particleShader != null)
-            {
-                renderer.material = new Material(particleShader);
-            }
-
-            particles.Play();
         }
 
         public override void Update(float deltaTime)
@@ -1023,21 +1029,14 @@ namespace FaeMaze.HeartPowers
         {
             if (hasExpired || grabPhase != GrabPhase.Idle) return;
 
-            var visitors = VisitorRegistry.All;
-            foreach (var visitor in visitors)
-            {
-                if (visitor == null) continue;
-                if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
-                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
-                    continue;
-                if (visitor == currentVisitor || pendingVisitors.Contains(visitor))
-                    continue;
+            // Build exclude set from current and pending visitors
+            var excludeSet = new HashSet<VisitorControllerBase>(pendingVisitors);
+            if (currentVisitor != null) excludeSet.Add(currentVisitor);
 
-                float distance = Vector3.Distance(visitor.transform.position, grabbingWallPos);
-                if (distance <= graspZoneRadius)
-                {
-                    pendingVisitors.Enqueue(visitor);
-                }
+            var found = HeartPowerUtils.FindAllVisitorsInRadius(grabbingWallPos, graspZoneRadius, excludeSet);
+            foreach (var visitor in found)
+            {
+                pendingVisitors.Enqueue(visitor);
             }
 
             if (grabPhase == GrabPhase.Idle && pendingVisitors.Count > 0)
@@ -1071,21 +1070,26 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Destroys the grabbing tongue instance and cleans up.
+        /// Destroys a tongue instance and clears its bone data.
+        /// </summary>
+        private static void DestroyTongueInstance(ref GameObject tongueInstance, ref TongueBoneData tongueData)
+        {
+            if (tongueInstance != null)
+            {
+                Object.Destroy(tongueInstance);
+                tongueInstance = null;
+            }
+            tongueData = null;
+        }
+
+        /// <summary>
+        /// Destroys the grabbing tongue instance and cleans up colliders.
         /// </summary>
         private void DestroyGrabbingTongue()
         {
-            // Disable colliders and clear static flag
             SetGrabbingSolidCollidersEnabled(false);
             grabbingSolidColliders = null;
-
-            if (grabbingTongueInstance != null)
-            {
-                Object.Destroy(grabbingTongueInstance);
-                grabbingTongueInstance = null;
-            }
-
-            grabbingTongueData = null;
+            DestroyTongueInstance(ref grabbingTongueInstance, ref grabbingTongueData);
         }
 
         private void UpdateGrabbingHGZ(float deltaTime)
@@ -1131,17 +1135,17 @@ namespace FaeMaze.HeartPowers
 
             // Move tongue up (-Z is up in this coordinate system)
             grabbingTongueZPosition -= tongueEmergeSpeed * deltaTime;
-            UpdateGrabbingTongueZPosition();
+            UpdateTongueZPosition(grabbingTongueInstance, grabbingTongueZPosition);
 
             // Keep tongue straight (bones at rest pose)
             ApplyGrabbingTongueBoneState();
 
-            // Calculate tip world Z position (accounting for parent Z offset)
-            // Tip's world Z = parent Z + local tip Z = grabbingWallPos.z + (grabbingTongueZPosition - grabbingTongueData.Length)
-            float tipWorldZ = grabbingWallPos.z + grabbingTongueZPosition - grabbingTongueData.Length;
+            // Use actual tip bone world Z (not mathematical estimate) to match FindGroundBoneIndex
+            int tipIdx = grabbingTongueData.Bones.Length - 1;
+            float tipWorldZ = grabbingTongueData.Bones[tipIdx].position.z;
 
-            // Transition to Extending when tip reaches ground level (world Z=0)
-            if (tipWorldZ <= TONGUE_GROUND_Z)
+            // Transition to Extending when tip reaches bend level (Z=-0.25)
+            if (tipWorldZ <= TONGUE_BEND_Z)
             {
                 grabPhase = GrabPhase.Extending;
 
@@ -1162,7 +1166,7 @@ namespace FaeMaze.HeartPowers
 
             // Continue rising (this increases horizontal extension)
             grabbingTongueZPosition -= tongueEmergeSpeed * deltaTime;
-            UpdateGrabbingTongueZPosition();
+            UpdateTongueZPosition(grabbingTongueInstance, grabbingTongueZPosition);
 
             // Update target angle to track visitor (like HeartOfTheMaze)
             UpdateGrabbingTargetAngle();
@@ -1183,7 +1187,7 @@ namespace FaeMaze.HeartPowers
 
             // Retract tongue (increase Z)
             grabbingTongueZPosition += tongueRetractSpeed * deltaTime;
-            UpdateGrabbingTongueZPosition();
+            UpdateTongueZPosition(grabbingTongueInstance, grabbingTongueZPosition);
 
             // Apply bone rotations
             ApplyGrabbingTongueBoneState();
@@ -1234,6 +1238,32 @@ namespace FaeMaze.HeartPowers
         {
             if (currentVisitor == null) return;
 
+            // Capture the visitor's transform relative to the tongue chain direction at grab time.
+            // Uses chain direction (lookback bone → tip bone) instead of tipBone.rotation because
+            // ApplyBoneRotations keeps the tip horizontal until the very end of retraction.
+            if (grabbingTongueData?.Bones != null && grabbingTongueData.Bones.Length > 0)
+            {
+                int tipIndex = grabbingTongueData.Bones.Length - 1;
+                Transform tipBone = grabbingTongueData.Bones[tipIndex];
+                if (tipBone != null)
+                {
+                    Quaternion chainRot = TongueUtility.GetChainRotationAtTip(grabbingTongueData);
+                    Quaternion inverseChainRot = Quaternion.Inverse(chainRot);
+
+                    // Force identity rotation so visitor stays upright during retraction
+                    // (matches pushing tongue's behavior after pushVisitorRealigned)
+                    grabRotationOffset = inverseChainRot * Quaternion.identity;
+
+                    // Use visitor visual center instead of root (feet) position.
+                    // The visitor's transform.position is at their feet (Z≈-0.01),
+                    // but the tongue tip is at Z≈-0.25 (bend level). Using feet position
+                    // causes the tongue to appear to grab the visitor at their feet.
+                    const float VISITOR_HALF_HEIGHT = 0.3f;
+                    Vector3 visitorCenter = currentVisitor.transform.position + new Vector3(0f, 0f, -VISITOR_HALF_HEIGHT);
+                    grabPositionOffset = inverseChainRot * (visitorCenter - tipBone.position);
+                }
+            }
+
             // Stop visitor movement and set grabbed state (like HeartOfTheMaze)
             currentVisitor.SetGrabbedByHeart();
 
@@ -1268,9 +1298,12 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Moves the grabbed visitor to the tongue tip position.
+        /// Moves the grabbed visitor to the tongue tip bone.
         /// Called each frame during Retracting phase.
-        /// Same as HeartOfTheMaze.MoveVisitorToTip().
+        /// Uses the relative offset captured at grab time so the visitor
+        /// maintains its orientation at capture and rotates with the bone
+        /// as the tongue retracts underground.
+        /// Same pattern as HeartOfTheMaze.MoveVisitorToTip().
         /// </summary>
         private void MoveGrabbedVisitorToTip()
         {
@@ -1281,13 +1314,11 @@ namespace FaeMaze.HeartPowers
 
             if (tipBone != null)
             {
-                // Position visitor at tip bone (maintain their original Z for proper rendering)
-                Vector3 tipWorldPos = tipBone.position;
-                currentVisitor.transform.position = new Vector3(
-                    tipWorldPos.x,
-                    tipWorldPos.y,
-                    currentVisitor.transform.position.z
-                );
+                Quaternion chainRot = TongueUtility.GetChainRotationAtTip(grabbingTongueData);
+                currentVisitor.transform.position = tipBone.position + chainRot * grabPositionOffset;
+                // Force identity rotation every frame so visitor stays upright
+                // throughout retraction, matching pushing tongue behavior
+                currentVisitor.transform.rotation = Quaternion.identity;
             }
         }
 
@@ -1310,12 +1341,30 @@ namespace FaeMaze.HeartPowers
             // Apply initial tongue state (straight, pointing up)
             ApplyPushingTongueBoneState();
 
-            // Position visitor at tongue tip (underground, hidden)
-            MovePushedVisitorToTip();
+            // Capture the visitor's transform relative to the pushing tongue chain direction.
+            // The visitor starts at identity relative to the tip; as the tongue bends
+            // at ground level the visitor rotates from vertical to horizontal naturally.
+            if (pushingTongueData?.Bones != null && pushingTongueData.Bones.Length > 0 && currentVisitor != null)
+            {
+                int tipIndex = pushingTongueData.Bones.Length - 1;
+                Transform tipBone = pushingTongueData.Bones[tipIndex];
+                if (tipBone != null)
+                {
+                    // Place visitor at tip (offset by half-height so tongue binds to visual center)
+                    const float VISITOR_HALF_HEIGHT = 0.3f;
+                    currentVisitor.transform.position = tipBone.position + new Vector3(0f, 0f, -VISITOR_HALF_HEIGHT);
+                    currentVisitor.SyncRigidbodyPosition();  // Prevent physics snap-back to grab location
+                    Quaternion chainRot = TongueUtility.GetChainRotationAtTip(pushingTongueData);
+                    Quaternion inverseChainRot = Quaternion.Inverse(chainRot);
+                    grabRotationOffset = inverseChainRot * Quaternion.identity;
+                    grabPositionOffset = inverseChainRot * (currentVisitor.transform.position - tipBone.position);
+                }
+            }
 
             // Start Emerging phase immediately (no pause needed)
             pushPhase = PushPhase.Emerging;
             pushPhaseStartTime = elapsedTime;
+            pushVisitorRealigned = false;
 
             if (pushingParticles != null) pushingParticles.Emit(25);
 
@@ -1331,7 +1380,8 @@ namespace FaeMaze.HeartPowers
             if (grabbingTongueData == null || grabbingTongueData.Bones == null || grabbingTongueData.Bones.Length == 0 || grabbingTongueInstance == null) return;
 
             // Update tongue instance rotation to point toward visitor
-            grabbingTongueInstance.transform.localRotation =
+            // Tongue is a root object (not parented), so use world rotation
+            grabbingTongueInstance.transform.rotation =
                 Quaternion.Euler(0f, 0f, grabbingTargetAngle) * Quaternion.Euler(0f, -90f, 0f);
 
             // During Emerging phase, keep all bones at rest pose (straight tongue)
@@ -1341,12 +1391,8 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-            // Find which bone is at ground level (world Z=0)
-            // Tongue is a child of grabbingZoneObject at grabbingWallPos.z
-            // Effective tongue Z relative to ground = grabbingWallPos.z + grabbingTongueZPosition
-            float effectiveTongueZ = grabbingWallPos.z + grabbingTongueZPosition;
-            int groundBoneIndex = TongueUtility.FindGroundBoneIndex(
-                effectiveTongueZ, grabbingTongueData.Length, grabbingTongueData.Bones.Length);
+            // Find which bone is at the bend level (Z=-0.25, middle of wall models)
+            int groundBoneIndex = TongueUtility.FindGroundBoneIndex(grabbingTongueData, TONGUE_BEND_Z, grabbingTongueInstance);
 
             if (groundBoneIndex < 0)
             {
@@ -1404,7 +1450,7 @@ namespace FaeMaze.HeartPowers
 
             // Move tongue up (-Z is up)
             pushingTongueZPosition -= tongueEmergeSpeed * deltaTime;
-            UpdatePushingTongueZPosition();
+            UpdateTongueZPosition(pushingTongueInstance, pushingTongueZPosition);
 
             // Keep tongue straight during emergence
             ApplyPushingTongueBoneState();
@@ -1412,11 +1458,12 @@ namespace FaeMaze.HeartPowers
             // Move visitor with tongue tip
             MovePushedVisitorToTip();
 
-            // Calculate tip world Z position (accounting for parent Z offset)
-            float tipWorldZ = pushingWallPos.z + pushingTongueZPosition - pushingTongueData.Length;
+            // Use actual tip bone world Z (not mathematical estimate) to match FindGroundBoneIndex
+            int tipIdx = pushingTongueData.Bones.Length - 1;
+            float tipWorldZ = pushingTongueData.Bones[tipIdx].position.z;
 
-            // Transition to Extending when tip reaches ground level (world Z=0)
-            if (tipWorldZ <= TONGUE_GROUND_Z)
+            // Transition to Extending when tip reaches bend point (middle of wall model)
+            if (tipWorldZ <= TONGUE_BEND_Z)
             {
                 pushPhase = PushPhase.Extending;
                 pushPhaseStartTime = elapsedTime;
@@ -1437,10 +1484,41 @@ namespace FaeMaze.HeartPowers
 
             // Continue rising (increases horizontal extension)
             pushingTongueZPosition -= tongueEmergeSpeed * deltaTime;
-            UpdatePushingTongueZPosition();
+            UpdateTongueZPosition(pushingTongueInstance, pushingTongueZPosition);
 
             // Apply bone rotations (bend at ground level, extend toward heart)
             ApplyPushingTongueBoneState();
+
+            // Once the tip bone is past the bend zone (fully horizontal), realign the
+            // visitor to identity rotation.  Before this point the chain rotation carries
+            // the visitor through the 90° bend naturally; after this point we want the
+            // visitor upright (model up = -Z) while riding the horizontal tongue section.
+            if (!pushVisitorRealigned && pushingTongueData?.Bones != null && pushingTongueData.Bones.Length > 0)
+            {
+                int lipBoneIndex = TongueUtility.FindGroundBoneIndex(pushingTongueData, TONGUE_BEND_Z, pushingTongueInstance);
+
+                int tipIndex = pushingTongueData.Bones.Length - 1;
+                // Tip is past bend zone when lipBoneIndex + BEND_BONE_COUNT < tipIndex
+                if (lipBoneIndex >= 0 && lipBoneIndex + BEND_BONE_COUNT < tipIndex)
+                {
+                    Transform tipBone = pushingTongueData.Bones[tipIndex];
+                    if (tipBone != null)
+                    {
+                        // Snap visitor to identity rotation and store world-space offset from tip.
+                        // After this point, MovePushedVisitorToTip uses the world offset directly
+                        // instead of chain-relative offset, so the visitor stays upright even as
+                        // the chain rotation changes frame to frame.
+                        currentVisitor.transform.rotation = Quaternion.identity;
+                        pushWorldPositionOffset = currentVisitor.transform.position - tipBone.position;
+                        // Zero the Z component: the tongue's parent is at Z=-0.4 (wall depth),
+                        // which shifts bone world positions and accumulates in the offset via
+                        // chain rotation during the bend. The visitor should ride at the tip
+                        // bone's actual Z level, not offset by the parent's Z position.
+                        pushWorldPositionOffset.z = 0f;
+                        pushVisitorRealigned = true;
+                    }
+                }
+            }
 
             // Move visitor with tongue tip
             MovePushedVisitorToTip();
@@ -1471,6 +1549,11 @@ namespace FaeMaze.HeartPowers
                     posBeforeRelease.y,
                     GROUND_Z
                 );
+
+                // Reset rotation to identity - the chain rotation during tongue carry
+                // leaves the visitor rotated to match tongue curvature; on release they
+                // should be upright (model up = -Z world = Quaternion.identity)
+                currentVisitor.transform.rotation = Quaternion.identity;
 
                 // Ensure visitor is visible when released
                 SetVisitorVisible(currentVisitor, true);
@@ -1536,7 +1619,7 @@ namespace FaeMaze.HeartPowers
 
             // Retract tongue (increase Z)
             pushingTongueZPosition += tongueRetractSpeed * deltaTime;
-            UpdatePushingTongueZPosition();
+            UpdateTongueZPosition(pushingTongueInstance, pushingTongueZPosition);
 
             // Apply bone rotations
             ApplyPushingTongueBoneState();
@@ -1548,17 +1631,6 @@ namespace FaeMaze.HeartPowers
             }
         }
 
-        /// <summary>
-        /// Updates the pushing tongue's Z position.
-        /// </summary>
-        private void UpdatePushingTongueZPosition()
-        {
-            if (pushingTongueInstance == null) return;
-
-            Vector3 localPos = pushingTongueInstance.transform.localPosition;
-            localPos.z = pushingTongueZPosition;
-            pushingTongueInstance.transform.localPosition = localPos;
-        }
 
         /// <summary>
         /// Moves the visitor being pushed to the tongue tip position.
@@ -1572,12 +1644,22 @@ namespace FaeMaze.HeartPowers
 
             if (tipBone != null)
             {
-                Vector3 tipWorldPos = tipBone.position;
-                currentVisitor.transform.position = new Vector3(
-                    tipWorldPos.x,
-                    tipWorldPos.y,
-                    currentVisitor.transform.position.z
-                );
+                if (pushVisitorRealigned)
+                {
+                    // After realignment: visitor stays upright, position tracks tip with fixed world offset
+                    currentVisitor.transform.position = tipBone.position + pushWorldPositionOffset;
+                    currentVisitor.transform.rotation = Quaternion.identity;
+                }
+                else
+                {
+                    // Before realignment: chain rotation carries visitor through the bend
+                    Quaternion chainRot = TongueUtility.GetChainRotationAtTip(pushingTongueData);
+                    currentVisitor.transform.position = tipBone.position + chainRot * grabPositionOffset;
+                    currentVisitor.transform.rotation = chainRot * grabRotationOffset;
+                }
+
+                // Keep Rigidbody in sync to prevent teleport on release
+                currentVisitor.SyncRigidbodyPosition();
             }
         }
 
@@ -1592,14 +1674,12 @@ namespace FaeMaze.HeartPowers
             if (pushingTongueData == null || pushingTongueData.Bones == null || pushingTongueData.Bones.Length == 0 || pushingTongueInstance == null) return;
 
             // Update tongue instance rotation to point toward heart
-            pushingTongueInstance.transform.localRotation =
+            // Tongue is a root object (not parented), so use world rotation
+            pushingTongueInstance.transform.rotation =
                 Quaternion.Euler(0f, 0f, pushingTargetAngle) * Quaternion.Euler(0f, -90f, 0f);
 
-            // Find which bone is at ground level (world Z=0)
-            // Tongue is a child of pushingZoneObject at pushingWallPos.z
-            float effectiveTongueZ = pushingWallPos.z + pushingTongueZPosition;
-            int groundBoneIndex = TongueUtility.FindGroundBoneIndex(
-                effectiveTongueZ, pushingTongueData.Length, pushingTongueData.Bones.Length);
+            // Find which bone is at the bend level (Z=-0.25, middle of wall models)
+            int groundBoneIndex = TongueUtility.FindGroundBoneIndex(pushingTongueData, TONGUE_BEND_Z, pushingTongueInstance);
 
             if (groundBoneIndex < 0)
             {
@@ -1615,13 +1695,7 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void DestroyPushingTongue()
         {
-            if (pushingTongueInstance != null)
-            {
-                Object.Destroy(pushingTongueInstance);
-                pushingTongueInstance = null;
-            }
-
-            pushingTongueData = null;
+            DestroyTongueInstance(ref pushingTongueInstance, ref pushingTongueData);
         }
 
         private void FinalizeCapture()
@@ -1632,28 +1706,13 @@ namespace FaeMaze.HeartPowers
                 currentVisitor.RecalculatePath();
             }
 
-            capturedCount++;
-
-            if (capturedCount >= requiredCaptures)
-            {
-                hasExpired = true;
-            }
+            OnVisitorConsumed();
 
             currentVisitor = null;
             pushPhase = PushPhase.Idle;
 
             // Destroy the pushing tongue
             DestroyPushingTongue();
-        }
-
-        /// <summary>
-        /// Updates touch collider and visitor positions during push phase (LEGACY - not used with tongue).
-        /// Kept for potential future use or fallback.
-        /// </summary>
-        private void UpdatePushPositions(Vector3 handPos)
-        {
-            // LEGACY: This method was used with the hand-based push system
-            // Now the tongue-based system handles visitor positioning directly
         }
 
         /// <summary>
@@ -1757,10 +1816,13 @@ namespace FaeMaze.HeartPowers
                 grabbingZoneObject.transform.position += worldOffset;
             if (pushingZoneObject != null)
                 pushingZoneObject.transform.position += worldOffset;
-        }
 
-        public int GetCapturedCount() => capturedCount;
-        public int GetRequiredCaptures() => requiredCaptures;
+            // Tongues are root objects (not parented to zone objects), so shift independently
+            if (grabbingTongueInstance != null)
+                grabbingTongueInstance.transform.position += worldOffset;
+            if (pushingTongueInstance != null)
+                pushingTongueInstance.transform.position += worldOffset;
+        }
 
         /// <summary>
         /// Returns the world positions of both grabbing and pushing zones.

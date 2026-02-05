@@ -17,7 +17,7 @@ namespace FaeMaze.HeartPowers
     /// When active, path tiles in the area shake with particles and fog effects.
     /// Visitors entering the zone are devoured sequentially with a 0.25s delay between each.
     /// </summary>
-    public class DevouringMawEffect : ActivePowerEffect
+    public class DevouringMawEffect : ConsumptionBasedPowerEffect
     {
         // Settings - Loaded from GameSettings
         private readonly float triggerRadius;
@@ -57,11 +57,6 @@ namespace FaeMaze.HeartPowers
         private bool cycleInProgress;
         private float cycleStartTime;
         private float lastCycleEndTime;
-
-        // Consumption-based expiration (like MurmuringPaths)
-        private int requiredConsumptions = 1;
-        private int consumedCount = 0;
-        private bool hasExpired = false;
 
         // Animation constants
         private const string DEVOUR_ANIMATION_NAME = "FaceRigAction";
@@ -108,38 +103,16 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// DevouringMaw uses consumption-based expiration, not duration.
-        /// Return a high value so the duration check doesn't prematurely expire the effect.
-        /// </summary>
-        public override float Duration => float.MaxValue;
-
-        /// <summary>
-        /// Override IsExpired to use consumption-based expiration instead of duration.
-        /// Power expires when consumed visitor count reaches the power tier.
-        /// Also extends while a devour cycle is still in progress.
+        /// Extends base expiration to also prevent expiring while a devour cycle is in progress.
         /// </summary>
         public override bool IsExpired
         {
             get
             {
-                // Extend if a cycle is still in progress
-                if (cycleInProgress)
-                {
-                    return false;
-                }
+                if (cycleInProgress) return false;
                 return hasExpired;
             }
         }
-
-        /// <summary>
-        /// Gets the current consumption progress (for UI display).
-        /// </summary>
-        public int GetConsumedCount() => consumedCount;
-
-        /// <summary>
-        /// Gets the required consumption count to expire (power tier).
-        /// </summary>
-        public int GetRequiredConsumptions() => requiredConsumptions;
 
         /// <summary>
         /// Called by DevourTriggerHandler when a visitor enters the maw's trigger zone.
@@ -508,38 +481,7 @@ namespace FaeMaze.HeartPowers
             MeshFilter meshFilter = fogQuad.AddComponent<MeshFilter>();
             MeshRenderer meshRenderer = fogQuad.AddComponent<MeshRenderer>();
 
-            // Create circular mesh
-            int segments = 32;
-            Mesh mesh = new Mesh();
-            mesh.name = "CircleFogMesh";
-
-            Vector3[] vertices = new Vector3[segments + 1];
-            Vector2[] uvs = new Vector2[segments + 1];
-            int[] triangles = new int[segments * 3];
-
-            vertices[0] = Vector3.zero;
-            uvs[0] = new Vector2(0.5f, 0.5f);
-
-            for (int i = 0; i < segments; i++)
-            {
-                float angle = (float)i / segments * Mathf.PI * 2f;
-                // Use visualRadius for the fog circle (larger than detection triggerRadius)
-                float x = Mathf.Cos(angle) * visualRadius;
-                float y = Mathf.Sin(angle) * visualRadius;
-
-                vertices[i + 1] = new Vector3(x, y, 0f);
-                uvs[i + 1] = new Vector2(0.5f + Mathf.Cos(angle) * 0.5f, 0.5f + Mathf.Sin(angle) * 0.5f);
-
-                triangles[i * 3] = 0;
-                triangles[i * 3 + 1] = i + 1;
-                triangles[i * 3 + 2] = (i + 1) % segments + 1;
-            }
-
-            mesh.vertices = vertices;
-            mesh.uv = uvs;
-            mesh.triangles = triangles;
-            mesh.RecalculateNormals();
-            meshFilter.mesh = mesh;
+            meshFilter.mesh = HeartPowerUtils.CreateCircleMesh(visualRadius, 32, "CircleFogMesh");
 
             // Create fog material using DevourDust shader for billowing dust effect
             Shader fogShader = Shader.Find("Custom/DevourDust");
@@ -653,8 +595,7 @@ namespace FaeMaze.HeartPowers
             var renderer = dustObj.GetComponent<ParticleSystemRenderer>();
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
 
-            Shader particleShader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                ?? Shader.Find("Particles/Standard Unlit");
+            Shader particleShader = HeartPowerUtils.GetParticleShader();
             if (particleShader != null)
             {
                 Material dustMat = new Material(particleShader);
@@ -713,8 +654,7 @@ namespace FaeMaze.HeartPowers
             var renderer = particleObj.GetComponent<ParticleSystemRenderer>();
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
 
-            Shader particleShader = Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                ?? Shader.Find("Particles/Standard Unlit");
+            Shader particleShader = HeartPowerUtils.GetParticleShader();
             if (particleShader != null)
             {
                 renderer.material = new Material(particleShader);
@@ -999,13 +939,11 @@ namespace FaeMaze.HeartPowers
             Vector3 consumptionPosition = visitor.transform.position;
 
             // Award 0.5 * essence value, applying heart form reward multiplier
-            int baseEssence = visitor.GetEssenceReward();
-            float formRewardMultiplier = HeartFormManager.Instance?.GetEssenceRewardMultiplier() ?? 1.0f;
-            int essence = Mathf.RoundToInt(baseEssence * 0.5f * formRewardMultiplier);
+            int essence = HeartPowerUtils.CalculateConsumptionEssence(visitor, additionalMultiplier: 0.5f);
 
             if (manager.GameController != null)
             {
-                manager.GameController.AddEssence(essence, EssenceSource.VisitorConsumedByMaw, $"50% of {baseEssence} x {formRewardMultiplier:F2}");
+                manager.GameController.AddEssence(essence, EssenceSource.VisitorConsumedByMaw, $"Maw reward: {essence}");
             }
 
             // Track visitor fate with essence value
@@ -1021,11 +959,10 @@ namespace FaeMaze.HeartPowers
 
             Object.Destroy(visitor.gameObject);
 
-            // Increment consumption count and check for expiration (like MurmuringPaths)
-            consumedCount++;
-            if (consumedCount >= requiredConsumptions)
+            // Increment consumption count and check for expiration
+            OnVisitorConsumed();
+            if (hasExpired)
             {
-                hasExpired = true;
             }
         }
 

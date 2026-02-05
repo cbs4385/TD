@@ -608,10 +608,8 @@ namespace FaeMaze.Tutorial
             // Wait for the button to reach peak brightness (>= 0.95 threshold)
             // The glow animation uses Time.unscaledTime, so it continues during pause
             const float BRIGHTNESS_THRESHOLD = 0.95f;
-            const float MAX_WAIT_TIME = 2.0f; // Don't wait more than one full cycle
 
-            float startTime = Time.unscaledTime;
-            while (Time.unscaledTime - startTime < MAX_WAIT_TIME)
+            while (true)
             {
                 float brightness = panelController.GetButtonPulseBrightness(buttonIndex);
                 if (brightness >= BRIGHTNESS_THRESHOLD)
@@ -643,7 +641,6 @@ namespace FaeMaze.Tutorial
             // activated the power during the transition, we should still advance
             if (step.triggerType == TutorialTriggerType.PowerActivated && IsPowerAlreadyActiveForCurrentStep())
             {
-                Debug.Log($"[TutorialPower] Power already active for step {step.stepId}, auto-advancing and locking all");
                 // Lock all powers — the activated power has served its purpose
                 var pc = FindFirstObjectByType<HeartPowerPanelController>();
                 if (pc != null) pc.DisableAllPowersForTutorial();
@@ -853,19 +850,11 @@ namespace FaeMaze.Tutorial
             OnStepChanged?.Invoke(currentStepIndex);
 
             // Track visitor by directly updating focal point position until grabbed
-            // Timeout prevents tutorial from freezing if visitor doesn't get grabbed/consumed
-            float trackingTimeout = 20f; // Max seconds to wait
-            float trackingStartTime = Time.realtimeSinceStartup;
-
             if (targetVisitor != null && cameraController != null)
             {
                 // Phase 1: Track until visitor is grabbed
                 while (targetVisitor != null && targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
                 {
-                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
-                    {
-                        break;
-                    }
                     Vector3 visitorPos = targetVisitor.transform.position;
                     visitorPos.z = 0f;
                     cameraController.FocusOnPosition(visitorPos, instant: true);
@@ -892,25 +881,15 @@ namespace FaeMaze.Tutorial
                         yield return null;
                     }
 
-                    // Phase 3: Wait for visitor to become visible (back on ground) with timeout
-                    float phase3StartTime = Time.realtimeSinceStartup;
+                    // Phase 3: Wait for visitor to become visible (back on ground)
                     while (targetVisitor != null && !IsVisitorVisible(targetVisitor))
                     {
-                        if (Time.realtimeSinceStartup - phase3StartTime > 10f)
-                        {
-                            break;
-                        }
                         yield return null;
                     }
 
-                    // Phase 4: Track visitor until consumed with timeout
-                    float phase4StartTime = Time.realtimeSinceStartup;
+                    // Phase 4: Track visitor until consumed
                     while (targetVisitor != null && targetVisitor.State != VisitorControllerBase.VisitorState.Consumed)
                     {
-                        if (Time.realtimeSinceStartup - phase4StartTime > 15f)
-                        {
-                            break;
-                        }
                         Vector3 visitorPos = targetVisitor.transform.position;
                         visitorPos.z = 0f;
                         cameraController.FocusOnPosition(visitorPos, instant: true);
@@ -1062,41 +1041,17 @@ namespace FaeMaze.Tutorial
             // Show the step UI
             ShowStepImmediate(step);
 
-            // Track visitor until they are consumed or grabbed (terminal states)
-            // We want to watch them walk through the fog and toward the heart
-            // Timeout prevents tutorial from freezing if visitor doesn't get consumed
-            float trackingTimeout = 30f; // Max seconds to wait (increased for longer paths)
-            float trackingStartTime = Time.realtimeSinceStartup;
-            bool visitorWasConsumed = false;
-
+            // Track visitor until they are consumed (destroyed by the heart)
+            // We want to watch them walk through the fog, get grabbed, retract, and be consumed
             if (targetVisitor != null && cameraController != null)
             {
-
                 while (targetVisitor != null &&
-                       targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
-                       targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
+                       targetVisitor.State != VisitorControllerBase.VisitorState.Consumed)
                 {
-                    // Check for timeout
-                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
-                    {
-                        break;
-                    }
-
                     Vector3 visitorPos = targetVisitor.transform.position;
                     visitorPos.z = 0f;
                     cameraController.FocusOnPosition(visitorPos, instant: true);
                     yield return null;
-                }
-
-                // Check if visitor was actually consumed
-                visitorWasConsumed = targetVisitor == null ||
-                                     targetVisitor.State == VisitorControllerBase.VisitorState.Consumed ||
-                                     targetVisitor.State == VisitorControllerBase.VisitorState.Grabbed;
-
-                // If visitor wasn't consumed (timeout), assign them a random exit instead of destroying
-                if (!visitorWasConsumed && targetVisitor != null)
-                {
-                    AssignRandomExitToVisitor(targetVisitor);
                 }
             }
             // Wait for heart consumption animation to complete
@@ -1160,23 +1115,12 @@ namespace FaeMaze.Tutorial
             // Show the step UI
             ShowStepImmediate(step);
 
-            // Track visitor until they are Consumed by the maw, destroyed, or timeout
-            // Timeout prevents tutorial from freezing if visitor doesn't reach the maw
-            float trackingTimeout = 15f; // Max seconds to wait for consumption
-            float trackingStartTime = Time.realtimeSinceStartup;
-
+            // Track visitor until they are Consumed by the maw (destroyed)
             if (targetVisitor != null && cameraController != null)
             {
                 while (targetVisitor != null &&
-                       targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
-                       targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
+                       targetVisitor.State != VisitorControllerBase.VisitorState.Consumed)
                 {
-                    // Check for timeout
-                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
-                    {
-                        break;
-                    }
-
                     Vector3 visitorPos = targetVisitor.transform.position;
                     visitorPos.z = 0f;
                     cameraController.FocusOnPosition(visitorPos, instant: true);
@@ -1185,11 +1129,6 @@ namespace FaeMaze.Tutorial
 
                 // Wait a moment for the maw animation to complete
                 yield return new WaitForSecondsRealtime(1.5f);
-            }
-            else
-            {
-                // Wait a bit even if no visitor, so player sees the maw
-                yield return new WaitForSecondsRealtime(2.0f);
             }
 
             AdvanceStep();
@@ -1244,10 +1183,8 @@ namespace FaeMaze.Tutorial
             }
 
             const float BRIGHTNESS_THRESHOLD = 0.95f;
-            const float MAX_WAIT_TIME = 2.0f;
 
-            float startTime = Time.unscaledTime;
-            while (Time.unscaledTime - startTime < MAX_WAIT_TIME)
+            while (true)
             {
                 float brightness = panelController.GetButtonPulseBrightness(buttonIndex);
                 if (brightness >= BRIGHTNESS_THRESHOLD)
@@ -1335,7 +1272,7 @@ namespace FaeMaze.Tutorial
         /// <summary>
         /// Handles the power_misdirect_effect step.
         /// Spawns a visitor at one end of the misdirected edge and tracks them walking along it.
-        /// Auto-advances when the visitor reaches the other end or after a timeout.
+        /// Auto-advances when the visitor reaches the destination node or enters a terminal state.
         /// </summary>
         private IEnumerator HandlePowerMisdirectEffectStep(TutorialStep step)
         {
@@ -1460,21 +1397,13 @@ namespace FaeMaze.Tutorial
 
             // Track visitor with camera as they walk along the misdirected edge toward heart
             var cameraController = FindFirstObjectByType<CameraController3D>();
-            float trackingTimeout = 20f;
-            float trackingStartTime = Time.realtimeSinceStartup;
 
             if (targetVisitor != null && cameraController != null)
             {
-
                 while (targetVisitor != null &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
                        targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
                 {
-                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
-                    {
-                        break;
-                    }
-
                     // Check if visitor reached the destination end of the misdirected edge (node B)
                     Vector2 visitorPos2D = new Vector2(targetVisitor.transform.position.x, targetVisitor.transform.position.y);
                     float distToEdgeEnd = Vector2.Distance(visitorPos2D, edgeDestEnd);
@@ -1488,18 +1417,6 @@ namespace FaeMaze.Tutorial
                     cameraController.FocusOnPosition(visitorPos, instant: true);
                     yield return null;
                 }
-
-                // Assign visitor a random exit instead of destroying them
-                if (targetVisitor != null &&
-                    targetVisitor.State != VisitorControllerBase.VisitorState.Consumed &&
-                    targetVisitor.State != VisitorControllerBase.VisitorState.Grabbed)
-                {
-                    AssignRandomExitToVisitor(targetVisitor);
-                }
-            }
-            else
-            {
-                yield return new WaitForSecondsRealtime(3f);
             }
 
             AdvanceStep();
@@ -1640,18 +1557,8 @@ namespace FaeMaze.Tutorial
             // Track visitor until they become fascinated by the lantern
             if (targetVisitor != null && cameraController != null)
             {
-                // Track visitor position with camera (with timeout to prevent infinite loop)
-                float trackingTimeout = 20f; // 20 second timeout
-                float trackingStartTime = Time.realtimeSinceStartup;
-
                 while (targetVisitor != null)
                 {
-                    // Check timeout
-                    if (Time.realtimeSinceStartup - trackingStartTime > trackingTimeout)
-                    {
-                        break;
-                    }
-
                     float distToLantern = targetLantern != null ? Vector3.Distance(targetVisitor.transform.position, targetLantern.transform.position) : -1f;
 
                     // Check if visitor is fascinated by a lantern
@@ -1681,10 +1588,6 @@ namespace FaeMaze.Tutorial
 
                     yield return null;
                 }
-            }
-            else
-            {
-                yield return new WaitForSecondsRealtime(2f);
             }
 
             // Short pause to let player see the fascination effect
@@ -1722,17 +1625,8 @@ namespace FaeMaze.Tutorial
 
             // Track essence changes - the step trigger (EssenceIncreased) will call AdvanceStep()
             // via NotifyEssenceChanged(), but we need to keep the camera focused until then
-            float timeout = 30f;
-            float startTime = Time.realtimeSinceStartup;
-
             while (isActive && CurrentStep != null && CurrentStep.stepId == "essence_gain")
             {
-                if (Time.realtimeSinceStartup - startTime > timeout)
-                {
-                    AdvanceStep();
-                    break;
-                }
-
                 // Keep camera on the lantern area
                 if (cameraController != null && focusPos != Vector3.zero)
                 {
@@ -1978,30 +1872,6 @@ namespace FaeMaze.Tutorial
         }
 
         /// <summary>
-        /// Assigns a random exit portal destination to a single visitor instead of destroying them.
-        /// The visitor continues walking to the exit naturally.
-        /// </summary>
-        private void AssignRandomExitToVisitor(VisitorControllerBase visitor)
-        {
-            if (visitor == null) return;
-
-            var dynamicMaze = FindFirstObjectByType<DynamicMazeGrowth>();
-            if (dynamicMaze == null) return;
-
-            var portalPositions = dynamicMaze.GetPortalPositions();
-            if (portalPositions == null || portalPositions.Count == 0) return;
-
-            // Pick a random exit portal
-            Vector3 exitPos = portalPositions[FaeMaze.Systems.RandomManager.Range(0, portalPositions.Count)];
-
-            visitor.SetLured(false);
-            visitor.ClearMisdirectState();
-            visitor.SetWorldDestination(exitPos);
-            visitor.Resume();
-            visitor.RecalculatePath();
-        }
-
-        /// <summary>
         /// Assigns valid exit portal destinations to all remaining visitors and recalculates their paths.
         /// Called at the end of the tutorial to ensure visitors have proper navigation targets.
         /// </summary>
@@ -2114,7 +1984,6 @@ namespace FaeMaze.Tutorial
             if (!isActive || CurrentStep == null) return;
 
             var step = CurrentStep;
-            Debug.Log($"[TutorialPower] NotifyPowerActivated({powerIndex}), currentStep={step.stepId}, trigger={step.triggerType}, param={step.triggerParameter}");
 
             if (step.triggerType == TutorialTriggerType.PowerActivated &&
                 step.triggerParameter == powerIndex.ToString())
