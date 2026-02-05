@@ -160,9 +160,10 @@ namespace FaeMaze.Maze
         // Frightening event (registered when tongue is active)
         private FrighteningEvent currentFrighteningEvent;
 
-        // Grab-time relative transform: visitor's rotation relative to tip bone at grab moment
-        private Quaternion grabRotationOffset;
+        // Grab-time relative transform: visitor's position and heading relative to tongue at grab moment
         private Vector3 grabPositionOffset;
+        private float visitorHeadingAngle;
+        private float chainAngleAtGrab;
 
         // The tongue bend point (where it transitions from vertical to horizontal).
         // Above the HeartBase model top, at the same Z as visitors so the tongue can reach them.
@@ -463,20 +464,8 @@ namespace FaeMaze.Maze
 
             if (targetVisitor != null)
             {
-                // Capture the visitor's transform relative to the tongue chain direction at grab time.
-                // Uses TongueUtility.GetChainRotationAtTip for the actual curve direction.
-                if (tongueBoneData?.Bones != null && tongueBoneData.Bones.Length > 0)
-                {
-                    int tipIndex = tongueBoneData.Bones.Length - 1;
-                    Transform tipBone = tongueBoneData.Bones[tipIndex];
-                    if (tipBone != null)
-                    {
-                        Quaternion chainRot = TongueUtility.GetChainRotationAtTip(tongueBoneData);
-                        Quaternion inverseChainRot = Quaternion.Inverse(chainRot);
-                        grabRotationOffset = inverseChainRot * targetVisitor.transform.rotation;
-                        grabPositionOffset = inverseChainRot * (targetVisitor.transform.position - tipBone.position);
-                    }
-                }
+                TongueUtility.CaptureGrabOffsets(tongueBoneData, targetVisitor.transform,
+                    out grabPositionOffset, out visitorHeadingAngle, out chainAngleAtGrab);
 
                 targetVisitor.SetGrabbedByHeart();
                 OnVisitorGrabbed?.Invoke(targetVisitor.transform.position);
@@ -519,28 +508,6 @@ namespace FaeMaze.Maze
 
             int groundBoneIndex = TongueUtility.FindGroundBoneIndex(tongueBoneData, HEART_TONGUE_BEND_Z, heartTongueInstance);
 
-            // --- DIAGNOSTIC: Per-frame bone listing, individual logs to avoid truncation ---
-            {
-                float instanceWorldZ = heartTongueInstance.transform.position.z;
-                float instanceLocalZ = heartTongueInstance.transform.localPosition.z;
-                int boneCount = tongueBoneData.Bones.Length;
-                int frame = Time.frameCount;
-                Debug.Log($"[TongueDiag] Frame={frame} phase={tonguePhase} tongueZPos={tongueZPosition:F4} instanceWorldZ={instanceWorldZ:F4} instanceLocalZ={instanceLocalZ:F4} parentWorldZ={transform.position.z:F4} boneCount={boneCount} groundZ={HEART_TONGUE_BEND_Z:F4} result={groundBoneIndex}");
-
-                // Log every bone from index 0 to tip, one per log statement
-                for (int i = 0; i < boneCount; i++)
-                {
-                    if (tongueBoneData.Bones[i] == null) { Debug.Log($"[TD F={frame}] [{i}] NULL"); continue; }
-                    float offset = (tongueBoneData.RestWorldZOffsets != null && i < tongueBoneData.RestWorldZOffsets.Length)
-                        ? tongueBoneData.RestWorldZOffsets[i] : float.NaN;
-                    float expectedZ = instanceWorldZ + offset;
-                    bool passesThreshold = expectedZ <= HEART_TONGUE_BEND_Z;
-                    string marker = (i == groundBoneIndex) ? " <<< LIP" : "";
-                    Debug.Log($"[TD F={frame}] [{i}] {tongueBoneData.Bones[i].name} offset={offset:F4} expectedZ={expectedZ:F4} passes={passesThreshold}{marker}");
-                }
-            }
-            // --- END DIAGNOSTIC ---
-
             if (groundBoneIndex < 0)
             {
                 TongueUtility.ResetBonesToRest(tongueBoneData);
@@ -555,23 +522,11 @@ namespace FaeMaze.Maze
             TongueUtility.ResetBonesToRest(tongueBoneData);
         }
 
-        /// <summary>
-        /// Moves the grabbed visitor to follow the tongue tip bone.
-        /// Uses TongueUtility.GetChainRotationAtTip to derive the actual travel direction
-        /// from nearby bone positions, so the visitor follows the tongue's curvature as it
-        /// retracts underground (tipBone.rotation stays horizontal until the very end).
-        /// </summary>
         private void MoveVisitorToTip()
         {
-            if (tongueBoneData == null || tongueBoneData.Bones == null || tongueBoneData.Bones.Length == 0 || targetVisitor == null) return;
-
-            int tipBoneIndex = tongueBoneData.Bones.Length - 1;
-            Transform tipBone = tongueBoneData.Bones[tipBoneIndex];
-            if (tipBone == null) return;
-
-            Quaternion chainRot = TongueUtility.GetChainRotationAtTip(tongueBoneData);
-            targetVisitor.transform.position = tipBone.position + chainRot * grabPositionOffset;
-            targetVisitor.transform.rotation = chainRot * grabRotationOffset;
+            if (targetVisitor == null) return;
+            TongueUtility.MoveVisitorToTip(tongueBoneData, targetVisitor.transform,
+                grabPositionOffset, visitorHeadingAngle, chainAngleAtGrab);
         }
 
         #endregion

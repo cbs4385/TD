@@ -106,11 +106,10 @@ namespace FaeMaze.HeartPowers
         private VisitorControllerBase currentVisitor;
         private Vector3 heartNodePosition;
 
-        // Grab-time relative transform: visitor's rotation/position offset from tip bone at grab moment
-        private Quaternion grabRotationOffset;
+        // Grab-time relative transform: visitor's position and heading relative to tongue at grab moment
         private Vector3 grabPositionOffset;
-        private bool pushVisitorRealigned;  // True once visitor rotation is reset to identity during push Extending
-        private Vector3 pushWorldPositionOffset;  // World-space offset from tip bone to visitor after realignment
+        private float visitorHeadingAngle;
+        private float chainAngleAtGrab;
 
         // Particle effects
         private ParticleSystem grabbingParticles;
@@ -1238,31 +1237,8 @@ namespace FaeMaze.HeartPowers
         {
             if (currentVisitor == null) return;
 
-            // Capture the visitor's transform relative to the tongue chain direction at grab time.
-            // Uses chain direction (lookback bone → tip bone) instead of tipBone.rotation because
-            // ApplyBoneRotations keeps the tip horizontal until the very end of retraction.
-            if (grabbingTongueData?.Bones != null && grabbingTongueData.Bones.Length > 0)
-            {
-                int tipIndex = grabbingTongueData.Bones.Length - 1;
-                Transform tipBone = grabbingTongueData.Bones[tipIndex];
-                if (tipBone != null)
-                {
-                    Quaternion chainRot = TongueUtility.GetChainRotationAtTip(grabbingTongueData);
-                    Quaternion inverseChainRot = Quaternion.Inverse(chainRot);
-
-                    // Force identity rotation so visitor stays upright during retraction
-                    // (matches pushing tongue's behavior after pushVisitorRealigned)
-                    grabRotationOffset = inverseChainRot * Quaternion.identity;
-
-                    // Use visitor visual center instead of root (feet) position.
-                    // The visitor's transform.position is at their feet (Z≈-0.01),
-                    // but the tongue tip is at Z≈-0.25 (bend level). Using feet position
-                    // causes the tongue to appear to grab the visitor at their feet.
-                    const float VISITOR_HALF_HEIGHT = 0.3f;
-                    Vector3 visitorCenter = currentVisitor.transform.position + new Vector3(0f, 0f, -VISITOR_HALF_HEIGHT);
-                    grabPositionOffset = inverseChainRot * (visitorCenter - tipBone.position);
-                }
-            }
+            TongueUtility.CaptureGrabOffsets(grabbingTongueData, currentVisitor.transform,
+                out grabPositionOffset, out visitorHeadingAngle, out chainAngleAtGrab);
 
             // Stop visitor movement and set grabbed state (like HeartOfTheMaze)
             currentVisitor.SetGrabbedByHeart();
@@ -1297,29 +1273,11 @@ namespace FaeMaze.HeartPowers
             }
         }
 
-        /// <summary>
-        /// Moves the grabbed visitor to the tongue tip bone.
-        /// Called each frame during Retracting phase.
-        /// Uses the relative offset captured at grab time so the visitor
-        /// maintains its orientation at capture and rotates with the bone
-        /// as the tongue retracts underground.
-        /// Same pattern as HeartOfTheMaze.MoveVisitorToTip().
-        /// </summary>
         private void MoveGrabbedVisitorToTip()
         {
-            if (currentVisitor == null || grabbingTongueData == null || grabbingTongueData.Bones == null || grabbingTongueData.Bones.Length == 0) return;
-
-            int tipIndex = grabbingTongueData.Bones.Length - 1;
-            Transform tipBone = grabbingTongueData.Bones[tipIndex];
-
-            if (tipBone != null)
-            {
-                Quaternion chainRot = TongueUtility.GetChainRotationAtTip(grabbingTongueData);
-                currentVisitor.transform.position = tipBone.position + chainRot * grabPositionOffset;
-                // Force identity rotation every frame so visitor stays upright
-                // throughout retraction, matching pushing tongue behavior
-                currentVisitor.transform.rotation = Quaternion.identity;
-            }
+            if (currentVisitor == null) return;
+            TongueUtility.MoveVisitorToTip(grabbingTongueData, currentVisitor.transform,
+                grabPositionOffset, visitorHeadingAngle, chainAngleAtGrab);
         }
 
         /// <summary>
@@ -1341,30 +1299,36 @@ namespace FaeMaze.HeartPowers
             // Apply initial tongue state (straight, pointing up)
             ApplyPushingTongueBoneState();
 
-            // Capture the visitor's transform relative to the pushing tongue chain direction.
-            // The visitor starts at identity relative to the tip; as the tongue bends
-            // at ground level the visitor rotates from vertical to horizontal naturally.
+            // Position visitor at tip, then set up offsets for centering
+            // Visitor model pivot is at feet, so we need an offset to center them on the tip
             if (pushingTongueData?.Bones != null && pushingTongueData.Bones.Length > 0 && currentVisitor != null)
             {
                 int tipIndex = pushingTongueData.Bones.Length - 1;
                 Transform tipBone = pushingTongueData.Bones[tipIndex];
                 if (tipBone != null)
                 {
-                    // Place visitor at tip (offset by half-height so tongue binds to visual center)
-                    const float VISITOR_HALF_HEIGHT = 0.3f;
-                    currentVisitor.transform.position = tipBone.position + new Vector3(0f, 0f, -VISITOR_HALF_HEIGHT);
-                    currentVisitor.SyncRigidbodyPosition();  // Prevent physics snap-back to grab location
-                    Quaternion chainRot = TongueUtility.GetChainRotationAtTip(pushingTongueData);
-                    Quaternion inverseChainRot = Quaternion.Inverse(chainRot);
-                    grabRotationOffset = inverseChainRot * Quaternion.identity;
-                    grabPositionOffset = inverseChainRot * (currentVisitor.transform.position - tipBone.position);
+                    currentVisitor.transform.position = tipBone.position;
+                    currentVisitor.SyncRigidbodyPosition();
                 }
             }
+
+            // SIMPLIFIED pushing tongue approach:
+            // - Set visitor rotation ONCE to face heart (flat on ground)
+            // - Track tip position with midpoint offset (just -Z offset, no chain-relative math)
+            // - No rotation changes during push
+
+            // Calculate heading toward heart and set rotation once
+            Vector2 toHeart = new Vector2(
+                heartNodePosition.x - pushingZoneObject.transform.position.x,
+                heartNodePosition.y - pushingZoneObject.transform.position.y);
+            visitorHeadingAngle = Mathf.Atan2(toHeart.y, toHeart.x) * Mathf.Rad2Deg;
+
+            // Set final rotation - visitor faces heart, flat on ground (no tilt)
+            currentVisitor.transform.rotation = Quaternion.Euler(0f, 0f, visitorHeadingAngle);
 
             // Start Emerging phase immediately (no pause needed)
             pushPhase = PushPhase.Emerging;
             pushPhaseStartTime = elapsedTime;
-            pushVisitorRealigned = false;
 
             if (pushingParticles != null) pushingParticles.Emit(25);
 
@@ -1378,11 +1342,6 @@ namespace FaeMaze.HeartPowers
         private void ApplyGrabbingTongueBoneState()
         {
             if (grabbingTongueData == null || grabbingTongueData.Bones == null || grabbingTongueData.Bones.Length == 0 || grabbingTongueInstance == null) return;
-
-            // Update tongue instance rotation to point toward visitor
-            // Tongue is a root object (not parented), so use world rotation
-            grabbingTongueInstance.transform.rotation =
-                Quaternion.Euler(0f, 0f, grabbingTargetAngle) * Quaternion.Euler(0f, -90f, 0f);
 
             // During Emerging phase, keep all bones at rest pose (straight tongue)
             if (grabPhase == GrabPhase.Emerging)
@@ -1489,38 +1448,7 @@ namespace FaeMaze.HeartPowers
             // Apply bone rotations (bend at ground level, extend toward heart)
             ApplyPushingTongueBoneState();
 
-            // Once the tip bone is past the bend zone (fully horizontal), realign the
-            // visitor to identity rotation.  Before this point the chain rotation carries
-            // the visitor through the 90° bend naturally; after this point we want the
-            // visitor upright (model up = -Z) while riding the horizontal tongue section.
-            if (!pushVisitorRealigned && pushingTongueData?.Bones != null && pushingTongueData.Bones.Length > 0)
-            {
-                int lipBoneIndex = TongueUtility.FindGroundBoneIndex(pushingTongueData, TONGUE_BEND_Z, pushingTongueInstance);
-
-                int tipIndex = pushingTongueData.Bones.Length - 1;
-                // Tip is past bend zone when lipBoneIndex + BEND_BONE_COUNT < tipIndex
-                if (lipBoneIndex >= 0 && lipBoneIndex + BEND_BONE_COUNT < tipIndex)
-                {
-                    Transform tipBone = pushingTongueData.Bones[tipIndex];
-                    if (tipBone != null)
-                    {
-                        // Snap visitor to identity rotation and store world-space offset from tip.
-                        // After this point, MovePushedVisitorToTip uses the world offset directly
-                        // instead of chain-relative offset, so the visitor stays upright even as
-                        // the chain rotation changes frame to frame.
-                        currentVisitor.transform.rotation = Quaternion.identity;
-                        pushWorldPositionOffset = currentVisitor.transform.position - tipBone.position;
-                        // Zero the Z component: the tongue's parent is at Z=-0.4 (wall depth),
-                        // which shifts bone world positions and accumulates in the offset via
-                        // chain rotation during the bend. The visitor should ride at the tip
-                        // bone's actual Z level, not offset by the parent's Z position.
-                        pushWorldPositionOffset.z = 0f;
-                        pushVisitorRealigned = true;
-                    }
-                }
-            }
-
-            // Move visitor with tongue tip
+            // Move visitor with tongue tip (chain rotation handles bend naturally)
             MovePushedVisitorToTip();
 
             // Check if visitor is over walkable area
@@ -1550,10 +1478,13 @@ namespace FaeMaze.HeartPowers
                     GROUND_Z
                 );
 
-                // Reset rotation to identity - the chain rotation during tongue carry
-                // leaves the visitor rotated to match tongue curvature; on release they
-                // should be upright (model up = -Z world = Quaternion.identity)
-                currentVisitor.transform.rotation = Quaternion.identity;
+                // Set rotation to face toward heart - the visitor was pushed in this direction
+                // and should continue walking toward heart after release
+                Vector2 toHeart = new Vector2(
+                    heartNodePosition.x - currentVisitor.transform.position.x,
+                    heartNodePosition.y - currentVisitor.transform.position.y);
+                float headingTowardHeart = Mathf.Atan2(toHeart.y, toHeart.x) * Mathf.Rad2Deg;
+                currentVisitor.transform.rotation = Quaternion.Euler(0f, 0f, headingTowardHeart);
 
                 // Ensure visitor is visible when released
                 SetVisitorVisible(currentVisitor, true);
@@ -1632,35 +1563,27 @@ namespace FaeMaze.HeartPowers
         }
 
 
-        /// <summary>
-        /// Moves the visitor being pushed to the tongue tip position.
-        /// </summary>
         private void MovePushedVisitorToTip()
         {
-            if (currentVisitor == null || pushingTongueData == null || pushingTongueData.Bones == null || pushingTongueData.Bones.Length == 0) return;
+            if (currentVisitor == null || pushingTongueData?.Bones == null) return;
 
             int tipIndex = pushingTongueData.Bones.Length - 1;
             Transform tipBone = pushingTongueData.Bones[tipIndex];
+            if (tipBone == null) return;
 
-            if (tipBone != null)
-            {
-                if (pushVisitorRealigned)
-                {
-                    // After realignment: visitor stays upright, position tracks tip with fixed world offset
-                    currentVisitor.transform.position = tipBone.position + pushWorldPositionOffset;
-                    currentVisitor.transform.rotation = Quaternion.identity;
-                }
-                else
-                {
-                    // Before realignment: chain rotation carries visitor through the bend
-                    Quaternion chainRot = TongueUtility.GetChainRotationAtTip(pushingTongueData);
-                    currentVisitor.transform.position = tipBone.position + chainRot * grabPositionOffset;
-                    currentVisitor.transform.rotation = chainRot * grabRotationOffset;
-                }
+            // Position visitor at tongue tip XY, but STAY AT GROUND LEVEL
+            // Visitor walks on ground (Z ≈ 0), they don't follow tongue's Z position
+            const float GROUND_Z = -0.01f;  // Slightly above ground
+            currentVisitor.transform.position = new Vector3(
+                tipBone.position.x,
+                tipBone.position.y,
+                GROUND_Z
+            );
 
-                // Keep Rigidbody in sync to prevent teleport on release
-                currentVisitor.SyncRigidbodyPosition();
-            }
+            // NO rotation change - visitor stays in the orientation set at transport time
+
+            // Keep Rigidbody in sync to prevent teleport on release
+            currentVisitor.SyncRigidbodyPosition();
         }
 
         /// <summary>
@@ -1672,11 +1595,6 @@ namespace FaeMaze.HeartPowers
         private void ApplyPushingTongueBoneState()
         {
             if (pushingTongueData == null || pushingTongueData.Bones == null || pushingTongueData.Bones.Length == 0 || pushingTongueInstance == null) return;
-
-            // Update tongue instance rotation to point toward heart
-            // Tongue is a root object (not parented), so use world rotation
-            pushingTongueInstance.transform.rotation =
-                Quaternion.Euler(0f, 0f, pushingTargetAngle) * Quaternion.Euler(0f, -90f, 0f);
 
             // Find which bone is at the bend level (Z=-0.25, middle of wall models)
             int groundBoneIndex = TongueUtility.FindGroundBoneIndex(pushingTongueData, TONGUE_BEND_Z, pushingTongueInstance);

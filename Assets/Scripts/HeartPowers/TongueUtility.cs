@@ -168,11 +168,6 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            // Diagnostic: log setup context
-            Debug.Log($"[TongueDiag] CacheRestWorldZOffsets: boneCount={data.Bones.Length} instanceWorldZ={instanceWorldZ:F4} " +
-                $"instanceLocalZ={tongueInstance.transform.localPosition.z:F4} " +
-                $"bone[0]={data.Bones[0]?.name} offset[0]={data.RestWorldZOffsets[0]:F4} " +
-                $"bone[last]={data.Bones[data.Bones.Length - 1]?.name} offset[last]={data.RestWorldZOffsets[data.Bones.Length - 1]:F4}");
         }
 
         /// <summary>
@@ -302,34 +297,121 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Computes a rotation representing the actual travel direction at the tongue tip
-        /// by looking at the direction from a nearby bone to the tip bone in world space.
-        ///
-        /// ApplyBoneRotations keeps tip bones pointing horizontal until the very end of
-        /// retraction (when the tip enters the bend zone). The bone chain's world positions
-        /// however DO follow the curve. This method derives the true curve direction from
-        /// the bone positions, so a grabbed visitor follows the tongue's curvature smoothly
-        /// rather than staying horizontal and then snapping to vertical.
+        /// Captures the visitor's position and heading angle at the moment of grab.
+        /// Position offset keeps visitor at their current position relative to tip.
+        /// Heading is preserved throughout grab/retract while the visitor tilts with the tongue curve.
         /// </summary>
         /// <param name="data">Tongue bone data</param>
-        /// <param name="lookbackCount">Number of bones to look back from the tip (default 10)</param>
-        /// <returns>A rotation facing along the chain direction at the tip</returns>
-        public static Quaternion GetChainRotationAtTip(TongueBoneData data, int lookbackCount = 10)
+        /// <param name="visitor">The visitor transform being grabbed</param>
+        /// <param name="positionOffset">Output: visitor position relative to tip bone</param>
+        /// <param name="visitorHeadingAngle">Output: visitor's Z rotation (heading in XY plane, degrees)</param>
+        /// <param name="chainAngleAtGrab">Output: not used, kept for signature compatibility</param>
+        public static void CaptureGrabOffsets(TongueBoneData data, Transform visitor,
+            out Vector3 positionOffset, out float visitorHeadingAngle, out float chainAngleAtGrab)
         {
-            if (data == null || data.Bones == null || data.Bones.Length == 0) return Quaternion.identity;
+            positionOffset = Vector3.zero;
+            visitorHeadingAngle = 0f;
+            chainAngleAtGrab = 0f;
+            if (data?.Bones == null || data.Bones.Length == 0 || visitor == null) return;
 
             int tipIndex = data.Bones.Length - 1;
             Transform tipBone = data.Bones[tipIndex];
-            if (tipBone == null) return Quaternion.identity;
+            if (tipBone == null) return;
 
-            int lookbackIndex = Mathf.Max(0, tipIndex - lookbackCount);
+            // Capture visitor's Z rotation directly (their walking heading)
+            // This is the angle they face in the XY plane
+            visitorHeadingAngle = visitor.eulerAngles.z;
+
+            // Capture position offset relative to tip bone
+            // This keeps visitor at their current position, not jumping to tip bone
+            positionOffset = visitor.position - tipBone.position;
+
+            // chainAngleAtGrab not used in current approach
+            chainAngleAtGrab = 0f;
+        }
+
+        /// <summary>
+        /// Moves a visitor to the tongue tip bone plus offset.
+        /// Visitor heading (XY facing direction) is preserved from grab time.
+        /// Visitor tilts with the tongue curve - when tongue is horizontal they're flat,
+        /// when tongue is vertical they're tilted upright.
+        ///
+        /// Position offset interpretation:
+        /// - For grabbing tongues: world-space offset captured at grab time
+        /// - For pushing tongue: chain-relative offset (X component = distance along chain backward from tip)
+        /// </summary>
+        /// <param name="chainRelativeOffset">If true, positionOffset.x is treated as distance backward along chain</param>
+        public static void MoveVisitorToTip(TongueBoneData data, Transform visitor,
+            Vector3 positionOffset, float visitorHeadingAngle, float chainAngleAtGrab,
+            bool chainRelativeOffset = false)
+        {
+            if (data?.Bones == null || data.Bones.Length == 0 || visitor == null) return;
+
+            int tipIndex = data.Bones.Length - 1;
+            Transform tipBone = data.Bones[tipIndex];
+            if (tipBone == null) return;
+
+            // Get chain direction from lookback bone to tip
+            int lookbackIndex = Mathf.Max(0, tipIndex - 10);
             Transform lookbackBone = data.Bones[lookbackIndex];
-            if (lookbackBone == null) return tipBone.rotation;
 
-            Vector3 chainDir = (tipBone.position - lookbackBone.position).normalized;
-            if (chainDir.sqrMagnitude < 0.001f) return tipBone.rotation;
+            Vector3 chainDir = Vector3.forward;
+            if (lookbackBone != null)
+            {
+                chainDir = (tipBone.position - lookbackBone.position).normalized;
+            }
 
-            return Quaternion.LookRotation(chainDir, tipBone.up);
+            // Calculate position
+            if (chainRelativeOffset)
+            {
+                // positionOffset.x = distance forward along chain (for pushing tongue)
+                // positionOffset.y = perpendicular offset toward -Z (to center model midpoint on tip)
+                // Positive chain direction = forward from tip in direction of travel
+
+                // Calculate perpendicular direction (toward -Z / world up, perpendicular to chain)
+                // Cross product of chain direction with a horizontal vector gives the perpendicular
+                Vector3 horizontalPerp = new Vector3(-chainDir.y, chainDir.x, 0f).normalized;
+                Vector3 upPerp = Vector3.Cross(chainDir, horizontalPerp).normalized;
+
+                // If chain is pointing into ground (+Z), upPerp should point toward -Z
+                // If chain is horizontal, upPerp should point toward -Z
+                // Ensure upPerp has negative Z component (pointing "up" in world)
+                if (upPerp.z > 0) upPerp = -upPerp;
+
+                visitor.position = tipBone.position + chainDir * positionOffset.x + upPerp * positionOffset.y;
+            }
+            else
+            {
+                // World-space offset (for grabbing tongues)
+                visitor.position = tipBone.position + positionOffset;
+            }
+
+            if (lookbackBone == null)
+            {
+                // Fallback: just use original heading, no tilt
+                visitor.rotation = Quaternion.Euler(0f, 0f, visitorHeadingAngle);
+                return;
+            }
+
+            // Calculate tilt angle from chain direction
+            // tiltAngle = how much chain deviates from horizontal (XY plane)
+            // horizontal → 0°, pointing +Z (down into ground) → +90°, pointing -Z (up) → -90°
+            float horizontalMag = Mathf.Sqrt(chainDir.x * chainDir.x + chainDir.y * chainDir.y);
+            float tiltAngle = Mathf.Atan2(chainDir.z, horizontalMag) * Mathf.Rad2Deg;
+
+            // Original heading rotation (flat in XY plane)
+            Quaternion headingRot = Quaternion.Euler(0f, 0f, visitorHeadingAngle);
+
+            // Tilt axis: perpendicular to heading direction in XY plane
+            // If heading h makes visitor face (cos(h), sin(h), 0), tilt axis is (-sin(h), cos(h), 0)
+            float h = visitorHeadingAngle * Mathf.Deg2Rad;
+            Vector3 tiltAxis = new Vector3(-Mathf.Sin(h), Mathf.Cos(h), 0f);
+
+            // Tilt rotation around that axis
+            Quaternion tiltRot = Quaternion.AngleAxis(tiltAngle, tiltAxis);
+
+            // Apply: first heading (flat), then tilt around perpendicular axis
+            visitor.rotation = tiltRot * headingRot;
         }
     }
 }

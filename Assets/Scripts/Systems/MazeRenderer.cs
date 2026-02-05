@@ -100,7 +100,7 @@ namespace FaeMaze.Systems
 
         [SerializeField]
         [Tooltip("Always use LOD2 (low-poly) wall prefab for ALL walls, not just interior layers. Dramatically reduces vertex count.")]
-        private bool alwaysUseLOD2Walls = true;
+        private bool alwaysUseLOD2Walls = false;
 
         #endregion
 
@@ -1492,15 +1492,18 @@ namespace FaeMaze.Systems
 
             if (symbol == '#' && wallPrefab != null)
             {
-                // Use LOD2 prefab for all walls if alwaysUseLOD2Walls is enabled, otherwise only for interior layers
-                bool useLOD2 = alwaysUseLOD2Walls || (wallLayer > 0);
-                GameObject prefabToUse = (useLOD2 && wallPrefabLOD2 != null) ? wallPrefabLOD2 : wallPrefab;
-                tileObj = Instantiate(prefabToUse, tileParent);
+                // All walls use the same prefab, LOD selection is done via ConfigureWallLOD
+                tileObj = Instantiate(wallPrefab, tileParent);
                 tileObj.transform.position = worldPos;
                 // Apply Z-axis rotation only so model's X axis aligns radially (toward node center for node walls)
                 // Using tileRotation (Z-only) instead of flatPrefabRotation (which tilts on X-axis)
                 tileObj.transform.rotation = tileRotation;
                 // Wall models use prefab default scale (no additional scaling)
+
+                // Configure LOD based on wall layer:
+                // Front-rank (layer 0) uses LOD0 (high detail)
+                // Interior ranks (layer > 0) use LOD1 (lower detail)
+                ConfigureWallLOD(tileObj, wallLayer);
 
                 // Mark wall as static for runtime static batching
                 if (enableStaticBatching)
@@ -1618,6 +1621,41 @@ namespace FaeMaze.Systems
         #endregion
 
         #region Shared Methods
+
+        /// <summary>
+        /// Configures wall LOD based on wall layer.
+        /// Front-rank walls (layer 0) use LOD0 (high detail).
+        /// Interior walls (layer > 0) use LOD1 (lower detail).
+        /// </summary>
+        private void ConfigureWallLOD(GameObject wallObj, int wallLayer)
+        {
+            // Disable the LODGroup so it doesn't override our choice
+            LODGroup lodGroup = wallObj.GetComponent<LODGroup>();
+            if (lodGroup != null)
+            {
+                lodGroup.enabled = false;
+            }
+
+            // Find LOD renderers by name pattern
+            Renderer[] renderers = wallObj.GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer renderer in renderers)
+            {
+                string name = renderer.gameObject.name.ToLower();
+                bool isLOD0 = name.Contains("lod0");
+                bool isLOD1 = name.Contains("lod1");
+
+                if (isLOD0)
+                {
+                    // LOD0 enabled for front-rank (layer 0), disabled for interior
+                    renderer.enabled = (wallLayer == 0);
+                }
+                else if (isLOD1)
+                {
+                    // LOD1 disabled for front-rank (layer 0), enabled for interior
+                    renderer.enabled = (wallLayer > 0);
+                }
+            }
+        }
 
         private void CreateTilesContainer(Transform mazeOrigin)
         {
