@@ -99,7 +99,7 @@ namespace FaeMaze.Visitors
             if (misstepEnabled && worldPath != null && worldPathIndex < worldPath.Count)
             {
                 // Track current position
-                walkedPositions.Add(transform.position);
+                walkedPositions.Add(PhysicsPosition);
 
                 // Use archetype-specific misstep chance (or default 0.25)
                 float misstepChance = GetConfusionChance();

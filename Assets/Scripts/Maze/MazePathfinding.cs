@@ -62,10 +62,9 @@ namespace ForestMaze
                 return new List<Vector3>();
             }
 
-            // Path simplification DISABLED - it was causing visitors to get stuck
-            // The A* path through tiles is already valid; simplification was removing
-            // intermediate waypoints needed for curved paths around obstacles
-            // tilePath = SimplifyTilePath(tilePath, mazeData);
+            // Simplify path to remove collinear points for smooth movement.
+            // Line-of-sight checks ensure simplified segments don't cut through unwalkable terrain.
+            tilePath = SimplifyTilePath(tilePath, mazeData);
 
             // Convert tile path to world positions
             // Only add current position if it's VERY close to the start tile (on the walkable path)
@@ -77,13 +76,14 @@ namespace ForestMaze
                 result.Add(start);
             }
 
-            // Add all tile positions, filtering out waypoints too close to the previous one
-            const float minWaypointDistance = 0.5f;
+            // Add all tile positions, filtering out waypoints too close to the previous one.
+            // Higher values reduce direction recalculation frequency for smoother movement.
+            const float minWaypointDistance = 1.0f;
             foreach (var tile in tilePath)
             {
                 Vector3 waypoint = new Vector3(tile.Position.x, tile.Position.y, start.z);
 
-                // Skip waypoints within 0.5 units of the previous waypoint
+                // Skip waypoints within minWaypointDistance of the previous waypoint
                 if (result.Count > 0)
                 {
                     float distToPrev = Vector3.Distance(waypoint, result[result.Count - 1]);

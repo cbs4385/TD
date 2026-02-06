@@ -117,7 +117,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 968249162689902819}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 1, w: 0}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -129,7 +129,7 @@ Transform:
   - {fileID: 8883327124867136058}
   - {fileID: 1847851909753246756}
   m_Father: {fileID: 941752241327953562}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 180}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1726124943748178147
 GameObject:
   m_ObjectHideFlags: 0
@@ -582,13 +582,12 @@ MonoBehaviour:
   moveSpeed: 3
   waypointReachedDistance: 0.05
   logVisitorPathfinding: 0
-  debugSplineRotation: 0
   modelPrefab: {fileID: 0}
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3
-  redCapDetectionRadius: 5
-  redCapDetectionInterval: 0.5
+  goblinDetectionRadius: 5
+  goblinDetectionInterval: 0.5
   minLostDistance: 10
   maxLostDistance: 20
   _confusionEnabled: 1
@@ -886,6 +885,7 @@ SkinnedMeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 1

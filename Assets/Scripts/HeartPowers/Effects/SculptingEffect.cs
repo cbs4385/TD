@@ -305,17 +305,14 @@ namespace FaeMaze.HeartPowers
                     Vector2 buttonCenter = new Vector2((corners[0].x + corners[2].x) / 2f, (corners[0].y + corners[2].y) / 2f);
                     float powerButtonTop = corners[1].y;
 
-                    // Position menu so the bottom sculpt button sits just above the power button
-                    // Need to calculate in screen pixels first, then convert to canvas coordinates
-                    float gap = 15f; // Gap in screen pixels
-                    // In screen space: menu center Y = powerButtonTop + gap + (distance from menu center to bottom of bottom button)
-                    // The bottom button center is at menuRadius below menu center, and button extends buttonSize/2 below that
-                    // So menu center Y = powerButtonTop + gap + menuRadius + buttonSize/2
-                    // But menuRadius and buttonSize are in reference resolution (1080p), need to scale
+                    // Position menu so the bottom key label sits just above the power button
+                    float gap = 15f; // Gap in screen pixels between power bar top and bottom of key label
                     float scaleFactor = Screen.height / 1080f;
                     float scaledMenuRadius = menuRadius * scaleFactor;
-                    float scaledButtonSize = buttonSize * scaleFactor;
-                    float menuCenterY = powerButtonTop + gap + scaledMenuRadius + scaledButtonSize * 0.5f;
+                    float scaledBorderSize = (buttonSize + 6f) * scaleFactor; // borderSize = buttonSize + 3px border each side
+                    // Bottom extent from center: radius to button center + half border + label offset (12) + half label height (12)
+                    float bottomExtent = scaledMenuRadius + scaledBorderSize * 0.5f + (12f + 12f) * scaleFactor;
+                    float menuCenterY = powerButtonTop + gap + bottomExtent;
                     screenPos = new Vector2(buttonCenter.x, menuCenterY);
                 }
             }
@@ -518,7 +515,7 @@ namespace FaeMaze.HeartPowers
                 keyLabelRect.sizeDelta = new Vector2(size, 24f);
 
                 var keyLabel = keyLabelObj.AddComponent<TMPro.TextMeshProUGUI>();
-                keyLabel.text = $"[{keyBinding}]";
+                keyLabel.text = keyBinding;
                 keyLabel.fontSize = 18f;
                 keyLabel.alignment = TMPro.TextAlignmentOptions.Center;
                 keyLabel.color = Color.white;

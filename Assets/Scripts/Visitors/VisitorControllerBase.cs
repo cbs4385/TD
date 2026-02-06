@@ -114,6 +114,16 @@ namespace FaeMaze.Visitors
 
         // 3D physics
         protected Rigidbody rb3D;
+
+        /// <summary>
+        /// Returns the actual physics position (rb3D.position) when available, falling back to
+        /// transform.position. Use this for ALL movement computation to avoid divergence between
+        /// the interpolated visual position (transform.position) and the physics position.
+        /// With RigidbodyInterpolation.Interpolate, transform.position lags behind rb3D.position,
+        /// causing systematic undershooting and micro-jitter when used for movement calculations.
+        /// </summary>
+        protected Vector3 PhysicsPosition => rb3D != null ? rb3D.position : transform.position;
+
         protected Vector3 originalDestination;
         protected bool usesSpawnMarkerDestination;
 
@@ -266,6 +276,12 @@ namespace FaeMaze.Visitors
         // Physics-based movement: calculate in Update, apply in FixedUpdate
         protected Vector3 desiredPosition;
         protected bool hasDesiredPosition = false;
+
+        // Coasting: when no desiredPosition is pending, allow velocity to persist for
+        // a short grace period before zeroing. This prevents micro-stutter from
+        // Update/FixedUpdate timing misalignment.
+        private int framesWithoutDesiredPosition = 0;
+
 
         // State aura visual feedback
         protected GameObject stateAuraObject;
@@ -584,13 +600,18 @@ namespace FaeMaze.Visitors
 
                 FrameProfiler.Checkpoint($"Visitor.BeforeUpdateWalking({name})");
 
-                if (!isCalculatingPath)
+
+                // Only compute new movement if FixedUpdate has consumed the previous desiredPosition.
+                // Without this gate, Update runs ~2x per FixedUpdate at high framerates, and the
+                // second call overwrites the first desiredPosition — discarding one frame of movement.
+                if (!isCalculatingPath && !hasDesiredPosition)
                 {
                     UpdateWalking();
                 }
 
                 FrameProfiler.Checkpoint($"Visitor.AfterUpdateWalking({name})");
             }
+
 
             // Update state aura visual
             UpdateStateAura();
@@ -622,25 +643,77 @@ namespace FaeMaze.Visitors
             if (state == VisitorState.Grabbed || state == VisitorState.Consumed)
             {
                 hasDesiredPosition = false;
+                // Zero velocity so the visitor doesn't slide with residual momentum.
+                // With linearDamping=0 this is essential — without it the visitor keeps
+                // moving at its last velocity and travels through devour/tongue models.
+                if (rb3D.linearVelocity.sqrMagnitude > 0.001f)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                }
                 return;
             }
 
+
             if (hasDesiredPosition && canMove)
             {
+                framesWithoutDesiredPosition = 0;
+
+                // Calculate desired velocity to reach desiredPosition in one physics step
                 Vector3 moveDir = desiredPosition - rb3D.position;
                 moveDir.z = 0;  // Only move in XY plane
                 float moveDist = moveDir.magnitude;
 
                 if (moveDist > 0.01f)
                 {
-                    // Use AddForce to move toward destination
-                    // With mass=10 and damping=5: terminal velocity = force / (mass * damping)
-                    // For velocity=moveSpeed: force = moveSpeed * mass * damping = 3 * 10 * 5 = 150
-                    Vector3 force = moveDir.normalized * moveSpeed * 10f * 5f;
-                    rb3D.AddForce(force, ForceMode.Force);
+                    // Target velocity to reach desired position this timestep
+                    Vector3 targetVelocity = moveDir / Time.fixedDeltaTime;
+
+                    // Smooth direction transitions for small angle changes.
+                    // Without this, VelocityChange creates instant direction snaps at every
+                    // waypoint, causing visible jitter even with interpolation enabled.
+                    Vector3 currentVel = rb3D.linearVelocity;
+                    currentVel.z = 0f;
+
+                    if (currentVel.sqrMagnitude > 0.1f && targetVelocity.sqrMagnitude > 0.1f)
+                    {
+                        float dot = Vector3.Dot(currentVel.normalized, targetVelocity.normalized);
+                        if (dot > 0.7f)  // < ~45° angle change: smooth transition
+                        {
+                            // Blend direction while preserving target speed
+                            float targetSpeed = targetVelocity.magnitude;
+                            Vector3 blendedDir = Vector3.Slerp(currentVel.normalized, targetVelocity.normalized, 0.5f);
+                            targetVelocity = blendedDir * targetSpeed;
+                        }
+                        // else: large turn (>45°), use full snap for responsive cornering
+                    }
+
+                    Vector3 deltaVelocity = targetVelocity - currentVel;
+                    rb3D.AddForce(deltaVelocity, ForceMode.VelocityChange);
+
+
+                }
+                else
+                {
+                    // Close enough — stop
+                    rb3D.linearVelocity = Vector3.zero;
                 }
 
                 hasDesiredPosition = false;
+            }
+            else if (canMove && rb3D.linearVelocity.sqrMagnitude > 0.001f)
+            {
+                framesWithoutDesiredPosition++;
+                // Grace period: allow velocity to coast for 1 physics frame before stopping.
+                // This prevents micro-stutter from Update/FixedUpdate timing misalignment
+                // where FixedUpdate runs before Update has set a new desiredPosition.
+                if (framesWithoutDesiredPosition >= 2)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                }
+            }
+            else
+            {
+                framesWithoutDesiredPosition = 0;
             }
         }
 
@@ -718,6 +791,7 @@ namespace FaeMaze.Visitors
         {
             lastMoveCause = cause;
         }
+
 
         /// <summary>
         /// Records an event to the navigation audit log for debugging stuck visitors.
@@ -887,12 +961,12 @@ namespace FaeMaze.Visitors
         protected Vector3 GetHeartApproachPosition()
         {
             if (mazeGridBehaviour == null)
-                return transform.position;
+                return PhysicsPosition;
 
             Vector3 heartCenter = mazeGridBehaviour.HeartWorldPosition;
 
             // Direction from heart to visitor (in XY plane)
-            Vector2 visitorPos2D = new Vector2(transform.position.x, transform.position.y);
+            Vector2 visitorPos2D = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
             Vector2 heartPos2D = new Vector2(heartCenter.x, heartCenter.y);
             Vector2 dirFromHeart = (visitorPos2D - heartPos2D).normalized;
 
@@ -957,7 +1031,7 @@ namespace FaeMaze.Visitors
 
             // Override destination to the far sign — forces visitor to walk the entire edge
             worldDestination = farSignPosition;
-            worldPath = BuildWorldPath(transform.position, farSignPosition);
+            worldPath = BuildWorldPath(PhysicsPosition, farSignPosition);
             worldPathIndex = 0;
             ResetSplineState();
         }
@@ -978,38 +1052,129 @@ namespace FaeMaze.Visitors
             // Remember this edge so all future path calculations penalize it
             completedMisdirectEdges.Add(completedEdgeIndex);
 
-            // Restore the original destination
-            worldDestination = misdirectOriginalDestination;
-            originalDestination = misdirectOriginalDestination;
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
+                return;
 
-            // Build path with the misdirect edge penalized to prevent backtracking.
-            // We temporarily override edge cost multipliers for this single path calculation.
-            var antiBacktrackMultipliers = new Dictionary<int, float>();
+            // Build anti-backtrack multipliers: block the misdirect edge entirely.
+            // Using float.MaxValue makes A* treat the edge as impassable — the previous
+            // 50x penalty wasn't enough to prevent routing back through the edge.
+            var antiBacktrackMultipliers = BuildAntiBacktrackMultipliers(completedEdgeIndex);
 
-            // Get existing misdirect multipliers (the attractive 0.05x)
+            // Determine destination: use original if valid, otherwise pick a random portal
+            Vector3 destination = misdirectOriginalDestination;
+            if (destination == Vector3.zero)
+            {
+                destination = PickRandomPortalPosition();
+            }
+
+            // Try to build a path that avoids the misdirect edge
+            worldPath = ForestMaze.MazePathfinding.BuildWorldPath(
+                mazeGridBehaviour.WorldSpaceMazeData,
+                PhysicsPosition,
+                destination,
+                heartNodePenalty: 0f,
+                penalizeHeartNode: false,
+                edgeCostMultipliers: antiBacktrackMultipliers
+            );
+
+            // If no path found (destination unreachable without the misdirect edge),
+            // try each portal until we find one that's reachable
+            if (worldPath == null || worldPath.Count == 0)
+            {
+                destination = FindReachablePortal(antiBacktrackMultipliers);
+            }
+
+            worldDestination = destination;
+            originalDestination = destination;
+            worldPathIndex = 0;
+            ResetSplineState();
+
+            // Ensure visitor is in a walking state
+            RefreshStateFromFlags();
+        }
+
+        /// <summary>
+        /// Builds edge cost multipliers that block the completed misdirect edge
+        /// while preserving any other active misdirect attraction.
+        /// </summary>
+        private Dictionary<int, float> BuildAntiBacktrackMultipliers(int blockedEdgeIndex)
+        {
+            var multipliers = new Dictionary<int, float>();
+
             var existingMultipliers = HeartPowerManager.Instance?.GetMisdirectEdgeCostMultipliers();
             if (existingMultipliers != null)
             {
                 foreach (var kvp in existingMultipliers)
-                    antiBacktrackMultipliers[kvp.Key] = kvp.Value;
+                    multipliers[kvp.Key] = kvp.Value;
             }
 
-            // Override the just-completed edge with a high penalty to prevent backtracking
-            antiBacktrackMultipliers[completedEdgeIndex] = 50f;
+            // Block the completed edge — float.MaxValue makes A* never choose it
+            multipliers[blockedEdgeIndex] = float.MaxValue;
 
-            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null)
+            // Also block any previously completed misdirect edges
+            foreach (int edgeIdx in completedMisdirectEdges)
+                multipliers[edgeIdx] = float.MaxValue;
+
+            return multipliers;
+        }
+
+        /// <summary>
+        /// Picks a random portal position from the available portals.
+        /// Returns Vector3.zero if no portals exist.
+        /// </summary>
+        private Vector3 PickRandomPortalPosition()
+        {
+            var dynamicMaze = Object.FindFirstObjectByType<FaeMaze.Systems.DynamicMazeGrowth>();
+            if (dynamicMaze == null) return Vector3.zero;
+
+            var portalPositions = dynamicMaze.GetPortalPositions();
+            if (portalPositions == null || portalPositions.Count == 0) return Vector3.zero;
+
+            return portalPositions[Random.Range(0, portalPositions.Count)];
+        }
+
+        /// <summary>
+        /// Tries each portal to find one reachable without crossing blocked edges.
+        /// Sets worldPath to the first valid path found.
+        /// Returns the portal position, or the current position if none found.
+        /// </summary>
+        private Vector3 FindReachablePortal(Dictionary<int, float> edgeCostMultipliers)
+        {
+            var dynamicMaze = Object.FindFirstObjectByType<FaeMaze.Systems.DynamicMazeGrowth>();
+            if (dynamicMaze == null) return PhysicsPosition;
+
+            var portalPositions = dynamicMaze.GetPortalPositions();
+            if (portalPositions == null || portalPositions.Count == 0) return PhysicsPosition;
+
+            // Shuffle to avoid always trying the same portal first
+            for (int i = portalPositions.Count - 1; i > 0; i--)
             {
-                worldPath = ForestMaze.MazePathfinding.BuildWorldPath(
+                int j = Random.Range(0, i + 1);
+                var temp = portalPositions[i];
+                portalPositions[i] = portalPositions[j];
+                portalPositions[j] = temp;
+            }
+
+            foreach (var portalPos in portalPositions)
+            {
+                var path = ForestMaze.MazePathfinding.BuildWorldPath(
                     mazeGridBehaviour.WorldSpaceMazeData,
-                    transform.position,
-                    misdirectOriginalDestination,
+                    PhysicsPosition,
+                    portalPos,
                     heartNodePenalty: 0f,
                     penalizeHeartNode: false,
-                    edgeCostMultipliers: antiBacktrackMultipliers
+                    edgeCostMultipliers: edgeCostMultipliers
                 );
-                worldPathIndex = 0;
-                ResetSplineState();
+
+                if (path != null && path.Count > 0)
+                {
+                    worldPath = path;
+                    return portalPos;
+                }
             }
+
+            // No portal reachable — stay put
+            return PhysicsPosition;
         }
 
         /// <summary>
@@ -1035,7 +1200,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public void RetargetToNearestSpawn()
         {
-            RetargetToNearestSpawnFrom(transform.position);
+            RetargetToNearestSpawnFrom(PhysicsPosition);
         }
 
         /// <summary>
@@ -1375,18 +1540,18 @@ namespace FaeMaze.Visitors
             // If no path or at end of path, return current position
             if (worldPath == null || worldPath.Count == 0 || worldPathIndex >= worldPath.Count)
             {
-                return transform.position;
+                return PhysicsPosition;
             }
 
             // Calculate direction toward current waypoint
             Vector3 currentTarget = worldPath[worldPathIndex];
-            Vector3 direction = (currentTarget - transform.position).normalized;
+            Vector3 direction = (currentTarget - PhysicsPosition).normalized;
 
             // If direction is nearly zero (at waypoint), try next waypoint
             if (direction.sqrMagnitude < 0.001f && worldPathIndex + 1 < worldPath.Count)
             {
                 currentTarget = worldPath[worldPathIndex + 1];
-                direction = (currentTarget - transform.position).normalized;
+                direction = (currentTarget - PhysicsPosition).normalized;
             }
 
             // Calculate effective speed with all state modifiers
@@ -1401,7 +1566,7 @@ namespace FaeMaze.Visitors
             }
 
             // Predict position
-            return transform.position + direction * effectiveSpeed * timeAhead;
+            return PhysicsPosition + direction * effectiveSpeed * timeAhead;
         }
 
         #endregion
@@ -1511,7 +1676,7 @@ namespace FaeMaze.Visitors
             navigationAuditLog.Clear();
 
             // Build world-space path from current position to destination
-            worldPath = BuildWorldPath(transform.position, destination);
+            worldPath = BuildWorldPath(PhysicsPosition, destination);
             worldPathIndex = 0;
             ResetSplineState();
 
@@ -1556,9 +1721,9 @@ namespace FaeMaze.Visitors
                     foreach (var kvp in edgeCostMultipliers)
                         merged[kvp.Key] = kvp.Value;
                 }
-                // Override completed edges with heavy penalty to prevent backtracking
+                // Block completed edges entirely to prevent backtracking
                 foreach (int edgeIdx in completedMisdirectEdges)
-                    merged[edgeIdx] = 50f;
+                    merged[edgeIdx] = float.MaxValue;
                 edgeCostMultipliers = merged;
             }
 
@@ -1952,7 +2117,7 @@ namespace FaeMaze.Visitors
             if (graphState == null || graphState.Nodes.Count == 0)
                 return false;
 
-            Vector2 currentPos = new Vector2(transform.position.x, transform.position.y);
+            Vector2 currentPos = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
             float closestDist = float.MaxValue;
             int closestNodeId = -1;
 
@@ -2197,11 +2362,13 @@ namespace FaeMaze.Visitors
             // Note: Position is applied via FixedUpdate using velocity-based movement
             // This allows Unity physics to naturally block movement at solid colliders
 
-            // Check if fascinated visitor has reached close enough to lantern (0.5 units)
+            // Check if fascinated visitor has reached the lantern's node.
+            // Lanterns sit at node centers; the walkable ring is 1.0-3.0 units from center.
+            // Use NODE_RADIUS (3.0) so the visitor stops as soon as it enters the node.
             if (isFascinated && !hasReachedLantern && currentFaeLantern != null)
             {
-                float distToLantern = Vector3.Distance(transform.position, currentFaeLantern.transform.position);
-                if (distToLantern <= 0.5f)
+                float distToLantern = Vector3.Distance(PhysicsPosition, currentFaeLantern.transform.position);
+                if (distToLantern <= 3.0f)
                 {
                     // Stop here, don't continue walking
                     hasReachedLantern = true;
@@ -2232,12 +2399,12 @@ namespace FaeMaze.Visitors
             // RECOVERY CHECK: If current position is far from any walkable tile, actively recover
             // This prevents continued drift when already off-path
             ForestMaze.WorldSpaceTile recoveryTile;
-            bool needsRecovery = !IsPositionNearWalkableTile(transform.position, out recoveryTile, 0.8f);
+            bool needsRecovery = !IsPositionNearWalkableTile(PhysicsPosition, out recoveryTile, 0.8f);
 
             // If we didn't find a tile within normal range but need recovery, search wider
             if (needsRecovery && recoveryTile == null && mazeGridBehaviour?.WorldSpaceMazeData != null)
             {
-                Vector2 pos2D = new Vector2(transform.position.x, transform.position.y);
+                Vector2 pos2D = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
                 // Search up to 10 units - if we're further than that, something is very wrong
                 var nearbyTiles = mazeGridBehaviour.WorldSpaceMazeData.GetTilesNear(pos2D, 10f);
                 float closestDist = float.MaxValue;
@@ -2256,11 +2423,11 @@ namespace FaeMaze.Visitors
             if (needsRecovery && recoveryTile != null)
             {
                 // We're far from walkable area but found a tile - move toward it
-                Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+                Vector2 currentPos2D = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
                 Vector2 pullDir = (recoveryTile.Position - currentPos2D).normalized;
-                float pullDistance = effectiveSpeed * Time.deltaTime;
+                float pullDistance = effectiveSpeed * Time.fixedDeltaTime;
                 Vector2 recoveryPos2D = currentPos2D + pullDir * pullDistance;
-                Vector3 recoveryPos = new Vector3(recoveryPos2D.x, recoveryPos2D.y, transform.position.z);
+                Vector3 recoveryPos = new Vector3(recoveryPos2D.x, recoveryPos2D.y, PhysicsPosition.z);
 
                 RecordMoveCause("SplineMovement_Recovery");
                 desiredPosition = recoveryPos;
@@ -2297,7 +2464,7 @@ namespace FaeMaze.Visitors
                 int p1Index = splineStartIndex;
                 if (p1Index >= 0 && p1Index < worldPath.Count)
                 {
-                    Vector3 currentPos = transform.position;
+                    Vector3 currentPos = PhysicsPosition;
 
                     // Compare with what we set P1 to - if visitor is far from P1, correct now
                     float p1Divergence = Vector3.Distance(
@@ -2316,12 +2483,12 @@ namespace FaeMaze.Visitors
             }
 
             // Store previous position for direction calculation
-            Vector3 previousPosition = transform.position;
+            Vector3 previousPosition = PhysicsPosition;
 
             // Progress along spline based on speed (normalized by segment length)
             float speedFactor = effectiveSpeed / Mathf.Max(0.1f, splineSegmentLength);
             float progressBefore = splineProgress;
-            splineProgress += speedFactor * Time.deltaTime;
+            splineProgress += speedFactor * Time.fixedDeltaTime;
 
             // Handle segment completion and advancement
             while (splineProgress >= 1f && splineStartIndex < worldPath.Count - 1)
@@ -2355,8 +2522,8 @@ namespace FaeMaze.Visitors
             {
                 // Only snap if we're already very close; otherwise let the spline finish naturally
                 Vector3 finalPos = worldPath[worldPath.Count - 1];
-                finalPos.z = transform.position.z; // Preserve Z
-                float distToFinal = Vector3.Distance(transform.position, finalPos);
+                finalPos.z = PhysicsPosition.z; // Preserve Z
+                float distToFinal = Vector3.Distance(PhysicsPosition, finalPos);
                 if (distToFinal < 0.1f)
                 {
                     // Close enough - snap to avoid floating point drift
@@ -2380,11 +2547,11 @@ namespace FaeMaze.Visitors
             );
 
             // Preserve Z position
-            newPosition.z = transform.position.z;
+            newPosition.z = PhysicsPosition.z;
 
             // SANITY CHECK: If the spline calculated a position more than 2 units from current position,
             // something is wrong with the spline control points. Reject the movement and stay in place.
-            float distanceFromCurrent = Vector3.Distance(newPosition, transform.position);
+            float distanceFromCurrent = Vector3.Distance(newPosition, PhysicsPosition);
             if (distanceFromCurrent > 2.0f)
             {
                 // Force path recalculation
@@ -2431,8 +2598,8 @@ namespace FaeMaze.Visitors
                     {
                         Vector3 targetWaypoint = worldPath[splineStartIndex + 1];
                         Vector3 directDir = (targetWaypoint - previousPosition).normalized;
-                        Vector3 candidatePosition = previousPosition + directDir * effectiveSpeed * Time.deltaTime;
-                        candidatePosition.z = transform.position.z;
+                        Vector3 candidatePosition = previousPosition + directDir * effectiveSpeed * Time.fixedDeltaTime;
+                        candidatePosition.z = PhysicsPosition.z;
 
                         // Validate the direct fallback position too
                         ForestMaze.WorldSpaceTile candidateTile;
@@ -2489,7 +2656,7 @@ namespace FaeMaze.Visitors
                         Vector2 pullDir = (tileCenter - currentPos2D).normalized;
 
                         // Move toward tile center at movement speed
-                        float pullDistance = Mathf.Min(effectiveSpeed * Time.deltaTime, distToTile - 0.4f);
+                        float pullDistance = Mathf.Min(effectiveSpeed * Time.fixedDeltaTime, distToTile - 0.4f);
                         Vector2 constrainedPos2D = currentPos2D + pullDir * pullDistance;
                         newPosition = new Vector3(constrainedPos2D.x, constrainedPos2D.y, newPosition.z);
                         RecordMoveCause("SplineMovement_Pulled");
@@ -2504,7 +2671,7 @@ namespace FaeMaze.Visitors
             if (wasBlocked)
             {
                 // speedFactor was already calculated above
-                splineProgress -= speedFactor * Time.deltaTime;
+                splineProgress -= speedFactor * Time.fixedDeltaTime;
                 if (splineProgress < 0f) splineProgress = 0f;
             }
 
@@ -2530,15 +2697,15 @@ namespace FaeMaze.Visitors
         {
             // RECOVERY CHECK: If current position is far from any walkable tile, actively recover
             ForestMaze.WorldSpaceTile recoveryTile;
-            bool needsRecovery = !IsPositionNearWalkableTile(transform.position, out recoveryTile, 0.8f);
+            bool needsRecovery = !IsPositionNearWalkableTile(PhysicsPosition, out recoveryTile, 0.8f);
             if (needsRecovery && recoveryTile != null)
             {
                 // We're far from walkable area but found a tile - move toward it
-                Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+                Vector2 currentPos2D = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
                 Vector2 pullDir = (recoveryTile.Position - currentPos2D).normalized;
-                float pullDistance = effectiveSpeed * Time.deltaTime;
+                float pullDistance = effectiveSpeed * Time.fixedDeltaTime;
                 Vector2 recoveryPos2D = currentPos2D + pullDir * pullDistance;
-                Vector3 recoveryPos = new Vector3(recoveryPos2D.x, recoveryPos2D.y, transform.position.z);
+                Vector3 recoveryPos = new Vector3(recoveryPos2D.x, recoveryPos2D.y, PhysicsPosition.z);
 
                 RecordMoveCause("DirectWalking_Recovery");
                 desiredPosition = recoveryPos;
@@ -2552,8 +2719,10 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            float remainingDistance = effectiveSpeed * Time.deltaTime;
-            Vector3 finalPosition = transform.position;
+            // Use fixedDeltaTime because UpdateWalking is gated to run once per FixedUpdate cycle.
+            // Using Time.deltaTime here would under-calculate distance (render frame ~0.01s vs physics step 0.02s).
+            float remainingDistance = effectiveSpeed * Time.fixedDeltaTime;
+            Vector3 finalPosition = PhysicsPosition;
 
             // Move continuously, consuming distance across multiple waypoints if needed
             while (remainingDistance > 0f && worldPathIndex < worldPath.Count)
@@ -2674,7 +2843,7 @@ namespace FaeMaze.Visitors
             if (worldPath != null && worldPathIndex < worldPath.Count)
             {
                 Vector3 targetWorldPos = worldPath[worldPathIndex];
-                Vector3 pathDirection = targetWorldPos - transform.position;
+                Vector3 pathDirection = targetWorldPos - PhysicsPosition;
                 if (pathDirection.sqrMagnitude > 0.0001f)  // Minimum distance threshold
                 {
                     Vector2 facingDirection = new Vector2(pathDirection.x, pathDirection.y).normalized;
@@ -2697,7 +2866,7 @@ namespace FaeMaze.Visitors
             }
 
             var segment = graphPath.Segments[graphSegmentIndex];
-            Vector3 currentPos = transform.position;
+            Vector3 currentPos = PhysicsPosition;
             Vector2 currentPos2D = new Vector2(currentPos.x, currentPos.y);
 
             if (segment.Type == ForestMaze.SegmentType.Edge)
@@ -2738,7 +2907,7 @@ namespace FaeMaze.Visitors
             // Calculate progress increment based on speed and segment length (not full edge length)
             // Use the segment's actual length which accounts for partial traversal
             float segmentLength = segment.Length > 0 ? segment.Length : CalculatePolylineLength(edge.PolylinePoints);
-            float progressDelta = (effectiveSpeed * Time.deltaTime) / Mathf.Max(segmentLength, 0.1f);
+            float progressDelta = (effectiveSpeed * Time.fixedDeltaTime) / Mathf.Max(segmentLength, 0.1f);
 
             // Determine direction based on whether exit progress is greater or less than current
             bool movingForward = exitProgress > graphSegmentProgress;
@@ -2787,7 +2956,7 @@ namespace FaeMaze.Visitors
             UpdateAnimatorDirection(facingDir);
 
             // Set desired position for physics
-            desiredPosition = new Vector3(targetPos2D.x, targetPos2D.y, transform.position.z);
+            desiredPosition = new Vector3(targetPos2D.x, targetPos2D.y, PhysicsPosition.z);
             hasDesiredPosition = true;
             RecordMoveCause("GraphEdge");
         }
@@ -2829,7 +2998,7 @@ namespace FaeMaze.Visitors
 
             Vector2 targetWaypoint = currentNodeArc[nodeArcIndex];
             float distToWaypoint = Vector2.Distance(currentPos2D, targetWaypoint);
-            float moveDistance = effectiveSpeed * Time.deltaTime;
+            float moveDistance = effectiveSpeed * Time.fixedDeltaTime;
 
             if (distToWaypoint <= moveDistance)
             {
@@ -2860,7 +3029,7 @@ namespace FaeMaze.Visitors
                 }
 
                 // Check for node center blocking before setting desired position
-                Vector3 targetPos3D = new Vector3(newPos.x, newPos.y, transform.position.z);
+                Vector3 targetPos3D = new Vector3(newPos.x, newPos.y, PhysicsPosition.z);
                 if (IsBlockedByNodeCenter(targetPos3D, out Vector3 blockedPos))
                 {
                     desiredPosition = blockedPos;
@@ -2885,7 +3054,7 @@ namespace FaeMaze.Visitors
                 Vector2 newPos = currentPos2D + dir * moveDistance;
 
                 // Check for node center blocking before setting desired position
-                Vector3 targetPos3D = new Vector3(newPos.x, newPos.y, transform.position.z);
+                Vector3 targetPos3D = new Vector3(newPos.x, newPos.y, PhysicsPosition.z);
                 if (IsBlockedByNodeCenter(targetPos3D, out Vector3 blockedPos))
                 {
                     desiredPosition = blockedPos;
@@ -3029,7 +3198,7 @@ namespace FaeMaze.Visitors
             // Don't block if we're already grabbed
             if (state == VisitorState.Grabbed) return false;
 
-            Vector3 currentPos = transform.position;
+            Vector3 currentPos = PhysicsPosition;
             Vector3 direction = targetPosition - currentPos;
             float distance = direction.magnitude;
 
@@ -3084,46 +3253,11 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // Check if movement toward target would pass through a node center blocked zone
-            // Use geometric line-circle intersection instead of SphereCast to avoid inflating the check area
-            Vector2 currentPos2D = new Vector2(currentPos.x, currentPos.y);
-            Vector2 targetPos2D = new Vector2(targetPosition.x, targetPosition.y);
-
-            // Check each nearby node center collider
-            foreach (var col in currentOverlaps)
-            {
-                if (col != null && col.gameObject.name.StartsWith("NodeCenterCollider_"))
-                {
-                    Vector3 colliderCenter = col.bounds.center;
-                    Vector2 colliderCenter2D = new Vector2(colliderCenter.x, colliderCenter.y);
-
-                    // Check if the line segment from current to target passes within nodeCenterBlockRadius of the center
-                    float distToLine = PointToLineSegmentDistance(colliderCenter2D, currentPos2D, targetPos2D);
-
-                    if (distToLine < nodeCenterBlockRadius)
-                    {
-                        // Movement would pass through blocked zone - slide around it
-                        Vector2 toTarget2D = (targetPos2D - currentPos2D).normalized;
-                        Vector2 toCollider2D = (colliderCenter2D - currentPos2D).normalized;
-
-                        // Perpendicular to collider direction - choose side that's more aligned with target
-                        Vector2 perpLeft = new Vector2(-toCollider2D.y, toCollider2D.x);
-                        Vector2 perpRight = new Vector2(toCollider2D.y, -toCollider2D.x);
-
-                        // Pick the perpendicular that's more aligned with our target direction
-                        Vector2 slideDir = Vector2.Dot(perpLeft, toTarget2D) > Vector2.Dot(perpRight, toTarget2D)
-                            ? perpLeft : perpRight;
-
-                        // Slide along the obstacle
-                        float slideAmount = distance * 0.5f; // Slide half the distance we were trying to move
-                        blockedPosition = new Vector3(
-                            currentPos.x + slideDir.x * slideAmount,
-                            currentPos.y + slideDir.y * slideAmount,
-                            currentPos.z);
-                        return true;
-                    }
-                }
-            }
+            // Note: The second check (line-circle slide around node centers) was removed.
+            // The A* path already routes through walkable tiles which avoid node centers.
+            // SimplifyTilePath also validates that simplified segments don't cut through node centers.
+            // The slide behavior was causing visitors to get stuck in infinite loops near lanterns
+            // (slide sideways → off walkable tile → recovery → try waypoint → slide again).
 
             return false;
         }
@@ -3200,7 +3334,7 @@ namespace FaeMaze.Visitors
             {
                 // Snap position to P2 of the short segment before advancing
                 Vector3 snapPos = splineControlPoints[2];
-                snapPos.z = transform.position.z;
+                snapPos.z = PhysicsPosition.z;
                 RecordMoveCause("SplineInit_ShortSegmentSnap_1");
                 desiredPosition = snapPos;
                 hasDesiredPosition = true;
@@ -3247,7 +3381,7 @@ namespace FaeMaze.Visitors
             // P1: Check if visitor has diverged from the path waypoint
             // This can happen when pushed by NodeCenterCollider or other physics interactions
             Vector3 pathP1 = worldPath[p1Index];
-            Vector3 currentPos = transform.position;
+            Vector3 currentPos = PhysicsPosition;
             float divergence = Vector3.Distance(new Vector3(pathP1.x, pathP1.y, 0), new Vector3(currentPos.x, currentPos.y, 0));
 
             // If diverged more than 0.5 units, use current position as P1 to create a recovery spline
@@ -3323,7 +3457,7 @@ namespace FaeMaze.Visitors
             {
                 // Snap position to P2 of the short segment before advancing
                 Vector3 snapPos = splineControlPoints[2];
-                snapPos.z = transform.position.z;
+                snapPos.z = PhysicsPosition.z;
                 RecordMoveCause("SplineAdvance_ShortSegmentSnap");
                 desiredPosition = snapPos;
                 hasDesiredPosition = true;
@@ -3467,7 +3601,7 @@ namespace FaeMaze.Visitors
                 return false;
 
             var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
-            Vector3 currentPos = transform.position;
+            Vector3 currentPos = PhysicsPosition;
 
             foreach (var kvp in spawnPoints)
             {
@@ -3597,9 +3731,12 @@ namespace FaeMaze.Visitors
             hasDesiredPosition = false;
 
             // Remove Z constraint so tongue colliders can push us down during sinking
+            // Also zero velocity immediately — with linearDamping=0, residual velocity
+            // would keep the visitor sliding through devour/tongue models
             if (rb3D != null)
             {
                 rb3D.constraints = RigidbodyConstraints.FreezeRotation;  // Remove FreezePositionZ
+                rb3D.linearVelocity = Vector3.zero;
             }
 
             // Set grabbed state to stop all movement (lights stay on until consumed)
@@ -3717,7 +3854,7 @@ namespace FaeMaze.Visitors
                     continue;
 
                 // Check if visitor is within lantern's influence radius (world-space)
-                float distanceToLantern = Vector3.Distance(transform.position, lantern.transform.position);
+                float distanceToLantern = Vector3.Distance(PhysicsPosition, lantern.transform.position);
 
                 if (distanceToLantern <= lantern.InfluenceRadius)
                 {
@@ -3778,7 +3915,7 @@ namespace FaeMaze.Visitors
             // Calculate stop position at edge of exclusion zone (1 unit from lantern center)
             // Direction from lantern to visitor in XY plane
             const float LANTERN_EXCLUSION_RADIUS = 1f;
-            Vector3 visitorPos = transform.position;
+            Vector3 visitorPos = PhysicsPosition;
             Vector2 dirToVisitor = new Vector2(visitorPos.x - lanternWorldPos.x, visitorPos.y - lanternWorldPos.y);
             if (dirToVisitor.sqrMagnitude < 0.01f)
             {
@@ -3796,7 +3933,7 @@ namespace FaeMaze.Visitors
             );
 
             // Navigate to the stop position (not the lantern center)
-            worldPath = BuildWorldPath(transform.position, stopPosition);
+            worldPath = BuildWorldPath(PhysicsPosition, stopPosition);
             worldPathIndex = 0;
             ResetSplineState();
             RefreshStateFromFlags();
@@ -3942,7 +4079,7 @@ namespace FaeMaze.Visitors
             // Build graph-based path if enabled
             if (useGraphNavigation)
             {
-                graphPath = BuildGraphPath(transform.position, destination);
+                graphPath = BuildGraphPath(PhysicsPosition, destination);
                 ResetGraphNavigationState();
 
                 // If graph path valid, initialize first segment
@@ -3967,7 +4104,7 @@ namespace FaeMaze.Visitors
             }
 
             // Also build tile-based path as fallback
-            worldPath = BuildWorldPath(transform.position, destination);
+            worldPath = BuildWorldPath(PhysicsPosition, destination);
             worldPathIndex = 0;
             worldDestination = destination;
             ResetSplineState();
@@ -4033,7 +4170,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual void SetFrightened(float duration = 0f)
         {
-            SetFrightened(transform.position, duration);
+            SetFrightened(PhysicsPosition, duration);
         }
 
         /// <summary>
@@ -4169,11 +4306,6 @@ namespace FaeMaze.Visitors
         /// <param name="eventPosition">The world position where the frightening event occurred</param>
         protected virtual void OnWitnessVisitorGrabbed(Vector3 eventPosition)
         {
-            // TEMPORARILY DISABLED for performance debugging
-            // TODO: Re-enable after fixing performance issue
-            return;
-
-            /*
             // Don't react if already in a terminal or frightened state
             if (isFrightened || state == VisitorState.Consumed || state == VisitorState.Escaping ||
                 state == VisitorState.Grabbed || state == VisitorState.Dazed)
@@ -4182,21 +4314,21 @@ namespace FaeMaze.Visitors
             }
 
             // Check if within viewing distance (use same radius as red cap detection)
-            float distance = Vector3.Distance(transform.position, eventPosition);
+            float distance = Vector3.Distance(PhysicsPosition, eventPosition);
             if (distance > goblinDetectionRadius * 2f) // Double the red cap detection radius for witnessing events
             {
                 return;
             }
 
             // Simple line-of-sight check using raycast in XY plane
-            Vector3 direction = eventPosition - transform.position;
+            Vector3 direction = eventPosition - PhysicsPosition;
             direction.z = 0; // XY plane only
             float xyDistance = direction.magnitude;
 
             if (xyDistance > 0.1f)
             {
                 // Cast ray to check for walls
-                RaycastHit[] hits = Physics.RaycastAll(transform.position, direction.normalized, xyDistance);
+                RaycastHit[] hits = Physics.RaycastAll(PhysicsPosition, direction.normalized, xyDistance);
                 foreach (var hit in hits)
                 {
                     // If we hit a wall before reaching the event, we can't see it
@@ -4210,7 +4342,6 @@ namespace FaeMaze.Visitors
 
             // Visitor can see the event - become frightened
             SetFrightened(eventPosition);
-            */
         }
 
         /// <summary>
@@ -4232,7 +4363,7 @@ namespace FaeMaze.Visitors
                 if (goblin == null || goblin.gameObject == null)
                     continue;
 
-                float distance = Vector3.Distance(transform.position, goblin.transform.position);
+                float distance = Vector3.Distance(PhysicsPosition, goblin.transform.position);
 
                 if (distance <= goblinDetectionRadius)
                 {
@@ -4353,20 +4484,26 @@ namespace FaeMaze.Visitors
             // Ensure visitor is on a walkable tile before resuming pathing
             MoveToNearestWalkableTile();
 
-            // Resume from stop point toward the original destination
-            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && originalDestination != Vector3.zero)
+            // Resume toward the most relevant destination:
+            // If the visitor was lured (e.g., by MurmuringPaths fog), worldDestination points to the heart.
+            // Otherwise, use originalDestination (the exit portal).
+            Vector3 resumeDestination = (isLured && worldDestination != Vector3.zero)
+                ? worldDestination
+                : originalDestination;
+
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && resumeDestination != Vector3.zero)
             {
-                worldPath = BuildWorldPath(transform.position, originalDestination);
+                worldPath = BuildWorldPath(PhysicsPosition, resumeDestination);
                 worldPathIndex = 0;
-                worldDestination = originalDestination;
+                worldDestination = resumeDestination;
                 ResetSplineState();
-                state = VisitorState.Walking;
+                RefreshStateFromFlags(); // Use flag-based state (Lured if still lured, Walking otherwise)
             }
             else
             {
-                // Fallback: pick a random destination if no original destination
+                // Fallback: pick a random destination if no destination available
                 Vector3 randomDestination = GetRandomWanderDestination();
-                worldPath = BuildWorldPath(transform.position, randomDestination);
+                worldPath = BuildWorldPath(PhysicsPosition, randomDestination);
                 worldPathIndex = 0;
                 ResetSplineState();
                 state = VisitorState.Walking;
@@ -4395,19 +4532,25 @@ namespace FaeMaze.Visitors
             // Ensure visitor is on a walkable tile before resuming pathing
             MoveToNearestWalkableTile();
 
-            // Resume normal behavior
-            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && originalDestination != Vector3.zero)
+            // Resume toward the most relevant destination:
+            // If lured (e.g., by MurmuringPaths fog), continue toward the heart (worldDestination).
+            // Otherwise, revert to the original exit portal destination.
+            Vector3 resumeDestination = (isLured && worldDestination != Vector3.zero)
+                ? worldDestination
+                : originalDestination;
+
+            if (mazeGridBehaviour != null && mazeGridBehaviour.WorldSpaceMazeData != null && resumeDestination != Vector3.zero)
             {
-                worldPath = BuildWorldPath(transform.position, originalDestination);
+                worldPath = BuildWorldPath(PhysicsPosition, resumeDestination);
                 worldPathIndex = 0;
-                worldDestination = originalDestination;
+                worldDestination = resumeDestination;
                 ResetSplineState();
-                state = VisitorState.Walking;
+                RefreshStateFromFlags(); // Use flag-based state (Lured if still lured, Walking otherwise)
             }
             else
             {
                 Vector3 randomDestination = GetRandomWanderDestination();
-                worldPath = BuildWorldPath(transform.position, randomDestination);
+                worldPath = BuildWorldPath(PhysicsPosition, randomDestination);
                 worldPathIndex = 0;
                 ResetSplineState();
                 state = VisitorState.Walking;
@@ -4446,7 +4589,7 @@ namespace FaeMaze.Visitors
 
             // Calculate stop position at edge of exclusion zone (1 unit from lantern center)
             const float LANTERN_EXCLUSION_RADIUS = 1f;
-            Vector3 visitorPos = transform.position;
+            Vector3 visitorPos = PhysicsPosition;
             Vector2 dirToVisitor = new Vector2(visitorPos.x - lanternWorldPos.x, visitorPos.y - lanternWorldPos.y);
             if (dirToVisitor.sqrMagnitude < 0.01f)
             {
@@ -4511,11 +4654,11 @@ namespace FaeMaze.Visitors
                 // Pick a random node
                 int randomIndex = RandomManager.Range(0, nodeTiles.Count);
                 Vector2 nodePos = nodeTiles[randomIndex].Position;
-                return new Vector3(nodePos.x, nodePos.y, transform.position.z);
+                return new Vector3(nodePos.x, nodePos.y, PhysicsPosition.z);
             }
 
             // Fallback: return current position if no nodes found
-            return transform.position;
+            return PhysicsPosition;
         }
 
         /// <summary>
@@ -4566,7 +4709,7 @@ namespace FaeMaze.Visitors
 
             // Calculate starting angle based on current position relative to ring
             Vector2 ringPos = new Vector2(ring.transform.position.x, ring.transform.position.y);
-            Vector2 visitorPos = new Vector2(transform.position.x, transform.position.y);
+            Vector2 visitorPos = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
             Vector2 toVisitor = visitorPos - ringPos;
             fairyRingCircleAngle = Mathf.Atan2(toVisitor.y, toVisitor.x);
 
@@ -4629,7 +4772,7 @@ namespace FaeMaze.Visitors
 
             Vector3 ringCenter = currentFairyRing.transform.position;
             float effectiveSpeed = moveSpeed * speedMultiplier;
-            Vector3 oldPosition = transform.position;
+            Vector3 oldPosition = PhysicsPosition;
 
             // Phase 1: Approach the ring until we're at circle radius
             if (fairyRingApproaching)
@@ -4637,7 +4780,7 @@ namespace FaeMaze.Visitors
                 // Calculate target position at circle radius along current angle to ring
                 float targetX = ringCenter.x + Mathf.Cos(fairyRingCircleAngle) * FairyRingCircleRadius;
                 float targetY = ringCenter.y + Mathf.Sin(fairyRingCircleAngle) * FairyRingCircleRadius;
-                Vector3 targetPos = new Vector3(targetX, targetY, transform.position.z);
+                Vector3 targetPos = new Vector3(targetX, targetY, PhysicsPosition.z);
 
                 Vector3 newPosition = Vector3.MoveTowards(oldPosition, targetPos, effectiveSpeed * Time.deltaTime);
 
@@ -4676,7 +4819,7 @@ namespace FaeMaze.Visitors
             // Calculate new position directly on the circle at the new angle (fixed radius)
             float circleNewX = ringCenter.x + Mathf.Cos(fairyRingCircleAngle) * FairyRingCircleRadius;
             float circleNewY = ringCenter.y + Mathf.Sin(fairyRingCircleAngle) * FairyRingCircleRadius;
-            Vector3 circleNewPosition = new Vector3(circleNewX, circleNewY, transform.position.z);
+            Vector3 circleNewPosition = new Vector3(circleNewX, circleNewY, PhysicsPosition.z);
 
             // Update animator direction based on movement (tangent to circle)
             Vector3 circleMoveDir = (circleNewPosition - oldPosition).normalized;
@@ -4724,7 +4867,7 @@ namespace FaeMaze.Visitors
             }
 
             var mazeData = mazeGridBehaviour.WorldSpaceMazeData;
-            Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+            Vector2 currentPos2D = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
 
             // Check if current position is on a walkable tile
             var nearbyTiles = mazeData.GetTilesNear(currentPos2D, 0.5f);
@@ -4748,7 +4891,7 @@ namespace FaeMaze.Visitors
             var nearestTile = FindNearestWalkableTile(mazeData, currentPos2D);
             if (nearestTile != null)
             {
-                Vector3 newPos = new Vector3(nearestTile.Position.x, nearestTile.Position.y, transform.position.z);
+                Vector3 newPos = new Vector3(nearestTile.Position.x, nearestTile.Position.y, PhysicsPosition.z);
                 RecordMoveCause("EscapeToNearestWalkable");
                 desiredPosition = newPos;
                 hasDesiredPosition = true;
@@ -4795,7 +4938,7 @@ namespace FaeMaze.Visitors
             rb3D.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ;  // Freeze Z to prevent sinking
             rb3D.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;  // Best for dynamic vs kinematic
             rb3D.interpolation = RigidbodyInterpolation.Interpolate;
-            rb3D.linearDamping = 5f;  // Drag to slow down when not actively moving
+            rb3D.linearDamping = 0f;  // No damping — velocity is fully controlled each FixedUpdate via VelocityChange
             rb3D.angularDamping = 0f;
 
             // Remove any legacy colliders on the root GameObject IMMEDIATELY - we use the "Detect" child collider now
@@ -4937,7 +5080,7 @@ namespace FaeMaze.Visitors
 
             // Check a small sphere around the visitor's position
             // Use the visitor's actual collider bounds if available
-            Vector3 checkPos = transform.position;
+            Vector3 checkPos = PhysicsPosition;
             float checkRadius = 0.5f;  // Approximate visitor radius
 
             // Find the Detect collider for more accurate bounds
@@ -5166,13 +5309,17 @@ namespace FaeMaze.Visitors
 
                     if (shouldFade)
                     {
-                        // Switch to transparent rendering mode
+                        // Switch to transparent rendering mode (URP Lit shader)
                         mat.SetFloat("_Surface", 1); // 1 = Transparent in URP
                         mat.SetFloat("_Blend", 0);   // Alpha blend
+                        mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                        mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                        mat.SetFloat("_ZWrite", 0);  // Disable depth write for transparency
                         mat.SetOverrideTag("RenderType", "Transparent");
                         mat.renderQueue = 3000;
                         mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                         mat.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+                        mat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
 
                         // Set alpha on base color
                         if (mat.HasProperty("_BaseColor"))
@@ -5193,10 +5340,14 @@ namespace FaeMaze.Visitors
                     {
                         // Restore opaque rendering mode
                         mat.SetFloat("_Surface", 0); // 0 = Opaque in URP
+                        mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+                        mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.Zero);
+                        mat.SetFloat("_ZWrite", 1);  // Re-enable depth write
                         mat.SetOverrideTag("RenderType", "Opaque");
                         mat.renderQueue = -1;
                         mat.EnableKeyword("_SURFACE_TYPE_OPAQUE");
                         mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                        mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
 
                         if (mat.HasProperty("_BaseColor"))
                         {
@@ -5415,7 +5566,7 @@ namespace FaeMaze.Visitors
             }
 
             // Find the nearest node to our current position
-            Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+            Vector2 currentPos2D = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
             int nearestNodeId = FindNearestNodeIndex(graphState, currentPos2D);
             if (nearestNodeId < 0)
             {
@@ -5494,7 +5645,7 @@ namespace FaeMaze.Visitors
 
             // Build path: current position -> each detour node -> final destination
             var fullPath = new List<Vector3>();
-            Vector3 pathStart = transform.position;
+            Vector3 pathStart = PhysicsPosition;
 
             // Path to each detour node
             foreach (int nodeId in detourNodeIds)
@@ -5561,7 +5712,7 @@ namespace FaeMaze.Visitors
             }
 
             // Find nearest node to current position
-            Vector2 currentPos2D = new Vector2(transform.position.x, transform.position.y);
+            Vector2 currentPos2D = new Vector2(PhysicsPosition.x, PhysicsPosition.y);
             int nearestNodeId = FindNearestNodeIndex(graphState, currentPos2D);
             if (nearestNodeId < 0)
             {
@@ -5576,10 +5727,10 @@ namespace FaeMaze.Visitors
             }
 
             var destNode = graphState.Nodes[destNodeId];
-            Vector3 destWorldPos = new Vector3(destNode.Position.x, destNode.Position.y, transform.position.z);
+            Vector3 destWorldPos = new Vector3(destNode.Position.x, destNode.Position.y, PhysicsPosition.z);
 
             // Build path to the chosen node
-            worldPath = BuildWorldPath(transform.position, destWorldPos);
+            worldPath = BuildWorldPath(PhysicsPosition, destWorldPos);
             worldPathIndex = 0;
             worldDestination = destWorldPos;
             ResetSplineState();

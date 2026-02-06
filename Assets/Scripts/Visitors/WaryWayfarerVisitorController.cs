@@ -115,7 +115,7 @@ namespace FaeMaze.Visitors
                 if (shouldMisstep && worldPath != null && worldPathIndex < worldPath.Count)
                 {
                     // Mark current position as walked
-                    walkedPositions.Add(transform.position);
+                    walkedPositions.Add(PhysicsPosition);
                     isOnMisstepPath = true;
                     misstepSegmentStartIndex = worldPathIndex;
 
@@ -182,7 +182,7 @@ namespace FaeMaze.Visitors
 
             Vector3 nearestExit = Vector3.zero;
             float shortestDist = float.MaxValue;
-            Vector3 currentPos = transform.position;
+            Vector3 currentPos = PhysicsPosition;
 
             // Find nearest spawn point (portals/exits) - positions queried real-time from transforms
             foreach (var kvp in mazeData.GetSpawnPointPositions())

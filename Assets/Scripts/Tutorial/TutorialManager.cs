@@ -1487,42 +1487,59 @@ namespace FaeMaze.Tutorial
                     heartPos = new Vector3(seedNode.Position.x, seedNode.Position.y, 0f);
                 }
 
-                // Direction from lantern to heart
-                Vector3 dirToHeart = (heartPos - lanternPos).normalized;
-                if (dirToHeart.sqrMagnitude < 0.01f)
-                {
-                    dirToHeart = new Vector3(1f, 0f, 0f); // Fallback direction
-                }
-
-                // Calculate ideal spawn position: perpendicular to heart direction
-                // Rotate 90 degrees in XY plane so the visitor approaches along the walkable ring
-                // instead of bouncing through the unwalkable node center
-                Vector3 perpDir = new Vector3(-dirToHeart.y, dirToHeart.x, 0f);
-                Vector3 idealSpawnPos = lanternPos + perpDir * 5f;
-                idealSpawnPos.z = 0f;
-
-                // CRITICAL: Find the nearest walkable tile to the ideal spawn position
-                // The calculated position might be off the path (in the forest)
+                // Use graph topology to find spawn position on a connected edge
+                // The visitor will walk through the lantern's node toward the heart, getting fascinated
+                var dynamicMaze = FindFirstObjectByType<DynamicMazeGrowth>();
                 var mazeData = mazeGrid?.WorldSpaceMazeData;
-                Vector3 spawnPos;
-                if (mazeData != null)
-                {
-                    var nearestWalkableTile = MazePathfinding.FindNearestWalkableTile(
-                        mazeData, new Vector2(idealSpawnPos.x, idealSpawnPos.y));
+                Vector3 spawnPos = lanternPos;
 
-                    if (nearestWalkableTile != null)
-                    {
-                        spawnPos = new Vector3(nearestWalkableTile.Position.x, nearestWalkableTile.Position.y, 0f);
-                    }
-                    else
-                    {
-                        spawnPos = lanternPos - dirToHeart * 2f;
-                        spawnPos.z = 0f;
-                    }
-                }
-                else
+                Vector2 lanternPos2D = new Vector2(lanternPos.x, lanternPos.y);
+                Vector2 heartPos2D = new Vector2(heartPos.x, heartPos.y);
+
+                if (dynamicMaze != null && mazeGrid?.ForestMapState != null)
                 {
-                    spawnPos = idealSpawnPos;
+                    int lanternNodeIndex = dynamicMaze.FindNodeIndexAtPosition(lanternPos);
+                    if (lanternNodeIndex >= 0)
+                    {
+                        var mapState = mazeGrid.ForestMapState;
+                        var lanternNode = mapState.Nodes[lanternNodeIndex];
+
+                        // Find the incident edge whose far endpoint is farthest from heart
+                        float bestDist = -1f;
+                        Vector2 bestEndpointPos = lanternPos2D;
+
+                        foreach (int edgeId in lanternNode.IncidentEdges)
+                        {
+                            var edge = mapState.Edges[edgeId];
+                            if (!edge.IsComplete()) continue;
+
+                            int otherNodeIndex = (edge.NodeA == lanternNodeIndex)
+                                ? edge.NodeB.Value
+                                : edge.NodeA;
+
+                            var otherNode = mapState.Nodes[otherNodeIndex];
+                            float distFromHeart = Vector2.Distance(otherNode.Position, heartPos2D);
+
+                            if (distFromHeart > bestDist)
+                            {
+                                bestDist = distFromHeart;
+                                bestEndpointPos = otherNode.Position;
+                            }
+                        }
+
+                        // Spawn 3.5 units from lantern node center, toward the far endpoint
+                        Vector2 dirToFarEndpoint = (bestEndpointPos - lanternNode.Position).normalized;
+                        Vector2 idealSpawn2D = lanternNode.Position + dirToFarEndpoint * 3.5f;
+
+                        if (mazeData != null)
+                        {
+                            var tile = MazePathfinding.FindNearestWalkableTile(mazeData, idealSpawn2D);
+                            if (tile != null)
+                            {
+                                spawnPos = new Vector3(tile.Position.x, tile.Position.y, 0f);
+                            }
+                        }
+                    }
                 }
 
                 // Destination is the heart (visitor walks toward heart, through lantern area)
