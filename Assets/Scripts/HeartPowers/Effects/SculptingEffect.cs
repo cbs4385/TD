@@ -681,11 +681,7 @@ namespace FaeMaze.HeartPowers
             MeshRenderer meshRenderer = fogRing.AddComponent<MeshRenderer>();
 
             // Create material using PowerFog shader
-            var shader = Shader.Find("Custom/PowerFog");
-            if (shader == null)
-            {
-                shader = Shader.Find("Sprites/Default");
-            }
+            var shader = HeartPowerUtils.LoadShader("Custom/PowerFog", "Sprites/Default");
 
             Material fogMaterial = new Material(shader);
             fogMaterial.SetColor("_FogColor", smokeColor);
@@ -782,7 +778,7 @@ namespace FaeMaze.HeartPowers
             particleRenderer.renderMode = ParticleSystemRenderMode.Billboard;
             particleRenderer.sortingOrder = 101;
 
-            var particleMat = new Material(Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Sprites/Default"));
+            var particleMat = new Material(HeartPowerUtils.LoadShader("Particles/Standard Unlit", "Sprites/Default"));
             particleMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             particleMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             particleMat.SetInt("_ZWrite", 0);

@@ -140,20 +140,19 @@ namespace FaeMaze.HeartPowers
 
         private void LoadPrefabsIfNeeded()
         {
-#if UNITY_EDITOR
+            // Load prefabs from Resources folder (works in both Editor and builds)
             if (graspPrefab == null)
             {
-                graspPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Props/grasp.prefab");
+                graspPrefab = Resources.Load<GameObject>("Prefabs/Props/grasp");
             }
             if (tonguePrefab == null)
             {
-                tonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Tile/heart tongue.prefab");
+                tonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
             }
             if (devourPrefab == null)
             {
-                devourPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Props/devour.prefab");
+                devourPrefab = Resources.Load<GameObject>("Prefabs/Props/devour");
             }
-#endif
         }
 
         private void LoadPowerDefinitionsFromResources()
@@ -164,24 +163,13 @@ namespace FaeMaze.HeartPowers
                 return;
             }
 
-#if UNITY_EDITOR
-            // Load all HeartPowerDefinition assets from the ScriptableObjects folder
-            var guids = UnityEditor.AssetDatabase.FindAssets("t:HeartPowerDefinition", new[] { "Assets/Resources/ScriptableObjects/HeartPowers" });
-            if (guids.Length > 0)
+            // Load all HeartPowerDefinition assets from Resources folder
+            // Resources.Load works in both Editor and builds
+            var loadedDefinitions = Resources.LoadAll<HeartPowerDefinition>("ScriptableObjects/HeartPowers");
+            if (loadedDefinitions != null && loadedDefinitions.Length > 0)
             {
-                var definitions = new List<HeartPowerDefinition>();
-                foreach (var guid in guids)
-                {
-                    string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
-                    var def = UnityEditor.AssetDatabase.LoadAssetAtPath<HeartPowerDefinition>(path);
-                    if (def != null) definitions.Add(def);
-                }
-                if (definitions.Count > 0)
-                {
-                    powerDefinitions = definitions.ToArray();
-                }
+                powerDefinitions = loadedDefinitions;
             }
-#endif
         }
 
         private void Start()

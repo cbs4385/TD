@@ -24,12 +24,12 @@ namespace FaeMaze.Systems
         private bool disableEndCapWalls = false;
 
         [SerializeField]
-        [Tooltip("Prefab/model for front-rank wall tiles (full detail, LOD0)")]
+        [Tooltip("Prefab/model for wall tiles (treeLOD2 for performance)")]
         private GameObject wallPrefab;
 
         [SerializeField]
-        [Tooltip("Prefab/model for interior wall tiles (low detail, LOD2) - used for walls behind front rank")]
-        private GameObject wallPrefabLOD2;
+        [Tooltip("Prefab for kudzu vines at graph boundaries (layer 0 walls)")]
+        private GameObject kudzuPrefab;
 
         [SerializeField]
         [Tooltip("Prefab/model for undergrowth tiles")]
@@ -98,10 +98,6 @@ namespace FaeMaze.Systems
         [Tooltip("Use StaticBatchingUtility to combine wall meshes at runtime (significantly reduces draw calls).")]
         private bool enableStaticBatching = true;
 
-        [SerializeField]
-        [Tooltip("Always use LOD2 (low-poly) wall prefab for ALL walls, not just interior layers. Dramatically reduces vertex count.")]
-        private bool alwaysUseLOD2Walls = false;
-
         #endregion
 
         #region Private Fields
@@ -151,6 +147,8 @@ namespace FaeMaze.Systems
         public void SetUndergrowthPrefab(GameObject prefab) => undergrowthPrefab = prefab;
         public bool HasWaterPrefab => waterPrefab != null;
         public void SetWaterPrefab(GameObject prefab) => waterPrefab = prefab;
+        public bool HasKudzuPrefab => kudzuPrefab != null;
+        public void SetKudzuPrefab(GameObject prefab) => kudzuPrefab = prefab;
 
         /// <summary>
         /// Creates a wall tile at a specific world position.
@@ -180,6 +178,10 @@ namespace FaeMaze.Systems
         {
             pathColor = Color.saddleBrown;
             waterColor = Color.magenta;
+
+            // Always load wall and kudzu prefabs from Resources to override stale scene references
+            wallPrefab = Resources.Load<GameObject>("Prefabs/Tile/treeLOD2");
+            kudzuPrefab = Resources.Load<GameObject>("Prefabs/Tile/kudzu");
 
             // Load heart prefabs dynamically if not assigned via inspector
             if (heartBasePrefab == null)
@@ -1458,7 +1460,7 @@ namespace FaeMaze.Systems
         /// <summary>
         /// Creates a tile at a world-space position with the given orientation.
         /// </summary>
-        /// <param name="wallLayer">For walls: 0 = front rank (full detail), 1+ = interior (LOD2)</param>
+        /// <param name="wallLayer">For walls: 0 = front rank (graph boundary, gets kudzu), 1+ = interior</param>
         /// <param name="wallContainer">Optional container for walls - walls will be parented under this</param>
         private void CreateWorldSpaceTile(Vector3 worldPos, float orientationDegrees, char symbol, Transform mazeOrigin, bool isWall, int wallLayer = 0, GraphElementWallContainer wallContainer = null)
         {
@@ -1492,18 +1494,12 @@ namespace FaeMaze.Systems
 
             if (symbol == '#' && wallPrefab != null)
             {
-                // All walls use the same prefab, LOD selection is done via ConfigureWallLOD
                 tileObj = Instantiate(wallPrefab, tileParent);
                 tileObj.transform.position = worldPos;
                 // Apply Z-axis rotation only so model's X axis aligns radially (toward node center for node walls)
                 // Using tileRotation (Z-only) instead of flatPrefabRotation (which tilts on X-axis)
                 tileObj.transform.rotation = tileRotation;
                 // Wall models use prefab default scale (no additional scaling)
-
-                // Configure LOD based on wall layer:
-                // Front-rank (layer 0) uses LOD0 (high detail)
-                // Interior ranks (layer > 0) use LOD1 (lower detail)
-                ConfigureWallLOD(tileObj, wallLayer);
 
                 // Mark wall as static for runtime static batching
                 if (enableStaticBatching)
@@ -1530,6 +1526,33 @@ namespace FaeMaze.Systems
                 // This component will use Unity physics to detect collisions with nodes/edges
                 // and destroy the wall if it collides. This is the ONLY valid way to remove walls.
                 tileObj.AddComponent<WallCollisionChecker>();
+
+                // Place kudzu vine at graph boundary walls (front-rank, layer 0)
+                // Kudzu prefab has identity root transform (via KudzuPrefabSetup editor script)
+                // so it follows the same Z-rotation convention as treeLOD2 walls.
+                // +X faces toward graph element: use orientationDegrees + 180 for the Z rotation.
+                if (wallLayer == 0 && kudzuPrefab != null)
+                {
+                    // Shift kudzu 0.15 units toward the graph element to close gap
+                    float inwardRad = (orientationDegrees + 180f) * Mathf.Deg2Rad;
+                    Vector3 kudzuPos = worldPos + new Vector3(Mathf.Cos(inwardRad), Mathf.Sin(inwardRad), 0f) * 0.15f;
+
+                    GameObject kudzuObj = Instantiate(kudzuPrefab, tileParent);
+                    kudzuObj.transform.position = kudzuPos;
+                    kudzuObj.transform.rotation = Quaternion.Euler(0f, 0f, orientationDegrees + 180f);
+                    kudzuObj.name = $"Kudzu_{worldPos.x:F1}_{worldPos.y:F1}";
+                    if (enableStaticBatching)
+                    {
+                        kudzuObj.isStatic = true;
+                    }
+
+                    // Add collider and WallCollisionChecker so kudzu is cleaned up
+                    // when the graph expands and paths/nodes overlap this position
+                    SphereCollider kudzuCol = kudzuObj.AddComponent<SphereCollider>();
+                    kudzuCol.radius = 0.3f;
+                    kudzuCol.isTrigger = true;
+                    kudzuObj.AddComponent<WallCollisionChecker>();
+                }
             }
             else if (symbol == 'N' && nodeHazardPrefab != null)
             {
@@ -1621,41 +1644,6 @@ namespace FaeMaze.Systems
         #endregion
 
         #region Shared Methods
-
-        /// <summary>
-        /// Configures wall LOD based on wall layer.
-        /// Front-rank walls (layer 0) use LOD0 (high detail).
-        /// Interior walls (layer > 0) use LOD1 (lower detail).
-        /// </summary>
-        private void ConfigureWallLOD(GameObject wallObj, int wallLayer)
-        {
-            // Disable the LODGroup so it doesn't override our choice
-            LODGroup lodGroup = wallObj.GetComponent<LODGroup>();
-            if (lodGroup != null)
-            {
-                lodGroup.enabled = false;
-            }
-
-            // Find LOD renderers by name pattern
-            Renderer[] renderers = wallObj.GetComponentsInChildren<Renderer>(true);
-            foreach (Renderer renderer in renderers)
-            {
-                string name = renderer.gameObject.name.ToLower();
-                bool isLOD0 = name.Contains("lod0");
-                bool isLOD1 = name.Contains("lod1");
-
-                if (isLOD0)
-                {
-                    // LOD0 enabled for front-rank (layer 0), disabled for interior
-                    renderer.enabled = (wallLayer == 0);
-                }
-                else if (isLOD1)
-                {
-                    // LOD1 disabled for front-rank (layer 0), enabled for interior
-                    renderer.enabled = (wallLayer > 0);
-                }
-            }
-        }
 
         private void CreateTilesContainer(Transform mazeOrigin)
         {

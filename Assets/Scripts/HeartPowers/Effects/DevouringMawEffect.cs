@@ -183,14 +183,8 @@ namespace FaeMaze.HeartPowers
             }
 
             // Register frightening event so visitors flee when they see the active maw zone
-            if (FrighteningEventManager.Instance != null)
-            {
-                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    FrighteningEventManager.EventType.DevouringMaw,
-                    targetWorldPos,
-                    this
-                );
-            }
+            currentFrighteningEvent = HeartPowerUtils.RegisterFrighteningEvent(
+                FrighteningEventManager.EventType.DevouringMaw, targetWorldPos, this);
 
             // Tier I: Apply fear to nearby visitors
             if (definition.tier >= 1 && definition.flag1)
@@ -232,11 +226,7 @@ namespace FaeMaze.HeartPowers
         public override void OnEnd()
         {
             // Unregister frightening event
-            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-            {
-                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
-                currentFrighteningEvent = null;
-            }
+            HeartPowerUtils.UnregisterFrighteningEvent(ref currentFrighteningEvent);
 
             // Clean up any in-progress devour
             if (devourVisual != null)
@@ -484,12 +474,8 @@ namespace FaeMaze.HeartPowers
             meshFilter.mesh = HeartPowerUtils.CreateCircleMesh(visualRadius, 32, "CircleFogMesh");
 
             // Create fog material using DevourDust shader for billowing dust effect
-            Shader fogShader = Shader.Find("Custom/DevourDust");
-            if (fogShader == null)
-            {
-                fogShader = Shader.Find("Universal Render Pipeline/Unlit");
-                if (fogShader == null) fogShader = Shader.Find("Unlit/Color");
-            }
+            Shader fogShader = HeartPowerUtils.LoadShader("Custom/DevourDust", "Universal Render Pipeline/Unlit")
+                ?? HeartPowerUtils.LoadShader("Unlit/Color");
 
             fogMaterial = new Material(fogShader);
 
@@ -815,11 +801,7 @@ namespace FaeMaze.HeartPowers
 
                 case DevourPhase.Complete:
                     // Unregister frightening event
-                    if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-                    {
-                        FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
-                        currentFrighteningEvent = null;
-                    }
+                    HeartPowerUtils.UnregisterFrighteningEvent(ref currentFrighteningEvent);
 
                     // Clean up and reset for next cycle
                     if (devourVisual != null)
@@ -975,12 +957,7 @@ namespace FaeMaze.HeartPowers
 
             foreach (var visitor in visitors)
             {
-                if (visitor == null ||
-                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
-                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
-                {
-                    continue;
-                }
+                if (!HeartPowerUtils.IsVisitorTargetable(visitor)) continue;
 
                 float distance = Vector3.Distance(visitor.transform.position, centerWorldPos);
 
@@ -1000,12 +977,7 @@ namespace FaeMaze.HeartPowers
 
             foreach (var visitor in visitors)
             {
-                if (visitor == null ||
-                    visitor.State == VisitorControllerBase.VisitorState.Consumed ||
-                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
-                {
-                    continue;
-                }
+                if (!HeartPowerUtils.IsVisitorTargetable(visitor)) continue;
 
                 float distance = Vector3.Distance(visitor.transform.position, centerWorldPos);
 

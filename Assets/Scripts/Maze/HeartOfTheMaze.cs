@@ -406,11 +406,7 @@ namespace FaeMaze.Maze
             currentTargetAngle = 0f;
 
             // Unregister frightening event
-            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-            {
-                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
-                currentFrighteningEvent = null;
-            }
+            HeartPowerUtils.UnregisterFrighteningEvent(ref currentFrighteningEvent);
 
             if (heartTongueInstance != null)
             {
@@ -436,14 +432,8 @@ namespace FaeMaze.Maze
             UpdateTargetAngle();
 
             // Register frightening event - nearby visitors will flee from the heart
-            if (FrighteningEventManager.Instance != null)
-            {
-                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    FrighteningEventManager.EventType.HeartTongue,
-                    transform.position,
-                    this
-                );
-            }
+            currentFrighteningEvent = HeartPowerUtils.RegisterFrighteningEvent(
+                FrighteningEventManager.EventType.HeartTongue, transform.position, this);
 
             // Activate tongue from pool
             if (heartTongueInstance != null)
@@ -563,9 +553,7 @@ namespace FaeMaze.Maze
 
         private bool IsVisitorValid(VisitorControllerBase visitor)
         {
-            if (visitor == null || visitor.gameObject == null) return false;
-            if (visitor.State == VisitorControllerBase.VisitorState.Consumed) return false;
-            if (visitor.State == VisitorControllerBase.VisitorState.Escaping) return false;
+            if (!HeartPowerUtils.IsVisitorTargetable(visitor)) return false;
 
             float distance = Vector2.Distance(
                 new Vector2(transform.position.x, transform.position.y),
@@ -581,16 +569,15 @@ namespace FaeMaze.Maze
 
         private void LoadPrefabs()
         {
-#if UNITY_EDITOR
+            // Load prefabs from Resources folder (works in both Editor and builds)
             if (heartBasePrefab == null)
             {
-                heartBasePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Tile/heartbase.prefab");
+                heartBasePrefab = Resources.Load<GameObject>("Prefabs/Tile/heartbase");
             }
             if (heartTonguePrefab == null)
             {
-                heartTonguePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Tile/heart tongue.prefab");
+                heartTonguePrefab = Resources.Load<GameObject>("Prefabs/Tile/heart tongue");
             }
-#endif
         }
 
         private void SetupHeartBase()
@@ -645,10 +632,7 @@ namespace FaeMaze.Maze
             heartTongueInstance.transform.localPosition = localPos;
 
             // Remove lights from tongue model
-            foreach (Light light in heartTongueInstance.GetComponentsInChildren<Light>())
-            {
-                Destroy(light);
-            }
+            HeartPowerUtils.DestroyAllLights(heartTongueInstance);
 
             // Find bones and store rest poses
             tongueBoneData = TongueUtility.SetupTongueBones(heartTongueInstance);
@@ -661,47 +645,18 @@ namespace FaeMaze.Maze
 
         private void FindBoneColliders()
         {
-            if (heartTongueInstance == null) return;
-
-            var colliderList = new List<GameObject>();
-            foreach (Transform child in heartTongueInstance.GetComponentsInChildren<Transform>(true))
-            {
-                if (child.name.StartsWith("SolidCollider_"))
-                {
-                    colliderList.Add(child.gameObject);
-                }
-            }
-
-            boneColliderObjects = colliderList.ToArray();
+            boneColliderObjects = TongueUtility.FindSolidColliders(heartTongueInstance);
             DisableBoneColliders();
         }
 
         private void EnableBoneColliders()
         {
-            if (boneColliderObjects == null) return;
-
-            foreach (var obj in boneColliderObjects)
-            {
-                if (obj != null)
-                {
-                    var col = obj.GetComponent<SphereCollider>();
-                    if (col != null) col.enabled = true;
-                }
-            }
+            TongueUtility.SetSolidCollidersEnabled(boneColliderObjects, true);
         }
 
         private void DisableBoneColliders()
         {
-            if (boneColliderObjects == null) return;
-
-            foreach (var obj in boneColliderObjects)
-            {
-                if (obj != null)
-                {
-                    var col = obj.GetComponent<SphereCollider>();
-                    if (col != null) col.enabled = false;
-                }
-            }
+            TongueUtility.SetSolidCollidersEnabled(boneColliderObjects, false);
         }
 
         #endregion

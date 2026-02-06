@@ -48,7 +48,12 @@
       "Bash(where:*)",
       "Bash(git rm:*)",
       "Bash(git -C \"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\" log --oneline --all -- \"Assets/Scripts/HeartPowers/HeartPowerEffects.cs\")",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\" -batchmode -projectPath . -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit -logFile -)",
+      "Bash(cmd.exe /c \"\"\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\"\" -batchmode -projectPath \"\"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\"\" -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit\")",
+      "Bash(tasklist:*)",
+      "Bash(cmd.exe /c \"\"\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\"\" -batchmode -projectPath \"\"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\"\" -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit -logFile C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\build.log\")",
+      "Bash(xxd:*)"
     ],
     "deny": [],
     "ask": []

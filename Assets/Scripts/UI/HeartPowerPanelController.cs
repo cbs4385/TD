@@ -16,8 +16,10 @@ namespace FaeMaze.UI
     /// of the screen for activating Heart Powers.
     /// Automatically creates the UI if not manually set up.
     /// </summary>
-    public class HeartPowerPanelController : MonoBehaviour
+    public class HeartPowerPanelController : MonoBehaviour, IReadyReporter
     {
+        public bool IsReady { get; private set; }
+
         #region Serialized Fields
 
         [Header("UI References (Optional - will auto-create if null)")]
@@ -178,6 +180,7 @@ namespace FaeMaze.UI
                 flashIntensity[i] = 0.0f; // No flash initially
             }
 
+            IsReady = true;
         }
 
         private void Update()

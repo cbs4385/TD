@@ -9,8 +9,10 @@ namespace FaeMaze.UI
     /// Controls the essence bar UI at the top of the screen.
     /// The bar auto-scales its maximum to the highest essence value the player has achieved.
     /// </summary>
-    public class EssenceBarController : MonoBehaviour
+    public class EssenceBarController : MonoBehaviour, IReadyReporter
     {
+        public bool IsReady { get; private set; }
+
         #region Private Fields
 
         private GameObject essenceBarPanel;
@@ -50,6 +52,7 @@ namespace FaeMaze.UI
 
             CreateEssenceBarUI();
             UpdateDisplay();
+            IsReady = true;
         }
 
         private void OnEnable()

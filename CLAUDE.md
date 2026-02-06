@@ -5,45 +5,53 @@ These rules exist because violations have caused repeated bugs that took hours t
 
 ---
 
-# 🚨🚨🚨 CRITICAL: ASSET LOADING - NO FALLBACKS, NO Resources.Load 🚨🚨🚨
+# 🚨🚨🚨 CRITICAL: ASSET LOADING - USE Resources.Load, NO FALLBACKS, NO #if UNITY_EDITOR 🚨🚨🚨
 
-## USE AssetDatabase ONLY - NEVER Resources.Load, NEVER FALLBACKS
+## USE Resources.Load ONLY - NEVER AssetDatabase, NEVER #if UNITY_EDITOR, NEVER FALLBACKS
 
-**All assets live under `Assets/Resources/`.** Load them with `AssetDatabase.LoadAssetAtPath` using the full path including `Assets/Resources/`.
+**All assets live under `Assets/Resources/`.** Load them with `Resources.Load` using the path relative to the Resources folder (WITHOUT the `Assets/Resources/` prefix, WITHOUT the file extension).
+
+**NEVER use `#if UNITY_EDITOR`** for asset loading. Code inside `#if UNITY_EDITOR` blocks does NOT run in builds, which causes assets to be null in builds while appearing to work in the editor.
+
+**NEVER use `AssetDatabase`** in runtime scripts. It's Editor-only and won't work in builds.
 
 **NEVER write fallback code.** No "else" branches, no "backup" paths, no "workaround" alternatives. If the asset isn't found, let it be null. Fallback code has repeatedly introduced bugs that take hours to diagnose because the fallback silently does the wrong thing.
 
 ### The ONE correct pattern:
 ```csharp
-#if UNITY_EDITOR
+// CORRECT - Resources.Load works in BOTH Editor AND builds
 if (myPrefab == null)
 {
-    myPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Prefabs/Props/devour.prefab");
+    myPrefab = Resources.Load<GameObject>("Prefabs/Props/devour");
 }
-#endif
 ```
 
 ### Asset locations (ALL under Assets/Resources/):
-| Asset Type | Path |
-|-----------|------|
-| Prefabs (Props) | `Assets/Resources/Prefabs/Props/` |
-| Prefabs (Tile) | `Assets/Resources/Prefabs/Tile/` |
-| Prefabs (Visitors) | `Assets/Resources/Prefabs/Visitors/` |
-| ScriptableObjects | `Assets/Resources/ScriptableObjects/HeartPowers/` |
-| Textures | `Assets/Textures/` |
-| Shaders | `Shader.Find("Custom/ShaderName")` |
+| Asset Type | Folder Path | Resources.Load Path |
+|-----------|-------------|---------------------|
+| Prefabs (Props) | `Assets/Resources/Prefabs/Props/` | `Prefabs/Props/filename` |
+| Prefabs (Tile) | `Assets/Resources/Prefabs/Tile/` | `Prefabs/Tile/filename` |
+| Prefabs (Visitors) | `Assets/Resources/Prefabs/Visitors/` | `Prefabs/Visitors/filename` |
+| ScriptableObjects | `Assets/Resources/ScriptableObjects/HeartPowers/` | `ScriptableObjects/HeartPowers/filename` |
+| Textures | `Assets/Textures/` | N/A (not in Resources) |
+| Shaders | N/A | `Shader.Find("Custom/ShaderName")` |
 
 ### VIOLATIONS - NEVER DO THESE:
 ```csharp
-// WRONG - Resources.Load (uses different path resolution, causes silent failures)
-Resources.Load<GameObject>("Prefabs/Props/devour");
+// WRONG - #if UNITY_EDITOR makes code NOT RUN IN BUILDS
+#if UNITY_EDITOR
+myPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<...>(...);  // BROKEN IN BUILDS!
+#endif
+
+// WRONG - AssetDatabase is Editor-only, won't compile in builds
+myPrefab = AssetDatabase.LoadAssetAtPath<...>(...);  // WON'T WORK IN BUILDS!
+
+// WRONG - Including "Assets/Resources/" prefix or file extension
+Resources.Load<GameObject>("Assets/Resources/Prefabs/Props/devour.prefab");  // WRONG PATH!
 
 // WRONG - Fallback code that silently does something different
 if (prefab == null) { CreateFallbackVisual(); }  // NO! Just return/skip!
 if (renderer.bones == null) { /* use GetComponentsInChildren instead */ }  // NO!
-
-// WRONG - Old asset paths (assets moved to Resources/)
-AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Props/devour.prefab");  // WRONG PATH!
 ```
 
 **SEARCH THE CODEBASE BEFORE WRITING ASSET LOADING CODE!**

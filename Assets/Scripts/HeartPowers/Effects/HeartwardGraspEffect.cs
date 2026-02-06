@@ -184,14 +184,8 @@ namespace FaeMaze.HeartPowers
             FindAffectedGrabbingWalls();
 
             // Register frightening event so visitors flee when they see the active HGZ
-            if (FrighteningEventManager.Instance != null)
-            {
-                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    FrighteningEventManager.EventType.HeartwardGrasp,
-                    grabbingWallPos,
-                    this
-                );
-            }
+            currentFrighteningEvent = HeartPowerUtils.RegisterFrighteningEvent(
+                FrighteningEventManager.EventType.HeartwardGrasp, grabbingWallPos, this);
         }
 
         /// <summary>
@@ -839,10 +833,7 @@ namespace FaeMaze.HeartPowers
                 grabbingTongueZPosition);
 
             // Remove any Light components
-            foreach (var light in grabbingTongueInstance.GetComponentsInChildren<Light>())
-            {
-                Object.Destroy(light);
-            }
+            HeartPowerUtils.DestroyAllLights(grabbingTongueInstance);
 
             // Find and store bone references via shared utility
             grabbingTongueData = TongueUtility.SetupTongueBones(grabbingTongueInstance);
@@ -884,10 +875,7 @@ namespace FaeMaze.HeartPowers
                 pushingTongueZPosition);
 
             // Remove lights
-            foreach (var light in pushingTongueInstance.GetComponentsInChildren<Light>())
-            {
-                Object.Destroy(light);
-            }
+            HeartPowerUtils.DestroyAllLights(pushingTongueInstance);
 
             // Find bones via shared utility
             pushingTongueData = TongueUtility.SetupTongueBones(pushingTongueInstance);
@@ -902,45 +890,17 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void FindGrabbingSolidColliders()
         {
-            // Colliders are now baked into the prefab - just find them
-            if (grabbingTongueInstance == null) return;
-
-            var solidColliders = new List<GameObject>();
-            Transform[] allTransforms = grabbingTongueInstance.GetComponentsInChildren<Transform>(true);
-
-            foreach (Transform t in allTransforms)
-            {
-                if (t.name.StartsWith("SolidCollider_"))
-                {
-                    solidColliders.Add(t.gameObject);
-                }
-            }
-
-            grabbingSolidColliders = solidColliders.ToArray();
-
-            // Disable colliders initially (enable during Extending phase)
+            grabbingSolidColliders = TongueUtility.FindSolidColliders(grabbingTongueInstance);
             SetGrabbingSolidCollidersEnabled(false);
         }
 
         /// <summary>
         /// Enables or disables solid colliders for collision detection.
-        /// Same pattern as HeartOfTheMaze.EnableBoneColliders/DisableBoneColliders.
         /// Also sets the static flag so visitors know to check for tongue collision.
         /// </summary>
         private void SetGrabbingSolidCollidersEnabled(bool enabled)
         {
-            if (grabbingSolidColliders == null) return;
-
-            foreach (var colliderObj in grabbingSolidColliders)
-            {
-                if (colliderObj != null)
-                {
-                    var collider = colliderObj.GetComponent<SphereCollider>();
-                    if (collider != null) collider.enabled = enabled;
-                }
-            }
-
-            // Set static flag so visitors know to check for tongue collision
+            TongueUtility.SetSolidCollidersEnabled(grabbingSolidColliders, enabled);
             IsGraspTongueActiveWithColliders = enabled;
         }
 
@@ -1675,11 +1635,7 @@ namespace FaeMaze.HeartPowers
         public override void OnEnd()
         {
             // Unregister frightening event
-            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-            {
-                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
-                currentFrighteningEvent = null;
-            }
+            HeartPowerUtils.UnregisterFrighteningEvent(ref currentFrighteningEvent);
 
             // Clear static instance reference
             if (ActiveInstance == this)

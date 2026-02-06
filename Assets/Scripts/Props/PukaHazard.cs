@@ -4,6 +4,7 @@ using UnityEngine;
 using FaeMaze.Visitors;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
+using FaeMaze.HeartPowers;
 using FaeMaze.Roguelike;
 using static FaeMaze.Systems.FrighteningEventManager;
 
@@ -368,14 +369,8 @@ namespace FaeMaze.Props
             SetState(PukaState.Active);
 
             // Register frightening event - nearby visitors will flee
-            if (FrighteningEventManager.Instance != null)
-            {
-                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    FrighteningEventManager.EventType.PukaDrowning,
-                    transform.position,
-                    this
-                );
-            }
+            currentFrighteningEvent = HeartPowerUtils.RegisterFrighteningEvent(
+                FrighteningEventManager.EventType.PukaDrowning, transform.position, this);
 
             // Rotate kelpie_active model to face the visitor
             RotateKelpieToFaceVisitor(visitor.transform.position);
@@ -544,11 +539,7 @@ namespace FaeMaze.Props
             }
 
             // Unregister frightening event
-            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-            {
-                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
-                currentFrighteningEvent = null;
-            }
+            HeartPowerUtils.UnregisterFrighteningEvent(ref currentFrighteningEvent);
 
             // Revert to idle state
             currentVictim = null;

@@ -490,7 +490,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d758ce0ab77047e4b8f795c60a4aa237, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.Cameras.GlobalVolumeSetup
   bloomThreshold: 0.9
   bloomIntensity: 1.5
@@ -498,6 +498,12 @@ MonoBehaviour:
   enableFog: 1
   fogColor: {r: 0.5, g: 0.5, b: 0.6, a: 1}
   fogDensity: 0.02
+  enableRadialBlur: 1
+  blurClearRadius: 85
+  blurIntensity: 0.5
+  blurSamples: 8
+  vignetteCoverage: 30
+  vignetteIntensity: 0.8
 --- !u!1 &763884661
 GameObject:
   m_ObjectHideFlags: 0
@@ -628,14 +634,14 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 820251993}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 12
   m_Type: 1
   m_Color: {r: 0.8, g: 0.8, b: 0.8, a: 1}
   m_Intensity: 0.9
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
-  m_CookieSize: 10
+  m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
     m_Type: 0
     m_Resolution: -1
@@ -695,6 +701,50 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &834122513
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 834122515}
+  - component: {fileID: 834122514}
+  m_Layer: 0
+  m_Name: SceneLoadingMask
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &834122514
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834122513}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a5b84a2c6e318e4eaa6e1607d7fad8c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaeMaze.UI.SceneLoadingMask
+--- !u!4 &834122515
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834122513}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -803,6 +853,7 @@ MonoBehaviour:
   autoCenterCamera: 1
   autoAddVoidFog: 1
   defaultWallPrefab: {fileID: 6667140854805589535, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
+  defaultKudzuPrefab: {fileID: 0}
   defaultUndergrowthPrefab: {fileID: 5635536503766265964, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   defaultWaterPrefab: {fileID: 0}
 --- !u!114 &963194230
@@ -820,7 +871,7 @@ MonoBehaviour:
   disableWalls: 0
   disableEndCapWalls: 0
   wallPrefab: {fileID: 1797253899782226283, guid: 4c1767d4bc81fe049a7a89cff47dd7dd, type: 3}
-  wallPrefabLOD2: {fileID: 8303703275134932937, guid: 7a30ebae864fca341a8ed027b8c475c7, type: 3}
+  kudzuPrefab: {fileID: 0}
   undergrowthPrefab: {fileID: 4824511089988406589, guid: a4290081b91d6e044b4c05b796a92d3b, type: 3}
   waterPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
   nodeHazardPrefab: {fileID: 4788621107301236323, guid: 2061dc4c05668314d8057adb89b6a151, type: 3}
@@ -836,7 +887,6 @@ MonoBehaviour:
   wallBorderDepth: 3
   tilesParent: {fileID: 0}
   enableStaticBatching: 1
-  alwaysUseLOD2Walls: 1
 --- !u!114 &963194231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1039,6 +1089,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -1176,6 +1227,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -1285,9 +1337,9 @@ MonoBehaviour:
   lanternDrunkVisitorPrefab: {fileID: 7849252713577324535, guid: e642516a3fb51c94a99c12ba11971ab8, type: 3}
   waryWayfarerVisitorPrefab: {fileID: 6000000003, guid: 2ad749bec494848408ae087122a2a286, type: 3}
   sleepwalkingVisitorPrefab: {fileID: 5000000003, guid: fcf1ccc101e3d2f4da955bc0eea16b81, type: 3}
-  redCapPrefab: {fileID: 7652839950100921278, guid: 7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d, type: 3}
+  goblinPrefab: {fileID: 0}
   baseSpawnInterval: 5
-  enableRedCap: 1
+  enableGoblin: 1
   enableWaveSpawnerUI: 0
   uiCanvas: {fileID: 0}
   fontSize: 20
@@ -1492,6 +1544,9 @@ MonoBehaviour:
   edgeIndicatorColor: {r: 1, g: 0.8, b: 0.2, a: 1}
   graphNodeColor: {r: 0.4, g: 0.6, b: 0.8, a: 0.6}
   graphEdgeColor: {r: 0.3, g: 0.5, b: 0.3, a: 0.4}
+  fogHighlightColor: {r: 0.6, g: 0.3, b: 0.7, a: 0.8}
+  misdirectHighlightColor: {r: 0.2, g: 0.8, b: 0.9, a: 0.8}
+  highlightEdgeWidthMultiplier: 2
   heartDotSize: 8
   visitorDotSize: 4
   crosshairSize: 10
@@ -1923,3 +1978,4 @@ SceneRoots:
   - {fileID: 820251996}
   - {fileID: 1644971210}
   - {fileID: 1113833344}
+  - {fileID: 834122515}

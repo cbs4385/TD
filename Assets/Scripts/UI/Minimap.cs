@@ -14,7 +14,7 @@ namespace FaeMaze.UI
     /// Shows a configurable tile radius with edge indicators for distant objects.
     /// Rotates with camera so forward is always up.
     /// </summary>
-    public class Minimap : MonoBehaviour
+    public class Minimap : MonoBehaviour, IReadyReporter
     {
         [Header("References")]
         [SerializeField]
@@ -147,6 +147,8 @@ namespace FaeMaze.UI
         private List<Image> graphNodeDots = new List<Image>();
         private List<List<RectTransform>> graphEdgeSegments = new List<List<RectTransform>>(); // Each edge has multiple segments
 
+        public bool IsReady { get; private set; }
+
         private void Awake()
         {
             mainCamera = Camera.main;
@@ -183,6 +185,8 @@ namespace FaeMaze.UI
                 CreateHeartDot();
                 CreateHeartEdgeIndicator();
             }
+
+            IsReady = true;
         }
 
         private void CreateSprites()

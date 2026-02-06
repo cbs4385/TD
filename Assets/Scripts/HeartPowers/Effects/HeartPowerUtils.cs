@@ -412,5 +412,88 @@ namespace FaeMaze.HeartPowers
         }
 
         #endregion
+
+        #region Frightening Event Helpers
+
+        /// <summary>
+        /// Safely registers a frightening event. Returns null if manager doesn't exist.
+        /// </summary>
+        public static FrighteningEventManager.FrighteningEvent RegisterFrighteningEvent(
+            FrighteningEventManager.EventType type, Vector3 position, object source)
+        {
+            if (FrighteningEventManager.Instance == null) return null;
+            return FrighteningEventManager.Instance.RegisterEvent(type, position, source);
+        }
+
+        /// <summary>
+        /// Safely unregisters a frightening event and nulls the reference.
+        /// </summary>
+        public static void UnregisterFrighteningEvent(ref FrighteningEventManager.FrighteningEvent evt)
+        {
+            if (evt != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UnregisterEvent(evt);
+            }
+            evt = null;
+        }
+
+        /// <summary>
+        /// Safely updates the position of an existing frightening event.
+        /// </summary>
+        public static void UpdateFrighteningEventPosition(FrighteningEventManager.FrighteningEvent evt, Vector3 newPosition)
+        {
+            if (evt != null && FrighteningEventManager.Instance != null)
+            {
+                FrighteningEventManager.Instance.UpdateEventPosition(evt, newPosition);
+            }
+        }
+
+        #endregion
+
+        #region Light Removal
+
+        /// <summary>
+        /// Removes all Light components from an object and its children.
+        /// Used to prevent GLB model lights from interfering with game lighting.
+        /// </summary>
+        public static void DestroyAllLights(GameObject obj)
+        {
+            if (obj == null) return;
+            foreach (Light light in obj.GetComponentsInChildren<Light>())
+            {
+                Object.Destroy(light);
+            }
+        }
+
+        #endregion
+
+        #region Shader Helpers (Loading)
+
+        /// <summary>
+        /// Loads a shader by name with an optional fallback.
+        /// </summary>
+        public static Shader LoadShader(string primaryName, string fallbackName = null)
+        {
+            Shader shader = Shader.Find(primaryName);
+            if (shader == null && fallbackName != null)
+            {
+                shader = Shader.Find(fallbackName);
+            }
+            return shader;
+        }
+
+        #endregion
+
+        #region Visitor Null Guard
+
+        /// <summary>
+        /// Checks if a visitor reference is valid (not null and GameObject still exists).
+        /// </summary>
+        public static bool IsVisitorAlive(VisitorControllerBase visitor)
+        {
+            return visitor != null && visitor.gameObject != null;
+        }
+
+        #endregion
     }
 }

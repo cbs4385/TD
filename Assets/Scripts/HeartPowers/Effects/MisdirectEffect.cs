@@ -304,11 +304,7 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void CreateMisdirectFogMaterial(List<Vector3> tilePositions)
         {
-            var shader = Shader.Find("Custom/PowerFog");
-            if (shader == null)
-            {
-                shader = Shader.Find("Sprites/Default");
-            }
+            var shader = HeartPowerUtils.LoadShader("Custom/PowerFog", "Sprites/Default");
 
             fogMaterial = new Material(shader);
             fogMaterial.SetColor("_FogColor", FogColor);

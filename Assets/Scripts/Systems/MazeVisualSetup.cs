@@ -33,6 +33,10 @@ namespace FaeMaze.Systems
         private GameObject defaultWallPrefab;
 
         [SerializeField]
+        [Tooltip("Kudzu prefab for graph boundary walls")]
+        private GameObject defaultKudzuPrefab;
+
+        [SerializeField]
         [Tooltip("Undergrowth prefab/model to inject when MazeRenderer is missing a reference")]
         private GameObject defaultUndergrowthPrefab;
 
@@ -63,10 +67,16 @@ namespace FaeMaze.Systems
 
         private void LoadDefaultPrefabs()
         {
-            // Load wall prefab if not assigned
+            // Load wall prefab if not assigned (treeLOD2 for performance)
             if (defaultWallPrefab == null)
             {
-                defaultWallPrefab = Resources.Load<GameObject>("Prefabs/Tile/tree");
+                defaultWallPrefab = Resources.Load<GameObject>("Prefabs/Tile/treeLOD2");
+            }
+
+            // Load kudzu prefab for graph boundary walls
+            if (defaultKudzuPrefab == null)
+            {
+                defaultKudzuPrefab = Resources.Load<GameObject>("Prefabs/Tile/kudzu");
             }
 
             // Load undergrowth prefab if not assigned
@@ -154,6 +164,11 @@ namespace FaeMaze.Systems
                 if (renderer != null && !renderer.HasWaterPrefab && defaultWaterPrefab != null)
                 {
                     renderer.SetWaterPrefab(defaultWaterPrefab);
+                }
+
+                if (renderer != null && !renderer.HasKudzuPrefab && defaultKudzuPrefab != null)
+                {
+                    renderer.SetKudzuPrefab(defaultKudzuPrefab);
                 }
             }
         }

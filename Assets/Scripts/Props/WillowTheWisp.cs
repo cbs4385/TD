@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Visitors;
+using FaeMaze.HeartPowers;
 using FaeMaze.Systems;
 using FaeMaze.Utilities;
 using ForestMaze;
@@ -761,14 +762,8 @@ namespace FaeMaze.Props
             state = WispState.Reacting;
 
             // Register frightening event - other visitors will flee from seeing the lure
-            if (FrighteningEventManager.Instance != null)
-            {
-                currentFrighteningEvent = FrighteningEventManager.Instance.RegisterEvent(
-                    FrighteningEventManager.EventType.WispLure,
-                    transform.position,
-                    this
-                );
-            }
+            currentFrighteningEvent = HeartPowerUtils.RegisterFrighteningEvent(
+                FrighteningEventManager.EventType.WispLure, transform.position, this);
 
             // NOW notify the visitor to follow this wisp (we're near them on a walkable tile)
             var followWisp = targetVisitor.gameObject.GetComponent<FollowWispBehavior>();
@@ -918,10 +913,7 @@ namespace FaeMaze.Props
             }
 
             // Update frightening event position as we move
-            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-            {
-                FrighteningEventManager.Instance.UpdateEventPosition(currentFrighteningEvent, transform.position);
-            }
+            HeartPowerUtils.UpdateFrighteningEventPosition(currentFrighteningEvent, transform.position);
 
             // Check if visitor is no longer in a lurable state (consumed, etc.)
             if (!IsVisitorLurable(targetVisitor.State) && targetVisitor.State != VisitorControllerBase.VisitorState.Escaping)
@@ -1075,11 +1067,7 @@ namespace FaeMaze.Props
         private void ReturnToIdle()
         {
             // Unregister frightening event
-            if (currentFrighteningEvent != null && FrighteningEventManager.Instance != null)
-            {
-                FrighteningEventManager.Instance.UnregisterEvent(currentFrighteningEvent);
-                currentFrighteningEvent = null;
-            }
+            HeartPowerUtils.UnregisterFrighteningEvent(ref currentFrighteningEvent);
 
             state = WispState.Idle;
             targetVisitor = null;

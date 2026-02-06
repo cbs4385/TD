@@ -413,5 +413,42 @@ namespace FaeMaze.HeartPowers
             // Apply: first heading (flat), then tilt around perpendicular axis
             visitor.rotation = tiltRot * headingRot;
         }
+
+        /// <summary>
+        /// Finds all SolidCollider_N child objects in a tongue instance.
+        /// Used to locate baked-in colliders for physics blocking.
+        /// </summary>
+        public static GameObject[] FindSolidColliders(GameObject tongueInstance)
+        {
+            if (tongueInstance == null) return System.Array.Empty<GameObject>();
+
+            var colliders = new List<GameObject>();
+            foreach (Transform child in tongueInstance.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name.StartsWith("SolidCollider_"))
+                {
+                    colliders.Add(child.gameObject);
+                }
+            }
+            return colliders.ToArray();
+        }
+
+        /// <summary>
+        /// Enables or disables all SphereColliders on a set of collider GameObjects.
+        /// Used for tongue bone collider enable/disable during state transitions.
+        /// </summary>
+        public static void SetSolidCollidersEnabled(GameObject[] colliderObjects, bool enabled)
+        {
+            if (colliderObjects == null) return;
+
+            foreach (var obj in colliderObjects)
+            {
+                if (obj != null)
+                {
+                    var col = obj.GetComponent<SphereCollider>();
+                    if (col != null) col.enabled = enabled;
+                }
+            }
+        }
     }
 }

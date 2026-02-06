@@ -219,7 +219,7 @@ private void OnVisitorConsumed(VisitorControllerBase visitor)
 - Path cost modifiers use Dictionary lookups (O(1) per tile)
 - Cleanup happens once per Update via `CleanupExpired()`
 - Visitor scanning in effects uses `FindObjectsByType` (consider caching for large visitor counts)
-- Gizmo visualization disabled in builds via `#if UNITY_EDITOR`
+- Gizmo visualization (OnDrawGizmos) is Editor-only by nature
 
 ## Known Limitations
 
