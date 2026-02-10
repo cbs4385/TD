@@ -255,7 +255,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_maw",
                     title: "Power 3: Nom Nom",
-                    description: "Press [3] to activate Nom Nom.\n\nA great mouth emerges at your focal point. Any visitor who touches it is consumed instantly, granting you half their threads.\n\nCost: 50 Threads (25% of starting)",
+                    description: "Press [3] to activate Nom Nom.\n\nYou invite an old ally to feast at your focal point. Any visitor who touches the maw is consumed instantly, and your ally shares the dividends with you as threads.\n\nCost: 50 Threads (25% of starting)",
                     trigger: TutorialTriggerType.PowerActivated,
                     triggerParam: "2", // DevouringMaw index
                     highlight: TutorialHighlightType.UIElementCircular,
@@ -267,7 +267,7 @@ namespace FaeMaze.Tutorial
                 new TutorialStep(
                     id: "power_maw_effect",
                     title: "Nom Nom Active",
-                    description: "A monstrous maw has emerged from the ground!\n\nAny visitor who walks into the maw is consumed instantly, granting you half their thread value.\n\nThe maw stays active until it consumes a visitor.",
+                    description: "Your old ally answers your call and opens its maw.\n\nAny visitor who walks into it is consumed instantly, and your ally shares part of the harvest with you as threads.\n\nThe maw stays active until it consumes a visitor.",
                     trigger: TutorialTriggerType.Timer, // No Continue button - auto-advances when visitor is consumed
                     pause: false,
                     spawn: false // Visitor spawned by HandlePowerMawEffectStep coroutine
@@ -277,7 +277,7 @@ namespace FaeMaze.Tutorial
                     id: "power_sculpt",
                     title: "Power 4: Redecorating",
                     description: "Press [4] to open the Redecorating menu.\n\nThis lets you place or change hazards at maze nodes:\n" +
-                                 "  Pond - Drowns visitors (with Puka hazard)\n" +
+                                 "  Pond - Drowns visitors\n" +
                                  "  Lantern - Fascinates visitors, drains threads\n" +
                                  "  Fairy Ring - Traps visitors, drains threads\n\n" +
                                  "Cost: Free",
