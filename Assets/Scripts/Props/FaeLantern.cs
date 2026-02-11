@@ -1,15 +1,16 @@
-using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Audio;
 using FaeMaze.Utilities;
+using FaeMaze.Visitors;
 
 namespace FaeMaze.Props
 {
     /// <summary>
-    /// FaeLantern that fascinates visitors using world-space area of effect.
-    /// Visitors entering the influence area abandon their path, move to the lantern,
+    /// FaeLantern that fascinates visitors using collider-based area of effect.
+    /// Visitors entering the influence trigger collider abandon their path, move to the lantern,
     /// stand still for 2 seconds, then wander randomly at intersections.
+    /// Detection uses a SphereCollider trigger (via LanternInfluenceTrigger) instead of distance checks.
     /// </summary>
     public class FaeLantern : RegistryComponent<FaeLantern>
     {
@@ -17,21 +18,12 @@ namespace FaeMaze.Props
 
         [Header("Influence Settings")]
         [SerializeField]
-        [Tooltip("Radius of influence in world units")]
-        private float influenceRadius = 3f;
+        [Tooltip("Radius of influence in world units (diameter = 2x this value)")]
+        private float influenceRadius = 1.5f;
 
         [SerializeField]
         [Tooltip("Duration in seconds that visitor stands fascinated at the lantern")]
         private float fascinationDuration = 2f;
-
-        [SerializeField]
-        [Tooltip("Probability (0-1) that a visitor becomes fascinated when entering influence")]
-        [Range(0f, 1f)]
-        private float procChance = 1.0f;
-
-        [SerializeField]
-        [Tooltip("Cooldown in seconds before a visitor can be fascinated again")]
-        private float cooldownSec = 5.0f;
 
         [Header("Debug")]
         [SerializeField]
@@ -58,12 +50,6 @@ namespace FaeMaze.Props
         /// <summary>Gets the fascination duration in seconds</summary>
         public float FascinationDuration => fascinationDuration;
 
-        /// <summary>Gets the proc chance for fascination (0-1)</summary>
-        public float ProcChance => procChance;
-
-        /// <summary>Gets the cooldown in seconds before re-fascination</summary>
-        public float CooldownSec => cooldownSec;
-
         /// <summary>Gets the influence radius in world units</summary>
         public float InfluenceRadius => influenceRadius;
 
@@ -88,6 +74,9 @@ namespace FaeMaze.Props
             // Create exclusion zone to prevent visitors from entering lantern center
             CreateExclusionZone();
 
+            // Create influence trigger for collider-based fascination detection
+            CreateInfluenceTrigger();
+
             // Setup audio
             SetupAudio();
         }
@@ -102,10 +91,10 @@ namespace FaeMaze.Props
 
         /// <summary>
         /// Returns true if any visitor is currently being targeted or fascinated by this lantern.
-        /// Used by PropAudioSource to determine when sound should play.
-        /// Sound plays while: visitor is walking toward lantern OR standing fascinated at lantern.
+        /// Used by PropAudioSource to determine when sound should play, and by
+        /// EnterFaeInfluence to enforce one-visitor-at-a-time limit.
         /// </summary>
-        private bool HasFascinatedVisitor()
+        public bool HasFascinatedVisitor()
         {
             // Use VisitorRegistry to include all visitor types (not just base VisitorController)
             foreach (var visitor in FaeMaze.Visitors.VisitorRegistry.All)
@@ -139,6 +128,48 @@ namespace FaeMaze.Props
             zoneObj.AddComponent<LanternExclusionZone>();
         }
 
+        private void CreateInfluenceTrigger()
+        {
+            // Check if influence trigger already exists
+            if (GetComponentInChildren<LanternInfluenceTrigger>() != null) return;
+
+            GameObject triggerObj = new GameObject("InfluenceTrigger");
+            triggerObj.transform.SetParent(transform);
+            triggerObj.transform.localPosition = Vector3.zero;
+
+            triggerObj.AddKinematicRigidbody();
+
+            var collider = triggerObj.AddComponent<SphereCollider>();
+            collider.isTrigger = true;
+            collider.radius = influenceRadius;
+
+            var trigger = triggerObj.AddComponent<LanternInfluenceTrigger>();
+            trigger.Initialize(this);
+        }
+
+        /// <summary>
+        /// Called by LanternInfluenceTrigger when a visitor's collider enters the influence area.
+        /// If the lantern is not currently fascinating anyone, attempts fascination.
+        /// If the lantern is already fascinating a visitor, frightens the newcomer away.
+        /// </summary>
+        public void OnVisitorEnteredInfluence(VisitorControllerBase visitor)
+        {
+            if (visitor == null) return;
+
+            // If this visitor is already fascinated by this lantern, do nothing
+            if (visitor.CurrentFaeLantern == this) return;
+
+            if (HasFascinatedVisitor())
+            {
+                // Lantern is occupied — frighten the visitor away
+                visitor.SetFrightened(transform.position);
+            }
+            else
+            {
+                visitor.EnterFaeInfluence(this);
+            }
+        }
+
         /// <summary>
         /// Called when unregistered from the static collection.
         /// Releases all visitors fascinated by this lantern.
@@ -168,21 +199,6 @@ namespace FaeMaze.Props
         private void Update()
         {
             UpdateDirectionToClosestVisitor();
-        }
-
-        #endregion
-
-        #region Influence Checks
-
-        /// <summary>
-        /// Checks if a world position is within this lantern's influence area.
-        /// </summary>
-        /// <param name="worldPos">World position to check</param>
-        /// <returns>True if the position is within influence radius</returns>
-        public bool IsPositionInInfluence(Vector3 worldPos)
-        {
-            float distance = Vector3.Distance(transform.position, worldPos);
-            return distance <= influenceRadius;
         }
 
         #endregion

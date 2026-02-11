@@ -645,13 +645,6 @@ namespace FaeMaze.Systems
             set => PlayerPrefs.SetFloat("LanternEssenceAwardPerSecond", Mathf.Max(0f, value));
         }
 
-        /// <summary>Speed multiplier when visitor is fascinated (approaching prop)</summary>
-        public static float FascinationSpeedMultiplier
-        {
-            get => PlayerPrefs.GetFloat("FascinationSpeedMultiplier", 0.5f);
-            set => PlayerPrefs.SetFloat("FascinationSpeedMultiplier", Mathf.Clamp(value, 0.1f, 2f));
-        }
-
         #endregion
 
         #region Heart Powers

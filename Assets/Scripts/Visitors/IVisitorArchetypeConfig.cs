@@ -15,7 +15,6 @@ namespace FaeMaze.Visitors
         float FascinationChance { get; }
         float FascinationDurationMin { get; }
         float FascinationDurationMax { get; }
-        float FascinationCooldown { get; }
         float LanternWanderDetourMin { get; }
         float LanternWanderDetourMax { get; }
 

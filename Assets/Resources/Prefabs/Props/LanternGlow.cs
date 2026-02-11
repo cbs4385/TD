@@ -374,11 +374,6 @@ public class LanternGlow : MonoBehaviour
             spotLight.color = currentGlowColor;
         }
 
-        // Trigger fascination check when spotlight activates (not when it ends)
-        if (targetVisitor != null && targetVisitor.gameObject.activeInHierarchy)
-        {
-            TriggerFascinationTest(targetVisitor);
-        }
     }
 
     private void CreateSpotlight()
@@ -454,23 +449,6 @@ public class LanternGlow : MonoBehaviour
 
         // Return to idle after spotlight ends
         TransitionToIdle();
-    }
-
-    private void TriggerFascinationTest(VisitorControllerBase visitor)
-    {
-        // Find the FaeLantern component on this or parent object
-        var lantern = GetComponentInParent<FaeMaze.Props.FaeLantern>();
-        if (lantern == null) return;
-
-        // Use the visitor's fascination chance from their archetype
-        float fascinationChance = visitor.GetFascinationChance();
-        float roll = RandomManager.Value;
-
-        if (roll <= fascinationChance)
-        {
-            // Chance roll passed - force fascination (bypasses EnterFaeInfluence's own roll)
-            visitor.ForceFascinateByLantern(lantern);
-        }
     }
 
     #endregion

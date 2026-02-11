@@ -27,9 +27,6 @@ namespace FaeMaze.Visitors
         [SerializeField] [Tooltip("Maximum fascination duration in seconds")]
         private float fascinationDurationMax = 5f;
 
-        [SerializeField] [Tooltip("Cooldown before same lantern can fascinate again (seconds)")]
-        private float fascinationCooldown = 3f;
-
         [SerializeField] [Tooltip("Minimum lantern-induced wander detour length (tiles)")]
         private float lanternWanderDetourMin = 4f;
 
@@ -86,7 +83,6 @@ namespace FaeMaze.Visitors
         public float FascinationChance => fascinationChance;
         public float FascinationDurationMin => fascinationDurationMin;
         public float FascinationDurationMax => fascinationDurationMax;
-        public float FascinationCooldown => fascinationCooldown;
         public float LanternWanderDetourMin => lanternWanderDetourMin;
         public float LanternWanderDetourMax => lanternWanderDetourMax;
         public float ConfusionIntersectionChance => confusionIntersectionChance;

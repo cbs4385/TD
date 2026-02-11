@@ -1272,19 +1272,12 @@ namespace FaeMaze.HeartPowers
                 }
             }
 
-            // SIMPLIFIED pushing tongue approach:
-            // - Set visitor rotation ONCE to face heart (flat on ground)
-            // - Track tip position with midpoint offset (just -Z offset, no chain-relative math)
-            // - No rotation changes during push
-
-            // Calculate heading toward heart and set rotation once
-            Vector2 toHeart = new Vector2(
-                heartNodePosition.x - pushingZoneObject.transform.position.x,
-                heartNodePosition.y - pushingZoneObject.transform.position.y);
-            visitorHeadingAngle = Mathf.Atan2(toHeart.y, toHeart.x) * Mathf.Rad2Deg;
-
-            // Set final rotation - visitor faces heart, flat on ground (no tilt)
-            currentVisitor.transform.rotation = Quaternion.Euler(0f, 0f, visitorHeadingAngle);
+            // Set visitor facing toward the tongue (away from heart) and vertical.
+            // Uses SetFacingDirectionImmediate which compensates for model base rotation.
+            Vector2 awayFromHeart = new Vector2(
+                pushingZoneObject.transform.position.x - heartNodePosition.x,
+                pushingZoneObject.transform.position.y - heartNodePosition.y);
+            currentVisitor.SetFacingDirectionImmediate(awayFromHeart);
 
             // Start Emerging phase immediately (no pause needed)
             pushPhase = PushPhase.Emerging;
@@ -1424,57 +1417,40 @@ namespace FaeMaze.HeartPowers
         /// </summary>
         private void TransitionToReleasing()
         {
-            // Resume visitor movement
             if (currentVisitor != null)
             {
                 Vector3 posBeforeRelease = currentVisitor.transform.position;
 
-                // CRITICAL: Set visitor to ground level Z before releasing
-                // The tongue tip may be slightly above or below ground, but visitors must be at Zâ‰ˆ0
-                const float GROUND_Z = -0.01f;  // Slightly above ground (Z=0 is ground, -Z is up)
+                // Set visitor to ground level Z
+                const float GROUND_Z = -0.01f;
                 currentVisitor.transform.position = new Vector3(
                     posBeforeRelease.x,
                     posBeforeRelease.y,
                     GROUND_Z
                 );
 
-                // Set rotation to face toward heart - the visitor was pushed in this direction
-                // and should continue walking toward heart after release
-                Vector2 toHeart = new Vector2(
-                    heartNodePosition.x - currentVisitor.transform.position.x,
-                    heartNodePosition.y - currentVisitor.transform.position.y);
-                float headingTowardHeart = Mathf.Atan2(toHeart.y, toHeart.x) * Mathf.Rad2Deg;
-                currentVisitor.transform.rotation = Quaternion.Euler(0f, 0f, headingTowardHeart);
-
-                // Ensure visitor is visible when released
+                // Ensure visitor is visible
                 SetVisitorVisible(currentVisitor, true);
 
-                // CRITICAL: Clear the Grabbed state before resuming
-                // RefreshStateFromFlags() returns early for Grabbed state, so we must clear it first
+                // Clear the Grabbed state — syncs Rigidbody, restores constraints, sets Idle.
                 currentVisitor.ClearGrabbedState();
 
-                // IMPORTANT: Update destination to the heart position
-                // The visitor was transported closer to the heart by the pushing HGZ.
-                // Their original destination may now be behind them (especially if it was
-                // a short-distance destination like "3 units past grabbing HGZ").
-                // Setting destination to heart ensures they continue inward after being pushed.
+                // Move to nearest walkable tile in case release position is unwalkable
+                currentVisitor.MoveToNearestWalkableTile();
+
+                // Update destination toward heart and build path
                 currentVisitor.SetWorldDestination(heartNodePosition);
+                currentVisitor.RecalculatePath();
 
-                // If path to heart failed, try recalculating - visitor might be at an edge position
-                int pathIndex;
-                var path = currentVisitor.GetCurrentPath(out pathIndex);
-                if (path == null || path.Count == 0)
-                {
-                    currentVisitor.RecalculatePath();
-                }
-
+                // Ensure visitor is in Walking state — RecalculatePath calls
+                // RefreshStateFromFlags which sets Walking, but if path building
+                // fails the visitor would be stuck in Idle while still having velocity.
                 currentVisitor.Resume();
 
-                // Apply daze effect
+                // Apply daze effect (tutorial visitors are immune)
                 float dazeDuration = definition.param1 > 0 ? definition.param1 : 2f;
                 currentVisitor.OnWitnessMazeGrowth(dazeDuration);
 
-                // Notify of push
                 HeartPowerEvents.NotifyVisitorPushedByGrasp(currentVisitor.transform.position);
             }
 
@@ -1540,7 +1516,13 @@ namespace FaeMaze.HeartPowers
                 GROUND_Z
             );
 
-            // NO rotation change - visitor stays in the orientation set at transport time
+            // Always enforce vertical orientation with face toward heart node center.
+            // The visitor must have its up pointing at world up (-Z) and face toward the node.
+            // Only Z-axis rotation is used (XY plane facing), keeping the model upright.
+            Vector2 toHeart = new Vector2(
+                heartNodePosition.x - tipBone.position.x,
+                heartNodePosition.y - tipBone.position.y);
+            currentVisitor.SetFacingDirectionImmediate(toHeart);
 
             // Keep Rigidbody in sync to prevent teleport on release
             currentVisitor.SyncRigidbodyPosition();

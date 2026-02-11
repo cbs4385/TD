@@ -384,6 +384,9 @@ namespace FaeMaze.Tutorial
 
         private IEnumerator SpawnVisitorAtPositionCoroutine(Vector3 spawnPosition, Vector3 destinationPosition, bool fascinationImmune = true)
         {
+            Debug.Log($"[TutorialVisitorSpawner] SpawnAtPosition: spawn=({spawnPosition.x:F2}, {spawnPosition.y:F2}, {spawnPosition.z:F2}) " +
+                      $"dest=({destinationPosition.x:F2}, {destinationPosition.y:F2}, {destinationPosition.z:F2}) fascinationImmune={fascinationImmune}");
+
             // Small delay for visual effect
             yield return new WaitForSecondsRealtime(0.3f);
 
@@ -401,6 +404,7 @@ namespace FaeMaze.Tutorial
             if (controller != null)
             {
                 controller.Initialize();
+                Debug.Log($"[TutorialVisitorSpawner] After Initialize: pos=({controller.transform.position.x:F2}, {controller.transform.position.y:F2}, {controller.transform.position.z:F2}) state={controller.State}");
 
                 // Mark as tutorial visitor - immune to being frightened and dazed
                 controller.SetTutorialVisitor(true);
@@ -411,6 +415,14 @@ namespace FaeMaze.Tutorial
 
                 controller.SetOriginalSpawnPosition(spawnPosition);
                 controller.SetWorldDestination(destinationPosition);
+
+                // Set initial facing direction toward destination so visitor doesn't start facing backwards
+                Vector2 facingDir = new Vector2(
+                    destinationPosition.x - spawnPosition.x,
+                    destinationPosition.y - spawnPosition.y);
+                controller.SetFacingDirectionImmediate(facingDir);
+
+                Debug.Log($"[TutorialVisitorSpawner] After SetWorldDestination: pos=({controller.transform.position.x:F2}, {controller.transform.position.y:F2}) state={controller.State} facing=({facingDir.x:F2}, {facingDir.y:F2})");
             }
 
             if (eventTriggers != null)

@@ -68,7 +68,6 @@ Base Speed: 0.9
 Fascination:
 - Fascination Chance: 0.7
 - Duration Min/Max: 3 / 6 seconds
-- Cooldown: 2 seconds
 - Wander Detour Min/Max: 6 / 12 tiles
 
 Confusion/Lost:
@@ -103,7 +102,6 @@ Base Speed: 1.1
 Fascination:
 - Fascination Chance: 0.15
 - Duration Min/Max: 2 / 3 seconds
-- Cooldown: 6 seconds
 - Wander Detour Min/Max: 2 / 4 tiles
 
 Confusion/Lost:
@@ -138,7 +136,6 @@ Base Speed: 1.0
 Fascination:
 - Fascination Chance: 0.4 (when trance broken)
 - Duration Min/Max: 3 / 5 seconds
-- Cooldown: 5 seconds
 - Wander Detour Min/Max: 4 / 9 tiles
 
 Confusion/Lost:
@@ -180,9 +177,10 @@ Reward:
 Hazards automatically respect archetype configs when available:
 
 ### FaeLantern
-- Uses `FascinationChance` from visitor config
+- Uses `FascinationChance` from visitor config (tutorial visitors always 100%)
 - Uses `FascinationDurationMin/Max` for pause duration
-- Uses `FascinationCooldown` between triggers
+- Each lantern can only fascinate one visitor at a time
+- Visitor stops immediately when fascinated (collider-based detection via LanternInfluenceTrigger)
 
 ### FairyRing
 - Multiplies slow effect by `FairyRingSlowMultiplier`

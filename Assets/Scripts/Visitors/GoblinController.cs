@@ -606,21 +606,22 @@ namespace FaeMaze.Visitors
                 }
 
                 // Calculate Z-axis rotation based on movement direction
-                // This rotation is applied on top of the base rotation from the prefab
+                // This rotation is applied on top of the base rotation from the prefab.
+                // Model's visual forward at rest points +Y, so Up = 0° and Down = 180°.
                 float zRotation = 0f;
                 switch (rotationDirection)
                 {
                     case 1: // Up (+Y in world)
-                        zRotation = 180f;
-                        break;
-                    case 2: // Down (-Y in world)
                         zRotation = 0f;
                         break;
+                    case 2: // Down (-Y in world)
+                        zRotation = 180f;
+                        break;
                     case 3: // Left (-X in world)
-                        zRotation = 90f;
+                        zRotation = -90f;
                         break;
                     case 4: // Right (+X in world)
-                        zRotation = -90f;
+                        zRotation = 90f;
                         break;
                 }
 

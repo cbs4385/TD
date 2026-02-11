@@ -135,7 +135,6 @@ namespace FaeMaze.Visitors
         protected bool hasReachedLantern;
         protected float fascinationTimer;
         protected FaeMaze.Props.FaeLantern currentFaeLantern;
-        protected float fascinationSpeedMultiplier; // Loaded from GameSettings
 
         // FairyRing fascination state (circling behavior)
         protected FaeMaze.Props.FairyRing currentFairyRing;
@@ -153,8 +152,6 @@ namespace FaeMaze.Visitors
         protected float lanternEssenceDrainPerSecond; // Loaded from GameSettings
         protected float lanternEssenceAwardPerSecond; // Loaded from GameSettings
 
-        // Cooldown tracking per lantern (prevents immediate re-triggering)
-        protected Dictionary<FaeMaze.Props.FaeLantern, float> lanternCooldowns;
 
         // Essence-based opacity (visitors fade as essence drains)
         protected float startingEssence;
@@ -287,6 +284,7 @@ namespace FaeMaze.Visitors
         protected GameObject stateAuraObject;
         protected Light stateAuraLight;
         protected VisitorState lastAuraState = VisitorState.Idle;
+
         protected const float AURA_LIGHT_INTENSITY = 1.5f;
         protected const float AURA_LIGHT_RANGE = 2.0f;
         protected const float AURA_Z_OFFSET = -0.3f; // Above the visitor
@@ -354,8 +352,7 @@ namespace FaeMaze.Visitors
             // Load settings from GameSettings (must be first, before any settings are used)
             LoadSettingsFromGameSettings();
 
-            state = VisitorState.Idle;
-            lanternCooldowns = new Dictionary<FaeMaze.Props.FaeLantern, float>();
+            SetState(VisitorState.Idle, "Awake");
             initialScale = transform.localScale;
 
             // Look for Animator on this GameObject or children (for Blender imports)
@@ -407,7 +404,6 @@ namespace FaeMaze.Visitors
             ringEssenceDrainPerSecond = GameSettings.RingEssenceDrainPerSecond;
             lanternEssenceDrainPerSecond = GameSettings.LanternEssenceDrainPerSecond;
             lanternEssenceAwardPerSecond = GameSettings.LanternEssenceAwardPerSecond;
-            fascinationSpeedMultiplier = GameSettings.FascinationSpeedMultiplier;
 
             // Visitor Behavior - Frightened State
             frightenedSpeedMultiplier = GameSettings.FrightenedSpeedMultiplier;
@@ -465,24 +461,6 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            // Update lantern cooldowns
-            if (lanternCooldowns != null && lanternCooldowns.Count > 0)
-            {
-                List<FaeMaze.Props.FaeLantern> lanternsToUpdate = new List<FaeMaze.Props.FaeLantern>(lanternCooldowns.Keys);
-                foreach (var lantern in lanternsToUpdate)
-                {
-                    if (lantern != null)
-                    {
-                        lanternCooldowns[lantern] -= Time.deltaTime;
-                        if (lanternCooldowns[lantern] <= 0f)
-                        {
-                            lanternCooldowns.Remove(lantern);
-                        }
-                    }
-                }
-            }
-
-            FrameProfiler.Checkpoint($"Visitor.AfterLanternCooldown({name})");
 
             // Check for nearby Goblins
             goblinDetectionTimer -= Time.deltaTime;
@@ -512,19 +490,6 @@ namespace FaeMaze.Visitors
             }
 
             FrameProfiler.Checkpoint($"Visitor.AfterRingCheck({name})");
-
-            // Check for FaeLantern influence (world-space detection)
-            // Also check when Idle - visitors standing near a lantern should become fascinated
-            if (IsMovementState(state) || state == VisitorState.Idle)
-            {
-                bool pausedAtLantern = isFascinated && hasReachedLantern && fascinationTimer > 0;
-                if (!pausedAtLantern)
-                {
-                    CheckFaeLanternInfluence();
-                }
-            }
-
-            FrameProfiler.Checkpoint($"Visitor.AfterLanternInfluence({name})");
 
             // Handle fascination timer (pause at lantern)
             if (isFascinated && hasReachedLantern)
@@ -569,6 +534,10 @@ namespace FaeMaze.Visitors
                         return;
                     }
 
+                    // Update visuals before returning — state was set to Idle by EnterFaeInfluence
+                    // but aura/animator won't update if we return early and skip the end of Update.
+                    UpdateStateAura();
+                    UpdateAnimatorSpeed();
                     return; // Don't move while fascinated timer is active
                 }
                 else
@@ -576,12 +545,6 @@ namespace FaeMaze.Visitors
                     // Fascination timer ended - resume wandering
                     EndFascination();
                 }
-            }
-
-            // If walking to a lantern that was destroyed, end fascination
-            if (isFascinated && !hasReachedLantern && currentFaeLantern == null)
-            {
-                EndFascination();
             }
 
             FrameProfiler.Checkpoint($"Visitor.BeforeMovement({name})");
@@ -643,9 +606,18 @@ namespace FaeMaze.Visitors
             if (state == VisitorState.Grabbed || state == VisitorState.Consumed)
             {
                 hasDesiredPosition = false;
-                // Zero velocity so the visitor doesn't slide with residual momentum.
-                // With linearDamping=0 this is essential — without it the visitor keeps
-                // moving at its last velocity and travels through devour/tongue models.
+                if (rb3D.linearVelocity.sqrMagnitude > 0.001f)
+                {
+                    rb3D.linearVelocity = Vector3.zero;
+                }
+                return;
+            }
+
+            // Non-movement states (Idle, Dazed) must not drift from residual velocity.
+            // With linearDamping=0, any leftover velocity persists forever unless zeroed.
+            if (!canMove)
+            {
+                hasDesiredPosition = false;
                 if (rb3D.linearVelocity.sqrMagnitude > 0.001f)
                 {
                     rb3D.linearVelocity = Vector3.zero;
@@ -1182,6 +1154,15 @@ namespace FaeMaze.Visitors
         /// </summary>
         public bool IsMisdirected => isMisdirected;
 
+        /// <summary>Whether this visitor is a tutorial visitor (immune to frightening/daze).</summary>
+        public bool IsTutorialVisitor => isTutorialVisitor;
+
+        /// <summary>Whether this visitor is immune to lantern fascination.</summary>
+        public bool IsFascinationImmune => isFascinationImmune;
+
+        /// <summary>Whether this visitor is currently lured by MurmuringPaths fog.</summary>
+        public bool IsLured => isLured;
+
         /// <summary>
         /// Clears the misdirect state without rebuilding a path or restoring the original destination.
         /// Used when externally overriding the visitor's destination (e.g., tutorial assigning exit portals).
@@ -1400,6 +1381,18 @@ namespace FaeMaze.Visitors
             return closestWalkable != null && closestDist <= tolerance;
         }
 
+        /// <summary>
+        /// Sets visitor state with logging. All state changes should go through this method
+        /// so transitions and their reasons are captured in the console log.
+        /// </summary>
+        protected void SetState(VisitorState newState, string reason)
+        {
+            if (state == newState) return;
+            VisitorState prev = state;
+            state = newState;
+            Debug.Log($"[VisitorState] {name}: {prev} -> {newState} ({reason})");
+        }
+
         // DEBUG: Set to true to disable all visitor states except Idle and Walking
         // This helps isolate pathfinding issues from state-related behavior
         protected static bool debugOnlyWalkingState = false;
@@ -1443,7 +1436,8 @@ namespace FaeMaze.Visitors
             }
             else if (isFascinated)
             {
-                state = VisitorState.Fascinated;
+                // Visitor stopped at lantern is Idle (not moving), not Fascinated (a movement state)
+                state = hasReachedLantern ? VisitorState.Idle : VisitorState.Fascinated;
             }
             else if (isConfused && confusionEnabled)
             {
@@ -1457,6 +1451,10 @@ namespace FaeMaze.Visitors
             // Log state change if it occurred
             if (state != previousState)
             {
+                string flagReason = isDazed ? "isDazed" : isFrightened ? "isFrightened" : isLured ? "isLured"
+                    : isFascinated ? (hasReachedLantern ? "isFascinated+atLantern" : "isFascinated")
+                    : (isConfused && confusionEnabled) ? "isConfused" : "defaultWalking";
+                Debug.Log($"[VisitorState] {name}: {previousState} -> {state} (RefreshStateFromFlags: {flagReason})");
                 RecordNavigationEvent("StateChange", $"{previousState} -> {state}");
             }
         }
@@ -1556,11 +1554,7 @@ namespace FaeMaze.Visitors
 
             // Calculate effective speed with all state modifiers
             float effectiveSpeed = moveSpeed * speedMultiplier;
-            if (isFascinated && !hasReachedLantern)
-            {
-                effectiveSpeed *= fascinationSpeedMultiplier;
-            }
-            else if (isFrightened)
+            if (isFrightened)
             {
                 effectiveSpeed *= frightenedSpeedMultiplier;
             }
@@ -1687,11 +1681,12 @@ namespace FaeMaze.Visitors
 
             if (worldPath != null && worldPath.Count > 0)
             {
-                state = VisitorState.Walking;
+                SetState(VisitorState.Walking, "SetDestination: path found");
             }
             else
             {
-                state = VisitorState.Idle;
+                // No path to assigned destination — try a random portal instead
+                NavigateToRandomPortal("SetDestination: no path to original dest");
             }
         }
 
@@ -2281,9 +2276,14 @@ namespace FaeMaze.Visitors
                 // Calculate Z rotation angle for facing direction in world space
                 float angle = Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg;
 
-                // Log rotation details on first movement and periodically
-                bool shouldLog = !hasLoggedFirstRotation || Time.frameCount % 300 == 0;
-                float zBefore = transform.eulerAngles.z;
+                // Compensate for the model's base Z rotation so the visual forward
+                // aligns with the movement direction. The model child has a local rotation
+                // (e.g. Euler(0, -90, 90)) baked into the prefab — its Z component offsets
+                // the visual facing from the parent's Z rotation.
+                if (modelBaseRotationCaptured)
+                {
+                    angle -= modelBaseRotation.eulerAngles.z;
+                }
 
                 // Apply Z rotation to the game object (this visitor's transform)
                 // This rotates around world Z, making the model face the direction of travel
@@ -2294,7 +2294,7 @@ namespace FaeMaze.Visitors
                     Time.deltaTime * 10f
                 );
 
-                if (shouldLog)
+                if (!hasLoggedFirstRotation)
                 {
                     hasLoggedFirstRotation = true;
                 }
@@ -2308,6 +2308,25 @@ namespace FaeMaze.Visitors
         public void ApplyExternalAnimatorDirection(Vector2 movement)
         {
             UpdateAnimatorDirection(movement);
+        }
+
+        /// <summary>
+        /// Sets the visitor's facing direction immediately (no Slerp interpolation).
+        /// Compensates for the model's base rotation so the visual forward aligns with the given direction.
+        /// Use this when setting facing from external code (e.g., HeartwardGrasp pushing tongue).
+        /// </summary>
+        public void SetFacingDirectionImmediate(Vector2 direction)
+        {
+            if (direction.sqrMagnitude <= MovementEpsilonSqr) return;
+
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+
+            if (modelBaseRotationCaptured)
+            {
+                angle -= modelBaseRotation.eulerAngles.z;
+            }
+
+            transform.rotation = Quaternion.Euler(0f, 0f, angle);
         }
 
 
@@ -2330,17 +2349,13 @@ namespace FaeMaze.Visitors
 
             if (!hasGraphPath && !hasTilePath)
             {
-                state = VisitorState.Idle;
+                NavigateToRandomPortal("UpdateWalking: no valid path");
                 return;
             }
 
             // Calculate effective speed with state-based multipliers
             float effectiveSpeed = moveSpeed * speedMultiplier;
-            if (isFascinated && !hasReachedLantern)
-            {
-                effectiveSpeed *= fascinationSpeedMultiplier;
-            }
-            else if (isFrightened)
+            if (isFrightened)
             {
                 effectiveSpeed *= frightenedSpeedMultiplier;
             }
@@ -2361,27 +2376,6 @@ namespace FaeMaze.Visitors
 
             // Note: Position is applied via FixedUpdate using velocity-based movement
             // This allows Unity physics to naturally block movement at solid colliders
-
-            // Check if fascinated visitor has reached the lantern's node.
-            // Lanterns sit at node centers; the walkable ring is 1.0-3.0 units from center.
-            // Use NODE_RADIUS (3.0) so the visitor stops as soon as it enters the node.
-            if (isFascinated && !hasReachedLantern && currentFaeLantern != null)
-            {
-                float distToLantern = Vector3.Distance(PhysicsPosition, currentFaeLantern.transform.position);
-                if (distToLantern <= 3.0f)
-                {
-                    // Stop here, don't continue walking
-                    hasReachedLantern = true;
-                    float duration = currentFaeLantern.FascinationDuration;
-                    fascinationTimer = duration;
-                    state = VisitorState.Idle;
-                    worldPath?.Clear();
-                    worldPathIndex = 0;
-                    splineInitialized = false;
-                    FaeMaze.Props.LanternStreamerEffect.SpawnStreamers(transform);
-                    return;
-                }
-            }
 
             // Check if we've completed the path
             if (worldPathIndex >= worldPath.Count)
@@ -3555,22 +3549,6 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // Check if fascinated - visitor has reached the lantern stop position
-            if (isFascinated && !hasReachedLantern)
-            {
-                hasReachedLantern = true;
-                // Get fascination duration from the current lantern if available
-                float duration = 2f; // Default 2 seconds
-                if (currentFaeLantern != null)
-                {
-                    duration = currentFaeLantern.FascinationDuration;
-                }
-                fascinationTimer = duration;
-                state = VisitorState.Idle; // Idle at the lantern
-                FaeMaze.Props.LanternStreamerEffect.SpawnStreamers(transform);
-                return;
-            }
-
             // Check if frightened - visitor reached a node, handle recovery/fleeing
             if (isFrightened)
             {
@@ -3583,13 +3561,13 @@ namespace FaeMaze.Visitors
             // Visitors never path to the heart center - heart node centers are unwalkable.
             if (mazeGridBehaviour != null && IsAtPortal())
             {
-                state = VisitorState.Escaping;
+                SetState(VisitorState.Escaping, "OnPathComplete: at portal");
                 OnExitedThroughPortal();
                 return;
             }
 
-            // Otherwise, just become idle
-            state = VisitorState.Idle;
+            // Not at a portal — pick a random portal and head there
+            NavigateToRandomPortal("OnPathComplete: not at portal");
         }
 
         /// <summary>
@@ -3681,8 +3659,7 @@ namespace FaeMaze.Visitors
             currentFairyRing = null;
             lanternEssenceAwardAccumulator = 0f;
 
-            // Set state to Escaping
-            state = VisitorState.Escaping;
+            SetState(VisitorState.Escaping, "OnExitedThroughPortal");
 
             // Destroy the visitor
             Destroy(gameObject, 0.1f);
@@ -3739,8 +3716,7 @@ namespace FaeMaze.Visitors
                 rb3D.linearVelocity = Vector3.zero;
             }
 
-            // Set grabbed state to stop all movement (lights stay on until consumed)
-            state = VisitorState.Grabbed;
+            SetState(VisitorState.Grabbed, "SetGrabbed: tongue contact");
         }
 
         /// <summary>
@@ -3754,14 +3730,15 @@ namespace FaeMaze.Visitors
                 return;
             }
 
-            // CRITICAL: Sync the Rigidbody position with the transform position.
-            // When grabbed, the visitor is moved via transform.position, but the Rigidbody's
-            // internal position tracking may not be updated (especially with interpolation).
-            // This prevents the visitor from teleporting back to their pre-grab physics position.
+            // CRITICAL: Sync the Rigidbody position AND rotation with the transform.
+            // When grabbed, the visitor is moved via transform.position/rotation, but the Rigidbody's
+            // internal tracking may not be updated (especially with interpolation).
+            // This prevents the visitor from teleporting back to their pre-grab physics state.
             if (rb3D != null)
             {
-                // Force the Rigidbody to match the current transform position
+                // Force the Rigidbody to match the current transform state
                 rb3D.position = transform.position;
+                rb3D.rotation = transform.rotation;
                 rb3D.linearVelocity = Vector3.zero;
                 rb3D.angularVelocity = Vector3.zero;
 
@@ -3769,8 +3746,7 @@ namespace FaeMaze.Visitors
                 rb3D.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionZ;
             }
 
-            // Reset to Idle - RefreshStateFromFlags will set appropriate state based on flags
-            state = VisitorState.Idle;
+            SetState(VisitorState.Idle, "ClearGrabbedState: released from tongue");
         }
 
         /// <summary>
@@ -3843,35 +3819,30 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
-        /// Checks if the visitor has entered any FaeLantern's influence area using world-space distance.
-        /// </summary>
-        protected virtual void CheckFaeLanternInfluence()
-        {
-            // Check all active FaeLanterns using world-space distance
-            foreach (var lantern in FaeMaze.Props.FaeLantern.All)
-            {
-                if (lantern == null)
-                    continue;
-
-                // Check if visitor is within lantern's influence radius (world-space)
-                float distanceToLantern = Vector3.Distance(PhysicsPosition, lantern.transform.position);
-
-                if (distanceToLantern <= lantern.InfluenceRadius)
-                {
-                    EnterFaeInfluence(lantern);
-                    break; // Only one lantern can capture a visitor
-                }
-            }
-        }
-
-        /// <summary>
-        /// Called when a visitor enters a FaeLantern's influence area.
+        /// Called when a visitor enters a FaeLantern's influence area (via collider trigger).
         /// Uses archetype-specific fascination parameters if config is available.
+        /// Tutorial visitors always have 100% fascination chance.
+        /// Each lantern can only fascinate one visitor at a time.
         /// </summary>
-        protected virtual void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern)
+        public virtual void EnterFaeInfluence(FaeMaze.Props.FaeLantern lantern)
         {
-            // Fascination-immune visitors (e.g., tutorial power demo visitors) ignore lanterns
-            if (isFascinationImmune || isMisdirected) return;
+            // Only process fascination for movement states and Idle
+            if (!IsMovementState(state) && state != VisitorState.Idle)
+            {
+                return;
+            }
+
+            // Don't re-trigger if already paused at a lantern
+            if (isFascinated && hasReachedLantern && fascinationTimer > 0)
+            {
+                return;
+            }
+
+            // Fascination-immune, misdirected, or lured visitors ignore lanterns
+            if (isFascinationImmune || isMisdirected || isLured)
+            {
+                return;
+            }
 
             Vector3 lanternWorldPos = lantern.transform.position;
 
@@ -3879,64 +3850,53 @@ namespace FaeMaze.Visitors
             if (isFascinated && currentFaeLantern == lantern && Vector3.Distance(fascinationLanternPosition, lanternWorldPos) < 0.1f)
                 return;
 
-            // Use archetype-specific cooldown if config available, otherwise use lantern's cooldown
-            float cooldown = config != null ? config.FascinationCooldown : lantern.CooldownSec;
-
-            // Check cooldown (prevents immediate re-triggering)
-            if (lanternCooldowns.ContainsKey(lantern) && lanternCooldowns[lantern] > 0f)
+            // Lantern can only fascinate one visitor at a time
+            if (lantern.HasFascinatedVisitor())
             {
                 return;
             }
 
-            // Use archetype-specific fascination chance
-            float fascinationChance = GetFascinationChance();
-            float roll = RandomManager.Value;
-            if (roll > fascinationChance)
+            // Tutorial visitors always succeed; normal visitors use archetype-specific chance
+            if (!isTutorialVisitor)
             {
-                // Set cooldown even on failed proc to prevent spam checks
-                lanternCooldowns[lantern] = cooldown;
-                return;
+                float fascinationChance = GetFascinationChance();
+                float roll = RandomManager.Value;
+                if (roll > fascinationChance)
+                {
+                    return;
+                }
             }
 
-            // Allow re-fascination by a different lantern
+            Debug.Log($"[EnterFaeInfluence] SUCCESS: visitor {name} becoming fascinated by lantern at ({lanternWorldPos.x:F2}, {lanternWorldPos.y:F2})");
             isFascinated = true;
             currentFaeLantern = lantern;
             fascinationLanternPosition = lanternWorldPos;
-            hasReachedLantern = false;
-            fascinationTimer = 0f; // Will be set when reaching lantern
-            lanternEssenceAwardAccumulator = 0f; // Reset essence award accumulator
+            lanternEssenceAwardAccumulator = 0f;
 
-            // Set archetype-specific cooldown for this lantern
-            lanternCooldowns[lantern] = cooldown;
-
-            // Reset detour state
+            // Reset detour state then explicitly clear confusion.
+            // VisitorController.ResetDetourState() sets isConfused = confusionEnabled,
+            // which would cause RefreshStateFromFlags() to override Idle → Confused.
             ResetDetourState();
+            isConfused = false;
 
-            // Calculate stop position at edge of exclusion zone (1 unit from lantern center)
-            // Direction from lantern to visitor in XY plane
-            const float LANTERN_EXCLUSION_RADIUS = 1f;
-            Vector3 visitorPos = PhysicsPosition;
-            Vector2 dirToVisitor = new Vector2(visitorPos.x - lanternWorldPos.x, visitorPos.y - lanternWorldPos.y);
-            if (dirToVisitor.sqrMagnitude < 0.01f)
-            {
-                // Visitor is at lantern center, pick a random direction
-                float randomAngle = RandomManager.Range(0f, 360f) * Mathf.Deg2Rad;
-                dirToVisitor = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
-            }
-            dirToVisitor.Normalize();
-
-            // Stop position is at the edge of the exclusion zone, toward the visitor
-            Vector3 stopPosition = new Vector3(
-                lanternWorldPos.x + dirToVisitor.x * LANTERN_EXCLUSION_RADIUS,
-                lanternWorldPos.y + dirToVisitor.y * LANTERN_EXCLUSION_RADIUS,
-                lanternWorldPos.z
-            );
-
-            // Navigate to the stop position (not the lantern center)
-            worldPath = BuildWorldPath(PhysicsPosition, stopPosition);
+            // Stop immediately — visitor becomes idle at current position
+            hasReachedLantern = true;
+            fascinationTimer = lantern.FascinationDuration;
+            SetState(VisitorState.Idle, "EnterFaeInfluence: fascinated by lantern");
+            worldPath?.Clear();
             worldPathIndex = 0;
             ResetSplineState();
-            RefreshStateFromFlags();
+
+            // Face toward the lantern
+            Vector3 visitorPos = PhysicsPosition;
+            Vector2 toLantern = new Vector2(lanternWorldPos.x - visitorPos.x, lanternWorldPos.y - visitorPos.y);
+            if (toLantern.sqrMagnitude > 0.01f)
+            {
+                UpdateAnimatorDirection(toLantern.normalized);
+            }
+
+            // Spawn visual streamers
+            FaeMaze.Props.LanternStreamerEffect.SpawnStreamers(transform);
         }
 
         #endregion
@@ -3948,7 +3908,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual void Stop()
         {
-            state = VisitorState.Idle;
+            SetState(VisitorState.Idle, "Stop()");
 
             // Clear fairy ring fascination so Update doesn't continue circling
             if (currentFairyRing != null)
@@ -4191,6 +4151,16 @@ namespace FaeMaze.Visitors
                 return;
             }
 
+            // End any active lantern fascination so the lantern is freed for another visitor
+            if (isFascinated && currentFaeLantern != null)
+            {
+                FaeMaze.Props.LanternStreamerEffect.DestroyStreamers(transform);
+                isFascinated = false;
+                hasReachedLantern = false;
+                fascinationTimer = 0f;
+                ClearLanternInteraction();
+            }
+
             isFrightened = true;
             frightSourcePosition = sourcePosition;
             frightRecoveryNodeCount = 0;
@@ -4273,8 +4243,7 @@ namespace FaeMaze.Visitors
             worldPathIndex = 0;
             ResetSplineState();
 
-            // Set state to Escaping (used for both escaping and drowning)
-            state = VisitorState.Escaping;
+            SetState(VisitorState.Escaping, "OnEssenceDepleted");
         }
 
         /// <summary>
@@ -4436,7 +4405,7 @@ namespace FaeMaze.Visitors
 
             // Recalculate path after timed state expires, since visitor may have been
             // moved by physics during daze or the old path may be stale
-            if (state == VisitorState.Walking)
+            if (state == VisitorState.Walking || state == VisitorState.Lured)
             {
                 RecalculatePath();
             }
@@ -4448,7 +4417,7 @@ namespace FaeMaze.Visitors
         /// </summary>
         public virtual void ForceEscape()
         {
-            state = VisitorState.Escaping;
+            SetState(VisitorState.Escaping, "ForceEscape");
 
             isFascinated = false;
             isFrightened = false;
@@ -4467,13 +4436,6 @@ namespace FaeMaze.Visitors
         /// </summary>
         protected virtual void EndFascination()
         {
-            // Set cooldown BEFORE clearing the lantern reference, to prevent immediate re-fascination
-            if (currentFaeLantern != null)
-            {
-                float cooldown = config != null ? config.FascinationCooldown : currentFaeLantern.CooldownSec;
-                lanternCooldowns[currentFaeLantern] = cooldown;
-            }
-
             FaeMaze.Props.LanternStreamerEffect.DestroyStreamers(transform);
 
             isFascinated = false;
@@ -4501,12 +4463,7 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                // Fallback: pick a random destination if no destination available
-                Vector3 randomDestination = GetRandomWanderDestination();
-                worldPath = BuildWorldPath(PhysicsPosition, randomDestination);
-                worldPathIndex = 0;
-                ResetSplineState();
-                state = VisitorState.Walking;
+                NavigateToRandomPortal("EndFascination: no resume destination");
             }
         }
 
@@ -4549,63 +4506,8 @@ namespace FaeMaze.Visitors
             }
             else
             {
-                Vector3 randomDestination = GetRandomWanderDestination();
-                worldPath = BuildWorldPath(PhysicsPosition, randomDestination);
-                worldPathIndex = 0;
-                ResetSplineState();
-                state = VisitorState.Walking;
+                NavigateToRandomPortal("EndLanternFascination: no resume destination");
             }
-        }
-
-        /// <summary>
-        /// Public method to forcibly start lantern fascination (bypasses chance roll).
-        /// Used by tutorial to force the demonstration to work reliably.
-        /// </summary>
-        public virtual void ForceFascinateByLantern(FaeMaze.Props.FaeLantern lantern)
-        {
-            if (lantern == null) return;
-
-            // Fascination-immune visitors ignore all lantern fascination
-            if (isFascinationImmune) return;
-
-            // Allow fascination from movement states OR Idle
-            if (!IsMovementState(state) && state != VisitorState.Idle)
-            {
-                return;
-            }
-
-            Vector3 lanternWorldPos = lantern.transform.position;
-
-            // Force fascination (bypass chance roll and cooldown)
-            isFascinated = true;
-            currentFaeLantern = lantern;
-            fascinationLanternPosition = lanternWorldPos;
-            hasReachedLantern = false;
-            fascinationTimer = 0f;
-            lanternEssenceAwardAccumulator = 0f;
-
-            // Reset detour state
-            ResetDetourState();
-
-            // Calculate stop position at edge of exclusion zone (1 unit from lantern center)
-            const float LANTERN_EXCLUSION_RADIUS = 1f;
-            Vector3 visitorPos = PhysicsPosition;
-            Vector2 dirToVisitor = new Vector2(visitorPos.x - lanternWorldPos.x, visitorPos.y - lanternWorldPos.y);
-            if (dirToVisitor.sqrMagnitude < 0.01f)
-            {
-                dirToVisitor = new Vector2(1f, 0f); // Default direction if at lantern center
-            }
-            dirToVisitor.Normalize();
-            Vector2 stopPos2D = new Vector2(lanternWorldPos.x, lanternWorldPos.y) + dirToVisitor * LANTERN_EXCLUSION_RADIUS;
-            Vector3 stopPosition = new Vector3(stopPos2D.x, stopPos2D.y, visitorPos.z);
-
-            // Build path to stop position
-            worldPath = BuildWorldPath(visitorPos, stopPosition);
-            worldPathIndex = 0;
-            worldDestination = stopPosition;
-            ResetSplineState();
-            RefreshStateFromFlags();
-
         }
 
         /// <summary>
@@ -4662,6 +4564,51 @@ namespace FaeMaze.Visitors
         }
 
         /// <summary>
+        /// Returns a random portal position as a destination.
+        /// Visitors without a destination should always head toward an exit portal.
+        /// </summary>
+        protected Vector3 GetRandomPortalDestination()
+        {
+            var dynamicMaze = Object.FindFirstObjectByType<FaeMaze.Systems.DynamicMazeGrowth>();
+            if (dynamicMaze != null)
+            {
+                var portals = dynamicMaze.GetPortalPositions();
+                if (portals != null && portals.Count > 0)
+                {
+                    int idx = RandomManager.Range(0, portals.Count);
+                    return portals[idx];
+                }
+            }
+            // Fallback to random node if no portals found
+            return GetRandomWanderDestination();
+        }
+
+        /// <summary>
+        /// Assigns a random portal destination and starts walking.
+        /// Called whenever a visitor would otherwise become idle with no destination.
+        /// </summary>
+        protected void NavigateToRandomPortal(string reason)
+        {
+            if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null) return;
+
+            Vector3 portalDest = GetRandomPortalDestination();
+            worldPath = BuildWorldPath(PhysicsPosition, portalDest);
+            worldPathIndex = 0;
+            worldDestination = portalDest;
+            originalDestination = portalDest;
+            ResetSplineState();
+
+            if (worldPath != null && worldPath.Count > 0)
+            {
+                SetState(VisitorState.Walking, $"NavigateToRandomPortal: {reason}");
+            }
+            else
+            {
+                SetState(VisitorState.Idle, $"NavigateToRandomPortal: no path to portal ({reason})");
+            }
+        }
+
+        /// <summary>
         /// Makes this visitor fascinated by a FairyRing. The visitor abandons their path
         /// and circles the ring for the specified duration. When fascination ends, they become lost.
         /// </summary>
@@ -4670,7 +4617,7 @@ namespace FaeMaze.Visitors
         /// <param name="slowFactor">Speed multiplier while fascinated (0.5 = 50% speed)</param>
         public virtual void BecomeFascinatedByRing(FaeMaze.Props.FairyRing ring, float duration, float slowFactor)
         {
-            if (isFascinationImmune || isMisdirected) return;
+            if (isFascinationImmune || isMisdirected || isLured) return;
 
             if (!IsMovementState(state) && state != VisitorState.Idle)
             {
@@ -4859,7 +4806,7 @@ namespace FaeMaze.Visitors
         /// Moves the visitor to the nearest walkable tile if they are currently
         /// in an unwalkable position (e.g., node center).
         /// </summary>
-        protected virtual void MoveToNearestWalkableTile()
+        public virtual void MoveToNearestWalkableTile()
         {
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
             {
@@ -5232,6 +5179,11 @@ namespace FaeMaze.Visitors
         {
             if (modelPrefab == null)
             {
+                // Model is baked into the prefab root (e.g. excited.prefab).
+                // Capture the root's rotation as the base rotation so
+                // UpdateAnimatorDirection can compensate for it.
+                modelBaseRotation = transform.rotation;
+                modelBaseRotationCaptured = true;
                 return;
             }
 
@@ -5810,7 +5762,7 @@ namespace FaeMaze.Visitors
             // Check for portal - if at a portal, escape immediately
             if (IsAtPortal())
             {
-                state = VisitorState.Escaping;
+                SetState(VisitorState.Escaping, "HandleFrightenedAtNode: at portal");
                 OnExitedThroughPortal();
                 return;
             }

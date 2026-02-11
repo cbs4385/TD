@@ -150,11 +150,8 @@ namespace FaeMaze.HeartPowers
             // Find the furthest position from the heart for wave animation
             FindFurthestExtent();
 
-            // Create power fog covering affected area
+            // Create power fog covering affected area (includes trigger collider for visitor detection)
             CreatePowerFog();
-
-            // Apply lure to all visitors currently on the affected node/edge
-            ApplyLureToVisitorsOnAffectedArea();
         }
 
         /// <summary>
@@ -259,9 +256,6 @@ namespace FaeMaze.HeartPowers
 
             // Update fog wave animation
             UpdatePowerFog(deltaTime);
-
-            // Check for new visitors entering the affected area
-            CheckForNewVisitorsOnAffectedArea();
 
             // Clean up destroyed visitors from tracking set
             affectedVisitors.RemoveWhere(v => v == null);
@@ -474,12 +468,23 @@ namespace FaeMaze.HeartPowers
             fogQuad.transform.localScale = new Vector3(fogBounds.size.x, fogBounds.size.y, 1f);
             fogQuad.transform.rotation = Quaternion.identity;
 
-            // Remove collider
-            var collider = fogQuad.GetComponent<Collider>();
-            if (collider != null)
-            {
-                Object.Destroy(collider);
-            }
+            // Replace auto-generated MeshCollider with a BoxCollider trigger for visitor detection
+            var meshCol = fogQuad.GetComponent<Collider>();
+            if (meshCol != null) Object.Destroy(meshCol);
+
+            var boxCol = fogQuad.AddComponent<BoxCollider>();
+            boxCol.isTrigger = true;
+            boxCol.size = new Vector3(1f, 1f, 3f); // Z depth spans visitor capsule range
+            boxCol.center = Vector3.zero;
+
+            // Fog quad needs a kinematic Rigidbody for trigger events to fire
+            var rb = fogQuad.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            // Attach trigger handler that calls back into this effect
+            var trigger = fogQuad.AddComponent<MurmuringFogTrigger>();
+            trigger.Initialize(this);
 
             // Apply material
             var renderer = fogQuad.GetComponent<Renderer>();
@@ -779,93 +784,46 @@ namespace FaeMaze.HeartPowers
         }
 
         /// <summary>
-        /// Checks if a visitor is on ANY affected node or edge along the path to the heart.
+        /// Called by MurmuringFogTrigger when a visitor's collider enters/stays in the fog bounds.
+        /// Validates the visitor is near an actual affected tile (not just in the bounding box)
+        /// before luring them toward the heart.
         /// </summary>
-        private bool IsVisitorOnAffectedArea(VisitorControllerBase visitor)
+        public void TryLureVisitor(VisitorControllerBase visitor)
         {
-            if (visitor == null || manager.MazeGrid?.WorldSpaceMazeData == null)
-                return false;
+            if (visitor == null || hasExpired) return;
 
-            // If no affected areas were identified, fall back to radius check
-            if (allAffectedNodeIndices.Count == 0 && allAffectedEdgeIndices.Count == 0)
+            if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
+                visitor.State == VisitorControllerBase.VisitorState.Escaping)
+                return;
+
+            // Already lured by this power instance
+            if (affectedVisitors.Contains(visitor)) return;
+
+            // Validate visitor is near an actual affected tile (not just in the fog bounding box)
+            if (IsNearAffectedTile(visitor))
             {
-                float radius = definition.radius > 0 ? definition.radius : 3f;
-                return Vector3.Distance(visitor.transform.position, targetPosition) <= radius;
+                LureVisitorToHeart(visitor);
             }
+        }
 
-            var mazeData = manager.MazeGrid.WorldSpaceMazeData;
-            Vector2 visitorPos2D = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+        /// <summary>
+        /// Checks if a visitor is near any affected tile position.
+        /// Uses the same tile positions that generate the fog visual, so detection matches what the player sees.
+        /// </summary>
+        private bool IsNearAffectedTile(VisitorControllerBase visitor)
+        {
+            Vector2 pos = new Vector2(visitor.transform.position.x, visitor.transform.position.y);
+            const float DETECTION_RADIUS_SQ = 1.5f * 1.5f; // Matches tileRadius in GeneratePathMaskTexture
 
-            var nearestTile = FindNearestWalkableTile(mazeData, visitorPos2D);
-            if (nearestTile == null)
-                return false;
-
-            // Check if visitor is on ANY affected node along the path
-            if (nearestTile.NodeIndex >= 0 && allAffectedNodeIndices.Contains(nearestTile.NodeIndex))
-                return true;
-
-            // Check if visitor is on ANY affected edge along the path
-            if (nearestTile.EdgeIndex >= 0 && allAffectedEdgeIndices.Contains(nearestTile.EdgeIndex))
-                return true;
+            foreach (var tilePos in allAffectedTilePositions)
+            {
+                float dx = pos.x - tilePos.x;
+                float dy = pos.y - tilePos.y;
+                if (dx * dx + dy * dy <= DETECTION_RADIUS_SQ)
+                    return true;
+            }
 
             return false;
-        }
-
-        /// <summary>
-        /// Applies lure effect to all visitors currently on the affected area.
-        /// </summary>
-        private void ApplyLureToVisitorsOnAffectedArea()
-        {
-            var activeVisitors = VisitorRegistry.All;
-            if (activeVisitors == null)
-            {
-                return;
-            }
-
-
-            foreach (var visitor in activeVisitors)
-            {
-                if (visitor == null || visitor.State == VisitorControllerBase.VisitorState.Consumed)
-                    continue;
-
-                bool isOnArea = IsVisitorOnAffectedArea(visitor);
-
-                if (isOnArea)
-                {
-                    LureVisitorToHeart(visitor);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Checks for new visitors entering the affected area and lures them.
-        /// Called every frame to catch visitors who walk into the affected zone.
-        /// </summary>
-        private void CheckForNewVisitorsOnAffectedArea()
-        {
-            var activeVisitors = VisitorRegistry.All;
-            if (activeVisitors == null) return;
-
-            foreach (var visitor in activeVisitors)
-            {
-                if (visitor == null)
-                    continue;
-
-                // Skip visitors in terminal or non-lurable states
-                if (visitor.State == VisitorControllerBase.VisitorState.Consumed ||
-                    visitor.State == VisitorControllerBase.VisitorState.Escaping)
-                    continue;
-
-                // Skip visitors already affected by this power instance
-                if (affectedVisitors.Contains(visitor))
-                    continue;
-
-                // Check if visitor is on the affected area
-                if (IsVisitorOnAffectedArea(visitor))
-                {
-                    LureVisitorToHeart(visitor);
-                }
-            }
         }
 
         /// <summary>
@@ -920,4 +878,42 @@ namespace FaeMaze.HeartPowers
     }
 
     #endregion
+
+    /// <summary>
+    /// Trigger component attached to the MurmuringPaths fog quad.
+    /// Detects when visitor colliders enter the fog bounds and notifies the effect to lure them.
+    /// Uses OnTriggerStay to also catch visitors already inside when the fog spawns.
+    /// </summary>
+    public class MurmuringFogTrigger : MonoBehaviour
+    {
+        private MurmuringPathsEffect effect;
+
+        public void Initialize(MurmuringPathsEffect effect)
+        {
+            this.effect = effect;
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            TryLure(other);
+        }
+
+        private void OnTriggerStay(Collider other)
+        {
+            TryLure(other);
+        }
+
+        private void TryLure(Collider other)
+        {
+            if (effect == null) return;
+
+            // Only respond to visitor colliders (layer 6)
+            if (other.gameObject.layer != 6) return;
+
+            var visitor = other.GetComponentInParent<VisitorControllerBase>();
+            if (visitor == null) return;
+
+            effect.TryLureVisitor(visitor);
+        }
+    }
 }

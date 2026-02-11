@@ -120,7 +120,7 @@ namespace FaeMaze.Systems
         private const float POSITION_HASH_CELL_SIZE = 0.5f; // Should be >= OVERLAP_THRESHOLD
 
         // Wall generation constants - shared between initial render and incremental updates
-        private const float WALL_STEP_SIZE = 0.8f; // 4x larger for 75% fewer walls
+        private const float WALL_STEP_SIZE = 0.8f;
         // PATH_HALF_WIDTH = 0 keeps walls tight against path edges
         // Path tile colliders are reduced to 2/3 size to prevent false collision on curves
         private const float PATH_HALF_WIDTH = 0f;
@@ -1528,18 +1528,18 @@ namespace FaeMaze.Systems
                 tileObj.AddComponent<WallCollisionChecker>();
 
                 // Place kudzu vine at graph boundary walls (front-rank, layer 0)
-                // Kudzu prefab has identity root transform (via KudzuPrefabSetup editor script)
-                // so it follows the same Z-rotation convention as treeLOD2 walls.
-                // +X faces toward graph element: use orientationDegrees + 180 for the Z rotation.
+                // For edges: orientationDegrees points outward from path; +180 = inward toward path.
+                // For nodes: orientationDegrees points inward toward center (already toward path).
+                // Z-rotation of (orientationDegrees + 180) aligns model +X toward graph (inward) for edges.
                 if (wallLayer == 0 && kudzuPrefab != null)
                 {
-                    // Shift kudzu 0.15 units toward the graph element to close gap
-                    float inwardRad = (orientationDegrees + 180f) * Mathf.Deg2Rad;
-                    Vector3 kudzuPos = worldPos + new Vector3(Mathf.Cos(inwardRad), Mathf.Sin(inwardRad), 0f) * 0.15f;
+                    // Shift kudzu 0.15 units toward the graph element
+                    float inwardRad = (orientationDegrees + 90f) * Mathf.Deg2Rad;
+                    Vector3 kudzuPos = worldPos - new Vector3(Mathf.Cos(inwardRad), Mathf.Sin(inwardRad), 0f) * 0.15f;
 
                     GameObject kudzuObj = Instantiate(kudzuPrefab, tileParent);
                     kudzuObj.transform.position = kudzuPos;
-                    kudzuObj.transform.rotation = Quaternion.Euler(0f, 0f, orientationDegrees + 180f);
+                    kudzuObj.transform.rotation = Quaternion.Euler(0f, 0f, orientationDegrees + 90f);
                     kudzuObj.name = $"Kudzu_{worldPos.x:F1}_{worldPos.y:F1}";
                     if (enableStaticBatching)
                     {
