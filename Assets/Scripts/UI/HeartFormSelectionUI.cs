@@ -373,11 +373,7 @@ namespace FaeMaze.UI
 
             // Find cards container
             Transform cardsContainer = _panel.transform.Find("CardsContainer");
-            if (cardsContainer == null)
-            {
-                Debug.LogError("[HeartFormSelectionUI] CardsContainer not found!");
-                return;
-            }
+            if (cardsContainer == null) return;
 
             // Create cards for each form
             for (int i = 0; i < unlockedForms.Count; i++)

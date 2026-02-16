@@ -337,6 +337,13 @@ namespace FaeMaze.Maze
 
             // Apply bone rotations (FindGroundBoneIndex uses cached Z offsets)
             ApplyTongueBoneRotations();
+
+            // Update frightening event position to track the tongue tip
+            if (currentFrighteningEvent != null && tongueBoneData?.Bones != null && tongueBoneData.Bones.Length > 0)
+            {
+                Vector3 tipPos = tongueBoneData.Bones[tongueBoneData.Bones.Length - 1].position;
+                HeartPowerUtils.UpdateFrighteningEventPosition(currentFrighteningEvent, tipPos);
+            }
         }
 
         private void UpdateGrabbingState()

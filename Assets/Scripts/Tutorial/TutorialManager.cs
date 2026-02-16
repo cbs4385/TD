@@ -164,7 +164,8 @@ namespace FaeMaze.Tutorial
             string p4Key = Bind(GameSettings.HeartPower4Binding);
             string p5Key = Bind(GameSettings.HeartPower5Binding);
             string focusHeartKey = Bind(GameSettings.CameraFocusHeartBinding);
-            string moveKeys = $"{Bind(GameSettings.CameraMoveForwardBinding)}/{Bind(GameSettings.CameraMoveBackwardBinding)}/{Bind(GameSettings.CameraTurnLeftBinding)}/{Bind(GameSettings.CameraTurnRightBinding)}";
+            string moveKeys = $"{Bind(GameSettings.CameraMoveForwardBinding)}/{Bind(GameSettings.CameraMoveBackwardBinding)}/{Bind(GameSettings.CameraStrafeLeftBinding)}/{Bind(GameSettings.CameraStrafeRightBinding)}";
+            string rotateKeys = $"{Bind(GameSettings.CameraTurnLeftBinding)}/{Bind(GameSettings.CameraTurnRightBinding)}";
             string orbitKey = Bind(GameSettings.CameraOrbitBinding);
             string panKey = Bind(GameSettings.CameraPanBinding);
 
@@ -203,10 +204,11 @@ namespace FaeMaze.Tutorial
                     title: "Camera & Focal Point",
                     description: "The center of your screen is the Focal Point - your powers strike wherever this point falls within the maze.\n\n" +
                                  "Command your gaze:\n\n" +
-                                 "  WASD / Arrow Keys - Move camera\n" +
+                                 $"  {moveKeys} - Move & strafe\n" +
+                                 $"  {rotateKeys} - Rotate view\n" +
                                  "  Scroll Wheel - Zoom in/out\n" +
-                                 "  Right-click drag - Orbit around focal point\n" +
-                                 "  Middle-click drag - Pan camera\n\n" +
+                                 "  Right-click drag - Orbit\n" +
+                                 "  Middle-click drag - Pan\n\n" +
                                  "Try moving the camera now.",
                     trigger: TutorialTriggerType.CameraMove,
                     pause: false
@@ -399,11 +401,20 @@ namespace FaeMaze.Tutorial
                 previousEssence = TUTORIAL_STARTING_ESSENCE;
             }
 
+            // Disable essence decay during tutorial so the player doesn't lose threads while learning
+            var essenceBlur = FindFirstObjectByType<EssenceBlurController>();
+            if (essenceBlur != null)
+            {
+                essenceBlur.SetEssenceDecayEnabled(false);
+            }
+
             // Lock all heart power buttons until tutorial explicitly enables them
             var panelController = FindFirstObjectByType<HeartPowerPanelController>();
             if (panelController != null)
             {
                 panelController.SetTutorialPowerLock(true);
+                // Show gameplay overlay so tutorial can demonstrate power buttons and essence bar
+                panelController.SetGameplayOverlayVisible(true);
             }
 
             var cam = Camera.main;
@@ -413,9 +424,6 @@ namespace FaeMaze.Tutorial
             }
 
             OnTutorialStarted?.Invoke();
-
-            // Log complete maze map for deterministic tutorial path planning
-            LogMazeMap();
 
             AdvanceStep();
         }
@@ -491,11 +499,9 @@ namespace FaeMaze.Tutorial
             }
 
             currentStepIndex++;
-            Debug.Log($"[Tutorial] AdvanceStepInternal: advancing to index={currentStepIndex}/{steps.Count}");
 
             if (currentStepIndex >= steps.Count)
             {
-                Debug.Log("[Tutorial] AdvanceStepInternal: all steps complete, calling CompleteTutorial()");
                 CompleteTutorial();
                 return;
             }
@@ -503,11 +509,8 @@ namespace FaeMaze.Tutorial
             var step = CurrentStep;
             if (step == null)
             {
-                Debug.LogError("[TutorialManager] CurrentStep is null after advancing!");
                 return;
             }
-
-            LogStepTransition("AdvanceStepInternal", step);
 
             // For all power activation steps, always do cinematic camera move to ensure focal point is in correct position
             // NOTE: power_sculpt is NOT included here - it has a dedicated handler that waits for DevouringMaw to finish
@@ -647,8 +650,6 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private void ShowStepImmediate(TutorialStep step)
         {
-            LogStepTransition("ShowStepImmediate", step);
-
             // Check if power is already active for PowerActivated trigger steps
             // This prevents tutorial lock if player activated power before being prompted
             // NOTE: We ALWAYS check this, even after cinematic transitions - if the player
@@ -761,8 +762,6 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerGraspEffectStep(TutorialStep step)
         {
-            Debug.Log("[Tutorial] HandlePowerGraspEffectStep: ENTER");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
             if (!shouldPause && isPaused)
@@ -940,8 +939,6 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerMurmuringEffectStep(TutorialStep step)
         {
-            Debug.Log("[Tutorial] HandlePowerMurmuringEffectStep: ENTER");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
@@ -1084,8 +1081,6 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandlePowerMawEffectStep(TutorialStep step)
         {
-            Debug.Log("[Tutorial] HandlePowerMawEffectStep: ENTER");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
@@ -1288,7 +1283,6 @@ namespace FaeMaze.Tutorial
 
             // Store the node where we placed the tutorial lantern for the lantern_demo step
             tutorialLanternNodeIndex = targetNodeIndex;
-            Debug.Log($"[Tutorial] HandlePowerSculptEffectStep: tutorial lantern placed at nodeIndex={tutorialLanternNodeIndex}");
 
             AdvanceStep();
         }
@@ -1452,20 +1446,16 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandleLanternDemoStep(TutorialStep step)
         {
-            Debug.Log("[Tutorial] HandleLanternDemoStep: ENTER");
-
             // CRITICAL: Always unpause first if needed - the game must be running
             // This step has pause: false, so ensure the game is unpaused
             bool shouldPause = step.pauseGame || step.highlightType != TutorialHighlightType.None;
             if (!shouldPause && isPaused)
             {
-                Debug.Log("[Tutorial] HandleLanternDemoStep: unpausing game");
                 PauseGame(false);
             }
 
             // Find the lantern placed by the sculpt tutorial step
             var lanterns = FindObjectsByType<FaeLantern>(FindObjectsSortMode.None);
-            Debug.Log($"[Tutorial] HandleLanternDemoStep: found {lanterns.Length} lanterns, tutorialLanternNodeIndex={tutorialLanternNodeIndex}");
 
             FaeLantern targetLantern = null;
 
@@ -1488,7 +1478,6 @@ namespace FaeMaze.Tutorial
                             targetLantern = lantern;
                         }
                     }
-                    Debug.Log($"[Tutorial] HandleLanternDemoStep: matched lantern at node {tutorialLanternNodeIndex} dist={bestDist:F2}");
                 }
             }
 
@@ -1496,16 +1485,6 @@ namespace FaeMaze.Tutorial
             if (targetLantern == null && lanterns.Length > 0)
             {
                 targetLantern = lanterns[0];
-                Debug.LogWarning("[Tutorial] HandleLanternDemoStep: falling back to first lantern found");
-            }
-
-            if (targetLantern != null)
-            {
-                Debug.Log($"[Tutorial] HandleLanternDemoStep: targetLantern pos=({targetLantern.transform.position.x:F2}, {targetLantern.transform.position.y:F2}, {targetLantern.transform.position.z:F2}) influenceRadius={targetLantern.InfluenceRadius:F2}");
-            }
-            else
-            {
-                Debug.LogWarning("[Tutorial] HandleLanternDemoStep: NO lanterns found!");
             }
 
             // Show the step UI
@@ -1565,13 +1544,11 @@ namespace FaeMaze.Tutorial
                 if (dynamicMaze != null && mazeGrid?.ForestMapState != null)
                 {
                     int lanternNodeIndex = dynamicMaze.FindNodeIndexAtPosition(lanternPos);
-                    Debug.Log($"[Tutorial] HandleLanternDemoStep: lanternNodeIndex={lanternNodeIndex}");
 
                     if (lanternNodeIndex >= 0)
                     {
                         var mapState = mazeGrid.ForestMapState;
                         var lanternNode = mapState.Nodes[lanternNodeIndex];
-                        Debug.Log($"[Tutorial] HandleLanternDemoStep: lanternNode pos=({lanternNode.Position.x:F2}, {lanternNode.Position.y:F2}) edges=[{string.Join(",", lanternNode.IncidentEdges)}]");
 
                         // Find the incident edge whose far endpoint is farthest from heart
                         float bestDist = -1f;
@@ -1588,7 +1565,6 @@ namespace FaeMaze.Tutorial
 
                             var otherNode = mapState.Nodes[otherNodeIndex];
                             float distFromHeart = Vector2.Distance(otherNode.Position, heartPos2D);
-                            Debug.Log($"[Tutorial] HandleLanternDemoStep: edge[{edgeId}] otherNode={otherNodeIndex} pos=({otherNode.Position.x:F2}, {otherNode.Position.y:F2}) distFromHeart={distFromHeart:F2}");
 
                             if (distFromHeart > bestDist)
                             {
@@ -1601,7 +1577,6 @@ namespace FaeMaze.Tutorial
                         // Must be well outside influence radius (3.0) so visitor visibly walks toward lantern
                         Vector2 dirToFarEndpoint = (bestEndpointPos - lanternNode.Position).normalized;
                         Vector2 idealSpawn2D = lanternNode.Position + dirToFarEndpoint * 8.0f;
-                        Debug.Log($"[Tutorial] HandleLanternDemoStep: bestEndpoint=({bestEndpointPos.x:F2}, {bestEndpointPos.y:F2}) dirToFar=({dirToFarEndpoint.x:F2}, {dirToFarEndpoint.y:F2}) idealSpawn=({idealSpawn2D.x:F2}, {idealSpawn2D.y:F2})");
 
                         if (mazeData != null)
                         {
@@ -1609,11 +1584,6 @@ namespace FaeMaze.Tutorial
                             if (tile != null)
                             {
                                 spawnPos = new Vector3(tile.Position.x, tile.Position.y, 0f);
-                                Debug.Log($"[Tutorial] HandleLanternDemoStep: snapped spawn to walkable tile=({tile.Position.x:F2}, {tile.Position.y:F2}) edge={tile.EdgeIndex} nodeIdx={tile.NodeIndex}");
-                            }
-                            else
-                            {
-                                Debug.LogWarning($"[Tutorial] HandleLanternDemoStep: no walkable tile near ideal spawn!");
                             }
                         }
                     }
@@ -1624,8 +1594,6 @@ namespace FaeMaze.Tutorial
                 Vector3 destPos = lanternPos;
                 destPos.z = 0f;
 
-                Debug.Log($"[Tutorial] HandleLanternDemoStep: SPAWNING visitor at ({spawnPos.x:F2}, {spawnPos.y:F2}) dest=({destPos.x:F2}, {destPos.y:F2}) fascinationImmune=false");
-
                 // Lantern demo visitor must NOT be fascination-immune
                 visitorSpawner.SpawnVisitorForHGZ(spawnPos, destPos, fascinationImmune: false);
             }
@@ -1635,14 +1603,12 @@ namespace FaeMaze.Tutorial
 
             // Find the spawned visitor (closest to spawn position)
             var visitors = FindObjectsByType<VisitorControllerBase>(FindObjectsSortMode.None);
-            Debug.Log($"[Tutorial] HandleLanternDemoStep: found {visitors.Length} visitors after spawn");
             VisitorControllerBase targetVisitor = null;
             float closestDist = float.MaxValue;
             foreach (var v in visitors)
             {
                 if (v == null) continue;
                 float dist = Vector3.Distance(v.transform.position, spawnPos);
-                Debug.Log($"[Tutorial] HandleLanternDemoStep: candidate visitor pos=({v.transform.position.x:F2}, {v.transform.position.y:F2}) distToSpawn={dist:F2} state={v.State}");
                 if (dist < closestDist)
                 {
                     closestDist = dist;
@@ -1652,8 +1618,6 @@ namespace FaeMaze.Tutorial
 
             if (targetVisitor != null)
             {
-                LogVisitorState("HandleLanternDemoStep: selected visitor", targetVisitor);
-
                 // Set initial facing toward the lantern so visitor doesn't start facing backwards
                 if (targetLantern != null)
                 {
@@ -1661,38 +1625,17 @@ namespace FaeMaze.Tutorial
                         targetLantern.transform.position.x - targetVisitor.transform.position.x,
                         targetLantern.transform.position.y - targetVisitor.transform.position.y);
                     targetVisitor.SetFacingDirectionImmediate(toLantern);
-                    Debug.Log($"[Tutorial] HandleLanternDemoStep: set facing toward lantern dir=({toLantern.x:F2}, {toLantern.y:F2})");
                 }
-            }
-            else
-            {
-                Debug.LogWarning("[Tutorial] HandleLanternDemoStep: NO target visitor found!");
             }
 
             // Track visitor until they become fascinated by the lantern
-            int frameCount = 0;
             if (targetVisitor != null && cameraController != null)
             {
-                Vector3 lastLoggedPos = targetVisitor.transform.position;
-
                 while (targetVisitor != null)
                 {
-                    // Log position every 30 frames or on significant movement
-                    frameCount++;
-                    float movedDist = Vector3.Distance(targetVisitor.transform.position, lastLoggedPos);
-                    if (frameCount % 30 == 0 || movedDist > 1.0f)
-                    {
-                        Debug.Log($"[Tutorial] HandleLanternDemoStep: tracking frame={frameCount} " +
-                                  $"pos=({targetVisitor.transform.position.x:F2}, {targetVisitor.transform.position.y:F2}, {targetVisitor.transform.position.z:F2}) " +
-                                  $"state={targetVisitor.State} " +
-                                  $"fascinated={targetVisitor.CurrentFaeLantern != null}");
-                        lastLoggedPos = targetVisitor.transform.position;
-                    }
-
                     // Check if visitor is fascinated by a lantern (naturally via collider trigger)
                     if (targetVisitor.CurrentFaeLantern != null)
                     {
-                        Debug.Log($"[Tutorial] HandleLanternDemoStep: visitor FASCINATED by lantern at frame={frameCount}");
                         break;
                     }
 
@@ -1700,7 +1643,6 @@ namespace FaeMaze.Tutorial
                     if (targetVisitor.State == VisitorControllerBase.VisitorState.Consumed ||
                         targetVisitor.State == VisitorControllerBase.VisitorState.Grabbed)
                     {
-                        Debug.Log($"[Tutorial] HandleLanternDemoStep: visitor in terminal state={targetVisitor.State} at frame={frameCount}");
                         break;
                     }
 
@@ -1712,8 +1654,6 @@ namespace FaeMaze.Tutorial
                     yield return null;
                 }
             }
-
-            Debug.Log($"[Tutorial] HandleLanternDemoStep: tracking loop ended after {frameCount} frames, advancing step");
 
             // Short pause to let player see the fascination effect
             yield return new WaitForSecondsRealtime(1.5f);
@@ -1728,8 +1668,6 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private IEnumerator HandleEssenceGainStep(TutorialStep step)
         {
-            Debug.Log("[Tutorial] HandleEssenceGainStep: ENTER");
-
             // Ensure game is unpaused
             if (isPaused)
             {
@@ -1988,6 +1926,13 @@ namespace FaeMaze.Tutorial
                 PauseGame(false);
             }
 
+            // Re-enable essence decay after tutorial
+            var essenceBlur = FindFirstObjectByType<EssenceBlurController>();
+            if (essenceBlur != null)
+            {
+                essenceBlur.SetEssenceDecayEnabled(true);
+            }
+
             // Assign valid exit destinations to any remaining visitors
             AssignExitDestinationsToRemainingVisitors();
 
@@ -2111,7 +2056,6 @@ namespace FaeMaze.Tutorial
             if (!isActive || CurrentStep == null) return;
 
             var step = CurrentStep;
-            Debug.Log($"[Tutorial] NotifyPowerActivated: power={powerIndex} currentStep={step.stepId} trigger={step.triggerType} param={step.triggerParameter}");
 
             if (step.triggerType == TutorialTriggerType.PowerActivated &&
                 step.triggerParameter == powerIndex.ToString())
@@ -2174,7 +2118,6 @@ namespace FaeMaze.Tutorial
             if (step.triggerType == TutorialTriggerType.EssenceIncreased &&
                 newEssence > previousEssence)
             {
-                Debug.Log($"[Tutorial] NotifyEssenceChanged: essence increased {previousEssence} -> {newEssence}, advancing from step={step.stepId}");
                 AdvanceStep();
             }
 
@@ -2206,212 +2149,6 @@ namespace FaeMaze.Tutorial
         {
             GameSettings.TutorialCompleted = false;
             GameSettings.Save();
-        }
-
-        #endregion
-
-        #region Debug Logging
-
-        /// <summary>
-        /// Logs a complete map of the tutorial maze topology.
-        /// Since the tutorial uses a fixed seed (TUTORIAL_SEED), this output is deterministic
-        /// and can be used to hard-code visitor paths for tutorial steps.
-        /// </summary>
-        private void LogMazeMap()
-        {
-            var mazeGrid = FindFirstObjectByType<MazeGridBehaviour>();
-            if (mazeGrid == null)
-            {
-                Debug.Log("[TutorialMap] ERROR: MazeGridBehaviour not found!");
-                return;
-            }
-
-            var forestState = mazeGrid.ForestMapState;
-            var mazeData = mazeGrid.WorldSpaceMazeData;
-
-            if (forestState == null)
-            {
-                Debug.Log("[TutorialMap] ERROR: ForestMapState is null!");
-                return;
-            }
-
-            // === HEADER ===
-            Debug.Log("[TutorialMap] ========== TUTORIAL MAZE MAP (seed=" + TUTORIAL_SEED + ") ==========");
-
-            // === HEART POSITION ===
-            Vector3 heartWorldPos = mazeGrid.HeartWorldPosition;
-            Debug.Log($"[TutorialMap] HEART: worldPos=({heartWorldPos.x:F2}, {heartWorldPos.y:F2}, {heartWorldPos.z:F2})");
-
-            if (GameController.Instance != null && GameController.Instance.Heart != null)
-            {
-                Vector3 heartObjPos = GameController.Instance.Heart.transform.position;
-                Debug.Log($"[TutorialMap] HEART (GameObject): ({heartObjPos.x:F2}, {heartObjPos.y:F2}, {heartObjPos.z:F2})");
-            }
-
-            // === NODES ===
-            Debug.Log($"[TutorialMap] --- NODES ({forestState.Nodes.Count}) ---");
-            for (int i = 0; i < forestState.Nodes.Count; i++)
-            {
-                var node = forestState.Nodes[i];
-                string edgeList = string.Join(",", node.IncidentEdges);
-                Debug.Log($"[TutorialMap] Node[{i}]: pos=({node.Position.x:F2}, {node.Position.y:F2}) kind={node.Kind} degree={node.IncidentEdges.Count} edges=[{edgeList}]");
-            }
-
-            // === EDGES ===
-            Debug.Log($"[TutorialMap] --- EDGES ({forestState.Edges.Count}) ---");
-            for (int i = 0; i < forestState.Edges.Count; i++)
-            {
-                var edge = forestState.Edges[i];
-                string nodeB = edge.NodeB.HasValue ? edge.NodeB.Value.ToString() : "null";
-                int polyCount = edge.PolylinePoints?.Count ?? 0;
-
-                Vector2 startPt = polyCount > 0 ? edge.PolylinePoints[0] : Vector2.zero;
-                Vector2 endPt = polyCount > 0 ? edge.PolylinePoints[polyCount - 1] : Vector2.zero;
-
-                // Calculate edge walking length
-                float walkLength = 0f;
-                if (edge.PolylinePoints != null && polyCount > 1)
-                {
-                    for (int j = 1; j < polyCount; j++)
-                    {
-                        walkLength += Vector2.Distance(edge.PolylinePoints[j - 1], edge.PolylinePoints[j]);
-                    }
-                }
-
-                Debug.Log($"[TutorialMap] Edge[{i}]: nodeA={edge.NodeA} nodeB={nodeB} partial={edge.Partial} polyPts={polyCount} walkLen={walkLength:F2} " +
-                          $"start=({startPt.x:F2}, {startPt.y:F2}) end=({endPt.x:F2}, {endPt.y:F2})");
-            }
-
-            // === PORTALS ===
-            var dynamicMaze = FindFirstObjectByType<DynamicMazeGrowth>();
-            if (dynamicMaze != null)
-            {
-                var portalPositions = dynamicMaze.GetPortalPositions();
-                Debug.Log($"[TutorialMap] --- PORTALS ({portalPositions?.Count ?? 0}) ---");
-                if (portalPositions != null)
-                {
-                    for (int i = 0; i < portalPositions.Count; i++)
-                    {
-                        var p = portalPositions[i];
-                        Debug.Log($"[TutorialMap] Portal[{i}]: ({p.x:F2}, {p.y:F2}, {p.z:F2})");
-                    }
-                }
-            }
-
-            // === NODE PROPS ===
-            if (dynamicMaze != null)
-            {
-                Debug.Log("[TutorialMap] --- NODE PROPS ---");
-                for (int i = 0; i < forestState.Nodes.Count; i++)
-                {
-                    var propType = dynamicMaze.GetNodePropType(i);
-                    if (propType.HasValue)
-                    {
-                        var node = forestState.Nodes[i];
-                        Debug.Log($"[TutorialMap] Node[{i}] prop={propType.Value} at ({node.Position.x:F2}, {node.Position.y:F2})");
-                    }
-                }
-            }
-
-            // === KEY POSITIONS FOR TUTORIAL STEPS ===
-            Debug.Log("[TutorialMap] --- KEY POSITIONS ---");
-
-            // Nearest non-heart node (where camera transitions to for power demos)
-            Vector3 nearestNode = GetNearestNonHeartNodePosition();
-            Debug.Log($"[TutorialMap] NearestNonHeartNode: ({nearestNode.x:F2}, {nearestNode.y:F2})");
-
-            // Furthest non-heart node (where Yoink! demo goes)
-            Vector3 furthestNode = GetFurthestNonHeartNodePosition();
-            Debug.Log($"[TutorialMap] FurthestNonHeartNode: ({furthestNode.x:F2}, {furthestNode.y:F2})");
-
-            // === WALKABLE TILES NEAR KEY POSITIONS ===
-            if (mazeData != null)
-            {
-                Debug.Log("[TutorialMap] --- WALKABLE TILES NEAR NODES ---");
-                for (int i = 0; i < forestState.Nodes.Count; i++)
-                {
-                    var node = forestState.Nodes[i];
-                    // Find walkable tiles on this node's ring (3.5 units from center in each cardinal direction)
-                    Vector2[] testDirs = { Vector2.up, Vector2.down, Vector2.left, Vector2.right };
-                    string[] dirNames = { "+Y", "-Y", "-X", "+X" };
-
-                    for (int d = 0; d < testDirs.Length; d++)
-                    {
-                        Vector2 testPos = node.Position + testDirs[d] * 3.5f;
-                        var tile = MazePathfinding.FindNearestWalkableTile(mazeData, testPos);
-                        if (tile != null)
-                        {
-                            float distFromNode = Vector2.Distance(tile.Position, node.Position);
-                            Debug.Log($"[TutorialMap] Node[{i}] walkable {dirNames[d]}: ({tile.Position.x:F2}, {tile.Position.y:F2}) dist={distFromNode:F2} edge={tile.EdgeIndex} nodeIdx={tile.NodeIndex}");
-                        }
-                    }
-                }
-            }
-
-            // === GRAPH ADJACENCY (compact) ===
-            Debug.Log("[TutorialMap] --- ADJACENCY ---");
-            for (int i = 0; i < forestState.Nodes.Count; i++)
-            {
-                var node = forestState.Nodes[i];
-                var neighbors = new List<string>();
-                foreach (int edgeId in node.IncidentEdges)
-                {
-                    if (edgeId < 0 || edgeId >= forestState.Edges.Count) continue;
-                    var edge = forestState.Edges[edgeId];
-                    int otherNode = (edge.NodeA == i && edge.NodeB.HasValue)
-                        ? edge.NodeB.Value
-                        : edge.NodeA;
-                    neighbors.Add($"{otherNode}(e{edgeId})");
-                }
-                Debug.Log($"[TutorialMap] Node[{i}] neighbors: [{string.Join(", ", neighbors)}]");
-            }
-
-            Debug.Log("[TutorialMap] ========== END TUTORIAL MAZE MAP ==========");
-        }
-
-        /// <summary>
-        /// Logs tutorial step transition information.
-        /// </summary>
-        private void LogStepTransition(string context, TutorialStep step)
-        {
-            if (step == null)
-            {
-                Debug.Log($"[Tutorial] {context}: step=null stepIndex={currentStepIndex}");
-                return;
-            }
-
-            Debug.Log($"[Tutorial] {context}: step={step.stepId} index={currentStepIndex}/{steps.Count} " +
-                      $"trigger={step.triggerType} param={step.triggerParameter ?? "none"} " +
-                      $"pause={step.pauseGame} isPaused={isPaused} isTransitioning={isTransitioning}");
-        }
-
-        /// <summary>
-        /// Logs visitor state for tutorial debugging.
-        /// </summary>
-        private void LogVisitorState(string context, VisitorControllerBase visitor, Vector3? spawnPos = null, Vector3? destPos = null)
-        {
-            if (visitor == null)
-            {
-                Debug.Log($"[Tutorial] {context}: visitor=null");
-                return;
-            }
-
-            string msg = $"[Tutorial] {context}: state={visitor.State} " +
-                        $"pos=({visitor.transform.position.x:F2}, {visitor.transform.position.y:F2}, {visitor.transform.position.z:F2}) " +
-                        $"isTutorial={visitor.IsTutorialVisitor} fascinationImmune={visitor.IsFascinationImmune} " +
-                        $"isLured={visitor.IsLured} isMisdirected={visitor.IsMisdirected}";
-
-            if (visitor.CurrentFaeLantern != null)
-            {
-                msg += $" fascByLantern=({visitor.CurrentFaeLantern.transform.position.x:F2}, {visitor.CurrentFaeLantern.transform.position.y:F2})";
-            }
-
-            if (spawnPos.HasValue)
-                msg += $" spawnPos=({spawnPos.Value.x:F2}, {spawnPos.Value.y:F2})";
-            if (destPos.HasValue)
-                msg += $" destPos=({destPos.Value.x:F2}, {destPos.Value.y:F2})";
-
-            Debug.Log(msg);
         }
 
         #endregion

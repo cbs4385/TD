@@ -804,11 +804,7 @@ namespace FaeMaze.HeartPowers
         private void SpawnGrabbingTongue(Vector3 visitorPos)
         {
             GameObject tonguePrefab = manager.TonguePrefab;
-            if (tonguePrefab == null)
-            {
-                Debug.LogError("[HeartwardGrasp] TonguePrefab is null!");
-                return;
-            }
+            if (tonguePrefab == null) return;
 
             if (grabbingTongueInstance != null)
             {
@@ -851,11 +847,7 @@ namespace FaeMaze.HeartPowers
         private void SpawnPushingTongue()
         {
             GameObject tonguePrefab = manager.TonguePrefab;
-            if (tonguePrefab == null)
-            {
-                Debug.LogError("[HeartwardGrasp] TonguePrefab is null!");
-                return;
-            }
+            if (tonguePrefab == null) return;
 
             if (pushingTongueInstance != null)
             {

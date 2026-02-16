@@ -325,7 +325,11 @@ namespace FaeMaze.Cameras
 
             float extendedMaxRadius = maxRadius * 1.3f;
 
-            for (int i = 0; i < energyBolts.Count; i++)
+            int boltCount = Mathf.Min(energyBolts.Count, Mathf.Min(boltJitterOffsets.Count,
+                Mathf.Min(boltRegenerateTime.Count, Mathf.Min(boltProgress.Count,
+                Mathf.Min(boltAngle.Count, boltDirection.Count)))));
+
+            for (int i = 0; i < boltCount; i++)
             {
                 LineRenderer lr = energyBolts[i];
                 if (lr == null)

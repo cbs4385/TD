@@ -1345,6 +1345,7 @@ MonoBehaviour:
   fontSize: 20
   uiTextColor: {r: 1, g: 1, b: 1, a: 1}
   autoStartFirstWave: 1
+  spawnAllTypesFirst: 1
 --- !u!1 &1432388913
 GameObject:
   m_ObjectHideFlags: 0

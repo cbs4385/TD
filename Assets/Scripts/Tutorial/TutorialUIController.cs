@@ -707,11 +707,7 @@ namespace FaeMaze.Tutorial
         private void OnStepChanged(int stepIndex)
         {
             var step = manager.CurrentStep;
-            if (step == null)
-            {
-                Debug.LogError("[TutorialUIController] CurrentStep is null!");
-                return;
-            }
+            if (step == null) return;
 
             // Ensure dialog panel is visible (may have been hidden by transition overlay)
             if (dialogPanel != null)

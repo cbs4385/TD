@@ -24,10 +24,10 @@ namespace FaeMaze.UI
 
         // Colors
         private readonly Color _panelColor = new Color(0.1f, 0.05f, 0.15f, 0.95f);
-        private readonly Color _cardColor = new Color(0.15f, 0.1f, 0.2f, 1f);
-        private readonly Color _cardHoverColor = new Color(0.25f, 0.15f, 0.35f, 1f);
-        private readonly Color _titleColor = new Color(0.7f, 0.5f, 1f);
-        private readonly Color _descColor = new Color(0.8f, 0.8f, 0.9f);
+        private readonly Color _cardColor = new Color(0.18f, 0.12f, 0.25f, 1f);
+        private readonly Color _cardHoverColor = new Color(0.3f, 0.2f, 0.4f, 1f);
+        private readonly Color _titleColor = new Color(0.9f, 0.75f, 1f);
+        private readonly Color _descColor = new Color(0.9f, 0.9f, 0.95f);
 
         #endregion
 
@@ -52,11 +52,18 @@ namespace FaeMaze.UI
 
         private void CreateCanvas()
         {
-            _canvas = UIFactory.FindOrCreateCanvas(this, "BlessingSelectionCanvas", 200);
+            _canvas = UIFactory.FindOrCreateCanvas(this, "BlessingSelectionCanvas", 200, new Vector2(1920, 1080));
         }
 
         private void CreateUI()
         {
+            // Destroy any leftover panel from a previous instance (prevents duplicate overlays on scene reload)
+            Transform existingPanel = _canvas.transform.Find("BlessingSelectionPanel");
+            if (existingPanel != null)
+            {
+                Destroy(existingPanel.gameObject);
+            }
+
             // Main panel (full screen overlay)
             _panel = new GameObject("BlessingSelectionPanel");
             _panel.transform.SetParent(_canvas.transform, false);
@@ -98,7 +105,7 @@ namespace FaeMaze.UI
             subtitleText.text = "Select a blessing to empower your run, or skip to start without one";
             subtitleText.fontSize = 20;
             subtitleText.alignment = TextAlignmentOptions.Center;
-            subtitleText.color = new Color(0.6f, 0.6f, 0.7f);
+            subtitleText.color = new Color(0.75f, 0.75f, 0.85f);
 
             // Cards container
             GameObject cardsContainer = new GameObject("CardsContainer");
@@ -135,16 +142,16 @@ namespace FaeMaze.UI
             skipRect.offsetMax = Vector2.zero;
 
             Image skipBg = skipObj.AddComponent<Image>();
-            skipBg.color = new Color(0.3f, 0.2f, 0.2f);
+            skipBg.color = new Color(0.35f, 0.22f, 0.22f);
 
             Button skipBtn = skipObj.AddComponent<Button>();
             skipBtn.onClick.AddListener(OnSkipClicked);
 
             // Add hover effect
             ColorBlock colors = skipBtn.colors;
-            colors.normalColor = new Color(0.3f, 0.2f, 0.2f);
-            colors.highlightedColor = new Color(0.4f, 0.25f, 0.25f);
-            colors.pressedColor = new Color(0.25f, 0.15f, 0.15f);
+            colors.normalColor = new Color(0.35f, 0.22f, 0.22f);
+            colors.highlightedColor = new Color(0.45f, 0.3f, 0.3f);
+            colors.pressedColor = new Color(0.28f, 0.18f, 0.18f);
             skipBtn.colors = colors;
 
             // Skip text
@@ -161,7 +168,7 @@ namespace FaeMaze.UI
             skipText.text = "Skip (No Blessing)";
             skipText.fontSize = 24;
             skipText.alignment = TextAlignmentOptions.Center;
-            skipText.color = new Color(0.7f, 0.5f, 0.5f);
+            skipText.color = new Color(0.9f, 0.7f, 0.7f);
         }
 
         private GameObject CreateBlessingCard(BlessingDefinition blessing, int index, Transform parent)
@@ -172,6 +179,11 @@ namespace FaeMaze.UI
             // Card background
             Image cardBg = cardObj.AddComponent<Image>();
             cardBg.color = _cardColor;
+
+            // Card border
+            Outline cardOutline = cardObj.AddComponent<Outline>();
+            cardOutline.effectColor = new Color(0.5f, 0.3f, 0.7f, 0.6f);
+            cardOutline.effectDistance = new Vector2(2, -2);
 
             // Layout element for proper sizing
             LayoutElement layoutElement = cardObj.AddComponent<LayoutElement>();
@@ -246,7 +258,7 @@ namespace FaeMaze.UI
                 effectText.text = effectSummary;
                 effectText.fontSize = 14;
                 effectText.alignment = TextAlignmentOptions.Center;
-                effectText.color = new Color(0.5f, 0.8f, 0.5f);
+                effectText.color = new Color(0.6f, 0.95f, 0.6f);
                 effectText.textWrappingMode = TextWrappingModes.Normal;
 
                 LayoutElement effectLayout = effectObj.AddComponent<LayoutElement>();
@@ -312,11 +324,7 @@ namespace FaeMaze.UI
 
             // Find cards container
             Transform cardsContainer = _panel.transform.Find("CardsContainer");
-            if (cardsContainer == null)
-            {
-                Debug.LogError("[BlessingSelectionUI] CardsContainer not found!");
-                return;
-            }
+            if (cardsContainer == null) return;
 
             // Create cards for each blessing
             for (int i = 0; i < _currentChoices.Count; i++)

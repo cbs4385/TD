@@ -384,7 +384,7 @@ Transform:
   m_GameObject: {fileID: 2467180731589602358}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0.013, y: 0.001, z: 0}
   m_LocalScale: {x: 1.5, y: 1.5, z: 1.5}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -434,12 +434,14 @@ MonoBehaviour:
   mesmerizedDuration: 5
   lostDuration: 10
   frightenedDuration: 3
-  redCapDetectionRadius: 5
-  redCapDetectionInterval: 0.5
+  goblinDetectionRadius: 5
+  goblinDetectionInterval: 0.5
   minLostDistance: 10
   maxLostDistance: 20
   misstepEnabled: 1
   debugMisstepGizmos: 0
+  hazardDetectionChance: 0.25
+  hazardAvoidancePenalty: 20
 --- !u!114 &6000000004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1353,6 +1355,7 @@ SkinnedMeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 1
@@ -1537,14 +1540,14 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7938177218748890945}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 12
   m_Type: 0
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
-  m_CookieSize: 10
+  m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
     m_Type: 0
     m_Resolution: -1

@@ -479,6 +479,11 @@ namespace FaeMaze.HeartPowers
             new Dictionary<int, (int, float)>();
         private const float REDIRECT_COOLDOWN = 10f;
 
+        // Visitors that have reached this (far) sign and are waiting to exit the collider
+        // before CompleteMisdirect is called. This prevents pathfinding from starting
+        // while the visitor is still inside the trigger volume.
+        private HashSet<int> pendingCompletion = new HashSet<int>();
+
         public void SetEffect(MisdirectEffect misdirectEffect)
         {
             effect = misdirectEffect;
@@ -507,11 +512,14 @@ namespace FaeMaze.HeartPowers
                 vState == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Grabbed ||
                 vState == FaeMaze.Visitors.VisitorControllerBase.VisitorState.Dazed)
             {
+                Debug.Log($"[Misdirect] OnTriggerEnter: {visitor.name} REJECTED (state={vState}) at sign pos=({transform.position.x:F1},{transform.position.y:F1})");
                 return;
             }
 
             int visitorId = visitor.GetInstanceID();
             int thisSignId = gameObject.GetInstanceID();
+
+            Debug.Log($"[Misdirect] OnTriggerEnter: {visitor.name} entered sign at ({transform.position.x:F1},{transform.position.y:F1}) state={vState} isMisdirected={visitor.IsMisdirected} signId={thisSignId}");
 
             // Check if this visitor was redirected by the OTHER sign (meaning this is the destination sign)
             if (redirectCooldowns.TryGetValue(visitorId, out var cooldown))
@@ -520,11 +528,21 @@ namespace FaeMaze.HeartPowers
                 {
                     if (cooldown.expiry == float.MaxValue || Time.time < cooldown.expiry)
                     {
-                        // This is the far sign -- visitor has completed the misdirect edge.
-                        visitor.CompleteMisdirect();
+                        // This is the far sign -- mark visitor for completion when they EXIT
+                        // the collider. This ensures pathfinding starts from outside the trigger.
+                        pendingCompletion.Add(visitorId);
                         redirectCooldowns[visitorId] = (cooldown.signId, Time.time + REDIRECT_COOLDOWN);
+                        Debug.Log($"[Misdirect] OnTriggerEnter: {visitor.name} reached FAR SIGN — pending completion on exit. originSignId={cooldown.signId}");
                         return;
                     }
+                    else
+                    {
+                        Debug.Log($"[Misdirect] OnTriggerEnter: {visitor.name} cooldown EXPIRED (was from signId={cooldown.signId}, expired at {cooldown.expiry:F1}, now={Time.time:F1}) — treating as new entry");
+                    }
+                }
+                else
+                {
+                    Debug.Log($"[Misdirect] OnTriggerEnter: {visitor.name} re-entered SAME sign (signId={thisSignId}) — treating as new entry");
                 }
             }
 
@@ -532,6 +550,7 @@ namespace FaeMaze.HeartPowers
             Vector3 farSignPos = effect.GetOtherSignPosition(transform.position);
             if (farSignPos == Vector3.zero)
             {
+                Debug.Log($"[Misdirect] OnTriggerEnter: {visitor.name} ABORTED — farSignPos is zero");
                 return;
             }
 
@@ -540,13 +559,26 @@ namespace FaeMaze.HeartPowers
             // Record that THIS sign redirected the visitor (in-transit)
             redirectCooldowns[visitorId] = (thisSignId, float.MaxValue);
 
+            Debug.Log($"[Misdirect] OnTriggerEnter: {visitor.name} REDIRECTED by entry sign → farSign at ({farSignPos.x:F1},{farSignPos.y:F1}) edgeIndex={edgeIndex}");
+
             // Force the visitor to walk to the far sign position
             visitor.SetMisdirectDestination(farSignPos, edgeIndex);
         }
 
         private void OnTriggerExit(Collider other)
         {
-            // No-op: completion is handled by OnTriggerEnter on the far sign
+            var visitor = other.GetComponentInParent<FaeMaze.Visitors.VisitorControllerBase>();
+            if (visitor == null) return;
+
+            int visitorId = visitor.GetInstanceID();
+            Debug.Log($"[Misdirect] OnTriggerExit: {visitor.name} exited sign at ({transform.position.x:F1},{transform.position.y:F1}) pendingCompletion={pendingCompletion.Contains(visitorId)} isMisdirected={visitor.IsMisdirected}");
+
+            if (pendingCompletion.Remove(visitorId))
+            {
+                // Visitor has exited the far sign collider — now safe to complete misdirect
+                Debug.Log($"[Misdirect] OnTriggerExit: {visitor.name} COMPLETING misdirect — will recalculate path freely");
+                visitor.CompleteMisdirect();
+            }
         }
     }
 

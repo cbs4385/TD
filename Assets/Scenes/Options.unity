@@ -7216,7 +7216,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
   m_Padding:
     m_Left: 20
@@ -7228,7 +7228,7 @@ MonoBehaviour:
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
-  m_ChildControlHeight: 0
+  m_ChildControlHeight: 1
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
@@ -8097,7 +8097,7 @@ MonoBehaviour:
   contentPanel: {fileID: 873517122}
   headerText: {fileID: 406279491}
   arrowText: {fileID: 998890117}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &196493290
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10686,7 +10686,7 @@ MonoBehaviour:
   contentPanel: {fileID: 75487910}
   headerText: {fileID: 2105605064}
   arrowText: {fileID: 1828127978}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &256597561
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11300,7 +11300,7 @@ MonoBehaviour:
   contentPanel: {fileID: 1146230537}
   headerText: {fileID: 215054578}
   arrowText: {fileID: 773599858}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &272703513
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -13460,7 +13460,7 @@ MonoBehaviour:
   contentPanel: {fileID: 2095105096}
   headerText: {fileID: 1331701079}
   arrowText: {fileID: 571482540}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &324622882
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15111,7 +15111,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
   m_Padding:
     m_Left: 20
@@ -15123,7 +15123,7 @@ MonoBehaviour:
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
-  m_ChildControlHeight: 0
+  m_ChildControlHeight: 1
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
@@ -15198,7 +15198,7 @@ MonoBehaviour:
   contentPanel: {fileID: 1343502891}
   headerText: {fileID: 148636506}
   arrowText: {fileID: 1018536396}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &358156199
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16613,7 +16613,7 @@ MonoBehaviour:
   contentPanel: {fileID: 529327285}
   headerText: {fileID: 337270926}
   arrowText: {fileID: 139795628}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &400742298
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -18025,7 +18025,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
   m_Padding:
     m_Left: 20
@@ -18037,7 +18037,7 @@ MonoBehaviour:
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
-  m_ChildControlHeight: 0
+  m_ChildControlHeight: 1
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
@@ -23371,7 +23371,7 @@ MonoBehaviour:
   contentPanel: {fileID: 1026600680}
   headerText: {fileID: 715356378}
   arrowText: {fileID: 1620376243}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &554341518
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -31465,7 +31465,7 @@ MonoBehaviour:
   contentPanel: {fileID: 1833443793}
   headerText: {fileID: 226893324}
   arrowText: {fileID: 1364168446}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &748476979
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -35244,7 +35244,7 @@ MonoBehaviour:
   contentPanel: {fileID: 1380117217}
   headerText: {fileID: 1685079790}
   arrowText: {fileID: 325345292}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &831879100
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -41751,7 +41751,7 @@ MonoBehaviour:
   spawnIntervalSlider: {fileID: 764726363}
   spawnIntervalText: {fileID: 172477332}
   spawnIntervalInput: {fileID: 945052714}
-  enableGoblinToggle: {fileID: 0}
+  enableGoblinToggle: {fileID: 1554085122}
   autoStartDelaySlider: {fileID: 61022220}
   autoStartDelayText: {fileID: 1819441811}
   autoStartDelayInput: {fileID: 1407660521}
@@ -55967,7 +55967,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Enable Red Cap
+  m_text: Enable Goblin
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -56454,7 +56454,7 @@ MonoBehaviour:
   contentPanel: {fileID: 2115447301}
   headerText: {fileID: 1978322838}
   arrowText: {fileID: 6264619}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &1474804907
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -57771,7 +57771,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
   m_Padding:
     m_Left: 20
@@ -57783,7 +57783,7 @@ MonoBehaviour:
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
-  m_ChildControlHeight: 0
+  m_ChildControlHeight: 1
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
@@ -68830,7 +68830,7 @@ MonoBehaviour:
   contentPanel: {fileID: 1157866554}
   headerText: {fileID: 455385627}
   arrowText: {fileID: 1300465517}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &1864027455
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -75956,7 +75956,7 @@ MonoBehaviour:
   contentPanel: {fileID: 1414601539}
   headerText: {fileID: 778118205}
   arrowText: {fileID: 221435310}
-  startExpanded: 1
+  startExpanded: 0
 --- !u!114 &2093815774
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -441,11 +441,7 @@ namespace FaeMaze.UI
             Transform viewport = scrollView?.Find("Viewport");
             Transform content = viewport?.Find("Content");
 
-            if (content == null)
-            {
-                Debug.LogError("[ChallengeSelectionUI] Content container not found!");
-                return;
-            }
+            if (content == null) return;
 
             // Create cards for each challenge
             for (int i = 0; i < _availableChallenges.Count; i++)

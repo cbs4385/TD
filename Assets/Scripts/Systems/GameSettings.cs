@@ -191,7 +191,7 @@ namespace FaeMaze.Systems
 
         public static int StartingEssence
         {
-            get => PlayerPrefs.GetInt("StartingEssence", 100);
+            get => PlayerPrefs.GetInt("StartingEssence", 200);
             set => PlayerPrefs.SetInt("StartingEssence", Mathf.Max(0, value));
         }
 
@@ -330,14 +330,27 @@ namespace FaeMaze.Systems
 
         public static string CameraTurnLeftBinding
         {
-            get => PlayerPrefs.GetString("CameraTurnLeftBinding", "A");
+            get => PlayerPrefs.GetString("CameraTurnLeftBinding", "Q");
             set => PlayerPrefs.SetString("CameraTurnLeftBinding", value);
         }
 
         public static string CameraTurnRightBinding
         {
-            get => PlayerPrefs.GetString("CameraTurnRightBinding", "D");
+            get => PlayerPrefs.GetString("CameraTurnRightBinding", "E");
             set => PlayerPrefs.SetString("CameraTurnRightBinding", value);
+        }
+
+        // Camera Strafe Keybindings
+        public static string CameraStrafeLeftBinding
+        {
+            get => PlayerPrefs.GetString("CameraStrafeLeftBinding", "A");
+            set => PlayerPrefs.SetString("CameraStrafeLeftBinding", value);
+        }
+
+        public static string CameraStrafeRightBinding
+        {
+            get => PlayerPrefs.GetString("CameraStrafeRightBinding", "D");
+            set => PlayerPrefs.SetString("CameraStrafeRightBinding", value);
         }
 
         // Camera Movement Alt Keybindings (default to arrow keys)
@@ -355,14 +368,27 @@ namespace FaeMaze.Systems
 
         public static string CameraTurnLeftAltBinding
         {
-            get => PlayerPrefs.GetString("CameraTurnLeftAltBinding", "LeftArrow");
+            get => PlayerPrefs.GetString("CameraTurnLeftAltBinding", "");
             set => PlayerPrefs.SetString("CameraTurnLeftAltBinding", value);
         }
 
         public static string CameraTurnRightAltBinding
         {
-            get => PlayerPrefs.GetString("CameraTurnRightAltBinding", "RightArrow");
+            get => PlayerPrefs.GetString("CameraTurnRightAltBinding", "");
             set => PlayerPrefs.SetString("CameraTurnRightAltBinding", value);
+        }
+
+        // Camera Strafe Alt Keybindings (default to arrow keys)
+        public static string CameraStrafeLeftAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraStrafeLeftAltBinding", "LeftArrow");
+            set => PlayerPrefs.SetString("CameraStrafeLeftAltBinding", value);
+        }
+
+        public static string CameraStrafeRightAltBinding
+        {
+            get => PlayerPrefs.GetString("CameraStrafeRightAltBinding", "RightArrow");
+            set => PlayerPrefs.SetString("CameraStrafeRightAltBinding", value);
         }
 
         // Camera Focus Shortcuts
@@ -383,6 +409,19 @@ namespace FaeMaze.Systems
         {
             get => PlayerPrefs.GetString("CameraFocusVisitorBinding", "F7");
             set => PlayerPrefs.SetString("CameraFocusVisitorBinding", value);
+        }
+
+        // Camera Viewing Angle Keybindings
+        public static string CameraAngleUpBinding
+        {
+            get => PlayerPrefs.GetString("CameraAngleUpBinding", "PageUp");
+            set => PlayerPrefs.SetString("CameraAngleUpBinding", value);
+        }
+
+        public static string CameraAngleDownBinding
+        {
+            get => PlayerPrefs.GetString("CameraAngleDownBinding", "PageDown");
+            set => PlayerPrefs.SetString("CameraAngleDownBinding", value);
         }
 
         // Camera Mouse Bindings
@@ -572,13 +611,25 @@ namespace FaeMaze.Systems
         }
         public static string CameraTurnLeftTertiaryBinding
         {
-            get => PlayerPrefs.GetString("CameraTurnLeftTertiaryBinding", "GamepadLeftStickLeft");
+            get => PlayerPrefs.GetString("CameraTurnLeftTertiaryBinding", "GamepadDpadLeft");
             set => PlayerPrefs.SetString("CameraTurnLeftTertiaryBinding", value);
         }
         public static string CameraTurnRightTertiaryBinding
         {
-            get => PlayerPrefs.GetString("CameraTurnRightTertiaryBinding", "GamepadLeftStickRight");
+            get => PlayerPrefs.GetString("CameraTurnRightTertiaryBinding", "GamepadDpadRight");
             set => PlayerPrefs.SetString("CameraTurnRightTertiaryBinding", value);
+        }
+
+        // Camera Strafe Tertiary: Left stick left/right
+        public static string CameraStrafeLeftTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraStrafeLeftTertiaryBinding", "GamepadLeftStickLeft");
+            set => PlayerPrefs.SetString("CameraStrafeLeftTertiaryBinding", value);
+        }
+        public static string CameraStrafeRightTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraStrafeRightTertiaryBinding", "GamepadLeftStickRight");
+            set => PlayerPrefs.SetString("CameraStrafeRightTertiaryBinding", value);
         }
 
         // Camera Focus Tertiary: Left Shoulder, Right Shoulder, Right Stick Press
@@ -620,6 +671,18 @@ namespace FaeMaze.Systems
         {
             get => PlayerPrefs.GetString("ScreenshotTertiaryBinding", "GamepadSelect");
             set => PlayerPrefs.SetString("ScreenshotTertiaryBinding", value);
+        }
+
+        // Camera Viewing Angle Tertiary (no default gamepad binding)
+        public static string CameraAngleUpTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraAngleUpTertiaryBinding", "");
+            set => PlayerPrefs.SetString("CameraAngleUpTertiaryBinding", value);
+        }
+        public static string CameraAngleDownTertiaryBinding
+        {
+            get => PlayerPrefs.GetString("CameraAngleDownTertiaryBinding", "");
+            set => PlayerPrefs.SetString("CameraAngleDownTertiaryBinding", value);
         }
 
         #region Props - Essence Mechanics
@@ -859,10 +922,86 @@ namespace FaeMaze.Systems
         }
 
         /// <summary>
+        /// One-time migration to update StartingEssence default from 100 to 200 for Normal difficulty.
+        /// Only runs once. If user still has old default (100), updates to new default (200).
+        /// </summary>
+        public static void MigrateStartingEssenceDefault()
+        {
+            const string MIGRATION_KEY = "StartingEssenceV2Migrated";
+            if (PlayerPrefs.GetInt(MIGRATION_KEY, 0) == 1) return;
+
+            // If user has old default of 100, update to new default of 200
+            int current = PlayerPrefs.GetInt("StartingEssence", 200);
+            if (current == 100)
+            {
+                PlayerPrefs.SetInt("StartingEssence", 200);
+            }
+
+            PlayerPrefs.SetInt(MIGRATION_KEY, 1);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>
+        /// One-time migration from old tank-control layout (A/D = turn) to strafe layout (A/D = strafe, Q/E = rotate).
+        /// Only runs once per install. If user had old defaults, swaps them. If user had custom bindings, leaves them alone.
+        /// </summary>
+        public static void MigrateToStrafeLayout()
+        {
+            const string MIGRATION_KEY = "StrafeLayoutMigrated";
+            if (PlayerPrefs.GetInt(MIGRATION_KEY, 0) == 1) return;
+
+            // Check primary bindings - if user had old A/D defaults for turn, migrate
+            string turnLeft = PlayerPrefs.GetString("CameraTurnLeftBinding", "");
+            string turnRight = PlayerPrefs.GetString("CameraTurnRightBinding", "");
+
+            if (turnLeft == "A" || turnLeft == "")
+                PlayerPrefs.SetString("CameraTurnLeftBinding", "Q");
+            if (turnRight == "D" || turnRight == "")
+                PlayerPrefs.SetString("CameraTurnRightBinding", "E");
+
+            // Migrate alt bindings: arrow keys move from turn to strafe
+            string turnLeftAlt = PlayerPrefs.GetString("CameraTurnLeftAltBinding", "");
+            string turnRightAlt = PlayerPrefs.GetString("CameraTurnRightAltBinding", "");
+
+            if (turnLeftAlt == "LeftArrow")
+            {
+                PlayerPrefs.SetString("CameraTurnLeftAltBinding", "");
+                PlayerPrefs.SetString("CameraStrafeLeftAltBinding", "LeftArrow");
+            }
+            if (turnRightAlt == "RightArrow")
+            {
+                PlayerPrefs.SetString("CameraTurnRightAltBinding", "");
+                PlayerPrefs.SetString("CameraStrafeRightAltBinding", "RightArrow");
+            }
+
+            // Migrate gamepad tertiary: left stick L/R moves from turn to strafe
+            string turnLeftTertiary = PlayerPrefs.GetString("CameraTurnLeftTertiaryBinding", "");
+            string turnRightTertiary = PlayerPrefs.GetString("CameraTurnRightTertiaryBinding", "");
+
+            if (turnLeftTertiary == "GamepadLeftStickLeft")
+            {
+                PlayerPrefs.SetString("CameraTurnLeftTertiaryBinding", "GamepadDpadLeft");
+                PlayerPrefs.SetString("CameraStrafeLeftTertiaryBinding", "GamepadLeftStickLeft");
+            }
+            if (turnRightTertiary == "GamepadLeftStickRight")
+            {
+                PlayerPrefs.SetString("CameraTurnRightTertiaryBinding", "GamepadDpadRight");
+                PlayerPrefs.SetString("CameraStrafeRightTertiaryBinding", "GamepadLeftStickRight");
+            }
+
+            PlayerPrefs.SetInt(MIGRATION_KEY, 1);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>
         /// Apply current settings to active game systems
         /// </summary>
         public static void ApplySettings()
         {
+            // Run one-time migrations
+            MigrateStartingEssenceDefault();
+            MigrateToStrafeLayout();
+
             // Apply video settings
             ApplyVideoSettings();
 

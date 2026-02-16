@@ -358,6 +358,8 @@ namespace FaeMaze.Systems
                 "Delete" => "Del",
                 "Space" => "Space",
                 "Tab" => "Tab",
+                "PageUp" => "Page Up",
+                "PageDown" => "Page Down",
                 _ => binding
             };
         }

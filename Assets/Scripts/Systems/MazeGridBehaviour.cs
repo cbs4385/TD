@@ -123,7 +123,6 @@ namespace FaeMaze.Systems
             // This ensures consistent seed-based maze generation between editor and build
             if (!RandomManager.IsInitialized)
             {
-                Debug.LogError("[MazeGridBehaviour] RandomManager not initialized! GameController must run first. Check execution order.");
                 // Fallback to prevent crash, but maze may not match expected seed
                 RandomManager.Initialize();
             }

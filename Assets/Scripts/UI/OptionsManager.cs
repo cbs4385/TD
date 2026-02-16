@@ -93,9 +93,10 @@ namespace FaeMaze.UI
         [SerializeField] private TMP_InputField spawnIntervalInput;  // Hidden for difficulty mode
         [SerializeField] private Toggle enableGoblinToggle;
 
-        // Difficulty settings mapping (slider value -> spawn interval in seconds)
+        // Difficulty settings mapping (slider value -> spawn interval and starting essence)
         private static readonly string[] difficultyLabels = { "EASY", "NORMAL", "HARD" };
         private static readonly float[] difficultySpawnIntervals = { 2f, 5f, 8f };  // Easy=2s, Normal=5s, Hard=8s
+        private static readonly int[] difficultyStartingEssence = { 300, 200, 100 };  // Easy=300, Normal=200, Hard=100
 
         [Header("Gameplay - Game Flow Settings")]
         [SerializeField] private Slider autoStartDelaySlider;
@@ -151,6 +152,10 @@ namespace FaeMaze.UI
         private string bindingCameraMoveBackward;
         private string bindingCameraTurnLeft;
         private string bindingCameraTurnRight;
+        private string bindingCameraStrafeLeft;
+        private string bindingCameraStrafeRight;
+        private string bindingCameraAngleUp;
+        private string bindingCameraAngleDown;
         private string bindingCameraFocusHeart;
         private string bindingCameraFocusEntrance;
         private string bindingCameraFocusVisitor;
@@ -173,6 +178,8 @@ namespace FaeMaze.UI
         private string bindingCameraMoveBackwardAlt;
         private string bindingCameraTurnLeftAlt;
         private string bindingCameraTurnRightAlt;
+        private string bindingCameraStrafeLeftAlt;
+        private string bindingCameraStrafeRightAlt;
         private string bindingCameraFocusHeartAlt;
         private string bindingCameraFocusEntranceAlt;
         private string bindingCameraFocusVisitorAlt;
@@ -195,6 +202,10 @@ namespace FaeMaze.UI
         private string bindingCameraMoveBackwardTertiary;
         private string bindingCameraTurnLeftTertiary;
         private string bindingCameraTurnRightTertiary;
+        private string bindingCameraStrafeLeftTertiary;
+        private string bindingCameraStrafeRightTertiary;
+        private string bindingCameraAngleUpTertiary;
+        private string bindingCameraAngleDownTertiary;
         private string bindingCameraFocusHeartTertiary;
         private string bindingCameraFocusEntranceTertiary;
         private string bindingCameraFocusVisitorTertiary;
@@ -520,7 +531,13 @@ namespace FaeMaze.UI
             if (autoStartDelaySlider != null)
                 autoStartDelaySlider.onValueChanged.AddListener(OnAutoStartDelayChanged);
             if (startingEssenceSlider != null)
+            {
                 startingEssenceSlider.onValueChanged.AddListener(OnStartingEssenceChanged);
+                // Hide the starting essence row — value is controlled by difficulty slider
+                Transform essenceRow = startingEssenceSlider.transform.parent;
+                if (essenceRow != null)
+                    essenceRow.gameObject.SetActive(false);
+            }
             if (useFixedSeedToggle != null)
                 useFixedSeedToggle.onValueChanged.AddListener(OnUseFixedSeedChanged);
             if (randomSeedInput != null)
@@ -635,9 +652,10 @@ namespace FaeMaze.UI
             SetSliderValue(autoStartDelaySlider, GameSettings.AutoStartDelay, 0f, 10f);
             UpdateValueText(autoStartDelayText, GameSettings.AutoStartDelay, "{0:F1}s");
             UpdateInputFromSlider(autoStartDelayInput, GameSettings.AutoStartDelay, "{0:F1}");
-            SetSliderValue(startingEssenceSlider, GameSettings.StartingEssence, 0f, 1000f);
-            UpdateValueText(startingEssenceText, GameSettings.StartingEssence, "{0:F0}");
-            UpdateInputFromSlider(startingEssenceInput, GameSettings.StartingEssence, "{0:F0}");
+            // Starting essence is controlled by difficulty — set from preset, not saved value
+            int essenceFromDifficulty = (difficultyIndex >= 0 && difficultyIndex < difficultyStartingEssence.Length)
+                ? difficultyStartingEssence[difficultyIndex] : 200;
+            SetSliderValue(startingEssenceSlider, essenceFromDifficulty, 0f, 1000f);
             if (useFixedSeedToggle != null)
                 useFixedSeedToggle.isOn = GameSettings.UseFixedSeed;
             if (randomSeedInput != null)
@@ -837,6 +855,12 @@ namespace FaeMaze.UI
         {
             int index = Mathf.RoundToInt(value);
             UpdateDifficultyText(index);
+
+            // Update starting essence to match difficulty preset
+            if (index >= 0 && index < difficultyStartingEssence.Length && startingEssenceSlider != null)
+            {
+                startingEssenceSlider.value = difficultyStartingEssence[index];
+            }
         }
 
         private void UpdateDifficultyText(int difficultyIndex)
@@ -1092,6 +1116,14 @@ namespace FaeMaze.UI
                 GameSettings.CameraTurnLeftBinding = bindingCameraTurnLeft;
             if (!string.IsNullOrEmpty(bindingCameraTurnRight))
                 GameSettings.CameraTurnRightBinding = bindingCameraTurnRight;
+            if (!string.IsNullOrEmpty(bindingCameraStrafeLeft))
+                GameSettings.CameraStrafeLeftBinding = bindingCameraStrafeLeft;
+            if (!string.IsNullOrEmpty(bindingCameraStrafeRight))
+                GameSettings.CameraStrafeRightBinding = bindingCameraStrafeRight;
+            if (!string.IsNullOrEmpty(bindingCameraAngleUp))
+                GameSettings.CameraAngleUpBinding = bindingCameraAngleUp;
+            if (!string.IsNullOrEmpty(bindingCameraAngleDown))
+                GameSettings.CameraAngleDownBinding = bindingCameraAngleDown;
             if (!string.IsNullOrEmpty(bindingCameraFocusHeart))
                 GameSettings.CameraFocusHeartBinding = bindingCameraFocusHeart;
             if (!string.IsNullOrEmpty(bindingCameraFocusEntrance))
@@ -1121,6 +1153,8 @@ namespace FaeMaze.UI
             GameSettings.CameraMoveBackwardAltBinding = bindingCameraMoveBackwardAlt ?? "";
             GameSettings.CameraTurnLeftAltBinding = bindingCameraTurnLeftAlt ?? "";
             GameSettings.CameraTurnRightAltBinding = bindingCameraTurnRightAlt ?? "";
+            GameSettings.CameraStrafeLeftAltBinding = bindingCameraStrafeLeftAlt ?? "";
+            GameSettings.CameraStrafeRightAltBinding = bindingCameraStrafeRightAlt ?? "";
             GameSettings.CameraFocusHeartAltBinding = bindingCameraFocusHeartAlt ?? "";
             GameSettings.CameraFocusEntranceAltBinding = bindingCameraFocusEntranceAlt ?? "";
             GameSettings.CameraFocusVisitorAltBinding = bindingCameraFocusVisitorAlt ?? "";
@@ -1143,6 +1177,10 @@ namespace FaeMaze.UI
             GameSettings.CameraMoveBackwardTertiaryBinding = bindingCameraMoveBackwardTertiary ?? "";
             GameSettings.CameraTurnLeftTertiaryBinding = bindingCameraTurnLeftTertiary ?? "";
             GameSettings.CameraTurnRightTertiaryBinding = bindingCameraTurnRightTertiary ?? "";
+            GameSettings.CameraStrafeLeftTertiaryBinding = bindingCameraStrafeLeftTertiary ?? "";
+            GameSettings.CameraStrafeRightTertiaryBinding = bindingCameraStrafeRightTertiary ?? "";
+            GameSettings.CameraAngleUpTertiaryBinding = bindingCameraAngleUpTertiary ?? "";
+            GameSettings.CameraAngleDownTertiaryBinding = bindingCameraAngleDownTertiary ?? "";
             GameSettings.CameraFocusHeartTertiaryBinding = bindingCameraFocusHeartTertiary ?? "";
             GameSettings.CameraFocusEntranceTertiaryBinding = bindingCameraFocusEntranceTertiary ?? "";
             GameSettings.CameraFocusVisitorTertiaryBinding = bindingCameraFocusVisitorTertiary ?? "";
@@ -1292,6 +1330,10 @@ namespace FaeMaze.UI
             bindingCameraMoveBackward = GameSettings.CameraMoveBackwardBinding;
             bindingCameraTurnLeft = GameSettings.CameraTurnLeftBinding;
             bindingCameraTurnRight = GameSettings.CameraTurnRightBinding;
+            bindingCameraStrafeLeft = GameSettings.CameraStrafeLeftBinding;
+            bindingCameraStrafeRight = GameSettings.CameraStrafeRightBinding;
+            bindingCameraAngleUp = GameSettings.CameraAngleUpBinding;
+            bindingCameraAngleDown = GameSettings.CameraAngleDownBinding;
             bindingCameraFocusHeart = GameSettings.CameraFocusHeartBinding;
             bindingCameraFocusEntrance = GameSettings.CameraFocusEntranceBinding;
             bindingCameraFocusVisitor = GameSettings.CameraFocusVisitorBinding;
@@ -1314,6 +1356,8 @@ namespace FaeMaze.UI
             bindingCameraMoveBackwardAlt = GameSettings.CameraMoveBackwardAltBinding;
             bindingCameraTurnLeftAlt = GameSettings.CameraTurnLeftAltBinding;
             bindingCameraTurnRightAlt = GameSettings.CameraTurnRightAltBinding;
+            bindingCameraStrafeLeftAlt = GameSettings.CameraStrafeLeftAltBinding;
+            bindingCameraStrafeRightAlt = GameSettings.CameraStrafeRightAltBinding;
             bindingCameraFocusHeartAlt = GameSettings.CameraFocusHeartAltBinding;
             bindingCameraFocusEntranceAlt = GameSettings.CameraFocusEntranceAltBinding;
             bindingCameraFocusVisitorAlt = GameSettings.CameraFocusVisitorAltBinding;
@@ -1336,6 +1380,10 @@ namespace FaeMaze.UI
             bindingCameraMoveBackwardTertiary = GameSettings.CameraMoveBackwardTertiaryBinding;
             bindingCameraTurnLeftTertiary = GameSettings.CameraTurnLeftTertiaryBinding;
             bindingCameraTurnRightTertiary = GameSettings.CameraTurnRightTertiaryBinding;
+            bindingCameraStrafeLeftTertiary = GameSettings.CameraStrafeLeftTertiaryBinding;
+            bindingCameraStrafeRightTertiary = GameSettings.CameraStrafeRightTertiaryBinding;
+            bindingCameraAngleUpTertiary = GameSettings.CameraAngleUpTertiaryBinding;
+            bindingCameraAngleDownTertiary = GameSettings.CameraAngleDownTertiaryBinding;
             bindingCameraFocusHeartTertiary = GameSettings.CameraFocusHeartTertiaryBinding;
             bindingCameraFocusEntranceTertiary = GameSettings.CameraFocusEntranceTertiaryBinding;
             bindingCameraFocusVisitorTertiary = GameSettings.CameraFocusVisitorTertiaryBinding;
@@ -1377,10 +1425,14 @@ namespace FaeMaze.UI
             if (objName.Contains("sculptring") || objName.Contains("placering")) return "sculptring";
             if (objName.Contains("sculptremove") || objName.Contains("removeprop")) return "sculptremove";
             // Camera movement - check more specific names first
+            if (objName.Contains("strafeleft")) return "strafeleft";
+            if (objName.Contains("straferight")) return "straferight";
             if (objName.Contains("moveforward")) return "moveforward";
             if (objName.Contains("movebackward")) return "movebackward";
-            if (objName.Contains("turnleft")) return "turnleft";
-            if (objName.Contains("turnright")) return "turnright";
+            if (objName.Contains("turnleft") || objName.Contains("rotateleft")) return "turnleft";
+            if (objName.Contains("turnright") || objName.Contains("rotateright")) return "turnright";
+            if (objName.Contains("angleup")) return "angleup";
+            if (objName.Contains("angledown")) return "angledown";
             // Camera focus
             if (objName.Contains("focusheart")) return "focusheart";
             if (objName.Contains("focusentrance")) return "focusentrance";
@@ -1474,6 +1526,26 @@ namespace FaeMaze.UI
                     if (column == 0) { value = bindingCameraTurnRight; callback = b => bindingCameraTurnRight = b; }
                     else if (column == 1) { value = bindingCameraTurnRightAlt; callback = b => bindingCameraTurnRightAlt = b; }
                     else { value = bindingCameraTurnRightTertiary; callback = b => bindingCameraTurnRightTertiary = b; }
+                    break;
+                case "strafeleft":
+                    if (column == 0) { value = bindingCameraStrafeLeft; callback = b => bindingCameraStrafeLeft = b; }
+                    else if (column == 1) { value = bindingCameraStrafeLeftAlt; callback = b => bindingCameraStrafeLeftAlt = b; }
+                    else { value = bindingCameraStrafeLeftTertiary; callback = b => bindingCameraStrafeLeftTertiary = b; }
+                    break;
+                case "straferight":
+                    if (column == 0) { value = bindingCameraStrafeRight; callback = b => bindingCameraStrafeRight = b; }
+                    else if (column == 1) { value = bindingCameraStrafeRightAlt; callback = b => bindingCameraStrafeRightAlt = b; }
+                    else { value = bindingCameraStrafeRightTertiary; callback = b => bindingCameraStrafeRightTertiary = b; }
+                    break;
+                case "angleup":
+                    if (column == 0) { value = bindingCameraAngleUp; callback = b => bindingCameraAngleUp = b; }
+                    else if (column == 1) { value = ""; callback = b => { }; }
+                    else { value = bindingCameraAngleUpTertiary; callback = b => bindingCameraAngleUpTertiary = b; }
+                    break;
+                case "angledown":
+                    if (column == 0) { value = bindingCameraAngleDown; callback = b => bindingCameraAngleDown = b; }
+                    else if (column == 1) { value = ""; callback = b => { }; }
+                    else { value = bindingCameraAngleDownTertiary; callback = b => bindingCameraAngleDownTertiary = b; }
                     break;
                 case "focusheart":
                     if (column == 0) { value = bindingCameraFocusHeart; callback = b => bindingCameraFocusHeart = b; }

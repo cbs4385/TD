@@ -1351,11 +1351,7 @@ namespace FaeMaze.Systems
                 lanternPrefab = Resources.Load<GameObject>("Prefabs/Props/lantern2");
             }
 
-            if (lanternPrefab == null)
-            {
-                Debug.LogError("[DynamicMazeGrowth] lanternPrefab is NULL, cannot spawn lantern!");
-                return false;
-            }
+            if (lanternPrefab == null) return false;
 
             // Calculate world position at node center - offset Z to place in front of node cylinder
             Vector3 lanternPos = new Vector3(node.Position.x, node.Position.y, -0.5f);

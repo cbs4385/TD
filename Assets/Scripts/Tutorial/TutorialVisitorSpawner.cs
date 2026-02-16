@@ -127,15 +127,12 @@ namespace FaeMaze.Tutorial
             var heartPowerManager = HeartPowerManager.Instance;
             if (heartPowerManager == null)
             {
-                Debug.LogError("[TutorialVisitorSpawner] HeartPowerManager not found!");
                 yield break;
             }
 
             var mawPositions = heartPowerManager.GetActiveDevouringMawPositions();
             if (mawPositions == null || mawPositions.Count == 0)
             {
-                Debug.LogError("[TutorialVisitorSpawner] No active Devouring Maw found!");
-                // Fallback to normal spawn toward heart
                 SpawnTutorialVisitorTowardHeart();
                 yield break;
             }
@@ -162,7 +159,6 @@ namespace FaeMaze.Tutorial
             var mazeData = mazeGrid?.WorldSpaceMazeData;
             if (mazeData == null)
             {
-                Debug.LogError("[TutorialVisitorSpawner] No maze data available!");
                 yield break;
             }
 
@@ -218,7 +214,6 @@ namespace FaeMaze.Tutorial
             GameObject visitorPrefab = GetVisitorPrefab();
             if (visitorPrefab == null)
             {
-                Debug.LogError("[TutorialVisitorSpawner] Could not find visitor prefab!");
                 yield break;
             }
             // Spawn the visitor
@@ -384,16 +379,12 @@ namespace FaeMaze.Tutorial
 
         private IEnumerator SpawnVisitorAtPositionCoroutine(Vector3 spawnPosition, Vector3 destinationPosition, bool fascinationImmune = true)
         {
-            Debug.Log($"[TutorialVisitorSpawner] SpawnAtPosition: spawn=({spawnPosition.x:F2}, {spawnPosition.y:F2}, {spawnPosition.z:F2}) " +
-                      $"dest=({destinationPosition.x:F2}, {destinationPosition.y:F2}, {destinationPosition.z:F2}) fascinationImmune={fascinationImmune}");
-
             // Small delay for visual effect
             yield return new WaitForSecondsRealtime(0.3f);
 
             GameObject visitorPrefab = GetVisitorPrefab();
             if (visitorPrefab == null)
             {
-                Debug.LogError("[TutorialVisitorSpawner] Could not find visitor prefab for HGZ spawn!");
                 yield break;
             }
 
@@ -404,7 +395,6 @@ namespace FaeMaze.Tutorial
             if (controller != null)
             {
                 controller.Initialize();
-                Debug.Log($"[TutorialVisitorSpawner] After Initialize: pos=({controller.transform.position.x:F2}, {controller.transform.position.y:F2}, {controller.transform.position.z:F2}) state={controller.State}");
 
                 // Mark as tutorial visitor - immune to being frightened and dazed
                 controller.SetTutorialVisitor(true);
@@ -421,8 +411,6 @@ namespace FaeMaze.Tutorial
                     destinationPosition.x - spawnPosition.x,
                     destinationPosition.y - spawnPosition.y);
                 controller.SetFacingDirectionImmediate(facingDir);
-
-                Debug.Log($"[TutorialVisitorSpawner] After SetWorldDestination: pos=({controller.transform.position.x:F2}, {controller.transform.position.y:F2}) state={controller.State} facing=({facingDir.x:F2}, {facingDir.y:F2})");
             }
 
             if (eventTriggers != null)

@@ -138,11 +138,7 @@ public class LanternGlow : MonoBehaviour
     private void Update()
     {
         // Calculate current time for color cycling
-#if UNITY_EDITOR
-        float t = Application.isPlaying ? Time.time : (float)UnityEditor.EditorApplication.timeSinceStartup;
-#else
         float t = Time.time;
-#endif
         t += timeOffset;
 
         // Evaluate the smooth rainbow color cycle
@@ -486,9 +482,7 @@ public class LanternGlow : MonoBehaviour
     private void DisableModelEmissions()
     {
         // Skip in edit mode to avoid material leaks
-#if UNITY_EDITOR
         if (!Application.isPlaying) return;
-#endif
 
         var renderers = GetComponentsInChildren<Renderer>(true);
         foreach (var renderer in renderers)

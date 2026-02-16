@@ -334,11 +334,7 @@ namespace FaeMaze.Roguelike
         /// </summary>
         public void RegisterUnlock(UnlockDefinition definition)
         {
-            if (string.IsNullOrEmpty(definition.Id))
-            {
-                Debug.LogError("[UnlockManager] Cannot register unlock with empty ID");
-                return;
-            }
+            if (string.IsNullOrEmpty(definition.Id)) return;
 
             _allUnlocks[definition.Id] = definition;
 

@@ -91,6 +91,12 @@ namespace FaeMaze.Visitors
         [Tooltip("Maximum detour path length for Lost state")]
         protected int maxLostDistance = 20;
 
+        [Header("Model Orientation")]
+        [SerializeField]
+        [Tooltip("Degrees to subtract from movement angle to correct model facing direction. " +
+                 "Set to 180 for models whose mesh faces backwards without compensation (e.g. nature, lost, sleepy).")]
+        protected float modelFacingOffsetDegrees;
+
         #endregion
 
         #region Protected Fields
@@ -993,10 +999,13 @@ namespace FaeMaze.Visitors
         /// <param name="edgeIndex">Index of the misdirect edge (for backtrack prevention)</param>
         public void SetMisdirectDestination(Vector3 farSignPosition, int edgeIndex)
         {
+            Debug.Log($"[Misdirect] SetMisdirectDestination: {name} forced to edge {edgeIndex} → ({farSignPosition.x:F1},{farSignPosition.y:F1}) from pos=({PhysicsPosition.x:F1},{PhysicsPosition.y:F1}) state={state} wasMisdirected={isMisdirected}");
+
             // Save original destination before overriding (only if not already misdirected)
             if (!isMisdirected)
             {
                 misdirectOriginalDestination = originalDestination;
+                Debug.Log($"[Misdirect] SetMisdirectDestination: {name} saved originalDest=({originalDestination.x:F1},{originalDestination.y:F1})");
             }
             isMisdirected = true;
             misdirectEdgeIndex = edgeIndex;
@@ -1006,6 +1015,8 @@ namespace FaeMaze.Visitors
             worldPath = BuildWorldPath(PhysicsPosition, farSignPosition);
             worldPathIndex = 0;
             ResetSplineState();
+
+            Debug.Log($"[Misdirect] SetMisdirectDestination: {name} path built with {worldPath?.Count ?? 0} waypoints");
         }
 
         /// <summary>
@@ -1015,10 +1026,16 @@ namespace FaeMaze.Visitors
         /// </summary>
         public void CompleteMisdirect()
         {
-            if (!isMisdirected) return;
+            if (!isMisdirected)
+            {
+                Debug.Log($"[Misdirect] CompleteMisdirect: {name} called but NOT misdirected — ignoring");
+                return;
+            }
+
+            int completedEdgeIndex = misdirectEdgeIndex;
+            Debug.Log($"[Misdirect] CompleteMisdirect: {name} RELEASED from misdirect edge {completedEdgeIndex} at pos=({PhysicsPosition.x:F1},{PhysicsPosition.y:F1}) state={state}");
 
             isMisdirected = false;
-            int completedEdgeIndex = misdirectEdgeIndex;
             misdirectEdgeIndex = -1;
 
             // Remember this edge so all future path calculations penalize it
@@ -1027,9 +1044,9 @@ namespace FaeMaze.Visitors
             if (mazeGridBehaviour == null || mazeGridBehaviour.WorldSpaceMazeData == null)
                 return;
 
-            // Build anti-backtrack multipliers: block the misdirect edge entirely.
-            // Using float.MaxValue makes A* treat the edge as impassable — the previous
-            // 50x penalty wasn't enough to prevent routing back through the edge.
+            // Build anti-backtrack multipliers: heavily penalize the misdirect edge.
+            // Using 1000x penalty makes it a last resort — high enough to avoid
+            // backtracking, but still allows pathfinding when no alternative exists.
             var antiBacktrackMultipliers = BuildAntiBacktrackMultipliers(completedEdgeIndex);
 
             // Determine destination: use original if valid, otherwise pick a random portal
@@ -1037,9 +1054,15 @@ namespace FaeMaze.Visitors
             if (destination == Vector3.zero)
             {
                 destination = PickRandomPortalPosition();
+                Debug.Log($"[Misdirect] CompleteMisdirect: {name} no original dest — picked random portal at ({destination.x:F1},{destination.y:F1})");
+            }
+            else
+            {
+                Debug.Log($"[Misdirect] CompleteMisdirect: {name} restoring original dest=({destination.x:F1},{destination.y:F1})");
             }
 
             // Try to build a path that avoids the misdirect edge
+            Debug.Log($"[Misdirect] CompleteMisdirect: {name} recalculating path from ({PhysicsPosition.x:F1},{PhysicsPosition.y:F1}) to ({destination.x:F1},{destination.y:F1}) with edge {completedEdgeIndex} penalized 1000x");
             worldPath = ForestMaze.MazePathfinding.BuildWorldPath(
                 mazeGridBehaviour.WorldSpaceMazeData,
                 PhysicsPosition,
@@ -1053,8 +1076,11 @@ namespace FaeMaze.Visitors
             // try each portal until we find one that's reachable
             if (worldPath == null || worldPath.Count == 0)
             {
+                Debug.Log($"[Misdirect] CompleteMisdirect: {name} no path found — trying alternate portals");
                 destination = FindReachablePortal(antiBacktrackMultipliers);
             }
+
+            Debug.Log($"[Misdirect] CompleteMisdirect: {name} FREE to navigate — dest=({destination.x:F1},{destination.y:F1}) pathLen={worldPath?.Count ?? 0} completedEdges=[{string.Join(",", completedMisdirectEdges)}]");
 
             worldDestination = destination;
             originalDestination = destination;
@@ -1080,12 +1106,13 @@ namespace FaeMaze.Visitors
                     multipliers[kvp.Key] = kvp.Value;
             }
 
-            // Block the completed edge — float.MaxValue makes A* never choose it
-            multipliers[blockedEdgeIndex] = float.MaxValue;
+            // Heavily penalize the completed edge — 1000x makes it a last resort
+            // but still allows pathfinding when no alternative route exists
+            multipliers[blockedEdgeIndex] = 1000f;
 
-            // Also block any previously completed misdirect edges
+            // Also penalize any previously completed misdirect edges
             foreach (int edgeIdx in completedMisdirectEdges)
-                multipliers[edgeIdx] = float.MaxValue;
+                multipliers[edgeIdx] = 1000f;
 
             return multipliers;
         }
@@ -1390,7 +1417,7 @@ namespace FaeMaze.Visitors
             if (state == newState) return;
             VisitorState prev = state;
             state = newState;
-            Debug.Log($"[VisitorState] {name}: {prev} -> {newState} ({reason})");
+            // State logging removed
         }
 
         // DEBUG: Set to true to disable all visitor states except Idle and Walking
@@ -1454,7 +1481,6 @@ namespace FaeMaze.Visitors
                 string flagReason = isDazed ? "isDazed" : isFrightened ? "isFrightened" : isLured ? "isLured"
                     : isFascinated ? (hasReachedLantern ? "isFascinated+atLantern" : "isFascinated")
                     : (isConfused && confusionEnabled) ? "isConfused" : "defaultWalking";
-                Debug.Log($"[VisitorState] {name}: {previousState} -> {state} (RefreshStateFromFlags: {flagReason})");
                 RecordNavigationEvent("StateChange", $"{previousState} -> {state}");
             }
         }
@@ -1716,9 +1742,11 @@ namespace FaeMaze.Visitors
                     foreach (var kvp in edgeCostMultipliers)
                         merged[kvp.Key] = kvp.Value;
                 }
-                // Block completed edges entirely to prevent backtracking
+                // Heavily penalize completed edges to prevent backtracking (1000x cost)
+                // Using finite penalty instead of float.MaxValue so visitors can still
+                // escape if the misdirect edge is the only route to any portal
                 foreach (int edgeIdx in completedMisdirectEdges)
-                    merged[edgeIdx] = float.MaxValue;
+                    merged[edgeIdx] = 1000f;
                 edgeCostMultipliers = merged;
             }
 
@@ -3867,7 +3895,6 @@ namespace FaeMaze.Visitors
                 }
             }
 
-            Debug.Log($"[EnterFaeInfluence] SUCCESS: visitor {name} becoming fascinated by lantern at ({lanternWorldPos.x:F2}, {lanternWorldPos.y:F2})");
             isFascinated = true;
             currentFaeLantern = lantern;
             fascinationLanternPosition = lanternWorldPos;
@@ -4929,7 +4956,7 @@ namespace FaeMaze.Visitors
 
             if (detectTransform == null)
             {
-                Debug.LogError($"[{name}] SetupDetectCollider: Could not find 'Detect' child. Visitor collision detection will not work!");
+                // Detect child not found — visitor collision detection will not work
                 return;
             }
 
@@ -4948,7 +4975,7 @@ namespace FaeMaze.Visitors
             CapsuleCollider detectCollider = detectTransform.GetComponent<CapsuleCollider>();
             if (detectCollider == null)
             {
-                Debug.LogError($"[{name}] SetupDetectCollider: 'Detect' child has no CapsuleCollider!");
+                // Detect child has no CapsuleCollider
                 return;
             }
 
@@ -5179,10 +5206,11 @@ namespace FaeMaze.Visitors
         {
             if (modelPrefab == null)
             {
-                // Model is baked into the prefab root (e.g. excited.prefab).
-                // Capture the root's rotation as the base rotation so
-                // UpdateAnimatorDirection can compensate for it.
-                modelBaseRotation = transform.rotation;
+                // Model is baked into the prefab root.
+                // Use the per-prefab modelFacingOffsetDegrees to compensate for model facing.
+                // Some models (nature, lost, sleepy) face backwards and need offset=180.
+                // Models with complex Armature rotations handle facing internally and need offset=0.
+                modelBaseRotation = Quaternion.Euler(0f, 0f, modelFacingOffsetDegrees);
                 modelBaseRotationCaptured = true;
                 return;
             }

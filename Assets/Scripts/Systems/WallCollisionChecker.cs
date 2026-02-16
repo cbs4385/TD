@@ -113,8 +113,6 @@ namespace FaeMaze.Systems
                     $"  (2) Complete maze regeneration (IsMazeRegenerating=true)\n" +
                     $"Stack trace:\n{stackTrace}";
 
-                Debug.LogError(errorMessage);
-
                 // Throw exception to halt execution and force investigation
                 throw new System.InvalidOperationException(errorMessage);
             }

@@ -69,11 +69,7 @@ namespace FaeMaze.Cameras
         private void SetupVolume()
         {
             volume = GetComponent<Volume>();
-            if (volume == null)
-            {
-                Debug.LogError("[GlobalVolumeSetup] No Volume component found!");
-                return;
-            }
+            if (volume == null) return;
 
             // Create a new profile if none exists
             if (volume.profile == null)
@@ -129,11 +125,7 @@ namespace FaeMaze.Cameras
 
         private void ConfigureRadialBlur()
         {
-            if (volume.profile == null)
-            {
-                Debug.LogError("[GlobalVolumeSetup] ConfigureRadialBlur: profile is null!");
-                return;
-            }
+            if (volume.profile == null) return;
 
             RadialBlur radialBlur;
             if (!volume.profile.TryGet<RadialBlur>(out radialBlur))
@@ -157,10 +149,6 @@ namespace FaeMaze.Cameras
                 radialBlur.vignetteIntensity.overrideState = true;
                 radialBlur.vignetteIntensity.value = vignetteIntensity;
 
-            }
-            else
-            {
-                Debug.LogError("[GlobalVolumeSetup] Failed to add RadialBlur to profile!");
             }
         }
     }

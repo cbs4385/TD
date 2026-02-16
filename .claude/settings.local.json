@@ -53,9 +53,29 @@
       "Bash(cmd.exe /c \"\"\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\"\" -batchmode -projectPath \"\"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\"\" -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit\")",
       "Bash(tasklist:*)",
       "Bash(cmd.exe /c \"\"\"C:\\\\Program Files\\\\Unity\\\\Hub\\\\Editor\\\\6000.0.32f1\\\\Editor\\\\Unity.exe\"\" -batchmode -projectPath \"\"C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\"\" -executeMethod FaeMaze.Editor.BuildScript.BuildWindowsCommandLine -quit -logFile C:\\\\Users\\\\chris\\\\source\\\\repos\\\\TD\\\\build.log\")",
-      "Bash(xxd:*)"
+      "Bash(xxd:*)",
+      "Bash(if not exist \"%APPDATA%\\\\Claude\" mkdir \"%APPDATA%\\\\Claude\")",
+      "mcp__unity__manage_editor",
+      "mcp__unity__manage_scene",
+      "mcp__unity__refresh_unity",
+      "mcp__unity__read_console",
+      "Bash(dotnet:*)",
+      "Bash(\"/c/Program Files/Unity/Hub/Editor/6000.3.6f1/Editor/Unity.exe\" -batchmode -projectPath \"C:/Users/chris/source/repos/TD\" -logFile - -quit)",
+      "WebSearch",
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(claude mcp:*)",
+      "Bash(npx --version:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(npm view:*)",
+      "mcp__unity__find_gameobjects",
+      "mcp__unity__manage_components"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "unity"
+  ]
 }

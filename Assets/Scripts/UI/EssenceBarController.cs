@@ -52,6 +52,7 @@ namespace FaeMaze.UI
 
             CreateEssenceBarUI();
             UpdateDisplay();
+            SetVisible(false); // Start hidden; shown by HeartPowerPanelController.SetGameplayOverlayVisible(true)
             IsReady = true;
         }
 
@@ -289,6 +290,22 @@ namespace FaeMaze.UI
             if (essenceTextShadow != null)
             {
                 essenceTextShadow.text = currentEssence.ToString();
+            }
+        }
+
+        #endregion
+
+        #region Visibility
+
+        /// <summary>
+        /// Shows or hides the essence bar panel.
+        /// Called by HeartPowerPanelController.SetGameplayOverlayVisible().
+        /// </summary>
+        public void SetVisible(bool visible)
+        {
+            if (essenceBarPanel != null)
+            {
+                essenceBarPanel.SetActive(visible);
             }
         }
 

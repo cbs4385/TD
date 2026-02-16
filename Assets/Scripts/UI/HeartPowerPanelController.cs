@@ -294,10 +294,25 @@ namespace FaeMaze.UI
             // Initialize resource displays
             UpdateResourceDisplays();
 
-            // Panel starts visible
+            // Panel starts hidden; RuntimeSceneSetup shows it after selection screens complete
             if (heartPowersPanel != null)
             {
-                heartPowersPanel.SetActive(true);
+                heartPowersPanel.SetActive(false);
+            }
+
+            // Also hide individual power buttons (parented to canvas, not heartPowersPanel)
+            for (int i = 0; i < powerButtons.Length; i++)
+            {
+                if (powerButtons[i] != null)
+                {
+                    powerButtons[i].gameObject.SetActive(false);
+                }
+            }
+
+            // Hide run timer initially
+            if (runTimerText != null)
+            {
+                runTimerText.gameObject.SetActive(false);
             }
 
         }
@@ -1036,6 +1051,41 @@ namespace FaeMaze.UI
         #region Utility
 
         /// <summary>
+        /// Shows or hides the entire gameplay overlay (power buttons, essence bar, run timer).
+        /// Called by RuntimeSceneSetup to hide during selection screens and show when gameplay begins.
+        /// </summary>
+        public void SetGameplayOverlayVisible(bool visible)
+        {
+            // Hide/show the panel container (may be empty but keep for consistency)
+            if (heartPowersPanel != null)
+            {
+                heartPowersPanel.SetActive(visible);
+            }
+
+            // Hide/show each power button individually (they're parented to canvas, not heartPowersPanel)
+            for (int i = 0; i < powerButtons.Length; i++)
+            {
+                if (powerButtons[i] != null)
+                {
+                    powerButtons[i].gameObject.SetActive(visible);
+                }
+            }
+
+            // Show/hide the run timer
+            if (runTimerText != null)
+            {
+                runTimerText.gameObject.SetActive(visible);
+            }
+
+            // Show/hide the essence bar
+            var essenceBar = Object.FindFirstObjectByType<EssenceBarController>();
+            if (essenceBar != null)
+            {
+                essenceBar.SetVisible(visible);
+            }
+        }
+
+        /// <summary>
         /// Toggles the panel visibility.
         /// </summary>
         private void TogglePanel()
@@ -1043,7 +1093,7 @@ namespace FaeMaze.UI
             if (heartPowersPanel != null)
             {
                 bool newState = !heartPowersPanel.activeSelf;
-                heartPowersPanel.SetActive(newState);
+                SetGameplayOverlayVisible(newState);
             }
         }
 

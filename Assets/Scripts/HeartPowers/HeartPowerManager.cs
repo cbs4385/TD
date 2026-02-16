@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FaeMaze.Systems;
 using FaeMaze.Roguelike;
+using FaeMaze.Tutorial;
 using Object = UnityEngine.Object;
 
 namespace FaeMaze.HeartPowers
@@ -433,6 +434,10 @@ namespace FaeMaze.HeartPowers
         public int GetEffectivePowerCost(HeartPowerType powerType, HeartPowerDefinition definition)
         {
             if (definition == null)
+                return 0;
+
+            // Powers are free during the tutorial so the player can learn without resource pressure
+            if (TutorialManager.Instance != null && TutorialManager.Instance.IsActive)
                 return 0;
 
             // Calculate base cost as percentage of starting essence

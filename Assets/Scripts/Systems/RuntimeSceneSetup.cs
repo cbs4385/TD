@@ -277,6 +277,13 @@ namespace FaeMaze.Systems
             // Show blessing selection UI if player has unlocked blessings
             yield return ShowBlessingSelection();
 
+            // Show gameplay overlay (power buttons, essence bar, run timer) now that selections are done
+            var panelController = Object.FindFirstObjectByType<HeartPowerPanelController>();
+            if (panelController != null)
+            {
+                panelController.SetGameplayOverlayVisible(true);
+            }
+
             if (waveSpawner != null)
             {
                 bool started = waveSpawner.StartWave();

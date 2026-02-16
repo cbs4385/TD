@@ -45,6 +45,12 @@ namespace FaeMaze.Systems
         private SleepwalkingDevoteeController sleepwalkingVisitorPrefab;
 
         [SerializeField]
+        private VisitorControllerBase festivalTouristPrefab;
+
+        [SerializeField]
+        private VisitorControllerBase mistakingFestivalTouristPrefab;
+
+        [SerializeField]
         [Tooltip("The Goblin prefab")]
         private GoblinController goblinPrefab;
 
@@ -72,6 +78,11 @@ namespace FaeMaze.Systems
         [Header("Auto-Start")]
         [SerializeField]
         private bool autoStartFirstWave = false;
+
+        [Header("Debug")]
+        [SerializeField]
+        [Tooltip("Spawn one of each visitor type from the same portal before normal spawning begins")]
+        private bool spawnAllTypesFirst = false;
 
         #endregion
 
@@ -148,6 +159,20 @@ namespace FaeMaze.Systems
             if (heartPowerManager == null)
             {
                 heartPowerManager = FindFirstObjectByType<HeartPowerManager>();
+            }
+
+            // Load festival tourist prefabs if not assigned
+            if (festivalTouristPrefab == null)
+            {
+                var prefab = Resources.Load<GameObject>("Prefabs/Visitors/Visitor_FestivalTourist");
+                if (prefab != null)
+                    festivalTouristPrefab = prefab.GetComponent<VisitorControllerBase>();
+            }
+            if (mistakingFestivalTouristPrefab == null)
+            {
+                var prefab = Resources.Load<GameObject>("Prefabs/Visitors/MistakingVisitor_FestivalTourist");
+                if (prefab != null)
+                    mistakingFestivalTouristPrefab = prefab.GetComponent<VisitorControllerBase>();
             }
 
             // Load goblin prefab if not assigned
@@ -232,6 +257,11 @@ namespace FaeMaze.Systems
                     yield return null;
                 }
             }
+            // Show gameplay overlay now that selections are done
+            var panelController = FindFirstObjectByType<HeartPowerPanelController>();
+            if (panelController != null)
+                panelController.SetGameplayOverlayVisible(true);
+
             // Now start the wave
             StartWave();
         }
@@ -335,6 +365,13 @@ namespace FaeMaze.Systems
 
             // Initialize spawn interval at base value
             currentSpawnInterval = baseSpawnInterval;
+
+            // Debug: spawn one of each visitor type from the same portal first
+            if (spawnAllTypesFirst)
+            {
+                yield return StartCoroutine(SpawnAllTypesFromSamePortal());
+                spawnAllTypesFirst = false; // Only do this once
+            }
 
             // Spawn visitors continuously while game is active (essence > 0)
             while (isWaveActive)
@@ -465,6 +502,10 @@ namespace FaeMaze.Systems
                 availableVisitorPrefabs.Add(waryWayfarerVisitorPrefab);
             if (sleepwalkingVisitorPrefab != null)
                 availableVisitorPrefabs.Add(sleepwalkingVisitorPrefab);
+            if (festivalTouristPrefab != null)
+                availableVisitorPrefabs.Add(festivalTouristPrefab);
+            if (mistakingFestivalTouristPrefab != null)
+                availableVisitorPrefabs.Add(mistakingFestivalTouristPrefab);
 
             if (availableVisitorPrefabs.Count == 0)
             {
@@ -474,9 +515,59 @@ namespace FaeMaze.Systems
             int randomIndex = RandomManager.Range(0, availableVisitorPrefabs.Count);
             VisitorControllerBase selectedPrefab = availableVisitorPrefabs[randomIndex];
 
-            VisitorControllerBase spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.Euler(0, 0, 180));
+            VisitorControllerBase spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.identity);
 
             return spawnedVisitor;
+        }
+
+        /// <summary>
+        /// Debug: spawns one of each visitor type from the same portal with 2-second gaps.
+        /// All visitors walk to the same destination so orientation can be compared side by side.
+        /// </summary>
+        private IEnumerator SpawnAllTypesFromSamePortal()
+        {
+            if (mazeGridBehaviour?.WorldSpaceMazeData == null) yield break;
+
+            var spawnPoints = mazeGridBehaviour.WorldSpaceMazeData.GetSpawnPointPositions();
+            if (spawnPoints == null || spawnPoints.Count == 0) yield break;
+
+            // Pick first spawn point for all visitors
+            var keys = new List<char>(spawnPoints.Keys);
+            char spawnId = keys[0];
+            Vector3 spawnPos = spawnPoints[spawnId];
+            Vector3 destPos = FindDifferentSpawnPoint(spawnPos, spawnPoints);
+
+            // Collect all available prefabs in order
+            var prefabs = new List<VisitorControllerBase>();
+            if (basicVisitorPrefab != null) prefabs.Add(basicVisitorPrefab);
+            if (mistakingVisitorPrefab != null) prefabs.Add(mistakingVisitorPrefab);
+            if (lanternDrunkVisitorPrefab != null) prefabs.Add(lanternDrunkVisitorPrefab);
+            if (waryWayfarerVisitorPrefab != null) prefabs.Add(waryWayfarerVisitorPrefab);
+            if (sleepwalkingVisitorPrefab != null) prefabs.Add(sleepwalkingVisitorPrefab);
+            if (festivalTouristPrefab != null) prefabs.Add(festivalTouristPrefab);
+            if (mistakingFestivalTouristPrefab != null) prefabs.Add(mistakingFestivalTouristPrefab);
+
+            Debug.Log($"[WaveSpawner] Spawning {prefabs.Count} visitor types from portal '{spawnId}' for orientation testing");
+
+            int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
+            foreach (var prefab in prefabs)
+            {
+                var visitor = Instantiate(prefab, spawnPos, Quaternion.identity);
+                visitor.Initialize(GameController.Instance);
+                visitor.SetDifficultyTier(tier);
+                visitor.SetOriginalSpawnPosition(spawnPos);
+                visitor.SetWorldDestination(destPos);
+
+                string typeName = prefab.GetType().Name.Replace("Controller", "");
+                visitor.gameObject.name = $"TEST_{typeName}_{spawnId}";
+
+                activeVisitors.Add(visitor.gameObject);
+                totalVisitorsSpawned++;
+
+                Debug.Log($"[WaveSpawner] Spawned TEST {typeName} at {spawnPos}");
+
+                yield return new WaitForSeconds(2f);
+            }
         }
 
         /// <summary>
@@ -518,17 +609,9 @@ namespace FaeMaze.Systems
 
         private void SpawnGoblin()
         {
-            if (goblinPrefab == null)
-            {
-                Debug.LogError("[WaveSpawner] SpawnGoblin FAILED: goblinPrefab is NULL!");
-                return;
-            }
+            if (goblinPrefab == null) return;
 
-            if (mazeGridBehaviour == null)
-            {
-                Debug.LogError("[WaveSpawner] SpawnGoblin FAILED: mazeGridBehaviour is NULL!");
-                return;
-            }
+            if (mazeGridBehaviour == null) return;
 
             Vector3 spawnWorldPos;
 
@@ -545,20 +628,9 @@ namespace FaeMaze.Systems
                 spawnWorldPos = mazeGridBehaviour.HeartWorldPosition;
             }
 
-            currentGoblin = Instantiate(goblinPrefab, spawnWorldPos, Quaternion.Euler(0, 0, 180));
+            currentGoblin = Instantiate(goblinPrefab, spawnWorldPos, Quaternion.identity);
 
-            if (currentGoblin == null)
-            {
-                Debug.LogError("[WaveSpawner] SpawnGoblin FAILED: Instantiate returned NULL!");
-                return;
-            }
-
-            // Check if GoblinController component exists
-            var controller = currentGoblin.GetComponent<GoblinController>();
-            if (controller == null)
-            {
-                Debug.LogError("[WaveSpawner] SpawnGoblin WARNING: Instantiated object has no GoblinController component! Check prefab setup.");
-            }
+            if (currentGoblin == null) return;
 
             int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
             currentGoblin.SetDifficultyTier(tier);

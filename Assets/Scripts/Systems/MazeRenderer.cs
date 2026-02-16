@@ -225,11 +225,6 @@ namespace FaeMaze.Systems
                     heartGroundMaterial.SetFloat("_Smoothness", 0.2f); // Matte earthy surface
                     heartGroundMaterial.SetFloat("_EdgeDarkening", 0.0f); // Disabled to match heart material
 
-                    // Verify the material is using the correct shader
-                    if (heartGroundMaterial.shader.name != "Custom/EarthenGroundTextured")
-                    {
-                        Debug.LogError($"[MazeRenderer] SHADER MISMATCH! Expected Custom/EarthenGroundTextured but got {heartGroundMaterial.shader.name}");
-                    }
                     return;
                 }
             }
@@ -263,11 +258,7 @@ namespace FaeMaze.Systems
 
             // Fallback: Try to find the procedural EarthenGround shader
             var proceduralShader = Shader.Find("Custom/EarthenGround");
-            if (proceduralShader == null)
-            {
-                Debug.LogError("[MazeRenderer] CRITICAL: No path shader found! Paths will render incorrectly.");
-                return;
-            }
+            if (proceduralShader == null) return;
 
             // Create the procedural earthy ground material with lighter, warmer colors
             heartGroundMaterial = new Material(proceduralShader);

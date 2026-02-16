@@ -60,6 +60,7 @@ MonoBehaviour:
   goblinDetectionInterval: 0.5
   minLostDistance: 10
   maxLostDistance: 20
+  modelFacingOffsetDegrees: 0
   misstepEnabled: 1
   debugMisstepGizmos: 0
 --- !u!114 &5000000006
@@ -2165,15 +2166,15 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8813107892241462545}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: 0.0012155174, y: 0.70710576, z: -0.7071058, w: -0.0012158154}
+  m_LocalPosition: {x: 0.0050226897, y: -0.0043103704, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 213298676305559779}
   - {fileID: 8122803480473508720}
   m_Father: {fileID: 5000000001}
-  m_LocalEulerAnglesHint: {x: -90, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 90.19501, y: 90.001, z: -89.997986}
 --- !u!95 &2874860717342979537
 Animator:
   serializedVersion: 7

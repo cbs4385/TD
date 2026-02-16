@@ -21,19 +21,11 @@ namespace FaeMaze.PostProcessing
 
         public override void Create()
         {
-            if (settings.shader == null)
-            {
-                Debug.LogError("[RadialBlurRenderFeature] Shader is NULL! RadialBlur will not work.");
-                return;
-            }
+            if (settings.shader == null) return;
 
             material = CoreUtils.CreateEngineMaterial(settings.shader);
 
-            if (material == null)
-            {
-                Debug.LogError("[RadialBlurRenderFeature] Failed to create material from shader!");
-                return;
-            }
+            if (material == null) return;
 
             renderPass = new RadialBlurRenderPass(material);
             renderPass.renderPassEvent = settings.renderPassEvent;
@@ -75,20 +67,10 @@ namespace FaeMaze.PostProcessing
             profilingSampler = new ProfilingSampler("RadialBlur");
         }
 
-        private static bool _hasLoggedOnce = false;
-
         // Unity 6 RenderGraph API using recommended AddBlitPass approach
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
-            if (material == null)
-            {
-                if (!_hasLoggedOnce && Time.frameCount > 60)
-                {
-                    Debug.LogError("[RadialBlurRenderPass] RecordRenderGraph: material is null!");
-                    _hasLoggedOnce = true;
-                }
-                return;
-            }
+            if (material == null) return;
 
             var resourceData = frameData.Get<UniversalResourceData>();
             var cameraData = frameData.Get<UniversalCameraData>();

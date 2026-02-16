@@ -107,12 +107,15 @@ namespace FaeMaze.UI
         /// </summary>
         private void HideOldElements()
         {
-            // Find and hide the old MainPanel (with its grey background and all children)
-            Transform mainPanel = canvas.transform.Find("MainPanel");
-            if (mainPanel != null)
+            // Find and destroy any old scene canvases (the GameOver scene has a pre-existing
+            // "Canvas" with "MainPanel" that conflicts with our runtime-created "GameOverCanvas")
+            Canvas[] allCanvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            foreach (var c in allCanvases)
             {
-                // Destroy the entire MainPanel to prevent any interference
-                Destroy(mainPanel.gameObject);
+                if (c != canvas) // Not our new GameOverCanvas
+                {
+                    Destroy(c.gameObject);
+                }
             }
         }
 

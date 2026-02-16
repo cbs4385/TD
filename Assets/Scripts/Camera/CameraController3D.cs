@@ -35,11 +35,11 @@ namespace FaeMaze.Cameras
         private float focalViewAngle = 45f;
 
         [SerializeField]
-        [Tooltip("Speed at which scroll wheel changes viewing angle")]
-        private float angleChangeSpeed = 5f;
+        [Tooltip("Speed at which PageUp/PageDown changes viewing angle (degrees per second)")]
+        private float angleChangeSpeed = 30f;
 
         [SerializeField]
-        [Tooltip("Maximum zoom distance along focal axis (Shift+Scroll)")]
+        [Tooltip("Maximum zoom distance along focal axis (Scroll Wheel)")]
         private float maxFocalZoomDistance = 3f;
 
         [SerializeField]
@@ -357,7 +357,9 @@ namespace FaeMaze.Cameras
                 InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveForwardBinding, GameSettings.CameraMoveForwardAltBinding, GameSettings.CameraMoveForwardTertiaryBinding) ||
                 InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraMoveBackwardBinding, GameSettings.CameraMoveBackwardAltBinding, GameSettings.CameraMoveBackwardTertiaryBinding) ||
                 InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnLeftBinding, GameSettings.CameraTurnLeftAltBinding, GameSettings.CameraTurnLeftTertiaryBinding) ||
-                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnRightBinding, GameSettings.CameraTurnRightAltBinding, GameSettings.CameraTurnRightTertiaryBinding);
+                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnRightBinding, GameSettings.CameraTurnRightAltBinding, GameSettings.CameraTurnRightTertiaryBinding) ||
+                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraStrafeLeftBinding, GameSettings.CameraStrafeLeftAltBinding, GameSettings.CameraStrafeLeftTertiaryBinding) ||
+                InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraStrafeRightBinding, GameSettings.CameraStrafeRightAltBinding, GameSettings.CameraStrafeRightTertiaryBinding);
 
             if (isFocusing && anyMovementPressed)
             {
@@ -386,7 +388,28 @@ namespace FaeMaze.Cameras
                 _focusPoint += movement;
             }
 
-            // A/D or ←/→ (or configured bindings): Orbit yaw (keyboard orbit)
+            // Strafe: move along camera right direction (projected on XY plane)
+            float strafeInput = 0f;
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraStrafeRightBinding, GameSettings.CameraStrafeRightAltBinding, GameSettings.CameraStrafeRightTertiaryBinding))
+            {
+                strafeInput += 1f;
+            }
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraStrafeLeftBinding, GameSettings.CameraStrafeLeftAltBinding, GameSettings.CameraStrafeLeftTertiaryBinding))
+            {
+                strafeInput -= 1f;
+            }
+
+            if (Mathf.Abs(strafeInput) > 0.001f)
+            {
+                Vector3 right = transform.right;
+                right.z = 0f;
+                right.Normalize();
+
+                Vector3 movement = right * strafeInput * panSpeed * Time.deltaTime;
+                _focusPoint += movement;
+            }
+
+            // Q/E or configured rotate bindings: Orbit yaw (keyboard orbit)
             float yawInput = 0f;
             if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraTurnRightBinding, GameSettings.CameraTurnRightAltBinding, GameSettings.CameraTurnRightTertiaryBinding))
             {
@@ -448,20 +471,31 @@ namespace FaeMaze.Cameras
                 turnInput += 1f;
             }
 
-            if (Mathf.Abs(moveInput) > 0.001f)
+            // Strafe input (A/D by default - perpendicular to facing direction)
+            float strafeInput = 0f;
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraStrafeLeftBinding, GameSettings.CameraStrafeLeftAltBinding, GameSettings.CameraStrafeLeftTertiaryBinding))
             {
-                // Calculate forward direction from focal point's yaw angle (rotation around Z axis)
-                // This ensures movement is always in the direction the focal point is "facing"
+                strafeInput -= 1f;
+            }
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraStrafeRightBinding, GameSettings.CameraStrafeRightAltBinding, GameSettings.CameraStrafeRightTertiaryBinding))
+            {
+                strafeInput += 1f;
+            }
+
+            if (Mathf.Abs(moveInput) > 0.001f || Mathf.Abs(strafeInput) > 0.001f)
+            {
                 float yawAngle = focalPointTransform.eulerAngles.z;
                 float yawRad = yawAngle * Mathf.Deg2Rad;
                 Vector3 forward = new Vector3(Mathf.Cos(yawRad), Mathf.Sin(yawRad), 0f);
+                // Right direction is perpendicular to forward (clockwise in XY plane with -Z up)
+                Vector3 right = new Vector3(Mathf.Sin(yawRad), -Mathf.Cos(yawRad), 0f);
 
-                focalPointTransform.position += forward * moveInput * focalMoveSpeed * Time.deltaTime;
+                Vector3 movement = (forward * moveInput + right * strafeInput) * focalMoveSpeed * Time.deltaTime;
+                focalPointTransform.position += movement;
                 Vector3 planarPosition = focalPointTransform.position;
                 planarPosition.z = 0f;
                 focalPointTransform.position = planarPosition;
 
-                // Constrain focal point to within 1 tile of maze bounds
                 ConstrainFocalPointToMazeBounds();
             }
 
@@ -472,6 +506,23 @@ namespace FaeMaze.Cameras
                 // Rotate around Z axis (world up in this game's XY-plane coordinate system)
                 // This changes focalPointTransform.eulerAngles.z which UpdateFocalPointCameraPosition reads
                 focalPointTransform.Rotate(Vector3.forward, yawDelta, Space.World);
+            }
+
+            // Viewing angle control (PageUp/PageDown by default)
+            float angleInput = 0f;
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraAngleUpBinding, "", GameSettings.CameraAngleUpTertiaryBinding))
+            {
+                angleInput += 1f;
+            }
+            if (InputBindingHelper.IsAnyBindingPressed(GameSettings.CameraAngleDownBinding, "", GameSettings.CameraAngleDownTertiaryBinding))
+            {
+                angleInput -= 1f;
+            }
+
+            if (Mathf.Abs(angleInput) > 0.001f)
+            {
+                focalViewAngle += angleInput * angleChangeSpeed * Time.deltaTime;
+                focalViewAngle = Mathf.Clamp(focalViewAngle, 40f, 85f);
             }
         }
 
@@ -648,49 +699,44 @@ namespace FaeMaze.Cameras
 
         private void HandleScrollZoom()
         {
+            float scroll = 0f;
+
             Mouse mouse = Mouse.current;
-            if (mouse == null)
+            if (mouse != null)
             {
-                return;
+                scroll = mouse.scroll.ReadValue().y;
             }
 
-            float scroll = mouse.scroll.ReadValue().y;
+            // Also check gamepad right stick for zoom
+            Gamepad gamepad = Gamepad.current;
+            if (gamepad != null)
+            {
+                float stickY = gamepad.rightStick.ReadValue().y;
+                if (Mathf.Abs(stickY) > 0.1f)
+                {
+                    // Scale right stick to approximate mouse scroll magnitude
+                    scroll += stickY * 120f * Time.deltaTime;
+                }
+            }
 
             if (Mathf.Approximately(scroll, 0f))
             {
                 return;
             }
 
-            // In focal point mode, handle scroll differently
+            // In focal point mode, scroll wheel directly zooms along focal axis
             if (useFocalPointMode)
             {
-                Keyboard keyboard = Keyboard.current;
-                bool shiftHeld = keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed);
+                // Zoom along focal axis using logarithmic scale
+                // Positive scroll (toward user) = zoom in (decrease offset, move closer)
+                // Negative scroll (away from user) = zoom out (increase offset, move further)
+                float scaledScroll = scroll * 10f * focalZoomSpeed * 0.01f;
 
-                if (shiftHeld)
-                {
-                    // Shift+Scroll: zoom along focal axis using logarithmic scale
-                    // Scale scroll input by 10 and apply on log scale for smooth zoom feel
-                    // Positive scroll (toward user) = zoom in (decrease offset, move closer)
-                    // Negative scroll (away from user) = zoom out (increase offset, move further)
-                    float scaledScroll = scroll * 10f * focalZoomSpeed * 0.01f;
-
-                    // Use logarithmic scaling: convert current offset to log space, modify, convert back
-                    // Add 1 to avoid log(0), so offset 0 maps to log(1)=0
-                    float logOffset = Mathf.Log(focalZoomOffset + 1f);
-                    logOffset -= scaledScroll;
-                    logOffset = Mathf.Clamp(logOffset, 0f, Mathf.Log(maxFocalZoomDistance + 1f));
-                    focalZoomOffset = Mathf.Exp(logOffset) - 1f;
-                    focalZoomOffset = Mathf.Clamp(focalZoomOffset, 0f, maxFocalZoomDistance);
-                }
-                else
-                {
-                    // Normal scroll: change viewing angle
-                    // Positive scroll = increase angle (move toward top-down)
-                    // Negative scroll = decrease angle (move toward level)
-                    focalViewAngle += scroll * angleChangeSpeed;
-                    focalViewAngle = Mathf.Clamp(focalViewAngle, 40f, 85f); // 40°-85° range
-                }
+                float logOffset = Mathf.Log(focalZoomOffset + 1f);
+                logOffset -= scaledScroll;
+                logOffset = Mathf.Clamp(logOffset, 0f, Mathf.Log(maxFocalZoomDistance + 1f));
+                focalZoomOffset = Mathf.Exp(logOffset) - 1f;
+                focalZoomOffset = Mathf.Clamp(focalZoomOffset, 0f, maxFocalZoomDistance);
                 return;
             }
 

@@ -193,8 +193,12 @@ namespace FaeMaze.Tutorial
 
             string moveForward = Bind(GameSettings.CameraMoveForwardBinding);
             string moveBack = Bind(GameSettings.CameraMoveBackwardBinding);
-            string turnLeft = Bind(GameSettings.CameraTurnLeftBinding);
-            string turnRight = Bind(GameSettings.CameraTurnRightBinding);
+            string strafeLeft = Bind(GameSettings.CameraStrafeLeftBinding);
+            string strafeRight = Bind(GameSettings.CameraStrafeRightBinding);
+            string rotateLeft = Bind(GameSettings.CameraTurnLeftBinding);
+            string rotateRight = Bind(GameSettings.CameraTurnRightBinding);
+            string angleUp = Bind(GameSettings.CameraAngleUpBinding);
+            string angleDown = Bind(GameSettings.CameraAngleDownBinding);
             string orbit = Bind(GameSettings.CameraOrbitBinding);
             string pan = Bind(GameSettings.CameraPanBinding);
             string focusHeart = Bind(GameSettings.CameraFocusHeartBinding);
@@ -203,8 +207,11 @@ namespace FaeMaze.Tutorial
 
             y = CreateSection(parent, "CAMERA", col1X, y, new string[]
             {
-                $"<color=#{kc}>{moveForward}/{moveBack}/{turnLeft}/{turnRight}</color>  Move",
+                $"<color=#{kc}>{moveForward}/{moveBack}</color>  Forward/Back",
+                $"<color=#{kc}>{strafeLeft}/{strafeRight}</color>  Strafe",
+                $"<color=#{kc}>{rotateLeft}/{rotateRight}</color>  Rotate",
                 $"<color=#{kc}>Scroll Wheel</color>  Zoom",
+                $"<color=#{kc}>{angleUp}/{angleDown}</color>  View Angle",
                 $"<color=#{kc}>{orbit} + Drag</color>  Orbit",
                 $"<color=#{kc}>{pan} + Drag</color>  Pan",
                 $"<color=#{kc}>{focusHeart}</color>  Focus Heart",

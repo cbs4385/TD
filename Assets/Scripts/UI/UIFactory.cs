@@ -9,21 +9,28 @@ namespace FaeMaze.UI
     public static class UIFactory
     {
         /// <summary>
-        /// Finds an existing canvas on or above the component, falling back to any canvas in the scene,
-        /// or creates a new ScreenSpaceOverlay canvas if none exists.
+        /// Finds an existing canvas on or above the component, then searches for one with the
+        /// matching name, or creates a new ScreenSpaceOverlay canvas if none is found.
+        /// Each UI system gets its own named canvas with the correct sorting order.
         /// </summary>
         public static Canvas FindOrCreateCanvas(MonoBehaviour context, string canvasName, int sortingOrder, Vector2? referenceResolution = null)
         {
+            // First check parent hierarchy
             Canvas canvas = context.GetComponentInParent<Canvas>();
-            if (canvas == null)
+            if (canvas != null) return canvas;
+
+            // Search for a canvas with the matching name
+            Canvas[] allCanvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            foreach (var c in allCanvases)
             {
-                canvas = Object.FindFirstObjectByType<Canvas>();
+                if (c.gameObject.name == canvasName)
+                {
+                    return c;
+                }
             }
-            if (canvas == null)
-            {
-                canvas = CreateOverlayCanvas(canvasName, sortingOrder, referenceResolution);
-            }
-            return canvas;
+
+            // No matching canvas found — create a new one with the correct sorting order
+            return CreateOverlayCanvas(canvasName, sortingOrder, referenceResolution);
         }
 
         /// <summary>

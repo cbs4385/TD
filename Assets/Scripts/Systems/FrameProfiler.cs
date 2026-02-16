@@ -80,7 +80,7 @@ namespace FaeMaze.Systems
 
         private void Update()
         {
-            if (!_isValid) return;
+            if (!_isValid || _frameStopwatch == null) return;
 
             float currentTime = Time.realtimeSinceStartup;
             _lastUpdateTime = currentTime;
@@ -92,7 +92,7 @@ namespace FaeMaze.Systems
 
         private void LateUpdate()
         {
-            if (!_isValid) return;
+            if (!_isValid || _frameStopwatch == null) return;
 
             _frameStopwatch.Stop();
             _lastCheckpoint = "FrameProfiler.LateUpdate";

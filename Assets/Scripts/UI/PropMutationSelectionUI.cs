@@ -299,11 +299,7 @@ namespace FaeMaze.UI
 
             // Find cards container
             Transform cardsContainer = _panel.transform.Find("CardsContainer");
-            if (cardsContainer == null)
-            {
-                Debug.LogError("[PropMutationSelectionUI] CardsContainer not found!");
-                return;
-            }
+            if (cardsContainer == null) return;
 
             // Create cards for each mutation
             for (int i = 0; i < unlockedMutations.Count; i++)
