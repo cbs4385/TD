@@ -26,6 +26,20 @@ namespace FaeMaze.Visitors
 
         #endregion
 
+        private string entityLabel;
+
+        /// <summary>Unique label for this Goblin, used in floating text and console logs.</summary>
+        public string EntityLabel => entityLabel;
+
+        /// <summary>
+        /// Assigns a unique label and shows it as floating text above the Goblin.
+        /// </summary>
+        public void AssignEntityLabel(string label)
+        {
+            entityLabel = label;
+            FaeMaze.Visitors.VisitorStateIndicator.ShowLabel(transform, label, new Color(1f, 0.4f, 0.4f));
+        }
+
         #region Serialized Fields
 
         [Header("Movement Settings")]
@@ -708,6 +722,13 @@ namespace FaeMaze.Visitors
                     GameStatsTracker.Instance.RecordVisitorFate(killingTarget.Archetype, VisitorFate.GoblinKill, -essencePenalty);
                 }
 
+                string victimLabel = killingTarget.EntityLabel ?? killingTarget.gameObject.name;
+                if (!string.IsNullOrEmpty(entityLabel))
+                {
+                    GameEventLogger.LogEnemyEvent(entityLabel, "Killed", $"{victimLabel} penalty=-{essencePenalty}");
+                }
+                GameEventLogger.LogVisitorFate(victimLabel, "GoblinKill", -essencePenalty);
+
                 // Despawn the visitor
                 Destroy(killingTarget.gameObject);
                 killingTarget = null;
@@ -738,6 +759,11 @@ namespace FaeMaze.Visitors
 
             state = GoblinState.Fleeing;
             targetVisitor = null;
+
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                GameEventLogger.LogEnemyEvent(entityLabel, "Fleeing", "essence low");
+            }
 
             // Find and path to nearest exit
             BuildPathToNearestExit();

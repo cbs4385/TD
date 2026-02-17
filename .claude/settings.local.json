@@ -69,7 +69,9 @@
       "WebFetch(domain:docs.anthropic.com)",
       "Bash(npm view:*)",
       "mcp__unity__find_gameobjects",
-      "mcp__unity__manage_components"
+      "mcp__unity__manage_components",
+      "mcp__computer-control__click_at",
+      "mcp__computer-control__get_screen_size"
     ],
     "deny": [],
     "ask": []

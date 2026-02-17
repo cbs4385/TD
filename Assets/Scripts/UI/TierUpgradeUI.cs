@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 using TMPro;
 using FaeMaze.HeartPowers;
 using FaeMaze.Roguelike;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -299,6 +300,7 @@ namespace FaeMaze.UI
 
             _panelRoot.SetActive(true);
             _isVisible = true;
+            GameEventLogger.LogUI("TierUpgrade", "Show", $"tier={tier}");
 
             // Pause the game
             Time.timeScale = 0f;
@@ -306,6 +308,7 @@ namespace FaeMaze.UI
 
         public void Hide()
         {
+            GameEventLogger.LogUI("TierUpgrade", "Hide");
             if (_panelRoot != null)
             {
                 _panelRoot.SetActive(false);
@@ -334,6 +337,7 @@ namespace FaeMaze.UI
 
         private void OnPowerSelected(HeartPowerType powerType)
         {
+            GameEventLogger.LogUI("TierUpgrade", "PowerSelected", $"{powerType}");
             if (PowerProgressionManager.Instance != null)
             {
                 PowerProgressionManager.Instance.ApplyTierUpgrade(powerType);
@@ -342,6 +346,7 @@ namespace FaeMaze.UI
 
         private void OnSkipClicked()
         {
+            GameEventLogger.LogUI("TierUpgrade", "Skipped");
             if (PowerProgressionManager.Instance != null)
             {
                 PowerProgressionManager.Instance.SkipPendingUpgrade();

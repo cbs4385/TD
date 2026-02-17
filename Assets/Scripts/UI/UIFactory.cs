@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 
 namespace FaeMaze.UI
 {
@@ -49,7 +51,24 @@ namespace FaeMaze.UI
                 scaler.referenceResolution = referenceResolution.Value;
             }
             canvasObj.AddComponent<GraphicRaycaster>();
+
+            // Ensure an EventSystem exists (required for UI button clicks)
+            EnsureEventSystem();
+
             return canvas;
+        }
+
+        /// <summary>
+        /// Ensures an EventSystem exists in the scene. UI buttons won't respond to clicks without one.
+        /// </summary>
+        public static void EnsureEventSystem()
+        {
+            if (Object.FindFirstObjectByType<EventSystem>() == null)
+            {
+                GameObject eventSystemObj = new GameObject("EventSystem");
+                eventSystemObj.AddComponent<EventSystem>();
+                eventSystemObj.AddComponent<InputSystemUIInputModule>();
+            }
         }
 
         /// <summary>

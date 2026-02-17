@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 using FaeMaze.Roguelike;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -385,6 +386,7 @@ namespace FaeMaze.UI
             // Show panel
             _panel.SetActive(true);
             _isVisible = true;
+            GameEventLogger.LogUI("HeartFormSelection", "Show", $"forms={unlockedForms.Count}");
 
             // Pause game
             Time.timeScale = 0f;
@@ -411,6 +413,7 @@ namespace FaeMaze.UI
 
         private void OnFormSelected(HeartFormDefinition form)
         {
+            GameEventLogger.LogUI("HeartFormSelection", "Selected", $"{form?.DisplayName ?? "default"}");
             // Set the form in the manager
             HeartFormManager.Instance?.SelectFormForRun(form);
 

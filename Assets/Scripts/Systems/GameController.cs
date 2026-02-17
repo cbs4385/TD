@@ -172,7 +172,11 @@ namespace FaeMaze.Systems
 
         private void Start()
         {
+            GameEventLogger.LogGame("GameStart", $"startingEssence={startingEssence} seed={RandomManager.CurrentSeed}");
             ValidateReferences();
+
+            // Reset entity label counters for the new game
+            EntityLabels.Reset();
 
             // Apply saved settings (light level, video settings, etc.)
             GameSettings.ApplySettings();
@@ -292,6 +296,7 @@ namespace FaeMaze.Systems
             currentEssence += amount;
             persistentEssence = currentEssence;
             LogEssenceTransaction(source, amount, details);
+            GameEventLogger.LogEssence("Add", amount, currentEssence, source.ToString());
             OnEssenceChanged?.Invoke(currentEssence);
 
             // Track maximum essence achieved
@@ -325,6 +330,7 @@ namespace FaeMaze.Systems
                 currentEssence -= cost;
                 persistentEssence = currentEssence;
                 LogEssenceTransaction(source, -cost, details);
+                GameEventLogger.LogEssence("Spend", -cost, currentEssence, source.ToString());
                 OnEssenceChanged?.Invoke(currentEssence);
                 return true;
             }

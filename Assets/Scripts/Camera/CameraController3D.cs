@@ -1233,6 +1233,7 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            GameEventLogger.LogCamera("FocusOnHeart", instant ? "instant" : "lerp");
             FocusOnPosition(GameController.Instance.Heart.transform.position, instant);
         }
 
@@ -1246,6 +1247,7 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            GameEventLogger.LogCamera("FocusOnEntrance", instant ? "instant" : "lerp");
             FocusOnPosition(GameController.Instance.Entrance.transform.position, instant);
         }
 
@@ -1259,6 +1261,8 @@ namespace FaeMaze.Cameras
                 return;
             }
 
+            string label = visitor.EntityLabel ?? visitor.gameObject.name;
+            GameEventLogger.LogCamera("FocusOnVisitor", $"{label} instant={instant}");
             FocusOnPosition(visitor.transform.position, instant);
             focusVisitor = visitor;
             focusLerpSpeed = Mathf.Max(focusLerpSpeed, 0f);
@@ -1297,6 +1301,7 @@ namespace FaeMaze.Cameras
             // Cycle to next portal
             currentPortalIndex = (currentPortalIndex + 1) % portalPositions.Count;
             Vector3 portalPos = portalPositions[currentPortalIndex];
+            GameEventLogger.LogCamera("CycleToNextPortal", $"portal {currentPortalIndex + 1}/{portalPositions.Count} at ({portalPos.x:F1},{portalPos.y:F1})");
             FocusOnPosition(portalPos, true);
 
             // Clear visitor tracking since we're focusing on a portal

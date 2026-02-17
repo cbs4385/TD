@@ -194,6 +194,10 @@ namespace FaeMaze.Maze
             // Apply blessing and heart form multipliers for consumption essence
             int essence = HeartPowerUtils.CalculateConsumptionEssence(visitor, additionalMultiplier: 1.0f, applyBlessingMultiplier: true);
 
+            string visitorLabel = visitor.EntityLabel ?? visitor.gameObject.name;
+            GameEventLogger.LogHeartEvent("Consumed", visitorLabel);
+            GameEventLogger.LogVisitorFate(visitorLabel, "Consumed", essence);
+
             if (GameStatsTracker.Instance != null)
             {
                 GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Consumed, essence);
@@ -224,6 +228,9 @@ namespace FaeMaze.Maze
 
             // Only grab our target visitor
             if (visitor != targetVisitor) return;
+
+            string visitorLabel = visitor.EntityLabel ?? visitor.gameObject.name;
+            GameEventLogger.LogHeartEvent("Grabbed", visitorLabel);
 
             TransitionToGrabbing();
         }

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using FaeMaze.Tutorial;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -36,6 +37,7 @@ namespace FaeMaze.UI
             // F1 toggles help overlay
             if (Keyboard.current.f1Key.wasPressedThisFrame)
             {
+                GameEventLogger.LogInput("Keyboard", "F1", "Toggle help overlay");
                 if (helpOverlay != null)
                 {
                     helpOverlay.Toggle();
@@ -49,6 +51,7 @@ namespace FaeMaze.UI
                 // If help overlay is open, close it instead of going to menu
                 if (helpOverlay != null && helpOverlay.IsVisible)
                 {
+                    GameEventLogger.LogInput("Keyboard", "ESC", "Close help overlay");
                     helpOverlay.Hide();
                     return;
                 }
@@ -57,10 +60,12 @@ namespace FaeMaze.UI
                 var tutorialManager = TutorialManager.Instance;
                 if (tutorialManager != null && tutorialManager.IsActive)
                 {
+                    GameEventLogger.LogInput("Keyboard", "ESC", "Skip tutorial");
                     tutorialManager.SkipTutorial();
                     return;
                 }
 
+                GameEventLogger.LogInput("Keyboard", "ESC", "Return to main menu");
                 sceneLoader.LoadMainMenu();
             }
         }

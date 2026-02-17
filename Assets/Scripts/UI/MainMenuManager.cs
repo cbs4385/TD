@@ -101,6 +101,7 @@ namespace FaeMaze.UI
 
         private void OnTutorialModeChanged(bool enabled)
         {
+            GameEventLogger.LogUI("MainMenu", "TutorialToggle", enabled ? "ON" : "OFF");
             // Sync with the GameSettings "Show Tutorial on First Run" setting
             GameSettings.ShowTutorialOnFirstRun = enabled;
         }
@@ -165,6 +166,7 @@ namespace FaeMaze.UI
         /// </summary>
         public void OpenShrine()
         {
+            GameEventLogger.LogUI("MainMenu", "OpenShrine");
             if (_unlockShopUI != null)
             {
                 _unlockShopUI.Show();
@@ -220,6 +222,8 @@ namespace FaeMaze.UI
         /// </summary>
         public void StartGame()
         {
+            GameEventLogger.LogUI("MainMenu", "StartGame", tutorialModeToggle != null && tutorialModeToggle.isOn ? "tutorial=ON" : "tutorial=OFF");
+
             // Save seed settings before starting
             if (seedInputField != null && int.TryParse(seedInputField.text, out int seed))
             {
@@ -251,6 +255,7 @@ namespace FaeMaze.UI
         /// </summary>
         public void StartTutorial()
         {
+            GameEventLogger.LogUI("MainMenu", "StartTutorial");
             // Reset tutorial completion and ensure ShowTutorialOnFirstRun is true
             // Both flags must be set for GameController.Awake() to use TUTORIAL_SEED
             TutorialManager.ResetTutorial();  // Sets TutorialCompleted = false

@@ -144,6 +144,9 @@ namespace FaeMaze.HeartPowers
             visitor.SetGrabbedByHeart();
             visitorsBeingDevoured.Add(visitor);
             visitorStartPositions[visitor] = visitor.transform.position;
+
+            string visitorLabel = visitor.EntityLabel ?? visitor.gameObject.name;
+            GameEventLogger.LogPowerVisitorEvent("DevouringMaw", visitorLabel, "Captured");
         }
 
         public override void OnStart()
@@ -929,10 +932,14 @@ namespace FaeMaze.HeartPowers
             }
 
             // Track visitor fate with essence value
-            if (Systems.GameStatsTracker.Instance != null)
+            if (GameStatsTracker.Instance != null)
             {
-                Systems.GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, Systems.VisitorFate.Devoured, essence);
+                GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Devoured, essence);
             }
+
+            string visitorLabel = visitor.EntityLabel ?? visitor.gameObject.name;
+            GameEventLogger.LogPowerVisitorEvent("DevouringMaw", visitorLabel, "Devoured");
+            GameEventLogger.LogVisitorFate(visitorLabel, "Devoured", essence);
 
             SoundManager.Instance?.PlayVisitorConsumed();
 

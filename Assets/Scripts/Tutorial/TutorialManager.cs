@@ -385,6 +385,7 @@ namespace FaeMaze.Tutorial
         public void StartTutorial()
         {
             if (isActive) return;
+            FaeMaze.Systems.GameEventLogger.LogTutorial("StartTutorial");
 
             isActive = true;
             currentStepIndex = -1;
@@ -511,6 +512,8 @@ namespace FaeMaze.Tutorial
             {
                 return;
             }
+
+            FaeMaze.Systems.GameEventLogger.LogTutorial("AdvanceStep", $"step {currentStepIndex}: {step.stepId}");
 
             // For all power activation steps, always do cinematic camera move to ensure focal point is in correct position
             // NOTE: power_sculpt is NOT included here - it has a dedicated handler that waits for DevouringMaw to finish
@@ -1896,6 +1899,7 @@ namespace FaeMaze.Tutorial
         public void SkipTutorial()
         {
             if (!isActive) return;
+            FaeMaze.Systems.GameEventLogger.LogTutorial("SkipTutorial");
 
             // Disable tutorial auto-start for future runs
             // Player explicitly chose to skip, so don't show it again automatically
@@ -1909,6 +1913,7 @@ namespace FaeMaze.Tutorial
         /// </summary>
         private void CompleteTutorial()
         {
+            FaeMaze.Systems.GameEventLogger.LogTutorial("CompleteTutorial");
             isActive = false;
             currentStepIndex = -1;
 

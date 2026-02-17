@@ -200,6 +200,8 @@ namespace FaeMaze.Systems
                 currentTier = newTier;
                 OnTierChanged?.Invoke(currentTier);
 
+                GameEventLogger.LogGame("Tier", $"{oldTier} → {newTier} (essence={essence})");
+
                 // Notify MetaProgressionManager of tier change
                 MetaProgressionManager.Instance?.RecordDifficultyTier(currentTier);
             }

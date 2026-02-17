@@ -1282,6 +1282,10 @@ namespace FaeMaze.Systems
             ring.name = $"FairyRing_Node{nodeIndex}";
             ring.transform.position = ringPos;
 
+            string ringLabel = EntityLabels.GetPropLabel(ring);
+            GameEventLogger.LogPropSpawn(ringLabel, ringPos);
+            FaeMaze.Visitors.VisitorStateIndicator.ShowPropLabel(ring.transform, ringLabel);
+
             if (fairyRingsParent != null)
             {
                 ring.transform.SetParent(fairyRingsParent, worldPositionStays: true);
@@ -1361,6 +1365,10 @@ namespace FaeMaze.Systems
             lantern.name = $"Lantern_Node{nodeIndex}";
             lantern.transform.position = lanternPos;
 
+            string lanternLabel = EntityLabels.GetPropLabel(lantern);
+            GameEventLogger.LogPropSpawn(lanternLabel, lanternPos);
+            FaeMaze.Visitors.VisitorStateIndicator.ShowPropLabel(lantern.transform, lanternLabel);
+
             // Lantern prefab has 180° X rotation to orient the model correctly.
             // Do NOT set rotation to identity — the prefab rotation is needed.
 
@@ -1421,6 +1429,10 @@ namespace FaeMaze.Systems
             GameObject wisp = Instantiate(wispPrefab);
             wisp.name = $"Wisp_Node{nodeIndex}";
             wisp.transform.position = wispPos;
+
+            string wispLabel = EntityLabels.GetPropLabel(wisp);
+            GameEventLogger.LogPropSpawn(wispLabel, wispPos);
+            FaeMaze.Visitors.VisitorStateIndicator.ShowPropLabel(wisp.transform, wispLabel);
 
             if (wispsParent != null)
             {
@@ -1610,6 +1622,10 @@ namespace FaeMaze.Systems
 
             // Set position while preserving prefab's local transform (scale, rotation)
             pond.transform.position = pondPos;
+
+            string pondLabel = EntityLabels.GetPropLabel(pond);
+            GameEventLogger.LogPropSpawn(pondLabel, pondPos);
+            FaeMaze.Visitors.VisitorStateIndicator.ShowPropLabel(pond.transform, pondLabel);
 
             if (pondsParent != null)
             {

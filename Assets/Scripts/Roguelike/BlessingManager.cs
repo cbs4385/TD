@@ -233,7 +233,7 @@ namespace FaeMaze.Roguelike
             string key = BLESSING_UNLOCK_KEY_PREFIX + type.ToString();
             PlayerPrefs.SetInt(key, 1);
             PlayerPrefs.Save();
-
+            GameEventLogger.LogRoguelike("Blessing", "Unlocked", $"{type}");
         }
 
         /// <summary>Get all unlocked blessings.</summary>
@@ -262,6 +262,7 @@ namespace FaeMaze.Roguelike
         public void SelectBlessingForRun(BlessingDefinition blessing)
         {
             _activeBlessing = blessing;
+            GameEventLogger.LogRoguelike("Blessing", "Selected", $"{blessing.DisplayName} ({blessing.Type})");
             OnBlessingSelected?.Invoke(blessing);
         }
 
@@ -276,6 +277,7 @@ namespace FaeMaze.Roguelike
         public void ClearActiveBlessing()
         {
             _activeBlessing = null;
+            GameEventLogger.LogRoguelike("Blessing", "Cleared");
             OnBlessingCleared?.Invoke();
         }
 
@@ -284,6 +286,7 @@ namespace FaeMaze.Roguelike
         {
             // Active blessing should already be selected via UI
             // This is just for any additional initialization
+            GameEventLogger.LogRoguelike("Blessing", "RunStart", _activeBlessing != null ? $"active={_activeBlessing.DisplayName}" : "none");
         }
 
         /// <summary>Called when a run ends.</summary>

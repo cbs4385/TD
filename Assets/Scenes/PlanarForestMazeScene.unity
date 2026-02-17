@@ -1337,6 +1337,8 @@ MonoBehaviour:
   lanternDrunkVisitorPrefab: {fileID: 7849252713577324535, guid: e642516a3fb51c94a99c12ba11971ab8, type: 3}
   waryWayfarerVisitorPrefab: {fileID: 6000000003, guid: 2ad749bec494848408ae087122a2a286, type: 3}
   sleepwalkingVisitorPrefab: {fileID: 5000000003, guid: fcf1ccc101e3d2f4da955bc0eea16b81, type: 3}
+  festivalTouristPrefab: {fileID: 0}
+  mistakingFestivalTouristPrefab: {fileID: 0}
   goblinPrefab: {fileID: 0}
   baseSpawnInterval: 5
   enableGoblin: 1
@@ -1346,6 +1348,7 @@ MonoBehaviour:
   uiTextColor: {r: 1, g: 1, b: 1, a: 1}
   autoStartFirstWave: 1
   spawnAllTypesFirst: 0
+  debugOnlyVisitorType: 0
 --- !u!1 &1432388913
 GameObject:
   m_ObjectHideFlags: 0

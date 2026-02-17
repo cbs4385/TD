@@ -4,6 +4,7 @@ using TMPro;
 using System.Collections.Generic;
 using System.Linq;
 using FaeMaze.Roguelike;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -456,6 +457,7 @@ namespace FaeMaze.UI
             // Show panel
             _panel.SetActive(true);
             _isVisible = true;
+            GameEventLogger.LogUI("ChallengeSelection", "Show", $"challenges={_availableChallenges.Count}");
 
             // Pause game
             Time.timeScale = 0f;
@@ -482,6 +484,7 @@ namespace FaeMaze.UI
 
         private void OnChallengeToggled(ChallengeModifierDefinition challenge, Image cardBg)
         {
+            GameEventLogger.LogUI("ChallengeSelection", "Toggled", $"{challenge.DisplayName}");
             if (_selectedChallenges.Contains(challenge))
             {
                 // Deselect
@@ -536,6 +539,7 @@ namespace FaeMaze.UI
 
         private void OnStartClicked()
         {
+            GameEventLogger.LogUI("ChallengeSelection", "StartClicked", $"selected={_selectedChallenges.Count}");
             // Set challenges in manager
             var challengeList = _selectedChallenges.ToList();
             ChallengeModifierManager.Instance?.SetChallengesForRun(challengeList);
@@ -549,6 +553,7 @@ namespace FaeMaze.UI
 
         private void OnSkipClicked()
         {
+            GameEventLogger.LogUI("ChallengeSelection", "Skipped");
             // Clear any challenges
             ChallengeModifierManager.Instance?.ClearActiveChallenges();
 

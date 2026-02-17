@@ -268,6 +268,7 @@ namespace FaeMaze.HeartPowers
             {
                 activePowers.Remove(powerType);
                 OnPowerDeactivated?.Invoke(powerType);
+                GameEventLogger.LogPowerDeactivated(powerType.ToString());
             }
         }
 
@@ -341,6 +342,7 @@ namespace FaeMaze.HeartPowers
 
             // Consume essence (accounting for blessing modifiers)
             int effectiveCost = GetEffectivePowerCost(powerType, definition);
+            int essenceBefore = CurrentEssence;
             if (effectiveCost > 0)
             {
                 SpendEssence(effectiveCost);
@@ -361,6 +363,9 @@ namespace FaeMaze.HeartPowers
             ActivatePower(powerType, definition, worldPosition);
 
             OnPowerActivated?.Invoke(powerType);
+
+            GameEventLogger.LogPowerActivated(
+                powerType.ToString(), worldPosition, effectiveCost, essenceBefore, CurrentEssence);
 
             // Record power activation for meta-progression
             MetaProgressionManager.Instance?.RecordPowerActivation(powerType.ToString());

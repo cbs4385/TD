@@ -908,6 +908,9 @@ namespace FaeMaze.HeartPowers
             // Only grab our target visitor
             if (visitor != currentVisitor) return;
 
+            string visitorLabel = visitor.EntityLabel ?? visitor.gameObject.name;
+            FaeMaze.Systems.GameEventLogger.LogPowerVisitorEvent("HeartwardGrasp", visitorLabel, "Grabbed");
+
             TransitionToRetracting();
         }
 
@@ -1423,6 +1426,9 @@ namespace FaeMaze.HeartPowers
 
                 // Ensure visitor is visible
                 SetVisitorVisible(currentVisitor, true);
+
+                string visitorLabel = currentVisitor.EntityLabel ?? currentVisitor.gameObject.name;
+                FaeMaze.Systems.GameEventLogger.LogPowerVisitorEvent("HeartwardGrasp", visitorLabel, "Released");
 
                 // Clear the Grabbed state — syncs Rigidbody, restores constraints, sets Idle.
                 currentVisitor.ClearGrabbedState();

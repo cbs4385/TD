@@ -84,6 +84,10 @@ namespace FaeMaze.Systems
         [Tooltip("Spawn one of each visitor type from the same portal before normal spawning begins")]
         private bool spawnAllTypesFirst = false;
 
+        [SerializeField]
+        [Tooltip("If >= 0, only spawn this visitor type index (0=basic, 1=mistaking, 2=lanternDrunk, 3=wary, 4=sleepy, 5=festival, 6=mistakingFestival). -1 = all types.")]
+        private int debugOnlyVisitorType = -1;
+
         #endregion
 
         #region Private Fields
@@ -329,6 +333,7 @@ namespace FaeMaze.Systems
             visitorsSpawnedThisWave = 0;
             activeVisitors.Clear();
             isWaveActive = true;
+            GameEventLogger.LogGame("WaveStarted", $"wave={currentWaveNumber}");
             isGameOver = false;
 
             if (heartPowerManager != null)
@@ -481,6 +486,11 @@ namespace FaeMaze.Systems
             string visitorType = spawnedVisitor.GetType().Name.Replace("Controller", "");
             visitorObject.name = $"{visitorType}_T{tier}_{totalVisitorsSpawned}_{spawnId}";
 
+            // Assign unique entity label for logging and floating text
+            string label = EntityLabels.GenerateVisitorLabel(spawnedVisitor);
+            spawnedVisitor.AssignEntityLabel(label);
+            GameEventLogger.LogVisitorSpawn(label, spawnWorldPos, tier, spawnId.ToString());
+
             SoundManager.Instance?.PlayVisitorSpawn();
 
             activeVisitors.Add(visitorObject);
@@ -512,8 +522,16 @@ namespace FaeMaze.Systems
                 return null;
             }
 
-            int randomIndex = RandomManager.Range(0, availableVisitorPrefabs.Count);
-            VisitorControllerBase selectedPrefab = availableVisitorPrefabs[randomIndex];
+            int selectedIndex;
+            if (debugOnlyVisitorType >= 0 && debugOnlyVisitorType < availableVisitorPrefabs.Count)
+            {
+                selectedIndex = debugOnlyVisitorType;
+            }
+            else
+            {
+                selectedIndex = RandomManager.Range(0, availableVisitorPrefabs.Count);
+            }
+            VisitorControllerBase selectedPrefab = availableVisitorPrefabs[selectedIndex];
 
             VisitorControllerBase spawnedVisitor = Instantiate(selectedPrefab, spawnPosition, Quaternion.identity);
 
@@ -634,13 +652,18 @@ namespace FaeMaze.Systems
 
             int tier = DifficultyManager.Instance?.CurrentTier ?? 1;
             currentGoblin.SetDifficultyTier(tier);
+            string goblinLabel = EntityLabels.GenerateEnemyLabel("Goblin");
+            currentGoblin.AssignEntityLabel(goblinLabel);
             currentGoblin.name = $"Goblin_T{tier}";
+            GameEventLogger.LogEnemyEvent(goblinLabel, "Spawned", $"at ({spawnWorldPos.x:F1},{spawnWorldPos.y:F1}) tier={tier}");
         }
 
         private void HandleGameOver()
         {
             if (!isWaveActive)
                 return;
+
+            GameEventLogger.LogGame("GameOver", $"totalSpawned={totalVisitorsSpawned}");
 
             isWaveActive = false;
             isSpawning = false;

@@ -134,6 +134,7 @@ namespace FaeMaze.Roguelike
                 _runTiers[powerType] = 1;
             }
 
+            GameEventLogger.LogRoguelike("PowerProgression", "ResetRunTiers");
             OnRunTiersReset?.Invoke();
         }
 
@@ -242,6 +243,7 @@ namespace FaeMaze.Roguelike
             _hasPendingUpgrade = true;
             _pendingUpgradeTier = tier;
 
+            GameEventLogger.LogRoguelike("PowerProgression", "TierUpgradeAvailable", $"tier={tier}");
             OnTierUpgradeAvailable?.Invoke(tier);
         }
 
@@ -286,6 +288,7 @@ namespace FaeMaze.Roguelike
             _hasPendingUpgrade = false;
             _pendingUpgradeTier = 0;
 
+            GameEventLogger.LogRoguelike("PowerProgression", "TierUpgraded", $"{powerType} -> tier {upgradedTier}");
             OnPowerTierUpgraded?.Invoke(powerType, upgradedTier);
 
             return true;
@@ -298,6 +301,7 @@ namespace FaeMaze.Roguelike
         {
             if (_hasPendingUpgrade)
             {
+                GameEventLogger.LogRoguelike("PowerProgression", "TierUpgradeSkipped");
                 _hasPendingUpgrade = false;
                 _pendingUpgradeTier = 0;
             }

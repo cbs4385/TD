@@ -420,6 +420,10 @@ namespace FaeMaze.Props
             // Set the visitor to Drowning state (stops movement and clears all other states)
             visitor.BecomeDrowning();
 
+            string visitorLabel = visitor.EntityLabel ?? visitor.gameObject.name;
+            string propLabel = FaeMaze.Systems.EntityLabels.GetPropLabel(gameObject);
+            FaeMaze.Systems.GameEventLogger.LogPropVisitorEvent(propLabel, visitorLabel, "Drowning");
+
             // Store initial values
             Vector3 initialPosition = visitorTransform.position;
             Quaternion initialRotation = visitorTransform.rotation;
@@ -533,6 +537,9 @@ namespace FaeMaze.Props
                 {
                     GameStatsTracker.Instance.RecordVisitorFate(visitor.Archetype, VisitorFate.Drowned, essenceAwarded);
                 }
+
+                FaeMaze.Systems.GameEventLogger.LogVisitorFate(
+                    visitor.EntityLabel ?? visitor.gameObject.name, "Drowned", essenceAwarded);
 
                 // Destroy the visitor
                 Destroy(visitorObj);

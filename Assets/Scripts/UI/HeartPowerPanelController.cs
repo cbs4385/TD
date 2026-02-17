@@ -701,16 +701,19 @@ namespace FaeMaze.UI
         {
             if (heartPowerManager == null)
             {
+                GameEventLogger.LogUI("HeartPowers", "ButtonClicked", $"Power {index} — no HeartPowerManager");
                 return;
             }
 
             // Block power activation during tutorial until explicitly unlocked
             if (tutorialPowersLocked && !tutorialUnlockedPowers.Contains(index))
             {
+                GameEventLogger.LogUI("HeartPowers", "ButtonBlocked", $"Power {index} ({powerTypes[index]}) — tutorial locked");
                 return;
             }
 
             HeartPowerType powerType = powerTypes[index];
+            GameEventLogger.LogInput("PowerButton", $"Clicked", $"{powerType} (button {index})");
 
             // Get the focal point position from the camera controller
             Vector3 targetPosition = GetFocalPointPosition();
@@ -1056,6 +1059,7 @@ namespace FaeMaze.UI
         /// </summary>
         public void SetGameplayOverlayVisible(bool visible)
         {
+            GameEventLogger.LogUI("GameplayOverlay", visible ? "Show" : "Hide");
             // Hide/show the panel container (may be empty but keep for consistency)
             if (heartPowersPanel != null)
             {

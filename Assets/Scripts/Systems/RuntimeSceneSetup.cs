@@ -19,6 +19,7 @@ namespace FaeMaze.Systems
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             string sceneName = scene.name;
+            GameEventLogger.LogScene("SceneLoaded", $"{sceneName} (mode={mode})");
 
             // NOTE: RandomManager initialization is handled by GameController.Awake()
             // Do NOT reset it here - this would overwrite the tutorial seed set by GameController
@@ -266,17 +267,22 @@ namespace FaeMaze.Systems
             }
 
             // Show heart form selection UI if player has multiple unlocked forms
+            GameEventLogger.LogUI("PreGame", "ShowHeartFormSelection");
             yield return ShowHeartFormSelection();
 
             // Show challenge selection UI if player has unlocked challenges
+            GameEventLogger.LogUI("PreGame", "ShowChallengeSelection");
             yield return ShowChallengeSelection();
 
             // Show mutation selection UI if player has unlocked mutations
+            GameEventLogger.LogUI("PreGame", "ShowMutationSelection");
             yield return ShowMutationSelection();
 
             // Show blessing selection UI if player has unlocked blessings
+            GameEventLogger.LogUI("PreGame", "ShowBlessingSelection");
             yield return ShowBlessingSelection();
 
+            GameEventLogger.LogUI("PreGame", "SelectionsComplete", "Showing gameplay overlay");
             // Show gameplay overlay (power buttons, essence bar, run timer) now that selections are done
             var panelController = Object.FindFirstObjectByType<HeartPowerPanelController>();
             if (panelController != null)
@@ -286,13 +292,16 @@ namespace FaeMaze.Systems
 
             if (waveSpawner != null)
             {
+                GameEventLogger.LogGame("WaveStart", "Starting first wave");
                 bool started = waveSpawner.StartWave();
 
                 if (!started)
                 {
+                    GameEventLogger.LogGame("WaveStart", "First attempt failed, retrying in 0.5s");
                     yield return new WaitForSeconds(0.5f);
                     started = waveSpawner.StartWave();
                 }
+                GameEventLogger.LogGame("WaveStart", $"result={started}");
             }
 
             Destroy(gameObject);

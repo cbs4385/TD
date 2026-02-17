@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using TMPro;
 using FaeMaze.Roguelike;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -565,6 +566,7 @@ namespace FaeMaze.UI
 
         private void SelectCategory(UnlockCategory category)
         {
+            GameEventLogger.LogUI("UnlockShop", "CategorySelected", $"{category}");
             _currentCategory = category;
 
             // Update tab visuals
@@ -589,6 +591,7 @@ namespace FaeMaze.UI
 
         private void OnPurchaseClicked(string unlockId)
         {
+            GameEventLogger.LogUI("UnlockShop", "PurchaseClicked", $"id={unlockId}");
             if (UnlockManager.Instance == null) return;
 
             UnlockManager.Instance.TryPurchaseUnlock(unlockId);
@@ -624,6 +627,7 @@ namespace FaeMaze.UI
 
             _panelRoot.SetActive(true);
             _isVisible = true;
+            GameEventLogger.LogUI("UnlockShop", "Show");
 
             // Refresh display
             UpdateFaeDustDisplay();
@@ -632,6 +636,7 @@ namespace FaeMaze.UI
 
         public void Hide()
         {
+            GameEventLogger.LogUI("UnlockShop", "Hide");
             if (_panelRoot != null)
             {
                 _panelRoot.SetActive(false);

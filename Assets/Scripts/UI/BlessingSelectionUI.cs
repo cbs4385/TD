@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 using FaeMaze.Roguelike;
+using FaeMaze.Systems;
 
 namespace FaeMaze.UI
 {
@@ -312,6 +313,7 @@ namespace FaeMaze.UI
         /// <param name="onComplete">Callback when selection is made (null if skipped)</param>
         public void Show(System.Action<BlessingDefinition> onComplete = null)
         {
+            GameEventLogger.LogUI("BlessingSelection", "Show", "Displaying blessing selection screen");
             _onSelectionComplete = onComplete;
 
             // Clear previous cards
@@ -332,6 +334,7 @@ namespace FaeMaze.UI
             // Create cards for each blessing
             for (int i = 0; i < _currentChoices.Count; i++)
             {
+                GameEventLogger.LogUI("BlessingSelection", "CardCreated", $"Card {i}: {_currentChoices[i].DisplayName}");
                 var card = CreateBlessingCard(_currentChoices[i], i, cardsContainer);
                 _blessingCards.Add(card);
             }
@@ -365,6 +368,8 @@ namespace FaeMaze.UI
 
         private void OnBlessingSelected(BlessingDefinition blessing)
         {
+            GameEventLogger.LogUI("BlessingSelection", "BlessingSelected", $"{blessing.DisplayName} ({blessing.Type})");
+
             // Set the blessing in the manager
             BlessingManager.Instance?.SelectBlessingForRun(blessing);
 
@@ -377,6 +382,8 @@ namespace FaeMaze.UI
 
         private void OnSkipClicked()
         {
+            GameEventLogger.LogUI("BlessingSelection", "SkipClicked", "No blessing selected");
+
             // Clear any selected blessing
             BlessingManager.Instance?.ClearActiveBlessing();
 

@@ -70,6 +70,7 @@ namespace FaeMaze.UI
 
         private void Start()
         {
+            GameEventLogger.LogScene("GameOverScreen", "Displayed");
             SetupCanvas();
             HideOldElements();
             CreateFullScreenUI();
@@ -576,6 +577,7 @@ namespace FaeMaze.UI
 
         private void ReturnToMainMenu()
         {
+            GameEventLogger.LogUI("GameOver", "ReturnToMainMenu");
             // Reset stats for next game
             if (GameStatsTracker.Instance != null)
             {

@@ -103,6 +103,7 @@ namespace FaeMaze.Visitors
 
         protected bool hasLoggedPathIssue;
         protected VisitorState state;
+        protected string entityLabel;
         protected Animator animator;
         protected GameController gameController;
         protected MazeGridBehaviour mazeGridBehaviour;
@@ -348,6 +349,18 @@ namespace FaeMaze.Visitors
 
         /// <summary>Gets the visitor's archetype configuration</summary>
         public VisitorArchetypeConfig ArchetypeConfig => config;
+
+        /// <summary>Unique label for this visitor, used in floating text and console logs.</summary>
+        public string EntityLabel => entityLabel;
+
+        /// <summary>
+        /// Assigns a unique label and shows it as floating text above the visitor.
+        /// </summary>
+        public void AssignEntityLabel(string label)
+        {
+            entityLabel = label;
+            VisitorStateIndicator.ShowLabel(transform, label, new Color(0f, 1f, 1f));
+        }
 
         #endregion
 
@@ -1417,7 +1430,10 @@ namespace FaeMaze.Visitors
             if (state == newState) return;
             VisitorState prev = state;
             state = newState;
-            // State logging removed
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                GameEventLogger.LogVisitorStateChange(entityLabel, prev.ToString(), newState.ToString(), reason);
+            }
         }
 
         // DEBUG: Set to true to disable all visitor states except Idle and Walking
@@ -1481,6 +1497,10 @@ namespace FaeMaze.Visitors
                 string flagReason = isDazed ? "isDazed" : isFrightened ? "isFrightened" : isLured ? "isLured"
                     : isFascinated ? (hasReachedLantern ? "isFascinated+atLantern" : "isFascinated")
                     : (isConfused && confusionEnabled) ? "isConfused" : "defaultWalking";
+                if (!string.IsNullOrEmpty(entityLabel))
+                {
+                    GameEventLogger.LogVisitorStateChange(entityLabel, previousState.ToString(), state.ToString(), flagReason);
+                }
                 RecordNavigationEvent("StateChange", $"{previousState} -> {state}");
             }
         }
@@ -3633,8 +3653,10 @@ namespace FaeMaze.Visitors
                 FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorFate(Archetype, FaeMaze.Systems.VisitorFate.Escaped, 0);
             }
 
-            // Visitor escaped - no essence reward for the player
-            // Visual feedback could be added here (particle effect, sound, etc.)
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                GameEventLogger.LogVisitorFate(entityLabel, "Escaped", 0);
+            }
 
             // Destroy the visitor
             Destroy(gameObject, 0.1f);
@@ -3667,6 +3689,11 @@ namespace FaeMaze.Visitors
             if (FaeMaze.Systems.GameStatsTracker.Instance != null)
             {
                 FaeMaze.Systems.GameStatsTracker.Instance.RecordVisitorFate(Archetype, fate, 0);
+            }
+
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                GameEventLogger.LogVisitorFate(entityLabel, fate.ToString(), 0);
             }
 
             // Clean up visual effects before destroying
@@ -3899,6 +3926,12 @@ namespace FaeMaze.Visitors
             currentFaeLantern = lantern;
             fascinationLanternPosition = lanternWorldPos;
             lanternEssenceAwardAccumulator = 0f;
+
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                string propLabel = EntityLabels.GetPropLabel(lantern.gameObject);
+                GameEventLogger.LogVisitorFascination(entityLabel, propLabel);
+            }
 
             // Reset detour state then explicitly clear confusion.
             // VisitorController.ResetDetourState() sets isConfused = confusionEnabled,
@@ -4293,6 +4326,11 @@ namespace FaeMaze.Visitors
             SetTimedState(VisitorState.Dazed, duration);
             RefreshStateFromFlags();
             FaeMaze.Props.DazeStreamerEffect.SpawnStreamers(transform);
+
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                GameEventLogger.LogVisitorDazed(entityLabel, duration);
+            }
         }
 
         /// <summary>
@@ -4505,6 +4543,12 @@ namespace FaeMaze.Visitors
                 return; // Not fascinated by a lantern
             }
 
+            if (!string.IsNullOrEmpty(entityLabel) && currentFaeLantern != null)
+            {
+                string propLabel = EntityLabels.GetPropLabel(currentFaeLantern.gameObject);
+                GameEventLogger.LogVisitorFascinationEnd(entityLabel, propLabel, "lantern released");
+            }
+
             FaeMaze.Props.LanternStreamerEffect.DestroyStreamers(transform);
 
             // Don't set cooldown since the lantern is being destroyed
@@ -4546,6 +4590,12 @@ namespace FaeMaze.Visitors
             if (currentFairyRing == null)
             {
                 return; // Not fascinated by a ring
+            }
+
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                string propLabel = EntityLabels.GetPropLabel(currentFairyRing.gameObject);
+                GameEventLogger.LogVisitorFascinationEnd(entityLabel, propLabel, "ring released");
             }
 
             // Clear without setting immunity (ring is being destroyed)
@@ -4680,6 +4730,12 @@ namespace FaeMaze.Visitors
             currentFairyRing = ring;
             fairyRingFascinationTimer = duration;
             speedMultiplier = slowFactor;
+
+            if (!string.IsNullOrEmpty(entityLabel))
+            {
+                string propLabel = EntityLabels.GetPropLabel(ring.gameObject);
+                GameEventLogger.LogVisitorFascination(entityLabel, propLabel);
+            }
 
             // Calculate starting angle based on current position relative to ring
             Vector2 ringPos = new Vector2(ring.transform.position.x, ring.transform.position.y);

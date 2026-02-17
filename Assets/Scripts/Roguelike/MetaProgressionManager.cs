@@ -191,7 +191,7 @@ namespace FaeMaze.Roguelike
             _faeDust += finalAmount;
             SaveFaeDust();
             OnFaeDustChanged?.Invoke(_faeDust);
-
+            GameEventLogger.LogRoguelike("FaeDust", "Add", $"+{baseAmount} source={source} total={_faeDust}");
         }
 
         /// <summary>
@@ -208,7 +208,7 @@ namespace FaeMaze.Roguelike
             _faeDust -= amount;
             SaveFaeDust();
             OnFaeDustChanged?.Invoke(_faeDust);
-
+            GameEventLogger.LogRoguelike("FaeDust", "Spend", $"-{amount} purpose={purpose} total={_faeDust}");
             return true;
         }
 
@@ -240,6 +240,7 @@ namespace FaeMaze.Roguelike
                 AddFaeDust(DUST_FIRST_RUN_OF_DAY, "First run of day");
             }
 
+            GameEventLogger.LogRoguelike("Meta", "RunStart", $"faeDust={_faeDust}");
         }
 
         /// <summary>
@@ -294,7 +295,7 @@ namespace FaeMaze.Roguelike
                 _lifetimeStats.LongestRunSeconds = _currentRunStats.RunDurationSeconds;
 
             SaveLifetimeStats();
-
+            GameEventLogger.LogRoguelike("Meta", "RunEnd", $"faeDust={_faeDust}");
         }
 
         #endregion

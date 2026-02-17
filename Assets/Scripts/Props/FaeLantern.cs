@@ -162,6 +162,9 @@ namespace FaeMaze.Props
             if (HasFascinatedVisitor())
             {
                 // Lantern is occupied — frighten the visitor away
+                string propLabel = FaeMaze.Systems.EntityLabels.GetPropLabel(gameObject);
+                string visitorLabel = visitor.EntityLabel ?? visitor.gameObject.name;
+                FaeMaze.Systems.GameEventLogger.LogPropVisitorEvent(propLabel, visitorLabel, "Frightened (occupied)");
                 visitor.SetFrightened(transform.position);
             }
             else
