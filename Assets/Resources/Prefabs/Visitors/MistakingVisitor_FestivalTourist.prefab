@@ -60,7 +60,7 @@ MonoBehaviour:
   goblinDetectionInterval: 0.5
   minLostDistance: 10
   maxLostDistance: 20
-  modelFacingOffsetDegrees: 0
+  modelFacingOffsetDegrees: 84.52
   misstepEnabled: 1
   debugMisstepGizmos: 0
 --- !u!114 &5000000006

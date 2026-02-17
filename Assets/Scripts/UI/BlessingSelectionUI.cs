@@ -57,11 +57,14 @@ namespace FaeMaze.UI
 
         private void CreateUI()
         {
-            // Destroy any leftover panel from a previous instance (prevents duplicate overlays on scene reload)
-            Transform existingPanel = _canvas.transform.Find("BlessingSelectionPanel");
-            if (existingPanel != null)
+            // Destroy ALL leftover panels from previous instances (prevents stacking overlays)
+            for (int i = _canvas.transform.childCount - 1; i >= 0; i--)
             {
-                Destroy(existingPanel.gameObject);
+                Transform child = _canvas.transform.GetChild(i);
+                if (child.name == "BlessingSelectionPanel")
+                {
+                    DestroyImmediate(child.gameObject);
+                }
             }
 
             // Main panel (full screen overlay)
